@@ -67,6 +67,7 @@ void ColumnFilePersistedSet::updateColumnFileStats()
         }
     }
     persisted_files_count = new_persisted_files_count;
+    persisted_files_level_count = persisted_files_levels.size();
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;
@@ -207,7 +208,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
         else if (auto * t_file = column_file->tryToTinyFile(); t_file)
         {
             // Use a newly created page_id to reference the data page_id of current column file.
-            PageId new_data_page_id = context.page_id_generator.newLogPageId();
+            PageId new_data_page_id = context.storage_pool.newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t_file->getDataPageId());
             auto new_column_file = t_file->cloneWith(new_data_page_id);
             cloned_tail.push_back(new_column_file);
@@ -215,7 +216,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
         else if (auto * b_file = column_file->tryToBigFile(); b_file)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
-            auto new_ref_id = context.page_id_generator.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             auto file_id = b_file->getFile()->fileId();
             wbs.data.putRefPage(new_ref_id, file_id);
             auto file_parent_path = delegator.getDTFilePath(file_id);
@@ -289,7 +290,7 @@ bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_vers
 {
     if (task_flush_version != flush_version)
     {
-        LOG_DEBUG(log, simpleInfo() << " Stop flush because structure got updated");
+        LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
         return false;
     }
     flush_version += 1;
@@ -319,6 +320,7 @@ bool ColumnFilePersistedSet::appendPersistedColumnFilesToLevel0(const ColumnFile
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
+    LOG_FMT_DEBUG(log, "{}, after append {} column files, level info: {}", info(), column_files.size(), levelsInfo());
 
     return true;
 }
@@ -392,7 +394,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         return false;
     }
     minor_compaction_version += 1;
-    LOG_FMT_DEBUG(log, "Before commit compaction, level summary: {}", info());
+    LOG_FMT_DEBUG(log, "{}, before commit compaction, level info: {}", info(), levelsInfo());
     ColumnFilePersistedLevels new_persisted_files_levels;
     auto compaction_src_level = compaction->getCompactionSourceLevel();
     // Copy column files in level range [0, compaction_src_level)
@@ -461,7 +463,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
-    LOG_FMT_DEBUG(log, "After commit compaction, level summary: {}", info());
+    LOG_FMT_DEBUG(log, "{}, after commit compaction, level info: {}", info(), levelsInfo());
 
     return true;
 }

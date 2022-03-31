@@ -33,23 +33,15 @@ public:
         const BlockInputStreamPtr & input,
         const SubqueriesForSets & subqueries_for_sets_,
         const SizeLimits & network_transfer_limits,
-        const LogWithPrefixPtr & log_);
+        const String & req_id);
 
     CreatingSetsBlockInputStream(
         const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
         const SizeLimits & network_transfer_limits,
-        const MPPTaskId & mpp_task_id_,
-        const LogWithPrefixPtr & log_);
+        const String & req_id);
 
-    ~CreatingSetsBlockInputStream()
-    {
-        for (auto & worker : workers)
-        {
-            if (worker.joinable())
-                worker.join();
-        }
-    }
+    ~CreatingSetsBlockInputStream() = default;
 
     static constexpr auto name = "CreatingSets";
 
@@ -101,13 +93,11 @@ private:
 
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
-    MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
 
-    std::vector<std::thread> workers;
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     void createAll();
     void createOne(SubqueryForSet & subquery);

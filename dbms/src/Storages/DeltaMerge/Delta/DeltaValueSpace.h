@@ -55,7 +55,8 @@ struct DMContext;
 struct WriteBatches;
 class StoragePool;
 
-class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>
+class DeltaValueSpace
+    : public std::enable_shared_from_this<DeltaValueSpace>
     , private boost::noncopyable
 {
 public:
@@ -166,7 +167,7 @@ public:
         // Other thread is doing structure update, just return.
         if (!is_updating.compare_exchange_strong(v, true))
         {
-            LOG_DEBUG(log, simpleInfo() << " Stop create snapshot because updating");
+            LOG_FMT_DEBUG(log, "{} Stop create snapshot because updating", simpleInfo());
             return false;
         }
         return true;
@@ -177,7 +178,7 @@ public:
         bool v = true;
         if (!is_updating.compare_exchange_strong(v, false))
         {
-            LOG_ERROR(log, "!!!=========================delta [" << getId() << "] is expected to be updating=========================!!!");
+            LOG_FMT_ERROR(log, "!!!=========================delta [{}] is expected to be updating=========================!!!", getId());
             return false;
         }
         else
@@ -242,7 +243,8 @@ public:
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 };
 
-class DeltaValueSnapshot : public std::enable_shared_from_this<DeltaValueSnapshot>
+class DeltaValueSnapshot
+    : public std::enable_shared_from_this<DeltaValueSnapshot>
     , private boost::noncopyable
 {
     friend class DeltaValueSpace;
@@ -260,7 +262,7 @@ private:
     // We need a reference to original delta object, to release the "is_updating" lock.
     DeltaValueSpacePtr _delta;
 
-    CurrentMetrics::Metric type;
+    const CurrentMetrics::Metric type;
 
 public:
     DeltaSnapshotPtr clone()
@@ -280,8 +282,8 @@ public:
     }
 
     explicit DeltaValueSnapshot(CurrentMetrics::Metric type_)
+        : type(type_)
     {
-        type = type_;
         CurrentMetrics::add(type);
     }
 
@@ -315,7 +317,6 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorageSnapshot() { return persisted_files_snap->getStorageSnapshot(); }
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
 };
 

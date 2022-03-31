@@ -13,16 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Common/RedactHelpers.h>
-#include <Encryption/EncryptionPath.h>
 #include <Encryption/FileProvider.h>
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Poco/Path.h>
@@ -47,18 +38,20 @@
 namespace DB::PS::V3
 {
 std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
+    String storage_name,
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator)
 {
-    auto reader = WALStoreReader::create(provider, delegator);
+    auto reader = WALStoreReader::create(storage_name, provider, delegator);
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {
-        std::unique_ptr<WALStore>(new WALStore(delegator, provider, last_log_num)),
+        std::unique_ptr<WALStore>(new WALStore(std::move(storage_name), delegator, provider, last_log_num)),
         reader};
 }
 
 WALStore::WALStore(
+    String storage_name,
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
     Format::LogNumberType last_log_num_)
@@ -66,7 +59,7 @@ WALStore::WALStore(
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
-    , logger(&Poco::Logger::get("WALStore"))
+    , logger(Logger::get("WALStore", std::move(storage_name)))
 {
 }
 
@@ -185,6 +178,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     if (files_snap.persisted_log_files.empty())
         return false;
 
+    LOG_FMT_INFO(logger, "Saving directory snapshot");
     {
         // Use {largest_log_num + 1, 1} to save the `edit`
         const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;

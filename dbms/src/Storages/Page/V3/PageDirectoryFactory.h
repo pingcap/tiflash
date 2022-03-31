@@ -46,10 +46,17 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
     // just for test
-    PageDirectoryPtr createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+    PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+
+    // just for test
+    PageDirectoryFactory & setBlobStats(BlobStore::BlobStats & blob_stats_)
+    {
+        blob_stats = &blob_stats_;
+        return *this;
+    }
 
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);

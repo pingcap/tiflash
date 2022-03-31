@@ -21,6 +21,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
+#include <Storages/PathPool.h>
 
 #include <mutex>
 
@@ -88,10 +89,12 @@ public:
 
             std::mutex sm_lock;
 
-            BlobStat(BlobFileId id_, SpaceMapPtr && smap_)
-                : smap(std::move(smap_))
+        public:
+            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
+                : smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , id(id_)
                 , type(BlobStatType::NORMAL)
+                , sm_max_caps(sm_max_caps_)
             {}
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()
@@ -124,16 +127,22 @@ public:
              * We still need to recalculate a `sm_total_size`/`sm_valid_size`/`sm_valid_rate`.
              */
             void recalculateSpaceMap();
+
+            /**
+             * The `sm_max_cap` is not accurate after GC removes out-of-date data, or after restoring from disk.
+             * Caller should call this function to update the `sm_max_cap` so that we can reuse the space in this BlobStat.
+             */
+            void recalculateCapacity();
         };
 
         using BlobStatPtr = std::shared_ptr<BlobStat>;
 
     public:
-        BlobStats(LogWithPrefixPtr log_, BlobStore::Config config);
+        BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
-        BlobStatPtr createStatNotCheckingRoll(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
@@ -155,15 +164,16 @@ public:
          * The `INVALID_BLOBFILE_ID` means that you don't need create a new `BlobFile`.
          * 
          */
-        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, UInt64 file_limit_size, const std::lock_guard<std::mutex> &);
+        std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false);
+        BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false, bool ignore_not_exist = false);
 
-        std::list<BlobStatPtr> getStats() const
+        std::map<String, std::list<BlobStatPtr>> getStats() const
         {
             auto guard = lock();
             return stats_map;
         }
+
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
@@ -175,15 +185,19 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif
-        LogWithPrefixPtr log;
+        LoggerPtr log;
         BlobStore::Config config;
 
         BlobFileId roll_id = 1;
-        std::list<BlobStatPtr> stats_map;
+        std::map<String, std::list<BlobStatPtr>> stats_map;
+        // Index for selecting next path for creating new blobfile
+        UInt16 stats_map_path_index = 0;
+
+        PSDiskDelegatorPtr delegator;
         mutable std::mutex lock_stats;
     };
 
-    BlobStore(const FileProviderPtr & file_provider_, String path, BlobStore::Config config);
+    BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
     std::vector<BlobFileId> getGCStats();
 
@@ -236,7 +250,7 @@ private:
      */
     void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
-    String getBlobFilePath(BlobFileId blob_id) const;
+    String getBlobFilePath(BlobFileId blob_id);
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
@@ -246,12 +260,14 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    constexpr static const char * blob_prefix_name = "/blobfile_";
+
+    PSDiskDelegatorPtr delegator;
 
     FileProviderPtr file_provider;
-    String path{};
     Config config;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     BlobStats blob_stats;
 

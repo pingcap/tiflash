@@ -72,16 +72,16 @@ String joinLines(const String & query)
     return res;
 }
 
-LogWithPrefixPtr getLogger(const Context & context)
+LoggerPtr getLogger(const Context & context)
 {
     auto * dag_context = context.getDAGContext();
     return (dag_context && dag_context->log)
         ? dag_context->log
-        : std::make_shared<LogWithPrefix>(&Poco::Logger::get("executeQuery"), "");
+        : Logger::get("executeQuery");
 }
 
 /// Log query into text log (not into system table).
-void logQuery(const String & query, const Context & context, const LogWithPrefixPtr & logger)
+void logQuery(const String & query, const Context & context, const LoggerPtr & logger)
 {
     const auto & current_query_id = context.getClientInfo().current_query_id;
     const auto & initial_query_id = context.getClientInfo().initial_query_id;
@@ -116,7 +116,7 @@ void setExceptionStackTrace(QueryLogElement & elem)
 
 
 /// Log exception (with query info) into text log (not into system table).
-void logException(Context & context, QueryLogElement & elem, const LogWithPrefixPtr & logger)
+void logException(Context & context, QueryLogElement & elem, const LoggerPtr & logger)
 {
     LOG_FMT_ERROR(
         logger,
@@ -128,7 +128,7 @@ void logException(Context & context, QueryLogElement & elem, const LogWithPrefix
 }
 
 
-void onExceptionBeforeStart(const String & query, Context & context, time_t current_time, const LogWithPrefixPtr & logger)
+void onExceptionBeforeStart(const String & query, Context & context, time_t current_time, const LoggerPtr & logger)
 {
     /// Exception before the query execution.
     context.getQuota().addError();
@@ -386,10 +386,13 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             if (!internal && res.in)
             {
-                std::stringstream log_str;
-                log_str << "Query pipeline:\n";
-                res.in->dumpTree(log_str);
-                LOG_DEBUG(execute_query_logger, log_str.str());
+                auto pipeline_log_str = [&res]() {
+                    FmtBuffer log_buffer;
+                    log_buffer.append("Query pipeline:\n");
+                    res.in->dumpTree(log_buffer);
+                    return log_buffer.toString();
+                };
+                LOG_DEBUG(execute_query_logger, pipeline_log_str());
             }
         }
     }

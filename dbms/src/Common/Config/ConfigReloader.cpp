@@ -75,7 +75,7 @@ void ConfigReloader::run()
 
 void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
 {
-    std::lock_guard<std::mutex> lock(reload_mutex);
+    std::lock_guard lock(reload_mutex);
 
     FilesChangesTracker new_files = getNewFileList();
     if (force || new_files.isDifferOrNewerThan(files))
@@ -84,7 +84,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
         ConfigProcessor::LoadedConfig loaded_config;
         try
         {
-            LOG_DEBUG(log, "Loading config `" << path << "'");
+            LOG_FMT_DEBUG(log, "Loading config `{}`", path);
 
             loaded_config = config_processor.loadConfig();
         }

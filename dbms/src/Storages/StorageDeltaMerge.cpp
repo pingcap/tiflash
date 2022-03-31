@@ -808,7 +808,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         to_read,
         {range},
         1,
-        MAX_UINT64,
+        std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER)[0];
     stream->readPrefix();
     Block block;
@@ -831,7 +831,7 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             to_read,
             {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             1,
-            MAX_UINT64,
+            std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;
@@ -1202,8 +1202,7 @@ void StorageDeltaMerge::rename(
         std::move(handle_column_define),
         is_common_handle,
         rowkey_column_size,
-        settings,
-        tidb_table_info.id);
+        settings);
 }
 
 String StorageDeltaMerge::getTableName() const
@@ -1507,7 +1506,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
     {
         return _store;
     }
-    std::lock_guard<std::mutex> lock(store_mutex);
+    std::lock_guard lock(store_mutex);
     if (_store == nullptr)
     {
         _store = std::make_shared<DeltaMergeStore>(
@@ -1520,8 +1519,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
             std::move(table_column_info->handle_column_define),
             is_common_handle,
             rowkey_column_size,
-            DeltaMergeStore::Settings(),
-            tidb_table_info.id);
+            DeltaMergeStore::Settings());
         table_column_info.reset(nullptr);
         store_inited.store(true, std::memory_order_release);
     }
@@ -1551,7 +1549,7 @@ bool StorageDeltaMerge::dataDirExist()
 {
     String db_name, table_name;
     {
-        std::lock_guard<std::mutex> lock(store_mutex);
+        std::lock_guard lock(store_mutex);
         // store is inited after lock acquired.
         if (storeInited())
         {

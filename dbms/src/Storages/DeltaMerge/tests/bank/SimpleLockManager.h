@@ -47,7 +47,7 @@ class SimpleLockManager
 public:
     void readLock(UInt64 id, UInt64 transaction_id, UInt64 tso)
     {
-        std::unique_lock<std::mutex> latch{mutex};
+        std::unique_lock latch{mutex};
         if (lock_map.find(id) == lock_map.end())
         {
             lock_map.emplace(std::piecewise_construct, std::make_tuple(id), std::make_tuple());
@@ -71,12 +71,12 @@ public:
 
     bool writeLock(UInt64 id, UInt64 transaction_id, UInt64 tso)
     {
-        std::unique_lock<std::mutex> latch{mutex};
+        std::unique_lock latch{mutex};
         if (lock_map.find(id) == lock_map.end())
         {
             lock_map.emplace(std::piecewise_construct, std::make_tuple(id), std::make_tuple());
         }
-        if (isWriteLocked(id, UINT64_MAX))
+        if (isWriteLocked(id, std::numeric_limits<UInt64>::max()))
         {
             latch.unlock();
             return false;
@@ -85,7 +85,7 @@ public:
         while (true)
         {
             latch.lock();
-            if (isWriteLocked(id, UINT64_MAX))
+            if (isWriteLocked(id, std::numeric_limits<UInt64>::max()))
             {
                 latch.unlock();
                 return false;
@@ -105,9 +105,9 @@ public:
 
     void readUnlock(UInt64 id, UInt64 transaction_id)
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard guard{mutex};
         auto & locks = lock_map[id];
-        size_t index = UINT64_MAX;
+        size_t index = std::numeric_limits<UInt64>::max();
         for (size_t i = 0; i < locks.size(); i++)
         {
             if (locks[i].transaction_id == transaction_id && locks[i].type == LockType::READ)
@@ -115,7 +115,7 @@ public:
                 index = i;
             }
         }
-        if (index != UINT64_MAX)
+        if (index != std::numeric_limits<UInt64>::max())
         {
             locks.erase(locks.begin() + index, locks.begin() + index + 1);
         }
@@ -128,9 +128,9 @@ public:
 
     void writeUnlock(UInt64 id, UInt64 transaction_id)
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard guard{mutex};
         auto & locks = lock_map[id];
-        size_t index = UINT64_MAX;
+        size_t index = std::numeric_limits<UInt64>::max();
         for (size_t i = 0; i < locks.size(); i++)
         {
             if (locks[i].transaction_id == transaction_id && locks[i].type == LockType::WRITE)
@@ -138,7 +138,7 @@ public:
                 index = i;
             }
         }
-        if (index != UINT64_MAX)
+        if (index != std::numeric_limits<UInt64>::max())
         {
             locks.erase(locks.begin() + index, locks.begin() + index + 1);
         }

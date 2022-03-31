@@ -60,6 +60,7 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
     }
 
     column_files.push_back(column_file);
+    column_files_count = column_files.size();
 
     rows += column_file->getRows();
     bytes += column_file->getBytes();
@@ -92,7 +93,7 @@ ColumnFiles MemTableSet::cloneColumnFiles(DMContext & context, const RowKeyRange
         else if (auto * t = column_file->tryToTinyFile(); t)
         {
             // Use a newly created page_id to reference the data page_id of current column file.
-            PageId new_data_page_id = context.page_id_generator.newLogPageId();
+            PageId new_data_page_id = context.storage_pool.newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
             auto new_column_file = t->cloneWith(new_data_page_id);
 
@@ -101,7 +102,7 @@ ColumnFiles MemTableSet::cloneColumnFiles(DMContext & context, const RowKeyRange
         else if (auto * f = column_file->tryToBigFile(); f)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
-            auto new_ref_id = context.page_id_generator.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             auto file_id = f->getFile()->fileId();
             wbs.data.putRefPage(new_ref_id, file_id);
             auto file_parent_path = delegator.getDTFilePath(file_id);
@@ -269,6 +270,7 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         column_file_iter++;
     }
     column_files.swap(new_column_files);
+    column_files_count = column_files.size();
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;

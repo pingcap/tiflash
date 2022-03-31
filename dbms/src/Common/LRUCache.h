@@ -63,7 +63,7 @@ public:
 
     MappedPtr get(const Key & key)
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
 
         auto res = getImpl(key, cache_lock);
         if (res)
@@ -76,7 +76,7 @@ public:
 
     void set(const Key & key, const MappedPtr & mapped)
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
 
         setImpl(key, mapped, cache_lock);
     }
@@ -94,7 +94,7 @@ public:
     {
         InsertTokenHolder token_holder;
         {
-            std::lock_guard<std::mutex> cache_lock(mutex);
+            std::lock_guard cache_lock(mutex);
 
             auto val = getImpl(key, cache_lock);
             if (val)
@@ -112,7 +112,7 @@ public:
 
         InsertToken * token = token_holder.token.get();
 
-        std::lock_guard<std::mutex> token_lock(token->mutex);
+        std::lock_guard token_lock(token->mutex);
 
         token_holder.cleaned_up = token->cleaned_up;
 
@@ -126,7 +126,7 @@ public:
         ++misses;
         token->value = load_func();
 
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
 
         /// Insert the new value only if the token is still in present in insert_tokens.
         /// (The token may be absent because of a concurrent reset() call).
@@ -142,7 +142,7 @@ public:
 
     void remove(const Key & key)
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
         auto it = cells.find(key);
         if (it == cells.end())
             return;
@@ -154,26 +154,26 @@ public:
 
     void getStats(size_t & out_hits, size_t & out_misses) const
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
         out_hits = hits;
         out_misses = misses;
     }
 
     size_t weight() const
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
         return current_size;
     }
 
     size_t count() const
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
         return cells.size();
     }
 
     void reset()
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
         queue.clear();
         cells.clear();
         insert_tokens.clear();
@@ -238,12 +238,12 @@ private:
             if (cleaned_up)
                 return;
 
-            std::lock_guard<std::mutex> token_lock(token->mutex);
+            std::lock_guard token_lock(token->mutex);
 
             if (token->cleaned_up)
                 return;
 
-            std::lock_guard<std::mutex> cache_lock(token->cache.mutex);
+            std::lock_guard cache_lock(token->cache.mutex);
 
             --token->refcount;
             if (token->refcount == 0)
@@ -322,13 +322,13 @@ private:
             {
                 // If queue.insert() throws exception, cells and queue will be in inconsistent.
                 cells.erase(res.first);
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw std::exception: " << e.what());
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw std::exception: {}", e.what());
                 throw;
             }
             catch (...)
             {
                 cells.erase(res.first);
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknow exception");
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "queue.insert throw unknown exception");
                 throw;
             }
         }
@@ -363,7 +363,7 @@ private:
             auto it = cells.find(key);
             if (it == cells.end())
             {
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+                LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
                 abort();
             }
 
@@ -383,7 +383,7 @@ private:
 
         if (current_size > (1ull << 63))
         {
-            LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+            LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
             abort();
         }
     }

@@ -32,6 +32,9 @@
 
 namespace DB
 {
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+
 namespace DM
 {
 class Segment;
@@ -118,6 +121,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_stable_num_snapshots = 0;
     Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_stable_oldest_snapshot_thread_id = 0;
+    String storage_stable_oldest_snapshot_tracing_id;
     UInt64 storage_stable_num_pages = 0;
     UInt64 storage_stable_num_normal_pages = 0;
     UInt64 storage_stable_max_page_id = 0;
@@ -125,6 +129,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_delta_num_snapshots = 0;
     Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_delta_oldest_snapshot_thread_id = 0;
+    String storage_delta_oldest_snapshot_tracing_id;
     UInt64 storage_delta_num_pages = 0;
     UInt64 storage_delta_num_normal_pages = 0;
     UInt64 storage_delta_max_page_id = 0;
@@ -132,6 +137,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_num_snapshots = 0;
     Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_meta_oldest_snapshot_thread_id = 0;
+    String storage_meta_oldest_snapshot_tracing_id;
     UInt64 storage_meta_num_pages = 0;
     UInt64 storage_meta_num_normal_pages = 0;
     UInt64 storage_meta_max_page_id = 0;
@@ -290,13 +296,12 @@ public:
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
-                    TableID table_id_,
+                    TableID physical_table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
                     size_t rowkey_column_size_,
-                    const Settings & settings_ = EMPTY_SETTINGS,
-                    const TableID physical_table_id = 0);
+                    const Settings & settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -369,7 +374,7 @@ public:
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);
 
-    /// Compact fregment packs into bigger one.
+    /// Compact fragment column files into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -449,8 +454,7 @@ private:
     Context & global_context;
     StoragePathPool path_pool;
     Settings settings;
-    StoragePool storage_pool;
-    PageIdGenerator page_id_generator;
+    StoragePoolPtr storage_pool;
 
     String db_name;
     String table_name;
@@ -471,7 +475,6 @@ private:
     std::atomic<bool> shutdown_called{false};
 
     BackgroundProcessingPool & background_pool;
-    BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     BackgroundProcessingPool & blockable_background_pool;

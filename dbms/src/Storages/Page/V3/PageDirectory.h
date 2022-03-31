@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
@@ -44,10 +44,10 @@ class PageDirectorySnapshot : public DB::PageStorageSnapshot
 public:
     using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
-    UInt64 sequence;
-    explicit PageDirectorySnapshot(UInt64 seq)
+    explicit PageDirectorySnapshot(UInt64 seq, const String & tracing_id_)
         : sequence(seq)
-        , t_id(Poco::ThreadNumber::get())
+        , create_thread(Poco::ThreadNumber::get())
+        , tracing_id(tracing_id_)
         , create_time(std::chrono::steady_clock::now())
     {
         CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
@@ -67,11 +67,15 @@ public:
 
     unsigned getTid() const
     {
-        return t_id;
+        return create_thread;
     }
 
+public:
+    UInt64 sequence;
+    const unsigned create_thread;
+    const String tracing_id;
+
 private:
-    const unsigned t_id;
     const TimePoint create_time;
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
@@ -146,7 +150,7 @@ public:
 
     [[nodiscard]] PageLock acquireLock() const
     {
-        return std::lock_guard<std::mutex>(m);
+        return std::lock_guard(m);
     }
 
     void createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry);
@@ -171,6 +175,8 @@ public:
     Int64 incrRefCount(const PageVersionType & ver);
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
+
+    std::optional<PageEntryV3> getLastEntry() const;
 
     /**
      * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and
@@ -285,16 +291,20 @@ using PageDirectoryPtr = std::unique_ptr<PageDirectory>;
 class PageDirectory
 {
 public:
-    explicit PageDirectory(WALStorePtr && wal);
+    explicit PageDirectory(String storage_name, WALStorePtr && wal);
 
-    PageDirectorySnapshotPtr createSnapshot() const;
+    PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
+    SnapshotsStatistics getSnapshotsStat() const;
 
-    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
     PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
         return get(page_id, toConcreteSnapshot(snap));
+    }
+    PageIDAndEntryV3 getOrNull(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
     PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const;
@@ -394,7 +404,7 @@ private:
 
     WALStorePtr wal;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DB::PS::V3

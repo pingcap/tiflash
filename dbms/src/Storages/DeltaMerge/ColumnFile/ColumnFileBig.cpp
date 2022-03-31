@@ -33,10 +33,17 @@ ColumnFileBig::ColumnFileBig(const DMContext & context, const DMFilePtr & file_,
 void ColumnFileBig::calculateStat(const DMContext & context)
 {
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
-    auto hash_salt = context.hash_salt;
 
-    auto pack_filter
-        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, {segment_range}, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
+    auto pack_filter = DMFilePackFilter::loadFrom(
+        file,
+        index_cache,
+        /*set_cache_if_miss*/ false,
+        {segment_range},
+        EMPTY_FILTER,
+        {},
+        context.db_context.getFileProvider(),
+        context.getReadLimiter(),
+        /*tracing_logger*/ nullptr);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
@@ -79,16 +86,8 @@ void ColumnFileBigReader::initStream()
     if (file_stream)
         return;
 
-    file_stream = std::make_shared<DMFileBlockInputStream>(context.db_context,
-                                                           /*max_version*/ MAX_UINT64,
-                                                           /*clean_read*/ false,
-                                                           context.hash_salt,
-                                                           column_file.getFile(),
-                                                           *col_defs,
-                                                           RowKeyRanges{column_file.segment_range},
-                                                           RSOperatorPtr{},
-                                                           ColumnCachePtr{},
-                                                           IdSetPtr{});
+    DMFileBlockInputStreamBuilder builder(context.db_context);
+    file_stream = builder.build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
 
     // If we only need to read pk and version columns, then cache columns data in memory.
     if (pk_ver_only)

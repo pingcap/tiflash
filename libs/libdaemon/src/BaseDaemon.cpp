@@ -96,11 +96,6 @@
 extern "C" int __llvm_profile_write_file(void);
 #endif
 
-#include <Symbolization/Symbolization.h>
-#ifndef TIFLASH_SOURCE_PREFIX
-#define TIFLASH_SOURCE_PREFIX ""
-#endif
-
 using Poco::AutoPtr;
 using Poco::ConsoleChannel;
 using Poco::FileChannel;
@@ -371,7 +366,7 @@ private:
 private:
     void onTerminate(const std::string & message, ThreadNumber thread_num) const
     {
-        LOG_ERROR(log, "(from thread " << thread_num << ") " << message);
+        LOG_FMT_ERROR(log, "(from thread {}) {}", thread_num, message);
     }
 #if USE_UNWIND
     void onFault(int sig, siginfo_t & info, ucontext_t & context, unw_context_t & unw_context, ThreadNumber thread_num) const
@@ -379,10 +374,8 @@ private:
     void onFault(int sig, siginfo_t & info, ucontext_t & context, ThreadNumber thread_num) const
 #endif
     {
-        LOG_ERROR(log, "########################################");
-        LOG_ERROR(log, "(from thread " << thread_num << ") "
-                                       << "Received signal " << strsignal(sig) << " (" << sig << ")"
-                                       << ".");
+        LOG_FMT_ERROR(log, "########################################");
+        LOG_FMT_ERROR(log, "(from thread {}) Received signal {}({}).", thread_num, strsignal(sig), sig);
 
         void * caller_address = nullptr;
 
@@ -412,7 +405,7 @@ private:
             if (nullptr == info.si_addr)
                 LOG_ERROR(log, "Address: NULL pointer.");
             else
-                LOG_ERROR(log, "Address: " << info.si_addr);
+                LOG_FMT_ERROR(log, "Address: {}", info.si_addr);
 
 #if defined(__x86_64__) && !defined(__FreeBSD__) && !defined(__APPLE__)
             if ((err_mask & 0x02))
@@ -543,11 +536,12 @@ private:
         if (already_printed_stack_trace)
             return;
 
-        static const int max_frames = 50;
+        static constexpr size_t max_frames = 50;
+        size_t frames_size = 0;
         void * frames[max_frames];
 
 #if USE_UNWIND
-        int frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
+        frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
         UNUSED(caller_address);
 #else
         /// No libunwind means no backtrace, because we are in a different thread from the one where the signal happened.
@@ -555,63 +549,25 @@ private:
         if (caller_address)
         {
             frames[0] = caller_address;
-            int frames_size = 1;
+            frames_size = 1;
         }
 #endif
 
-        std::stringstream output;
-        auto prefix_size = std::size(TIFLASH_SOURCE_PREFIX);
-        for (int f = 0; f < frames_size; ++f)
+        DB::FmtBuffer output;
+
+        for (size_t f = 0; f < frames_size; ++f)
         {
-            output << std::endl;
-            auto sym_info = _tiflash_symbolize(frames[f]);
-            auto address = fmt::format("{}", frames[f]);
-            output << address;
-
-            if (sym_info.symbol_name)
-            {
-                size_t length = 0;
+            output.append("\n");
+            auto demangle_func = [](const char * name) {
                 int status = 0;
-                auto * demangled = abi::__cxa_demangle(sym_info.symbol_name, nullptr, &length, &status);
-                if (status == 0)
-                {
-                    std::string_view view(demangled, length - 1);
-                    output << "\t" << view;
-                }
-                else
-                {
-                    output << "\t" << sym_info.symbol_name;
-                }
-            }
-            else
-            {
-                output << "\t"
-                       << "<unknown symbol>";
-            }
-
-            std::fill(address.begin(), address.end(), ' ');
-            std::fill(address.begin(), address.end(), ' ');
-
-            if (sym_info.object_name)
-            {
-                output << " [" << ::basename(sym_info.object_name) << "+" << sym_info.svma << "]";
-            }
-
-            if (sym_info.source_filename)
-            {
-                output << std::endl;
-                std::string_view view(sym_info.source_filename, sym_info.source_filename_length);
-                if (view.find(TIFLASH_SOURCE_PREFIX) != std::string_view::npos)
-                {
-                    output << address << "\t" << view.substr(prefix_size) << ":" << sym_info.lineno << "";
-                }
-                else
-                {
-                    output << address << "\t" << view << ":" << sym_info.lineno << "";
-                }
-            }
+                // __cxa_demangle will leak memory; but we are failing anyway
+                // freeing memory may increase possibilities to trigger other errors
+                auto * result = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+                return std::pair<const char *, int>{result, status};
+            };
+            StackTrace::addr2line(demangle_func, output, frames[f]);
         }
-        LOG_ERROR(log, output.rdbuf());
+        LOG_ERROR(log, output.toString());
     }
 };
 
@@ -643,7 +599,7 @@ static void terminate_handler()
             int status = -1;
             char * dem = nullptr;
 
-            dem = abi::__cxa_demangle(name, 0, 0, &status);
+            dem = abi::__cxa_demangle(name, nullptr, nullptr, &status);
 
             log << "Terminate called after throwing an instance of " << (status == 0 ? dem : name) << std::endl;
 
@@ -718,7 +674,7 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     }
     catch (...)
     {
-        LOG_WARNING(logger, __PRETTY_FUNCTION__ << ": when creating " << path << ", " << DB::getCurrentExceptionMessage(true));
+        LOG_FMT_WARNING(logger, "when creating {}, {}", path, DB::getCurrentExceptionMessage(true));
     }
     return false;
 }
@@ -941,8 +897,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     config.keys("logger.levels", levels);
 
     if (!levels.empty())
-        for (AbstractConfiguration::Keys::iterator it = levels.begin(); it != levels.end(); ++it)
-            Logger::get(*it).setLevel(config.getString("logger.levels." + *it, "trace"));
+        for (auto & level : levels)
+            Logger::get(level).setLevel(config.getString("logger.levels." + level, "trace"));
 }
 
 
@@ -973,7 +929,7 @@ void BaseDaemon::initialize(Application & self)
         /// Test: -- --1=1 --1=2 --3 5 7 8 -9 10 -11=12 14= 15== --16==17 --=18 --19= --20 21 22 --23 --24 25 --26 -27 28 ---29=30 -- ----31 32 --33 3-4
         Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
         std::string key;
-        for (auto & arg : argv())
+        for (const auto & arg : argv())
         {
             auto key_start = arg.find_first_not_of('-');
             auto pos_minus = arg.find('-');
@@ -1174,7 +1130,7 @@ void BaseDaemon::initialize(Application & self)
                         throw Poco::Exception("Cannot set signal handler.");
 
                 for (auto signal : signals)
-                    if (sigaction(signal, &sa, 0))
+                    if (sigaction(signal, &sa, nullptr))
                         throw Poco::Exception("Cannot set signal handler.");
             }
         };
@@ -1213,7 +1169,7 @@ void BaseDaemon::handleNotification(Poco::TaskFailedNotification * _tfn)
     task_failed = true;
     AutoPtr<Poco::TaskFailedNotification> fn(_tfn);
     Logger * lg = &(logger());
-    LOG_ERROR(lg, "Task '" << fn->task()->name() << "' failed. Daemon is shutting down. Reason - " << fn->reason().displayText());
+    LOG_FMT_ERROR(lg, "Task '{}' failed. Daemon is shutting down. Reason - {}", fn->task()->name(), fn->reason().displayText());
     ServerApplication::terminate();
 }
 
@@ -1340,7 +1296,7 @@ void BaseDaemon::handleSignal(int signal_id)
 void BaseDaemon::onInterruptSignals(int signal_id)
 {
     is_cancelled = true;
-    LOG_INFO(&logger(), "Received termination signal (" << strsignal(signal_id) << ")");
+    LOG_FMT_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id));
 
     if (sigint_signals_counter >= 2)
     {

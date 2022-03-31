@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
@@ -95,11 +96,17 @@ public:
       * - where you must first make JOIN in parallel, while noting which keys are not found,
       *   and only after the completion of this work, create blocks of keys that are not found.
       */
-    ParallelInputsProcessor(const BlockInputStreams & inputs_, const BlockInputStreamPtr & additional_input_at_end_, size_t max_threads_, Handler & handler_)
+    ParallelInputsProcessor(
+        const BlockInputStreams & inputs_,
+        const BlockInputStreamPtr & additional_input_at_end_,
+        size_t max_threads_,
+        Handler & handler_,
+        const LoggerPtr & log_)
         : inputs(inputs_)
         , additional_input_at_end(additional_input_at_end_)
         , max_threads(std::min(inputs_.size(), max_threads_))
         , handler(handler_)
+        , log(log_)
     {
         for (size_t i = 0; i < inputs_.size(); ++i)
             unprepared_inputs.emplace(inputs_[i], i);
@@ -113,7 +120,7 @@ public:
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 
@@ -146,7 +153,7 @@ public:
                       * (for example, the connection is broken for distributed query processing)
                       * - then do not care.
                       */
-                    LOG_ERROR(log, "Exception while cancelling " << child->getName());
+                    LOG_FMT_ERROR(log, "Exception while cancelling {}", child->getName());
                 }
             }
         }
@@ -167,7 +174,7 @@ public:
         return active_threads;
     }
 
-    unsigned int getMaxThreads() const
+    size_t getMaxThreads() const
     {
         return max_threads;
     }
@@ -209,7 +216,7 @@ private:
             {
                 InputData unprepared_input;
                 {
-                    std::lock_guard<std::mutex> lock(unprepared_inputs_mutex);
+                    std::lock_guard lock(unprepared_inputs_mutex);
 
                     if (unprepared_inputs.empty())
                         break;
@@ -221,7 +228,7 @@ private:
                 unprepared_input.in->readPrefix();
 
                 {
-                    std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                    std::lock_guard lock(available_inputs_mutex);
                     available_inputs.push(unprepared_input);
                 }
             }
@@ -275,7 +282,7 @@ private:
 
             /// Select the next source.
             {
-                std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                std::lock_guard lock(available_inputs_mutex);
 
                 /// If there are no free sources, then this thread is no longer needed. (But other threads can work with their sources.)
                 if (available_inputs.empty())
@@ -296,7 +303,7 @@ private:
 
                 /// If this source is not run out yet, then put the resulting block in the ready queue.
                 {
-                    std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                    std::lock_guard lock(available_inputs_mutex);
 
                     if (block)
                     {
@@ -366,7 +373,7 @@ private:
     /// Wait for the completion of all threads.
     std::atomic<bool> joined_threads{false};
 
-    Poco::Logger * log = &Poco::Logger::get("ParallelInputsProcessor");
+    const LoggerPtr log;
 };
 
 

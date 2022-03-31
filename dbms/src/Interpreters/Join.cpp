@@ -80,7 +80,23 @@ const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
 const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
 
 
-Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_, const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_, const String & other_filter_column_, const String & other_eq_filter_from_in_column_, ExpressionActionsPtr other_condition_ptr_, size_t max_block_size_, const String & match_helper_name, const LogWithPrefixPtr & log_)
+Join::Join(
+    const Names & key_names_left_,
+    const Names & key_names_right_,
+    bool use_nulls_,
+    const SizeLimits & limits,
+    ASTTableJoin::Kind kind_,
+    ASTTableJoin::Strictness strictness_,
+    const String & req_id,
+    size_t build_concurrency_,
+    const TiDB::TiDBCollators & collators_,
+    const String & left_filter_column_,
+    const String & right_filter_column_,
+    const String & other_filter_column_,
+    const String & other_eq_filter_from_in_column_,
+    ExpressionActionsPtr other_condition_ptr_,
+    size_t max_block_size_,
+    const String & match_helper_name)
     : match_helper_name(match_helper_name)
     , kind(kind_)
     , strictness(strictness_)
@@ -97,7 +113,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
     , build_table_state(BuildTableState::SUCCEED)
-    , log(getLogWithPrefix(log_, "Join"))
+    , log(Logger::get("Join", req_id))
     , limits(limits)
 {
     build_set_exceeded.store(false);
@@ -124,7 +140,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
 
 void Join::setBuildTableState(BuildTableState state_)
 {
-    std::lock_guard<std::mutex> lk(build_table_mutex);
+    std::lock_guard lk(build_table_mutex);
     build_table_state = state_;
     build_table_cv.notify_all();
 }
@@ -605,7 +621,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
         }
         else
         {
-            std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
+            std::lock_guard lk(map.getSegmentMutex(segment_index));
             for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
             {
                 Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(segment_index), key_getter, stored_block, segment_index_info[segment_index][i], pool, sort_key_containers);
@@ -761,7 +777,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
     std::shared_lock lock(rwlock);
     Block * stored_block = nullptr;
     {
-        std::lock_guard<std::mutex> lk(blocks_lock);
+        std::lock_guard lk(blocks_lock);
         blocks.push_back(block);
         stored_block = &blocks.back();
         original_blocks.push_back(block);

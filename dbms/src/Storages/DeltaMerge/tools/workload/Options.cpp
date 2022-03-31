@@ -43,7 +43,9 @@ std::string WorkloadOptions::toString(std::string seperator) const
         fmt::format("read_thread_count {}{}", read_thread_count, seperator) + //
         fmt::format("read_stream_count {}{}", read_stream_count, seperator) + //
         fmt::format("testing_type {}{}", testing_type, seperator) + //
-        fmt::format("log_write_request {}{}", log_write_request, seperator);
+        fmt::format("log_write_request {}{}", log_write_request, seperator) + //
+        fmt::format("enable_ps_v3 {}{}", enable_ps_v3, seperator) + //
+        fmt::format("bg_thread_count {}{}", bg_thread_count, seperator);
 }
 
 std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv[])
@@ -53,7 +55,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     desc.add_options() //
         ("help", "produce help message") //
-        ("max_key_count", value<uint64_t>()->default_value(2000000), "Default is 200w.") //
+        ("max_key_count", value<uint64_t>()->default_value(20000000), "Default is 2000w.") //
         ("write_key_distribution", value<std::string>()->default_value("uniform"), "uniform/normal/incremental") //
         ("write_count", value<uint64_t>()->default_value(5000000), "Default is 500w.") //
         ("write_thread_count", value<uint64_t>()->default_value(4), "") //
@@ -66,7 +68,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("failpoints,F", value<std::vector<std::string>>()->multitoken(), "failpoint(s) to enable: fp1 fp2 fp3...") //
         //
         ("log_file", value<std::string>()->default_value(""), "") //
-        ("log_level", value<std::string>()->default_value("debug"), "") //
+        ("log_level", value<std::string>()->default_value("information"), "") //
         //
         ("verification", value<bool>()->default_value(true), "") //
         ("verify_round", value<uint64_t>()->default_value(10), "") //
@@ -83,6 +85,10 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         ("testing_type", value<std::string>()->default_value(""), "daily_perf/daily_random") //
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
+        //
+        ("enable_ps_v3", value<bool>()->default_value(false), "") //
+        //
+        ("bg_thread_count", value<uint64_t>()->default_value(4), "") //
         ;
 
     boost::program_options::variables_map vm;
@@ -144,6 +150,10 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
+
+    enable_ps_v3 = vm["enable_ps_v3"].as<bool>();
+
+    bg_thread_count = vm["bg_thread_count"].as<uint64_t>();
 
     return {true, toString()};
 }

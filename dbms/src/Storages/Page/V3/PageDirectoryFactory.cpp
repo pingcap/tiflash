@@ -14,6 +14,7 @@
 
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WALStore.h>
 
@@ -21,13 +22,18 @@
 
 namespace DB::PS::V3
 {
-PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
 {
-    auto [wal, reader] = WALStore::create(file_provider, delegator);
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadFromDisk(dir, std::move(reader));
+
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
+
+    // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
+    // try to run GC again on some entries that are already marked as invalid in BlobStore.
+    dir->gcInMemEntries();
 
     if (blob_stats)
     {
@@ -38,7 +44,11 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
         for (const auto & [page_id, entries] : dir->mvcc_table_directory)
         {
             (void)page_id;
-            if (auto entry = entries->getEntry(max_applied_ver.sequence); entry)
+
+            // We should restore the entry to `blob_stats` even if it is marked as "deleted",
+            // or we will mistakenly reuse the space to write other blobs down into that space.
+            // So we need to use `getLastEntry` instead of `getEntry(version)` here.
+            if (auto entry = entries->getLastEntry(); entry)
             {
                 blob_stats->restoreByEntry(*entry);
             }
@@ -51,16 +61,41 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
     return dir;
 }
 
-PageDirectoryPtr PageDirectoryFactory::createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
+PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
 {
-    auto [wal, reader] = WALStore::create(file_provider, delegator);
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
     (void)reader;
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadEdit(dir, edit);
-    if (blob_stats)
-        blob_stats->restore();
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
+
+    // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
+    // try to run GC again on some entries that are already marked as invalid in BlobStore.
+    dir->gcInMemEntries();
+
+    if (blob_stats)
+    {
+        // After all entries restored to `mvcc_table_directory`, only apply
+        // the latest entry to `blob_stats`, or we may meet error since
+        // some entries may be removed in memory but not get compacted
+        // in the log file.
+        for (const auto & [page_id, entries] : dir->mvcc_table_directory)
+        {
+            (void)page_id;
+
+            // We should restore the entry to `blob_stats` even if it is marked as "deleted",
+            // or we will mistakenly reuse the space to write other blobs down into that space.
+            // So we need to use `getLastEntry` instead of `getEntry(version)` here.
+            if (auto entry = entries->getLastEntry(); entry)
+            {
+                blob_stats->restoreByEntry(*entry);
+            }
+        }
+
+        blob_stats->restore();
+    }
+
     return dir;
 }
 

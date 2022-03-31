@@ -14,12 +14,11 @@
 
 #pragma once
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 
 #include <thread>
 
@@ -33,9 +32,9 @@ class SharedQueryBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "SharedQuery";
 
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const LogWithPrefixPtr & log_)
+    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
         : queue(clients)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(Logger::get(NAME, req_id))
         , in(in_)
     {
         children.push_back(in);
@@ -50,7 +49,7 @@ public:
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 
@@ -60,7 +59,7 @@ public:
 
     void readPrefix() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
 
         if (read_prefixed)
             return;
@@ -72,15 +71,33 @@ public:
 
     void readSuffix() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
 
         if (read_suffixed)
             return;
         read_suffixed = true;
-        if (thread_manager)
-            thread_manager->wait();
-        if (!exception_msg.empty())
-            throw Exception(exception_msg);
+        queue.cancel();
+        waitThread();
+    }
+
+    /** Different from the default implementation by trying to cancel the queue
+      */
+    void cancel(bool kill) override
+    {
+        if (kill)
+            is_killed = true;
+
+        bool old_val = false;
+        if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+            return;
+
+        // notify the thread exit asap.
+        queue.cancel();
+
+        auto * ptr = dynamic_cast<IProfilingBlockInputStream *>(in.get());
+        assert(ptr);
+
+        ptr->cancel(kill);
     }
 
     virtual void collectNewThreadCountOfThisLevel(int & cnt) override
@@ -91,21 +108,23 @@ public:
 protected:
     Block readImpl() override
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
 
         if (!read_prefixed)
             throw Exception("read operation called before readPrefix");
+        if (read_suffixed)
+            throw Exception("read operation called after readSuffix");
 
         Block block;
-        do
+        if (!queue.pop(block))
         {
-            if (!exception_msg.empty())
+            if (!isCancelled())
             {
-                throw Exception(exception_msg);
+                // must be `fetchBlocks` finished, `waitThread` to get its final status
+                waitThread();
             }
-            if (isCancelled() || read_suffixed)
-                return {};
-        } while (!queue.tryPop(block, try_action_millisecionds));
+            return {};
+        }
 
         return block;
     }
@@ -115,20 +134,11 @@ protected:
         try
         {
             in->readPrefix();
-            while (!isCancelled())
+            while (true)
             {
                 Block block = in->read();
-                do
-                {
-                    if (isCancelled() || read_suffixed)
-                    {
-                        // Notify waiting client.
-                        queue.tryEmplace(0);
-                        break;
-                    }
-                } while (!queue.tryPush(block, try_action_millisecionds));
-
-                if (!block)
+                // in is finished or queue is canceled
+                if (!block || !queue.push(block))
                     break;
             }
             in->readSuffix();
@@ -145,12 +155,22 @@ protected:
         {
             exception_msg = "other error";
         }
+        queue.finish();
+    }
+
+    void waitThread()
+    {
+        if (thread_manager)
+        {
+            thread_manager->wait();
+            thread_manager.reset();
+        }
+        if (!exception_msg.empty())
+            throw Exception(exception_msg);
     }
 
 private:
-    static constexpr UInt64 try_action_millisecionds = 200;
-
-    ConcurrentBoundedQueue<Block> queue;
+    MPMCQueue<Block> queue;
 
     bool read_prefixed = false;
     bool read_suffixed = false;
@@ -160,7 +180,7 @@ private:
 
     std::string exception_msg;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
     BlockInputStreamPtr in;
 };
 } // namespace DB

@@ -30,7 +30,7 @@ namespace DB
 {
 std::tuple<size_t, UInt64> RegionMeta::serialize(WriteBuffer & buf) const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     size_t size = 0;
     size += writeBinary2(peer, buf);
@@ -56,25 +56,25 @@ RegionID RegionMeta::regionId() const
 
 UInt64 RegionMeta::peerId() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return peer.id();
 }
 
 UInt64 RegionMeta::storeId() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return peer.store_id();
 }
 
 metapb::Peer RegionMeta::getPeer() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return peer;
 }
 
 raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return apply_state;
 }
 
@@ -85,7 +85,7 @@ void RegionMeta::doSetRegion(const metapb::Region & region)
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     doSetApplied(index, term);
 }
 
@@ -102,14 +102,14 @@ void RegionMeta::notifyAll() const
 
 UInt64 RegionMeta::appliedIndex() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return apply_state.applied_index();
 }
 
 RegionMeta::RegionMeta(RegionMeta && rhs)
     : region_id(rhs.regionId())
 {
-    std::lock_guard<std::mutex> lock(rhs.mutex);
+    std::lock_guard lock(rhs.mutex);
 
     peer = std::move(rhs.peer);
     apply_state = std::move(rhs.apply_state);
@@ -119,7 +119,7 @@ RegionMeta::RegionMeta(RegionMeta && rhs)
 
 ImutRegionRangePtr RegionMeta::getRange() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return region_state.getRange();
 }
 
@@ -132,7 +132,7 @@ std::string RegionMeta::toString(bool dump_status) const
         UInt64 term = 0;
         UInt64 index = 0;
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             term = applied_term;
             index = apply_state.applied_index();
         }
@@ -144,19 +144,19 @@ std::string RegionMeta::toString(bool dump_status) const
 
 raft_serverpb::PeerState RegionMeta::peerState() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return region_state.getState();
 }
 
 void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     region_state.setState(peer_state_);
 }
 
 WaitIndexResult RegionMeta::waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running) const
 {
-    std::unique_lock<std::mutex> lock(mutex);
+    std::unique_lock lock(mutex);
     WaitIndexResult status = WaitIndexResult::Finished;
     if (timeout_ms != 0)
     {
@@ -193,7 +193,7 @@ WaitIndexResult RegionMeta::waitIndex(UInt64 index, const UInt64 timeout_ms, std
 
 bool RegionMeta::checkIndex(UInt64 index) const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return doCheckIndex(index);
 }
 
@@ -204,19 +204,19 @@ bool RegionMeta::doCheckIndex(UInt64 index) const
 
 UInt64 RegionMeta::version() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return region_state.getVersion();
 }
 
 UInt64 RegionMeta::confVer() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return region_state.getConfVersion();
 }
 
 void RegionMeta::assignRegionMeta(RegionMeta && rhs)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     peer = std::move(rhs.peer);
     apply_state = std::move(rhs.apply_state);
@@ -230,7 +230,7 @@ void MetaRaftCommandDelegate::execChangePeer(
     UInt64 index,
     UInt64 term)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     const auto & new_region = response.change_peer().region();
 
@@ -312,7 +312,7 @@ void MetaRaftCommandDelegate::execRollbackMerge(
             fmt::format("{}: merge commit index is {}, expect {}", __FUNCTION__, region_state.getMergeState().commit(), rollback_request.commit()),
             ErrorCodes::LOGICAL_ERROR);
 
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     const auto version = region_state.getVersion() + 1;
     region_state.setVersion(version);
     region_state.setState(raft_serverpb::PeerState::Normal);
@@ -337,7 +337,7 @@ void MetaRaftCommandDelegate::execCommitMerge(
     const MetaRaftCommandDelegate & source_meta,
     const raft_cmdpb::AdminResponse & response)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     region_state.setVersion(res.version);
 
     ChangeRegionStateRange(region_state, res.source_at_left, source_meta.region_state);
@@ -358,7 +358,7 @@ void MetaRaftCommandDelegate::execPrepareMerge(
     const auto & prepare_merge_request = request.prepare_merge();
     const auto & target = prepare_merge_request.target();
 
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     const auto & region = region_state.getRegion();
     auto region_version = region.region_epoch().version() + 1;
     region_state.setVersion(region_version);
@@ -391,8 +391,8 @@ bool RegionMeta::doCheckPeerRemoved() const
 
 bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
 {
-    std::lock_guard<std::mutex> lock1(meta1.mutex);
-    std::lock_guard<std::mutex> lock2(meta2.mutex);
+    std::lock_guard lock1(meta1.mutex);
+    std::lock_guard lock2(meta2.mutex);
 
     return meta1.peer == meta2.peer && meta1.apply_state == meta2.apply_state && meta1.applied_term == meta2.applied_term
         && meta1.region_state == meta2.region_state;
@@ -400,7 +400,7 @@ bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
 
 RegionMetaSnapshot RegionMeta::dumpRegionMetaSnapshot() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return {region_state.getVersion(), region_state.getConfVersion(), region_state.getRange(), peer};
 }
 
@@ -438,13 +438,13 @@ RegionMeta::RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb:
 
 metapb::Region RegionMeta::getMetaRegion() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return region_state.getRegion();
 }
 
 raft_serverpb::MergeState RegionMeta::getMergeState() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return region_state.getMergeState();
 }
 
