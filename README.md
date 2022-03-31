@@ -44,6 +44,20 @@ The following packages are needed for all platforms:
 - Ninja or GNU Make
 
 The following are platform-specific prerequisites. Click to expand details:
+<details>
+<summary><b>Linux specific prerequisites</b></summary>
+
+  TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
+  > But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
+  
+- LLVM 13.0.0+
+
+  TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default.
+  To quickly set up a LLVM environment, you can use TiFlash Development Environment (short as TiFlash Env, see `release-centos7-llvm/env`).
+  You may also use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
+
+  Click sections below to see detailed instructions:
+
 
   <details>
   <summary><b>Set up LLVM via package managers in Debian/Ubuntu</b></summary>
@@ -62,7 +76,7 @@ The following are platform-specific prerequisites. Click to expand details:
   </details>
 
   <details>
-  <summary><b>Set up LLVM via package managers in Archlinux</b></summary>
+  <summary><b>Setup LLVM via package managers in Archlinux</b></summary>
 
   ```shell
   # install compilers and dependencies
