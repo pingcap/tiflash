@@ -56,7 +56,7 @@ DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext & context, //
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
-    auto dp_file = new DeltaPackFile(dmfile, valid_rows, valid_bytes, segment_range);
+    auto * dp_file = new DeltaPackFile(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<DeltaPackFile>(dp_file);
 }
 
@@ -132,7 +132,7 @@ size_t DPFileReader::readRowsOnce(MutableColumns & output_cols, //
                                   const RowKeyRange * range)
 {
     auto read_next_block = [&, this]() -> bool {
-        rows_before_cur_block += ((bool)cur_block) ? cur_block.rows() : 0;
+        rows_before_cur_block += (static_cast<bool>(cur_block)) ? cur_block.rows() : 0;
         cur_block_data.clear();
 
         cur_block = file_stream->read();

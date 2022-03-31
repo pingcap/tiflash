@@ -24,7 +24,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
 
     if (range.all())
     {
-        for (auto & file : files_)
+        for (const auto & file : files_)
         {
             rows += file->getRows();
             bytes += file->getBytes();
@@ -34,7 +34,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     {
         auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache();
         auto hash_salt = dm_context->hash_salt;
-        for (auto & file : files_)
+        for (const auto & file : files_)
         {
             auto pack_filter = DMFilePackFilter::loadFrom(file,
                                                           index_cache,
@@ -62,7 +62,7 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
     writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
-    writeIntBinary((UInt64)files.size(), buf);
+    writeIntBinary(static_cast<UInt64>(files.size()), buf);
     for (auto & f : files)
         writeIntBinary(f->refId(), buf);
 
@@ -125,7 +125,7 @@ size_t StableValueSpace::getBytesOnDisk() const
 size_t StableValueSpace::getPacks() const
 {
     size_t packs = 0;
-    for (auto & file : files)
+    for (const auto & file : files)
         packs += file->getPacks();
     return packs;
 }
@@ -133,7 +133,7 @@ size_t StableValueSpace::getPacks() const
 String StableValueSpace::getDMFilesString()
 {
     String s;
-    for (auto & file : files)
+    for (const auto & file : files)
         s += "dmf_" + DB::toString(file->fileId()) + ",";
     if (!s.empty())
         s.erase(s.length() - 1);
@@ -142,13 +142,13 @@ String StableValueSpace::getDMFilesString()
 
 void StableValueSpace::enableDMFilesGC()
 {
-    for (auto & file : files)
+    for (const auto & file : files)
         file->enableGC();
 }
 
 void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
 {
-    for (auto & file : files)
+    for (const auto & file : files)
     {
         // Here we should remove the ref id instead of file_id.
         // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
@@ -162,10 +162,9 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
     property.num_versions = 0;
     property.num_puts = 0;
     property.num_rows = 0;
-    for (size_t i = 0; i < files.size(); i++)
+    for (const auto & file : files)
     {
-        auto & file = files[i];
-        auto & pack_stats = file->getPackStats();
+        const auto & pack_stats = file->getPackStats();
         auto & pack_properties = file->getPackProperties();
         if (pack_stats.empty())
             continue;
@@ -235,7 +234,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                                                       {},
                                                       context.db_context.getFileProvider(),
                                                       context.getReadLimiter());
-        auto & use_packs = pack_filter.getUsePacks();
+        const auto & use_packs = pack_filter.getUsePacks();
         size_t new_pack_properties_index = 0;
         bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
@@ -261,14 +260,14 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             property.num_puts += pack_stats[pack_id].rows - pack_stats[pack_id].not_clean;
             if (use_new_pack_properties)
             {
-                auto & pack_property = new_pack_properties.property(new_pack_properties_index);
+                const auto & pack_property = new_pack_properties.property(new_pack_properties_index);
                 property.num_rows += pack_property.num_rows();
                 property.gc_hint_version = std::min(property.gc_hint_version, pack_property.gc_hint_version());
                 new_pack_properties_index += 1;
             }
             else
             {
-                auto & pack_property = pack_properties.property(pack_id);
+                const auto & pack_property = pack_properties.property(pack_id);
                 property.num_rows += pack_property.num_rows();
                 property.gc_hint_version = std::min(property.gc_hint_version, pack_property.gc_hint_version());
             }
@@ -351,7 +350,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     // Usually, this method will be called for some "cold" key ranges.
     // Loading the index into cache may pollute the cache and make the hot index cache invalid.
     // So don't refill the cache if the index does not exist.
-    for (auto & f : stable->files)
+    for (const auto & f : stable->files)
     {
         auto filter = DMFilePackFilter::loadFrom(f, //
                                                  context.db_context.getGlobalContext().getMinMaxIndexCache(),
@@ -362,8 +361,8 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
                                                  IdSetPtr{},
                                                  context.db_context.getFileProvider(),
                                                  context.getReadLimiter());
-        auto & pack_stats = f->getPackStats();
-        auto & use_packs = filter.getUsePacks();
+        const auto & pack_stats = f->getPackStats();
+        const auto & use_packs = filter.getUsePacks();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (use_packs[i])
@@ -376,8 +375,8 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     }
     if (!total_match_rows || !match_packs)
         return {0, 0};
-    Float64 avg_pack_rows = total_match_rows / match_packs;
-    Float64 avg_pack_bytes = total_match_bytes / match_packs;
+    Float64 avg_pack_rows = static_cast<Float64>(total_match_rows) / match_packs;
+    Float64 avg_pack_bytes = static_cast<Float64>(total_match_bytes) / match_packs;
     // By average, the first and last pack are only half covered by the range.
     // And if this range only covers one pack, then return the pack's stat.
     size_t approx_rows = std::max(avg_pack_rows, total_match_rows - avg_pack_rows / 2);
