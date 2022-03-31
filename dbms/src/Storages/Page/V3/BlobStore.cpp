@@ -893,7 +893,7 @@ void BlobStore::BlobStats::restore()
                             ErrorCodes::LOGICAL_ERROR);
         }
 
-        if (CHECK_STATS_ALL_IN_DISK)
+        if constexpr (CHECK_STATS_ALL_IN_DISK)
         {
             std::vector<BlobFileId> blob_ids_on_disk_not_in_stats(blob_ids_in_stats.size());
             auto last_check_it = std::set_difference(blob_ids_in_stats.begin(),
