@@ -130,7 +130,7 @@ size_t StableValueSpace::getBytes() const
 
 size_t StableValueSpace::getBytesOnDisk() const
 {
-    // If this stable value space is logical splited, some file may not used,
+    // If this stable value space is logical splitted, some file may not used,
     // and this will return more bytes than actual used.
     size_t bytes = 0;
     for (const auto & file : files)
@@ -258,9 +258,9 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
             }
             if (unlikely((size_t)new_pack_properties.property_size() != use_packs_count))
             {
-                throw Exception("new_pack_properties size " + std::to_string(new_pack_properties.property_size())
-                                    + " doesn't match use packs size " + std::to_string(use_packs_count),
-                                ErrorCodes::LOGICAL_ERROR);
+                throw Exception(
+                    fmt::format("size doesn't match [new_pack_properties_size={}] [use_packs_size={}]", new_pack_properties.property_size(), use_packs_count),
+                    ErrorCodes::LOGICAL_ERROR);
             }
         }
         for (size_t pack_id = 0; pack_id < use_packs.size(); pack_id++)

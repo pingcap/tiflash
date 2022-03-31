@@ -235,7 +235,7 @@ private:
 
     Context & global_context;
 
-    DB::LoggerPtr log;
+    LoggerPtr log;
 };
 
 
