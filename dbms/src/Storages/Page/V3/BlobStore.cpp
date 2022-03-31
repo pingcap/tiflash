@@ -924,15 +924,13 @@ void BlobStore::BlobStats::restore()
             }
         }
 
-        std::vector<BlobFileId> invalid_blob_ids(blob_ids_on_disk.size());
+        std::vector<BlobFileId> invalid_blob_ids;
 
-        auto last_it = std::set_difference(blob_ids_on_disk.begin(),
-                                           blob_ids_on_disk.end(),
-                                           blob_ids_in_stats.begin(),
-                                           blob_ids_in_stats.end(),
-                                           invalid_blob_ids.begin());
-
-        invalid_blob_ids.resize(last_it - invalid_blob_ids.begin());
+        std::set_difference(blob_ids_on_disk.begin(),
+                            blob_ids_on_disk.end(),
+                            blob_ids_in_stats.begin(),
+                            blob_ids_in_stats.end(),
+                            std::back_inserter(invalid_blob_ids));
 
         for (const auto & invalid_blob_id : invalid_blob_ids)
         {
