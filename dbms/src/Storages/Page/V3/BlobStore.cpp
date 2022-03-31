@@ -803,12 +803,12 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 
 std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
 {
-    std::set<BlobFileId> blob_ids_in_disk;
+    std::set<BlobFileId> blob_ids_on_disk;
 
     Poco::File store_path(path);
     if (!store_path.exists())
     {
-        return blob_ids_in_disk;
+        return blob_ids_on_disk;
     }
 
 
@@ -836,7 +836,7 @@ std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
         try
         {
             const auto & blob_id = std::stoull(ss[1]);
-            blob_ids_in_disk.insert(blob_id);
+            blob_ids_on_disk.insert(blob_id);
             continue; // continue to handle next file
         }
         catch (std::invalid_argument & e)
@@ -850,7 +850,7 @@ std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
         LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}] [err={}]", path, blob_name, err_msg);
     }
 
-    return blob_ids_in_disk;
+    return blob_ids_on_disk;
 }
 
 void BlobStore::BlobStats::restore()
