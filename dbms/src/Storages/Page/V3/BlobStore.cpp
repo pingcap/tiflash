@@ -781,8 +781,8 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 
 BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
     : log(std::move(log_))
-    , config(config_)
     , delegator(delegator_)
+    , config(config_)
 {
 }
 
