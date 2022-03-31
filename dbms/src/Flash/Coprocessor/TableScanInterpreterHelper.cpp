@@ -16,6 +16,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -23,7 +24,6 @@
 #include <Flash/Coprocessor/TableScanInterpreterHelper.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <kvproto/coprocessor.pb.h>
 #include <pingcap/coprocessor/Client.h>
@@ -273,7 +273,7 @@ void executePushedDownFilter(
 }
 } // namespace
 
-void handleTableScan(
+std::unique_ptr<DAGExpressionAnalyzer> handleTableScan(
     Context & context,
     const TiDBTableScan & table_scan,
     const String & filter_executor_id,
@@ -355,5 +355,7 @@ void handleTableScan(
         executePushedDownFilter(*analyzer, conditions, remote_read_streams_start_index, pipeline, dag_context.log->identifier());
         recordProfileStreams(dag_context, pipeline, filter_executor_id);
     }
+
+    return analyzer;
 }
 } // namespace DB::TableScanInterpreterHelper

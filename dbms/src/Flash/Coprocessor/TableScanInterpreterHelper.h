@@ -20,7 +20,7 @@
 
 namespace DB::TableScanInterpreterHelper
 {
-void handleTableScan(
+std::unique_ptr<DAGExpressionAnalyzer> handleTableScan(
     Context & context,
     const TiDBTableScan & table_scan,
     const String & filter_executor_id,

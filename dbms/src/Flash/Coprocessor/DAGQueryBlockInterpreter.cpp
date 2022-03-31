@@ -17,14 +17,11 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
-#include <DataStreams/NullBlockInputStream.h>
-#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
-#include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/TableScanInterpreterHelper.h>
