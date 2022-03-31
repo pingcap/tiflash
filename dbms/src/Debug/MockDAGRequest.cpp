@@ -131,8 +131,10 @@ TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::project(std::initializer_list<AST
 {
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
-    for (const auto & ast_ptr : cols)
-        exp_list->children.push_back(ast_ptr);
+    for (const auto & col : cols)
+	{
+		exp_list->children.push_back(col);
+	}
 
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
@@ -143,7 +145,7 @@ TiPBDAGRequestBuilder & TiPBDAGRequestBuilder::project(std::initializer_list<Str
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
     for (const auto & name : cols)
-        exp_list->children.push_back(COL(name).build());
+        exp_list->children.push_back(COL(name));
 
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
@@ -214,42 +216,6 @@ AstExprBuilder & AstExprBuilder::appendFunction(const String & func_name)
     return *this;
 }
 
-AstExprBuilder & AstExprBuilder::eq(AstExprBuilder & right_expr)
-{
-    vec.push_back(right_expr.build());
-    return appendFunction("equals");
-}
-
-AstExprBuilder & AstExprBuilder::notEq(AstExprBuilder & right_expr)
-{
-    vec.push_back(right_expr.build());
-    return appendFunction("notEquals");
-}
-
-AstExprBuilder & AstExprBuilder::lt(AstExprBuilder & right_expr)
-{
-    vec.push_back(right_expr.build());
-    return appendFunction("less");
-}
-
-AstExprBuilder & AstExprBuilder::gt(AstExprBuilder & right_expr)
-{
-    vec.push_back(right_expr.build());
-    return appendFunction("greater");
-}
-
-AstExprBuilder & AstExprBuilder::andFunc(AstExprBuilder & right_expr)
-{
-    vec.push_back(right_expr.build());
-    return appendFunction("and");
-}
-
-AstExprBuilder & AstExprBuilder::orFunc(AstExprBuilder & right_expr)
-{
-    vec.push_back(right_expr.build());
-    return appendFunction("or");
-}
-
 ASTPtr AstExprBuilder::build()
 {
     assert(vec.size() == 1);
@@ -258,26 +224,16 @@ ASTPtr AstExprBuilder::build()
     return ret;
 }
 
-ASTPtr AstExprBuilder::buildEqualFunction(const String & column_left, const String & column_right)
+ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, String name)
 {
-    appendColumnRef(column_left);
-    appendColumnRef(column_right);
-    appendFunction("equals");
-    assert(vec.size() == 1);
-    ASTPtr ret = vec.back();
-    vec.clear();
-    return ret;
-}
-
-ASTPtr AstExprBuilder::buildEqualFunction(const String & column_left, const Field & literal)
-{
-    appendColumnRef(column_left);
-    appendLiteral(literal);
-    appendFunction("equals");
-    assert(vec.size() == 1);
-    ASTPtr ret = vec.back();
-    vec.clear();
-    return ret;
+    auto func = std::make_shared<ASTFunction>();
+    func->name = name;
+    auto expr_list = std::make_shared<ASTExpressionList>();
+    for (const auto & expr : exprs)
+        expr_list->children.push_back(expr);
+    func->arguments = expr_list;
+    func->children.push_back(func->arguments);
+    return func;
 }
 
 } // namespace DB

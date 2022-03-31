@@ -57,17 +57,16 @@ try
     TiPBDAGRequestBuilder right_builder;
     right_builder
         .mockTable(right_table, r_columns)
-        .filter(COL("r_a").eq(COL("r_b")))
-        .filter(EQUALFUNCTION("r_a", "r_a"))
-        .project({"r_a", "r_b"})
+        .filter(EQ(COL("r_a"), COL("r_b")))
+        .project({COL("r_a")})
         .topN("r_a", false, 20);
 
 
     TiPBDAGRequestBuilder left_builder;
     left_builder
         .mockTable(left_table, l_columns)
-        .filter(EQUALFUNCTION("l_a", Field(empty_str))) // ywq todo add and/or ..
-        .filter(EQUALFUNCTION("l_b", makeField(10000000000000))) // illegal check...
+        // .filter(EQUALFUNCTION("l_a", Field(empty_str))) // ywq todo add and/or ..
+        // .filter(EQUALFUNCTION("l_b", makeField(10000000000000))) // illegal check...
         // .project({COL("l_a"), COL("l_b")})  // todo add function
         .topN({"l_a", "l_b"}, false, 10)
         .join(right_builder, AstExprBuilder().appendColumnRef("l_a").appendColumnRef("r_a").appendList().build()) // ywq todo more types of join

@@ -61,23 +61,28 @@ public:
     AstExprBuilder & appendAlias(String alias);
 
     AstExprBuilder & appendFunction(const String & func_name);
-    AstExprBuilder & eq(AstExprBuilder & right_expr);
-    AstExprBuilder & notEq(AstExprBuilder & right_expr);
-    AstExprBuilder & lt(AstExprBuilder & right_expr);
-    AstExprBuilder & gt(AstExprBuilder & right_expr);
-    AstExprBuilder & andFunc(AstExprBuilder & right_expr);
-    AstExprBuilder & orFunc(AstExprBuilder & right_expr);
 
     ASTPtr build();
-    ASTPtr buildEqualFunction(const String & column_left, const String & column_right);
-    ASTPtr buildEqualFunction(const String & column_left, const Field & literal);
-
 private:
     std::vector<ASTPtr> vec;
 };
 
+// ywq todo
+// class NaryExprBuilder
+// {
+// public:
+//     ASTPtr build();
+// };
+ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, String name);
 
 #define EQUALFUNCTION(col1, col2) AstExprBuilder().buildEqualFunction((col1), (col2))
-#define COL(name) AstExprBuilder().appendColumnRef((name))
+#define COL(name) AstExprBuilder().appendColumnRef((name)).build()
+#define EQ(expr1, expr2) buildFunction({(expr1), (expr2)}, "equals")
+#define NOT_EQ(expr1, expr2) buildFunction({(expr1), (expr2)}, "notEquals")
+#define lt(expr1, expr2) buildFunction({(expr1), (expr2)}, "less")
+#define gt(expr1, expr2) buildFunction({(expr1), (expr2)}, "greater")
+#define And(expr1, expr2) buildFunction({(expr1), (expr2)}, "and")
+#define Or(expr1, expr2) buildFunction({(expr1), (expr2)}, "or")
+#define NOT(expr) buildFunction({expr1}, "not")
 
 } // namespace DB
