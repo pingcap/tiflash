@@ -186,15 +186,14 @@ public:
     private:
 #endif
         LoggerPtr log;
+        PSDiskDelegatorPtr delegator;
         BlobStore::Config config;
 
-        BlobFileId roll_id = 1;
-        std::map<String, std::list<BlobStatPtr>> stats_map;
-        // Index for selecting next path for creating new blobfile
-        UInt16 stats_map_path_index = 0;
-
-        PSDiskDelegatorPtr delegator;
         mutable std::mutex lock_stats;
+        BlobFileId roll_id = 1;
+        // Index for selecting next path for creating new blobfile
+        UInt32 stats_map_path_index = 0;
+        std::map<String, std::list<BlobStatPtr>> stats_map;
     };
 
     BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
