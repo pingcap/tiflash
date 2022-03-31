@@ -49,6 +49,7 @@ public:
 
     ~DynamicThreadPool();
 
+    // wrap func into a std::packaged_task so users can get the status of execution via the returned future.
     template <typename Func, typename... Args>
     auto schedule(bool propagate_memory_tracker, Func && func, Args &&... args)
     {
@@ -56,6 +57,15 @@ public:
         auto future = task.get_future();
         scheduleTask(std::make_unique<ExecutableTask<decltype(task)>>(std::move(task)));
         return std::move(future);
+    }
+
+    // wrap func into a lambda and users can't get the status of execution.
+    // NOTE: exceptions thrown from func might cause the process terminate.
+    template <typename Func, typename... Args>
+    void scheduleRaw(bool propagate_memory_tracker, Func && func, Args &&... args)
+    {
+        auto invocable = wrapInvocable(propagate_memory_tracker, std::forward<Func>(func), std::forward<Args>(args)...);
+        scheduleTask(std::make_unique<ExecutableTask<decltype(invocable)>>(std::move(invocable)));
     }
 
     struct ThreadCount
