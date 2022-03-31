@@ -102,7 +102,7 @@ namespace DM
 //   MergeDeltaTaskPool
 // ================================================
 
-std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, Poco::Logger * log_)
+std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const BackgroundTask & task, const ThreadType & whom, const size_t max_task_num, const LoggerPtr & log_)
 {
     std::scoped_lock lock(mutex);
     if (light_tasks.size() + heavy_tasks.size() >= max_task_num)
@@ -142,7 +142,7 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
     return std::make_pair(true, is_heavy);
 }
 
-DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bool is_heavy, Poco::Logger * log_)
+DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bool is_heavy, const LoggerPtr & log_)
 {
     std::scoped_lock lock(mutex);
 
@@ -207,7 +207,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
     , hash_salt(++DELTA_MERGE_STORE_HASH_SALT)
-    , log(&Poco::Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
+    , log(Logger::get("DeltaMergeStore", fmt::format("{}.{}", db_name, table_name)))
 {
     LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}]", db_name, table_name);
 
@@ -1539,7 +1539,7 @@ namespace GC
 {
 // Returns true if it needs gc.
 // This is for optimization purpose, does not mean to be accurate.
-bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, Poco::Logger * log)
+bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, const LoggerPtr & log)
 {
     // Always GC.
     if (ratio_threshold < 1.0)
@@ -1559,7 +1559,7 @@ bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, dou
     return false;
 }
 
-bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, const RowKeyRange & segment_range, double ratio_threshold, Poco::Logger * log)
+bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, const RowKeyRange & segment_range, double ratio_threshold, const LoggerPtr & log)
 {
     auto actual_delete_range = snap->delta->getSquashDeleteRange().shrink(segment_range);
     if (actual_delete_range.none())

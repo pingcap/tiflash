@@ -287,9 +287,9 @@ public:
 
         // first element of return value means whether task is added or not
         // second element of return value means whether task is heavy or not
-        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, Poco::Logger * log_);
+        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, const LoggerPtr & log_);
 
-        BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
+        BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
     };
 
     DeltaMergeStore(Context & db_context, //
@@ -497,7 +497,7 @@ private:
 
     UInt64 hash_salt;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 }; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
