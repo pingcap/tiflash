@@ -54,7 +54,7 @@ public:
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        dir = factory.create(provider, delegator);
+        dir = factory.create("PageDirectoryTest", provider, delegator);
     }
 
 protected:
@@ -1769,7 +1769,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.createFromEdit(provider, delegator, edit);
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
 
@@ -1982,7 +1982,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.setBlobStats(stats).createFromEdit(provider, delegator, edit);
+        auto d = factory.setBlobStats(stats).createFromEdit(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
     {

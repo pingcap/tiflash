@@ -22,10 +22,10 @@
 
 namespace DB::PS::V3
 {
-PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
 {
-    auto [wal, reader] = WALStore::create(file_provider, delegator);
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadFromDisk(dir, std::move(reader));
 
     // Reset the `sequence` to the maximum of persisted.
@@ -61,11 +61,11 @@ PageDirectoryPtr PageDirectoryFactory::create(FileProviderPtr & file_provider, P
     return dir;
 }
 
-PageDirectoryPtr PageDirectoryFactory::createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
+PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
 {
-    auto [wal, reader] = WALStore::create(file_provider, delegator);
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
     (void)reader;
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(wal));
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadEdit(dir, edit);
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;

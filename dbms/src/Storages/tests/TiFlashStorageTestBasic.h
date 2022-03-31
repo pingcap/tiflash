@@ -56,6 +56,25 @@ public:
         return buffer;
     }
 
+    static std::string getCurrentTestName()
+    {
+        std::string buffer;
+        if (!testing::UnitTest::GetInstance())
+        {
+            throw DB::Exception("not in GTEST context scope.", DB::ErrorCodes::LOGICAL_ERROR);
+        }
+
+        if (const auto * info = testing::UnitTest::GetInstance()->current_test_info())
+        {
+            buffer = info->name();
+        }
+        else
+        {
+            throw DB::Exception("Can not get current test info", DB::ErrorCodes::LOGICAL_ERROR);
+        }
+        return buffer;
+    }
+
     static String getTemporaryPath()
     {
         /**
