@@ -116,7 +116,7 @@ WriteLimiter::~WriteLimiter()
 
 void WriteLimiter::request(Int64 bytes)
 {
-    std::unique_lock<std::mutex> lock(request_mutex);
+    std::unique_lock lock(request_mutex);
 
     if (stop)
         return;
@@ -409,13 +409,13 @@ extern thread_local bool is_background_thread;
 
 WriteLimiterPtr IORateLimiter::getWriteLimiter()
 {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard lock(mtx_);
     return is_background_thread ? bg_write_limiter : fg_write_limiter;
 }
 
 ReadLimiterPtr IORateLimiter::getReadLimiter()
 {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard lock(mtx_);
     return is_background_thread ? bg_read_limiter : fg_read_limiter;
 }
 

@@ -14,28 +14,24 @@
 
 #include "MetricsTransmitter.h"
 
-#include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/Context.h>
-
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
-
-#include <daemon/BaseDaemon.h>
-
+#include <Interpreters/AsynchronousMetrics.h>
+#include <Interpreters/Context.h>
 #include <Poco/Util/Application.h>
 #include <Poco/Util/LayeredConfiguration.h>
+#include <daemon/BaseDaemon.h>
 
 
 namespace DB
 {
-
 MetricsTransmitter::~MetricsTransmitter()
 {
     try
     {
         {
-            std::lock_guard<std::mutex> lock{mutex};
+            std::lock_guard lock{mutex};
             quit = true;
         }
 
@@ -57,8 +53,7 @@ void MetricsTransmitter::run()
 
     setThreadName("CHMetricsTrns");
 
-    const auto get_next_time = [](size_t seconds)
-    {
+    const auto get_next_time = [](size_t seconds) {
         /// To avoid time drift and transmit values exactly each interval:
         ///  next time aligned to system seconds
         /// (60s -> every minute at 00 seconds, 5s -> every minute:[00, 05, 15 ... 55]s, 3600 -> every hour:00:00
@@ -69,7 +64,7 @@ void MetricsTransmitter::run()
 
     std::vector<ProfileEvents::Count> prev_counters(ProfileEvents::end());
 
-    std::unique_lock<std::mutex> lock{mutex};
+    std::unique_lock lock{mutex};
 
     while (true)
     {
@@ -122,7 +117,7 @@ void MetricsTransmitter::transmit(std::vector<ProfileEvents::Count> & prev_count
         }
     }
 
-    if (key_vals.size())
+    if (!key_vals.empty())
         BaseDaemon::instance().writeToGraphite(key_vals, config_name);
 }
-}
+} // namespace DB

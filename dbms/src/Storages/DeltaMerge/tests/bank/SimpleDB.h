@@ -30,7 +30,7 @@ class SimpleDB
 public:
     void upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard guard{mutex};
         std::pair<UInt64, UInt64> value = std::make_pair(tso, balance);
         if (data.find(id) == data.end())
         {
@@ -51,7 +51,7 @@ public:
 
     UInt64 selectBalance(UInt64 id, UInt64 tso)
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard guard{mutex};
         UInt64 current_tso = 0;
         UInt64 result = 0;
         for (auto & p : data[id])

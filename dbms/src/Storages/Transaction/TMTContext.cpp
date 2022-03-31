@@ -144,13 +144,13 @@ TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_orde
 
 SchemaSyncerPtr TMTContext::getSchemaSyncer() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return schema_syncer;
 }
 
 void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     schema_syncer = rhs;
 }
 

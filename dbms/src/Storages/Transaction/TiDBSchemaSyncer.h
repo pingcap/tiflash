@@ -71,7 +71,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     // just for test
     void reset() override
     {
-        std::lock_guard<std::mutex> lock(schema_mutex);
+        std::lock_guard lock(schema_mutex);
 
         databases.clear();
         cur_version = 0;
@@ -85,13 +85,13 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Int64 getCurrentVersion() override
     {
-        std::lock_guard<std::mutex> lock(schema_mutex);
+        std::lock_guard lock(schema_mutex);
         return cur_version;
     }
 
     bool syncSchemas(Context & context) override
     {
-        std::lock_guard<std::mutex> lock(schema_mutex);
+        std::lock_guard lock(schema_mutex);
 
         auto getter = createSchemaGetter();
         Int64 version = getter.getVersion();
@@ -122,7 +122,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
     {
-        std::lock_guard<std::mutex> lock(schema_mutex);
+        std::lock_guard lock(schema_mutex);
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
         if (it == databases.end())
@@ -132,7 +132,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
     {
-        std::lock_guard<std::mutex> lock(schema_mutex);
+        std::lock_guard lock(schema_mutex);
 
         auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
         if (it == databases.end())
