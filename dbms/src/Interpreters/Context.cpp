@@ -964,13 +964,13 @@ DDLGuard::DDLGuard(Map & map_, std::mutex & mutex_, std::unique_lock<std::mutex>
 
 DDLGuard::~DDLGuard()
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     map.erase(it);
 }
 
 std::unique_ptr<DDLGuard> Context::getDDLGuard(const String & database, const String & table, const String & message) const
 {
-    std::unique_lock<std::mutex> lock(shared->ddl_guards_mutex);
+    std::unique_lock lock(shared->ddl_guards_mutex);
     return std::make_unique<DDLGuard>(shared->ddl_guards[database], shared->ddl_guards_mutex, std::move(lock), table, message);
 }
 
@@ -1236,7 +1236,7 @@ ExternalModels & Context::getExternalModels()
 
 EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->embedded_dictionaries_mutex);
+    std::lock_guard lock(shared->embedded_dictionaries_mutex);
 
     if (!shared->embedded_dictionaries)
     {
@@ -1254,7 +1254,7 @@ EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_
 
 ExternalDictionaries & Context::getExternalDictionariesImpl(const bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->external_dictionaries_mutex);
+    std::lock_guard lock(shared->external_dictionaries_mutex);
 
     if (!shared->external_dictionaries)
     {
@@ -1274,7 +1274,7 @@ ExternalDictionaries & Context::getExternalDictionariesImpl(const bool throw_on_
 
 ExternalModels & Context::getExternalModelsImpl(bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->external_models_mutex);
+    std::lock_guard lock(shared->external_models_mutex);
 
     if (!shared->external_models)
     {
@@ -1854,7 +1854,7 @@ SessionCleaner::~SessionCleaner()
     try
     {
         {
-            std::lock_guard<std::mutex> lock{mutex};
+            std::lock_guard lock{mutex};
             quit = true;
         }
 
@@ -1872,7 +1872,7 @@ void SessionCleaner::run()
 {
     setThreadName("SessionCleaner");
 
-    std::unique_lock<std::mutex> lock{mutex};
+    std::unique_lock lock{mutex};
 
     while (true)
     {

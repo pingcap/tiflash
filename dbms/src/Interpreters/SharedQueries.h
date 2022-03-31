@@ -99,7 +99,7 @@ public:
         if (!clients)
             throw Exception("Illegal client count: " + toString(clients));
 
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         const auto it = queries.find(query_id);
         if (it != queries.end())
@@ -144,7 +144,7 @@ public:
 
     void onSharedQueryFinish(String query_id)
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         const auto it = queries.find(query_id);
         if (it == queries.end())
@@ -166,7 +166,7 @@ public:
 
     void checkAll()
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         for (auto it = queries.begin(); it != queries.end();)
         {

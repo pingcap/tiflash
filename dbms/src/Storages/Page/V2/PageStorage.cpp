@@ -357,7 +357,7 @@ void PageStorage::restore()
 
 PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
 {
-    std::lock_guard<std::mutex> write_lock(write_mutex);
+    std::lock_guard write_lock(write_mutex);
     return versioned_page_entries.getSnapshot("")->version()->maxId();
 }
 
@@ -462,7 +462,7 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
 
 PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id_level)
 {
-    std::lock_guard<std::mutex> lock(open_read_files_mutex);
+    std::lock_guard lock(open_read_files_mutex);
 
     auto & pages_reader = open_read_files[file_id_level];
     if (pages_reader == nullptr)
@@ -937,7 +937,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
     WritingFilesSnapshot writing_files_snapshot;
     StatisticsInfo statistics_snapshot; // statistics snapshot copy with lock protection
     {
-        std::lock_guard<std::mutex> lock(write_mutex);
+        std::lock_guard lock(write_mutex);
         getWritingSnapshot(lock, writing_files_snapshot);
 
         /// If writer has not been used for too long, close the opened file fd of them.
@@ -961,7 +961,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
 
         {
             // Remove obsolete files' reader cache that are not used by any version
-            std::lock_guard<std::mutex> lock(open_read_files_mutex);
+            std::lock_guard lock(open_read_files_mutex);
             for (const auto & page_file : page_files)
             {
                 const auto page_id_and_lvl = page_file.fileIdLevel();
