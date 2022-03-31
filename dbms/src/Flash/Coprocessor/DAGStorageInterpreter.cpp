@@ -131,14 +131,14 @@ MakeRegionQueryInfos(
 
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
-    const DAGQueryBlock & query_block_,
     const TiDBTableScan & table_scan_,
-    const std::vector<const tipb::Expr *> & conditions_,
+    const String & pushed_down_filter_id_,
+    const std::vector<const tipb::Expr *> & pushed_down_conditions_,
     size_t max_streams_)
     : context(context_)
-    , query_block(query_block_)
     , table_scan(table_scan_)
-    , conditions(conditions_)
+    , pushed_down_filter_id(pushed_down_filter_id_)
+    , pushed_down_conditions(pushed_down_conditions_)
     , max_streams(max_streams_)
     , log(Logger::get("DAGStorageInterpreter", context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
@@ -266,7 +266,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         /// to avoid null point exception
         query_info.query = makeDummyQuery();
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
+            pushed_down_conditions,
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
@@ -686,7 +686,8 @@ void DAGStorageInterpreter::buildRemoteRequests()
             *context.getDAGContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
-            query_block.selection,
+            pushed_down_filter_id,
+            pushed_down_conditions,
             log));
     }
 }

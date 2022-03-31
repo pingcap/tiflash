@@ -28,6 +28,7 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/TableScanInterpreterHelper.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/traversePhysicalPlans.h>
 #include <Interpreters/ExpressionActions.h>
@@ -194,9 +195,10 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     {
         for (const auto & condition : query_block.selection->selection().conditions())
             conditions.push_back(&condition);
+        assert(!conditions.empty());
     }
 
-    DAGStorageInterpreter storage_interpreter(context, query_block, table_scan, conditions, max_streams);
+    DAGStorageInterpreter storage_interpreter(context, table_scan, query_block.selection_name, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
@@ -212,7 +214,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
-        executeRemoteQueryImpl(pipeline, remote_requests);
+        TableScanInterpreterHelper::executeRemoteQueryImpl(context, pipeline, remote_requests);
 
     /// record local and remote io input stream
     auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
@@ -240,7 +242,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 
     /// handle timezone/duration cast for local and remote table scan.
-    executeCastAfterTableScan(storage_interpreter.is_need_add_cast_column, remote_read_streams_start_index, pipeline);
+    TableScanInterpreterHelper::executeCastAfterTableScan(*analyzer, storage_interpreter.is_need_add_cast_column, remote_read_streams_start_index, pipeline);
     recordProfileStreams(pipeline, query_block.source_name);
 
     /// handle pushed down filter for local and remote table scan.
@@ -684,71 +686,6 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
 {
     auto & profile_streams = dagContext().getProfileStreamsMap()[key];
     pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
-}
-
-bool schemaMatch(const DAGSchema & left, const DAGSchema & right)
-{
-    if (left.size() != right.size())
-        return false;
-    for (size_t i = 0; i < left.size(); i++)
-    {
-        const auto & left_ci = left[i];
-        const auto & right_ci = right[i];
-        if (left_ci.second.tp != right_ci.second.tp)
-            return false;
-        if (left_ci.second.flag != right_ci.second.flag)
-            return false;
-    }
-    return true;
-}
-
-void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
-    DAGPipeline & pipeline,
-    std::vector<RemoteRequest> & remote_requests)
-{
-    assert(!remote_requests.empty());
-    DAGSchema & schema = remote_requests[0].schema;
-#ifndef NDEBUG
-    for (size_t i = 1; i < remote_requests.size(); i++)
-    {
-        if (!schemaMatch(schema, remote_requests[i].schema))
-            throw Exception("Schema mismatch between different partitions for partition table");
-    }
-#endif
-    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
-    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
-    std::vector<pingcap::coprocessor::copTask> all_tasks;
-    for (const auto & remote_request : remote_requests)
-    {
-        pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
-        remote_request.dag_request.SerializeToString(&(req->data));
-        req->tp = pingcap::coprocessor::ReqType::DAG;
-        req->start_ts = context.getSettingsRef().read_tso;
-        req->schema_version = context.getSettingsRef().schema_version;
-
-        pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-        pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-        all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
-    }
-
-    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
-    size_t task_per_thread = all_tasks.size() / concurrent_num;
-    size_t rest_task = all_tasks.size() % concurrent_num;
-    for (size_t i = 0, task_start = 0; i < concurrent_num; i++)
-    {
-        size_t task_end = task_start + task_per_thread;
-        if (i < rest_task)
-            task_end++;
-        if (task_end == task_start)
-            continue;
-        std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
-
-        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), query_block.source_name);
-        pipeline.streams.push_back(input);
-        task_start = task_end;
-    }
 }
 
 // To execute a query block, you have to:
