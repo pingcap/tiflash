@@ -1143,6 +1143,9 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
 
     UInt64 invalid_snapshot_nums = 0;
     UInt64 valid_snapshot_nums = 0;
+    UInt64 longest_alive_snapshot_time = 0;
+    UInt64 longest_alive_snapshot_seq = 0;
+    UInt64 stale_snapshot_nums = 0;
     {
         // Cleanup released snapshots
         std::lock_guard lock(snapshots_mutex);
@@ -1158,6 +1161,19 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
                 lowest_seq = std::min(lowest_seq, snap->sequence);
                 ++iter;
                 valid_snapshot_nums++;
+                const auto alive_time_seconds = snap->elapsedSeconds();
+
+                if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
+                {
+                    LOG_FMT_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
+                    stale_snapshot_nums++;
+                }
+
+                if (longest_alive_snapshot_time < alive_time_seconds)
+                {
+                    longest_alive_snapshot_time = alive_time_seconds;
+                    longest_alive_snapshot_seq = snap->sequence;
+                }
             }
         }
     }
@@ -1235,15 +1251,22 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         }
     }
 
-    LOG_FMT_INFO(log, "After MVCC gc in memory, clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
+    LOG_FMT_INFO(log, "After MVCC gc in memory, [lowest_seq={}]"
+                      "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
                       "[total_deref_counter={}] [all_del_entries={}]."
-                      "Still exist [snapshot_nums={}], [page_nums={}].",
+                      "Still exist [snapshot_nums={}], [page_nums={}]."
+                      "Longest alive snapshot: [longest_alive_snapshot_time={}] "
+                      "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
+                 lowest_seq,
                  invalid_snapshot_nums,
                  invalid_page_nums,
                  total_deref_counter,
                  all_del_entries.size(),
                  valid_snapshot_nums,
-                 valid_page_nums);
+                 valid_page_nums,
+                 longest_alive_snapshot_time,
+                 longest_alive_snapshot_seq,
+                 stale_snapshot_nums);
 
     return all_del_entries;
 }
