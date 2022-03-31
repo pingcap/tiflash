@@ -30,6 +30,7 @@ class BlobFile
 {
 public:
     constexpr static const char * BLOB_PREFIX_NAME = "blobfile_";
+
 public:
     BlobFile(String parent_path_,
              BlobFileId blob_id_,
