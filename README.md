@@ -45,48 +45,6 @@ The following packages are needed for all platforms:
 
 The following are platform-specific prerequisites. Click to expand details:
 
-<details>
-  <summary><b>Linux specific prerequisites</b></summary>
-
-TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
-> But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
-
-- LLVM 13.0.0+
-
-  TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default.
-  To quickly set up a LLVM environment, you can use TiFlash Development Environment (short as TiFlash Env, see `release-centos7-llvm/env`).
-  You may also use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
-
-  Click sections below to see detailed instructions:
-
-  <details>
-  <summary><b>Set up LLVM via TiFlash Env (for PingCAP empolyees)</b></summary>
-
-  TiFlash Env can be created with the following commands (`docker` and `tar xz` are needed):
-
-  ```shell
-  cd $WORKSPACE/tiflash/release-centos7-llvm/env
-  make tiflash-env-$(uname -m).tar.xz
-  ```
-
-  Then copy and uncompress `tiflash-env-$(uname -m).tar.xz` to a suitable place, assuming `$TIFLASH_ENV`.
-
-  To enter the env (before compiling TiFlash):
-
-  ```shell
-  cd $TIFLASH_ENV
-  ./loader
-  ```
-
-  Or you can dump the env settings and put them to the end of your `~/.bashrc` or `~/.zshrc`
-
-  ```shell
-  cd $TIFLASH_ENV
-  ./loader-env-dump
-  ```
-
-  </details>
-
   <details>
   <summary><b>Set up LLVM via package managers in Debian/Ubuntu</b></summary>
 
@@ -217,17 +175,6 @@ cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
     - Built library is under directory `$TIFLASH_PROXY_REPO/target/release`
 
   </details>
-### IDE Support
-
-Normally a CMake-based IDE, e.g., Clion and VSCode, should be able to open TiFlash project with no pain as long as the toolchains are properly configured.
-
-If your toolchain is set up using [TiFlash Env](#tiflash-env), and you may not want to add those libs to your system loader config, you can pass the following CMake options to your IDE:
-
-```shell
--DCMAKE_PREFIX_PATH=$TIFLASH_ENV
-```
-
-Remember that `$TIFLASH_ENV` is a placeholder mentioned in [TiFlash Env](#tiflash-env).
 
 ## Run Unit Tests
 
@@ -239,12 +186,8 @@ TBD.
 
 ## Generate LLVM Coverage Report
 
-<details>
-  <summary><b>For PingCAP empolyees</b></summary>
 
-[//]: <> (TODO: This section is not proper for developers outside PingCAP, as it uses docker image only available on internal network.)
-[//]: <> (TODO: Should refine to use local commands rather than docker.)
-To get a coverage report of unit tests, we recommend using the docker image and our scripts.
+To get a coverage report of unit tests, we recommend using the docker image and our scripts. The docker image `hub.pingcap.net/tiflash/tiflash-llvm-base:amd64` can be built via [`release-centos7-llvm/Makefile`](https://github.com/pingcap/tiflash/blob/master/release-centos7-llvm/Makefile#L16).
 
 ```shell
 docker run --rm -it -v /path/to/tiflash/src:/build/tiflash hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /bin/bash # or aarch64
@@ -269,7 +212,6 @@ llvm-cov export \
 mkdir -p /build/tiflash/report
 genhtml /tiflash/profile/lcov.info -o /build/tiflash/report
 ```
-</details>
 
 ## Contributing
 
