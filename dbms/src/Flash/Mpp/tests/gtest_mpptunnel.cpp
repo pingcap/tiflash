@@ -137,6 +137,8 @@ TEST_F(TestMPPTunnelBase, CloseBeforeConnect)
     {
         auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
         mpp_tunnel_ptr->close("Canceled");
+        GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
+        GTEST_ASSERT_EQ(mpp_tunnel_ptr->getConnectFlag(), false);
     }
     catch (Exception & e)
     {
@@ -258,6 +260,7 @@ TEST_F(TestMPPTunnelBase, ConsumerFinish)
             delete writer_ptr;
         if (data_packet_ptr)
             delete data_packet_ptr;
+        std::cerr << e.displayText() << std::endl;
         GTEST_FAIL();
     }
 }
