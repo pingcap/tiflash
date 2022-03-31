@@ -74,14 +74,11 @@ public:
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     DB::PageStorage::SnapshotPtr getSnapshot() { return getSnapshot(""); }
-    void write(DB::WriteBatch && wb) { return writeImpl(std::move(wb), nullptr); }
     DB::PageEntry getEntry(PageId page_id) { return getEntryImpl(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::Page read(PageId page_id) { return readImpl(TEST_NAMESPACE_ID, page_id, nullptr, nullptr); }
     PageMap read(const std::vector<PageId> & page_ids) { return readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr); }
     void read(const std::vector<PageId> & page_ids, const PageHandler & handler) { return readImpl(TEST_NAMESPACE_ID, page_ids, handler, nullptr, nullptr); }
     PageMap read(const std::vector<PageReadFields> & page_fields) { return readImpl(TEST_NAMESPACE_ID, page_fields, nullptr, nullptr); }
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor) { return traverseImpl(acceptor, nullptr); }
-    bool gc() { return gcImpl(false, nullptr, nullptr); }
 #endif
 
     friend class PageDirectoryFactory;

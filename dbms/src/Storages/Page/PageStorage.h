@@ -179,9 +179,6 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
-    using FieldIndices = std::vector<size_t>;
-    using PageReadFields = std::pair<PageId, FieldIndices>;
-
     void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
     {
         writeImpl(std::move(write_batch), write_limiter);
@@ -206,6 +203,9 @@ public:
     {
         readImpl(ns_id, page_ids, handler, read_limiter, snapshot);
     }
+
+    using FieldIndices = std::vector<size_t>;
+    using PageReadFields = std::pair<PageId, FieldIndices>;
 
     PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
     {
