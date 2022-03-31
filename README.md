@@ -76,7 +76,7 @@ The following are platform-specific prerequisites. Click to expand details:
   </details>
 
   <details>
-  <summary><b>Setup LLVM via package managers in Archlinux</b></summary>
+  <summary><b>Set up LLVM via package managers in Archlinux</b></summary>
 
   ```shell
   # install compilers and dependencies
