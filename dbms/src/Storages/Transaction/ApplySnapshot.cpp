@@ -190,7 +190,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             {
                 auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
                 {
-                    std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+                    std::lock_guard lock(bg_gc_region_data_mutex);
                     bg_gc_region_data.push_back(std::move(tmp));
                 }
                 tryFlushRegionCacheInStorage(tmt, *new_region_wrap, log);
@@ -259,7 +259,7 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
     RegionPreDecodeBlockDataPtr cache{nullptr};
     {
         decltype(bg_gc_region_data)::value_type tmp;
-        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+        std::lock_guard lock(bg_gc_region_data_mutex);
         if (!bg_gc_region_data.empty())
         {
             tmp.swap(bg_gc_region_data.back());

@@ -1506,7 +1506,7 @@ DeltaMergeStorePtr & StorageDeltaMerge::getAndMaybeInitStore()
     {
         return _store;
     }
-    std::lock_guard<std::mutex> lock(store_mutex);
+    std::lock_guard lock(store_mutex);
     if (_store == nullptr)
     {
         _store = std::make_shared<DeltaMergeStore>(
@@ -1549,7 +1549,7 @@ bool StorageDeltaMerge::dataDirExist()
 {
     String db_name, table_name;
     {
-        std::lock_guard<std::mutex> lock(store_mutex);
+        std::lock_guard lock(store_mutex);
         // store is inited after lock acquired.
         if (storeInited())
         {

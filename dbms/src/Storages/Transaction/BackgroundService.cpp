@@ -50,7 +50,7 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
             {
                 RegionPtr region = nullptr;
                 {
-                    std::lock_guard<std::mutex> lock(region_mutex);
+                    std::lock_guard lock(region_mutex);
                     if (!regions_to_flush.empty())
                     {
                         auto it = regions_to_flush.begin();
@@ -91,7 +91,7 @@ void BackgroundService::addRegionToFlush(const DB::RegionPtr & region)
         throw Exception("Try to addRegionToFlush while background flush is disabled.", ErrorCodes::LOGICAL_ERROR);
 
     {
-        std::lock_guard<std::mutex> lock(region_mutex);
+        std::lock_guard lock(region_mutex);
         regions_to_flush.emplace(region->id(), region);
     }
     region_handle->wake();

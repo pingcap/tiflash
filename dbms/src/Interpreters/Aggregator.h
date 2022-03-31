@@ -856,7 +856,7 @@ public:
 
         bool empty() const
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             return files.empty();
         }
     };

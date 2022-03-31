@@ -176,7 +176,7 @@ void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
 {
     {
         decltype(bg_gc_region_data) tmp;
-        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+        std::lock_guard lock(bg_gc_region_data_mutex);
         tmp.swap(bg_gc_region_data);
     }
     Timepoint now = Clock::now();
