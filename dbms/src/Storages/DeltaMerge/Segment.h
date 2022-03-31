@@ -232,6 +232,8 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
+    SegmentPtr dropNextSegment(WriteBatches & wbs);
+
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
     void placeDeltaIndex(DMContext & dm_context);
@@ -275,7 +277,7 @@ public:
     bool isSplitForbidden() { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
 
-    void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
+    void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
 
     RowsAndBytes getRowsAndBytesInRange(
         DMContext & dm_context,

@@ -138,9 +138,20 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 
 void PageIdGenerator::restore(const StoragePool & storage_pool)
 {
+<<<<<<< HEAD
     max_log_page_id = storage_pool.log_storage_reader.getMaxId();
     max_data_page_id = storage_pool.data_storage_reader.getMaxId();
     max_meta_page_id = storage_pool.meta_storage_reader.getMaxId();
+=======
+    shutdown();
+
+    if (owned_storage)
+    {
+        meta_storage->drop();
+        data_storage->drop();
+        log_storage->drop();
+    }
+>>>>>>> 3f0667a3a0 (Support drop table for PageStorage V3 (#4428))
 }
 
 PageId PageIdGenerator::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who)
