@@ -22,6 +22,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select s, i from test.
 | s           | i    |
 +-------------+------+
 | Hello world | 666  |
+| test        |  -1  |
 +-------------+------+
 
 mysql> delete from test.t
