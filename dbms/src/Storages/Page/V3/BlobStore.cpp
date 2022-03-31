@@ -569,7 +569,7 @@ void BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, 
 
 struct BlobStoreGCInfo
 {
-    const String toString()
+    String toString() const
     {
         return fmt::format("{}. {}. {}. {}. ",
                            toTypeString("Read-Only Blob", 0),
@@ -605,7 +605,7 @@ private:
     // 4. need truncate blob
     std::vector<std::pair<BlobFileId, double>> blob_gc_info[4];
 
-    const String toTypeString(const String prefix, const size_t index)
+    String toTypeString(const String prefix, const size_t index) const
     {
         FmtBuffer fmt_buf;
 
