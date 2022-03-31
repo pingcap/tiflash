@@ -30,7 +30,6 @@
 #include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
-#include <Interpreters/Compiler.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ExternalDictionaries.h>
@@ -154,7 +153,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
@@ -1647,17 +1645,6 @@ UInt16 Context::getTCPPort() const
 
     auto & config = getConfigRef();
     return config.getInt("tcp_port");
-}
-
-
-Compiler & Context::getCompiler()
-{
-    auto lock = getLock();
-
-    if (!shared->compiler)
-        shared->compiler = std::make_unique<Compiler>(shared->path + "build/", 1);
-
-    return *shared->compiler;
 }
 
 
