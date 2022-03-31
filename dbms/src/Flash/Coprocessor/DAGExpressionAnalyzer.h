@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -117,7 +118,7 @@ public:
     bool appendExtraCastsAfterTS(
         ExpressionActionsChain & chain,
         const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-        const tipb::TableScan & table_scan);
+        const TiDBTableScan & table_scan);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
