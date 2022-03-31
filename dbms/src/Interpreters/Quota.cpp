@@ -209,7 +209,7 @@ void QuotaForIntervals::setMax(const QuotaForIntervals & quota)
             cont.erase(it++);
     }
 
-    for (auto & x : quota.cont)
+    for (const auto & x : quota.cont)
     {
         if (!cont.count(x.first))
             cont.emplace(x.first, x.second);
@@ -312,7 +312,7 @@ QuotaForIntervalsPtr Quota::get(const String & quota_key, const String & user_na
                    ? quota_key
                    : user_name));
 
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     Container::iterator it = quota_for_keys.find(quota_key_hashed);
     if (quota_for_keys.end() == it)

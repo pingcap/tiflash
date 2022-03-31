@@ -49,14 +49,14 @@ public:
         : rand_gen(std::random_device()())
         , uniform_dist(dist_a, dist_b)
     {}
-    UniformDistributionKeyGenerator(uint64_t key_count)
+    explicit UniformDistributionKeyGenerator(uint64_t key_count)
         : rand_gen(std::random_device()())
         , uniform_dist(0, key_count)
     {}
 
     virtual uint64_t get64() override
     {
-        std::lock_guard<std::mutex> lock(mtx);
+        std::lock_guard lock(mtx);
         return uniform_dist(rand_gen);
     }
 
@@ -73,14 +73,14 @@ public:
         : rand_gen(std::random_device()())
         , normal_dist(mean, stddev)
     {}
-    NormalDistributionKeyGenerator(uint64_t key_count)
+    explicit NormalDistributionKeyGenerator(uint64_t key_count)
         : rand_gen(std::random_device()())
-        , normal_dist(key_count / 2, key_count / 20)
+        , normal_dist(key_count / 2.0, key_count / 20.0)
     {}
 
     virtual uint64_t get64() override
     {
-        std::lock_guard<std::mutex> lock(mtx);
+        std::lock_guard lock(mtx);
         return normal_dist(rand_gen);
     }
 
