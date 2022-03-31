@@ -105,7 +105,7 @@ extern const int CLIENT_OUTPUT_FORMAT_SPECIFIED;
 class Client : public Poco::Util::Application
 {
 public:
-    Client() {}
+    Client() = default;
 
 private:
     using StringSet = std::unordered_set<String>;
@@ -210,9 +210,9 @@ private:
         Protocol::Compression compression;
         ConnectionTimeouts timeouts;
 
-        ConnectionParameters() {}
+        ConnectionParameters() = default;
 
-        ConnectionParameters(const Poco::Util::AbstractConfiguration & config)
+        explicit ConnectionParameters(const Poco::Util::AbstractConfiguration & config)
         {
             bool is_secure = config.getBool("secure", false);
             security = is_secure
@@ -326,7 +326,7 @@ private:
     }
 
     /// Should we celebrate a bit?
-    bool isNewYearMode()
+    static bool isNewYearMode()
     {
         time_t current_time = time(nullptr);
 
@@ -549,13 +549,13 @@ private:
     static bool hasDataInSTDIN()
     {
         timeval timeout = {0, 0};
-        fd_set fds;
+        fd_set fds; // NOLINT
         FD_ZERO(&fds);
-        FD_SET(STDIN_FILENO, &fds);
-        return select(1, &fds, 0, 0, &timeout) == 1;
+        FD_SET(STDIN_FILENO, &fds); // NOLINT
+        return select(1, &fds, nullptr, nullptr, &timeout) == 1;
     }
 
-    inline const String prompt() const
+    inline String prompt() const
     {
         return boost::replace_all_copy(prompt_by_server_display_name, "{database}", config().getString("database", "default"));
     }
@@ -565,10 +565,10 @@ private:
         String query;
         String prev_query;
 
-        while (char * line_ = readline(query.empty() ? prompt().c_str() : ":-] "))
+        while (char * line_read = readline(query.empty() ? prompt().c_str() : ":-] "))
         {
-            String line = line_;
-            free(line_);
+            String line = line_read;
+            free(line_read);
 
             size_t ws = line.size();
             while (ws > 0 && isWhitespaceASCII(line[ws - 1]))
@@ -833,7 +833,7 @@ private:
     /// Convert external tables to ExternalTableData and send them using the connection.
     void sendExternalTables()
     {
-        auto * select = typeid_cast<const ASTSelectWithUnionQuery *>(&*parsed_query);
+        const auto * select = typeid_cast<const ASTSelectWithUnionQuery *>(&*parsed_query);
         if (!select && !external_tables.empty())
             throw Exception("External tables could be sent only with select query", ErrorCodes::BAD_ARGUMENTS);
 
@@ -1326,7 +1326,7 @@ private:
             std::cout << "Ok." << std::endl;
     }
 
-    void showClientVersion()
+    static void showClientVersion()
     {
         std::cout << "ClickHouse client version " << DBMS_VERSION_MAJOR
                   << "." << DBMS_VERSION_MINOR

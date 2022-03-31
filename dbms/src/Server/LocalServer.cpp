@@ -196,20 +196,20 @@ void LocalServer::applyOptions()
 
 void LocalServer::displayHelp()
 {
-    Poco::Util::HelpFormatter helpFormatter(options());
-    helpFormatter.setCommand(commandName());
-    helpFormatter.setUsage("[initial table definition] [--query <query>]");
-    helpFormatter.setHeader("\n"
-                            "clickhouse-local allows to execute SQL queries on your data files via single command line call.\n"
-                            "To do so, intially you need to define your data source and its format.\n"
-                            "After you can execute your SQL queries in the usual manner.\n"
-                            "There are two ways to define initial table keeping your data:\n"
-                            "either just in first query like this:\n"
-                            "    CREATE TABLE <table> (<structure>) ENGINE = File(<input-format>, <file>);\n"
-                            "either through corresponding command line parameters.");
-    helpFormatter.setWidth(132); /// 80 is ugly due to wide settings params
+    Poco::Util::HelpFormatter help_formatter(options());
+    help_formatter.setCommand(commandName());
+    help_formatter.setUsage("[initial table definition] [--query <query>]");
+    help_formatter.setHeader("\n"
+                             "clickhouse-local allows to execute SQL queries on your data files via single command line call.\n"
+                             "To do so, intially you need to define your data source and its format.\n"
+                             "After you can execute your SQL queries in the usual manner.\n"
+                             "There are two ways to define initial table keeping your data:\n"
+                             "either just in first query like this:\n"
+                             "    CREATE TABLE <table> (<structure>) ENGINE = File(<input-format>, <file>);\n"
+                             "either through corresponding command line parameters.");
+    help_formatter.setWidth(132); /// 80 is ugly due to wide settings params
 
-    helpFormatter.format(std::cerr);
+    help_formatter.format(std::cerr);
     std::cerr << "Example printing memory used by each Unix user:\n"
                  "ps aux | tail -n +2 | awk '{ printf(\"%s\\t%s\\n\", $1, $4) }' | "
                  "clickhouse-local -S \"user String, mem Float64\" -q \"SELECT user, round(sum(mem), 2) as memTotal FROM table GROUP BY user ORDER BY memTotal DESC FORMAT Pretty\"\n";
@@ -315,8 +315,8 @@ try
     if (minmax_index_cache_size)
         context->setMinMaxIndexCache(minmax_index_cache_size);
 
-    bool use_L0_opt = config().getBool("l0_optimize", true);
-    context->setUseL0Opt(use_L0_opt);
+    bool use_l0_opt = config().getBool("l0_optimize", true);
+    context->setUseL0Opt(use_l0_opt);
 
     /// Load global settings from default_profile and system_profile.
     context->setDefaultProfiles(config());

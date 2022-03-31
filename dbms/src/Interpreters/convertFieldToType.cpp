@@ -128,7 +128,7 @@ static Field convertDecimalToDecimalType(const Field & from, const DataTypeDecim
     // TODO:: Refine this, Consider overflow!!
     if constexpr (sizeof(From) <= sizeof(To))
     {
-        auto field = from.get<DecimalField<From>>();
+        const auto & field = from.get<DecimalField<From>>();
         if (field.getScale() <= type.getScale())
         {
             ScaleType scale = type.getScale() - field.getScale();
@@ -227,13 +227,13 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
             return convertNumericType<Float32>(src, type);
         if (typeid_cast<const DataTypeFloat64 *>(&type))
             return convertNumericType<Float64>(src, type);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal32 *>(&type))
+        if (const auto * ptype = typeid_cast<const DataTypeDecimal32 *>(&type))
             return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal64 *>(&type))
+        if (const auto * ptype = typeid_cast<const DataTypeDecimal64 *>(&type))
             return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal128 *>(&type))
+        if (const auto * ptype = typeid_cast<const DataTypeDecimal128 *>(&type))
             return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal256 *>(&type))
+        if (const auto * ptype = typeid_cast<const DataTypeDecimal256 *>(&type))
             return convertDecimalType(src, *ptype);
 
         const bool is_date = typeid_cast<const DataTypeDate *>(&type);
