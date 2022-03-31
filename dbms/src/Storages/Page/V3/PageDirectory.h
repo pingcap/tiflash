@@ -290,7 +290,7 @@ using PageDirectoryPtr = std::unique_ptr<PageDirectory>;
 class PageDirectory
 {
 public:
-    explicit PageDirectory(WALStorePtr && wal);
+    explicit PageDirectory(String storage_name, WALStorePtr && wal);
 
     PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
 
