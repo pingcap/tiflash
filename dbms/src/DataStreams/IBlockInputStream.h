@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <Storages/TableLockHolder.h>
@@ -122,7 +123,7 @@ public:
 
     /** Must be called before read, readPrefix.
       */
-    void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1);
+    void dumpTree(FmtBuffer & buffer, size_t indent = 0, size_t multiplier = 1);
 
     /** Check the depth of the pipeline.
       * If max_depth is specified and the `depth` is greater - throw an exception.
@@ -184,8 +185,11 @@ private:
     TableLockHolders table_locks;
 
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
+    mutable std::mutex tree_id_mutex;
+    mutable String tree_id;
 
-    /// Get text with names of this source and the entire subtree.
+    /// Get text with names of this source and the entire subtree, this function should only be called after the
+    /// InputStream tree is constructed.
     String getTreeID() const;
 };
 
