@@ -281,10 +281,9 @@ void StorageDeltaMerge::updateTableColumnInfo()
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    if (storeInited())
-    {
-        _store->drop();
-    }
+    // init the store so it can it can delete data from shared PageStorage
+    auto & store = getAndMaybeInitStore();
+    store->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)

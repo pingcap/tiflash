@@ -899,7 +899,7 @@ size_t PSDiskDelegatorGlobalMulti::addPageFileUsedSize(
     const auto & global_paths = pool.listGlobalPagePaths();
     for (size_t i = 0; i < global_paths.size(); i++)
     {
-        if (global_paths[i] == upper_path)
+        if (fmt::format("{}/{}", global_paths[i], path_prefix) == upper_path)
         {
             index = i;
             break;
@@ -932,7 +932,7 @@ size_t PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
     const auto & global_paths = pool.listGlobalPagePaths();
     for (size_t i = 0; i < global_paths.size(); i++)
     {
-        if (global_paths[i] == upper_path)
+        if (fmt::format("{}/{}", global_paths[i], path_prefix) == upper_path)
         {
             index = i;
             break;
