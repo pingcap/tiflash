@@ -342,7 +342,7 @@ try
     config.file_limit_size = 1024;
 
     // Generate blob [1,2,3]
-    auto writeBlobData = [](BlobStore & blob_store) {
+    auto write_blob_datas = [](BlobStore & blob_store) {
         WriteBatch write_batch;
         PageId page_id = 55;
         size_t buff_size = 1024;
@@ -377,7 +377,7 @@ try
         return true;
     };
 
-    auto restoreBlobs = [](BlobStore & blob_store, std::vector<BlobFileId> blob_ids) {
+    auto restore_blobs = [](BlobStore & blob_store, std::vector<BlobFileId> blob_ids) {
         for (const auto & id : blob_ids)
         {
             blob_store.blob_stats.restoreByEntry(PageEntryV3{
@@ -394,12 +394,12 @@ try
     {
         auto test_path = getTemporaryPath();
         auto blob_store = BlobStore(file_provider, delegator, config);
-        writeBlobData(blob_store);
+        write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(file_provider, delegator, config);
-        restoreBlobs(blob_store_check, {1, 2, 3});
+        restore_blobs(blob_store_check, {1, 2, 3});
 
         blob_store_check.blob_stats.restore();
 
@@ -412,12 +412,12 @@ try
     {
         auto test_path = getTemporaryPath();
         auto blob_store = BlobStore(file_provider, delegator, config);
-        writeBlobData(blob_store);
+        write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(file_provider, delegator, config);
-        restoreBlobs(blob_store_check, {1});
+        restore_blobs(blob_store_check, {1});
 
         blob_store_check.blob_stats.restore();
 
@@ -430,12 +430,12 @@ try
     {
         auto test_path = getTemporaryPath();
         auto blob_store = BlobStore(file_provider, delegator, config);
-        writeBlobData(blob_store);
+        write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(file_provider, delegator, config);
-        restoreBlobs(blob_store_check, {2});
+        restore_blobs(blob_store_check, {2});
 
         blob_store_check.blob_stats.restore();
 
@@ -448,12 +448,12 @@ try
     {
         auto test_path = getTemporaryPath();
         auto blob_store = BlobStore(file_provider, delegator, config);
-        writeBlobData(blob_store);
+        write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(file_provider, delegator, config);
-        restoreBlobs(blob_store_check, {3});
+        restore_blobs(blob_store_check, {3});
 
         blob_store_check.blob_stats.restore();
 
@@ -466,18 +466,18 @@ try
     {
         auto test_path = getTemporaryPath();
         auto blob_store = BlobStore(file_provider, delegator, config);
-        writeBlobData(blob_store);
+        write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(file_provider, delegator, config);
-        restoreBlobs(blob_store_check, {4});
+        restore_blobs(blob_store_check, {4});
         ASSERT_THROW(blob_store_check.blob_stats.restore(), DB::Exception);
         // Won't remove blob if exception happened.
         ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
 
         auto blob_store_check2 = BlobStore(file_provider, delegator, config);
-        restoreBlobs(blob_store_check2, {1, 2, 3, 4});
+        restore_blobs(blob_store_check2, {1, 2, 3, 4});
         ASSERT_THROW(blob_store_check2.blob_stats.restore(), DB::Exception);
         ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
     }

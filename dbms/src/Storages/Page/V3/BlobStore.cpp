@@ -801,7 +801,7 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
     stat->restoreSpaceMap(entry.offset, entry.size);
 }
 
-std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path)
+std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
 {
     std::set<BlobFileId> blob_ids_in_disk;
 
@@ -870,55 +870,69 @@ void BlobStore::BlobStats::restore()
         // If a BlobFile on disk with a valid rate of 0 (but has not been deleted because of some reason),
         // then it won't be restored to stats. But we should check and clean up if such files exist.
 
-        std::set<BlobFileId> blob_ids_in_disk = getBlobIdsFromDisk(path);
+        std::set<BlobFileId> blob_ids_on_disk = getBlobIdsFromDisk(path);
 
-        if (blob_ids_in_disk.size() < blob_ids_in_stats.size())
+        if (blob_ids_on_disk.size() < blob_ids_in_stats.size())
         {
-            String stats_str;
-            for (const auto & id_in_stats : blob_ids_in_stats)
-            {
-                stats_str += fmt::format("{},", id_in_stats);
-            }
+            FmtBuffer fmt_buf;
+            fmt_buf.fmtAppend(
+                "Some of Blob are missing in disk.[path={}] [stats ids: ",
+                path);
 
-            throw Exception(fmt::format("Some of Blob are missing in disk.[path={}][stats={}]",
-                                        path,
-                                        stats_str),
+            fmt_buf.joinStr(
+                blob_ids_in_stats.begin(),
+                blob_ids_in_stats.end(),
+                [](const auto arg, FmtBuffer & fb) {
+                    fb.fmtAppend("{}", arg);
+                },
+                ", ");
+
+            fmt_buf.append("]");
+
+            throw Exception(fmt_buf.toString(),
                             ErrorCodes::LOGICAL_ERROR);
         }
 
-        std::vector<BlobFileId> invalid_blob_ids(blob_ids_in_disk.size());
+        if (CHECK_STATS_ALL_IN_DISK)
+        {
+            std::vector<BlobFileId> blob_ids_on_disk_not_in_stats(blob_ids_in_stats.size());
+            auto last_check_it = std::set_difference(blob_ids_in_stats.begin(),
+                                                     blob_ids_in_stats.end(),
+                                                     blob_ids_on_disk.begin(),
+                                                     blob_ids_on_disk.end(),
+                                                     blob_ids_on_disk_not_in_stats.begin());
 
-        auto last_it = std::set_difference(blob_ids_in_disk.begin(),
-                                           blob_ids_in_disk.end(),
+            if (last_check_it != blob_ids_on_disk_not_in_stats.begin())
+            {
+                FmtBuffer fmt_buf;
+                fmt_buf.fmtAppend(
+                    "Some of Blob are missing in disk.[path={}] [stats ids: ",
+                    path);
+
+                fmt_buf.joinStr(
+                    blob_ids_in_stats.begin(),
+                    blob_ids_in_stats.end(),
+                    [](const auto arg, FmtBuffer & fb) {
+                        fb.fmtAppend("{}", arg);
+                    },
+                    ", ");
+
+                fmt_buf.append("]");
+
+                throw Exception(fmt_buf.toString(),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+
+        std::vector<BlobFileId> invalid_blob_ids(blob_ids_on_disk.size());
+
+        auto last_it = std::set_difference(blob_ids_on_disk.begin(),
+                                           blob_ids_on_disk.end(),
                                            blob_ids_in_stats.begin(),
                                            blob_ids_in_stats.end(),
                                            invalid_blob_ids.begin());
 
         invalid_blob_ids.resize(last_it - invalid_blob_ids.begin());
-
-        if (CHECK_STATS_ALL_IN_DISK)
-        {
-            std::vector<BlobFileId> blob_ids_in_disk_not_in_stats(blob_ids_in_stats.size());
-            auto last_check_it = std::set_difference(blob_ids_in_stats.begin(),
-                                                     blob_ids_in_stats.end(),
-                                                     blob_ids_in_disk.begin(),
-                                                     blob_ids_in_disk.end(),
-                                                     blob_ids_in_disk_not_in_stats.begin());
-
-            if (last_check_it != blob_ids_in_disk_not_in_stats.begin())
-            {
-                String stats_str;
-                for (const auto & id_in_stats : blob_ids_in_stats)
-                {
-                    stats_str += fmt::format("{},", id_in_stats);
-                }
-
-                throw Exception(fmt::format("Some of Blob are missing in disk.[path={}][stats={}]",
-                                            path,
-                                            stats_str),
-                                ErrorCodes::LOGICAL_ERROR);
-            }
-        }
 
         for (const auto & invalid_blob_id : invalid_blob_ids)
         {
