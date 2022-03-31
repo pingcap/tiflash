@@ -75,7 +75,7 @@ public:
         // If you have no idea what it means, then simply set it to false.
         bool enable_clean_read_,
         // The the MVCC filter version. Used by clean read check.
-        UInt64 max_data_version_,
+        UInt64 max_read_version_,
         // filters
         const RowKeyRanges & rowkey_ranges_,
         const RSOperatorPtr & filter_,
