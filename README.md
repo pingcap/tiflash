@@ -52,9 +52,7 @@ The following are platform-specific prerequisites. Click to expand details:
   
 - LLVM 13.0.0+
 
-  TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default.
-  To quickly set up a LLVM environment, you can use TiFlash Development Environment (short as TiFlash Env, see `release-centos7-llvm/env`).
-  You may also use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
+  TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default. You can use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
 
   Click sections below to see detailed instructions:
 
