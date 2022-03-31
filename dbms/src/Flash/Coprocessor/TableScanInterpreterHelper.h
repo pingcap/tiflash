@@ -20,20 +20,11 @@
 
 namespace DB::TableScanInterpreterHelper
 {
-void executeRemoteQueryImpl(
-    const Context & context,
-    DAGPipeline & pipeline,
-    std::vector<RemoteRequest> & remote_requests);
-
-void executeCastAfterTableScan(
-    const Context & context,
-    DAGExpressionAnalyzer & analyzer,
-    const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column,
-    size_t remote_read_streams_start_index,
-    DAGPipeline & pipeline);
-
-void executePushedDownFilter(
+void handleTableScan(
+    Context & context,
+    const TiDBTableScan & table_scan,
+    const String & filter_executor_id,
     const std::vector<const tipb::Expr *> & conditions,
-    size_t remote_read_streams_start_index,
-    DAGPipeline & pipeline);
+    DAGPipeline & pipeline,
+    size_t max_streams);
 } // namespace DB::TableScanInterpreterHelper
