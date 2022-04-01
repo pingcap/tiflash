@@ -111,7 +111,7 @@ For Ninja:
 
 ```shell
 cd $BUILD
-cmake $WORKSPACE/tiflash -Gninja
+cmake $WORKSPACE/tiflash -GNinja
 ninja tiflash
 ```
 
