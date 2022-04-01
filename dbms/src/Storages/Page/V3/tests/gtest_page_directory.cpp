@@ -1959,13 +1959,21 @@ CATCH
 TEST_F(PageDirectoryGCTest, RestoreWithRef)
 try
 {
-    PageEntryV3 entry_1_v1{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_5_v1{.file_id = 5, .size = 255, .tag = 0, .offset = 0x100, .checksum = 0x4567};
-    PageEntryV3 entry_5_v2{.file_id = 5, .size = 255, .tag = 0, .offset = 0x400, .checksum = 0x4567};
+    BlobFileId file_id1 = 1;
+    BlobFileId file_id2 = 5;
+
+    const auto & path = getTemporaryPath();
+    createIfNotExist(path);
+    Poco::File(fmt::format("{}/{}{}", path, BlobStore::BLOB_PREFIX_NAME, file_id1)).createFile();
+    Poco::File(fmt::format("{}/{}{}", path, BlobStore::BLOB_PREFIX_NAME, file_id2)).createFile();
+
+    PageEntryV3 entry_1_v1{.file_id = file_id1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_5_v1{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x100, .checksum = 0x4567};
+    PageEntryV3 entry_5_v2{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x400, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(1, entry_1_v1);
-        edit.put(5, entry_5_v1);
+        edit.put(file_id1, entry_1_v1);
+        edit.put(file_id2, entry_5_v1);
         dir->apply(std::move(edit));
     }
     {
@@ -1998,9 +2006,9 @@ try
         EXPECT_SAME_ENTRY(entry_5_v2, restored_dir->get(5, temp_snap).second);
 
         // The entry_1_v1 should be restored to stats
-        auto stat_for_file_1 = stats.blobIdToStat(1, false, false);
+        auto stat_for_file_1 = stats.blobIdToStat(file_id1, false, false);
         EXPECT_TRUE(stat_for_file_1->smap->isMarkUsed(entry_1_v1.offset, entry_1_v1.size));
-        auto stat_for_file_5 = stats.blobIdToStat(5, false, false);
+        auto stat_for_file_5 = stats.blobIdToStat(file_id2, false, false);
         // entry_5_v1 should not be restored to stats
         EXPECT_FALSE(stat_for_file_5->smap->isMarkUsed(entry_5_v1.offset, entry_5_v1.size));
         EXPECT_TRUE(stat_for_file_5->smap->isMarkUsed(entry_5_v2.offset, entry_5_v2.size));

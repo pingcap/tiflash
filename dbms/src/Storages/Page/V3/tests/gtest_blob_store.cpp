@@ -70,6 +70,11 @@ try
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
 
+    const auto & path = getTemporaryPath();
+    createIfNotExist(path);
+    Poco::File(fmt::format("{}/{}{}", path, BlobStore::BLOB_PREFIX_NAME, file_id1)).createFile();
+    Poco::File(fmt::format("{}/{}{}", path, BlobStore::BLOB_PREFIX_NAME, file_id2)).createFile();
+
     {
         stats.restoreByEntry(PageEntryV3{
             .file_id = file_id1,
@@ -284,6 +289,11 @@ try
 
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
+
+    const auto & path = getTemporaryPath();
+    createIfNotExist(path);
+    Poco::File(fmt::format("{}/{}{}", path, BlobStore::BLOB_PREFIX_NAME, file_id1)).createFile();
+    Poco::File(fmt::format("{}/{}{}", path, BlobStore::BLOB_PREFIX_NAME, file_id2)).createFile();
 
     {
         blob_store.blob_stats.restoreByEntry(PageEntryV3{
