@@ -49,17 +49,17 @@ class DynamicThreadManager : public ThreadManager
 public:
     void scheduleThenDetach(bool propagate_memory_tracker, String /*thread_name*/, ThreadManager::Job job) override
     {
-        DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, job);
+        DynamicThreadPool::global_instance->scheduleRaw(propagate_memory_tracker, std::move(job));
     }
 
     void schedule(bool propagate_memory_tracker, String /*thread_name*/, ThreadManager::Job job) override
     {
-        futures.push_back(DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, job));
+        futures.push_back(DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, std::move(job)));
     }
 
     void schedule(bool propagate_memory_tracker, ThreadPoolManager::Job job) override
     {
-        futures.push_back(DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, job));
+        futures.push_back(DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, std::move(job)));
     }
 
     void wait() override
