@@ -235,7 +235,7 @@ public:
 private:
 #endif
 
-    void read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
+    BlobFilePtr read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
 
     /**
      *  Ask BlobStats to get a span from BlobStat.
@@ -250,7 +250,7 @@ private:
      */
     void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
-    String getBlobFilePath(BlobFileId blob_id);
+    String getBlobFileParentPath(BlobFileId blob_id);
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
@@ -258,7 +258,6 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    constexpr static const char * blob_prefix_name = "/blobfile_";
 
     PSDiskDelegatorPtr delegator;
 
