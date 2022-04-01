@@ -37,7 +37,7 @@ String astToDebugString(const IAST * const ast)
 void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
     std::function<Field(const Field &, const DataTypePtr &)> cast_default_value; // for lazy bind
-    cast_default_value = [cast_default_value](const Field & value, const DataTypePtr & type) -> Field {
+    cast_default_value = [&](const Field & value, const DataTypePtr & type) -> Field {
         switch (type->getTypeId())
         {
         case TypeIndex::Float32:

@@ -347,7 +347,10 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
                 fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
         }
 
-    LOG_DEBUG(log, fmt_buf.toString());
+    auto log_str = [&]() {
+        return fmt_buf.toString();
+    };
+    LOG_DEBUG(log, log_str());
 
     /// Update metadata, through calling alterFromTiDB.
     // Using original table info with updated columns instead of using new_table_info directly,
