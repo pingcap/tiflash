@@ -48,10 +48,6 @@ int mainEntryClickHouseServer(int argc, char ** argv);
 #if ENABLE_CLICKHOUSE_CLIENT
 int mainEntryClickHouseClient(int argc, char ** argv);
 #endif
-#if USE_EMBEDDED_COMPILER
-int mainEntryClickHouseClang(int argc, char ** argv);
-int mainEntryClickHouseLLD(int argc, char ** argv);
-#endif
 
 extern "C" void print_raftstore_proxy_version();
 
@@ -102,11 +98,6 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #if ENABLE_CLICKHOUSE_SERVER
     {"server", mainEntryClickHouseServer},
 #endif
-#if USE_EMBEDDED_COMPILER
-    {"clang", mainEntryClickHouseClang},
-    {"clang++", mainEntryClickHouseClang},
-    {"lld", mainEntryClickHouseLLD},
-#endif
 #if ENABLE_TIFLASH_DTTOOL
     {"dttool", DTTool::mainEntryTiFlashDTTool},
 #endif
@@ -151,11 +142,6 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
 
 int main(int argc_, char ** argv_)
 {
-#if USE_EMBEDDED_COMPILER
-    if (argc_ >= 2 && 0 == strcmp(argv_[1], "-cc1"))
-        return mainEntryClickHouseClang(argc_, argv_);
-#endif
-
 #if USE_TCMALLOC
     /** Without this option, tcmalloc returns memory to OS too frequently for medium-sized memory allocations
       *  (like IO buffers, column vectors, hash tables, etc.),
