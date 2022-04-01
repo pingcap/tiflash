@@ -27,6 +27,7 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/StorageBuffer.h>
 #include <Storages/StorageFactory.h>
 #include <common/logger_useful.h>

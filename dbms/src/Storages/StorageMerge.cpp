@@ -32,6 +32,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMerge.h>

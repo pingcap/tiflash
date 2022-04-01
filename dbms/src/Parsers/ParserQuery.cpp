@@ -12,25 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ParserDBGInvokeQuery.h>
+#include <Parsers/ParserDeleteQuery.h>
+#include <Parsers/ParserDropQuery.h>
+#include <Parsers/ParserInsertQuery.h>
+#include <Parsers/ParserManageQuery.h>
+#include <Parsers/ParserOptimizeQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ParserInsertQuery.h>
-#include <Parsers/ParserDeleteQuery.h>
-#include <Parsers/ParserDBGInvokeQuery.h>
-#include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserRenameQuery.h>
-#include <Parsers/ParserOptimizeQuery.h>
-#include <Parsers/ParserUseQuery.h>
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserSystemQuery.h>
 #include <Parsers/ParserTruncateQuery.h>
-#include <Parsers/ParserManageQuery.h>
+#include <Parsers/ParserUseQuery.h>
 
 namespace DB
 {
-
-
 bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserQueryWithOutput query_with_output_p;
@@ -58,4 +56,4 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return res;
 }
 
-}
+} // namespace DB
