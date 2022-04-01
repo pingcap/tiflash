@@ -190,7 +190,14 @@ cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
 
 ## Run Unit Tests
 
-TBD.
+To run unit tests, you need to build with `-DCMAKE_BUILD_TYPE=DEBUG`:
+
+```shell
+cd $BUILD
+cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
+ninja gtests_dbms
+```
+And the executable unit test is in `$BUILD/dbms/gtests_dbms`.
 
 ## Run Integration Tests
 
