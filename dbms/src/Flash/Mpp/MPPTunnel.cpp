@@ -226,7 +226,9 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
     std::lock_guard<std::mutex> lk(mu);
     if (connected)
-        throw Exception("has connected");
+        throw Exception("MPPTunnel has connected");
+    if (finished)
+        throw Exception("MPPTunnel has finished");
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
