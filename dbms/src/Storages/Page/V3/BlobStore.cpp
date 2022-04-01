@@ -246,10 +246,8 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
         if (stat)
         {
             LOG_FMT_TRACE(log, "Blob begin to recalculate capability [blob_id={}]", blob_id);
-            {
-                auto lock = stat->lock();
-                stat->recalculateCapacity();
-            }
+            auto lock = stat->lock();
+            stat->recalculateCapacity();
         }
     }
 }
@@ -262,31 +260,29 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         auto lock_stats = blob_stats.lock();
         BlobFileId blob_file_id = INVALID_BLOBFILE_ID;
         std::tie(stat, blob_file_id) = blob_stats.chooseStat(size, lock_stats);
-
-        // No valid stat for puting data with `size`, create a new one
         if (stat == nullptr)
         {
+            // No valid stat for puting data with `size`, create a new one
             stat = blob_stats.createStat(blob_file_id, lock_stats);
         }
-
-        // We need to assume that this insert will reduce max_cap.
-        // Because other threads may also be waiting for BlobStats to chooseStat during this time.
-        // If max_cap is not reduced, it may cause the same BlobStat to accept multiple buffers and exceed its max_cap.
-        // After the BlobStore records the buffer size, max_caps will also get an accurate update.
-        // So there won't get problem in reducing max_caps here.
-        stat->sm_max_caps -= size;
 
         // We must get the lock from BlobStat under the BlobStats lock
         // to ensure that BlobStat updates are serialized.
         // Otherwise it may cause stat to fail to get the span for writing
         // and throwing exception.
-
         return stat->lock();
     }();
 
+    // We need to assume that this insert will reduce max_cap.
+    // Because other threads may also be waiting for BlobStats to chooseStat during this time.
+    // If max_cap is not reduced, it may cause the same BlobStat to accept multiple buffers and exceed its max_cap.
+    // After the BlobStore records the buffer size, max_caps will also get an accurate update.
+    // So there won't get problem in reducing max_caps here.
+    stat->sm_max_caps -= size;
+
     // Get Postion from single stat
     auto old_max_cap = stat->sm_max_caps;
-    BlobFileOffset offset = stat->getPosFromStat(size);
+    BlobFileOffset offset = stat->getPosFromStat(size, lock_stat);
 
     // Can't insert into this spacemap
     if (offset == INVALID_BLOBFILE_OFFSET)
@@ -307,7 +303,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
 {
     const auto & stat = blob_stats.blobIdToStat(blob_id);
     auto lock = stat->lock();
-    stat->removePosFromStat(offset, size);
+    stat->removePosFromStat(offset, size, lock);
 
     if (stat->isReadOnly() && stat->sm_valid_size == 0)
     {
@@ -790,8 +786,8 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
 
 BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
     : log(std::move(log_))
-    , config(config_)
     , delegator(delegator_)
+    , config(config_)
 {
 }
 
@@ -932,6 +928,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         // Try to find a suitable stat under current path (path=`stats_iter->first`)
         for (const auto & stat : stats_iter->second)
         {
+            auto lock = stat->lock(); // TODO: will it bring performance regression?
             if (!stat->isReadOnly()
                 && stat->sm_max_caps >= buf_size
                 && stat->sm_valid_rate < smallest_valid_rate)
@@ -1002,7 +999,7 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_
   * BlobStat methods *
   ********************/
 
-BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size)
+BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &)
 {
     BlobFileOffset offset = 0;
     UInt64 max_cap = 0;
@@ -1038,7 +1035,7 @@ BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size)
     return offset;
 }
 
-void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, size_t buf_size)
+void BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &)
 {
     if (!smap->markFree(offset, buf_size))
     {
