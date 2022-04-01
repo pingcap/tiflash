@@ -41,9 +41,9 @@ public:
 
     virtual ~PhysicalPlan() = default;
 
-    virtual PhysicalPlanPtr children(size_t) const = 0;
+    virtual PhysicalPlanPtr children(size_t /*i*/) const = 0;
 
-    virtual void setChild(size_t, const PhysicalPlanPtr &) = 0;
+    virtual void setChild(size_t /*i*/, const PhysicalPlanPtr & /*new_child*/) = 0;
 
     const PlanType & tp() const { return type; }
 
@@ -51,11 +51,11 @@ public:
 
     const NamesAndTypes & getSchema() const { return schema; }
 
-    virtual void appendChild(const PhysicalPlanPtr &) = 0;
+    virtual void appendChild(const PhysicalPlanPtr & /*new_child*/) = 0;
 
     virtual size_t childrenSize() const = 0;
 
-    void transform(DAGPipeline & pipeline, const Context & context, size_t max_streams);
+    virtual void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
     virtual void finalize(const Names & parent_require) = 0;
     void finalize() { finalize({}); }
@@ -68,7 +68,7 @@ public:
     String toString();
 
 protected:
-    virtual void transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams) = 0;
+    virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/) {};
 
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 

@@ -34,7 +34,7 @@ PhysicalPlanPtr PhysicalExchangeSender::build(
     return physical_exchange_sender;
 }
 
-void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     children(0)->transform(pipeline, context, max_streams);
 

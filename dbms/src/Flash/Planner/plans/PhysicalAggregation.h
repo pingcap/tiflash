@@ -39,7 +39,7 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
-    void transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams) override;
+    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     ExpressionActionsPtr before_agg_actions;
     Names aggregation_keys;

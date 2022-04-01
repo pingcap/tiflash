@@ -20,7 +20,7 @@ PhysicalPlanPtr PhysicalLimit::build(
     return physical_limit;
 }
 
-void PhysicalLimit::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     children(0)->transform(pipeline, context, max_streams);
 

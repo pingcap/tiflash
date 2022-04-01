@@ -49,7 +49,7 @@ void PhysicalPlan::recordProfileStreams(DAGPipeline & pipeline, const Context & 
     }
 }
 
-void PhysicalPlan::transform(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+void PhysicalPlan::transform(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     transformImpl(pipeline, context, max_streams);
     recordProfileStreams(pipeline, context);

@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Coprocessor/StorageWithStructureLock.h>
 #include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
@@ -70,11 +71,6 @@ public:
     BlockInputStreamPtr null_stream_if_empty;
 
 private:
-    struct StorageWithStructureLock
-    {
-        ManageableStoragePtr storage;
-        TableStructureLockHolder lock;
-    };
     LearnerReadSnapshot doCopLearnerRead();
 
     LearnerReadSnapshot doBatchCopLearnerRead();

@@ -27,6 +27,7 @@ enum PlanType
     Projection,
     Source,
     ExchangeSender,
+    TableScan,
 };
 
 String toString(const PlanType & plan_type);

@@ -62,7 +62,7 @@ PhysicalPlanPtr PhysicalAggregation::build(
     return physical_agg;
 }
 
-void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     children(0)->transform(pipeline, context, max_streams);
 

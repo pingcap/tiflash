@@ -32,7 +32,7 @@ PhysicalPlanPtr PhysicalFilter::build(
     return physical_filter;
 }
 
-void PhysicalFilter::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+void PhysicalFilter::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     children(0)->transform(pipeline, context, max_streams);
 

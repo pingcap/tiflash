@@ -16,6 +16,8 @@
 
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Coprocessor/StorageWithStructureLock.h>
 #include <Interpreters/Context.h>
 
 namespace DB::TableScanInterpreterHelper
@@ -27,4 +29,8 @@ std::unique_ptr<DAGExpressionAnalyzer> handleTableScan(
     const std::vector<const tipb::Expr *> & conditions,
     DAGPipeline & pipeline,
     size_t max_streams);
+
+std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(
+    Context & context,
+    const TiDBTableScan & tidb_table_scan);
 } // namespace DB::TableScanInterpreterHelper

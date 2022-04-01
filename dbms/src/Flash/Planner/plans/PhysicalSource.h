@@ -24,7 +24,7 @@ public:
         , sample_block(sample_block_)
     {}
 
-    void transformImpl(DAGPipeline &, const Context &, size_t) override {}
+    void transformImpl(DAGPipeline &, Context &, size_t) override {}
 
     void finalize(const Names &) override {}
 

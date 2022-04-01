@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -22,6 +23,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/TableScanInterpreterHelper.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/Transaction/TiDB.h>
@@ -359,6 +361,93 @@ std::unique_ptr<DAGExpressionAnalyzer> handleTableScan(
     }
 
     return analyzer;
+}
+
+std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(
+    Context & context,
+    const TiDBTableScan & tidb_table_scan)
+{
+    const auto & settings = context.getSettingsRef();
+    Int64 query_schema_version = settings.schema_version;
+    TMTContext & tmt = context.getTMTContext();
+    std::unordered_map<TableID, StorageWithStructureLock> storages_with_lock;
+    if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
+    {
+        auto logical_table_storage = tmt.getStorages().get(tidb_table_scan.getLogicalTableID());
+        if (!logical_table_storage)
+        {
+            throw TiFlashException("Table " + std::to_string(tidb_table_scan.getLogicalTableID()) + " doesn't exist.", Errors::Table::NotExists);
+        }
+        storages_with_lock[tidb_table_scan.getLogicalTableID()] = {logical_table_storage, logical_table_storage->lockStructureForShare(context.getCurrentQueryId())};
+        if (tidb_table_scan.isPartitionTableScan())
+        {
+            for (auto const physical_table_id : tidb_table_scan.getPhysicalTableIDs())
+            {
+                auto physical_table_storage = tmt.getStorages().get(physical_table_id);
+                if (!physical_table_storage)
+                {
+                    throw TiFlashException(fmt::format("Table {} doesn't exist.", physical_table_id), Errors::Table::NotExists);
+                }
+                storages_with_lock[physical_table_id] = {physical_table_storage, physical_table_storage->lockStructureForShare(context.getCurrentQueryId())};
+            }
+        }
+        return storages_with_lock;
+    }
+
+    auto global_schema_version = tmt.getSchemaSyncer()->getCurrentVersion();
+
+    /// Align schema version under the read lock.
+    /// Return: [storage, table_structure_lock, storage_schema_version, ok]
+    auto get_and_lock_storage = [&](bool schema_synced, TableID table_id) -> std::tuple<ManageableStoragePtr, TableStructureLockHolder, Int64, bool> {
+        /// Get storage in case it's dropped then re-created.
+        // If schema synced, call getTable without try, leading to exception on table not existing.
+        auto table_store = tmt.getStorages().get(table_id);
+        if (!table_store)
+        {
+            if (schema_synced)
+                throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
+            else
+                return {{}, {}, {}, false};
+        }
+
+        if (table_store->engineType() != ::TiDB::StorageEngine::TMT && table_store->engineType() != ::TiDB::StorageEngine::DT)
+        {
+            throw TiFlashException(
+                fmt::format(
+                    "Specifying schema_version for non-managed storage: {}, table: {}, id: {} is not allowed",
+                    table_store->getName(),
+                    table_store->getTableName(),
+                    table_id),
+            Errors::Coprocessor::Internal);
+        }
+
+        auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
+
+        /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
+        // We have three schema versions, two in TiFlash:
+        // 1. Storage: the version that this TiFlash table (storage) was last altered.
+        // 2. Global: the version that TiFlash global schema is at.
+        // And one from TiDB/TiSpark:
+        // 3. Query: the version that TiDB/TiSpark used for this query.
+        auto storage_schema_version = table_store->getTableInfo().schema_version;
+        // Not allow storage > query in any case, one example is time travel queries.
+        if (storage_schema_version > query_schema_version)
+            throw TiFlashException(
+                fmt::format("Table {} schema version {} newer than query schema version {}", table_id, storage_schema_version, query_schema_version),
+                Errors::Table::SchemaVersionError);
+        // From now on we have storage <= query.
+        // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
+        if (schema_synced)
+            return {table_store, lock, storage_schema_version, true};
+        // From now on the schema was not synced.
+        // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
+        // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
+        // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
+        if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
+            return {table_store, lock, storage_schema_version, true};
+        // From now on we have global < query.
+        // Return false for outer to sync and retry.
+        return {nullptr, {}, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false};
 }
 } // namespace TableScanInterpreterHelper
 } // namespace DB

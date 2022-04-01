@@ -38,7 +38,7 @@ PhysicalPlanPtr PhysicalTopN::build(
     return physical_top_n;
 }
 
-void PhysicalTopN::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+void PhysicalTopN::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     children(0)->transform(pipeline, context, max_streams);
 

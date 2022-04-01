@@ -35,6 +35,8 @@ String toString(const PlanType & plan_type)
         return "Source";
     case ExchangeSender:
         return "ExchangeSender";
+    case TableScan:
+        return "TableScan";
     default:
         throw Exception("Unknown PlanType");
     }

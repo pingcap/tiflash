@@ -38,7 +38,7 @@ PhysicalPlanPtr PhysicalExchangeReceiver::build(
     return physical_exchange_receiver;
 }
 
-void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, const Context & context, size_t max_streams)
+void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     auto & dag_context = *context.getDAGContext();
     const auto & logger = dag_context.log;
