@@ -20,6 +20,7 @@
 #include <Parsers/ParserShowProcesslistQuery.h>
 #include <Parsers/ParserCheckQuery.h>
 #include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserDescribeTableQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
