@@ -740,7 +740,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
 
     // Check disk file have been truncate to right margin
-    String path = blob_store.getBlobFilePath(1);
+    String path = blob_store.getBlobFile(1)->getPath();
     Poco::File blob_file_in_disk(path);
     ASSERT_EQ(blob_file_in_disk.getSize(), stat->sm_total_size);
 }
@@ -859,8 +859,8 @@ TEST_F(BlobStoreTest, GC)
     }
 
     // Check blobfile1
-    Poco::File file1(blob_store.getBlobFilePath(1));
-    Poco::File file2(blob_store.getBlobFilePath(2));
+    Poco::File file1(blob_store.getBlobFile(1)->getPath());
+    Poco::File file2(blob_store.getBlobFile(2)->getPath());
     ASSERT_TRUE(file1.exists());
     ASSERT_TRUE(file2.exists());
     ASSERT_EQ(file1.getSize(), file2.getSize());
