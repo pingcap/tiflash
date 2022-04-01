@@ -97,23 +97,31 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
 class PageStorageControl
 {
 public:
-    PageStorageControl(const ControlOptions & options_)
+    explicit PageStorageControl(const ControlOptions & options_)
         : options(options_)
     {
     }
 
     void run()
     {
-        DB::PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
+        DB::PSDiskDelegatorPtr delegator;
+        if (options.paths.size() == 1)
+        {
+            delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(options.paths[0]);
+        }
+        else
+        {
+            delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(options.paths);
+        }
 
         auto key_manager = std::make_shared<DB::MockKeyManager>(false);
         auto file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
 
         BlobStore::Config blob_config;
 
-        // TODO: Need use multi-path after BlobStore supported.
         PageStorage::Config config;
         PageStorageImpl ps_v3("PageStorageControl", delegator, config, file_provider);
+        ps_v3.restore();
         PageDirectory::MVCCMapType & mvcc_table_directory = ps_v3.page_directory->mvcc_table_directory;
 
         switch (options.display_mode)
@@ -152,117 +160,128 @@ public:
     }
 
 private:
-    String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
+    static String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
     {
-        auto statInfo = [](const BlobStore::BlobStats::BlobStatPtr & stat) {
-            String stat_str = fmt::format(R"raw(    stat id: {}
-            total size: {}
-            valid size: {}
-            valid rate: {}
-            max cap: {}
-                )raw", //
-                                          stat->id, //
-                                          stat->sm_total_size, //
-                                          stat->sm_valid_size, //
-                                          stat->sm_valid_rate, //
-                                          stat->sm_max_caps);
+        auto stat_info = [](const BlobStore::BlobStats::BlobStatPtr & stat, const String & path) {
+            FmtBuffer stat_str;
+            stat_str.fmtAppend("    stat id: {}\n"
+                               "     path: {}\n"
+                               "     total size: {}\n"
+                               "     valid size: {}\n"
+                               "     valid rate: {}\n"
+                               "     max cap: {}\n", //
+                               stat->id, //
+                               path,
+                               stat->sm_total_size, //
+                               stat->sm_valid_size, //
+                               stat->sm_valid_rate, //
+                               stat->sm_max_caps);
 
-            stat_str += stat->smap->toDebugString();
-            stat_str += "\n";
-            return stat_str;
+            stat_str.append(stat->smap->toDebugString());
+            stat_str.append("\n");
+            return stat_str.toString();
         };
 
-        String stats_str = "  Blobs specific info: \n\n";
-        for (const auto & stat : blob_store.blob_stats.getStats())
+        FmtBuffer stats_info;
+        stats_info.append("  Blobs specific info: \n\n");
+
+        for (const auto & [path, stats] : blob_store.blob_stats.getStats())
         {
-            if (blob_id != UINT32_MAX)
+            for (const auto & stat : stats)
             {
-                if (stat->id == blob_id)
+                if (blob_id != UINT32_MAX)
                 {
-                    stats_str += statInfo(stat);
-                    return stats_str;
+                    if (stat->id == blob_id)
+                    {
+                        stats_info.append(stat_info(stat, path));
+                        return stats_info.toString();
+                    }
+                    continue;
                 }
-                continue;
+
+                stats_info.append(stat_info(stat, path));
             }
-            stats_str += statInfo(stat);
         }
 
         if (blob_id != UINT32_MAX)
         {
-            stats_str += fmt::format("    no found blob {}", blob_id);
+            stats_info.fmtAppend("    no found blob {}", blob_id);
         }
-        return stats_str;
+        return stats_info.toString();
     }
 
-    String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
+    static String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
     {
-        auto pageInfo = [](UInt128 page_internal_id_, const VersionedPageEntriesPtr & versioned_entries) {
-            String page_str = fmt::format("    page id {}\n", page_internal_id_);
-            page_str += fmt::format("      {}\n", versioned_entries->toDebugString());
+        auto page_info = [](UInt128 page_internal_id_, const VersionedPageEntriesPtr & versioned_entries) {
+            FmtBuffer page_str;
+            page_str.fmtAppend("    page id {}\n", page_internal_id_);
+            page_str.fmtAppend("      {}\n", versioned_entries->toDebugString());
 
             size_t count = 0;
             for (const auto & [version, entry_or_del] : versioned_entries->entries)
             {
                 const auto & entry = entry_or_del.entry;
-                page_str += fmt::format(R"raw(      entry {}
-                sequence: {}
-                epoch: {}
-                is del: {}
-                blob id: {}
-                offset: {}
-                size: {}
-                crc: {})raw", //
-                                        count++, //
-                                        version.sequence, //
-                                        version.epoch, //
-                                        entry_or_del.isDelete(), //
-                                        entry.file_id, //
-                                        entry.offset, //
-                                        entry.size, //
-                                        entry.checksum, //
-                                        entry.field_offsets.size() //
+                page_str.fmtAppend("      entry {}\n"
+                                   "       sequence: {}\n"
+                                   "       epoch: {}\n"
+                                   "       is del: {}\n"
+                                   "       blob id: {}\n"
+                                   "       offset: {}\n"
+                                   "       size: {}\n"
+                                   "       crc: {}\n", //
+                                   count++, //
+                                   version.sequence, //
+                                   version.epoch, //
+                                   entry_or_del.isDelete(), //
+                                   entry.file_id, //
+                                   entry.offset, //
+                                   entry.size, //
+                                   entry.checksum, //
+                                   entry.field_offsets.size() //
                 );
-                if (entry.field_offsets.size() != 0)
+                if (!entry.field_offsets.empty())
                 {
-                    page_str += fmt::format("          field offset:\n");
+                    page_str.append("          field offset:\n");
                     for (const auto & [offset, crc] : entry.field_offsets)
                     {
-                        page_str += fmt::format("            offset: {} crc: 0x{:X}\n", offset, crc);
+                        page_str.fmtAppend("            offset: {} crc: 0x{:X}\n", offset, crc);
                     }
-                    page_str += fmt::format("\n");
+                    page_str.append("\n");
                 }
             }
-            return page_str;
+            return page_str.toString();
         };
 
-        String directory_str = "  Directory specific info: \n\n";
+        FmtBuffer directory_info;
+        directory_info.append("  Directory specific info: \n\n");
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
             if (page_id != UINT64_MAX)
             {
                 if (internal_id.low == page_id && internal_id.high == ns_id)
                 {
-                    directory_str += pageInfo(internal_id, versioned_entries);
-                    return directory_str;
+                    directory_info.append(page_info(internal_id, versioned_entries));
+                    return directory_info.toString();
                 }
                 continue;
             }
-            directory_str += pageInfo(internal_id, versioned_entries);
+            directory_info.append(page_info(internal_id, versioned_entries));
         }
 
         if (page_id != UINT64_MAX)
         {
-            directory_str += fmt::format("    no found page {}", page_id);
+            directory_info.fmtAppend("    no found page {}", page_id);
         }
-        return directory_str;
+        return directory_info.toString();
     }
 
-    String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
+    static String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
     {
         UInt64 longest_version_chaim = 0;
         UInt64 shortest_version_chaim = UINT64_MAX;
+        FmtBuffer dir_summary_info;
 
-        String dir_summary_info = "  Directory summary info: \n";
+        dir_summary_info.append("  Directory summary info: \n");
 
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
@@ -271,31 +290,39 @@ private:
             shortest_version_chaim = std::min(shortest_version_chaim, versioned_entries->size());
         }
 
-        dir_summary_info += fmt::format("    total pages: {}, longest version chaim: {} , shortest version chaim: {} \n\n",
-                                        mvcc_table_directory.size(),
-                                        longest_version_chaim,
-                                        shortest_version_chaim);
+        dir_summary_info.fmtAppend("    total pages: {}, longest version chaim: {} , shortest version chaim: {} \n\n",
+                                   mvcc_table_directory.size(),
+                                   longest_version_chaim,
+                                   shortest_version_chaim);
 
-        String stats_str = "  Blobs summary info: \n";
-        for (const auto & stat : blob_store.blob_stats.getStats())
-        {
-            stats_str += fmt::format(R"raw(    stat id: {}
-            total size: {}
-            valid size: {}
-            valid rate: {}
-            max cap: {}
-                )raw", //
-                                     stat->id,
-                                     stat->sm_total_size,
-                                     stat->sm_valid_size,
-                                     stat->sm_valid_rate,
-                                     stat->sm_max_caps);
-        }
+        dir_summary_info.append("  Blobs summary info: \n");
+        const auto & blob_stats = blob_store.blob_stats.getStats();
+        dir_summary_info.joinStr(
+            blob_stats.begin(),
+            blob_stats.end(),
+            [](const auto arg, FmtBuffer & fb) {
+                for (const auto & stat : arg.second)
+                {
+                    fb.fmtAppend("   stat id: {}\n"
+                                 "     path: {}\n"
+                                 "     total size: {}\n"
+                                 "     valid size: {}\n"
+                                 "     valid rate: {}\n"
+                                 "     max cap: {}\n",
+                                 stat->id,
+                                 arg.first,
+                                 stat->sm_total_size,
+                                 stat->sm_valid_size,
+                                 stat->sm_valid_rate,
+                                 stat->sm_max_caps);
+                }
+            },
+            "");
 
-        return dir_summary_info + stats_str;
+        return dir_summary_info.toString();
     }
 
-    String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
+    static String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
     {
         const auto & page_internal_id = buildV3Id(ns_id, page_id);
         const auto & it = mvcc_table_directory.find(page_internal_id);
@@ -304,7 +331,7 @@ private:
             return fmt::format("Can't find {}", page_internal_id);
         }
 
-        String error_msg = "";
+        FmtBuffer error_msg;
         size_t error_count = 0;
         for (const auto & [version, entry_or_del] : it->second->entries)
         {
@@ -322,7 +349,7 @@ private:
                     to_read.emplace_back(to_read_entry);
                     blob_store.read(to_read);
 
-                    if (entry.field_offsets.size() != 0)
+                    if (!entry.field_offsets.empty())
                     {
                         DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                         std::iota(std::begin(indices), std::end(indices), 0);
@@ -336,8 +363,8 @@ private:
                 catch (DB::Exception & e)
                 {
                     error_count++;
-                    error_msg += e.displayText();
-                    error_msg += "\n";
+                    error_msg.append(e.displayText());
+                    error_msg.append("\n");
                 }
             }
         }
@@ -347,16 +374,16 @@ private:
             return fmt::format("Checked {} without any error.", page_internal_id);
         }
 
-        error_msg += fmt::format("Check {} meet {} errors!", page_internal_id, error_count);
-        return error_msg;
+        error_msg.fmtAppend("Check {} meet {} errors!", page_internal_id, error_count);
+        return error_msg.toString();
     }
 
-    String checkAllDatasCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
+    static String checkAllDatasCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
     {
         size_t total_pages = mvcc_table_directory.size();
         size_t cut_index = 0;
         size_t index = 0;
-        std::cout << fmt::format("Begin to check all of datas CRC. enable_fo_check={}", (int)enable_fo_check) << std::endl;
+        std::cout << fmt::format("Begin to check all of datas CRC. enable_fo_check={}", static_cast<int>(enable_fo_check)) << std::endl;
 
         std::list<std::pair<UInt128, PageVersionType>> error_versioned_pages;
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
@@ -384,7 +411,7 @@ private:
                         to_read.emplace_back(to_read_entry);
                         blob_store.read(to_read);
 
-                        if (enable_fo_check && entry.field_offsets.size() != 0)
+                        if (enable_fo_check && !entry.field_offsets.empty())
                         {
                             DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                             std::iota(std::begin(indices), std::end(indices), 0);
@@ -404,19 +431,20 @@ private:
             index++;
         }
 
-        if (error_versioned_pages.size() == 0)
+        if (error_versioned_pages.empty())
         {
             return "All of data checked. All passed.";
         }
 
-        String error_msg = "Found error in these pages: ";
+        FmtBuffer error_msg;
+        error_msg.append("Found error in these pages: ");
         for (const auto & [internal_id, versioned] : error_versioned_pages)
         {
-            error_msg += fmt::format("id: {}, sequence: {}, epoch: {} \n", internal_id, versioned.sequence, versioned.epoch);
+            error_msg.fmtAppend("id: {}, sequence: {}, epoch: {} \n", internal_id, versioned.sequence, versioned.epoch);
         }
-        error_msg += "Please use `--query_table_id` + `--check_page_id` to get the more error info.";
+        error_msg.append("Please use `--query_table_id` + `--check_page_id` to get the more error info.");
 
-        return error_msg;
+        return error_msg.toString();
     }
 
 private:

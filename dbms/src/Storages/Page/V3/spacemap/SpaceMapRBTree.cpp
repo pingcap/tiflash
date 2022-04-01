@@ -469,34 +469,23 @@ String RBTreeSpaceMap::toDebugString()
     struct rb_node * node = nullptr;
     struct SmapRbEntry * entry;
     UInt64 count = 0;
-    UInt64 max_size = 0;
-    UInt64 min_size = ULONG_MAX;
-    String stats_str;
+    FmtBuffer fmt_buffer;
 
     if (rb_tree->root.rb_node == nullptr)
     {
-        stats_str += "Tree have not been inited.";
-        return stats_str;
+        fmt_buffer.append("Tree have not been inited.");
+        return fmt_buffer.toString();
     }
 
-    stats_str += "    RB-Tree entries status: \n";
+    fmt_buffer.append("    RB-Tree entries status: \n");
     for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
-        stats_str += fmt::format("      Space: {} start: {} size: {} \n", count, entry->start, entry->count);
+        fmt_buffer.fmtAppend("      Space: {} start: {} size: {} \n", count, entry->start, entry->count);
         count++;
-        if (entry->count > max_size)
-        {
-            max_size = entry->count;
-        }
-
-        if (entry->count < min_size)
-        {
-            min_size = entry->count;
-        }
     }
 
-    return stats_str;
+    return fmt_buffer.toString();
 }
 
 bool RBTreeSpaceMap::isMarkUnused(UInt64 offset, size_t length)

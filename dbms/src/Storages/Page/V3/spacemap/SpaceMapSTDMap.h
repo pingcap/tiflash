@@ -61,15 +61,17 @@ protected:
     {
         UInt64 count = 0;
 
-        String stats_str = "    STD-Map entries status: \n";
+        FmtBuffer fmt_buffer;
+        fmt_buffer.append("    STD-Map entries status: \n");
 
+        // Need use `count`,so can't use `joinStr` here.
         for (auto it = free_map.begin(); it != free_map.end(); it++)
         {
-            stats_str += fmt::format("      Space: {} start: {} size : {}\n", count, it->first, it->second);
+            fmt_buffer.fmtAppend("      Space: {} start: {} size : {}\n", count, it->first, it->second);
             count++;
         }
 
-        return stats_str;
+        return fmt_buffer.toString();
     }
 
     std::pair<UInt64, UInt64> getSizes() const override
