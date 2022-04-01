@@ -24,7 +24,7 @@
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
 # Data.
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64, col_3 MyDatetime)
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64, col_3 MyDatetime')
 => DBGInvoke __mock_tidb_partition(default, test, 9997)
 => DBGInvoke __mock_tidb_partition(default, test, 9998)
 => DBGInvoke __mock_tidb_partition(default, test, 9999)
