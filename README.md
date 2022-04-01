@@ -66,6 +66,7 @@ The following are platform-specific prerequisites. Click to expand details:
 
   # install LLVM packages
   apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev
+  # if failed, you can find more detailed instructions in https://apt.llvm.org/
 
   # install other dependencies
   apt-get install lcov cmake ninja-build libssl-dev zlib1g-dev libcurl4-openssl-dev
