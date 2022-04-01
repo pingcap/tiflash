@@ -47,8 +47,30 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , thread_manager(newThreadManager())
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
 {
-    RUNTIME_ASSERT(!(is_local && is_async), log, "is_local: {}, is_async: {}.", is_local, is_async);
+    assert(!(is_local && is_async));
     GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
+}
+
+template <typename Writer>
+MPPTunnelBase<Writer>::MPPTunnelBase(
+    const String & tunnel_id_,
+    const std::chrono::seconds timeout_,
+    int input_steams_num_,
+    bool is_local_,
+    bool is_async_,
+    const String & req_id)
+    : connected(false)
+    , finished(false)
+    , is_local(is_local_)
+    , is_async(is_async_)
+    , timeout(timeout_)
+    , tunnel_id(tunnel_id_)
+    , input_streams_num(input_steams_num_)
+    , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
+    , thread_manager(newThreadManager())
+    , log(Logger::get("MPPTunnel", req_id, tunnel_id))
+{
+    assert(!(is_local && is_async));
 }
 
 template <typename Writer>
@@ -152,7 +174,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 {
-    RUNTIME_ASSERT(!is_local, log, "should not reach sendJob for local tunnels");
+    assert(!is_local);
     if (!is_async)
     {
         GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
@@ -220,7 +242,7 @@ void MPPTunnelBase<Writer>::writeDone()
 template <typename Writer>
 std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 {
-    RUNTIME_ASSERT(is_local, log, "should not reach readForLocal for remote tunnels");
+    assert(is_local);
     MPPDataPacketPtr res;
     if (send_queue.pop(res))
         return res;
@@ -240,7 +262,7 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
 
         LOG_FMT_TRACE(log, "ready to connect");
         if (is_local)
-            RUNTIME_ASSERT(writer_ == nullptr, log);
+            assert(writer_ == nullptr);
         else
         {
             writer = writer_;
