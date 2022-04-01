@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
-#include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDBGInvokeQuery.h>

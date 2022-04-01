@@ -26,7 +26,6 @@
 #include <Databases/IDatabase.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTExpressionList.h>

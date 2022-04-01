@@ -15,7 +15,6 @@
 #include <Storages/StorageNull.h>
 #include <Storages/StorageFactory.h>
 
-#include <Interpreters/InterpreterAlterQuery.h>
 #include <Databases/IDatabase.h>
 
 #include <IO/WriteHelpers.h>

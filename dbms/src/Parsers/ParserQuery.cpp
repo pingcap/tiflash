@@ -23,7 +23,6 @@
 #include <Parsers/ParserOptimizeQuery.h>
 #include <Parsers/ParserUseQuery.h>
 #include <Parsers/ParserSetQuery.h>
-#include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserSystemQuery.h>
 #include <Parsers/ParserTruncateQuery.h>
 #include <Parsers/ParserManageQuery.h>
