@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Debug/DBGInvoker.h>
@@ -5,13 +19,11 @@
 
 namespace DB
 {
-
 class Context;
 
 // TiDB table test tool
 struct MockTiDBTable
 {
-
     // Inject mocked TiDB table.
     // Usage:
 
@@ -84,9 +96,24 @@ struct MockTiDBTable
     //   ./storages-client.sh "DBGInvoke clean_up_region()"
     static void dbgFuncCleanUpRegions(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+    // Trigger a create tables ddl job.
+    // Usage:
+    //   ./storage-client.sh "DBGInvoke create_tidb_tables(db_name, table_name, [table_name], ..., [table_name])"
+    static void dbgFuncCreateTiDBTables(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Trigger a rename tables ddl job.
+    // Usage:
+    //   ./storage-client.sh "DBGInvoke rename_tidb_tables(database-name, table-name, new-table-name, ..., [database-name, table-name, new-table-name])"
+    static void dbgFuncRenameTiDBTables(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output);
+
 private:
     static void dbgFuncDropTiDBTableImpl(
-        Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output);
+        Context & context,
+        String database_name,
+        String table_name,
+        bool drop_regions,
+        bool is_drop_db,
+        DBGInvoker::Printer output);
 };
 
 } // namespace DB

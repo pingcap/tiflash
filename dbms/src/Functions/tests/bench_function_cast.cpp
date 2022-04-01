@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/Context.h>
@@ -57,6 +71,8 @@ public:
         DataTypePtr from_type_dec_60_5 = std::make_shared<DataTypeDecimal256>(60, 5);
         DataTypePtr from_type_date = std::make_shared<DataTypeMyDate>();
         DataTypePtr from_type_datetime_fsp5 = std::make_shared<DataTypeMyDateTime>(5);
+        DataTypePtr from_type_float32 = std::make_shared<DataTypeFloat32>();
+        DataTypePtr from_type_float64 = std::make_shared<DataTypeFloat64>();
 
         auto tmp_col_int8 = from_type_int8->createColumn();
         auto tmp_col_int16 = from_type_int16->createColumn();
@@ -81,6 +97,8 @@ public:
         auto tmp_col_dec_60_5 = from_type_dec_60_5->createColumn();
         auto tmp_col_date = from_type_date->createColumn();
         auto tmp_col_datetime_fsp5 = from_type_date->createColumn();
+        auto tmp_col_float32 = ColumnFloat32::create();
+        auto tmp_col_float64 = ColumnFloat64::create();
 
         std::uniform_int_distribution<int64_t> dist64(std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max());
 
@@ -106,6 +124,8 @@ public:
             tmp_col_uint16->insert(Field(static_cast<Int64>(static_cast<UInt16>(dist64(mt)))));
             tmp_col_uint32->insert(Field(static_cast<Int64>(static_cast<UInt16>(dist64(mt)))));
             tmp_col_uint64->insert(Field(static_cast<Int64>(static_cast<UInt16>(dist64(mt)))));
+            tmp_col_float32->insert(static_cast<Float32>(dist64(mt)));
+            tmp_col_float64->insert(static_cast<Float64>(dist64(mt)));
 
             tmp_col_dec_2_1->insert(DecimalField(Decimal(static_cast<Int32>(dist64(mt) % 100)), 1));
             tmp_col_dec_2_1_small->insert(DecimalField(Decimal(static_cast<Int32>(dist64(mt) % 10)), 1));
@@ -131,6 +151,8 @@ public:
         from_col_uint16 = ColumnWithTypeAndName(std::move(tmp_col_uint16), from_type_uint16, "from_col_uint16");
         from_col_uint32 = ColumnWithTypeAndName(std::move(tmp_col_uint32), from_type_uint32, "from_col_uint32");
         from_col_uint64 = ColumnWithTypeAndName(std::move(tmp_col_uint64), from_type_uint64, "from_col_uint64");
+        from_col_float32 = ColumnWithTypeAndName(std::move(tmp_col_float32), from_type_float32, "from_col_float32");
+        from_col_float64 = ColumnWithTypeAndName(std::move(tmp_col_float64), from_type_float64, "from_col_float64");
 
         from_col_dec_2_1 = ColumnWithTypeAndName(std::move(tmp_col_dec_2_1), from_type_dec_2_1, "from_col_dec_2_1");
         from_col_dec_2_1_small = ColumnWithTypeAndName(std::move(tmp_col_dec_2_1_small), from_type_dec_2_1_small, "from_col_dec_2_1_small");
@@ -189,9 +211,13 @@ public:
         from_int64_vec = std::vector<Int64>(row_num);
         from_int128_vec = std::vector<Int128>(row_num);
         from_int256_vec = std::vector<Int256>(row_num);
+        from_float32_vec = std::vector<Float32>(row_num);
+        from_float64_vec = std::vector<Float64>(row_num);
         dest_int64_vec = std::vector<Int64>(row_num);
         dest_int128_vec = std::vector<Int128>(row_num);
         dest_int256_vec = std::vector<Int256>(row_num);
+        dest_float32_vec = std::vector<Float32>(row_num);
+        dest_float64_vec = std::vector<Float64>(row_num);
         const Int256 mod_prec_19 = getScaleMultiplier<Decimal256>(19);
         const Int256 mod_prec_38 = getScaleMultiplier<Decimal256>(38);
         for (auto i = 0; i < row_num; ++i)
@@ -199,6 +225,8 @@ public:
             from_int64_vec[i] = dist64(mt);
             from_int128_vec[i] = static_cast<Int128>(dist256(mt) % (std::numeric_limits<Int128>::max() % mod_prec_19));
             from_int256_vec[i] = static_cast<Int256>(dist256(mt) % (std::numeric_limits<Int256>::max()) % mod_prec_38);
+            from_float32_vec[i] = static_cast<Float32>(from_int64_vec[i]);
+            from_float64_vec[i] = static_cast<Float64>(from_int64_vec[i]);
         }
     }
 
@@ -213,6 +241,8 @@ public:
     ColumnWithTypeAndName from_col_uint16;
     ColumnWithTypeAndName from_col_uint32;
     ColumnWithTypeAndName from_col_uint64;
+    ColumnWithTypeAndName from_col_float32;
+    ColumnWithTypeAndName from_col_float64;
     ColumnWithTypeAndName from_col_dec_2_1;
     ColumnWithTypeAndName from_col_dec_2_1_small;
     ColumnWithTypeAndName from_col_dec_3_0;
@@ -253,9 +283,13 @@ public:
     std::vector<Int64> from_int64_vec;
     std::vector<Int128> from_int128_vec;
     std::vector<Int256> from_int256_vec;
+    std::vector<Float32> from_float32_vec;
+    std::vector<Float64> from_float64_vec;
     std::vector<Int64> dest_int64_vec;
     std::vector<Int128> dest_int128_vec;
     std::vector<Int256> dest_int256_vec;
+    std::vector<Float32> dest_float32_vec;
+    std::vector<Float64> dest_float64_vec;
 };
 
 #define CAST_BENCHMARK(CLASS_NAME, CASE_NAME, FROM_COL, DEST_TYPE)    \
@@ -319,6 +353,9 @@ CAST_BENCHMARK(CastToDecimalBench, int32_to_decimal_30_0, from_col_int32, dest_c
 CAST_BENCHMARK(CastToDecimalBench, int32_to_decimal_60_0, from_col_int32, dest_col_dec_60_0);
 // no; Int64; Int256
 CAST_BENCHMARK(CastToDecimalBench, int32_to_decimal_60_4, from_col_int32, dest_col_dec_60_4);
+
+CAST_BENCHMARK(CastToDecimalBench, float32_to_decimal_60_30, from_col_float32, dest_col_dec_60_30);
+CAST_BENCHMARK(CastToDecimalBench, float64_to_decimal_60_30, from_col_float64, dest_col_dec_60_30);
 
 // need; Int128; Int32
 CAST_BENCHMARK(CastToDecimalBench, int64_to_decimal_8_0, from_col_int64, dest_col_dec_8_0);
@@ -396,57 +433,48 @@ STATIC_CAST_BENCHMARK(CastToDecimalBench, 64, 256);
 STATIC_CAST_BENCHMARK(CastToDecimalBench, 128, 128);
 STATIC_CAST_BENCHMARK(CastToDecimalBench, 128, 256);
 
-#define DIV_BENCHMARK(CLASS_NAME, TYPE)                                                      \
-    BENCHMARK_DEFINE_F(CastToDecimalBench, div_##TYPE)                                       \
-    (benchmark::State & state)                                                               \
-    try                                                                                      \
-    {                                                                                        \
-        for (auto _ : state)                                                                 \
-        {                                                                                    \
-            for (int i = 0; i < row_num; ++i)                                                \
-            {                                                                                \
-                dest_int##TYPE##_vec[i] = from_int##TYPE##_vec[i] / from_int##TYPE##_vec[0]; \
-            }                                                                                \
-        }                                                                                    \
-    }                                                                                        \
-    CATCH                                                                                    \
+#define DIV_BENCHMARK(CLASS_NAME, TYPE)                                             \
+    BENCHMARK_DEFINE_F(CastToDecimalBench, div_##TYPE)                              \
+    (benchmark::State & state)                                                      \
+    try                                                                             \
+    {                                                                               \
+        for (auto _ : state)                                                        \
+        {                                                                           \
+            for (int i = 0; i < row_num; ++i)                                       \
+            {                                                                       \
+                dest_##TYPE##_vec[i] = from_##TYPE##_vec[i] / from_##TYPE##_vec[0]; \
+            }                                                                       \
+        }                                                                           \
+    }                                                                               \
+    CATCH                                                                           \
     BENCHMARK_REGISTER_F(CastToDecimalBench, div_##TYPE)->Iterations(1000);
 
-DIV_BENCHMARK(CastToDecimalBench, 64);
-DIV_BENCHMARK(CastToDecimalBench, 128);
-DIV_BENCHMARK(CastToDecimalBench, 256);
+DIV_BENCHMARK(CastToDecimalBench, int64);
+DIV_BENCHMARK(CastToDecimalBench, int128);
+DIV_BENCHMARK(CastToDecimalBench, int256);
+DIV_BENCHMARK(CastToDecimalBench, float32);
+DIV_BENCHMARK(CastToDecimalBench, float64);
 
-#define MUL_BENCHMARK(CLASS_NAME, TYPE)                                                      \
-    BENCHMARK_DEFINE_F(CastToDecimalBench, mul_##TYPE)                                       \
-    (benchmark::State & state)                                                               \
-    try                                                                                      \
-    {                                                                                        \
-        for (auto _ : state)                                                                 \
-        {                                                                                    \
-            for (int i = 0; i < row_num; ++i)                                                \
-            {                                                                                \
-                dest_int##TYPE##_vec[i] = from_int##TYPE##_vec[i] * from_int##TYPE##_vec[0]; \
-            }                                                                                \
-        }                                                                                    \
-    }                                                                                        \
-    CATCH                                                                                    \
+#define MUL_BENCHMARK(CLASS_NAME, TYPE)                                             \
+    BENCHMARK_DEFINE_F(CastToDecimalBench, mul_##TYPE)                              \
+    (benchmark::State & state)                                                      \
+    try                                                                             \
+    {                                                                               \
+        for (auto _ : state)                                                        \
+        {                                                                           \
+            for (int i = 0; i < row_num; ++i)                                       \
+            {                                                                       \
+                dest_##TYPE##_vec[i] = from_##TYPE##_vec[i] * from_##TYPE##_vec[0]; \
+            }                                                                       \
+        }                                                                           \
+    }                                                                               \
+    CATCH                                                                           \
     BENCHMARK_REGISTER_F(CastToDecimalBench, mul_##TYPE)->Iterations(1000);
 
-MUL_BENCHMARK(CastToDecimalBench, 64);
-MUL_BENCHMARK(CastToDecimalBench, 128);
-MUL_BENCHMARK(CastToDecimalBench, 256);
+MUL_BENCHMARK(CastToDecimalBench, int64);
+MUL_BENCHMARK(CastToDecimalBench, int128);
+MUL_BENCHMARK(CastToDecimalBench, int256);
+MUL_BENCHMARK(CastToDecimalBench, float32);
+MUL_BENCHMARK(CastToDecimalBench, float64);
 } // namespace tests
 } // namespace DB
-
-int main(int argc, char * argv[])
-{
-    benchmark::Initialize(&argc, argv);
-    DB::tests::TiFlashTestEnv::setupLogger();
-    DB::tests::TiFlashTestEnv::initializeGlobalContext();
-    if (::benchmark::ReportUnrecognizedArguments(argc, argv))
-        return 1;
-    ::benchmark::RunSpecifiedBenchmarks();
-    DB::tests::TiFlashTestEnv::shutdown();
-    ::benchmark::Shutdown();
-    return 0;
-}

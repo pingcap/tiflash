@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/MPMCQueue.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
@@ -428,7 +442,7 @@ struct ReceiverHelper
         std::vector<BlockInputStreamPtr> streams;
         for (int i = 0; i < concurrency; ++i)
             streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, nullptr));
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     BlockInputStreamPtr buildUnionStreamWithHashJoinBuildStream(int concurrency)
@@ -460,16 +474,16 @@ struct ReceiverHelper
         join_ptr->setSampleBlock(receiver_header);
 
         for (int i = 0; i < concurrency; ++i)
-            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, nullptr);
+            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, /*req_id=*/"");
 
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     void finish()
     {
         if (join_ptr)
         {
-            join_ptr->setFinishBuildTable(true);
+            join_ptr->setBuildTableState(Join::BuildTableState::SUCCEED);
             std::cout << fmt::format("Hash table size: {} bytes", join_ptr->getTotalByteCount()) << std::endl;
         }
     }
@@ -543,10 +557,10 @@ struct SenderHelper
                     -1,
                     true,
                     *dag_context));
-            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer)));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
 
-        return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     void finish()

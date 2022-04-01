@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -32,12 +46,12 @@ static bool isUnlimitedQuery(const IAST * ast)
     /// False negative: USE system; SELECT * FROM processes;
     /// False positive: SELECT * FROM system.processes CROSS JOIN (SELECT ...)
 
-    if (auto ast_selects = typeid_cast<const ASTSelectWithUnionQuery *>(ast))
+    if (const auto * ast_selects = typeid_cast<const ASTSelectWithUnionQuery *>(ast))
     {
         if (!ast_selects->list_of_selects || ast_selects->list_of_selects->children.empty())
             return false;
 
-        auto ast_select = typeid_cast<ASTSelectQuery *>(ast_selects->list_of_selects->children[0].get());
+        auto * ast_select = typeid_cast<ASTSelectQuery *>(ast_selects->list_of_selects->children[0].get());
 
         if (!ast_select)
             return false;
@@ -50,11 +64,11 @@ static bool isUnlimitedQuery(const IAST * ast)
         if (!ast_table)
             return false;
 
-        auto ast_database_id = typeid_cast<const ASTIdentifier *>(ast_database.get());
+        const auto * ast_database_id = typeid_cast<const ASTIdentifier *>(ast_database.get());
         if (!ast_database_id)
             return false;
 
-        auto ast_table_id = typeid_cast<const ASTIdentifier *>(ast_table.get());
+        const auto * ast_table_id = typeid_cast<const ASTIdentifier *>(ast_table.get());
         if (!ast_table_id)
             return false;
 
@@ -177,7 +191,7 @@ ProcessListEntry::~ProcessListEntry()
     /// Destroy all streams to avoid long lock of ProcessList
     it->releaseQueryStreams();
 
-    std::lock_guard<std::mutex> lock(parent.mutex);
+    std::lock_guard lock(parent.mutex);
 
     String user = it->getClientInfo().current_user;
     String query_id = it->getClientInfo().current_query_id;
@@ -238,7 +252,7 @@ ProcessListEntry::~ProcessListEntry()
 
 void ProcessListElement::setQueryStreams(const BlockIO & io)
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     query_stream_in = io.in;
     query_stream_out = io.out;
@@ -251,7 +265,7 @@ void ProcessListElement::releaseQueryStreams()
     BlockOutputStreamPtr out;
 
     {
-        std::lock_guard<std::mutex> lock(query_streams_mutex);
+        std::lock_guard lock(query_streams_mutex);
 
         query_streams_status = QueryStreamsStatus::Released;
         in = std::move(query_stream_in);
@@ -263,14 +277,14 @@ void ProcessListElement::releaseQueryStreams()
 
 bool ProcessListElement::streamsAreReleased()
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     return query_streams_status == QueryStreamsStatus::Released;
 }
 
 bool ProcessListElement::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStreamPtr & out) const
 {
-    std::lock_guard<std::mutex> lock(query_streams_mutex);
+    std::lock_guard lock(query_streams_mutex);
 
     if (query_streams_status != QueryStreamsStatus::Initialized)
         return false;
@@ -307,7 +321,7 @@ ProcessListElement * ProcessList::tryGetProcessListElement(const String & curren
 
 ProcessList::CancellationCode ProcessList::sendCancelToQuery(const String & current_query_id, const String & current_user, bool kill)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     ProcessListElement * elem = tryGetProcessListElement(current_query_id, current_user);
 

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
@@ -288,26 +302,30 @@ bool PageFile::LinkingMetaAdapter::hasNext() const
     return meta_file_offset < meta_size;
 }
 
-void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
+bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID sid, PageEntriesEdit & edit, UInt64 file_id, UInt64 level)
 {
     char * meta_data_end = meta_buffer + meta_size;
     char * pos = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
-        LOG_WARNING(page_file.log,
-                    "[batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size << "] [file=" << page_file.metaPath()
-                                        << "] ignored.");
-        return;
+        LOG_FMT_WARNING(page_file.log,
+                        "[batch_start_pos={}] [meta_size={}] [file={}] ignored.",
+                        meta_file_offset,
+                        meta_size,
+                        page_file.metaPath());
+        return false;
     }
 
     const char * wb_start_pos = pos;
     const auto wb_bytes = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
-        LOG_WARNING(page_file.log,
-                    "[expect_batch_bytes=" << wb_bytes << "] [meta_size=" << meta_size << "] [file=" << page_file.metaPath()
-                                           << "] ignored.");
-        return;
+        LOG_FMT_WARNING(page_file.log,
+                        "[expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
+                        wb_bytes,
+                        meta_size,
+                        page_file.metaPath());
+        return false;
     }
 
     WriteBatch::SequenceID wb_sequence = 0;
@@ -436,6 +454,8 @@ void PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
                         ErrorCodes::LOGICAL_ERROR);
 
     meta_file_offset = pos - meta_buffer;
+
+    return true;
 }
 
 // =========================================================
@@ -524,9 +544,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     char * pos = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
-        LOG_WARNING(page_file.log,
-                    "Incomplete write batch {" << toString() << "} [batch_start_pos=" << meta_file_offset << "] [meta_size=" << meta_size
-                                               << "] [file=" << page_file.metaPath() << "] ignored.");
+        LOG_FMT_WARNING(page_file.log,
+                        "Incomplete write batch {{{}}} [batch_start_pos={}] [meta_size={}] [file={}] ignored.",
+                        toString(),
+                        meta_file_offset,
+                        meta_size,
+                        page_file.metaPath());
         status = Status::Finished;
         return;
     }
@@ -534,9 +557,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     const auto wb_bytes = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
-        LOG_WARNING(page_file.log,
-                    "Incomplete write batch {" << toString() << "} [expect_batch_bytes=" << wb_bytes << "] [meta_size=" << meta_size
-                                               << "] [file=" << page_file.metaPath() << "] ignored.");
+        LOG_FMT_WARNING(page_file.log,
+                        "Incomplete write batch {{{}}} [expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
+                        toString(),
+                        wb_bytes,
+                        meta_size,
+                        page_file.metaPath());
         status = Status::Finished;
         return;
     }
@@ -721,7 +747,11 @@ void PageFile::Writer::hardlinkFrom(PageFile & linked_file, WriteBatch::Sequence
     // Move to the SequenceID item
     while (reader->hasNext())
     {
-        reader->linkToNewSequenceNext(sid, edit, page_file.getFileId(), page_file.getLevel());
+        if (!reader->linkToNewSequenceNext(sid, edit, page_file.getFileId(), page_file.getLevel()))
+        {
+            throw Exception(fmt::format("Failed to update [sid={}] into [file_id={}] , [file_level={}]", sid, page_file.getFileId(), page_file.getLevel()),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     char * linked_meta_data;
@@ -771,9 +801,11 @@ size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, cons
                   auto size = f.getSize();
                   f.setSize(size - 2);
                   auto size_after = f.getSize();
-                  LOG_WARNING(page_file.log,
-                              "Failpoint truncate [file=" << meta_file->getFileName() << "] [origin_size=" << size
-                                                          << "] [truncated_size=" << size_after << "]");
+                  LOG_FMT_WARNING(page_file.log,
+                                  "Failpoint truncate [file={}] [origin_size={}] [truncated_size={}]",
+                                  meta_file->getFileName(),
+                                  size,
+                                  size_after);
                   throw Exception(String("Fail point ") + FailPoints::exception_before_page_file_write_sync + " is triggered.",
                                   ErrorCodes::FAIL_POINT_ERROR);
               });
@@ -1079,14 +1111,14 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
         && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
     {
-        LOG_INFO(log, "Not page file, ignored " + page_file_name);
+        LOG_FMT_INFO(log, "Not page file, ignored {}", page_file_name);
         return {{}, Type::Invalid};
     }
     std::vector<std::string> ss;
     boost::split(ss, page_file_name, boost::is_any_of("_"));
     if (ss.size() != 3)
     {
-        LOG_INFO(log, "Unrecognized file, ignored: " + page_file_name);
+        LOG_FMT_INFO(log, "Unrecognized file, ignored: {}", page_file_name);
         return {{}, Type::Invalid};
     }
 
@@ -1095,7 +1127,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     PageFile pf(file_id, level, parent_path, file_provider_, Type::Formal, /* is_create */ false, log);
     if (ss[0] == folder_prefix_temp)
     {
-        LOG_INFO(log, "Temporary page file, ignored: " + page_file_name);
+        LOG_FMT_INFO(log, "Temporary page file, ignored: {}", page_file_name);
         pf.type = Type::Temp;
         return {pf, Type::Temp};
     }
@@ -1105,7 +1137,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         // ensure meta exist
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
+            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
@@ -1116,13 +1148,13 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         // ensure both meta && data exist
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
+            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
         if (!Poco::File(pf.dataPath()).exists())
         {
-            LOG_INFO(log, "Broken page without data file, ignored: " + pf.dataPath());
+            LOG_FMT_INFO(log, "Broken page without data file, ignored: {}", pf.dataPath());
             return {{}, Type::Invalid};
         }
 
@@ -1133,14 +1165,14 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         pf.type = Type::Checkpoint;
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
+            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
         return {pf, Type::Checkpoint};
     }
 
-    LOG_INFO(log, "Unrecognized file prefix, ignored: " + page_file_name);
+    LOG_FMT_INFO(log, "Unrecognized file prefix, ignored: {}", page_file_name);
     return {{}, Type::Invalid};
 }
 
@@ -1193,10 +1225,11 @@ void PageFile::setFileAppendPos(size_t meta_pos, size_t data_pos)
     const auto meta_size_on_disk = meta_on_disk.getSize();
     if (unlikely(meta_size_on_disk != meta_pos))
     {
-        LOG_WARNING(log,
-                    "Truncate incomplete write batches"
-                    " [orig_size="
-                        << meta_size_on_disk << "] [set_size=" << meta_file_pos << "] [file=" << metaPath() << "]");
+        LOG_FMT_WARNING(log,
+                        "Truncate incomplete write batches [orig_size={}] [set_size={}] [file={}]",
+                        meta_size_on_disk,
+                        meta_file_pos,
+                        metaPath());
         meta_on_disk.setSize(meta_file_pos);
     }
 }
@@ -1295,7 +1328,7 @@ bool PageFile::linkFrom(PageFile & page_file, WriteBatch::SequenceID sid, PageEn
     }
     catch (DB::Exception & e)
     {
-        LOG_WARNING(page_file.log, "failed to link page file. error message : " + e.message());
+        LOG_FMT_WARNING(page_file.log, "failed to link page file. error message : {}", e.message());
     }
     return false;
 }

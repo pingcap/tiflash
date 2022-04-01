@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDeleteRange.h>
@@ -46,6 +60,7 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
     }
 
     column_files.push_back(column_file);
+    column_files_count = column_files.size();
 
     rows += column_file->getRows();
     bytes += column_file->getBytes();
@@ -78,7 +93,7 @@ ColumnFiles MemTableSet::cloneColumnFiles(DMContext & context, const RowKeyRange
         else if (auto * t = column_file->tryToTinyFile(); t)
         {
             // Use a newly created page_id to reference the data page_id of current column file.
-            PageId new_data_page_id = context.page_id_generator.newLogPageId();
+            PageId new_data_page_id = context.storage_pool.newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
             auto new_column_file = t->cloneWith(new_data_page_id);
 
@@ -87,7 +102,7 @@ ColumnFiles MemTableSet::cloneColumnFiles(DMContext & context, const RowKeyRange
         else if (auto * f = column_file->tryToBigFile(); f)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
-            auto new_ref_id = context.page_id_generator.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             auto file_id = f->getFile()->fileId();
             wbs.data.putRefPage(new_ref_id, file_id);
             auto file_parent_path = delegator.getDTFilePath(file_id);
@@ -155,9 +170,9 @@ void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles
     }
 }
 
-ColumnFileSetSnapshotPtr MemTableSet::createSnapshot()
+ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & storage_snap)
 {
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(nullptr);
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;
@@ -255,6 +270,7 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         column_file_iter++;
     }
     column_files.swap(new_column_files);
+    column_files_count = column_files.size();
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;

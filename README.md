@@ -1,7 +1,7 @@
 # TiFlash
 ![tiflash-architecture](tiflash-architecture.png)
 
-[TiFlash](https://docs.pingcap.com/tidb/stable/tiflash-overview) is a columnar storage component of [TiDB](https://docs.pingcap.com/tidb/stable). It mainly plays the role of Analytical Processing (AP) in the Hybrid Transactional/Analytical Processing (HTAP) architecture of TiDB. 
+[TiFlash](https://docs.pingcap.com/tidb/stable/tiflash-overview) is a columnar storage component of [TiDB](https://docs.pingcap.com/tidb/stable). It mainly plays the role of Analytical Processing (AP) in the Hybrid Transactional/Analytical Processing (HTAP) architecture of TiDB.
 
 TiFlash stores data in columnar format and synchronizes data updates in real-time from [TiKV](https://github.com/tikv/tikv) by Raft logs with sub-second latency. Reads in TiFlash are guaranteed transactionally consistent with Snapshot Isolation level. TiFlash utilizes Massively Parallel Processing (MPP) computing architecture to accelerate the analytical workloads.
 
@@ -17,126 +17,109 @@ And the following operating systems:
 * Linux
 * MacOS
 
-### Checkout Source Code
+### 1. Checkout Source Code
 
 Assume `$WORKSPACE` to be the directory under which the TiFlash repo is placed.
 
-```bash
+```shell
 cd $WORKSPACE
-git clone --recursive https://github.com/pingcap/tics.git
+git clone --recursive https://github.com/pingcap/tiflash.git
 ```
 
-### Prerequisites
+### 2. Prepare Prerequisites
 
 The following packages are needed for all platforms:
-- CMake 3.13.2+
-- Rust
-  ```bash
+
+- CMake 3.21.0+
+
+- Rust: Recommended to use [rustup](https://rustup.rs) to install:
+
+  ```shell
   curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly
   source $HOME/.cargo/env
   ```
+
 - Python 3.0+
+
 - Ninja or GNU Make
 
-The following are platform-specific prerequisites.
+The following are platform-specific prerequisites. Click to expand details:
+<details>
+<summary><b>Linux specific prerequisites</b></summary>
 
-#### Linux
-
-TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
-> But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
-
-##### LLVM 13.0.0+
-
-TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default.
-To quickly set up a LLVM environment, you can use TiFlash Development Environment (short as TiFlash Env, see `release-centos7-llvm/env`).
-Or you can also use system-wise toolchain if you can install `clang/compiler-rt/libc++/libc++abi` in your environment.
-
-###### TiFlash Env
-
-> For faster access to precompiled package in internal network, you can use [this link](http://fileserver.pingcap.net/download/development/tiflash-env/v1.0.0/tiflash-env-x86_64.tar.xz).
-
-TiFlash Env can be created with the following commands (`docker` and `tar xz` are needed):
-
-```bash
-cd $WORKSPACE/tics/release-centos7-llvm/env
-make tiflash-env-$(uname -m).tar.xz
-```
-
-Then copy and uncompress `tiflash-env-$(uname -m).tar.xz` to a suitable place, assuming `$TIFLASH_ENV`.
-
-To enter the env (before compiling TiFlash):
-
-```bash
-cd $TIFLASH_ENV
-./loader
-```
-
-Or you can dump the env settings and put them to the end of your `~/.bashrc` or `~/.zshrc`
-
-```bash
-cd $TIFLASH_ENV
-./loader-env-dump
-```
-
-###### System-wise Toolchain
-
-- Debian/Ubuntu users:
-
-  ```bash
-  # add LLVM repo key
-  wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add - 
-
-  # install LLVM packages
-  apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev 
+  TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
+  > But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
   
-  # install rust
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+- LLVM 13.0.0+
+
+  TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default. You can use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
+
+  Click sections below to see detailed instructions:
+
+
+  <details>
+  <summary><b>Set up LLVM via package managers in Debian/Ubuntu</b></summary>
+
+  ```shell
+  # add LLVM repo key
+  wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
+
+  # install LLVM packages, and can find more detailed instructions in https://apt.llvm.org/ when failed
+  apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev
 
   # install other dependencies
   apt-get install lcov cmake ninja-build libssl-dev zlib1g-dev libcurl4-openssl-dev
   ```
 
-- Archlinux users:
+  </details>
 
-  ```bash
+  <details>
+  <summary><b>Set up LLVM via package managers in Archlinux</b></summary>
+
+  ```shell
   # install compilers and dependencies
   sudo pacman -S clang libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib
-  
-  # install rust
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  ``` 
+  ```
 
-##### GCC 7.x
+  </details>
 
-> **WARNING**: This support may not be maintained in the future.
+- GCC 7.x
 
-TiFlash compiles on GCC 7.x (no older, nor newer) only because it hasn't been broken. If you have GCC 7.x, you are probably fine, for now.
+  > **WARNING**: This support may not be maintained in the future.
 
-#### MacOS
+  TiFlash compiles on GCC 7.x (no older, nor newer) only because it hasn't been broken. If you have GCC 7.x, you are probably fine, for now.
+
+</details>
+
+<details>
+  <summary><b>MacOS specific prerequisites</b></summary>
 
 - Apple Clang 12.0.0+
 - OpenSSL 1.1
-  ```bash
+
+  ```shell
   brew install openssl@1.1
   ```
 
-### Build
+</details>
+
+### 3. Build
 
 Assume `$BUILD` to be the directory under which you want to build TiFlash.
 
 For Ninja:
 
-```bash
+```shell
 cd $BUILD
-cmake $WORKSPACE/tics -Gninja
+cmake $WORKSPACE/tiflash -GNinja
 ninja tiflash
 ```
 
 For GNU Make:
 
-```bash
+```shell
 cd $BUILD
-cmake $WORKSPACE/tics
+cmake $WORKSPACE/tiflash
 make tiflash -j
 ```
 
@@ -144,61 +127,66 @@ After building, you can get TiFlash binary under `$BUILD/dbms/src/Server/tiflash
 
 ### Build Options
 
-TiFlash has several build options to tweak the build, mostly for development purposes.
+TiFlash has several CMake build options to tweak for development purposes. These options SHOULD NOT be changed for production usage, as they may introduce unexpected build errors and unpredictable runtime behaviors.
 
-> **WARNING**: These options SHOULD NOT be tuned for production usage, as they may introduce unexpected build errors and unpredictable runtime behaviors.
+To tweat options, pass one or multiple `-D...=...` args when invoking CMake, for example:
 
-They are all CMake options thus are specified using `-D...=...`s in CMake command line.
-
-#### Build Types
-
-- `CMAKE_BUILD_TYPE`: `DEBUG` / `RELWITHDEBINFO` (default) / `RELEASE`
-
-#### Build with Unit Tests
-
-- `ENABLE_TESTS`: `ON` / `OFF` (default)
-
-#### Build with System Libraries
-
-For local development, it is sometimes handy to use pre-installed third-party libraries in the system, rather than to compile them from sources of the bundled (internal) submodules.
-
-Options are supplied to control whether to use internal third-party libraries (bundled in TiFlash) or to try using the pre-installed system ones.
-
-> **WARNING**: It is NOT guaranteed that TiFlash would still build if any of the system libraries are used.
-> Build errors are very likely to happen, almost all the time.
-
-You can view these options along with their descriptions by running:
-
-```bash
-cd $BUILD
-cmake -LH | grep "USE_INTERNAL" -A3
+```shell
+cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
 ```
 
-All of these options are default as `ON`, as the names tell, using the internal libraries and build from sources.
+- **Build Type**:
 
-There is another option to append extra paths for CMake to find system libraries:
+  - `-DCMAKE_BUILD_TYPE=RELWITHDEBINFO`: Release build with debug info (default)
 
-- `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
+  - `-DCMAKE_BUILD_TYPE=DEBUG`: Debug build
 
-Specifically, for [TiFlash proxy](https://github.com/pingcap/tidb-engine-ext):
+  - `-DCMAKE_BUILD_TYPE=RELEASE`: Release build
 
-- `USE_INTERNAL_TIFLASH_PROXY`: `TRUE` (default) / `FALSE`
-  - One may want to use external TiFlash proxy, e.g., if he is developing TiFlash proxy together with TiFlash, assume `$TIFLASH_PROXY_REPO` to be the path to the external TiFlash proxy repo
-  - Usually need to be combined with `PREBUILT_LIBS_ROOT=$TIFLASH_PROXY_REPO`, and `$TIFLASH_PROXY_REPO` should have the following directory structure:
+- **Build with Unit Tests**:
+
+  - `-DENABLE_TESTS=OFF`: Default
+
+  - `-DENABLE_TESTS=ON`
+
+- **Build with System Libraries**:
+
+  <details>
+  <summary>Click to expand instructions</summary>
+
+  For local development, it is sometimes handy to use pre-installed third-party libraries in the system, rather than to compile them from sources of the bundled (internal) submodules.
+
+  Options are supplied to control whether to use internal third-party libraries (bundled in TiFlash) or to try using the pre-installed system ones.
+
+  > **WARNING**: It is NOT guaranteed that TiFlash would still build if any of the system libraries are used.
+  > Build errors are very likely to happen, almost all the time.
+
+  You can view these options along with their descriptions by running:
+
+  ```shell
+  cd $BUILD
+  cmake -LH | grep "USE_INTERNAL" -A3
+  ```
+
+  All of these options are default as `ON`, as the names tell, using the internal libraries and build from sources.
+
+  There is another option to append extra paths for CMake to find system libraries:
+
+  - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
+
+  Specifically, for [TiFlash proxy](https://github.com/pingcap/tidb-engine-ext):
+
+  - `USE_INTERNAL_TIFLASH_PROXY=TRUE` (default) / `FALSE`
+
+    One may want to use external TiFlash proxy, e.g., if he is developing TiFlash proxy together with TiFlash, assume `$TIFLASH_PROXY_REPO` to be the path to the external TiFlash proxy repo
+
+    Usually need to be combined with `PREBUILT_LIBS_ROOT=$TIFLASH_PROXY_REPO`, and `$TIFLASH_PROXY_REPO` should have the following directory structure:
+
     - Header files are under directory `$TIFLASH_PROXY_REPO/raftstore-proxy/ffi/src`
+
     - Built library is under directory `$TIFLASH_PROXY_REPO/target/release`
 
-### IDE Support
-
-Normally a CMake-based IDE, e.g., Clion and VSCode, should be able to open TiFlash project with no pain as long as the toolchains are properly configured.
-
-If your toolchain is set up using [TiFlash Env](#tiflash-env), and you may not want to add those libs to your system loader config, you can pass the following CMake options to your IDE:
-
-```
--DCMAKE_PREFIX_PATH=$TIFLASH_ENV
-```
-
-Remember that `$TIFLASH_ENV` is a placeholder mentioned in [TiFlash Env](#tiflash-env).
+  </details>
 
 ## Run Unit Tests
 
@@ -210,33 +198,7 @@ TBD.
 
 ## Generate LLVM Coverage Report
 
-[//]: <> (TODO: This section is not proper for developers outside PingCAP, as it uses docker image only available on internal network.)
-[//]: <> (TODO: Should refine to use local commands rather than docker.)
-To get a coverage report of unit tests, we recommend using the docker image and our scripts.
-
-```
-docker run --rm -it -v /path/to/tiflash/src:/build/tiflash hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /bin/bash # or aarch64
-cd /build/tiflash/release-centos7-llvm
-sh scripts/build-tiflash-ut-coverage.sh
-sh scripts/run-ut.sh
-
-# after running complete
-
-llvm-profdata merge -sparse /tiflash/profile/*.profraw -o /tiflash/profile/merged.profdata
-llvm-cov export \
-    /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon \
-    --format=lcov \
-    --instr-profile /tiflash/profile/merged.profdata \
-    --ignore-filename-regex "/usr/include/.*" \
-    --ignore-filename-regex "/usr/local/.*" \
-    --ignore-filename-regex "/usr/lib/.*" \
-    --ignore-filename-regex ".*/contrib/.*" \
-    --ignore-filename-regex ".*/dbms/src/Debug/.*" \
-    --ignore-filename-regex ".*/dbms/src/Client/.*" \
-    > /tiflash/profile/lcov.info
-mkdir -p /build/tiflash/report
-genhtml /tiflash/profile/lcov.info -o /build/tiflash/report
-```
+TBD.
 
 ## Contributing
 
@@ -248,7 +210,11 @@ Before submitting a pull request, please use [format-diff.py](format-diff.py) to
 
 > **NOTE**: It is required to use clang-format 12.0.0+.
 
-```
-cd $WORKSPACE/tics
+```shell
+cd $WORKSPACE/tiflash
 python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
 ```
+
+## License
+
+TiFlash is under the Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.

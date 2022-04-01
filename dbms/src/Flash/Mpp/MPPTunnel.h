@@ -1,8 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
+#include <Flash/FlashService.h>
+#include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -26,6 +42,8 @@
 
 namespace DB
 {
+class EstablishCallData;
+
 /**
  * MPPTunnelBase represents the sender of an exchange connection.
  *
@@ -64,7 +82,8 @@ public:
         std::chrono::seconds timeout_,
         int input_steams_num_,
         bool is_local_,
-        const LogWithPrefixPtr & log_ = nullptr);
+        bool is_async_,
+        const String & req_id);
 
     ~MPPTunnelBase();
 
@@ -92,14 +111,21 @@ public:
 
     bool isLocal() const { return is_local; }
 
-    const LogWithPrefixPtr & getLogger() const { return log; }
+    const LoggerPtr & getLogger() const { return log; }
 
-    void consumerFinish(const String & err_msg);
+    // do finish work for consumer, if need_lock is false, it means it has been protected by a mutex lock.
+    void consumerFinish(const String & err_msg, bool need_lock = true);
+
+    bool isSendQueueNextPopNonBlocking() { return send_queue.isNextPopNonBlocking(); }
+
+    // In async mode, do a singe send operation when Writer::TryWrite() succeeds.
+    // In sync mode, as a background task to keep sending until done.
+    void sendJob(bool need_lock = true);
 
 private:
-    void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
+    void finishSendQueue();
 
-    void sendLoop();
+    void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
     void waitForConsumerFinish(bool allow_throw);
 
@@ -110,7 +136,9 @@ private:
 
     bool finished; // if the tunnel has finished its connection.
 
-    bool is_local; // if this tunnel used for local environment
+    bool is_local; // if the tunnel is used for local environment
+
+    bool is_async; // if the tunnel is used for async server.
 
     Writer * writer;
 
@@ -123,6 +151,8 @@ private:
 
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
+
+    std::shared_ptr<ThreadManager> thread_manager;
 
     /// Consumer can be sendLoop or local receiver.
     class ConsumerState
@@ -143,23 +173,30 @@ private:
         void setError(const String & err_msg)
         {
             promise.set_value(err_msg);
+            err_has_set = true;
+        }
+
+        bool errHasSet() const
+        {
+            return err_has_set.load();
         }
 
     private:
         std::promise<String> promise;
         std::shared_future<String> future;
+        std::atomic<bool> err_has_set{false};
     };
     ConsumerState consumer_state;
 
     ConnectionProfileInfo connection_profile_info;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
-class MPPTunnel : public MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>
+class MPPTunnel : public MPPTunnelBase<PacketWriter>
 {
 public:
-    using Base = MPPTunnelBase<::grpc::ServerWriter<::mpp::MPPDataPacket>>;
+    using Base = MPPTunnelBase<PacketWriter>;
     using Base::Base;
 };
 

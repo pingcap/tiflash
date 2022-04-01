@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -53,6 +67,7 @@ void ColumnFilePersistedSet::updateColumnFileStats()
         }
     }
     persisted_files_count = new_persisted_files_count;
+    persisted_files_level_count = persisted_files_levels.size();
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;
@@ -92,7 +107,7 @@ ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const Column
 
 ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
 {
-    Page page = context.storage_pool.meta()->read(id, nullptr);
+    Page page = context.storage_pool.metaReader().read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
     return std::make_shared<ColumnFilePersistedSet>(id, column_files);
@@ -193,7 +208,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
         else if (auto * t_file = column_file->tryToTinyFile(); t_file)
         {
             // Use a newly created page_id to reference the data page_id of current column file.
-            PageId new_data_page_id = context.page_id_generator.newLogPageId();
+            PageId new_data_page_id = context.storage_pool.newLogPageId();
             wbs.log.putRefPage(new_data_page_id, t_file->getDataPageId());
             auto new_column_file = t_file->cloneWith(new_data_page_id);
             cloned_tail.push_back(new_column_file);
@@ -201,7 +216,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
         else if (auto * b_file = column_file->tryToBigFile(); b_file)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
-            auto new_ref_id = context.page_id_generator.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             auto file_id = b_file->getFile()->fileId();
             wbs.data.putRefPage(new_ref_id, file_id);
             auto file_parent_path = delegator.getDTFilePath(file_id);
@@ -275,7 +290,7 @@ bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_vers
 {
     if (task_flush_version != flush_version)
     {
-        LOG_DEBUG(log, simpleInfo() << " Stop flush because structure got updated");
+        LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
         return false;
     }
     flush_version += 1;
@@ -305,6 +320,7 @@ bool ColumnFilePersistedSet::appendPersistedColumnFilesToLevel0(const ColumnFile
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
+    LOG_FMT_DEBUG(log, "{}, after append {} column files, level info: {}", info(), column_files.size(), levelsInfo());
 
     return true;
 }
@@ -378,7 +394,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         return false;
     }
     minor_compaction_version += 1;
-    LOG_FMT_DEBUG(log, "Before commit compaction, level summary: {}", info());
+    LOG_FMT_DEBUG(log, "{}, before commit compaction, level info: {}", info(), levelsInfo());
     ColumnFilePersistedLevels new_persisted_files_levels;
     auto compaction_src_level = compaction->getCompactionSourceLevel();
     // Copy column files in level range [0, compaction_src_level)
@@ -447,15 +463,14 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
-    LOG_FMT_DEBUG(log, "After commit compaction, level summary: {}", info());
+    LOG_FMT_DEBUG(log, "{}, after commit compaction, level info: {}", info(), levelsInfo());
 
     return true;
 }
 
-ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const DMContext & context)
+ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const StorageSnapshotPtr & storage_snap)
 {
-    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), true);
-    auto snap = std::make_shared<ColumnFileSetSnapshot>(std::move(storage_snap));
+    auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
     snap->rows = rows;
     snap->bytes = bytes;
     snap->deletes = deletes;

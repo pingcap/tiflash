@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
@@ -490,8 +504,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::DayName, "toDayName"},
     {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
-    //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
-    //{tipb::ScalarFuncSig::DayOfYear, "cast"},
+    {tipb::ScalarFuncSig::DayOfWeek, "tidbDayOfWeek"},
+    {tipb::ScalarFuncSig::DayOfYear, "tidbDayOfYear"},
 
     //{tipb::ScalarFuncSig::WeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::WeekWithoutMode, "cast"},
@@ -560,7 +574,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Timestamp2Args, "cast"},
     //{tipb::ScalarFuncSig::TimestampLiteral, "cast"},
 
-    //{tipb::ScalarFuncSig::LastDay, "cast"},
+    {tipb::ScalarFuncSig::LastDay, "tidbLastDay"},
     {tipb::ScalarFuncSig::StrToDateDate, "strToDateDate"},
     {tipb::ScalarFuncSig::StrToDateDatetime, "strToDateDatetime"},
     // {tipb::ScalarFuncSig::StrToDateDuration, "cast"},
@@ -976,11 +990,12 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
 // So far the known invalid field types are:
 // 1. decimal type with scale == -1
 // 2. decimal type with precision == 0
+// 3. decimal type with precision == -1
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type()
         && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal
-             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0));
+             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0 || expr.field_type().flen() == -1));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/Page/V3/LogFile/LogFilename.h>
@@ -31,13 +45,13 @@ private:
 class WALStoreReader
 {
 public:
-    static LogFilenameSet listAllFiles(const PSDiskDelegatorPtr & delegator, Poco::Logger * logger);
+    static LogFilenameSet listAllFiles(const PSDiskDelegatorPtr & delegator, LoggerPtr logger);
     static std::tuple<std::optional<LogFilename>, LogFilenameSet>
     findCheckpoint(LogFilenameSet && all_files);
 
-    static WALStoreReaderPtr create(FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter = nullptr);
+    static WALStoreReaderPtr create(String storage_name, FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter = nullptr);
 
-    static WALStoreReaderPtr create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter = nullptr);
+    static WALStoreReaderPtr create(String storage_name, FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter = nullptr);
 
     bool remained() const;
 
@@ -61,6 +75,7 @@ public:
     }
 
     WALStoreReader(
+        String storage_name,
         FileProviderPtr & provider_,
         std::optional<LogFilename> checkpoint,
         LogFilenameSet && files_,
@@ -82,7 +97,7 @@ private:
     LogFilenameSet::const_iterator next_reading_file;
     std::unique_ptr<LogReader> reader;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 } // namespace PS::V3

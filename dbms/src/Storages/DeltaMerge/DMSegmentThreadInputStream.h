@@ -1,8 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -36,7 +49,9 @@ public:
         size_t expected_block_size_,
         bool is_raw_,
         bool do_range_filter_for_raw_,
-        const LogWithPrefixPtr & log_)
+        const int extra_table_id_index,
+        const TableID physical_table_id,
+        const String & req_id)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
         , after_segment_read(after_segment_read_)
@@ -47,8 +62,16 @@ public:
         , expected_block_size(expected_block_size_)
         , is_raw(is_raw_)
         , do_range_filter_for_raw(do_range_filter_for_raw_)
-        , log(getMPPTaskLog(log_, NAME))
+        , extra_table_id_index(extra_table_id_index)
+        , physical_table_id(physical_table_id)
+        , log(Logger::get(NAME, req_id))
     {
+        if (extra_table_id_index != InvalidColumnID)
+        {
+            ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
+            ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
+            header.insert(extra_table_id_index, col);
+        }
     }
 
     String getName() const override { return NAME; }
@@ -102,10 +125,22 @@ protected:
 
             if (res)
             {
+                if (extra_table_id_index != InvalidColumnID)
+                {
+                    ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
+                    ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
+                    size_t row_number = res.rows();
+                    auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
+                    col.column = std::move(col_data);
+                    res.insert(extra_table_id_index, std::move(col));
+                }
                 if (!res.rows())
                     continue;
                 else
+                {
+                    total_rows += res.rows();
                     return res;
+                }
             }
             else
             {
@@ -115,6 +150,11 @@ protected:
                 cur_stream = {};
             }
         }
+    }
+
+    void readSuffixImpl() override
+    {
+        LOG_FMT_DEBUG(log, "finish read {} rows from storage", total_rows);
     }
 
 private:
@@ -128,14 +168,18 @@ private:
     const size_t expected_block_size;
     const bool is_raw;
     const bool do_range_filter_for_raw;
+    // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
+    const int extra_table_id_index;
 
     bool done = false;
 
     BlockInputStreamPtr cur_stream;
 
     SegmentPtr cur_segment;
+    TableID physical_table_id;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
+    size_t total_rows = 0;
 };
 
 } // namespace DM

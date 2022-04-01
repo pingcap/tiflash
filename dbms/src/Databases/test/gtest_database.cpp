@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
@@ -786,7 +800,7 @@ String readFile(Context & ctx, const String & file)
 DatabasePtr detachThenAttach(Context & ctx, const String & db_name, DatabasePtr && db, Poco::Logger * log)
 {
     auto meta = readFile(ctx, getDatabaseMetadataPath(db->getMetadataPath()));
-    LOG_DEBUG(log, "After tombstone [meta=" << meta << "]");
+    LOG_FMT_DEBUG(log, "After tombstone [meta={}]", meta);
     {
         // Detach and load again
         auto detach_query = std::make_shared<ASTDropQuery>();
@@ -850,7 +864,7 @@ try
 
         auto db = ctx.getDatabase(db_name);
         auto meta = readFile(ctx, getDatabaseMetadataPath(db->getMetadataPath()));
-        LOG_DEBUG(log, "After create [meta=" << meta << "]");
+        LOG_FMT_DEBUG(log, "After create [meta={}]", meta);
 
         DB::Timestamp tso = 1000;
         db->alterTombstone(ctx, tso);

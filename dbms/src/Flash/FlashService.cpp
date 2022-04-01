@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CPUAffinityManager.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
@@ -34,6 +48,8 @@ FlashService::FlashService(IServer & server_)
     , log(&Poco::Logger::get("FlashService"))
 {
     auto settings = server_.context().getSettingsRef();
+    enable_local_tunnel = settings.enable_local_tunnel;
+    enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
     size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
@@ -134,7 +150,6 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "{}: Handling mpp dispatch request: {}", __PRETTY_FUNCTION__, request->DebugString());
-
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -189,9 +204,19 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
-::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
-                                                    const ::mpp::EstablishMPPConnectionRequest * request,
-                                                    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+::grpc::Status returnStatus(EstablishCallData * calldata, const grpc::Status & status)
+{
+    if (calldata)
+    {
+        calldata->writeDone(status);
+    }
+    return status;
+}
+
+::grpc::Status FlashService::EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
+                                                               const ::mpp::EstablishMPPConnectionRequest * request,
+                                                               ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
+                                                               EstablishCallData * calldata)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
@@ -200,7 +225,7 @@ grpc::Status FlashService::Coprocessor(
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+        return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -223,7 +248,7 @@ grpc::Status FlashService::Coprocessor(
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
-        return status;
+        return returnStatus(calldata, status);
     }
 
     auto & tmt_context = context->getTMTContext();
@@ -239,23 +264,46 @@ grpc::Status FlashService::Coprocessor(
         }
         if (tunnel == nullptr)
         {
-            LOG_ERROR(log, err_msg);
-            if (writer->Write(getPacketWithError(err_msg)))
+            if (calldata)
             {
+                LOG_ERROR(log, err_msg);
+                // In Async version, writer::Write() return void.
+                // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
+                calldata->writeErr(getPacketWithError(err_msg));
                 return grpc::Status::OK;
             }
             else
             {
-                LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
-                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                LOG_ERROR(log, err_msg);
+                if (sync_writer->Write(getPacketWithError(err_msg)))
+                {
+                    return grpc::Status::OK;
+                }
+                else
+                {
+                    LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
+                    return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                }
             }
         }
     }
     Stopwatch stopwatch;
-    tunnel->connect(writer);
-    LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
-    tunnel->waitForFinish();
-    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
+    if (calldata)
+    {
+        calldata->attachTunnel(tunnel);
+        // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
+        tunnel->connect(calldata);
+        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
+    }
+    else
+    {
+        SyncPacketWriter writer(sync_writer);
+        tunnel->connect(&writer);
+        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
+        tunnel->waitForFinish();
+        LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
+    }
+
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;
@@ -402,7 +450,9 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         {
             context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
-
+        context->setSetting("enable_async_server", is_async ? "true" : "false");
+        context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
+        context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
         return std::make_tuple(context, grpc::Status::OK);
     }
     catch (Exception & e)
