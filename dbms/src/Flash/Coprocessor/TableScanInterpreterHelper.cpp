@@ -31,7 +31,7 @@
 #include <memory>
 #include <vector>
 
-namespace DB::TableScanInterpreterHelper
+namespace DB
 {
 namespace FailPoints
 {
@@ -39,6 +39,8 @@ extern const char pause_after_copr_streams_acquired[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
+namespace TableScanInterpreterHelper
+{
 namespace
 {
 bool schemaMatch(const DAGSchema & left, const DAGSchema & right)
@@ -358,4 +360,5 @@ std::unique_ptr<DAGExpressionAnalyzer> handleTableScan(
 
     return analyzer;
 }
-} // namespace DB::TableScanInterpreterHelper
+} // namespace TableScanInterpreterHelper
+} // namespace DB
