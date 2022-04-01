@@ -94,12 +94,14 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
     Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
     Int64 recv_task_id = task_meta.task_id();
+    String req_info_prefix;
     static const Int32 MAX_RETRY_TIMES = 10;
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
         send_task_id = req.send_task_id;
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
+        req_info_prefix = req_info;
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
         for (int i = 0; i < MAX_RETRY_TIMES; ++i)
@@ -122,7 +124,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+                        local_err_msg = req_info + ": receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
@@ -140,7 +142,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     has_data = true;
                 if (recv_msg->packet->has_error())
                 {
-                    throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
+                    throw Exception(req_info + ": Exchange receiver meet error : " + recv_msg->packet->error().msg());
                 }
                 {
                     std::unique_lock<std::mutex> lock(mu);
@@ -153,7 +155,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                     else
                     {
                         meet_error = true;
-                        local_err_msg = "receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
+                        local_err_msg = req_info + ": receiver's state is " + getReceiverStateStr(state) + ", exit from readLoop";
                         LOG_WARNING(log, local_err_msg);
                         break;
                     }
@@ -167,7 +169,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             status = reader->finish();
             if (status.ok())
             {
-                LOG_DEBUG(log, "finish read : " << req.debugString());
+                LOG_WARNING(log, "finish read : " << req.debugString());
                 break;
             }
             else
@@ -213,11 +215,16 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         if (meet_error && state == ExchangeReceiverState::NORMAL)
             state = ExchangeReceiverState::ERROR;
         if (meet_error && err_msg.empty())
-            err_msg = local_err_msg;
+        {
+            if (req_info_prefix.size() > 0)
+                err_msg = req_info_prefix + ": " + local_err_msg;
+            else
+                err_msg = local_err_msg;
+        }
         copy_live_conn = live_connections;
         cv.notify_all();
     }
-    LOG_DEBUG(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
+    LOG_WARNING(log, fmt::format("{} -> {} end! current alive connections: {}", send_task_id, recv_task_id, copy_live_conn));
 
     if (copy_live_conn == 0)
         LOG_DEBUG(log, fmt::format("All threads end in ExchangeReceiver"));
