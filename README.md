@@ -64,7 +64,7 @@ The following are platform-specific prerequisites. Click to expand details:
   # add LLVM repo key
   wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
 
-  # install LLVM packages
+  # install LLVM packages, and can find more detailed instructions in https://apt.llvm.org/ when failed
   apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev
 
   # install other dependencies
