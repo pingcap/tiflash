@@ -214,3 +214,7 @@ Before submitting a pull request, please use [format-diff.py](format-diff.py) to
 cd $WORKSPACE/tiflash
 python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
 ```
+
+## License
+
+TiFlash is under the Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.
