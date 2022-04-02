@@ -610,8 +610,8 @@ bool Aggregator::executeOnBlock(
     {
         current_memory_usage = current_memory_tracker->get();
         auto updated_local_delta_memory = CurrentMemoryTracker::getLocalDeltaMemory();
-        current_memory_usage += local_memory_usage.fetch_add(updated_local_delta_memory - local_delta_memory);
-        current_memory_usage += (updated_local_delta_memory - local_delta_memory);
+        auto local_delta_memory_diff = updated_local_delta_memory - local_delta_memory;
+        current_memory_usage += (local_memory_usage.fetch_add(local_delta_memory_diff) + local_delta_memory_diff);
         local_delta_memory = updated_local_delta_memory;
     }
 
