@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ParserQueryWithOutput.h>
-#include <Parsers/ParserShowTablesQuery.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserTablePropertiesQuery.h>
-#include <Parsers/ParserDescribeTableQuery.h>
-#include <Parsers/ParserShowProcesslistQuery.h>
-#include <Parsers/ParserCheckQuery.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ParserRenameQuery.h>
 #include <Parsers/ParserAlterQuery.h>
+#include <Parsers/ParserCheckQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDescribeTableQuery.h>
 #include <Parsers/ParserDropQuery.h>
