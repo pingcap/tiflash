@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/ChecksumBuffer.h>
 #include <IO/IOSWrapper.h>
@@ -40,11 +54,11 @@ static constexpr char MIGRATE_HELP[] =
     "Usage: migrate [args]\n"
     "Available Arguments:\n"
     "  --help        Print help message and exit.\n"
-    "  --version     Target dmfile version. [default: 2] [available: 1, 2]\n"
+    "  --version     Target dtfile version. [default: 2] [available: 1, 2]\n"
     "  --algorithm   Checksum algorithm. [default: xxh3] [available: xxh3, city128, crc32, crc64, none]\n"
     "  --frame       Checksum frame length. [default: " TO_STRING(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE) "]\n"
     "  --compression Compression method. [default: lz4] [available: lz4, lz4hc, zstd, none]\n"
-    "  --level       Compression level. [default: -1 (auto)]\n"
+    "  --level       Compression level. [default: lz4: 1, lz4hc: 9, zstd: 1]\n"
     "  --file-id     Target file id.\n"
     "  --workdir     Target directory.\n"
     "  --nokeep      Do not keep old version.\n"
@@ -189,22 +203,22 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
             keeper.setStorageVersion(DB::STORAGE_FORMAT_V2);
             break;
         default:
-            throw DB::Exception(fmt::format("invalid dmfile version: {}", args.version));
+            throw DB::Exception(fmt::format("invalid dtfile version: {}", args.version));
         }
 
-        LOG_FMT_INFO(logger, "creating new dmfile");
+        LOG_FMT_INFO(logger, "creating new dtfile");
         auto new_file = DB::DM::DMFile::create(args.file_id, keeper.migration_temp_dir.path(), false, std::move(option));
 
         LOG_FMT_INFO(logger, "creating input stream");
         auto input_stream = DB::DM::createSimpleBlockInputStream(context, src_file);
 
         LOG_FMT_INFO(logger, "creating output stream");
+        context.getSettingsRef().dt_compression_method.set(args.compression_method);
+        context.getSettingsRef().dt_compression_level.set(args.compression_level);
         auto output_stream = DB::DM::DMFileBlockOutputStream(
             context,
             new_file,
-            src_file->getColumnDefines(),
-            {},
-            {args.compression_method, args.compression_level});
+            src_file->getColumnDefines());
 
         input_stream->readPrefix();
         if (!args.dry_mode)
@@ -212,7 +226,7 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         auto stat_iter = src_file->pack_stats.begin();
         auto properties_iter = src_file->pack_properties.property().begin();
         size_t counter = 0;
-        // iterate all blocks and rewrite them to new dmfile
+        // iterate all blocks and rewrite them to new dtfile
         while (auto block = input_stream->read())
         {
             LOG_FMT_INFO(logger, "migrating block {} ( size: {} )", counter++, block.bytes());
@@ -260,7 +274,7 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("file-id", bpo::value<size_t>()->required())
         ("dry", bpo::bool_switch(&dry_mode))
         ("compression", bpo::value<std::string>()->default_value("lz4"))
-        ("level", bpo::value<int>()->default_value(-1))
+        ("level", bpo::value<int>())
         ("imitative", bpo::bool_switch(&imitative))
         ("nokeep", bpo::bool_switch(&no_keep));
     // clang-format on
@@ -296,7 +310,7 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         args.version = vm["version"].as<size_t>();
         if (args.version < 1 || args.version > 2)
         {
-            std::cerr << "invalid dmfile version: " << args.version << std::endl;
+            std::cerr << "invalid dtfile version: " << args.version << std::endl;
             return -EINVAL;
         }
         args.no_keep = no_keep;
@@ -328,43 +342,42 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
                 return -EINVAL;
             }
 
-            auto compression_level = vm["level"].as<int>();
-            if (compression_level == -1)
+            if (vm.count("level") == 0)
             {
                 args.compression_level = DB::CompressionSettings::getDefaultLevel(args.compression_method);
             }
             else
             {
-                args.compression_level = compression_level;
+                args.compression_level = vm["level"].as<int>();
             }
         }
         if (args.version == 2)
         {
             args.frame = vm["frame"].as<size_t>();
-            auto algorithm_ = vm["algorithm"].as<std::string>();
-            if (algorithm_ == "xxh3")
+            auto algorithm = vm["algorithm"].as<std::string>();
+            if (algorithm == "xxh3")
             {
                 args.algorithm = DB::ChecksumAlgo::XXH3;
             }
-            else if (algorithm_ == "crc32")
+            else if (algorithm == "crc32")
             {
                 args.algorithm = DB::ChecksumAlgo::CRC32;
             }
-            else if (algorithm_ == "crc64")
+            else if (algorithm == "crc64")
             {
                 args.algorithm = DB::ChecksumAlgo::CRC64;
             }
-            else if (algorithm_ == "city128")
+            else if (algorithm == "city128")
             {
                 args.algorithm = DB::ChecksumAlgo::City128;
             }
-            else if (algorithm_ == "none")
+            else if (algorithm == "none")
             {
                 args.algorithm = DB::ChecksumAlgo::None;
             }
             else
             {
-                std::cerr << "invalid algorithm: " << algorithm_ << std::endl;
+                std::cerr << "invalid algorithm: " << algorithm << std::endl;
                 return -EINVAL;
             }
         }

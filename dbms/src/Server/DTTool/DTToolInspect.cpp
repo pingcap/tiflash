@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -16,9 +30,9 @@ static constexpr char INSPECT_HELP[] =
     "Usage: inspect [args]\n"
     "Available Arguments:\n"
     "  --help        Print help message and exit.\n"
-    "  --config-file Tiflash config file.\n"
+    "  --config-file TiFlash config file.\n"
     "  --check       Iterate data files to check integrity.\n"
-    "  --file-id     Target DMFile ID.\n"
+    "  --file-id     Target DTFile ID.\n"
     "  --imitative   Use imitative context instead. (encryption is not supported in this mode)\n"
     "  --workdir     Target directory.";
 
@@ -31,7 +45,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
 
     // black_hole is used to consume data manually.
     // we use SCOPE_EXIT to ensure the release of memory area.
-    auto black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
+    auto * black_hole = reinterpret_cast<char *>(::operator new (DBMS_DEFAULT_BUFFER_SIZE, std::align_val_t{64}));
     SCOPE_EXIT({ ::operator delete (black_hole, std::align_val_t{64}); });
     auto consume = [&](DB::ReadBuffer & t) {
         while (t.readBig(black_hole, DBMS_DEFAULT_BUFFER_SIZE) != 0) {}
@@ -179,7 +193,6 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
 
         auto workdir = vm["workdir"].as<std::string>();
         auto file_id = vm["file-id"].as<size_t>();
-        auto config_file = vm["config-file"].as<std::string>();
         auto args = InspectArgs{check, file_id, workdir};
 
         if (imitative)
@@ -189,6 +202,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         }
         else
         {
+            auto config_file = vm["config-file"].as<std::string>();
             CLIService service(inspectServiceMain, args, config_file, ffi_function);
             return service.run({""});
         }

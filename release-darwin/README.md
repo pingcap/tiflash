@@ -11,3 +11,4 @@ Following OS are tested OK
 Your system needs to install
 
 * python 3.7
+* openssl 1.1

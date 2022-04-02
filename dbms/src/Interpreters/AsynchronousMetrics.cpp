@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Allocator.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
@@ -38,7 +52,7 @@ AsynchronousMetrics::~AsynchronousMetrics()
     try
     {
         {
-            std::lock_guard<std::mutex> lock{wait_mutex};
+            std::lock_guard lock{wait_mutex};
             quit = true;
         }
 
@@ -54,14 +68,14 @@ AsynchronousMetrics::~AsynchronousMetrics()
 
 AsynchronousMetrics::Container AsynchronousMetrics::getValues() const
 {
-    std::lock_guard<std::mutex> lock{container_mutex};
+    std::lock_guard lock{container_mutex};
     return container;
 }
 
 
 void AsynchronousMetrics::set(const std::string & name, Value value)
 {
-    std::lock_guard<std::mutex> lock{container_mutex};
+    std::lock_guard lock{container_mutex};
     container[name] = value;
 }
 
@@ -70,7 +84,7 @@ void AsynchronousMetrics::run()
 {
     setThreadName("AsyncMetrics");
 
-    std::unique_lock<std::mutex> lock{wait_mutex};
+    std::unique_lock lock{wait_mutex};
 
     /// Next minute + 30 seconds. To be distant with moment of transmission of metrics, see MetricsTransmitter.
     const auto get_next_minute = [] {

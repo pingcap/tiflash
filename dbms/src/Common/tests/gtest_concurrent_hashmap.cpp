@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/HashTable/HashMap.h>
 #include <common/ThreadPool.h>
 #include <gtest/gtest.h>
@@ -73,7 +87,7 @@ TEST(TestConcurrentHashMap, ConcurrentInsertWithExplicitLock)
                         segment_index = hash_value % test_concurrency;
                     }
                     bool inserted;
-                    std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
+                    std::lock_guard lk(map.getSegmentMutex(segment_index));
                     typename ConcurrentMap::SegmentType::HashTable::LookupResult it;
                     map.getSegmentTable(segment_index).emplace(insert_value, it, inserted);
                     it->getMapped().value++;
@@ -188,7 +202,7 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
                     }
                     bool inserted;
                     {
-                        std::lock_guard<std::mutex> lk(concurrent_map.getSegmentMutex(segment_index));
+                        std::lock_guard lk(concurrent_map.getSegmentMutex(segment_index));
                         typename ConcurrentMap::SegmentType::HashTable::LookupResult it;
                         concurrent_map.getSegmentTable(segment_index).emplace(insert_value, it, inserted);
                         it->getMapped().value++;

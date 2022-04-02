@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+# -*- coding:utf-8 -*-
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+import os.path as path
+import platform
+import subprocess
+import sys
+banner = r"""
+ _________  ___  ________ ___       ________  ________  ___  ___          _______   ________   ___      ___
+|\___   ___\\  \|\  _____\\  \     |\   __  \|\   ____\|\  \|\  \        |\  ___ \ |\   ___  \|\  \    /  /|
+\|___ \  \_\ \  \ \  \__/\ \  \    \ \  \|\  \ \  \___|\ \  \\\  \       \ \   __/|\ \  \\ \  \ \  \  /  / /
+     \ \  \ \ \  \ \   __\\ \  \    \ \   __  \ \_____  \ \   __  \       \ \  \_|/_\ \  \\ \  \ \  \/  / /
+      \ \  \ \ \  \ \  \_| \ \  \____\ \  \ \  \|____|\  \ \  \ \  \       \ \  \_|\ \ \  \\ \  \ \    / /
+       \ \__\ \ \__\ \__\   \ \_______\ \__\ \__\____\_\  \ \__\ \__\       \ \_______\ \__\\ \__\ \__/ /
+        \|__|  \|__|\|__|    \|_______|\|__|\|__|\_________\|__|\|__|        \|_______|\|__| \|__|\|__|/
+
+TiFlash Development Environment Enabled
+"""
+
+only_dump_envs = len(sys.argv) > 1
+
+if sys.stdout.isatty() and not only_dump_envs:
+    print(banner)
+
+def get_env_var(key):
+    if not only_dump_envs:
+        return os.getenv(key, "")
+    return "${%s}" % (key)
+
+sysroot = path.abspath(path.dirname(__file__) + "/sysroot") + "/"
+bindir  = "{}bin/".format(sysroot)
+libdir  = "{}lib/".format(sysroot)
+triple  = "{}-unknown-linux-gnu".format(platform.machine())
+shell   = os.getenv('SHELL', '/bin/sh')
+env     = {
+    "PS1"                : "[\\u@\\h \\W] (TiFlash) > ",
+    "CMAKE_PREFIX_PATH"  : sysroot,
+    "PATH"               : ":".join([bindir, sysroot + "go/bin/", get_env_var("PATH")]),
+    "CMAKE"              : bindir + "cmake",
+    "LD_LIBRARY_PATH"    : ":".join([libdir, libdir + triple + "/", get_env_var("LD_LIBRARY_PATH")]),
+    "LIBRARY_PATH"       : ":".join([libdir, libdir + triple + "/", get_env_var("LIBRARY_PATH")]),
+    "CPLUS_INCLUDE_PATH" : ":".join([sysroot + "include/" + triple + "/c++/v1/", get_env_var("CPLUS_INCLUDE_PATH")]),
+    "AR"                 : bindir + "llvm-ar",
+    "OBJCOPY"            : bindir + "llvm-objcopy",
+    "AS"                 : bindir + "llvm-as",
+    "CXX"                : bindir + "clang++",
+    "CC"                 : bindir + "clang",
+    "LD"                 : bindir + "ld.lld",
+    "CXXSTDLIB"          : "c++",
+    "RUSTFLAGS"          : " ".join([
+                                "-C",
+                                "linker={}".format(path.abspath(path.dirname(__file__) + "/tiflash-linker")),
+                                "-C", "link-arg=-fuse-ld=lld"])
+}
+
+if platform.processor() == 'aarch64':
+    env["RUSTFLAGS"] =  env["RUSTFLAGS"] + " -C link-arg=-Wl,-Bsymbolic"
+
+if only_dump_envs:
+    print("# Put these env settings to the end of your ~/.bashrc or ~/.zshrc\n")
+    for k,v in env.items():
+        if k == "PS1": continue
+        print('export {}="{}"'.format(k, v))
+    sys.exit(0)
+
+# else start a new session
+for (i, j) in os.environ.items():
+    if i not in env:
+        env[i] = j
+
+subprocess.run(shell, env=env)

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/ChecksumBuffer.h>
@@ -30,7 +44,7 @@ static constexpr char BENCH_HELP[] =
     "Usage: bench [args]\n"
     "Available Arguments:\n"
     "  --help        Print help message and exit.\n"
-    "  --version     DMFile version. [default: 2] [available: 1, 2]\n"
+    "  --version     DTFile version. [default: 2] [available: 1, 2]\n"
     "  --algorithm   Checksum algorithm. [default: xxh3] [available: xxh3, city128, crc32, crc64, none]\n"
     "  --frame       Checksum frame length. [default: " TO_STRING(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE) "]\n"
     "  --column      Column number. [default: 100]\n"
@@ -215,34 +229,34 @@ int benchEntry(const std::vector<std::string> & opts)
         auto version = vm["version"].as<size_t>();
         if (version < 1 || version > 2)
         {
-            std::cerr << "invalid dmfile version: " << version << std::endl;
+            std::cerr << "invalid dtfile version: " << version << std::endl;
             return -EINVAL;
         }
-        auto algorithm_ = vm["algorithm"].as<std::string>();
+        auto algorithm_config = vm["algorithm"].as<std::string>();
         DB::ChecksumAlgo algorithm;
-        if (algorithm_ == "xxh3")
+        if (algorithm_config == "xxh3")
         {
             algorithm = DB::ChecksumAlgo::XXH3;
         }
-        else if (algorithm_ == "crc32")
+        else if (algorithm_config == "crc32")
         {
             algorithm = DB::ChecksumAlgo::CRC32;
         }
-        else if (algorithm_ == "crc64")
+        else if (algorithm_config == "crc64")
         {
             algorithm = DB::ChecksumAlgo::CRC64;
         }
-        else if (algorithm_ == "city128")
+        else if (algorithm_config == "city128")
         {
             algorithm = DB::ChecksumAlgo::City128;
         }
-        else if (algorithm_ == "none")
+        else if (algorithm_config == "none")
         {
             algorithm = DB::ChecksumAlgo::None;
         }
         else
         {
-            std::cerr << "invalid algorithm: " << algorithm_ << std::endl;
+            std::cerr << "invalid algorithm: " << algorithm_config << std::endl;
             return -EINVAL;
         }
         auto frame = vm["frame"].as<size_t>();
@@ -286,7 +300,7 @@ int benchEntry(const std::vector<std::string> & opts)
                                                       "encryption: {}\n"
                                                       "algorithm:  {}";
         DB::DM::DMConfigurationOpt opt = std::nullopt;
-        auto logger = &Poco::Logger::get("DTTool::Bench");
+        auto * logger = &Poco::Logger::get("DTTool::Bench");
         if (version == 1)
         {
             LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V1, version, column, size, field, random, encryption, workdir);
@@ -294,7 +308,7 @@ int benchEntry(const std::vector<std::string> & opts)
         }
         else
         {
-            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_);
+            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_config);
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
         }
@@ -322,7 +336,7 @@ int benchEntry(const std::vector<std::string> & opts)
         auto settings = DB::Settings();
         auto db_context = env.getContext();
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
+        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", /*table_id*/ 1, *path_pool, *db_context, db_context->getSettingsRef());
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,
@@ -372,22 +386,13 @@ int benchEntry(const std::vector<std::string> & opts)
 
             auto start = high_resolution_clock::now();
             {
-                auto stream = DB::DM::DMFileBlockInputStream(
-                    *db_context,
-                    std::numeric_limits<UInt64>::max(),
-                    false,
-                    dm_context->hash_salt,
-                    dmfile,
-                    *defines,
-                    {DB::DM::RowKeyRange::newAll(false, 1)},
-                    DB::DM::RSOperatorPtr{},
-                    std::make_shared<DB::DM::ColumnCache>(),
-                    DB::DM::IdSetPtr{});
+                auto builder = DB::DM::DMFileBlockInputStreamBuilder(*db_context);
+                auto stream = builder.setColumnCache(std::make_shared<DB::DM::ColumnCache>()).build(dmfile, *defines, {DB::DM::RowKeyRange::newAll(false, 1)});
                 for (size_t j = 0; j < blocks.size(); ++j)
                 {
-                    TIFLASH_NO_OPTIMIZE(stream.read());
+                    TIFLASH_NO_OPTIMIZE(stream->read());
                 }
-                stream.readSuffix();
+                stream->readSuffix();
             }
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<nanoseconds>(end - start).count();

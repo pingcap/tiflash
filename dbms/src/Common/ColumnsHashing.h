@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 
@@ -80,7 +94,7 @@ struct HashMethodString
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 
     HashMethodString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
@@ -128,7 +142,7 @@ struct HashMethodFixedString
 
     size_t n;
     const ColumnFixedString::Chars_t * chars;
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 
     HashMethodFixedString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {

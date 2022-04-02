@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
@@ -245,7 +259,7 @@ public:
 
         ~Holder()
         {
-            std::lock_guard<std::mutex> cache_lock(cache.mutex);
+            std::lock_guard cache_lock(cache.mutex);
             if (--region.refcount == 0)
                 cache.lru_list.push_back(region);
             cache.total_size_in_use -= region.size;
@@ -317,12 +331,12 @@ private:
             if (cleaned_up)
                 return;
 
-            std::lock_guard<std::mutex> token_lock(token->mutex);
+            std::lock_guard token_lock(token->mutex);
 
             if (token->cleaned_up)
                 return;
 
-            std::lock_guard<std::mutex> cache_lock(token->cache.mutex);
+            std::lock_guard cache_lock(token->cache.mutex);
 
             --token->refcount;
             if (token->refcount == 0)
@@ -553,7 +567,7 @@ public:
 
     ~ArrayCache()
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
 
         key_map.clear();
         lru_list.clear();
@@ -580,7 +594,7 @@ public:
     {
         InsertTokenHolder token_holder;
         {
-            std::lock_guard<std::mutex> cache_lock(mutex);
+            std::lock_guard cache_lock(mutex);
 
             auto it = key_map.find(key, RegionCompareByKey());
             if (key_map.end() != it)
@@ -601,7 +615,7 @@ public:
 
         InsertToken * token = token_holder.token.get();
 
-        std::lock_guard<std::mutex> token_lock(token->mutex);
+        std::lock_guard token_lock(token->mutex);
 
         token_holder.cleaned_up = token->cleaned_up;
 
@@ -622,7 +636,7 @@ public:
 
         RegionMetadata * region;
         {
-            std::lock_guard<std::mutex> cache_lock(mutex);
+            std::lock_guard cache_lock(mutex);
             region = allocate(size);
         }
 
@@ -643,14 +657,14 @@ public:
             catch (...)
             {
                 {
-                    std::lock_guard<std::mutex> cache_lock(mutex);
+                    std::lock_guard cache_lock(mutex);
                     freeRegion(*region);
                 }
                 throw;
             }
         }
 
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
 
         try
         {
@@ -709,7 +723,7 @@ public:
 
     Statistics getStatistics() const
     {
-        std::lock_guard<std::mutex> cache_lock(mutex);
+        std::lock_guard cache_lock(mutex);
         Statistics res;
 
         res.total_chunks_size = total_chunks_size;

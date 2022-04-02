@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnConst.h>
 #include <Common/Exception.h>
 #include <Functions/FunctionFactory.h>
@@ -219,9 +233,38 @@ try
     // Scan day, month and year. There is no matter if the Date/DateTime is invalid,
     // since you can just ignore the invalid cases,
     // and we ensure function extracts correct member info from MyDateTime.
-    for (UInt16 year = 1990; year <= 2050; year++)
+    UInt8 corner_days[] = {1, 28, 29, 30, 31};
+    for (UInt16 year = 1990; year <= 2030; year++)
     {
-        for (UInt8 month = 1; month < 12; month++)
+        for (UInt8 month = 1; month <= 12; month++)
+        {
+            for (UInt8 day : corner_days)
+            {
+                //DateTime const nullable
+                testForDateTime<true, true>(year, month, day);
+                //DateTime const non-nullable
+                testForDateTime<true, false>(year, month, day);
+                //DateTime non-const nullable
+                testForDateTime<false, true>(year, month, day);
+                //DateTime non-const non-nullable
+                testForDateTime<false, false>(year, month, day);
+
+                //Date const nullable
+                testForDate<true, true>(year, month, day);
+                //Date const non-nullable
+                testForDate<true, false>(year, month, day);
+                //Date non-const nullable
+                testForDate<false, true>(year, month, day);
+                //Date non-const non-nullable
+                testForDate<false, false>(year, month, day);
+            }
+        }
+    }
+
+    //scan a whole year to scan days.
+    for (UInt16 year = 2000; year <= 2000; year++)
+    {
+        for (UInt8 month = 1; month <= 12; month++)
         {
             for (UInt8 day = 1; day < 31; day++)
             {

@@ -1,10 +1,23 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/SortCursor.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Poco/TemporaryFile.h>
@@ -24,16 +37,18 @@ namespace DB
   */
 class MergeSortingBlocksBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "MergeSortingBlocks";
+
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
     MergeSortingBlocksBlockInputStream(
         Blocks & blocks_,
         SortDescription & description_,
-        const LogWithPrefixPtr & log_,
+        const String & req_id,
         size_t max_merged_block_size_,
         size_t limit_ = 0);
 
-    String getName() const override { return "MergeSortingBlocks"; }
+    String getName() const override { return NAME; }
 
     bool isGroupedOutput() const override { return true; }
     bool isSortedOutput() const override { return true; }
@@ -66,11 +81,13 @@ private:
     template <typename TSortCursor>
     Block mergeImpl(std::priority_queue<TSortCursor> & queue);
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 };
 
 class MergeSortingBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "MergeSorting";
+
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
     MergeSortingBlockInputStream(
@@ -80,9 +97,9 @@ public:
         size_t limit_,
         size_t max_bytes_before_external_sort_,
         const std::string & tmp_path_,
-        const LogWithPrefixPtr & log_);
+        const String & req_id);
 
-    String getName() const override { return "MergeSorting"; }
+    String getName() const override { return NAME; }
 
     bool isGroupedOutput() const override { return true; }
     bool isSortedOutput() const override { return true; }
@@ -101,7 +118,7 @@ private:
     size_t max_bytes_before_external_sort;
     const std::string tmp_path;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     Blocks blocks;
     size_t sum_bytes_in_blocks = 0;

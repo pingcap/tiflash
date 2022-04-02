@@ -265,3 +265,11 @@ tmp/
 tests/fullstack-test2/auto_gen
 
 CoverageReport
+
+# installation and sysroot path
+release-centos7-llvm/tiflash
+release-centos7-llvm/build-release
+
+# CCACHE
+ccache.tar
+.ccache/

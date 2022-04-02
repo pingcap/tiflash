@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -14,6 +28,8 @@
 
 namespace DB
 {
+class DAGContext;
+
 bool isLiteralExpr(const tipb::Expr & expr);
 Field decodeLiteral(const tipb::Expr & expr);
 bool isFunctionExpr(const tipb::Expr & expr);
@@ -34,6 +50,10 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr);
 SortDescription getSortDescription(
     const std::vector<NameAndTypePair> & order_columns,
     const google::protobuf::RepeatedPtrField<tipb::ByItem> & by_items);
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators);
 
 extern const Int8 VAR_SIZE;
 
@@ -76,5 +96,6 @@ public:
 };
 
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
+tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
 
 } // namespace DB

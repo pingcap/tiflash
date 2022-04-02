@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
@@ -49,10 +63,10 @@ public:
             ",");
         fmt_buffer.fmtAppend(
             R"(],"outbound_rows":{},"outbound_blocks":{},"outbound_bytes":{},"execution_time_ns":{})",
-            outbound_rows,
-            outbound_blocks,
-            outbound_bytes,
-            execution_time_ns);
+            base.rows,
+            base.blocks,
+            base.bytes,
+            base.execution_time_ns);
         if constexpr (ExecutorImpl::has_extra_info)
         {
             fmt_buffer.append(",");
@@ -68,15 +82,12 @@ public:
         auto it = profile_streams_map.find(executor_id);
         if (it != profile_streams_map.end())
         {
-            for (const auto & input_stream : it->second.input_streams)
+            for (const auto & input_stream : it->second)
             {
                 auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get());
                 assert(p_stream);
                 const auto & profile_info = p_stream->getProfileInfo();
-                outbound_rows += profile_info.rows;
-                outbound_blocks += profile_info.blocks;
-                outbound_bytes += profile_info.bytes;
-                execution_time_ns = std::max(execution_time_ns, profile_info.execution_time);
+                base.append(profile_info);
             }
         }
         if constexpr (ExecutorImpl::has_extra_info)

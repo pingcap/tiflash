@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Flash/LogSearch.h>
 #include <Poco/DeflatingStream.h>
+#include <common/types.h>
 #include <gtest/gtest.h>
 
 #include <ext/scope_guard.h>
@@ -14,12 +29,12 @@ public:
     void SetUp() override {}
 };
 
-inline long getTimezoneAndOffset(int tz_sign, int tz_hour, int tz_min)
+inline Int64 getTimezoneAndOffset(int tz_sign, int tz_hour, int tz_min)
 {
-    time_t t = time(NULL);
+    time_t t = time(nullptr);
     struct tm lt = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr};
     localtime_r(&t, &lt);
-    long offset = tz_sign * (60 * 60 * tz_hour + 60 * tz_min) - lt.tm_gmtoff;
+    Int64 offset = tz_sign * (60 * 60 * tz_hour + 60 * tz_min) - lt.tm_gmtoff;
     offset *= 1000;
     return offset;
 }
@@ -32,7 +47,7 @@ inline void getTimezoneString(char * tzs, int tz_sign, int tz_hour, int tz_min)
 TEST_F(LogSearchTest, LogSearch)
 {
     int tz_sign = 1, tz_hour = 8, tz_min = 0;
-    long offset = getTimezoneAndOffset(tz_sign, tz_hour, tz_min);
+    Int64 offset = getTimezoneAndOffset(tz_sign, tz_hour, tz_min);
     char tzs[10];
     getTimezoneString(tzs, tz_sign, tz_hour, tz_min);
     std::string s = "[2020/04/23 13:11:02.329 " + std::string(tzs) + "] [DEBUG] [\"Application : Load metadata done.\"]\n";
@@ -46,12 +61,12 @@ TEST_F(LogSearchTest, LogSearch)
     int year, month, day, hour, minute, second;
     size_t loglevel_size;
     size_t loglevel_s;
-    ASSERT_FALSE(LogIterator::read_date(s_bad1.size(), s_bad1.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-                 && LogIterator::read_level(s_bad1.size(), s_bad1.data(), loglevel_s, loglevel_size));
-    ASSERT_FALSE(LogIterator::read_date(s_bad2.size(), s_bad2.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-                 && LogIterator::read_level(s_bad2.size(), s_bad2.data(), loglevel_s, loglevel_size));
-    ASSERT_TRUE(LogIterator::read_date(s.size(), s.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-                && LogIterator::read_level(s.size(), s.data(), loglevel_s, loglevel_size));
+    ASSERT_FALSE(LogIterator::readDate(s_bad1.size(), s_bad1.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+                 && LogIterator::readLevel(s_bad1.size(), s_bad1.data(), loglevel_s, loglevel_size));
+    ASSERT_FALSE(LogIterator::readDate(s_bad2.size(), s_bad2.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+                 && LogIterator::readLevel(s_bad2.size(), s_bad2.data(), loglevel_s, loglevel_size));
+    ASSERT_TRUE(LogIterator::readDate(s.size(), s.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+                && LogIterator::readLevel(s.size(), s.data(), loglevel_s, loglevel_size));
     EXPECT_EQ(year, 2020);
     EXPECT_EQ(month, 4);
     EXPECT_EQ(day, 23);
@@ -93,10 +108,10 @@ TEST_F(LogSearchTest, LogSearch)
 
 TEST_F(LogSearchTest, SearchDir)
 {
-    time_t t = time(NULL);
+    time_t t = time(nullptr);
     struct tm lt = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nullptr};
     localtime_r(&t, &lt);
-    long offset = 60 * 60 * 8 * 1000 - lt.tm_gmtoff * 1000;
+    Int64 offset = 60 * 60 * 8 * 1000 - lt.tm_gmtoff * 1000;
 
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"/1/test-err.log"}, 0));
     ASSERT_FALSE(FilterFileByDatetime("/1/2.log", {"", ""}, 0));

@@ -1,13 +1,22 @@
-#include <DataStreams/ConcatBlockInputStream.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <pingcap/coprocessor/Client.h>
 
 namespace DB
 {
@@ -43,37 +52,15 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         query_block,
         max_streams,
         dagContext().keep_session_timezone_info || !query_block.isRootQueryBlock(),
-        subqueries_for_sets,
-        mpp_exchange_receiver_maps);
+        subqueries_for_sets);
     return query_block_interpreter.execute();
-}
-
-void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block)
-{
-    for (const auto & child_qb : dag_query_block.children)
-    {
-        initMPPExchangeReceiver(*child_qb);
-    }
-    if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
-    {
-        mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(
-                context.getTMTContext().getKVCluster(),
-                context.getTMTContext().getMPPTaskManager(),
-                context.getSettings().enable_local_tunnel),
-            dag_query_block.source->exchange_receiver(),
-            dagContext().getMPPTaskMeta(),
-            max_streams,
-            dagContext().log);
-    }
 }
 
 BlockIO InterpreterDAG::execute()
 {
-    if (dagContext().isMPPTask())
-        /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
-        /// the query plan, so we init mpp exchange receiver before executeQueryBlock
-        initMPPExchangeReceiver(*dag.getRootQueryBlock());
+    /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
+    /// the query plan, so we init mpp exchange receiver before executeQueryBlock
+    dagContext().initExchangeReceiverIfMPP(context, max_streams);
     /// region_info should base on the source executor, however
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
@@ -95,8 +82,7 @@ BlockIO InterpreterDAG::execute()
             pipeline.firstStream(),
             std::move(subqueries_for_sets),
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            dagContext().getMPPTaskId(),
-            dagContext().log);
+            dagContext().log->identifier());
     }
 
     BlockIO res;

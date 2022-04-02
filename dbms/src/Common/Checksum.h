@@ -1,10 +1,28 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <Common/Exception.h>
 #include <IO/HashingWriteBuffer.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/Base64Encoder.h>
 #include <common/crc64.h>
+#ifdef __x86_64__
+#include <xxh_x86dispatch.h>
+#else
 #include <xxh3.h>
+#endif
 #include <zlib.h>
 
 #include <cstddef>
@@ -43,7 +61,7 @@ public:
 class CRC32
 {
 public:
-    using HashType = z_crc_t;
+    using HashType = uint32_t;
     static constexpr size_t hash_size = sizeof(HashType);
     static constexpr auto algorithm = ::DB::ChecksumAlgo::CRC32;
     void update(const void * src, size_t length)
@@ -100,7 +118,11 @@ public:
     void update(const void * src, size_t length)
     {
         ProfileEvents::increment(ProfileEvents::ChecksumDigestBytes, length);
+#ifdef __x86_64__ // dispatched version can utilize hardware resource
+        state = XXH3_64bits_withSeed_dispatch(src, length, state);
+#else // use inlined version
         state = XXH_INLINE_XXH3_64bits_withSeed(src, length, state);
+#endif
     }
     [[nodiscard]] HashType checksum() const { return state; }
 

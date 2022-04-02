@@ -1,6 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
@@ -21,11 +36,11 @@ LogReader::LogReader(
     std::unique_ptr<ReadBufferFromFileBase> && file_,
     Reporter * reporter_,
     bool verify_checksum_,
-    UInt32 log_num_,
-    WALRecoveryMode recovery_mode_,
-    Poco::Logger * log_)
+    Format::LogNumberType log_num_,
+    WALRecoveryMode recovery_mode_)
     : verify_checksum(verify_checksum_)
     , recycled(false)
+    , is_last_block(false)
     , eof(false)
     , read_error(false)
     , recovery_mode(recovery_mode_)
@@ -35,8 +50,9 @@ LogReader::LogReader(
     , reporter(reporter_)
     , end_of_buffer_offset(0)
     , log_number(log_num_)
-    , log(log_)
 {
+    // Must be `BLOCK_SIZE`, or we can not ensure the correctness of reading.
+    assert(file->internalBuffer().size() == Format::BLOCK_SIZE);
 }
 
 LogReader::~LogReader() = default;
@@ -198,6 +214,7 @@ LogReader::readRecord()
                     // a corruption, just ignore the entire logical record.
                     record.clear();
                 }
+                eof = true;
                 return {false, std::move(record)};
             }
             case ParseErrorType::OldRecord:
@@ -236,7 +253,7 @@ LogReader::readRecord()
             }
             case ParseErrorType::BadRecordLen:
             {
-                if (eof)
+                if (is_last_block)
                 {
                     if (recovery_mode == WALRecoveryMode::AbsoluteConsistency || recovery_mode == WALRecoveryMode::PointInTimeRecovery)
                     {
@@ -378,7 +395,7 @@ UInt8 LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_siz
         }
         else if (err != 0)
             return err;
-        // else parse header successe.
+        // else parse header success.
 
         if (verify_checksum)
         {
@@ -410,20 +427,19 @@ UInt8 LogReader::readMore(size_t * drop_size)
 {
     static_assert(ParseErrorType::MeetEOF != 0 && ParseErrorType::BadHeader != 0);
 
-    if (likely(!eof && !read_error))
+    if (likely(!is_last_block && !read_error))
     {
         // Last read was a full read, so this is a trailer to skip
         buffer.remove_prefix(buffer.size());
         try
         {
-            // Last read was a full read, so this is a trailer to skip
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_when_read_from_log);
             file->next();
             buffer = std::string_view{file->buffer().begin(), file->buffer().size()};
             end_of_buffer_offset += buffer.size();
             if (buffer.size() < static_cast<size_t>(Format::BLOCK_SIZE))
             {
-                eof = true;
+                is_last_block = true;
                 eof_offset = buffer.size();
             }
             // Return "0" for no error happen

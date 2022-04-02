@@ -1,59 +1,92 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Storages/Transaction/RegionsRangeIndex.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/Utils.h>
 
-#include <memory>
-#include <mutex>
 #include <unordered_map>
 
 namespace DB
 {
-
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using RegionMap = std::unordered_map<RegionID, RegionPtr>;
-
 class RegionTaskLock;
 
-/// RegionManager is used to store region instance and mutex for region to execute raft cmd/task.
-class RegionManager : private boost::noncopyable
+struct RegionTaskCtrl : MutexLockWrap
 {
-public:
-    /// Encapsulate the task lock for region
-    RegionTaskLock genRegionTaskLock(const RegionID region_id) const;
-
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
-
-    friend class KVStore;
-
+    /// The life time of each RegionTaskElement element should be as long as RegionManager, just return const ref.
     struct RegionTaskElement : private boost::noncopyable
     {
         mutable std::mutex mutex;
     };
+    /// Encapsulate the task lock for region
+    RegionTaskLock genRegionTaskLock(RegionID region_id) const;
 
-    /// The life time of each RegionTaskElement element should be as long as RegionManager, just return const ref.
-    const RegionTaskElement & getRegionTaskCtrl(const RegionID region_id) const;
+private:
+    mutable std::unordered_map<RegionID, RegionTaskElement> regions;
+};
+
+/// RegionManager is used to store region instance and mutex for region to execute raft cmd/task.
+struct RegionManager : SharedMutexLockWrap
+{
+    struct RegionReadLock
+    {
+        std::shared_lock<std::shared_mutex> lock;
+        const RegionMap & regions;
+        const RegionsRangeIndex & index;
+    };
+
+    struct RegionWriteLock
+    {
+        std::unique_lock<std::shared_mutex> lock;
+        RegionMap & regions;
+        RegionsRangeIndex & index;
+    };
+
+    RegionReadLock genRegionReadLock() const
+    {
+        return {genReadLockGuard(), regions, region_range_index};
+    }
+
+    RegionWriteLock genRegionWriteLock()
+    {
+        return {genWriteLockGuard(), regions, region_range_index};
+    }
+
+    /// Encapsulate the task lock for region
+    RegionTaskLock genRegionTaskLock(RegionID region_id) const;
 
     /// RegionManager can only be constructed by KVStore.
     RegionManager() = default;
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
-
-    mutable std::unordered_map<RegionID, RegionTaskElement> regions_ctrl;
+    RegionTaskCtrl region_task_ctrl;
     RegionMap regions;
-    mutable std::mutex mutex;
+    // region_range_index must be protected by task_mutex. It's used to search for region by range.
+    // region merge/split/apply-snapshot/remove will change the range.
+    RegionsRangeIndex region_range_index;
 };
 
 /// Task lock for region to prevent other thread persist middle state during applying raft cmd.
 class RegionTaskLock : private boost::noncopyable
 {
-    friend RegionTaskLock RegionManager::genRegionTaskLock(const RegionID region_id) const;
+    friend struct RegionTaskCtrl;
 
-    RegionTaskLock(std::mutex & mutex_) : lock(mutex_) {}
+    explicit RegionTaskLock(std::mutex & mutex_)
+        : lock(mutex_)
+    {}
     std::lock_guard<std::mutex> lock;
 };
 

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -5,13 +19,17 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
+#include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/Types.h>
+#include <pingcap/coprocessor/Client.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -23,8 +41,7 @@
 
 namespace DB
 {
-using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
-
+using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
 /// It's only intended to be used by DAGQueryBlockInterpreter.
 /// After DAGStorageInterpreter::execute some of its members will be transfered to DAGQueryBlockInterpreter.
@@ -34,7 +51,7 @@ public:
     DAGStorageInterpreter(
         Context & context_,
         const DAGQueryBlock & query_block_,
-        const tipb::TableScan & ts,
+        const TiDBTableScan & table_scan,
         const std::vector<const tipb::Expr *> & conditions_,
         size_t max_streams_);
 
@@ -47,42 +64,46 @@ public:
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
-    /// it should be hash map because duplicated region id may occur if merge regions to retry of dag.
-    RegionRetryList region_retry;
-    /// Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
-    /// We need an immuntable structure to build the TableScan operator and create snapshot input streams
-    /// of storage. After the input streams created, the `alter_lock` can be released so that reading
-    /// won't block DDL operations.
-    TableStructureLockHolder table_structure_lock;
-    std::optional<tipb::DAGRequest> dag_request;
-    std::optional<DAGSchema> dag_schema;
+    /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
+    RegionRetryList region_retry_from_local_region;
+    TableLockHolders drop_locks;
+    std::vector<RemoteRequest> remote_requests;
     BlockInputStreamPtr null_stream_if_empty;
 
 private:
+    struct StorageWithStructureLock
+    {
+        ManageableStoragePtr storage;
+        TableStructureLockHolder lock;
+    };
     LearnerReadSnapshot doCopLearnerRead();
 
     LearnerReadSnapshot doBatchCopLearnerRead();
 
     void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
 
-    std::tuple<ManageableStoragePtr, TableStructureLockHolder> getAndLockStorage(Int64 query_schema_version);
+    std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
-    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>, String> getColumnsForTableScan(Int64 max_columns_to_read);
+    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
 
-    std::tuple<std::optional<tipb::DAGRequest>, std::optional<DAGSchema>> buildRemoteTS();
+    void buildRemoteRequests();
+
+    void releaseAlterLocks();
+
+    std::unordered_map<TableID, SelectQueryInfo> generateSelectQueryInfos();
 
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
     Context & context;
     const DAGQueryBlock & query_block;
-    const tipb::TableScan & table_scan;
+    const TiDBTableScan & table_scan;
     const std::vector<const tipb::Expr *> & conditions;
     size_t max_streams;
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
-    TableID table_id;
+    TableID logical_table_id;
     const Settings & settings;
     TMTContext & tmt;
 
@@ -92,10 +113,14 @@ private:
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
     /// Table from where to read data, if not subquery.
-    ManageableStoragePtr storage;
+    /// Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
+    /// We need an immutable structure to build the TableScan operator and create snapshot input streams
+    /// of storage. After the input streams created, the `alter_lock` can be released so that reading
+    /// won't block DDL operations.
+    std::unordered_map<TableID, StorageWithStructureLock> storages_with_structure_lock;
+    ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
     NamesAndTypes source_columns;
-    String handle_column_name;
 };
 
 } // namespace DB

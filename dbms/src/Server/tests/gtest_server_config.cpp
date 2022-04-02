@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #if !__clang__
 #pragma GCC diagnostic push
@@ -14,6 +28,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/V2/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
@@ -25,11 +40,11 @@ namespace DB
 {
 namespace tests
 {
-class UsersConfigParser_test : public ::testing::Test
+class UsersConfigParserTest : public ::testing::Test
 {
 public:
-    UsersConfigParser_test()
-        : log(&Poco::Logger::get("UsersConfigParser_test"))
+    UsersConfigParserTest()
+        : log(&Poco::Logger::get("UsersConfigParserTest"))
     {
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         origin_settings = global_ctx.getSettings();
@@ -43,7 +58,7 @@ protected:
 };
 
 
-TEST_F(UsersConfigParser_test, ParseConfigs)
+TEST_F(UsersConfigParserTest, ParseConfigs)
 try
 {
     Strings tests = {
@@ -105,7 +120,7 @@ dt_enable_rough_set_filter = false
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         // Reload users config with test case
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
@@ -113,10 +128,10 @@ dt_enable_rough_set_filter = false
 
         // Create a copy of global_ctx
         auto ctx = global_ctx;
-        for (const auto & addr_ : test_addrs)
+        for (const auto & t_addr : test_addrs)
         {
             // Ensure "default" user can build connection
-            Poco::Net::SocketAddress addr(addr_);
+            Poco::Net::SocketAddress addr(t_addr);
 
             // `setUser` will check user, password, address, update settings and quota for current user
             ASSERT_NO_THROW(ctx.setUser("default", "", addr, ""));
@@ -139,7 +154,7 @@ dt_enable_rough_set_filter = false
 }
 CATCH
 
-TEST_F(UsersConfigParser_test, ReloadDtConfig)
+TEST_F(UsersConfigParserTest, ReloadDtConfig)
 try
 {
     Strings tests = {
@@ -154,6 +169,38 @@ dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
 dt_storage_pool_data_gc_min_bytes = 256
 dt_storage_pool_data_gc_max_valid_rate = 0.5
+dt_compression_method = "zstd"
+dt_compression_level = -1
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "zstd"
+dt_compression_level = 1
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "lz4"
+dt_compression_level = 2
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "lz4hc"
+dt_compression_level = 9
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "Zstd"
+dt_compression_level = 1
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "LZ4"
+dt_compression_level = 1
         )"};
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
@@ -162,7 +209,7 @@ dt_storage_pool_data_gc_max_valid_rate = 0.5
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         // Reload users config with test case
         global_ctx.reloadDeltaTreeConfig(*config);
@@ -174,19 +221,50 @@ dt_storage_pool_data_gc_max_valid_rate = 0.5
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_pack_size, 8388608);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_pack_rows, 2048);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_column_file_size, 8388608);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_column_file_rows, 2048);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_size, 536870912);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_limit_size, 42991616);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_force_merge_delta_size, 1073741824);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_force_split_size, 1610612736);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
+
+        if (i == 0)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::ZSTD);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, -1);
+        }
+        if (i == 1)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::ZSTD);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 1);
+        }
+        if (i == 2)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::LZ4);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 2);
+        }
+        if (i == 3)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::LZ4HC);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 9);
+        }
+        if (i == 4)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::ZSTD);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 1);
+        }
+        if (i == 5)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::LZ4);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 1);
+        }
     }
     global_ctx.setSettings(origin_settings);
 }
 CATCH
 
-TEST_F(UsersConfigParser_test, ReloadPersisterConfig)
+TEST_F(UsersConfigParserTest, ReloadPersisterConfig)
 try
 {
     Strings tests = {
@@ -209,24 +287,26 @@ dt_page_gc_low_write_prob = 0.2
     RegionPersister persister(global_ctx, region_manager);
     persister.restore(nullptr, PageStorage::Config{});
 
-    auto verifyPersisterReloadConfig = [&global_ctx](RegionPersister & persister) {
+    auto verify_persister_reload_config = [&global_ctx](RegionPersister & persister) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        EXPECT_NE(persister.page_storage->config.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
-        EXPECT_NE(persister.page_storage->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
-        EXPECT_NE(persister.page_storage->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
-        EXPECT_NE(persister.page_storage->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(persister.page_storage->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
-        EXPECT_NE(persister.page_storage->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
+        auto cfg = persister.page_storage->getSettings();
+        EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
+        EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
+        EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
+        EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
+        EXPECT_NE(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
+        EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
         persister.gc();
 
-        EXPECT_NE(persister.page_storage->config.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
-        EXPECT_NE(persister.page_storage->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
-        EXPECT_NE(persister.page_storage->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
-        EXPECT_NE(persister.page_storage->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_EQ(persister.page_storage->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
-        EXPECT_EQ(persister.page_storage->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
+        cfg = persister.page_storage->getSettings();
+        EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
+        EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
+        EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
+        EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
+        EXPECT_EQ(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
+        EXPECT_EQ(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
@@ -234,7 +314,7 @@ dt_page_gc_low_write_prob = 0.2
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         // Reload users config with test case
         global_ctx.reloadDeltaTreeConfig(*config);
@@ -249,13 +329,13 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_open_file_max_idle_seconds, 20);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_page_gc_low_write_prob, 0.2);
-        verifyPersisterReloadConfig(persister);
+        verify_persister_reload_config(persister);
     }
     global_ctx.setSettings(origin_settings);
 }
 CATCH
 
-TEST_F(UsersConfigParser_test, ReloadStoragePoolConfig)
+TEST_F(UsersConfigParserTest, ReloadStoragePoolConfig)
 try
 {
     Strings tests = {
@@ -276,26 +356,28 @@ dt_page_gc_low_write_prob = 0.2
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
     std::unique_ptr<StoragePathPool> path_pool = std::make_unique<StoragePathPool>(global_ctx.getPathPool().withTable("test", "t1", false));
-    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", *path_pool, global_ctx, global_ctx.getSettingsRef());
+    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", /*table_id*/ 100, *path_pool, global_ctx, global_ctx.getSettingsRef());
 
-    auto verifyStoragePoolReloadConfig = [&global_ctx](std::unique_ptr<DM::StoragePool> & storage_pool) {
+    auto verify_storage_pool_reload_config = [&global_ctx](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        EXPECT_NE(storage_pool->data()->config.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
-        EXPECT_NE(storage_pool->data()->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
-        EXPECT_NE(storage_pool->data()->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
-        EXPECT_NE(storage_pool->data()->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(storage_pool->data()->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
-        EXPECT_NE(storage_pool->data()->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
+        auto cfg = storage_pool->data()->getSettings();
+        EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
+        EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
+        EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
+        EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
+        EXPECT_NE(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
+        EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
         storage_pool->gc(settings, DM::StoragePool::Seconds(0));
 
-        EXPECT_EQ(storage_pool->data()->config.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
-        EXPECT_EQ(storage_pool->data()->config.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
-        EXPECT_EQ(storage_pool->data()->config.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
-        EXPECT_DOUBLE_EQ(storage_pool->data()->config.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_EQ(storage_pool->data()->config.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
-        EXPECT_EQ(storage_pool->data()->config.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
+        cfg = storage_pool->data()->getSettings();
+        EXPECT_EQ(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
+        EXPECT_EQ(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
+        EXPECT_EQ(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
+        EXPECT_DOUBLE_EQ(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
+        EXPECT_EQ(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
+        EXPECT_EQ(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
@@ -303,7 +385,7 @@ dt_page_gc_low_write_prob = 0.2
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         // Reload users config with test case
         global_ctx.reloadDeltaTreeConfig(*config);
@@ -318,7 +400,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_open_file_max_idle_seconds, 20);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_page_gc_low_write_prob, 0.2);
-        verifyStoragePoolReloadConfig(storage_pool);
+        verify_storage_pool_reload_config(storage_pool);
     }
     global_ctx.setSettings(origin_settings);
 }
@@ -344,7 +426,7 @@ static void validate_bool_config(SettingBool & setting, String input, bool expec
     ASSERT_EQ(setting, expect_value);
 }
 
-TEST_F(UsersConfigParser_test, ReloadBoolSetting)
+TEST_F(UsersConfigParserTest, ReloadBoolSetting)
 try
 {
     Strings tests = {
@@ -363,7 +445,7 @@ dt_read_stable_only = true
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         global_ctx.reloadDeltaTreeConfig(*config);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, false);

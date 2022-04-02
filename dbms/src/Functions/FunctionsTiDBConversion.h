@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnArray.h>
@@ -33,6 +47,7 @@
 #include <Functions/FunctionsDateTime.h>
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/IFunction.h>
+#include <Functions/castTypeToEither.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromVector.h>
@@ -57,6 +72,11 @@ enum CastError
     TRUNCATED_ERR,
     OVERFLOW_ERR,
 };
+
+namespace
+{
+constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+}
 
 /// cast int/real/decimal/time as string
 template <typename FromDataType, bool return_nullable>
@@ -810,60 +830,68 @@ struct TiDBConvertToFloat
 
 /// cast int/real/decimal/enum/string/time/string as decimal
 // todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
-template <typename FromDataType, typename ToFieldType, bool return_nullable>
+// There are two optimizations in TiDBConvertToDecimal:
+// 1. Skip overflow check if possible, such as cast(tiny_int_val as decimal(10, 0)),
+//    we can skip check overflow, because max_tiny_int(127) < to_max_val(10^9).
+// 2. Use appropriate type for multiplication of from_int_val and scale_mul(which is 10^abs(scale_diff)).
+//    The original implementation always uses Int256, which is very slow.
+// The general idea is:
+// 1. If from_type_prec + scale_diff <= to_type_prec, we can skip overflow check.
+//    Because the max value of from type is less than the max value of to type, so no overflow will happen.
+// 2. CastInternalType is the int type with minimum prec which satisfies: from_type_prec + scale_diff <= IntPrec<CastInternalType>::prec - 1.
+//    So on the one hand CastInternalType can hold both from_int_value and the result of multiplication of from_int_val and scale_mul,
+//    on the other hand the multiplication is as fast as possible.
+// NOTE: scale_diff = to_type_scale - from_type_scale.
+// NOTE: The above two optimizations only take effects when from type is int/decimal/date/dateimte.
+//       The logic of cast doesn't care about CastInternalType(Int512) and can_skip_check_overflow(false) at all when from_type is real or string.
+template <typename FromDataType, typename ToFieldType, bool return_nullable, bool can_skip_check_overflow, typename CastInternalType>
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
+    static U toTiDBDecimalInternal(T int_value, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
     {
+        // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
+        // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
+        static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
-        auto max_value = DecimalMaxValue::get(prec);
-        if (value > max_value || value < -max_value)
-        {
-            context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
-            if (value > 0)
-                return static_cast<UType>(max_value);
-            else
-                return static_cast<UType>(-max_value);
-        }
-        UType scale_mul = getScaleMultiplier<U>(scale);
-        U result = static_cast<UType>(value) * scale_mul;
-        return result;
+
+        CastInternalType scaled_value = static_cast<CastInternalType>(int_value) * scale_mul;
+        return handleOverflowErrorForIntAndDecimal<UType>(context, scaled_value, max_value, "cast to decimal");
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, int fsp, const Context & context)
+    static U toTiDBDecimal(MyDateTime & date_time, const CastInternalType & max_value, ScaleType from_scale, ScaleType to_scale, const CastInternalType & scale_mul, int fsp, const Context & context)
     {
-        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
+        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000ULL
+            + date_time.hour * 10000ULL + date_time.minute * 100ULL + date_time.second;
         if (fsp > 0)
         {
-            Int128 value = value_without_fsp * 1000000 + date_time.micro_second;
+            Int128 value = static_cast<Int128>(value_without_fsp) * 1000000 + date_time.micro_second;
             Decimal128 decimal(value);
-            return toTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, context);
+            return toTiDBDecimal<Decimal128, U>(decimal, from_scale, max_value, to_scale, scale_mul, context);
         }
         else
         {
-            return toTiDBDecimalInternal<UInt64, U>(value_without_fsp, prec, scale, context);
+            return toTiDBDecimalInternal<UInt64, U>(value_without_fsp, max_value, scale_mul, context);
         }
     }
 
     template <typename U>
-    static U toTiDBDecimal(MyDate & date, PrecType prec, ScaleType scale, const Context & context)
+    static U toTiDBDecimal(MyDate & date, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
     {
         UInt64 value = date.year * 10000 + date.month * 100 + date.day;
-        return toTiDBDecimalInternal<UInt64, U>(value, prec, scale, context);
+        return toTiDBDecimalInternal<UInt64, U>(value, max_value, scale_mul, context);
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, PrecType prec, ScaleType scale, const Context & context)
+    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, const CastInternalType & max_value, const CastInternalType & scale_mul, const Context & context)
     {
         if constexpr (std::is_signed_v<T>)
-            return toTiDBDecimalInternal<T, U>(value, prec, scale, context);
+            return toTiDBDecimalInternal<T, U>(value, max_value, scale_mul, context);
         else
-            return toTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), prec, scale, context);
+            return toTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), max_value, scale_mul, context);
     }
 
     template <typename T, typename U>
@@ -910,46 +938,38 @@ struct TiDBConvertToDecimal
     static std::enable_if_t<IsDecimal<T>, U> toTiDBDecimal(
         const T & v,
         ScaleType v_scale,
-        PrecType prec,
+        const CastInternalType & max_value,
         ScaleType scale,
+        const CastInternalType & scale_mul,
         const Context & context)
     {
         using UType = typename U::NativeType;
-        auto value = Int256(v.value);
+        CastInternalType value = static_cast<CastInternalType>(v.value);
 
-        if (v_scale <= scale)
+        if (v_scale < scale)
         {
-            for (ScaleType i = v_scale; i < scale; i++)
-                value *= 10;
+            value *= scale_mul;
         }
-        else
+        else if (v_scale > scale)
         {
             context.getDAGContext()->handleTruncateError("cast decimal as decimal");
-            bool need_to_round = false;
-            for (ScaleType i = scale; i < v_scale; i++)
-            {
-                need_to_round = (value < 0 ? -value : value) % 10 >= 5;
-                value /= 10;
-            }
+            value /= scale_mul;
+            const bool need_to_round = ((value < 0 ? -value : value) % scale_mul) >= (scale_mul / 2);
             if (need_to_round)
             {
                 if (value < 0)
-                    value--;
+                    --value;
                 else
-                    value++;
+                    ++value;
             }
         }
-
-        auto max_value = DecimalMaxValue::get(prec);
-        if (value > max_value || value < -max_value)
+        else
         {
-            context.getDAGContext()->handleOverflowError("cast decimal as decimal", Errors::Types::Truncated);
-            if (value > 0)
-                return static_cast<UType>(max_value);
-            else
-                return static_cast<UType>(-max_value);
+            // If v_scale == scale, then scale_mul must be 1, no need to touch value.
+            assert(scale_mul == 1);
         }
-        return static_cast<UType>(value);
+
+        return handleOverflowErrorForIntAndDecimal<UType>(context, value, max_value, "cast decimal to decimal");
     }
 
     struct DecimalParts
@@ -1141,8 +1161,10 @@ struct TiDBConvertToDecimal
             const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
 
+            const CastInternalType max_value = getMaxValueIfNecessary(prec);
+            const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(col_from->getScale(), scale);
             for (size_t i = 0; i < size; ++i)
-                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), prec, scale, context);
+                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), max_value, scale, scale_mul, context);
         }
         else if constexpr (std::is_same_v<DataTypeMyDateTime, FromDataType> || std::is_same_v<DataTypeMyDate, FromDataType>)
         {
@@ -1154,17 +1176,25 @@ struct TiDBConvertToDecimal
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; ++i)
+            const CastInternalType max_value = getMaxValueIfNecessary(prec);
+            if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
             {
-                if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
+                const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
+                for (size_t i = 0; i < size; ++i)
                 {
                     MyDate date(vec_from[i]);
-                    vec_to[i] = toTiDBDecimal<ToFieldType>(date, prec, scale, context);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date, max_value, scale_mul, context);
                 }
-                else
+            }
+            else
+            {
+                // Check getMinPrecForHoldingDatetime() to see why from_scale is 6.
+                static constexpr ScaleType from_scale = 6;
+                const CastInternalType scale_mul = getScaleMulForDecimalToDecimal(from_scale, scale);
+                for (size_t i = 0; i < size; ++i)
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, prec, scale, type.getFraction(), context);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, max_value, from_scale, scale, scale_mul, type.getFraction(), context);
                 }
             }
         }
@@ -1188,11 +1218,24 @@ struct TiDBConvertToDecimal
         else if (const ColumnVector<FromFieldType> * col_from
                  = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
-            /// cast enum/int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; ++i)
-                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+            if constexpr (std::is_integral_v<FromFieldType>)
+            {
+                /// cast enum/int as decimal
+                const CastInternalType max_value = getMaxValueIfNecessary(prec);
+                const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
+                for (size_t i = 0; i < size; ++i)
+                    vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], max_value, scale_mul, context);
+            }
+            else
+            {
+                static_assert(std::is_floating_point_v<FromFieldType>);
+                /// cast real as decimal
+                for (size_t i = 0; i < size; ++i)
+                    // Always use Float64 to avoid overflow for vec_from[i] * 10^scale.
+                    vec_to[i] = toTiDBDecimal<Float64, ToFieldType>(static_cast<Float64>(vec_from[i]), prec, scale, context);
+            }
         }
         else
         {
@@ -1205,12 +1248,53 @@ struct TiDBConvertToDecimal
         else
             block.getByPosition(result).column = std::move(col_to);
     }
+
+    template <typename ReturnType>
+    static ReturnType handleOverflowErrorForIntAndDecimal(const Context & context,
+                                                          const CastInternalType & to_value,
+                                                          const CastInternalType & max_value [[maybe_unused]],
+                                                          const String & msg)
+    {
+        if constexpr (!can_skip_check_overflow)
+        {
+            if (to_value > max_value || to_value < -max_value)
+            {
+                context.getDAGContext()->handleOverflowError(msg, Errors::Types::Truncated);
+                if (to_value > 0)
+                    return static_cast<ReturnType>(max_value);
+                else
+                    return static_cast<ReturnType>(-max_value);
+            }
+        }
+        return static_cast<ReturnType>(to_value);
+    }
+
+    // max_value is useless if can_skip_check_overflow is true.
+    static CastInternalType getMaxValueIfNecessary(PrecType prec [[maybe_unused]])
+    {
+        if constexpr (!can_skip_check_overflow)
+        {
+            return static_cast<CastInternalType>(DecimalMaxValue::get(prec));
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+    // Only used for cast decimal to decimal.
+    static CastInternalType getScaleMulForDecimalToDecimal(ScaleType from_scale, ScaleType to_scale)
+    {
+        const ScaleType scale_diff = ((from_scale > to_scale) ? (from_scale - to_scale) : (to_scale - from_scale));
+        return getScaleMultiplier<CastInternalType>(scale_diff);
+    }
 };
 
 /// cast int/real/decimal/time/string as Date/DateTime
 template <typename FromDataType, typename ToDataType, bool return_nullable>
 struct TiDBConvertToTime
 {
+public:
     static_assert(std::is_same_v<ToDataType, DataTypeMyDate> || std::is_same_v<ToDataType, DataTypeMyDateTime>);
 
     using FromFieldType = typename FromDataType::FieldType;
@@ -1246,7 +1330,6 @@ struct TiDBConvertToTime
             col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
-
         if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
             // cast string as time
@@ -1256,7 +1339,7 @@ struct TiDBConvertToTime
             const ColumnString::Offsets * offsets = &col_from->getOffsets();
 
             size_t current_offset = 0;
-            for (size_t i = 0; i < size; i++)
+            for (size_t i = 0; i < size; ++i)
             {
                 size_t next_offset = (*offsets)[i];
                 size_t string_size = next_offset - current_offset - 1;
@@ -1281,7 +1364,8 @@ struct TiDBConvertToTime
                 {
                     // Fill NULL if cannot parse
                     (*vec_null_map_to)[i] = 1;
-                    context.getDAGContext()->handleInvalidTime("Invalid time value: '" + string_value + "'", Errors::Types::WrongValue);
+                    vec_to[i] = 0;
+                    handleInvalidTime(context, string_value);
                 }
                 current_offset = next_offset;
             }
@@ -1292,7 +1376,7 @@ struct TiDBConvertToTime
             const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
             const ColumnUInt64::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; i++)
+            for (size_t i = 0; i < size; ++i)
             {
                 MyDateTime datetime(vec_from[i]);
 
@@ -1341,7 +1425,7 @@ struct TiDBConvertToTime
 
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; i++)
+            for (size_t i = 0; i < size; ++i)
             {
                 try
                 {
@@ -1362,9 +1446,8 @@ struct TiDBConvertToTime
                 {
                     // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
-                    context.getDAGContext()->handleInvalidTime(
-                        "Invalid time value: '" + toString(vec_from[i]) + "'",
-                        Errors::Types::WrongValue);
+                    vec_to[i] = 0;
+                    handleInvalidTime(context, vec_from[i]);
                 }
             }
         }
@@ -1378,7 +1461,7 @@ struct TiDBConvertToTime
 
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; i++)
+            for (size_t i = 0; i < size; ++i)
             {
                 Float64 value = vec_from[i];
                 // Convert to string and then parse to time
@@ -1387,6 +1470,7 @@ struct TiDBConvertToTime
                 if (value_str == "0")
                 {
                     (*vec_null_map_to)[i] = 1;
+                    vec_to[i] = 0;
                 }
                 else
                 {
@@ -1409,7 +1493,15 @@ struct TiDBConvertToTime
                     {
                         // Fill NULL if cannot parse
                         (*vec_null_map_to)[i] = 1;
-                        context.getDAGContext()->handleInvalidTime("Invalid time value: '" + value_str + "'", Errors::Types::WrongValue);
+                        vec_to[i] = 0;
+                        handleInvalidTime(context, value_str);
+                    }
+                    catch (const std::exception &)
+                    {
+                        // Fill NULL if cannot parse
+                        (*vec_null_map_to)[i] = 1;
+                        vec_to[i] = 0;
+                        handleInvalidTime(context, value_str);
                     }
                 }
             }
@@ -1440,14 +1532,15 @@ struct TiDBConvertToTime
                 catch (const Exception &)
                 {
                     (*vec_null_map_to)[i] = 1;
-                    context.getDAGContext()->handleInvalidTime("Invalid time value: '" + value_str + "'", Errors::Types::WrongValue);
+                    vec_to[i] = 0;
+                    handleInvalidTime(context, value_str);
                 }
             }
         }
         else
         {
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
+                fmt::format("Illegal column {} of first argument of function tidb_cast", block.getByPosition(arguments[0]).column->getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
         }
 
@@ -1455,6 +1548,13 @@ struct TiDBConvertToTime
             block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
         else
             block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    template <typename T>
+    static void handleInvalidTime(const Context & context, const T & value)
+    {
+        context.getDAGContext()->handleInvalidTime(fmt::format("Invalid time value: '{}'", value), Errors::Types::WrongValue);
     }
 };
 
@@ -1521,7 +1621,6 @@ struct TiDBConvertToDuration
             block.getByPosition(result).column = ColumnNullable::create(std::move(block.getByPosition(result).column), std::move(col_null_map_to));
     }
 
-    constexpr static Int64 pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
     static Int64 round(Int64 x, int fsp)
     {
         Int64 scale = pow10[fsp];
@@ -1727,6 +1826,15 @@ public:
         return monotonicity_for_range(type, left, right);
     }
 
+    // rule: from_scale_prec <= to_decimal_prec
+    template <typename FromDataType>
+    static bool canSkipCheckOverflowForDecimal(DataTypePtr from_type, PrecType to_decimal_prec, ScaleType to_decimal_scale)
+    {
+        constexpr bool avoid_truncate_from_value = false;
+        const PrecType from_scaled_prec = getMinPrecForHoldingFromValue<FromDataType>(from_type, to_decimal_scale, avoid_truncate_from_value);
+        return from_scaled_prec <= to_decimal_prec;
+    }
+
 private:
     const Context & context;
     const char * name;
@@ -1738,9 +1846,227 @@ private:
     bool in_union;
     const tipb::FieldType & tidb_tp;
 
+    template <typename FromDataType>
+    static bool getMinPrecForHoldingInteger(DataTypePtr from_type, ScaleType to_decimal_scale, PrecType & from_scaled_prec)
+    {
+        const auto f = [&from_scaled_prec, to_decimal_scale](const auto &, bool) -> bool {
+            using FromFieldType = typename FromDataType::FieldType;
+            // This is required because other types(like Float32) don't have template specialization for IntPrec.
+            if constexpr (std::is_integral_v<FromFieldType>)
+            {
+                from_scaled_prec = IntPrec<FromFieldType>::prec + to_decimal_scale;
+            }
+            else
+            {
+                // Cannot reach here. castTypeToEither will return false directly.
+                __builtin_unreachable();
+                (void)from_scaled_prec;
+                (void)to_decimal_scale;
+            }
+            return true;
+        };
+
+        return castTypeToEither<
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeEnum8,
+            DataTypeEnum16>(from_type.get(), f);
+    }
+
+    static PrecType getMinPrecForHoldingDecimalInternal(PrecType from_prec, ScaleType from_scale, ScaleType to_scale, bool avoid_truncate_from_value)
+    {
+        Int64 scale_diff = static_cast<Int64>(to_scale) - static_cast<Int64>(from_scale);
+        if (scale_diff < 0)
+        {
+            if (avoid_truncate_from_value)
+                scale_diff = 0;
+            else
+                ++scale_diff;
+        }
+        return from_prec + scale_diff;
+    }
+
+    static bool getMinPrecForHoldingDatetime(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value, PrecType & from_scaled_prec)
+    {
+        if (const auto * datetime_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
+        {
+            const auto fsp = datetime_type->getFraction();
+            if (fsp > 0)
+            {
+                // Treat datetime(fsp) as decimal(20, 6).
+                // Max value of datetime time is '9999-12-31 23:59:59.999999',
+                // which will be treated as 99991231235959.999999 when doing cast,
+                // so here we use 20 as its precision and 6 as its scale.
+                from_scaled_prec = getMinPrecForHoldingDecimalInternal(20, 6, to_decimal_scale, avoid_truncate_from_value);
+            }
+            else
+            {
+                // Max value of datetime time is '9999-12-31 23:59:59', which will be treated as 99991231235959.
+                // So treat it as a int value whose precision is 14.
+                assert(fsp == 0);
+                from_scaled_prec = 14 + to_decimal_scale;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    static bool getMinPrecForHoldingDecimal(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value, PrecType & from_scaled_prec)
+    {
+        return castTypeToEither<
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256>(from_type.get(), [to_decimal_scale, avoid_truncate_from_value, &from_scaled_prec](const auto & from_type_ptr, bool) {
+            from_scaled_prec = getMinPrecForHoldingDecimalInternal(from_type_ptr.getPrec(), from_type_ptr.getScale(), to_decimal_scale, avoid_truncate_from_value);
+            return true;
+        });
+    }
+
+    // Cast optimization doesn't handle float/string/duration for now, so return a max prec value.
+    static bool getMinPrecForHoldingOtherTypes(DataTypePtr from_type, PrecType & from_scaled_prec)
+    {
+        return castTypeToEither<
+            DataTypeFloat32,
+            DataTypeFloat64,
+            DataTypeString,
+            DataTypeMyDuration>(from_type.get(), [&from_scaled_prec](const auto &, bool) {
+            from_scaled_prec = std::numeric_limits<PrecType>::max();
+            return true;
+        });
+    }
+
+    // The core function of the optimizations of TiDBConvertToDecimal. The basic idea has already described above.
+    // avoid_truncate_from_value:
+    //  1. True when determining CastInternalType to avoid truncating from_int_val when static_cast it to CastInternalType.
+    //     Because it needs to hold both from_int_value and the result of multiplication(division when scale_diff is negative) of from_int_val and scale_mul.
+    //     So if scale_diff is negative, we should reset scale_diff as zero to avoid from_int_value is truncated unexpectedly.
+    //  2. False when determining if can_skip_overflow_check. Also the scale_diff should plus 1 if it's negative,
+    //     Such as cast(99.9999 as decimal(4, 2)), after division, the internal int value of cast result is 10000 instead of 9999,
+    //     because we need to round up during cast. In this case, overflow happens.
+    //     So we plus 1 to scale_diff(check getMinPrecForHoldingDecimalInternal).
+    //     Then the rule will be from_prec + scale_diff + 1 <= to_prec when scale_diff < 0.
+    template <typename FromDataType>
+    static PrecType getMinPrecForHoldingFromValue(DataTypePtr from_type, ScaleType to_decimal_scale, bool avoid_truncate_from_value)
+    {
+        PrecType from_scaled_prec = std::numeric_limits<PrecType>::max();
+
+        if (getMinPrecForHoldingInteger<FromDataType>(from_type, to_decimal_scale, from_scaled_prec))
+        {
+            // cast(int/enum as decimal)
+        }
+        else if (checkDataType<DataTypeMyDate>(from_type.get()))
+        {
+            // cast(date as decimal)
+            // The max value of date type is '9999-12-31', which will be treated as 99991231 when cast it as decimal,
+            // so we use 8 as its precision.
+            from_scaled_prec = 8 + to_decimal_scale;
+        }
+        else if (getMinPrecForHoldingDatetime(from_type, to_decimal_scale, avoid_truncate_from_value, from_scaled_prec))
+        {
+            // cast(datetime as decimal)
+        }
+        else if (getMinPrecForHoldingDecimal(from_type, to_decimal_scale, avoid_truncate_from_value, from_scaled_prec))
+        {
+            // cast(decimal as decimal)
+        }
+        else if (getMinPrecForHoldingOtherTypes(from_type, from_scaled_prec))
+        {
+            // cast(float/string as decimal); cast duration to decimal not pushed down for now.
+        }
+        else
+        {
+            __builtin_unreachable();
+        }
+        return from_scaled_prec;
+    }
+
+    // Determine CastInternalType template argument for TiDBConvertToDecimal,
+    // which is used as the type in the multiplication/division of from_int_val and scale_mul.
+    template <typename FromDataType, typename ToDataType, bool return_nullable>
+    WrapperType createWrapperForDecimal(const DataTypePtr & from_type, const ToDataType * decimal_type) const
+    {
+        const bool avoid_truncate_from_value = true;
+        PrecType from_scaled_prec = getMinPrecForHoldingFromValue<FromDataType>(from_type, decimal_type->getScale(), avoid_truncate_from_value);
+        const bool can_skip = canSkipCheckOverflowForDecimal<FromDataType>(from_type, decimal_type->getPrec(), decimal_type->getScale());
+        if (!can_skip)
+        {
+            // If cannot skip overflow check, we should use int type that can hold both scaled_val and max_val.
+            from_scaled_prec = std::max(from_scaled_prec, decimal_type->getPrec());
+        }
+
+        // Here we minus 1 to IntPrec::prec to avoid potential overflow.
+        // IntPrec denotes the minimum precision of decimals to hold a specific integer type.
+        // However, not all decimals with such precision could be held by this integer type.
+        // This could happen when calculating the max_value and the multiplication of from_int_val and scale_mul.
+        if (from_scaled_prec <= IntPrec<Int32>::prec - 1)
+        {
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int32>(decimal_type, can_skip);
+        }
+        else if (from_scaled_prec <= IntPrec<Int64>::prec - 1)
+        {
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int64>(decimal_type, can_skip);
+        }
+        else if (from_scaled_prec <= IntPrec<Int128>::prec - 1)
+        {
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int128>(decimal_type, can_skip);
+        }
+        else if (from_scaled_prec <= IntPrec<Int256>::prec - 1)
+        {
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int256>(decimal_type, can_skip);
+        }
+        else
+        {
+            return createWrapperForDecimal<FromDataType, ToDataType, return_nullable, Int512>(decimal_type, can_skip);
+        }
+    }
+
+    // Determine can_skip_overflow_check template argument for TiDBConvertToDecimal.
+    template <typename FromDataType, typename ToDataType, bool return_nullable, typename CastInternalType>
+    WrapperType createWrapperForDecimal(const ToDataType * decimal_type, bool can_skip) const
+    {
+        using ToFieldType = typename ToDataType::FieldType;
+        PrecType prec = decimal_type->getPrec();
+        ScaleType scale = decimal_type->getScale();
+        if (can_skip)
+        {
+            return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                TiDBConvertToDecimal<FromDataType, ToFieldType, return_nullable, true, CastInternalType>::execute(
+                    block,
+                    arguments,
+                    result,
+                    prec,
+                    scale,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
+            };
+        }
+        else
+        {
+            return [prec, scale](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
+                TiDBConvertToDecimal<FromDataType, ToFieldType, return_nullable, false, CastInternalType>::execute(
+                    block,
+                    arguments,
+                    result,
+                    prec,
+                    scale,
+                    in_union_,
+                    tidb_tp_,
+                    context_);
+            };
+        }
+    }
+
     /// createWrapper creates lambda functions that do the real type conversion job
     template <typename FromDataType, bool return_nullable>
-    WrapperType createWrapper(const DataTypePtr & to_type) const
+    WrapperType createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
         /// cast as int
         if (checkDataType<DataTypeUInt64>(to_type.get()))
@@ -1763,55 +2089,17 @@ private:
                     tidb_tp_,
                     context_);
             };
+
         /// cast as decimal
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable>::execute(
-                    block,
-                    arguments,
-                    result,
-                    decimal_type->getPrec(),
-                    decimal_type->getScale(),
-                    in_union_,
-                    tidb_tp_,
-                    context_);
-            };
+            return createWrapperForDecimal<FromDataType, DataTypeDecimal32, return_nullable>(from_type, decimal_type);
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable>::execute(
-                    block,
-                    arguments,
-                    result,
-                    decimal_type->getPrec(),
-                    decimal_type->getScale(),
-                    in_union_,
-                    tidb_tp_,
-                    context_);
-            };
+            return createWrapperForDecimal<FromDataType, DataTypeDecimal64, return_nullable>(from_type, decimal_type);
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable>::execute(
-                    block,
-                    arguments,
-                    result,
-                    decimal_type->getPrec(),
-                    decimal_type->getScale(),
-                    in_union_,
-                    tidb_tp_,
-                    context_);
-            };
+            return createWrapperForDecimal<FromDataType, DataTypeDecimal128, return_nullable>(from_type, decimal_type);
         if (const auto * decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
-            return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable>::execute(
-                    block,
-                    arguments,
-                    result,
-                    decimal_type->getPrec(),
-                    decimal_type->getScale(),
-                    in_union_,
-                    tidb_tp_,
-                    context_);
-            };
+            return createWrapperForDecimal<FromDataType, DataTypeDecimal256, return_nullable>(from_type, decimal_type);
+
         /// cast as real
         if (checkDataType<DataTypeFloat64>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_, const Context & context_) {
@@ -1875,7 +2163,7 @@ private:
                     context_);
             };
 
-        // todo support convert to duration/json type
+        // todo support convert to json type
         throw Exception{"tidb_cast to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
@@ -1892,45 +2180,45 @@ private:
         if (isIdentityCast(from_type, to_type))
             return createIdentityWrapper(from_type);
         if (checkAndGetDataType<DataTypeUInt8>(from_type.get()))
-            return createWrapper<DataTypeUInt8, return_nullable>(to_type);
+            return createWrapper<DataTypeUInt8, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeUInt16>(from_type.get()))
-            return createWrapper<DataTypeUInt16, return_nullable>(to_type);
+            return createWrapper<DataTypeUInt16, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeUInt32>(from_type.get()))
-            return createWrapper<DataTypeUInt32, return_nullable>(to_type);
+            return createWrapper<DataTypeUInt32, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeUInt64>(from_type.get()))
-            return createWrapper<DataTypeUInt64, return_nullable>(to_type);
+            return createWrapper<DataTypeUInt64, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeInt8>(from_type.get()))
-            return createWrapper<DataTypeInt8, return_nullable>(to_type);
+            return createWrapper<DataTypeInt8, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeInt16>(from_type.get()))
-            return createWrapper<DataTypeInt16, return_nullable>(to_type);
+            return createWrapper<DataTypeInt16, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeInt32>(from_type.get()))
-            return createWrapper<DataTypeInt32, return_nullable>(to_type);
+            return createWrapper<DataTypeInt32, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeInt64>(from_type.get()))
-            return createWrapper<DataTypeInt64, return_nullable>(to_type);
+            return createWrapper<DataTypeInt64, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeFloat32>(from_type.get()))
-            return createWrapper<DataTypeFloat32, return_nullable>(to_type);
+            return createWrapper<DataTypeFloat32, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeFloat64>(from_type.get()))
-            return createWrapper<DataTypeFloat64, return_nullable>(to_type);
+            return createWrapper<DataTypeFloat64, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeDecimal32>(from_type.get()))
-            return createWrapper<DataTypeDecimal32, return_nullable>(to_type);
+            return createWrapper<DataTypeDecimal32, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeDecimal64>(from_type.get()))
-            return createWrapper<DataTypeDecimal64, return_nullable>(to_type);
+            return createWrapper<DataTypeDecimal64, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeDecimal128>(from_type.get()))
-            return createWrapper<DataTypeDecimal128, return_nullable>(to_type);
+            return createWrapper<DataTypeDecimal128, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeDecimal256>(from_type.get()))
-            return createWrapper<DataTypeDecimal256, return_nullable>(to_type);
+            return createWrapper<DataTypeDecimal256, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeMyDate>(from_type.get()))
-            return createWrapper<DataTypeMyDate, return_nullable>(to_type);
+            return createWrapper<DataTypeMyDate, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
-            return createWrapper<DataTypeMyDateTime, return_nullable>(to_type);
+            return createWrapper<DataTypeMyDateTime, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeString>(from_type.get()))
-            return createWrapper<DataTypeString, return_nullable>(to_type);
+            return createWrapper<DataTypeString, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeEnum8>(from_type.get()))
-            return createWrapper<DataTypeEnum8, return_nullable>(to_type);
+            return createWrapper<DataTypeEnum8, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeEnum16>(from_type.get()))
-            return createWrapper<DataTypeEnum16, return_nullable>(to_type);
+            return createWrapper<DataTypeEnum16, return_nullable>(from_type, to_type);
         if (checkAndGetDataType<DataTypeMyDuration>(from_type.get()))
-            return createWrapper<DataTypeMyDuration, return_nullable>(to_type);
+            return createWrapper<DataTypeMyDuration, return_nullable>(from_type, to_type);
 
         // todo support convert to duration/json type
         throw Exception{

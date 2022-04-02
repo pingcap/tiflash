@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #pragma GCC diagnostic push
@@ -45,25 +59,21 @@ public:
     String aggregation_name;
     const tipb::Executor * having = nullptr;
     String having_name;
-    const tipb::Executor * limitOrTopN = nullptr;
-    String limitOrTopN_name;
-    const tipb::Executor * exchangeSender = nullptr;
+    const tipb::Executor * limit_or_topn = nullptr;
+    String limit_or_topn_name;
+    const tipb::Executor * exchange_sender = nullptr;
     String exchange_sender_name;
     UInt32 id;
     const tipb::Executor * root;
     String qb_column_prefix;
-    String qb_join_subquery_alias;
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
+
+    // only meaningful for root query block.
     std::vector<tipb::FieldType> output_field_types;
-    // kinds of project
     std::vector<Int32> output_offsets;
-    void fillOutputFieldTypes();
-    void collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result);
+
     bool isRootQueryBlock() const { return id == 1; };
-    bool isRemoteQuery() const
-    {
-        return source->tp() == tipb::ExecType::TypeTableScan && source->tbl_scan().next_read_engine() != tipb::EngineType::Local;
-    }
+    bool isTableScanSource() const { return source->tp() == tipb::ExecType::TypeTableScan || source->tp() == tipb::ExecType::TypePartitionTableScan; }
 };
 
 } // namespace DB

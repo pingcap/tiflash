@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <fmt/core.h>
@@ -13,6 +27,14 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
         throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
     return packet;
 }
+
+void checkPacketSize(size_t size)
+{
+    static constexpr size_t max_packet_size = 1u << 31;
+    if (size >= max_packet_size)
+        throw Exception(fmt::format("Packet is too large to send, size : {}", size));
+}
+
 } // namespace
 
 template <typename Tunnel>
@@ -51,6 +73,7 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
 {
+    checkPacketSize(packet.ByteSizeLong());
     tunnels[0]->write(packet);
     auto tunnels_size = tunnels.size();
     if (tunnels_size > 1)
@@ -78,6 +101,7 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t pa
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partition_id)
 {
+    checkPacketSize(packet.ByteSizeLong());
     if (partition_id != 0 && !packet.data().empty())
         packet.mutable_data()->clear();
 

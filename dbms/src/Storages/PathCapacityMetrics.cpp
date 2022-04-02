@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
@@ -67,7 +81,7 @@ PathCapacityMetrics::PathCapacityMetrics(
 
     for (auto && [path, quota] : all_paths)
     {
-        LOG_INFO(log, "Init capacity [path=" << path << "] [capacity=" << formatReadableSizeWithBinarySuffix(quota) << "]");
+        LOG_FMT_INFO(log, "Init capacity [path={}] [capacity={}]", path, formatReadableSizeWithBinarySuffix(quota));
         path_infos.emplace_back(CapacityInfo{path, quota});
     }
 }
@@ -77,11 +91,11 @@ void PathCapacityMetrics::addUsedSize(std::string_view file_path, size_t used_by
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
     {
-        LOG_ERROR(log, "Can not locate path in addUsedSize. File: " + String(file_path));
+        LOG_FMT_ERROR(log, "Can not locate path in addUsedSize. File: {}", file_path);
         return;
     }
 
-    // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
+    // Now we expect size of path_infos not change, don't acquire heavy lock on `path_infos` now.
     path_infos[path_idx].used_bytes += used_bytes;
 }
 
@@ -90,23 +104,20 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
     {
-        LOG_ERROR(log, "Can not locate path in removeUsedSize. File: " + String(file_path));
+        LOG_FMT_ERROR(log, "Can not locate path in removeUsedSize. File: {}", file_path);
         return;
     }
 
-    // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
+    // Now we expect size of path_infos not change, don't acquire heavy lock on `path_infos` now.
     path_infos[path_idx].used_bytes -= used_bytes;
 }
 
 std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
 {
     std::map<FSID, DiskCapacity> disk_stats_map;
-    for (size_t i = 0; i < path_infos.size(); ++i)
+    for (auto & path_info : path_infos)
     {
-        struct statvfs vfs;
-        FsStats path_stat;
-
-        std::tie(path_stat, vfs) = path_infos[i].getStats(log);
+        auto [path_stat, vfs] = path_info.getStats(log);
         if (!path_stat.ok)
         {
             // Disk may be hot remove, Ignore this disk.
@@ -132,14 +143,14 @@ FsStats PathCapacityMetrics::getFsStats()
     FsStats total_stat{};
 
     // Build the disk stats map
-    // which use to measure single disk capacoty and available size
+    // which use to measure single disk capacity and available size
     auto disk_stats_map = getDiskStats();
 
-    for (auto fs_it = disk_stats_map.begin(); fs_it != disk_stats_map.end(); ++fs_it)
+    for (auto & fs_it : disk_stats_map)
     {
         FsStats disk_stat{};
 
-        auto & disk_stat_vec = fs_it->second;
+        auto & disk_stat_vec = fs_it.second;
         auto & vfs_info = disk_stat_vec.vfs_info;
 
         for (const auto & single_path_stats : disk_stat_vec.path_stats)
@@ -153,7 +164,7 @@ FsStats PathCapacityMetrics::getFsStats()
         if (disk_stat.capacity_size == 0 || disk_capacity_size < disk_stat.capacity_size)
             disk_stat.capacity_size = disk_capacity_size;
 
-        // Calutate single disk info
+        // Calculate single disk info
         const uint64_t disk_free_bytes = vfs_info.f_bavail * vfs_info.f_frsize;
         disk_stat.avail_size = std::min(disk_free_bytes, disk_stat.avail_size);
 
@@ -176,11 +187,13 @@ FsStats PathCapacityMetrics::getFsStats()
     const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
     if (avail_rate <= 0.2)
-        LOG_WARNING(log,
-                    "Available space is only " << DB::toString(avail_rate * 100.0, 2)
-                                               << "% of capacity size. Avail size: " << formatReadableSizeWithBinarySuffix(total_stat.avail_size)
-                                               << ", used size: " << formatReadableSizeWithBinarySuffix(total_stat.used_size)
-                                               << ", capacity size: " << formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
+        LOG_FMT_WARNING(
+            log,
+            "Available space is only {:.2f}% of capacity size. Avail size: {}, used size: {}, capacity size: {}",
+            avail_rate * 100.0,
+            formatReadableSizeWithBinarySuffix(total_stat.avail_size),
+            formatReadableSizeWithBinarySuffix(total_stat.used_size),
+            formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
     total_stat.ok = 1;
 
     CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
@@ -195,7 +208,7 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::getFsStatsOfPath(std::s
     ssize_t path_idx = locatePath(file_path);
     if (unlikely(path_idx == INVALID_INDEX))
     {
-        LOG_ERROR(log, "Can not locate path in getFsStatsOfPath. File: " + String(file_path));
+        LOG_FMT_ERROR(log, "Can not locate path in getFsStatsOfPath. File: {}", file_path);
         return {FsStats{}, {}};
     }
 
@@ -246,7 +259,7 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     {
         if (log)
         {
-            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
+            LOG_FMT_ERROR(log, "Could not calculate available disk space (statvfs) of path: {}, errno: {}", path, errno);
         }
         return {};
     }
@@ -268,9 +281,12 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     if (capacity > res.used_size)
         avail = capacity - res.used_size;
     else if (log)
-        LOG_WARNING(log,
-                    "No available space for path: " << path << ", capacity: " << formatReadableSizeWithBinarySuffix(capacity) //
-                                                    << ", used: " << formatReadableSizeWithBinarySuffix(used_bytes));
+        LOG_FMT_WARNING(
+            log,
+            "No available space for path: {}, capacity: {}, used: {}",
+            path,
+            formatReadableSizeWithBinarySuffix(capacity),
+            formatReadableSizeWithBinarySuffix(used_bytes));
 
     const uint64_t disk_free_bytes = vfs.f_bavail * vfs.f_frsize;
     if (avail > disk_free_bytes)

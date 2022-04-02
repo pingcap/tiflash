@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/BlockOutputStreamFromRowOutputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
@@ -140,7 +154,7 @@ try
     QueryProcessingStage::Enum stage;
 
     BlockInputStreamPtr in = table->read(column_names, {}, Context::createGlobal(), stage, argc == 2 ? atoi(argv[1]) : 65536, 1)[0];
-    in = std::make_shared<PartialSortingBlockInputStream>(in, sort_columns, nullptr);
+    in = std::make_shared<PartialSortingBlockInputStream>(in, sort_columns, "");
     in = std::make_shared<MergeSortingBlockInputStream>(in, sort_columns, DEFAULT_BLOCK_SIZE, 0, 0, "");
     //in = std::make_shared<LimitBlockInputStream>(in, 10, 0);
 
