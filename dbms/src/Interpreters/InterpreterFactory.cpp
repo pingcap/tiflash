@@ -1,6 +1,5 @@
 #include <Common/typeid_cast.h>
 #include <Interpreters/InterpreterAlterQuery.h>
-#include <Interpreters/InterpreterCheckQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDBGInvokeQuery.h>
 #include <Interpreters/InterpreterDeleteQuery.h>
@@ -23,7 +22,6 @@
 #include <Interpreters/InterpreterTruncateQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDBGInvokeQuery.h>
 #include <Parsers/ASTDeleteQuery.h>
@@ -141,10 +139,6 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     {
         throwIfReadOnly(context);
         return std::make_unique<InterpreterAlterQuery>(query, context);
-    }
-    else if (typeid_cast<ASTCheckQuery *>(query.get()))
-    {
-        return std::make_unique<InterpreterCheckQuery>(query, context);
     }
     else if (typeid_cast<ASTKillQueryQuery *>(query.get()))
     {
