@@ -28,9 +28,10 @@ inline auto packTask(bool propagate_memory_tracker, Func && func, Args &&... arg
     using TaskResult = std::invoke_result_t<decltype(capture)>;
 
     // create package_task to capture exceptions
-    using PackagedTask = std::packaged_task<TaskResult()>;
+    using PackagedTask = FiberTraits::PackagedTask<TaskResult()>;
     PackagedTask task{std::move(capture)};
 
     return std::move(task);
 }
+
 } // namespace DB

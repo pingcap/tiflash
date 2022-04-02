@@ -303,8 +303,11 @@ template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
 {
     tipb::SelectResponse response;
+    // TODO: remove this #ifndef
+#ifndef TIFLASH_USE_FIBER
     if constexpr (send_exec_summary_at_last)
         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
+#endif
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         partitionAndEncodeThenWriteBlocks<send_exec_summary_at_last>(blocks, response);

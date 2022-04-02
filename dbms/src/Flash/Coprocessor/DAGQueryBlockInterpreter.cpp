@@ -21,6 +21,7 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
+#include <DataStreams/IOAdaptorBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -301,7 +302,12 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
         // todo do not need to hold all locks in each stream, if the stream is reading from table a
         //  it only needs to hold the lock of table a
         for (auto & lock : storage_interpreter.drop_locks)
+        {
             stream->addTableLock(lock);
+#ifdef TIFLASH_USE_FIBER
+            stream = std::make_shared<IOAdaptorBlockInputStream>(5, stream, log->identifier());
+#endif
+        }
     });
 
     /// Set the limits and quota for reading data, the speed and time of the query.
@@ -949,6 +955,9 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), query_block.source_name);
+#ifdef TIFLASH_USE_FIBER
+        input = std::make_shared<IOAdaptorBlockInputStream>(5, input, log->identifier());
+#endif
         pipeline.streams.push_back(input);
         task_start = task_end;
     }

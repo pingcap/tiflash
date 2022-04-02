@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/BitHelpers.h>
 #include <Common/SimpleIntrusiveNode.h>
 #include <common/defines.h>
 #include <common/types.h>
@@ -27,6 +28,13 @@
 
 namespace DB
 {
+enum class MPMCQueueStatus
+{
+    NORMAL,
+    CANCELLED,
+    FINISHED,
+};
+
 namespace MPMCQueueDetail
 {
 /// WaitingNode is used to construct a double-linked waiting list so that
@@ -37,37 +45,29 @@ struct WaitingNode : public SimpleIntrusiveNode<WaitingNode>
 {
     std::condition_variable cv;
 };
-} // namespace MPMCQueueDetail
 
-enum class MPMCQueueStatus
-{
-    NORMAL,
-    CANCELLED,
-    FINISHED,
-};
-
-/// MPMCQueue is a FIFO queue which supports concurrent operations from
+/// MPMCQueueImpl is a FIFO queue which supports concurrent operations from
 /// multiple producers and consumers.
 ///
-/// MPMCQueue is thread-safe and exception-safe.
+/// MPMCQueueImpl is thread-safe and exception-safe.
 ///
 /// It is inspired by MCSLock that all blocking readers/writers construct a
 /// waiting list and everyone only wait on its own condition_variable.
 ///
 /// This can significantly reduce contentions and avoid "thundering herd" problem.
 template <typename T>
-class MPMCQueue
+class MPMCQueueImpl
 {
 public:
     using Status = MPMCQueueStatus;
 
-    explicit MPMCQueue(Int64 capacity_)
+    explicit MPMCQueueImpl(Int64 capacity_)
         : capacity(capacity_)
         , data(capacity * sizeof(T))
     {
     }
 
-    ~MPMCQueue()
+    ~MPMCQueueImpl()
     {
         std::unique_lock lock(mu);
         for (; read_pos < write_pos; ++read_pos)
@@ -183,7 +183,6 @@ public:
 
 private:
     using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
-    using WaitingNode = MPMCQueueDetail::WaitingNode;
 
     void notifyAll()
     {
@@ -356,5 +355,113 @@ private:
 
     std::vector<UInt8> data;
 };
+
+/// FiberMPMCQueue is a FIFO queue which supports concurrent operations from
+/// multiple producers and consumers.
+///
+/// FiberMPMCQueue is thread-safe and exception-safe.
+///
+/// It is inspired by MCSLock that all blocking readers/writers construct a
+/// waiting list and everyone only wait on its own condition_variable.
+///
+/// This can significantly reduce contentions and avoid "thundering herd" problem.
+template <typename T>
+class FiberMPMCQueue
+{
+public:
+    using Status = MPMCQueueStatus;
+
+    explicit FiberMPMCQueue(Int64 capacity)
+        : channel(std::max(2, roundUpToPowerOfTwoOrZero(capacity)))
+    {
+    }
+
+    ~FiberMPMCQueue() = default;
+
+    bool pop(T & obj)
+    {
+        auto res = channel.pop(obj);
+        return res == boost::fibers::channel_op_status::success;
+    }
+
+    template <typename Duration>
+    bool tryPop(T & obj, const Duration & timeout)
+    {
+        auto res = channel.pop_wait_for(obj, timeout);
+        return res == boost::fibers::channel_op_status::success;
+    }
+
+    template <typename U>
+    ALWAYS_INLINE bool push(U && u)
+    {
+        auto res = channel.push(std::forward<U>(u));
+        return res == boost::fibers::channel_op_status::success;
+    }
+
+    template <typename U, typename Duration>
+    ALWAYS_INLINE bool tryPush(U && u, const Duration & timeout)
+    {
+        auto res = channel.push_wait_for(std::forward<U>(u), timeout);
+        return res == boost::fibers::channel_op_status::success;
+    }
+
+    template <typename... Args>
+    ALWAYS_INLINE bool emplace(Args &&... args)
+    {
+        T tmp{std::forward<Args>(args)...};
+        return push(std::move(tmp));
+    }
+
+    template <typename... Args, typename Duration>
+    ALWAYS_INLINE bool tryEmplace(Args &&... args, const Duration & timeout)
+    {
+        T tmp{std::forward<Args>(args)...};
+        return tryPush(std::move(tmp), timeout);
+    }
+
+    void cancel()
+    {
+        channel.close();
+    }
+
+    bool finish()
+    {
+        channel.close();
+        return true;
+    }
+
+    bool isNextPopNonBlocking() const
+    {
+        return true;
+    }
+
+    bool isNextPushNonBlocking() const
+    {
+        return true;
+    }
+
+    MPMCQueueStatus getStatus() const
+    {
+        if (channel.is_closed())
+            return Status::FINISHED;
+        return Status::NORMAL;
+    }
+
+    size_t size() const
+    {
+        return 0;
+    }
+private:
+    boost::fibers::buffered_channel<T> channel;
+};
+} // namespace MPMCQueueDetail
+
+#ifdef TIFLASH_USE_FIBER
+template <typename T>
+using MPMCQueue = MPMCQueueDetail::FiberMPMCQueue<T>;
+#else
+template <typename T>
+using MPMCQueue = MPMCQueueDetail::MPMCQueueImpl<T>;
+#endif
 
 } // namespace DB

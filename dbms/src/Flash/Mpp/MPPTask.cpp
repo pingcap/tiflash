@@ -61,10 +61,12 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
 
 MPPTask::~MPPTask()
 {
+#ifndef TIFLASH_USE_FIBER
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
     if (current_memory_tracker != memory_tracker)
         current_memory_tracker = memory_tracker;
+#endif
     closeAllTunnels("");
     if (schedule_state == ScheduleState::SCHEDULED)
     {

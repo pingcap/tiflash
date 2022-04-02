@@ -37,7 +37,7 @@ namespace DB
 struct StreamWriter
 {
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
-    std::mutex write_mutex;
+    FiberTraits::Mutex write_mutex;
 
     explicit StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
         : writer(writer_)

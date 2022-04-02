@@ -169,6 +169,14 @@ std::shared_ptr<ThreadManager> newThreadManager()
 #endif
 }
 
+std::shared_ptr<ThreadManager> newIOThreadManager()
+{
+    if (DynamicThreadPool::global_instance)
+        return std::make_shared<DynamicThreadManager>();
+    else
+        return std::make_shared<RawThreadManager>();
+}
+
 std::shared_ptr<ThreadPoolManager> newThreadPoolManager(size_t capacity)
 {
 #ifdef TIFLASH_USE_FIBER

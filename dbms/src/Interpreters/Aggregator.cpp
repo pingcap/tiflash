@@ -817,6 +817,8 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
         if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, no_more_keys))
             break;
+
+        adaptive_yield();
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
@@ -1165,6 +1167,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
             /// Select Arena to avoid race conditions
             Arena * arena = data_variants.aggregates_pools.at(thread_id).get();
             blocks.emplace_back(convertOneBucketToBlock(data_variants, method, arena, final, bucket));
+            adaptive_yield();
         }
         return blocks;
     };

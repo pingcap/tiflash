@@ -180,25 +180,25 @@ public:
     {
         if (warning_count.fetch_add(1, std::memory_order_acq_rel) < max_recorded_error_count)
         {
-            warnings.tryPush(warning);
+            warnings.tryPush(warning, std::chrono::seconds(0));
         }
     }
     /// Consume all warnings. Once this method called, every warning will be cleared.
     /// This method is not thread-safe.
     void consumeWarnings(std::vector<tipb::Error> & warnings_)
     {
-        const size_t warnings_size = warnings.size();
-        warnings_.reserve(warnings_size);
-        for (size_t i = 0; i < warnings_size; ++i)
+        while (true)
         {
             tipb::Error error;
-            warnings.pop(error);
+            if (!warnings.tryPop(error, std::chrono::seconds(0)))
+                break;
             warnings_.push_back(error);
         }
     }
     void clearWarnings()
     {
-        warnings.clear();
+        std::vector<tipb::Error> tmp;
+        consumeWarnings(tmp);
         warning_count = 0;
     }
     UInt64 getWarningCount() { return warning_count; }
@@ -314,7 +314,7 @@ private:
     const MPPTaskId mpp_task_id = MPPTaskId::unknown_mpp_task_id;
     /// max_recorded_error_count is the max error/warning need to be recorded in warnings
     UInt64 max_recorded_error_count;
-    ConcurrentBoundedQueue<tipb::Error> warnings;
+    MPMCQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
     int new_thread_count_of_exchange_receiver = 0;

@@ -167,7 +167,20 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
 
     if (!mvcc_query_info->regions_query_info.empty())
-        doLocalRead(pipeline, settings.max_block_size);
+    {
+        auto job = [&] { doLocalRead(pipeline, settings.max_block_size); };
+#ifdef TIFLASH_USE_FIBER
+        if (g_run_in_fiber)
+        {
+            auto future = DynamicThreadPool::global_instance->schedule(job);
+            future.get();
+        }
+        else
+            job();
+#else
+        job();
+#endif
+    }
 
     null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
 

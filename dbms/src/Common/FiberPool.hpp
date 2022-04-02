@@ -12,10 +12,12 @@ inline thread_local bool g_run_in_fiber = false;
 
 inline void adaptive_yield()
 {
+#ifdef TIFLASH_USE_FIBER
     if (g_run_in_fiber)
         boost::this_fiber::yield();
     else
         std::this_thread::yield();
+#endif
 }
        
 namespace FiberPool
