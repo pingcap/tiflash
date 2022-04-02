@@ -196,8 +196,9 @@ To run unit tests, you need to build with `-DCMAKE_BUILD_TYPE=DEBUG`:
 cd $BUILD
 cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
 ninja gtests_dbms
+ninja gtests_libcommon
 ```
-And the executable unit test is in `$BUILD/dbms/gtests_dbms`.
+And the executable unit test is in `$BUILD/dbms/gtests_dbms` and `$BUILD/libs/libcommon/src/tests/gtests_libcommon`.
 
 ## Run Integration Tests
 
