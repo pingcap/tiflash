@@ -98,29 +98,11 @@ public:
 
     virtual void initializeClientInfo()
     {
-        /// Set a bunch of client information.
-        // std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
-        // std::string password = getClientMetaVarWithDefault(grpc_context, "password", "");
-        // std::string quota_key = getClientMetaVarWithDefault(grpc_context, "quota_key", "");
-        // std::string peer = grpc_context->peer();
-        // Int64 pos = peer.find(':');
-        // if (pos == -1)
-        // {
-        //     return std::make_tuple(context, ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + peer));
-        // }
-        // std::string client_ip = peer.substr(pos + 1);
-        // Poco::Net::SocketAddress client_address(client_ip);
-
-        // context->setUser(user, password, client_address, quota_key);
-
-        // String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
         context.setCurrentQueryId("test");
-
         ClientInfo & client_info = context.getClientInfo();
         client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
         client_info.interface = ClientInfo::Interface::GRPC;
     }
-
 
     DAGContext & getDAGContext()
     {
@@ -166,6 +148,42 @@ public:
         return ::testing::AssertionSuccess();
     }
 
+    static void writeResult(String file_) // todo change how to use...
+    {
+        std::string file = Poco::Path(file_).absolute().toString();
+        std::cout << "file_name: " << file << std::endl;
+        Poco::File poco_file(file);
+
+        if (poco_file.exists())
+        {
+            poco_file.remove();
+        }
+
+        int fd = open(file.c_str(),
+                      O_CREAT | O_EXCL | O_WRONLY,
+                      S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+
+        if (-1 == fd)
+        {
+            file.clear();
+            if (EEXIST == errno)
+                throw Poco::Exception("Pid file exists, should not start daemon.");
+            throw Poco::CreateFileException("Cannot create pid file.");
+        }
+
+        try
+        {
+            if (static_cast<ssize_t>(5) != write(fd, "test", 5))
+                throw Poco::Exception("Cannot write to test file.");
+        }
+        catch (...)
+        {
+            close(fd);
+            throw;
+        }
+
+        close(fd);
+    }
 
 protected:
     Context context;

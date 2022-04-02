@@ -61,6 +61,7 @@ try
                                 "    selection_1\n"
                                 "     table_scan_0 columns: { column_id: -1, [String]}\n";
     ASSERT_TRUE(dagRequestEqual(expect_tree_string, dag_request));
+    writeResult("test_interpreter.txt");
 }
 CATCH
 
@@ -101,6 +102,7 @@ try
     // Don't care about regions information in this test
     DAGQuerySource dag(context);
     executeQuery(dag, context, false, QueryProcessingStage::Complete);
+    writeResult("test_interpreter.txt");
 }
 CATCH
 
