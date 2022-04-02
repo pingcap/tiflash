@@ -150,7 +150,7 @@ public:
 
     [[nodiscard]] PageLock acquireLock() const
     {
-        return std::lock_guard<std::mutex>(m);
+        return std::lock_guard(m);
     }
 
     void createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry);
@@ -290,7 +290,7 @@ using PageDirectoryPtr = std::unique_ptr<PageDirectory>;
 class PageDirectory
 {
 public:
-    explicit PageDirectory(WALStorePtr && wal);
+    explicit PageDirectory(String storage_name, WALStorePtr && wal);
 
     PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
 

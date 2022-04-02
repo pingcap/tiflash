@@ -74,26 +74,26 @@ public:
 
         struct BlobStat
         {
-            const SpaceMapPtr smap;
             const BlobFileId id;
-            BlobStatType type;
+            std::atomic<BlobStatType> type;
 
+            std::mutex sm_lock;
+            const SpaceMapPtr smap;
             /**
-            * If no any data inside. It shoule be same as space map `biggest_cap`
-            */
+             * If no any data inside. It shoule be same as space map `biggest_cap`,
+             * It is a hint for choosing quickly, should use `recalculateCapacity`
+             * to update it after some space are free in the spacemap.
+             */
             UInt64 sm_max_caps = 0;
-
             UInt64 sm_total_size = 0;
             UInt64 sm_valid_size = 0;
             double sm_valid_rate = 1.0;
 
-            std::mutex sm_lock;
-
         public:
             BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
-                : smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
-                , id(id_)
+                : id(id_)
                 , type(BlobStatType::NORMAL)
+                , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , sm_max_caps(sm_max_caps_)
             {}
 
@@ -104,17 +104,17 @@ public:
 
             bool isReadOnly() const
             {
-                return type == BlobStatType::READ_ONLY;
+                return type.load() == BlobStatType::READ_ONLY;
             }
 
             void changeToReadOnly()
             {
-                type = BlobStatType::READ_ONLY;
+                type.store(BlobStatType::READ_ONLY);
             }
 
-            BlobFileOffset getPosFromStat(size_t buf_size);
+            BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
-            void removePosFromStat(BlobFileOffset offset, size_t buf_size);
+            void removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &);
 
             /**
              * This method is only used when blobstore restore
@@ -180,24 +180,24 @@ public:
 #endif
         void restoreByEntry(const PageEntryV3 & entry);
         void restore();
+        std::set<BlobFileId> getBlobIdsFromDisk(String path) const;
         friend class PageDirectoryFactory;
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif
         LoggerPtr log;
+        PSDiskDelegatorPtr delegator;
         BlobStore::Config config;
 
-        BlobFileId roll_id = 1;
-        std::map<String, std::list<BlobStatPtr>> stats_map;
-        // Index for selecting next path for creating new blobfile
-        UInt16 stats_map_path_index = 0;
-
-        PSDiskDelegatorPtr delegator;
         mutable std::mutex lock_stats;
+        BlobFileId roll_id = 1;
+        // Index for selecting next path for creating new blobfile
+        UInt32 stats_map_path_index = 0;
+        std::map<String, std::list<BlobStatPtr>> stats_map;
     };
 
-    BlobStore(const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
+    BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
     std::vector<BlobFileId> getGCStats();
 
@@ -235,7 +235,7 @@ public:
 private:
 #endif
 
-    void read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
+    BlobFilePtr read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
 
     /**
      *  Ask BlobStats to get a span from BlobStat.
@@ -250,7 +250,7 @@ private:
      */
     void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
-    String getBlobFilePath(BlobFileId blob_id);
+    String getBlobFileParentPath(BlobFileId blob_id);
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
@@ -258,7 +258,6 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    constexpr static const char * blob_prefix_name = "/blobfile_";
 
     PSDiskDelegatorPtr delegator;
 

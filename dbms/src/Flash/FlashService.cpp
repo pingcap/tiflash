@@ -48,6 +48,8 @@ FlashService::FlashService(IServer & server_)
     , log(&Poco::Logger::get("FlashService"))
 {
     auto settings = server_.context().getSettingsRef();
+    enable_local_tunnel = settings.enable_local_tunnel;
+    enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
     size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
@@ -447,7 +449,9 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         {
             context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
-
+        context->setSetting("enable_async_server", is_async ? "true" : "false");
+        context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
+        context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
         return std::make_tuple(context, grpc::Status::OK);
     }
     catch (Exception & e)

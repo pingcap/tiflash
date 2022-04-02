@@ -227,7 +227,7 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
 
 PageId PageStorage::getMaxId()
 {
-    std::lock_guard<std::mutex> write_lock(write_mutex);
+    std::lock_guard write_lock(write_mutex);
     return versioned_page_entries.getSnapshot()->version()->maxId();
 }
 
@@ -283,7 +283,7 @@ PageFile::Writer & PageStorage::getWriter()
 
 PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id_level)
 {
-    std::lock_guard<std::mutex> lock(open_read_files_mutex);
+    std::lock_guard lock(open_read_files_mutex);
 
     auto & pages_reader = open_read_files[file_id_level];
     if (pages_reader == nullptr)
@@ -301,7 +301,7 @@ void PageStorage::write(const WriteBatch & wb)
         return;
 
     PageEntriesEdit edit;
-    std::lock_guard<std::mutex> lock(write_mutex);
+    std::lock_guard lock(write_mutex);
     getWriter().write(wb, edit);
 
     // Apply changes into versioned_page_entries(generate a new version)
@@ -499,7 +499,7 @@ bool PageStorage::gc()
 
     PageFileIdAndLevel writing_file_id_level;
     {
-        std::lock_guard<std::mutex> lock(write_mutex);
+        std::lock_guard lock(write_mutex);
         writing_file_id_level = write_file.fileIdLevel();
     }
 
@@ -564,7 +564,7 @@ bool PageStorage::gc()
 
     {
         // Remove obsolete files' reader cache that are not used by any version
-        std::lock_guard<std::mutex> lock(open_read_files_mutex);
+        std::lock_guard lock(open_read_files_mutex);
         for (const auto & page_file : page_files)
         {
             const auto page_id_and_lvl = page_file.fileIdLevel();
