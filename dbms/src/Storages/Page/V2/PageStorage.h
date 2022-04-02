@@ -191,22 +191,6 @@ public:
         std::map<PageFileIdAndLevel, PersistState> states;
     };
 
-#ifndef NDEBUG
-    // Just for tests, refactor them out later
-    DB::PageStorage::SnapshotPtr getSnapshot() { return getSnapshot(""); }
-    void write(DB::WriteBatch && wb) { return writeImpl(std::move(wb), nullptr); }
-    DB::PageEntry getEntry(PageId page_id) { return getEntryImpl(TEST_NAMESPACE_ID, page_id, nullptr); }
-    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot) { return getEntryImpl(TEST_NAMESPACE_ID, page_id, snapshot); };
-    DB::Page read(PageId page_id) { return readImpl(TEST_NAMESPACE_ID, page_id, nullptr, nullptr); }
-    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) { return readImpl(TEST_NAMESPACE_ID, page_id, read_limiter, snapshot); }
-    PageMap read(const std::vector<PageId> & page_ids) { return readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr); }
-    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) { return readImpl(TEST_NAMESPACE_ID, page_ids, read_limiter, snapshot); };
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler) { return readImpl(TEST_NAMESPACE_ID, page_ids, handler, nullptr, nullptr); }
-    PageMap read(const std::vector<PageReadFields> & page_fields) { return readImpl(TEST_NAMESPACE_ID, page_fields, nullptr, nullptr); }
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor) { return traverseImpl(acceptor, nullptr); }
-    bool gc() { return gcImpl(false, nullptr, nullptr); }
-#endif
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
