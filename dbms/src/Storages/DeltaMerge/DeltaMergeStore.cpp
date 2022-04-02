@@ -366,12 +366,7 @@ void DeltaMergeStore::drop()
     shutdown();
 
     LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
-<<<<<<< HEAD
-    storage_pool.drop();
-    for (auto & [end, segment] : segments)
-=======
     auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
->>>>>>> 3f0667a3a0 (Support drop table for PageStorage V3 (#4428))
     {
         std::unique_lock lock(read_write_mutex);
         auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
