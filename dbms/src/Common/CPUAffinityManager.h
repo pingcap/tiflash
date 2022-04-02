@@ -123,9 +123,19 @@ private:
     CPUAffinityManager();
     // Disable copy and move
 public:
-    CPUAffinityManager(const CPUAffinityManager &) = delete;
-    CPUAffinityManager & operator=(const CPUAffinityManager &) = delete;
-    CPUAffinityManager(CPUAffinityManager &&) = delete;
-    CPUAffinityManager & operator=(CPUAffinityManager &&) = delete;
+#define DISALLOW_COPY_AND_ASSIGN(ClassName) \
+    DISALLOW_COPY(ClassName);               \
+    DISALLOW_ASSIGN(ClassName);
+
+#define DISALLOW_COPY(ClassName) \
+    ClassName(const ClassName &) = delete; \
+    ClassName(ClassName &&) = delete
+
+#define DISALLOW_ASSIGN(ClassName) \
+    ClassName & operator=(const ClassName &) = delete; \
+    ClassName & operator=(ClassName &&) = delete
+
+    DISALLOW_COPY_AND_ASSIGN(CPUAffinityManager);
+    
 };
 } // namespace DB
