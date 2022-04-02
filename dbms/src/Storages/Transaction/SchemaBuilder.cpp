@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
@@ -331,22 +332,24 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         return;
     }
 
-    std::stringstream ss;
-    ss << "Detected schema changes: " << name_mapper.debugCanonicalName(*db_info, *table_info) << ": ";
-    for (const auto & schema_change : schema_changes)
-        for (const auto & command : schema_change.first)
-        {
-            if (command.type == AlterCommand::ADD_COLUMN)
-                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-            else if (command.type == AlterCommand::DROP_COLUMN)
-                ss << "DROP COLUMN " << command.column_name << ", ";
-            else if (command.type == AlterCommand::MODIFY_COLUMN)
-                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-            else if (command.type == AlterCommand::RENAME_COLUMN)
-                ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
-        }
-
-    LOG_FMT_DEBUG(log, "{} : {}", __PRETTY_FUNCTION__, ss.str());
+    auto log_str = [&]() {
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend("Detected schema changes: {}: ", name_mapper.debugCanonicalName(*db_info, *table_info));
+        for (const auto & schema_change : schema_changes)
+            for (const auto & command : schema_change.first)
+            {
+                if (command.type == AlterCommand::ADD_COLUMN)
+                    fmt_buf.fmtAppend("ADD COLUMN {} {},", command.column_name, command.data_type->getName());
+                else if (command.type == AlterCommand::DROP_COLUMN)
+                    fmt_buf.fmtAppend("DROP COLUMN {}, ", command.column_name);
+                else if (command.type == AlterCommand::MODIFY_COLUMN)
+                    fmt_buf.fmtAppend("MODIFY COLUMN {} {}, ", command.column_name, command.data_type->getName());
+                else if (command.type == AlterCommand::RENAME_COLUMN)
+                    fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
+            }
+        return fmt_buf.toString();
+    };
+    LOG_DEBUG(log, log_str());
 
     /// Update metadata, through calling alterFromTiDB.
     // Using original table info with updated columns instead of using new_table_info directly,
