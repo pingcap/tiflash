@@ -40,28 +40,20 @@
 #include <mutex>
 #include <optional>
 
-/// \brief Базовый класс для демонов
+/// \brief Base class for applications that can run as daemons.
 ///
 /// \code
-/// # Список возможных опций командной строки обрабатываемых демоном:
-/// #    --config-file или --config - имя файла конфигурации. По умолчанию - config.xml
-/// #    --pid-file - имя PID файла. По умолчанию - pid
-/// #    --log-file - имя лог файла
-/// #    --error-file - имя лог файла, в который будут помещаться только ошибки
-/// #    --daemon - запустить в режиме демона; если не указан - логгирование будет вестись на консоль
-/// <daemon_name> --daemon --config-file=localfile.xml --pid-file=pid.pid --log-file=log.log --errorlog-file=error.log
+/// # Some possible command line options:
+/// #    --config-file, -C or --config - path to configuration file. By default - config.xml in the current directory.
+/// #    --pid-file - PID file name. Default is pid
+/// #    --log-file
+/// #    --errorlog-file
+/// #    --daemon - run as daemon; without this option, the program will be attached to the terminal and also output logs to stderr.
+/// <daemon_name> --daemon --config-file=localfile.xml --log-file=log.log --errorlog-file=error.log
 /// \endcode
 ///
-/// Если неперехваченное исключение выкинуто в других потоках (не Task-и), то по-умолчанию
-/// используется KillingErrorHandler, который вызывает std::terminate.
-///
-/// Кроме того, класс позволяет достаточно гибко управлять журналированием. В методе initialize() вызывается метод
-/// buildLoggers() который и строит нужные логгеры. Эта функция ожидает увидеть в конфигурации определённые теги
-/// заключённые в секции "logger".
-/// Если нужно журналирование на консоль, нужно просто не использовать тег "log" или использовать --console.
-/// Теги уровней вывода использовать можно в любом случае
-
-
+/// You can configure different log options for different loggers used inside program
+///  by providing subsections to "logger" in configuration file.
 class BaseDaemon : public Poco::Util::ServerApplication
 {
     friend class SignalListener;
@@ -72,31 +64,30 @@ public:
     BaseDaemon();
     ~BaseDaemon();
 
-    /// Загружает конфигурацию и "строит" логгеры на запись в файлы
+    /// Load configuration, prepare loggers, etc.
     void initialize(Poco::Util::Application &) override;
 
-    /// Читает конфигурацию
+    /// Reads the configuration
     void reloadConfiguration();
 
-    /// Строит необходимые логгеры
+    /// Builds the necessary loggers
     void buildLoggers(Poco::Util::AbstractConfiguration & config);
 
-    /// Определяет параметр командной строки
+    /// Process command line parameters
     void defineOptions(Poco::Util::OptionSet & _options) override;
 
-    /// Завершение демона ("мягкое")
+    /// Graceful shutdown
     void terminate();
 
-    /// Завершение демона ("жёсткое")
+    /// Forceful shutdown
     void kill();
 
-    /// Получен ли сигнал на завершение?
+    /// Cancellation request has been received.
     bool isCancelled() const
     {
         return is_cancelled;
     }
 
-    /// Получение ссылки на экземпляр демона
     static BaseDaemon & instance()
     {
         return dynamic_cast<BaseDaemon &>(Poco::Util::Application::instance());
@@ -105,23 +96,22 @@ public:
     /// return none if daemon doesn't exist, reference to the daemon otherwise
     static std::optional<std::reference_wrapper<BaseDaemon>> tryGetInstance() { return tryGetInstance<BaseDaemon>(); }
 
-    /// Спит заданное количество секунд или до события wakeup
+    /// Sleeps for the set number of seconds or until wakeup event
     void sleep(double seconds);
 
-    /// Разбудить
     void wakeup();
 
-    /// Закрыть файлы с логами. При следующей записи, будут созданы новые файлы.
+    /// Close the log files. The next time you write, new files will be created.
     void closeLogs();
 
-    /// В Graphite компоненты пути(папки) разделяются точкой.
-    /// У нас принят путь формата root_path.hostname_yandex_ru.key
-    /// root_path по умолчанию one_min
-    /// key - лучше группировать по смыслу. Например "meminfo.cached" или "meminfo.free", "meminfo.total"
+    /// In Graphite, path(folder) components are separated by a dot.
+    /// We have adopted the format root_path.hostname_yandex_ru.key
+    /// root_path is by default one_min
+    /// key - better to group by meaning. For example "meminfo.cached" or "meminfo.free", "meminfo.total"
     template <class T>
     void writeToGraphite(const std::string & key, const T & value, const std::string & config_name = DEFAULT_GRAPHITE_CONFIG_NAME, time_t timestamp = 0, const std::string & custom_root_path = "")
     {
-        auto writer = getGraphiteWriter(config_name);
+        auto * writer = getGraphiteWriter(config_name);
         if (writer)
             writer->write(key, value, timestamp, custom_root_path);
     }
@@ -129,7 +119,7 @@ public:
     template <class T>
     void writeToGraphite(const GraphiteWriter::KeyValueVector<T> & key_vals, const std::string & config_name = DEFAULT_GRAPHITE_CONFIG_NAME, time_t timestamp = 0, const std::string & custom_root_path = "")
     {
-        auto writer = getGraphiteWriter(config_name);
+        auto * writer = getGraphiteWriter(config_name);
         if (writer)
             writer->write(key_vals, timestamp, custom_root_path);
     }
@@ -137,7 +127,7 @@ public:
     template <class T>
     void writeToGraphite(const GraphiteWriter::KeyValueVector<T> & key_vals, const std::chrono::system_clock::time_point & current_time, const std::string & custom_root_path)
     {
-        auto writer = getGraphiteWriter();
+        auto * writer = getGraphiteWriter();
         if (writer)
             writer->write(key_vals, std::chrono::system_clock::to_time_t(current_time), custom_root_path);
     }
@@ -151,21 +141,21 @@ public:
 
     std::optional<size_t> getLayer() const
     {
-        return layer; /// layer выставляется в классе-наследнике BaseDaemonApplication.
+        return layer;
     }
 
 protected:
     virtual void logRevision() const;
 
-    /// Используется при exitOnTaskError()
+    /// Used when exitOnTaskError()
     void handleNotification(Poco::TaskFailedNotification *);
 
     /// thread safe
     virtual void handleSignal(int signal_id);
 
-    /// реализация обработки сигналов завершения через pipe не требует блокировки сигнала с помощью sigprocmask во всех потоках
+    /// implementation of pipe termination signal handling does not require blocking the signal with sigprocmask in all threads
     void waitForTerminationRequest()
-#if POCO_CLICKHOUSE_PATCH || POCO_VERSION >= 0x02000000 // in old upstream poco not vitrual
+#if POCO_CLICKHOUSE_PATCH || POCO_VERSION >= 0x02000000 // in old upstream poco not virtual
         override
 #endif
         ;
@@ -177,21 +167,21 @@ protected:
 
     virtual std::string getDefaultCorePath() const;
 
-    /// Создание и автоматическое удаление pid файла.
+    /// Creation and automatic deletion of a pid file.
     struct PID
     {
         std::string file;
 
-        /// Создать объект, не создавая PID файл
-        PID() {}
+        /// Create an object without creating a PID file
+        PID() = default;
 
-        /// Создать объект, создать PID файл
-        PID(const std::string & file_) { seed(file_); }
+        /// Create object, create PID file
+        explicit PID(const std::string & file_) { seed(file_); }
 
-        /// Создать PID файл
+        /// Create a PID file
         void seed(const std::string & file_);
 
-        /// Удалить PID файл
+        /// Delete PID file
         void clear();
 
         ~PID() { clear(); }
@@ -201,19 +191,19 @@ protected:
 
     std::atomic_bool is_cancelled{false};
 
-    /// Флаг устанавливается по сообщению из Task (при аварийном завершении).
+    /// The flag is set by a message from Task (in case of an emergency stop).
     bool task_failed = false;
 
     bool log_to_console = false;
 
-    /// Событие, чтобы проснуться во время ожидания
+    /// An event to wake up to while waiting
     Poco::Event wakeup_event;
 
-    /// Поток, в котором принимается сигнал HUP/USR1 для закрытия логов.
+    /// The stream in which the HUP/USR1 signal is received to close the logs.
     Poco::Thread signal_listener_thread;
     std::unique_ptr<Poco::Runnable> signal_listener;
 
-    /// Файлы с логами.
+    /// Log files.
     Poco::AutoPtr<Poco::FileChannel> log_file;
     Poco::AutoPtr<Poco::FileChannel> error_log_file;
     Poco::AutoPtr<Poco::FileChannel> tracing_log_file;

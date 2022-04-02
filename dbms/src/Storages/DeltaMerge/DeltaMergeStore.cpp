@@ -374,12 +374,45 @@ void DeltaMergeStore::drop()
     shutdown();
 
     LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
-    storage_pool->drop();
-    for (auto & [end, segment] : segments)
+    auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
     {
-        (void)end;
-        segment->drop(global_context.getFileProvider());
+        std::unique_lock lock(read_write_mutex);
+        auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+        std::stack<PageId> segment_ids;
+        while (segment_id != 0)
+        {
+            segment_ids.push(segment_id);
+            auto segment = id_to_segment[segment_id];
+            segment_id = segment->nextSegmentId();
+        }
+        WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
+        while (!segment_ids.empty())
+        {
+            auto segment_id_to_drop = segment_ids.top();
+            auto segment_to_drop = id_to_segment[segment_id_to_drop];
+            segment_ids.pop();
+            if (!segment_ids.empty())
+            {
+                // This is not the last segment, so we need to set previous segment's next_segment_id to 0 to indicate that this segment has been dropped
+                auto previous_segment_id = segment_ids.top();
+                auto previous_segment = id_to_segment[previous_segment_id];
+                assert(previous_segment->nextSegmentId() == segment_id_to_drop);
+                auto previous_lock = previous_segment->mustGetUpdateLock();
+                auto new_previous_segment = previous_segment->dropNextSegment(wbs);
+                previous_segment->abandon(*dm_context);
+                segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
+                id_to_segment.emplace(previous_segment_id, new_previous_segment);
+            }
+            // The order to drop the meta and data of this segment doesn't matter,
+            // Because there is no segment pointing to this segment,
+            // so it won't be restored again even the drop process was interrupted by restart
+            auto drop_lock = segment_to_drop->mustGetUpdateLock();
+            segment_to_drop->abandon(*dm_context);
+            segment_to_drop->drop(global_context.getFileProvider(), wbs);
+        }
     }
+    storage_pool->drop();
+
     // Drop data in storage path pool
     path_pool.drop(/*recursive=*/true, /*must_success=*/false);
     LOG_FMT_INFO(log, "Drop DeltaMerge done [{}.{}]", db_name, table_name);
@@ -406,7 +439,7 @@ void DeltaMergeStore::shutdown()
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle = nullptr;
     blockable_background_pool_handle = nullptr;
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start [{}.{}]", db_name, table_name);
+    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end [{}.{}]", db_name, table_name);
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id)
@@ -1272,7 +1305,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             auto it = segments.find(segment->getRowKeyRange().getEnd());
             // check legality
             if (it == segments.end())
-
                 return {};
             auto & cur_segment = it->second;
             if (cur_segment.get() != segment.get())
@@ -1599,7 +1631,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
 
         assert(segment != nullptr);
-        if (segment->hasAbandoned() || segment->getLastCheckGCSafePoint() >= gc_safe_point || segment_snap == nullptr)
+        if (segment->hasAbandoned() || segment_snap == nullptr)
             continue;
 
         const auto segment_id = segment->segmentId();
@@ -1608,43 +1640,52 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         // meet empty segment, try merge it
         if (segment_snap->getRows() == 0)
         {
+            // release segment_snap before checkSegmentUpdate, otherwise this segment is still in update status.
+            segment_snap = {};
             checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
             continue;
         }
 
-        // Avoid recheck this segment when gc_safe_point doesn't change regardless whether we trigger this segment's DeltaMerge or not.
-        // Because after we calculate StableProperty and compare it with this gc_safe_point,
-        // there is no need to recheck it again using the same gc_safe_point.
-        // On the other hand, if it should do DeltaMerge using this gc_safe_point, and the DeltaMerge is interruptted by other process,
-        // it's still worth to wait another gc_safe_point to check this segment again.
-        segment->setLastCheckGCSafePoint(gc_safe_point);
-        dm_context->min_version = gc_safe_point;
-
-        // calculate StableProperty if needed
-        if (!segment->getStable()->isStablePropertyCached())
-            segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
-
         try
         {
             // Check whether we should apply gc on this segment
-            const bool should_compact
-                = GC::shouldCompactStable(
-                      segment,
-                      gc_safe_point,
-                      global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
-                      log)
-                || GC::shouldCompactDeltaWithStable(
-                      *dm_context,
-                      segment_snap,
-                      segment_range,
-                      global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc,
-                      log);
+            bool should_compact = false;
+            if (GC::shouldCompactDeltaWithStable(
+                    *dm_context,
+                    segment_snap,
+                    segment_range,
+                    global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc,
+                    log))
+            {
+                should_compact = true;
+            }
+            else if (segment->getLastCheckGCSafePoint() < gc_safe_point)
+            {
+                // Avoid recheck this segment when gc_safe_point doesn't change regardless whether we trigger this segment's DeltaMerge or not.
+                // Because after we calculate StableProperty and compare it with this gc_safe_point,
+                // there is no need to recheck it again using the same gc_safe_point.
+                // On the other hand, if it should do DeltaMerge using this gc_safe_point, and the DeltaMerge is interruptted by other process,
+                // it's still worth to wait another gc_safe_point to check this segment again.
+                segment->setLastCheckGCSafePoint(gc_safe_point);
+                dm_context->min_version = gc_safe_point;
+
+                // calculate StableProperty if needed
+                if (!segment->getStable()->isStablePropertyCached())
+                    segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
+
+                should_compact = GC::shouldCompactStable(
+                    segment,
+                    gc_safe_point,
+                    global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
+                    log);
+            }
             bool finish_gc_on_segment = false;
             if (should_compact)
             {
                 if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundGCThread, segment_snap); segment)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
+                    segment_snap = {};
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;

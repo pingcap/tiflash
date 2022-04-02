@@ -54,7 +54,7 @@ public:
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        dir = factory.create(provider, delegator);
+        dir = factory.create("PageDirectoryTest", provider, delegator);
     }
 
 protected:
@@ -1769,7 +1769,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.createFromEdit(provider, delegator, edit);
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
 
@@ -1964,8 +1964,8 @@ try
 
     const auto & path = getTemporaryPath();
     createIfNotExist(path);
-    Poco::File(fmt::format("{}/{}{}", path, BlobStore::BLOB_PREFIX_NAME, file_id1)).createFile();
-    Poco::File(fmt::format("{}/{}{}", path, BlobStore::BLOB_PREFIX_NAME, file_id2)).createFile();
+    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
+    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
 
     PageEntryV3 entry_1_v1{.file_id = file_id1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_5_v1{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x100, .checksum = 0x4567};
@@ -1990,7 +1990,7 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.setBlobStats(stats).createFromEdit(provider, delegator, edit);
+        auto d = factory.setBlobStats(stats).createFromEdit(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
     {
