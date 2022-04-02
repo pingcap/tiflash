@@ -433,7 +433,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
         dm_context.tracing_id);
 
     LOG_FMT_TRACE(
-        Logger::get(log->name(), dm_context.tracing_id),
+        Logger::get(log, dm_context.tracing_id),
         "Segment [{}] is read by max_version: {}, {} ranges: {}",
         segment_id,
         max_version,
@@ -1348,7 +1348,8 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
                                        const RowKeyRanges & read_ranges,
                                        UInt64 max_version) const
 {
-    LOG_FMT_DEBUG(log, "Segment[{}] getReadInfo start", segment_id);
+    auto tracing_logger = Logger::get(log, dm_context.tracing_id);
+    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] getReadInfo start", segment_id);
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs
@@ -1363,7 +1364,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
     // Hold compacted_index reference, to prevent it from deallocated.
     delta_reader->setDeltaIndex(compacted_index);
 
-    LOG_FMT_DEBUG(log, "Segment[{}] getReadInfo end", segment_id);
+    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] getReadInfo end", segment_id);
 
     if (fully_indexed)
     {
