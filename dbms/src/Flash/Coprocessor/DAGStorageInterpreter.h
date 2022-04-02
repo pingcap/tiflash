@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -55,8 +56,7 @@ public:
         const std::vector<const tipb::Expr *> & conditions_,
         size_t max_streams_);
 
-    DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
-    DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
+    DISALLOW_MOVE(DAGStorageInterpreter);
 
     void execute(DAGPipeline & pipeline);
 
