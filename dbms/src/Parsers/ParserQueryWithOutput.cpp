@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Parsers/ParserAlterQuery.h>
-#include <Parsers/ParserCheckQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDescribeTableQuery.h>
 #include <Parsers/ParserDropQuery.h>
