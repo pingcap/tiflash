@@ -340,7 +340,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
             if (command.type == AlterCommand::ADD_COLUMN)
                 fmt_buf.fmtAppend("ADD COLUMN {} {},", command.column_name, command.data_type->getName());
             else if (command.type == AlterCommand::DROP_COLUMN)
-                fmt_buf.fmtAppend("DROP COLUMN {}, ", command.data_type->getName());
+                fmt_buf.fmtAppend("DROP COLUMN {}, ", command.column_name);
             else if (command.type == AlterCommand::MODIFY_COLUMN)
                 fmt_buf.fmtAppend("MODIFY COLUMN {} {}, ", command.column_name, command.data_type->getName());
             else if (command.type == AlterCommand::RENAME_COLUMN)
