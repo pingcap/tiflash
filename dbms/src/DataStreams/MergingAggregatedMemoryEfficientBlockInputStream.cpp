@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/setThreadName.h>
 #include <Common/wrapInvocable.h>
@@ -74,9 +88,9 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     bool final_,
     size_t reading_threads_,
     size_t merging_threads_,
-    const LogWithPrefixPtr & log_)
-    : log(getLogWithPrefix(log_, getName()))
-    , aggregator(params)
+    const String & req_id)
+    : log(Logger::get(name, req_id))
+    , aggregator(params, req_id)
     , final(final_)
     , reading_threads(std::min(reading_threads_, inputs_.size()))
     , merging_threads(merging_threads_)
@@ -133,7 +147,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::cancel(bool kill)
     if (parallel_merge_data)
     {
         {
-            std::unique_lock<std::mutex> lock(parallel_merge_data->merged_blocks_mutex);
+            std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
             parallel_merge_data->finish = true;
         }
         parallel_merge_data->merged_blocks_changed.notify_one(); /// readImpl method must stop waiting and exit.
@@ -154,7 +168,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::cancel(bool kill)
                   * (example: connection reset during distributed query execution)
                   * - then don't care.
                   */
-                LOG_ERROR(log, "Exception while cancelling " << child->getName());
+                LOG_FMT_ERROR(log, "Exception while cancelling {}", child->getName());
             }
         }
     }
@@ -219,7 +233,7 @@ Block MergingAggregatedMemoryEfficientBlockInputStream::readImpl()
 
         while (true)
         {
-            std::unique_lock<std::mutex> lock(parallel_merge_data->merged_blocks_mutex);
+            std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
 
             parallel_merge_data->merged_blocks_changed.wait(lock, [this] {
                 return parallel_merge_data->finish /// Requested to finish early.
@@ -284,12 +298,12 @@ void MergingAggregatedMemoryEfficientBlockInputStream::finalize()
     if (!started)
         return;
 
-    LOG_TRACE(log, "Waiting for threads to finish");
+    LOG_FMT_TRACE(log, "Waiting for threads to finish");
 
     if (parallel_merge_data)
         parallel_merge_data->thread_pool->wait();
 
-    LOG_TRACE(log, "Waited for threads to finish");
+    LOG_FMT_TRACE(log, "Waited for threads to finish");
 }
 
 
@@ -318,7 +332,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
               * - or, if no next blocks, set 'exhausted' flag.
               */
             {
-                std::lock_guard<std::mutex> lock(parallel_merge_data->get_next_blocks_mutex);
+                std::lock_guard lock(parallel_merge_data->get_next_blocks_mutex);
 
                 if (parallel_merge_data->exhausted || parallel_merge_data->finish)
                     break;
@@ -328,7 +342,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
                 if (!blocks_to_merge || blocks_to_merge->empty())
                 {
                     {
-                        std::unique_lock<std::mutex> lock(parallel_merge_data->merged_blocks_mutex);
+                        std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
                         parallel_merge_data->exhausted = true;
                     }
 
@@ -342,7 +356,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
                     : blocks_to_merge->front().info.bucket_num;
 
                 {
-                    std::unique_lock<std::mutex> lock(parallel_merge_data->merged_blocks_mutex);
+                    std::unique_lock lock(parallel_merge_data->merged_blocks_mutex);
 
                     parallel_merge_data->have_space.wait(lock, [this] {
                         return parallel_merge_data->merged_blocks.size() < merging_threads
@@ -364,7 +378,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
             Block res = aggregator.mergeBlocks(*blocks_to_merge, final);
 
             {
-                std::lock_guard<std::mutex> lock(parallel_merge_data->merged_blocks_mutex);
+                std::lock_guard lock(parallel_merge_data->merged_blocks_mutex);
 
                 if (parallel_merge_data->finish)
                     break;
@@ -379,7 +393,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
     catch (...)
     {
         {
-            std::lock_guard<std::mutex> lock(parallel_merge_data->merged_blocks_mutex);
+            std::lock_guard lock(parallel_merge_data->merged_blocks_mutex);
             parallel_merge_data->exception = std::current_exception();
             parallel_merge_data->finish = true;
         }
@@ -528,7 +542,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
                 /// Not yet partitioned (splitted to buckets) block. Will partition it and place result to 'splitted_blocks'.
                 if (input.block.info.bucket_num == -1 && input.block && input.splitted_blocks.empty())
                 {
-                    LOG_TRACE(log, "Having block without bucket: will split.");
+                    LOG_FMT_TRACE(log, "Having block without bucket: will split.");
 
                     input.splitted_blocks = aggregator.convertBlockToTwoLevel(input.block);
                     input.block = Block();

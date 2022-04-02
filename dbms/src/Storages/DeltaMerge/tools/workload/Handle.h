@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Encryption/PosixRandomAccessFile.h>
@@ -72,8 +86,9 @@ private:
 class HandleTable
 {
 public:
-    HandleTable(const std::string & fname)
+    HandleTable(const std::string & fname, uint64_t max_key_count)
     {
+        handle_to_ts.reserve(max_key_count * 1.2); // An extra 20% key count to avoid rehash due to sharding unbalance.
         if (!fname.empty())
         {
             recover(fname);
@@ -176,13 +191,14 @@ class SharedHandleTable
 public:
     static constexpr uint64_t default_shared_count = 4096;
 
-    SharedHandleTable(const std::string & waldir = "", uint64_t shared_cnt = default_shared_count)
+    SharedHandleTable(uint64_t max_key_count, const std::string & waldir = "", uint64_t shared_cnt = default_shared_count)
         : tables(shared_cnt)
     {
+        uint64_t max_key_count_per_shared = max_key_count / default_shared_count + 1;
         for (uint64_t i = 0; i < shared_cnt; i++)
         {
             auto fname = waldir.empty() ? "" : fmt::format("{}/{}.wal", waldir, i);
-            tables[i] = std::make_unique<HandleTable>(fname);
+            tables[i] = std::make_unique<HandleTable>(fname, max_key_count_per_shared);
         }
     }
     void write(const uint64_t & handle, uint64_t ts)

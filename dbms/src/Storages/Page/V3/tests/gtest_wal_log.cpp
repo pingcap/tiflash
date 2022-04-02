@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // TODO: Add copyright for PingCAP
 //  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under both the GPLv2 (found in the
@@ -153,8 +167,7 @@ public:
                                            &report,
                                            /* verify_checksum */ true,
                                            /* log_number */ log_num,
-                                           wal_recovery_mode,
-                                           log);
+                                           wal_recovery_mode);
     }
 
     void resetReader(const WALRecoveryMode wal_recovery_mode = WALRecoveryMode::TolerateCorruptedTailRecords)
@@ -202,19 +215,17 @@ public:
         PageUtil::ftruncateFile(wr_file, writtenBytes() - bytes);
     }
 
-    void fixChecksum(int header_offset, int len, bool recyclable)
+    void fixChecksum(int header_offset, int payload_len, bool recyclable)
     {
         // Compute crc of type/len/data
         int header_size = recyclable ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
-        Digest::CRC32 digest;
+        Format::ChecksumClass digest;
 
-        size_t crc_buff_size = header_size - Format::CHECKSUM_START_OFFSET + len;
+        size_t crc_buff_size = header_size - Format::CHECKSUM_START_OFFSET + payload_len;
         char crc_buff[crc_buff_size];
         PageUtil::readFile(wr_file, header_offset + Format::CHECKSUM_START_OFFSET, crc_buff, crc_buff_size, nullptr);
 
-        digest.update(
-            crc_buff,
-            crc_buff_size);
+        digest.update(crc_buff, crc_buff_size);
 
         auto checksum = digest.checksum();
         PageUtil::writeFile(wr_file, header_offset, reinterpret_cast<char *>(&checksum), sizeof(checksum), nullptr);
@@ -407,7 +418,7 @@ TEST_P(LogFileRWTest, BadRecordType)
 TEST_P(LogFileRWTest, TruncatedTrailingRecordIsIgnored)
 {
     write("foo");
-    shrinkSize(4); // Drop all payload as well as a header byte
+    shrinkSize(3 + sizeof(Format::MaxRecordType)); // Drop all payload as well as a header byte
     resetReader();
     ASSERT_EQ("EOF", read());
     // Truncated last record is ignored, not treated as an error
@@ -425,7 +436,7 @@ TEST_P(LogFileRWTest, TruncatedTrailingRecordIsNotIgnored)
     }
 
     write("foo");
-    shrinkSize(4); // Drop all payload as well as a header byte
+    shrinkSize(3 + sizeof(Format::MaxRecordType)); // Drop all payload as well as a header byte
     resetReader(WALRecoveryMode::AbsoluteConsistency);
     ASSERT_EQ("EOF", read());
     // Truncated last record is ignored, not treated as an error
@@ -447,8 +458,8 @@ TEST_P(LogFileRWTest, BadLength)
     write(repeatedString("bar", payload_size));
     write("foo");
     resetReader();
-    // Least significant size byte is stored in header[4].
-    incrementByte(4, 1);
+    // Least significant size byte is stored in header[SizePos].
+    incrementByte(Format::CHECKSUM_FIELD_SIZE, 1);
     if (!recyclable_log)
     {
         ASSERT_EQ("foo", read());
@@ -498,11 +509,11 @@ TEST_P(LogFileRWTest, BadLengthAtEndIsNotIgnored)
 TEST_P(LogFileRWTest, ChecksumMismatch)
 {
     write("foooooo");
-    incrementByte(0, 14);
+    incrementByte(0, Format::HEADER_SIZE + 7);
     ASSERT_EQ("EOF", read());
     if (!recyclable_log)
     {
-        ASSERT_EQ(14, droppedBytes());
+        ASSERT_EQ(Format::HEADER_SIZE + 7, droppedBytes());
         ASSERT_EQ("OK", matchError("checksum mismatch"));
     }
     else
@@ -560,7 +571,7 @@ TEST_P(LogFileRWTest, MissingLastIsIgnored)
 {
     write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
-    shrinkSize(14);
+    shrinkSize(2 * (recyclable_log ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE));
     ASSERT_EQ("EOF", read());
     ASSERT_EQ("", reportMessage());
     ASSERT_EQ(0, droppedBytes());
@@ -577,7 +588,7 @@ TEST_P(LogFileRWTest, MissingLastIsNotIgnored)
     resetReader(WALRecoveryMode::AbsoluteConsistency);
     write(repeatedString("bar", PS::V3::Format::BLOCK_SIZE));
     // Remove the LAST block, including header.
-    shrinkSize(14);
+    shrinkSize(2 * (recyclable_log ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE));
     ASSERT_EQ("EOF", read());
     ASSERT_GT(droppedBytes(), 0);
     ASSERT_EQ("OK", matchError("Corruption: error reading trailing data"));

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Interpreters/Context.h>
@@ -57,7 +71,7 @@ public:
     static Strings findTestDataPath(const String & name)
     {
         const static std::vector<String> SEARCH_PATH = {"../tests/testdata/", "/tests/testdata/"};
-        for (auto & prefix : SEARCH_PATH)
+        for (const auto & prefix : SEARCH_PATH)
         {
             String path = prefix + name;
             if (auto f = Poco::File(path); f.exists() && f.isDirectory())
@@ -74,14 +88,13 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
-    static void initializeGlobalContext(Strings testdata_path = {});
+    static void initializeGlobalContext(Strings testdata_path = {}, bool enable_ps_v3 = false);
     static Context & getGlobalContext() { return *global_context; }
     static void shutdown();
 
-private:
-    static std::unique_ptr<Context> global_context;
+    TiFlashTestEnv() = delete;
 
 private:
-    TiFlashTestEnv() = delete;
+    static std::unique_ptr<Context> global_context;
 };
 } // namespace DB::tests

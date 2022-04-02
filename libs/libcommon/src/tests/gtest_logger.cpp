@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 
 #include <Poco/AutoPtr.h>
 #include <Poco/Channel.h>
@@ -45,6 +59,13 @@ TEST_F(LoggerUsefulTest, Log)
     LOG_INFO(log, "Info log");
     LOG_WARNING(log, "Warning log");
     LOG_ERROR(log, "Error log");
+
+    // Do not accept more than one parameter
+    // LOG_ERROR(log, "Error log, num: ", 1);
+
+    std::string msg_in_log;
+    msg_in_log = "hello tiflash";
+    LOG_DEBUG(log, msg_in_log);
 }
 
 TEST_F(LoggerUsefulTest, LogFmt)
@@ -55,6 +76,11 @@ TEST_F(LoggerUsefulTest, LogFmt)
     LOG_FMT_INFO(log, "Info log");
     LOG_FMT_WARNING(log, "Warning log");
     LOG_FMT_ERROR(log, "Error log");
+
+    // Error! Do not accept a variable as format string.
+    // std::string msg_in_log;
+    // msg_in_log = "hello tiflash";
+    // LOG_FMT_DEBUG(log, msg_in_log);
 }
 
 } // namespace tests

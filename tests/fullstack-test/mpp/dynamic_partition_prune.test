@@ -1,0 +1,76 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+=> DBGInvoke __init_fail_point()
+
+mysql> drop table if exists test.employees;
+mysql> CREATE TABLE test.employees (  id int(11) NOT NULL,  fname varchar(30) DEFAULT NULL,  lname varchar(30) DEFAULT NULL,  hired date NOT NULL DEFAULT '1970-01-01',  separated date DEFAULT '9999-12-31',  job_code int(11) DEFAULT NULL,  store_id int(11) NOT NULL  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin  PARTITION BY RANGE (store_id)  (PARTITION p0 VALUES LESS THAN (6),  PARTITION p1 VALUES LESS THAN (11),  PARTITION p2 VALUES LESS THAN (16),  PARTITION p3 VALUES LESS THAN (21));
+mysql> alter table test.employees set tiflash replica 1;
+mysql> insert into test.employees values(100,'aa','aa','2020-01-01',null,10,5);
+mysql> insert into test.employees values(100,'aa','aa','2020-01-01',null,10,15);
+mysql> insert into test.employees values(100,'aa','aa','2020-01-01',null,10,20);
+
+func> wait_table test employees
+
+# no partition prune
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select count(*) from test.employees;
++----------+
+| count(*) |
++----------+
+|        3 |
++----------+
+
+# no partition after prune
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select count(*) from test.employees where store_id > 100;
++----------+
+| count(*) |
++----------+
+|        0 |
++----------+
+
+# 1 partition left after prune
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select count(*) from test.employees where store_id < 6;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+# 1 partition left after prune
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select count(*) from test.employees where store_id > 6 and store_id < 11;
++----------+
+| count(*) |
++----------+
+|        0 |
++----------+
+
+# 2 partition left after prune
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select count(*) from test.employees where store_id < 11;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+# all partitions left after prune
+mysql> set tidb_partition_prune_mode=dynamic; set tidb_enforce_mpp=1; select count(*) from test.employees where store_id < 100;
++----------+
+| count(*) |
++----------+
+|        3 |
++----------+
+
+# Clean up.
+mysql> drop table if exists test.employees;

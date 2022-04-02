@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Checksum.h>
@@ -68,10 +82,11 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class WALStore
 {
 public:
-    using ChecksumClass = Digest::CRC64;
+    constexpr static const char * wal_folder_prefix = "/wal";
 
     static std::pair<WALStorePtr, WALStoreReaderPtr>
     create(
+        String storage_name,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator);
 
@@ -99,25 +114,25 @@ public:
 
 private:
     WALStore(
+        String storage_name,
         const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
         Format::LogNumberType last_log_num_);
 
-    static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
+    std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
-        PSDiskDelegatorPtr delegator,
-        const FileProviderPtr & provider,
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-        Poco::Logger * logger,
         bool manual_flush);
 
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
     mutable std::mutex log_file_mutex;
     Format::LogNumberType last_log_num;
+    // select next path for creating new logfile
+    UInt32 wal_paths_index;
     std::unique_ptr<LogWriter> log_file;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 } // namespace PS::V3
