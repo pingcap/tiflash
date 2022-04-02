@@ -14,6 +14,8 @@
 
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -23,10 +25,12 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/TableScanInterpreterHelper.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
+#include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <pingcap/coprocessor/Client.h>
 
@@ -370,15 +374,17 @@ std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(
     const auto & settings = context.getSettingsRef();
     Int64 query_schema_version = settings.schema_version;
     TMTContext & tmt = context.getTMTContext();
+    auto log = Logger::get("getAndLockStorages", context.getDAGContext()->getMPPTaskId().toString());
     std::unordered_map<TableID, StorageWithStructureLock> storages_with_lock;
+    Int64 logical_table_id = tidb_table_scan.getLogicalTableID();
     if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
-        auto logical_table_storage = tmt.getStorages().get(tidb_table_scan.getLogicalTableID());
+        auto logical_table_storage = tmt.getStorages().get(logical_table_id);
         if (!logical_table_storage)
         {
-            throw TiFlashException("Table " + std::to_string(tidb_table_scan.getLogicalTableID()) + " doesn't exist.", Errors::Table::NotExists);
+            throw TiFlashException("Table " + std::to_string(logical_table_id) + " doesn't exist.", Errors::Table::NotExists);
         }
-        storages_with_lock[tidb_table_scan.getLogicalTableID()] = {logical_table_storage, logical_table_storage->lockStructureForShare(context.getCurrentQueryId())};
+        storages_with_lock[logical_table_id] = {logical_table_storage, logical_table_storage->lockStructureForShare(context.getCurrentQueryId())};
         if (tidb_table_scan.isPartitionTableScan())
         {
             for (auto const physical_table_id : tidb_table_scan.getPhysicalTableIDs())
@@ -386,7 +392,7 @@ std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(
                 auto physical_table_storage = tmt.getStorages().get(physical_table_id);
                 if (!physical_table_storage)
                 {
-                    throw TiFlashException(fmt::format("Table {} doesn't exist.", physical_table_id), Errors::Table::NotExists);
+                    throw TiFlashException("Table " + std::to_string(physical_table_id) + " doesn't exist.", Errors::Table::NotExists);
                 }
                 storages_with_lock[physical_table_id] = {physical_table_storage, physical_table_storage->lockStructureForShare(context.getCurrentQueryId())};
             }
@@ -405,20 +411,16 @@ std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(
         if (!table_store)
         {
             if (schema_synced)
-                throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
+                throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
             else
                 return {{}, {}, {}, false};
         }
 
         if (table_store->engineType() != ::TiDB::StorageEngine::TMT && table_store->engineType() != ::TiDB::StorageEngine::DT)
         {
-            throw TiFlashException(
-                fmt::format(
-                    "Specifying schema_version for non-managed storage: {}, table: {}, id: {} is not allowed",
-                    table_store->getName(),
-                    table_store->getTableName(),
-                    table_id),
-            Errors::Coprocessor::Internal);
+            throw TiFlashException("Specifying schema_version for non-managed storage: " + table_store->getName()
+                                       + ", table: " + table_store->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
+                                   Errors::Coprocessor::Internal);
         }
 
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
@@ -432,9 +434,9 @@ std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(
         auto storage_schema_version = table_store->getTableInfo().schema_version;
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
-            throw TiFlashException(
-                fmt::format("Table {} schema version {} newer than query schema version {}", table_id, storage_schema_version, query_schema_version),
-                Errors::Table::SchemaVersionError);
+            throw TiFlashException("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
+                                       + " newer than query schema version " + std::to_string(query_schema_version),
+                                   Errors::Table::SchemaVersionError);
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
@@ -448,6 +450,86 @@ std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(
         // From now on we have global < query.
         // Return false for outer to sync and retry.
         return {nullptr, {}, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false};
+    };
+
+    auto get_and_lock_storages = [&](bool schema_synced) -> std::tuple<std::vector<ManageableStoragePtr>, std::vector<TableStructureLockHolder>, std::vector<Int64>, bool> {
+        std::vector<ManageableStoragePtr> table_storages;
+        std::vector<TableStructureLockHolder> table_locks;
+        std::vector<Int64> table_schema_versions;
+        auto [logical_table_storage, logical_table_lock, logical_table_storage_schema_version, ok] = get_and_lock_storage(schema_synced, logical_table_id);
+        if (!ok)
+            return {{}, {}, {}, false};
+        table_storages.emplace_back(std::move(logical_table_storage));
+        table_locks.emplace_back(std::move(logical_table_lock));
+        table_schema_versions.push_back(logical_table_storage_schema_version);
+        if (!tidb_table_scan.isPartitionTableScan())
+        {
+            return {table_storages, table_locks, table_schema_versions, true};
+        }
+        for (auto const physical_table_id : tidb_table_scan.getPhysicalTableIDs())
+        {
+            auto [physical_table_storage, physical_table_lock, physical_table_storage_schema_version, ok] = get_and_lock_storage(schema_synced, physical_table_id);
+            if (!ok)
+            {
+                return {{}, {}, {}, false};
+            }
+            table_storages.emplace_back(std::move(physical_table_storage));
+            table_locks.emplace_back(std::move(physical_table_lock));
+            table_schema_versions.push_back(physical_table_storage_schema_version);
+        }
+        return {table_storages, table_locks, table_schema_versions, true};
+    };
+
+    auto log_schema_version = [&](const String & result, const std::vector<Int64> & storage_schema_versions) {
+        FmtBuffer buffer;
+        buffer.fmtAppend("{} Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}]", __PRETTY_FUNCTION__, logical_table_id, result, storage_schema_versions[0], global_schema_version, query_schema_version);
+        if (tidb_table_scan.isPartitionTableScan())
+        {
+            assert(storage_schema_versions.size() == 1 + tidb_table_scan.getPhysicalTableIDs().size());
+            for (size_t i = 0; i < tidb_table_scan.getPhysicalTableIDs().size(); ++i)
+            {
+                const auto physical_table_id = tidb_table_scan.getPhysicalTableIDs()[i];
+                buffer.fmtAppend(", Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}]", physical_table_id, result, storage_schema_versions[1 + i], global_schema_version, query_schema_version);
+            }
+        }
+        return buffer.toString();
+    };
+
+    auto sync_schema = [&] {
+        auto start_time = Clock::now();
+        GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
+        tmt.getSchemaSyncer()->syncSchemas(context);
+        auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        LOG_FMT_INFO(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
+    };
+
+    /// Try get storage and lock once.
+    auto [storages, locks, storage_schema_versions, ok] = get_and_lock_storages(false);
+    if (ok)
+    {
+        LOG_FMT_INFO(log, "{}", log_schema_version("OK, no syncing required.", storage_schema_versions));
+    }
+    else
+    /// If first try failed, sync schema and try again.
+    {
+        LOG_FMT_INFO(log, "not OK, syncing schemas.");
+
+        sync_schema();
+
+        std::tie(storages, locks, storage_schema_versions, ok) = get_and_lock_storages(true);
+        if (ok)
+        {
+            LOG_FMT_INFO(log, "{}", log_schema_version("OK after syncing.", storage_schema_versions));
+        }
+        else
+            throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
+    }
+    for (size_t i = 0; i < storages.size(); ++i)
+    {
+        auto const table_id = storages[i]->getTableInfo().id;
+        storages_with_lock[table_id] = {std::move(storages[i]), std::move(locks[i])};
+    }
+    return storages_with_lock;
 }
 } // namespace TableScanInterpreterHelper
 } // namespace DB
