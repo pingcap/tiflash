@@ -44,7 +44,7 @@ BlobFile::BlobFile(String path_,
     Poco::File file_in_disk(getPath());
     file_size = file_in_disk.getSize();
     {
-        std::lock_guard<std::mutex> lock(file_size_lock);
+        std::lock_guard lock(file_size_lock);
 
         // If file_size is 0, we still need insert it.
         PageFileIdAndLevel id_lvl{blob_id, 0};
@@ -100,7 +100,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 
     UInt64 expand_size = 0;
     {
-        std::lock_guard<std::mutex> lock(file_size_lock);
+        std::lock_guard lock(file_size_lock);
         if ((offset + size) > file_size)
         {
             expand_size = offset + size - file_size;
@@ -122,7 +122,7 @@ void BlobFile::truncate(size_t size)
     PageUtil::ftruncateFile(wrfile, size);
     Int64 shrink_size = 0;
     {
-        std::lock_guard<std::mutex> lock(file_size_lock);
+        std::lock_guard lock(file_size_lock);
         assert(size <= file_size);
         shrink_size = file_size - size;
         file_size = size;

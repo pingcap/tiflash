@@ -34,7 +34,7 @@ void insertColumn(Block & block, const DataTypePtr & type, const String & name, 
 
 void DeltaMergeStoreProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
 {
-    std::lock_guard<std::mutex> guard{mutex};
+    std::lock_guard guard{mutex};
     Block block;
 
     insertColumn<Int64>(block, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID, id);
@@ -47,7 +47,7 @@ void DeltaMergeStoreProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
 
 UInt64 DeltaMergeStoreProxy::selectBalance(UInt64 id, UInt64 tso)
 {
-    std::lock_guard<std::mutex> guard{mutex};
+    std::lock_guard guard{mutex};
     // read all columns from store
     const auto & columns = store->getTableColumns();
     BlockInputStreamPtr in = store->read(*context,
@@ -99,7 +99,7 @@ UInt64 DeltaMergeStoreProxy::selectBalance(UInt64 id, UInt64 tso)
 
 UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
 {
-    std::lock_guard<std::mutex> guard{mutex};
+    std::lock_guard guard{mutex};
     // read all columns from store
     const auto & columns = store->getTableColumns();
     BlockInputStreamPtr in = store->read(*context,

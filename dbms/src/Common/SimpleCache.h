@@ -46,7 +46,7 @@ public:
     Result operator()(Args &&... args)
     {
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
 
             Key key{std::forward<Args>(args)...};
             auto it = cache.find(key);
@@ -59,7 +59,7 @@ public:
         Result res = f(std::forward<Args>(args)...);
 
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
 
             cache.emplace(std::forward_as_tuple(args...), res);
         }
@@ -69,7 +69,7 @@ public:
 
     void drop()
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         cache.clear();
     }
 };
