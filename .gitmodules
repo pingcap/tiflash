@@ -32,6 +32,7 @@
 [submodule "contrib/client-c"]
 	path = contrib/client-c
 	url = git@github.com:SeaRise/client-c.git
+	branch = close_keepalive
 [submodule "contrib/tiflash-proxy"]
 	path = contrib/tiflash-proxy
 	url = git@github.com:pingcap/tidb-engine-ext.git
