@@ -1,5 +1,7 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 
+#include <unordered_set>
+
 namespace DB::PhysicalPlanHelper
 {
 Names schemaToNames(const NamesAndTypes & schema)
@@ -35,7 +37,7 @@ ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Conte
 Block constructBlockFromSchema(const NamesAndTypes & schema)
 {
     ColumnsWithTypeAndName columns;
-    for (const auto & column : schema_)
+    for (const auto & column : schema)
         columns.emplace_back(column.type, column.name);
     return Block(columns);
 }

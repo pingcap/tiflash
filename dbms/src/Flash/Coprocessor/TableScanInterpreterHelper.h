@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/StorageWithStructureLock.h>
