@@ -178,7 +178,6 @@ target_link_libraries (dbms
     kvproto
     kv_client
     tipb
-    dtpb
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
