@@ -385,7 +385,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
             // A helper to read entries from `data_reader` and migrate the pages to `gc_file_writer`.
             // The changes will be recorded by `gc_file_edit` and the bytes written will be return.
             auto migrate_entries =
-                [compact_sequence, &data_reader, &gc_file_id, &gc_file_writer, &gc_file_edit, this](PageIdAndEntries & entries) -> size_t {
+                [compact_sequence, &data_reader, &gc_file_id, &gc_file_writer, &gc_file_edit](PageIdAndEntries & entries) -> size_t {
                 const PageMap pages = data_reader->read(entries);
                 WriteBatch    wb;
                 wb.setSequence(compact_sequence);
