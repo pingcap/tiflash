@@ -78,8 +78,8 @@ public:
         assert(ret == 1);
         int final_output_size = 0;
         ret = EVP_EncryptFinal_ex(ctx, ciphertext + output_size, &final_output_size);
-        DBMS_ASSERT(ret == 1);
-        DBMS_ASSERT(output_size + final_output_size == MAX_SIZE);
+        assert(ret == 1);
+        assert(output_size + final_output_size == MAX_SIZE);
         FreeCipherContext(ctx);
     }
 
