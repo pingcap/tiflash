@@ -93,7 +93,7 @@ bool addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     ExpressionActionsChain & chain,
-    const tipb::TableScan & table_scan)
+    const TiDBTableScan & table_scan)
 {
     bool has_need_cast_column = false;
     for (auto b : need_cast_column)
@@ -309,7 +309,11 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 
     /// handle timezone/duration cast for local and remote table scan.
-    executeCastAfterTableScan(storage_interpreter.is_need_add_cast_column, remote_read_streams_start_index, pipeline);
+    executeCastAfterTableScan(
+        table_scan,
+        storage_interpreter.is_need_add_cast_column,
+        remote_read_streams_start_index,
+        pipeline);
     recordProfileStreams(pipeline, query_block.source_name);
 
     /// handle pushed down filter for local and remote table scan.
@@ -356,6 +360,7 @@ void DAGQueryBlockInterpreter::executePushedDownFilter(
 }
 
 void DAGQueryBlockInterpreter::executeCastAfterTableScan(
+    const TiDBTableScan & table_scan,
     const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column,
     size_t remote_read_streams_start_index,
     DAGPipeline & pipeline)
@@ -366,7 +371,7 @@ void DAGQueryBlockInterpreter::executeCastAfterTableScan(
     analyzer->initChain(chain, original_source_columns);
 
     // execute timezone cast or duration cast if needed for local table scan
-    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, query_block.source->tbl_scan()))
+    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, table_scan))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         chain.finalize();
