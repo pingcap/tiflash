@@ -21,7 +21,7 @@ add_library(page_storage EXCLUDE_FROM_ALL
         ${io_base_headers} ${io_base_sources}
 )
 target_include_directories(page_storage PUBLIC ${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/raftstore-proxy/ffi/src)
-target_link_libraries(page_storage clickhouse_common_io cpptoml
+target_link_libraries(page_storage clickhouse_common_io
         kv_client tipb) # TODO: remove dependency on these libs. Now we need them for DB::Context
 
 ### Build a control binary for PageStorage
