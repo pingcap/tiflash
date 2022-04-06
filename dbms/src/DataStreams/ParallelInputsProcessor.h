@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <Common/FiberPool.hpp>
+#include <Common/FiberPool.h>
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
@@ -258,7 +258,7 @@ private:
                     while (Block block = additional_input_at_end->read())
                     {
                         publishPayload(additional_input_at_end, block, thread_num);
-                        adaptive_yield();
+                        adaptiveYield();
                     }
                 }
                 catch (...)
@@ -324,7 +324,7 @@ private:
                 if (block)
                     publishPayload(input.in, block, thread_num);
             }
-            adaptive_yield();
+            adaptiveYield();
         }
     }
 
