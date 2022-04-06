@@ -156,8 +156,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(task_request.regions(), task_request.table_regions(), tmt_context);
     LOG_FMT_DEBUG(
         log,
-        "{}: Handling {} regions from {} physical tables in MPP task",
-        __PRETTY_FUNCTION__,
+        "Handling {} regions from {} physical tables in MPP task",
         tables_regions_info.regionCount(),
         tables_regions_info.tableCount());
 
