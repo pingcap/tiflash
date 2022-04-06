@@ -87,6 +87,7 @@ public:
     {
         SettingUInt64 roll_size = PAGE_META_ROLL_SIZE;
         SettingUInt64 wal_recover_mode = 0;
+        SettingUInt64 max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
     };
 
     constexpr static const char * wal_folder_prefix = "/wal";
@@ -106,10 +107,10 @@ public:
         Format::LogNumberType current_writting_log_num;
         LogFilenameSet persisted_log_files;
 
-        bool needSave() const
+        bool needSave(const size_t & max_size) const
         {
             // TODO: Make it configurable and check the reasonable of this number
-            return persisted_log_files.size() > 4;
+            return persisted_log_files.size() > max_size;
         }
     };
 

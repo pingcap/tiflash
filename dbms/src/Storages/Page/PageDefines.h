@@ -44,6 +44,7 @@ static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP shou
 static constexpr UInt64 BLOBFILE_LIMIT_SIZE = 512 * MB;
 static constexpr UInt64 BLOBSTORE_CACHED_FD_SIZE = 100;
 static constexpr UInt64 PAGE_META_ROLL_SIZE = 2 * MB;
+static constexpr UInt64 MAX_PERSISTED_LOG_FILES = 4;
 
 using NamespaceId = UInt64;
 static constexpr NamespaceId MAX_NAMESPACE_ID = UINT64_MAX;
@@ -106,7 +107,7 @@ inline size_t alignPage(size_t n)
 template <>
 struct fmt::formatter<DB::PageIdV3Internal>
 {
-    constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
     {
         return ctx.begin();
     }

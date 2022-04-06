@@ -122,6 +122,7 @@ public:
 
         SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
         SettingUInt64 wal_recover_mode = 0;
+        SettingUInt64 wal_max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
 
         void reload(const Config & rhs)
         {
@@ -144,9 +145,10 @@ public:
             blob_heavy_gc_valid_rate = rhs.blob_heavy_gc_valid_rate;
             wal_roll_size = rhs.wal_roll_size;
             wal_recover_mode = rhs.wal_recover_mode;
+            wal_max_persisted_log_files = rhs.wal_max_persisted_log_files;
         }
 
-        String toDebugString() const
+        String toDebugStringV2() const
         {
             return fmt::format(
                 "PageStorage::Config {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, gc_max_valid_rate: {:.3f}, "
@@ -168,14 +170,15 @@ public:
             return fmt::format(
                 "PageStorage::Config V3 {{"
                 "blob_file_limit_size: {}, blob_spacemap_type: {}, "
-                "blob_cached_fd_size:{}, blob_heavy_gc_valid_rate: {:.3f}, "
-                "wal_roll_size:{}, wal_recover_mode:{}}}",
+                "blob_cached_fd_size: {}, blob_heavy_gc_valid_rate: {:.3f}, "
+                "wal_roll_size: {}, wal_recover_mode: {}, wal_max_persisted_log_files: {}}}",
                 blob_file_limit_size.get(),
                 blob_spacemap_type.get(),
                 blob_cached_fd_size.get(),
                 blob_heavy_gc_valid_rate.get(),
                 wal_roll_size.get(),
-                wal_recover_mode.get());
+                wal_recover_mode.get(),
+                wal_max_persisted_log_files.get());
         }
     };
     void reloadSettings(const Config & new_config) { config.reload(new_config); };

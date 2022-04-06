@@ -47,7 +47,8 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     config.blob_cached_fd_size = settings.dt_storage_pool_##NAME##_blob_cached_fd_size;           \
     config.blob_heavy_gc_valid_rate = settings.dt_storage_pool_##NAME##_blob_heavy_gc_valid_rate; \
     config.wal_roll_size = settings.dt_storage_pool_##NAME##_wal_roll_size;                       \
-    config.wal_recover_mode = settings.dt_storage_pool_##NAME##_wal_recover_mode;
+    config.wal_recover_mode = settings.dt_storage_pool_##NAME##_wal_recover_mode;                 \
+    config.wal_max_persisted_log_files = settings.dt_storage_pool_##NAME##_wal_max_persisted_log_files;
 
     PageStorage::Config config = getConfigFromSettings(settings);
 

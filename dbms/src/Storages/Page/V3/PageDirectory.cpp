@@ -639,10 +639,12 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal p
   * PageDirectory methods *
   *************************/
 
-PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_)
+PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 max_persisted_log_files_)
     : sequence(0)
     , wal(std::move(wal_))
+    , max_persisted_log_files(max_persisted_log_files_)
     , log(Logger::get("PageDirectory", std::move(storage_name)))
+
 {
 }
 
@@ -1116,7 +1118,7 @@ bool PageDirectory::tryDumpSnapshot(const WriteLimiterPtr & write_limiter)
     bool done_any_io = false;
     // In order not to make read amplification too high, only apply compact logs when ...
     auto files_snap = wal->getFilesSnapshot();
-    if (files_snap.needSave())
+    if (files_snap.needSave(max_persisted_log_files))
     {
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
         auto edit = dumpSnapshotToEdit();

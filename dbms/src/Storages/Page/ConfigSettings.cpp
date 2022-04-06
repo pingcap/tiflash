@@ -45,6 +45,8 @@ void mergeConfigFromSettings(const DB::Settings & settings, PageStorage::Config 
     {
         config.wal_recover_mode = settings.dt_page_wal_recover_mode;
     }
+
+    config.wal_max_persisted_log_files = settings.dt_page_wal_max_persisted_log_files;
 }
 
 PageStorage::Config getConfigFromSettings(const DB::Settings & settings)

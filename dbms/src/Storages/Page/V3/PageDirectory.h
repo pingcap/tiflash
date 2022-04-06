@@ -290,7 +290,7 @@ using PageDirectoryPtr = std::unique_ptr<PageDirectory>;
 class PageDirectory
 {
 public:
-    explicit PageDirectory(String storage_name, WALStorePtr && wal);
+    explicit PageDirectory(String storage_name, WALStorePtr && wal, UInt64 max_persisted_log_files_ = MAX_PERSISTED_LOG_FILES);
 
     PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
 
@@ -401,7 +401,7 @@ private:
     mutable std::list<std::weak_ptr<PageIdV3Internal>> external_ids;
 
     WALStorePtr wal;
-
+    const UInt64 max_persisted_log_files;
     LoggerPtr log;
 };
 
