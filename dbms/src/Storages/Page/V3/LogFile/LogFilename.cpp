@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <common/logger_useful.h>
@@ -24,7 +24,7 @@
 
 namespace DB::PS::V3
 {
-LogFilename LogFilename::parseFrom(const String & parent_path, const String & filename, Poco::Logger * log)
+LogFilename LogFilename::parseFrom(const String & parent_path, const String & filename, LoggerPtr log)
 {
     if (!startsWith(filename, LOG_FILE_PREFIX_TEMP) && !startsWith(filename, LOG_FILE_PREFIX_NORMAL))
     {

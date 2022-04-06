@@ -193,26 +193,54 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
-    virtual void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) = 0;
+    void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
+    {
+        writeImpl(std::move(write_batch), write_limiter);
+    }
 
-    virtual PageEntry getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {}) = 0;
+    PageEntry getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {})
+    {
+        return getEntryImpl(ns_id, page_id, snapshot);
+    }
 
-    virtual Page read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
+    Page read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    {
+        return readImpl(ns_id, page_id, read_limiter, snapshot);
+    }
 
-    virtual PageMap read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
+    PageMap read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    {
+        return readImpl(ns_id, page_ids, read_limiter, snapshot);
+    }
 
-    virtual void read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
+    void read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    {
+        readImpl(ns_id, page_ids, handler, read_limiter, snapshot);
+    }
 
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
-    virtual PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) = 0;
 
-    virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) = 0;
+    PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    {
+        return readImpl(ns_id, page_fields, read_limiter, snapshot);
+    }
 
-    virtual PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {}) = 0;
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {})
+    {
+        traverseImpl(acceptor, snapshot);
+    }
+
+    PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {})
+    {
+        return getNormalPageIdImpl(ns_id, page_id, snapshot);
+    }
 
     // We may skip the GC to reduce useless reading by default.
-    virtual bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) = 0;
+    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr)
+    {
+        return gcImpl(not_skip, write_limiter, read_limiter);
+    }
 
     // Register and unregister external pages GC callbacks
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
@@ -221,6 +249,24 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
+    virtual void writeImpl(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) = 0;
+
+    virtual PageEntry getEntryImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) = 0;
+
+    virtual Page readImpl(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+
+    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+
+    virtual void readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+
+    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+
+    virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
+
+    virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) = 0;
+
+    virtual bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) = 0;
+
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
     Config config;

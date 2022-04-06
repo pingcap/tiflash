@@ -46,10 +46,11 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
+    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
 
     // just for test
-    PageDirectoryPtr createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+    PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+
     // just for test
     PageDirectoryFactory & setBlobStats(BlobStore::BlobStats & blob_stats_)
     {

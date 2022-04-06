@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
-#include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -31,7 +31,7 @@ namespace DB::PS::V3
 {
 LogFilenameSet WALStoreReader::listAllFiles(
     const PSDiskDelegatorPtr & delegator,
-    Poco::Logger * logger)
+    LoggerPtr logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
     std::vector<std::pair<String, Strings>> all_filenames;
@@ -119,7 +119,11 @@ WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
     return {latest_checkpoint, std::move(all_files)};
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files, WALRecoveryMode recovery_mode_, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(String storage_name,
+                                         FileProviderPtr & provider,
+                                         LogFilenameSet files,
+                                         WALRecoveryMode recovery_mode_,
+                                         const ReadLimiterPtr & read_limiter)
 {
     auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
     auto reader = std::make_shared<WALStoreReader>(provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
@@ -127,14 +131,23 @@ WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilename
     return reader;
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, WALRecoveryMode recovery_mode_, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(
+    String storage_name,
+    FileProviderPtr & provider,
+    PSDiskDelegatorPtr & delegator,
+    WALRecoveryMode recovery_mode_,
+    const ReadLimiterPtr & read_limiter)
 {
-    Poco::Logger * logger = &Poco::Logger::get("WALStore");
-    LogFilenameSet log_files = listAllFiles(delegator, logger);
-    return create(provider, std::move(log_files), recovery_mode_, read_limiter);
+    LogFilenameSet log_files = listAllFiles(delegator, Logger::get("WALStore", storage_name));
+    return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
-WALStoreReader::WALStoreReader(FileProviderPtr & provider_, std::optional<LogFilename> checkpoint, LogFilenameSet && files_, WALRecoveryMode recovery_mode_, const ReadLimiterPtr & read_limiter_)
+WALStoreReader::WALStoreReader(String storage_name,
+                               FileProviderPtr & provider_,
+                               std::optional<LogFilename> checkpoint,
+                               LogFilenameSet && files_,
+                               WALRecoveryMode recovery_mode_,
+                               const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , read_limiter(read_limiter_)
     , checkpoint_read_done(!checkpoint.has_value())
@@ -142,7 +155,7 @@ WALStoreReader::WALStoreReader(FileProviderPtr & provider_, std::optional<LogFil
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
     , recovery_mode(recovery_mode_)
-    , logger(&Poco::Logger::get("LogReader"))
+    , logger(Logger::get("WALStore", std::move(storage_name)))
 {}
 
 bool WALStoreReader::remained() const

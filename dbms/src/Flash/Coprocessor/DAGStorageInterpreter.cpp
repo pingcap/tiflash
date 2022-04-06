@@ -549,7 +549,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
     auto log_schema_version = [&](const String & result, const std::vector<Int64> & storage_schema_versions) {
         FmtBuffer buffer;
-        buffer.fmtAppend("{} Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}]", __PRETTY_FUNCTION__, logical_table_id, result, storage_schema_versions[0], global_schema_version, query_schema_version);
+        buffer.fmtAppend("Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}]", logical_table_id, result, storage_schema_versions[0], global_schema_version, query_schema_version);
         if (table_scan.isPartitionTableScan())
         {
             assert(storage_schema_versions.size() == 1 + table_scan.getPhysicalTableIDs().size());
@@ -567,7 +567,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_FMT_INFO(log, "{} Table {} schema sync cost {}ms.", __PRETTY_FUNCTION__, logical_table_id, schema_sync_cost);
+        LOG_FMT_INFO(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.

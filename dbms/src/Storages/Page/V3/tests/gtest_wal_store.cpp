@@ -134,7 +134,7 @@ TEST(WALSeriTest, Upserts)
 
 TEST(WALLognameTest, parsing)
 {
-    Poco::Logger * log = &Poco::Logger::get("WALLognameTest");
+    LoggerPtr log = Logger::get("WALLognameTest");
     const String parent_path("/data1");
 
     {
@@ -180,7 +180,7 @@ TEST(WALLognameTest, parsing)
 
 TEST(WALLognameSetTest, ordering)
 {
-    Poco::Logger * log = &Poco::Logger::get("WALLognameTest");
+    LoggerPtr log = Logger::get("WALLognameTest");
     const String parent_path("/data1");
 
     LogFilenameSet filenames;
@@ -254,7 +254,7 @@ protected:
 
 TEST_P(WALStoreTest, FindCheckpointFile)
 {
-    Poco::Logger * log = &Poco::Logger::get("WALStoreTest");
+    LoggerPtr log = Logger::get("WALLognameTest");
     auto path = getTemporaryPath();
 
     {
@@ -308,7 +308,7 @@ TEST_P(WALStoreTest, Empty)
     auto provider = ctx.getFileProvider();
     auto path = getTemporaryPath();
     size_t num_callback_called = 0;
-    auto [wal, reader] = WALStore::create(provider, delegator, config);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
     ASSERT_NE(wal, nullptr);
     while (reader->remained())
     {
@@ -334,10 +334,10 @@ try
 
     // Stage 1. empty
     std::vector<size_t> size_each_edit;
-    auto [wal, reader] = WALStore::create(provider, delegator, config);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
     {
         size_t num_applied_edit = 0;
-        auto reader = WALStoreReader::create(provider, delegator);
+        auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         for (; reader->remained(); reader->next())
         {
             num_applied_edit += 1;
@@ -362,7 +362,7 @@ try
     wal.reset();
     reader.reset();
 
-    std::tie(wal, reader) = WALStore::create(provider, delegator, config);
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
     {
         size_t num_applied_edit = 0;
         while (reader->remained())
@@ -394,7 +394,7 @@ try
     wal.reset();
     reader.reset();
 
-    std::tie(wal, reader) = WALStore::create(provider, delegator, config);
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
     {
         size_t num_applied_edit = 0;
         while (reader->remained())
@@ -430,7 +430,7 @@ try
 
     {
         size_t num_applied_edit = 0;
-        auto reader = WALStoreReader::create(provider, delegator);
+        auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
@@ -452,7 +452,7 @@ try
     auto provider = ctx.getFileProvider();
     auto path = getTemporaryPath();
 
-    auto [wal, reader] = WALStore::create(provider, delegator, config);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
     ASSERT_NE(wal, nullptr);
 
     std::vector<size_t> size_each_edit;
@@ -501,7 +501,7 @@ try
 
     {
         size_t num_applied_edit = 0;
-        auto reader = WALStoreReader::create(provider, delegator);
+        auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
@@ -516,7 +516,7 @@ try
 
     {
         size_t num_applied_edit = 0;
-        std::tie(wal, reader) = WALStore::create(provider, delegator, config);
+        std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
             auto [ok, edit] = reader->next();
@@ -543,7 +543,7 @@ try
     auto path = getTemporaryPath();
 
     // Stage 1. empty
-    auto [wal, reader] = WALStore::create(provider, delegator, config);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
     ASSERT_NE(wal, nullptr);
 
     std::mt19937 rd;
@@ -576,7 +576,7 @@ try
 
     size_t num_edits_read = 0;
     size_t num_pages_read = 0;
-    std::tie(wal, reader) = WALStore::create(provider, delegator, config);
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
     while (reader->remained())
     {
         auto [ok, edit] = reader->next();

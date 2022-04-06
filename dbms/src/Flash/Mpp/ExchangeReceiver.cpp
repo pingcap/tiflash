@@ -115,7 +115,7 @@ public:
     // handle will be called by ExchangeReceiver::reactor.
     void handle()
     {
-        LOG_FMT_TRACE(log, "Enter {}. stage: {}", __PRETTY_FUNCTION__, stage);
+        LOG_FMT_TRACE(log, "stage: {}", stage);
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:

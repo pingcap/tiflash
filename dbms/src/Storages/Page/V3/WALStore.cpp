@@ -38,21 +38,24 @@
 namespace DB::PS::V3
 {
 std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
+    String storage_name,
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator,
     WALStore::Config config)
 {
-    auto reader = WALStoreReader::create(provider,
+    auto reader = WALStoreReader::create(storage_name,
+                                         provider,
                                          delegator,
                                          static_cast<WALRecoveryMode>(config.wal_recover_mode.get()));
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {
-        std::unique_ptr<WALStore>(new WALStore(delegator, provider, last_log_num, std::move(config))),
+        std::unique_ptr<WALStore>(new WALStore(std::move(storage_name), delegator, provider, last_log_num, std::move(config))),
         reader};
 }
 
 WALStore::WALStore(
+    String storage_name,
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
     Format::LogNumberType last_log_num_,
@@ -61,7 +64,7 @@ WALStore::WALStore(
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
-    , logger(&Poco::Logger::get("WALStore"))
+    , logger(Logger::get("WALStore", std::move(storage_name)))
     , config(config_)
 {
 }
