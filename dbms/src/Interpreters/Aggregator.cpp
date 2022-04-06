@@ -1604,8 +1604,8 @@ private:
     {
         std::map<Int32, Block> ready_blocks;
         std::exception_ptr exception;
-        std::mutex mutex;
-        std::condition_variable condvar;
+        FiberTraits::Mutex mutex;
+        FiberTraits::ConditionVariable condvar;
         std::shared_ptr<ThreadPoolManager> thread_pool;
 
         explicit ParallelMergeData(size_t threads)

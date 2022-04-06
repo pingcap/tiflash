@@ -280,7 +280,7 @@ void MPPTunnelBase<Writer>::waitForConsumerFinish(bool allow_throw)
 }
 
 template <typename Writer>
-void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
+void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<FiberTraits::Mutex> & lk)
 {
     auto connected_or_finished = [&] {
         return connected || finished;

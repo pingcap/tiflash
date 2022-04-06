@@ -23,7 +23,7 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Common/ConcurrentBoundedQueue.h>
+#include <Common/MPMCQueue.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>

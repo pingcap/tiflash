@@ -97,7 +97,7 @@ private:
     /// Be careful using it. For example, queries field could be modified concurrently.
     const ProcessListForUser * user_process_list = nullptr;
 
-    mutable std::mutex query_streams_mutex;
+    mutable FiberTraits::Mutex query_streams_mutex;
 
     /// Streams with query results, point to BlockIO from executeQuery()
     /// This declaration is compatible with notes about BlockIO::process_list_entry:
@@ -127,7 +127,9 @@ public:
         , priority_handle(std::move(priority_handle_))
     {
         memory_tracker.setDescription("(for query)");
+#ifndef TIFLASH_USE_FIBER
         current_memory_tracker = &memory_tracker;
+#endif
 
         if (memory_tracker_fault_probability)
             memory_tracker.setFaultProbability(memory_tracker_fault_probability);

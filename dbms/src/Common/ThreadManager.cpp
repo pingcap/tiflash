@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/DynamicThreadPool.h>
+#include <Common/FiberPool.hpp>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Common/wrapInvocable.h>

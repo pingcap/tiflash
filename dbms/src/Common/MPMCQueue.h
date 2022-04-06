@@ -18,6 +18,7 @@
 #include <Common/SimpleIntrusiveNode.h>
 #include <common/defines.h>
 #include <common/types.h>
+#include <boost/fiber/all.hpp>
 
 #include <atomic>
 #include <chrono>

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/wrapInvocable.h>
+#include <Common/FiberTraits.h>
 
 #include <future>
 

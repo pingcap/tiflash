@@ -138,8 +138,8 @@ private:
 
     int needed_threads;
 
-    std::mutex schedule_mu;
-    std::condition_variable schedule_cv;
+    FiberTraits::Mutex schedule_mu;
+    FiberTraits::ConditionVariable schedule_cv;
     ScheduleState schedule_state;
 };
 

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/FiberPool.hpp>
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>

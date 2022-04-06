@@ -851,7 +851,7 @@ public:
         std::vector<std::unique_ptr<Poco::TemporaryFile>> files;
         size_t sum_size_uncompressed = 0;
         size_t sum_size_compressed = 0;
-        mutable std::mutex mutex;
+        mutable FiberTraits::Mutex mutex;
 
         bool empty() const
         {
@@ -906,7 +906,7 @@ protected:
     /// How many RAM were used to process the query before processing the first block.
     Int64 memory_usage_before_aggregation = 0;
 
-    std::mutex mutex;
+    FiberTraits::Mutex mutex;
 
     const LoggerPtr log;
 
