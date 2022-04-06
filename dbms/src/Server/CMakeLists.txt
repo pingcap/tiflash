@@ -58,14 +58,6 @@ target_link_libraries (clickhouse-compressor-lib clickhouse_common_io ${Boost_PR
 add_library (clickhouse-format-lib ${SPLIT_SHARED} Format.cpp)
 target_link_libraries (clickhouse-format-lib dbms clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
 
-add_library(tiflash-dttool-lib ${SPLIT_SHARED} DTTool/DTToolBench.cpp DTTool/DTToolMigrate.cpp DTTool/DTToolInspect.cpp)
-target_link_libraries(tiflash-dttool-lib PUBLIC dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
-target_include_directories(tiflash-dttool-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
-
-add_library(tiflash-dttool-entry-object STATIC DTTool/DTTool.cpp)
-target_link_libraries(tiflash-dttool-entry-object tiflash-dttool-lib ${TIFLASH_PROXY_LIBRARY})
-target_include_directories(tiflash-dttool-entry-object PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
-
 if (USE_EMBEDDED_COMPILER)
     link_directories (${LLVM_LIBRARY_DIRS})
     add_subdirectory ("Compiler-${LLVM_VERSION}")
