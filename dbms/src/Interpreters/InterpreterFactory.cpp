@@ -18,7 +18,6 @@
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDBGInvokeQuery.h>
 #include <Interpreters/InterpreterDeleteQuery.h>
-#include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterFactory.h>
@@ -142,10 +141,6 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     else if (typeid_cast<ASTShowCreateDatabaseQuery *>(query.get()))
     {
         return std::make_unique<InterpreterShowCreateQuery>(query, context);
-    }
-    else if (typeid_cast<ASTDescribeQuery *>(query.get()))
-    {
-        return std::make_unique<InterpreterDescribeQuery>(query, context);
     }
     else if (typeid_cast<ASTShowProcesslistQuery *>(query.get()))
     {
