@@ -49,7 +49,9 @@ extern const Event FileOpenFailed;
 extern const Event PSMWritePages;
 extern const Event PSMWriteIOCalls;
 extern const Event PSMWriteBytes;
+extern const Event PSMBackgroundWriteBytes;
 extern const Event PSMReadPages;
+extern const Event PSMBackgroundReadBytes;
 extern const Event PSMReadIOCalls;
 extern const Event PSMReadBytes;
 extern const Event PSMWriteFailed;
@@ -158,6 +160,7 @@ void writeFile(
     char * data,
     size_t to_write,
     const WriteLimiterPtr & write_limiter = nullptr,
+    const bool background = false,
     [[maybe_unused]] bool enable_failpoint = false)
 {
     if (write_limiter)
@@ -212,6 +215,11 @@ void writeFile(
     }
     ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls, write_io_calls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, bytes_written);
+
+    if (background)
+    {
+        ProfileEvents::increment(ProfileEvents::PSMBackgroundWriteBytes, bytes_written);
+    }
 }
 
 template <typename T>
@@ -219,7 +227,8 @@ void readFile(T & file,
               const off_t offset,
               const char * buf,
               size_t expected_bytes,
-              const ReadLimiterPtr & read_limiter = nullptr)
+              const ReadLimiterPtr & read_limiter = nullptr,
+              const bool background = false)
 {
     if (unlikely(expected_bytes == 0))
         return;
@@ -257,6 +266,10 @@ void readFile(T & file,
     }
     ProfileEvents::increment(ProfileEvents::PSMReadIOCalls, read_io_calls);
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
+    if (background)
+    {
+        ProfileEvents::increment(ProfileEvents::PSMBackgroundReadBytes, bytes_read);
+    }
 
     if (unlikely(bytes_read != expected_bytes))
         throw DB::TiFlashException(fmt::format("No enough data in file {}, read bytes: {} , expected bytes: {}", file->getFileName(), bytes_read, expected_bytes),
