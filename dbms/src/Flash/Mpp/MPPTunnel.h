@@ -1,9 +1,10 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
+
+#include <boost/noncopyable.hpp>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -23,8 +24,7 @@ struct MPPTask;
 class MPPTunnel : private boost::noncopyable
 {
 public:
-    MPPTunnel(
-        const mpp::TaskMeta & receiver_meta_,
+    MPPTunnel(const mpp::TaskMeta & receiver_meta_,
         const mpp::TaskMeta & sender_meta_,
         const std::chrono::seconds timeout_,
         const std::shared_ptr<MPPTask> & current_task_);
@@ -50,6 +50,7 @@ public:
 
     // wait until all the data has been transferred.
     void waitForFinish();
+
 private:
     void waitUntilConnectedOrCancelled(std::unique_lock<std::mutex> & lk);
 
@@ -79,4 +80,3 @@ private:
 using MPPTunnelPtr = std::shared_ptr<MPPTunnel>;
 
 } // namespace DB
-
