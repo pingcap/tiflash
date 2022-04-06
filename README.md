@@ -197,8 +197,9 @@ cd $BUILD
 cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
 ninja gtests_dbms
 ninja gtests_libcommon
+ninja gtests_libdaemon
 ```
-And the executable unit test is in `$BUILD/dbms/gtests_dbms` and `$BUILD/libs/libcommon/src/tests/gtests_libcommon`.
+And the executable unit test is in `$BUILD/dbms/gtests_dbms` and `$BUILD/libs/libcommon/src/tests/gtests_libcommon` and `$BUILD/libs/libdaemon/src/tests/gtests_libdaemon`.
 
 ## Run Integration Tests
 
