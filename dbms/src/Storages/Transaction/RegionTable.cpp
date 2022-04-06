@@ -87,7 +87,7 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & regi
 
 void RegionTable::shrinkRegionRange(const Region & region)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getRange()->rawKeys();
     internal_region.cache_bytes = region.dataSize();
@@ -190,7 +190,7 @@ void RegionTable::restore()
 
 void RegionTable::removeTable(TableID table_id)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     auto it = tables.find(table_id);
     if (it == tables.end())
@@ -209,7 +209,7 @@ void RegionTable::removeTable(TableID table_id)
 
 void RegionTable::updateRegion(const Region & region)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.cache_bytes = region.dataSize();
     if (internal_region.cache_bytes)
@@ -262,7 +262,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
 
     {
         /// We need to protect `regions` and `table` under mutex lock
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         auto it = regions.find(region_id);
         if (it == regions.end())
@@ -316,7 +316,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
     RegionID region_id = region->id();
 
     const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         if (auto it = regions.find(region_id); it != regions.end())
         {
             auto & internal_region = doGetInternalRegion(it->second, region_id);
@@ -383,7 +383,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
 
 RegionID RegionTable::pickRegionToFlush()
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
     {
@@ -421,7 +421,7 @@ bool RegionTable::tryFlushRegions()
 
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     if (auto it = tables.find(table_id); it != tables.end())
         callback(it->second.regions);
@@ -449,7 +449,7 @@ void RegionTable::setFlushThresholds(const FlushThresholds::FlushThresholdsData 
 
 void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     auto table_id = region_range_keys.getMappedTableID();
     auto new_handle_range = region_range_keys.rawKeys();

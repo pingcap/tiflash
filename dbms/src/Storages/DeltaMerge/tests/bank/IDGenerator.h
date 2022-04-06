@@ -33,7 +33,7 @@ public:
 
     UInt64 get()
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard guard{mutex};
         return id++;
     }
 
