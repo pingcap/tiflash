@@ -785,7 +785,7 @@ private:
         Field const_default_value; /// Null, if not specified.
 
         std::atomic<bool> initialized{false};
-        std::mutex mutex;
+        FiberTraits::Mutex mutex;
     };
 
     mutable Cache cache;

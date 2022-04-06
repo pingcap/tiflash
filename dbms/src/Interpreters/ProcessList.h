@@ -276,8 +276,8 @@ public:
     using UserToQueries = std::unordered_map<String, ProcessListForUser>;
 
 private:
-    mutable std::mutex mutex;
-    mutable std::condition_variable have_space; /// Number of currently running queries has become less than maximum.
+    mutable FiberTraits::Mutex mutex;
+    mutable FiberTraits::ConditionVariable have_space; /// Number of currently running queries has become less than maximum.
 
     /// List of queries
     Container cont;

@@ -148,7 +148,7 @@ private:
         std::shared_ptr<ThreadPoolManager> thread_pool;
 
         /// Now one of the merging threads receives next blocks for the merge. This operation must be done sequentially.
-        std::mutex get_next_blocks_mutex;
+        FiberTraits::Mutex get_next_blocks_mutex;
 
         std::atomic<bool> exhausted{false}; /// No more source data.
         std::atomic<bool> finish{false}; /// Need to terminate early.
@@ -159,7 +159,7 @@ private:
         /// (This means the promise that there will be data here, which is important because the data should be given out
         /// in the order of the key - bucket_num)
         std::map<int, Block> merged_blocks;
-        std::mutex merged_blocks_mutex;
+        FiberTraits::Mutex merged_blocks_mutex;
         /// An event that is used by merging threads to tell the main thread that the new block is ready.
         std::condition_variable merged_blocks_changed;
         /// An event by which the main thread is telling merging threads that it is possible to process the next group of blocks.
