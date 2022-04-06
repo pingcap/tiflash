@@ -1251,10 +1251,10 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         }
     }
 
-    LOG_FMT_INFO(log, "After MVCC gc in memory, [lowest_seq={}]"
+    LOG_FMT_INFO(log, "After MVCC gc in memory [lowest_seq={}] "
                       "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-                      "[total_deref_counter={}] [all_del_entries={}]."
-                      "Still exist [snapshot_nums={}], [page_nums={}]."
+                      "[total_deref_counter={}] [all_del_entries={}]. "
+                      "Still exist [snapshot_nums={}], [page_nums={}]. "
                       "Longest alive snapshot: [longest_alive_snapshot_time={}] "
                       "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
                  lowest_seq,
