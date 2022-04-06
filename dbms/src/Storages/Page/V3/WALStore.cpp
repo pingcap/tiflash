@@ -179,27 +179,26 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
         return false;
 
     LOG_FMT_INFO(logger, "Saving directory snapshot");
-    {
-        // Use {largest_log_num + 1, 1} to save the `edit`
-        const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
-        // Create a temporary file for saving directory snapshot
-        auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*manual_flush*/ true);
-        {
-            const String serialized = ser::serializeTo(directory_snap);
-            ReadBufferFromString payload(serialized);
-            compact_log->addRecord(payload, serialized.size());
-        }
-        compact_log->flush(write_limiter);
-        compact_log.reset(); // close fd explicitly before renaming file.
 
-        // Rename it to be a normal log file.
-        const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);
-        const auto normal_fullname = log_filename.fullname(LogFileStage::Normal);
-        LOG_FMT_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
-        auto f = Poco::File{temp_fullname};
-        f.renameTo(normal_fullname);
-        LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
-    }
+    // Use {largest_log_num + 1, 1} to save the `edit`
+    const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
+    // Create a temporary file for saving directory snapshot
+    auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*manual_flush*/ true);
+
+    const String serialized = ser::serializeTo(directory_snap);
+    ReadBufferFromString payload(serialized);
+
+    compact_log->addRecord(payload, serialized.size());
+    compact_log->flush(write_limiter);
+    compact_log.reset(); // close fd explicitly before renaming file.
+
+    // Rename it to be a normal log file.
+    const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);
+    const auto normal_fullname = log_filename.fullname(LogFileStage::Normal);
+    LOG_FMT_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
+    auto f = Poco::File{temp_fullname};
+    f.renameTo(normal_fullname);
+    LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
 
     // #define ARCHIVE_COMPACTED_LOGS // keep for debug
 
@@ -221,8 +220,24 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
 #endif
         }
     }
-    // TODO: Log more information. duration, num entries, size of compact log file...
-    LOG_FMT_INFO(logger, "Save directory snapshot to log file done [num_compacts={}]", files_snap.persisted_log_files.size());
+
+    FmtBuffer fmt_buf;
+    fmt_buf.append("Dumped directory snapshot to log file done. [files_snapshot=");
+
+    fmt_buf.joinStr(
+        files_snap.persisted_log_files.begin(),
+        files_snap.persisted_log_files.end(),
+        [](const auto & arg, FmtBuffer & fb) {
+            fb.fmtAppend("{}", arg.filename(arg.stage));
+        },
+        ", ");
+    fmt_buf.fmtAppend("] [num of records={}] [file={}] [size={}].",
+                      directory_snap.size(),
+                      normal_fullname,
+                      serialized.size());
+
+    LOG_INFO(logger, fmt_buf.toString());
+
     return true;
 }
 
