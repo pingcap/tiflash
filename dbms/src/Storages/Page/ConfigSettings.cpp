@@ -33,6 +33,18 @@ void mergeConfigFromSettings(const DB::Settings & settings, PageStorage::Config 
         config.gc_max_expect_legacy_files = settings.dt_page_num_max_expect_legacy_files;
     if (settings.dt_page_num_max_gc_valid_rate > 0.0)
         config.gc_max_valid_rate_bound = settings.dt_page_num_max_gc_valid_rate;
+
+    // V3 setting
+    config.blob_file_limit_size = settings.dt_page_blob_file_limit_size;
+    config.blob_cached_fd_size = settings.dt_page_blob_cached_fd_size;
+    config.blob_heavy_gc_valid_rate = settings.dt_page_blob_heavy_gc_valid_rate;
+
+    config.wal_roll_size = settings.dt_page_wal_roll_size;
+    if (settings.dt_page_wal_recover_mode >= 0
+        && settings.dt_page_wal_recover_mode <= 3)
+    {
+        config.wal_recover_mode = settings.dt_page_wal_recover_mode;
+    }
 }
 
 PageStorage::Config getConfigFromSettings(const DB::Settings & settings)

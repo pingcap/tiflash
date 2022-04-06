@@ -126,7 +126,7 @@ WALStoreReaderPtr WALStoreReader::create(String storage_name,
                                          const ReadLimiterPtr & read_limiter)
 {
     auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
-    auto reader = std::make_shared<WALStoreReader>(provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
+    auto reader = std::make_shared<WALStoreReader>(storage_name, provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
     reader->openNextFile();
     return reader;
 }

@@ -37,12 +37,17 @@ enum class StorageType
 
 PageStorage::Config extractConfig(const Settings & settings, StorageType subtype)
 {
-#define SET_CONFIG(NAME)                                                            \
-    config.num_write_slots = settings.dt_storage_pool_##NAME##_write_slots;         \
-    config.gc_min_files = settings.dt_storage_pool_##NAME##_gc_min_file_num;        \
-    config.gc_min_bytes = settings.dt_storage_pool_##NAME##_gc_min_bytes;           \
-    config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
-    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;
+#define SET_CONFIG(NAME)                                                                          \
+    config.num_write_slots = settings.dt_storage_pool_##NAME##_write_slots;                       \
+    config.gc_min_files = settings.dt_storage_pool_##NAME##_gc_min_file_num;                      \
+    config.gc_min_bytes = settings.dt_storage_pool_##NAME##_gc_min_bytes;                         \
+    config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num;               \
+    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;               \
+    config.blob_file_limit_size = settings.dt_storage_pool_##NAME##_blob_file_limit_size;         \
+    config.blob_cached_fd_size = settings.dt_storage_pool_##NAME##_blob_cached_fd_size;           \
+    config.blob_heavy_gc_valid_rate = settings.dt_storage_pool_##NAME##_blob_heavy_gc_valid_rate; \
+    config.wal_roll_size = settings.dt_storage_pool_##NAME##_wal_roll_size;                       \
+    config.wal_recover_mode = settings.dt_storage_pool_##NAME##_wal_recover_mode;
 
     PageStorage::Config config = getConfigFromSettings(settings);
 

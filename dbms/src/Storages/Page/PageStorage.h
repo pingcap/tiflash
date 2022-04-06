@@ -136,6 +136,14 @@ public:
             prob_do_gc_when_write_is_low = rhs.prob_do_gc_when_write_is_low;
             // Reload fd idle time
             open_file_max_idle_time = rhs.open_file_max_idle_time;
+
+            // Reload V3 setting
+            blob_file_limit_size = rhs.blob_file_limit_size;
+            blob_spacemap_type = rhs.blob_spacemap_type;
+            blob_cached_fd_size = rhs.blob_cached_fd_size;
+            blob_heavy_gc_valid_rate = rhs.blob_heavy_gc_valid_rate;
+            wal_roll_size = rhs.wal_roll_size;
+            wal_recover_mode = rhs.wal_recover_mode;
         }
 
         String toDebugString() const
@@ -154,10 +162,24 @@ public:
                 prob_do_gc_when_write_is_low,
                 open_file_max_idle_time);
         }
+
+        String toDebugStringV3() const
+        {
+            return fmt::format(
+                "PageStorage::Config V3 {{"
+                "blob_file_limit_size: {}, blob_spacemap_type: {}, "
+                "blob_cached_fd_size:{}, blob_heavy_gc_valid_rate: {:.3f}, "
+                "wal_roll_size:{}, wal_recover_mode:{}}}",
+                blob_file_limit_size.get(),
+                blob_spacemap_type.get(),
+                blob_cached_fd_size.get(),
+                blob_heavy_gc_valid_rate.get(),
+                wal_roll_size.get(),
+                wal_recover_mode.get());
+        }
     };
     void reloadSettings(const Config & new_config) { config.reload(new_config); };
     Config getSettings() const { return config; }
-
 
 public:
     static PageStoragePtr
