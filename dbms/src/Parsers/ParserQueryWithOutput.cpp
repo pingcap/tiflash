@@ -12,26 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ParserQueryWithOutput.h>
-#include <Parsers/ParserShowTablesQuery.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserTablePropertiesQuery.h>
-#include <Parsers/ParserDescribeTableQuery.h>
-#include <Parsers/ParserShowProcesslistQuery.h>
+#include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCheckQuery.h>
 #include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ParserRenameQuery.h>
-#include <Parsers/ParserAlterQuery.h>
+#include <Parsers/ParserDescribeTableQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserKillQueryQuery.h>
+#include <Parsers/ParserQueryWithOutput.h>
+#include <Parsers/ParserRenameQuery.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
+#include <Parsers/ParserShowProcesslistQuery.h>
+#include <Parsers/ParserTablePropertiesQuery.h>
 
 
 namespace DB
 {
-
 bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserShowTablesQuery show_tables_p;
     ParserSelectWithUnionQuery select_p;
     ParserTablePropertiesQuery table_p;
     ParserDescribeTableQuery describe_table_p;
@@ -46,7 +43,6 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ASTPtr query;
 
     bool parsed = select_p.parse(pos, query, expected)
-        || show_tables_p.parse(pos, query, expected)
         || table_p.parse(pos, query, expected)
         || describe_table_p.parse(pos, query, expected)
         || show_processlist_p.parse(pos, query, expected)
@@ -89,4 +85,4 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     return true;
 }
 
-}
+} // namespace DB
