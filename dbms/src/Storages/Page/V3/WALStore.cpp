@@ -222,16 +222,16 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     }
 
     FmtBuffer fmt_buf;
-    fmt_buf.append("Dumped snapshotSave directory snapshot to log file done. [files_snapshot: ");
+    fmt_buf.append("Dumped directory snapshot to log file done. [files_snapshot=");
 
     fmt_buf.joinStr(
         files_snap.persisted_log_files.begin(),
         files_snap.persisted_log_files.end(),
-        [](const auto arg, FmtBuffer & fb) {
+        [](const auto & arg, FmtBuffer & fb) {
             fb.fmtAppend("{}", arg.filename(arg.stage));
         },
         ", ");
-    fmt_buf.fmtAppend("] [num of records: {}] dump into [current_log={}, size={}].",
+    fmt_buf.fmtAppend("] [num of records={}] [file={}] [size={}].",
                       directory_snap.size(),
                       normal_fullname,
                       serialized.size());

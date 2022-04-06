@@ -250,8 +250,8 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     if (blob_need_gc.empty())
     {
         LOG_FMT_INFO(log, "GC finished without any blob need full gc. [total time(ms)={}]"
-                          "[dump snapshots(ms)={}] [gc in mem entries(ms)={}]"
-                          "[blobstore remove entries(ms)={}] [blobstore get status(ms)={}].",
+                          " [dump snapshots(ms)={}] [gc in mem entries(ms)={}]"
+                          " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]",
                      gc_watch.elapsedMilliseconds(),
                      dump_snapshots_ms,
                      gc_in_mem_entries_ms,
@@ -274,9 +274,9 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     if (blob_gc_info.empty())
     {
         LOG_FMT_INFO(log, "GC finished without any entry need be moved. [total time(ms)={}]"
-                          "[dump snapshots(ms)={}] [in mem entries(ms)={}]"
-                          "[blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
-                          "[get entries(ms)={}].",
+                          " [dump snapshots(ms)={}] [in mem entries(ms)={}]"
+                          " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
+                          " [get entries(ms)={}]",
                      gc_watch.elapsedMilliseconds(),
                      dump_snapshots_ms,
                      gc_in_mem_entries_ms,
@@ -308,10 +308,10 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     const auto gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
     LOG_FMT_INFO(log, "GC finished. [total time(ms)={}]"
-                      "[dump snapshots(ms)={}] [gc in mem entries(ms)={}]"
-                      "[blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
-                      "[get gc entries(ms)={}] [blobstore full gc(ms)={}]"
-                      "[gc apply(ms)={}].",
+                      " [dump snapshots(ms)={}] [gc in mem entries(ms)={}]"
+                      " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
+                      " [get gc entries(ms)={}] [blobstore full gc(ms)={}]"
+                      " [gc apply(ms)={}]",
                  gc_watch.elapsedMilliseconds(),
                  dump_snapshots_ms,
                  gc_in_mem_entries_ms,

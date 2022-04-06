@@ -71,6 +71,7 @@ public:
     {
         start_ns = 0;
         stop_ns = 0;
+        last_ns = 0;
         is_running = false;
     }
     void restart() { start(); }

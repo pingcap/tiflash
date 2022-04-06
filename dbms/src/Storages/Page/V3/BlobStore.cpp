@@ -611,17 +611,17 @@ private:
     // 4. need truncate blob
     std::vector<std::pair<BlobFileId, double>> blob_gc_info[4];
 
-    String toTypeString(const String prefix, const size_t index) const
+    String toTypeString(const std::string_view prefix, const size_t index) const
     {
         FmtBuffer fmt_buf;
 
-        fmt_buf.fmtAppend("{}: [", prefix);
         if (blob_gc_info[index].empty())
         {
-            fmt_buf.append("null]");
+            fmt_buf.fmtAppend("{}: [null]", prefix);
         }
         else
         {
+            fmt_buf.fmtAppend("{}: [", prefix);
             fmt_buf.joinStr(
                 blob_gc_info[index].begin(),
                 blob_gc_info[index].end(),
