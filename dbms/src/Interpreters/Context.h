@@ -53,7 +53,6 @@ class ExternalDictionaries;
 class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
-class Compiler;
 class MarkCache;
 class UncompressedCache;
 class DBGInvoker;
@@ -413,8 +412,6 @@ public:
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3);
 
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
-
-    Compiler & getCompiler();
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();

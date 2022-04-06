@@ -304,7 +304,7 @@ std::mutex page_id_mutex;
 
 DB::PageId PSWindowWriter::genRandomPageId()
 {
-    std::lock_guard<std::mutex> page_id_lock(page_id_mutex);
+    std::lock_guard page_id_lock(page_id_mutex);
     if (pageid_boundary < (window_size / 2))
     {
         writing_page[index] = pageid_boundary++;

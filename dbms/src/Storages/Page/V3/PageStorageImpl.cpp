@@ -64,7 +64,7 @@ PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
     return page_directory->getMaxId(ns_id);
 }
 
-PageId PageStorageImpl::getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
+PageId PageStorageImpl::getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -84,7 +84,7 @@ SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
     return page_directory->getSnapshotsStat();
 }
 
-void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
+void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
 {
     if (unlikely(write_batch.empty()))
         return;
@@ -94,7 +94,7 @@ void PageStorageImpl::write(DB::WriteBatch && write_batch, const WriteLimiterPtr
     page_directory->apply(std::move(edit), write_limiter);
 }
 
-DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -124,7 +124,7 @@ DB::PageEntry PageStorageImpl::getEntry(NamespaceId ns_id, PageId page_id, Snaps
     }
 }
 
-DB::Page PageStorageImpl::read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -135,7 +135,7 @@ DB::Page PageStorageImpl::read(NamespaceId ns_id, PageId page_id, const ReadLimi
     return blob_store.read(page_entry, read_limiter);
 }
 
-PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -149,7 +149,7 @@ PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & pag
     return blob_store.read(page_entries, read_limiter);
 }
 
-void PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+void PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -163,7 +163,7 @@ void PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageId> & page_i
     blob_store.read(page_entries, handler, read_limiter);
 }
 
-PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -182,7 +182,7 @@ PageMap PageStorageImpl::read(NamespaceId ns_id, const std::vector<PageReadField
     return blob_store.read(read_infos, read_limiter);
 }
 
-void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -198,7 +198,7 @@ void PageStorageImpl::traverse(const std::function<void(const DB::Page & page)> 
     }
 }
 
-bool PageStorageImpl::gc(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     // If another thread is running gc, just return;
     bool v = false;

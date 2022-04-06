@@ -25,14 +25,14 @@ extern const char exception_before_page_file_write_sync[];
 
 namespace PS::V3
 {
-BlobFile::BlobFile(String path_,
+BlobFile::BlobFile(String parent_path_,
                    BlobFileId blob_id_,
                    FileProviderPtr file_provider_,
                    PSDiskDelegatorPtr delegator_)
     : blob_id(blob_id_)
     , file_provider{std::move(file_provider_)}
     , delegator(std::move(delegator_))
-    , path(path_)
+    , parent_path(std::move(parent_path_))
 {
     // TODO: support encryption file
     wrfile = file_provider->newWriteReadableFile(
@@ -44,7 +44,7 @@ BlobFile::BlobFile(String path_,
     Poco::File file_in_disk(getPath());
     file_size = file_in_disk.getSize();
     {
-        std::lock_guard<std::mutex> lock(file_size_lock);
+        std::lock_guard lock(file_size_lock);
 
         // If file_size is 0, we still need insert it.
         PageFileIdAndLevel id_lvl{blob_id, 0};
@@ -52,7 +52,7 @@ BlobFile::BlobFile(String path_,
         {
             delegator->addPageFileUsedSize(id_lvl,
                                            file_size,
-                                           path,
+                                           parent_path,
                                            /*need_insert_location*/ true);
         }
     }
@@ -62,7 +62,7 @@ void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiter
 {
     if (unlikely(wrfile->isClosed()))
     {
-        throw Exception("Write failed, FD is closed which [path=" + path + "], BlobFile should also be closed",
+        throw Exception("Write failed, FD is closed which [path=" + parent_path + "], BlobFile should also be closed",
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -81,7 +81,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 
     if (unlikely(wrfile->isClosed()))
     {
-        throw Exception(fmt::format("Write failed, FD is closed which [path={}], BlobFile should also be closed", path),
+        throw Exception(fmt::format("Write failed, FD is closed which [path={}], BlobFile should also be closed", parent_path),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -100,7 +100,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 
     UInt64 expand_size = 0;
     {
-        std::lock_guard<std::mutex> lock(file_size_lock);
+        std::lock_guard lock(file_size_lock);
         if ((offset + size) > file_size)
         {
             expand_size = offset + size - file_size;
@@ -112,7 +112,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
     {
         delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
                                        expand_size,
-                                       path,
+                                       parent_path,
                                        false);
     }
 }
@@ -122,12 +122,12 @@ void BlobFile::truncate(size_t size)
     PageUtil::ftruncateFile(wrfile, size);
     Int64 shrink_size = 0;
     {
-        std::lock_guard<std::mutex> lock(file_size_lock);
+        std::lock_guard lock(file_size_lock);
         assert(size <= file_size);
         shrink_size = file_size - size;
         file_size = size;
     }
-    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), shrink_size, path);
+    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), shrink_size, parent_path);
 }
 
 void BlobFile::remove()

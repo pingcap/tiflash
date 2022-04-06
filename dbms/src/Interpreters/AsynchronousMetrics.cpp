@@ -52,7 +52,7 @@ AsynchronousMetrics::~AsynchronousMetrics()
     try
     {
         {
-            std::lock_guard<std::mutex> lock{wait_mutex};
+            std::lock_guard lock{wait_mutex};
             quit = true;
         }
 
@@ -68,14 +68,14 @@ AsynchronousMetrics::~AsynchronousMetrics()
 
 AsynchronousMetrics::Container AsynchronousMetrics::getValues() const
 {
-    std::lock_guard<std::mutex> lock{container_mutex};
+    std::lock_guard lock{container_mutex};
     return container;
 }
 
 
 void AsynchronousMetrics::set(const std::string & name, Value value)
 {
-    std::lock_guard<std::mutex> lock{container_mutex};
+    std::lock_guard lock{container_mutex};
     container[name] = value;
 }
 
@@ -84,7 +84,7 @@ void AsynchronousMetrics::run()
 {
     setThreadName("AsyncMetrics");
 
-    std::unique_lock<std::mutex> lock{wait_mutex};
+    std::unique_lock lock{wait_mutex};
 
     /// Next minute + 30 seconds. To be distant with moment of transmission of metrics, see MetricsTransmitter.
     const auto get_next_minute = [] {

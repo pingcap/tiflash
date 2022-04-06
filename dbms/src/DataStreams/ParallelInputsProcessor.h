@@ -216,7 +216,7 @@ private:
             {
                 InputData unprepared_input;
                 {
-                    std::lock_guard<std::mutex> lock(unprepared_inputs_mutex);
+                    std::lock_guard lock(unprepared_inputs_mutex);
 
                     if (unprepared_inputs.empty())
                         break;
@@ -228,7 +228,7 @@ private:
                 unprepared_input.in->readPrefix();
 
                 {
-                    std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                    std::lock_guard lock(available_inputs_mutex);
                     available_inputs.push(unprepared_input);
                 }
             }
@@ -282,7 +282,7 @@ private:
 
             /// Select the next source.
             {
-                std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                std::lock_guard lock(available_inputs_mutex);
 
                 /// If there are no free sources, then this thread is no longer needed. (But other threads can work with their sources.)
                 if (available_inputs.empty())
@@ -303,7 +303,7 @@ private:
 
                 /// If this source is not run out yet, then put the resulting block in the ready queue.
                 {
-                    std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                    std::lock_guard lock(available_inputs_mutex);
 
                     if (block)
                     {

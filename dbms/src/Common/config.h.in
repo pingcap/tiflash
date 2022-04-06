@@ -5,5 +5,4 @@
 #cmakedefine01 USE_ICU
 #cmakedefine01 USE_RE2_ST
 #cmakedefine01 USE_VECTORCLASS
-#cmakedefine01 USE_EMBEDDED_COMPILER
 #cmakedefine01 Poco_NetSSL_FOUND
