@@ -5,6 +5,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Planner/FinalizeHelper.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -12,6 +13,15 @@
 
 namespace DB
 {
+PhysicalExchangeReceiver::PhysicalExchangeReceiver(
+    const String & executor_id_,
+    const NamesAndTypes & schema_,
+    const std::shared_ptr<ExchangeReceiver> & mpp_exchange_receiver_)
+    : PhysicalLeaf(executor_id_, PlanType::ExchangeSender, schema_)
+    , mpp_exchange_receiver(mpp_exchange_receiver_)
+    , sample_block(PhysicalPlanHelper::constructBlockFromSchema(schema_))
+{}
+
 PhysicalPlanPtr PhysicalExchangeReceiver::build(
     const Context & context,
     const String & executor_id)

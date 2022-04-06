@@ -26,6 +26,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/TableScanInterpreterHelper.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
+#include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Flash/Planner/traversePhysicalPlans.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
@@ -63,7 +64,7 @@ void analysePhysicalPlan(
     const DAGQueryBlock & query_block,
     bool keep_session_timezone_info)
 {
-    // selection on table scan had been executed in handleTableScan
+    // selection on table scan had been executed in table scan.
     if (query_block.selection && !query_block.isTableScanSource())
     {
         builder.build(query_block.selection_name, query_block.selection);
@@ -121,26 +122,6 @@ ExpressionActionsPtr generateProjectExpressionActions(
     return project;
 }
 } // namespace
-
-void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
-{
-    // construct pushed down filter conditions.
-    std::vector<const tipb::Expr *> conditions;
-    if (query_block.selection)
-    {
-        for (const auto & condition : query_block.selection->selection().conditions())
-            conditions.push_back(&condition);
-        assert(!conditions.empty());
-    }
-
-    TableScanInterpreterHelper::handleTableScan(
-        context,
-        table_scan,
-        query_block.selection_name,
-        conditions,
-        pipeline,
-        max_streams);
-}
 
 void DAGQueryBlockInterpreter::prepareJoin(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -518,30 +499,20 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             analyzer->getCurrentInputColumns(),
             pipeline.firstStream()->getHeader());
     }
-    else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
-    {
-        physical_plan_builder.build(query_block.source_name, query_block.source);
-    }
-    else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
-    {
-        physical_plan_builder.build(query_block.source_name, query_block.source);
-    }
     else if (query_block.isTableScanSource())
     {
-        TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
-        handleTableScan(table_scan, pipeline);
-        dagContext().table_scan_executor_id = query_block.source_name;
-
-        physical_plan_builder.buildSource(
-            query_block.source_name,
-            analyzer->getCurrentInputColumns(),
-            pipeline.firstStream()->getHeader());
+        physical_plan_builder.build(query_block.source_name, query_block.source);
+        if (query_block.selection)
+        {
+            auto physical_table_scan = std::dynamic_pointer_cast<PhysicalTableScan>(physical_plan_builder.getResult());
+            assert(physical_table_scan);
+            physical_table_scan->pushDownFilter(query_block.selection_name, query_block.selection->selection());
+        }
     }
     else
     {
-        throw TiFlashException(
-            std::string(__PRETTY_FUNCTION__) + ": Unsupported source node: " + query_block.source_name,
-            Errors::Coprocessor::BadRequest);
+        // TypeExchangeReceiver, TypeProjection
+        physical_plan_builder.build(query_block.source_name, query_block.source);
     }
 
     // this log measures the concurrent degree in this mpp task

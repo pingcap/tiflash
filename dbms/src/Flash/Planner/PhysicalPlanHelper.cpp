@@ -31,4 +31,12 @@ ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Conte
     }
     return std::make_shared<ExpressionActions>(actions_input_column, context.getSettingsRef());
 }
+
+Block constructBlockFromSchema(const NamesAndTypes & schema)
+{
+    ColumnsWithTypeAndName columns;
+    for (const auto & column : schema_)
+        columns.emplace_back(column.type, column.name);
+    return Block(columns);
+}
 } // namespace DB::PhysicalPlanHelper

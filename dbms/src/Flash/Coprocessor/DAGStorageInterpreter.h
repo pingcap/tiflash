@@ -19,8 +19,8 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
-#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Coprocessor/StorageWithStructureLock.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
@@ -51,6 +51,8 @@ public:
     DAGStorageInterpreter(
         Context & context_,
         const TiDBTableScan & table_scan_,
+        IDsAndStorageWithStructureLocks && storages_with_structure_lock_,
+        const NamesAndTypes & source_columns_,
         const String & pushed_down_filter_id_,
         const std::vector<const tipb::Expr *> & pushed_down_conditions_,
         size_t max_streams_);
@@ -76,10 +78,6 @@ private:
     LearnerReadSnapshot doBatchCopLearnerRead();
 
     void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
-
-    std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
-
-    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
 
     void buildRemoteRequests();
 
@@ -112,7 +110,7 @@ private:
     /// We need an immutable structure to build the TableScan operator and create snapshot input streams
     /// of storage. After the input streams created, the `alter_lock` can be released so that reading
     /// won't block DDL operations.
-    std::unordered_map<TableID, StorageWithStructureLock> storages_with_structure_lock;
+    IDsAndStorageWithStructureLocks storages_with_structure_lock;
     ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
     NamesAndTypes source_columns;

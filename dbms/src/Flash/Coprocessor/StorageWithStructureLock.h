@@ -1,7 +1,10 @@
 #pragma once
 
-#include <Storages/TableLockHolder.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/TableLockHolder.h>
+#include <Storages/Transaction/Types.h>
+
+#include <unordered_map>
 
 namespace DB
 {
@@ -11,4 +14,6 @@ struct StorageWithStructureLock
     ManageableStoragePtr storage;
     TableStructureLockHolder lock;
 };
-}
+
+using IDsAndStorageWithStructureLocks = std::unordered_map<TableID, StorageWithStructureLock>;
+} // namespace DB

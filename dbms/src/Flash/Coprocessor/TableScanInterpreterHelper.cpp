@@ -284,6 +284,8 @@ void executePushedDownFilter(
 std::unique_ptr<DAGExpressionAnalyzer> handleTableScan(
     Context & context,
     const TiDBTableScan & table_scan,
+    IDsAndStorageWithStructureLocks && storages_with_structure_lock,
+    const NamesAndTypes & source_columns,
     const String & filter_executor_id,
     const std::vector<const tipb::Expr *> & conditions,
     DAGPipeline & pipeline,
@@ -305,7 +307,7 @@ std::unique_ptr<DAGExpressionAnalyzer> handleTableScan(
             fmt::format("Dag Request does not have region to read for table: {}", table_scan.getLogicalTableID()),
             Errors::Coprocessor::BadRequest);
 
-    DAGStorageInterpreter storage_interpreter(context, table_scan, filter_executor_id, conditions, max_streams);
+    DAGStorageInterpreter storage_interpreter(context, table_scan, std::move(storages_with_structure_lock), source_columns, filter_executor_id, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer = std::move(storage_interpreter.analyzer);
@@ -530,6 +532,58 @@ std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(
         storages_with_lock[table_id] = {std::move(storages[i]), std::move(locks[i])};
     }
     return storages_with_lock;
+}
+
+NamesAndTypes getSchemaForTableScan(
+    const Context & context,
+    const TiDBTableScan & table_scan,
+    IDsAndStorageWithStructureLocks & storages_with_structure_lock)
+{
+    const Settings & settings = context.getSettingsRef();
+    Int64 max_columns_to_read = settings.max_columns_to_read;
+
+    assert(storages_with_structure_lock.find(table_scan.getLogicalTableID()) != storages_with_structure_lock.end());
+    auto storage_for_logical_table = storages_with_structure_lock[table_scan.getLogicalTableID()].storage;
+
+    // todo handle alias column
+    if (max_columns_to_read && table_scan.getColumnSize() > max_columns_to_read)
+    {
+        throw TiFlashException(
+            fmt::format("Limit for number of columns to read exceeded. Requested: {}, maximum: {}", table_scan.getColumnSize(), max_columns_to_read),
+            Errors::BroadcastJoin::TooManyColumns);
+    }
+
+    NamesAndTypes schema;
+    String handle_column_name = MutableSupport::tidb_pk_column_name;
+    if (auto pk_handle_col = storage_for_logical_table->getTableInfo().getPKHandleColumn())
+        handle_column_name = pk_handle_col->get().name;
+
+    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
+    {
+        auto const & ci = table_scan.getColumns()[i];
+        ColumnID cid = ci.column_id();
+
+        // Column ID -1 return the handle column
+        String name;
+        if (cid == TiDBPkColumnID)
+            name = handle_column_name;
+        else if (cid == ExtraTableIDColumnID)
+            name = MutableSupport::extra_table_id_column_name;
+        else
+            name = storage_for_logical_table->getTableInfo().getColumnName(cid);
+        if (cid == ExtraTableIDColumnID)
+        {
+            NameAndTypePair extra_table_id_column_pair = {name, MutableSupport::extra_table_id_column_type};
+            schema.emplace_back(std::move(extra_table_id_column_pair));
+        }
+        else
+        {
+            auto pair = storage_for_logical_table->getColumns().getPhysical(name);
+            schema.emplace_back(std::move(pair));
+        }
+    }
+
+    return schema;
 }
 } // namespace TableScanInterpreterHelper
 } // namespace DB
