@@ -32,6 +32,6 @@ add_executable(page_ctl EXCLUDE_FROM_ALL
         ${io_base_headers} ${io_base_sources}
 )
 target_include_directories(page_ctl PUBLIC ${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/raftstore-proxy/ffi/src)
-target_link_libraries(page_ctl clickhouse_common_io cpptoml)
+target_link_libraries(page_ctl clickhouse_common_io)
 target_compile_options(page_ctl  PRIVATE -Wno-format)
 target_compile_definitions(page_ctl PRIVATE PAGE_STORAGE_UTIL_DEBUGGGING DBMS_PUBLIC_GTEST)
