@@ -142,16 +142,14 @@ public:
         FmtBuffer fmt_buf;
         auto serialize = SerializeExecutor(context, fmt_buf);
         String actual_string = serialize.serialize(actual.get());
-        std::cout << actual_string << std::endl;
-        std::cout << expected << std::endl;
         ASSERT_EQUAL(trim(expected), trim(actual_string), "DAGRequest mismatch");
         return ::testing::AssertionSuccess();
     }
 
-    static void writeResult(String file_) // todo change how to use...
+    void writeTestResult(std::shared_ptr<tipb::DAGRequest> dag_request, const String & name)
     {
-        std::string file = Poco::Path(file_).absolute().toString();
-        std::cout << "file_name: " << file << std::endl;
+        String path = "../../tests/testresult/" + name + ".txt";
+        auto file = Poco::Path(path).absolute().toString();
         Poco::File poco_file(file);
 
         if (poco_file.exists())
@@ -167,23 +165,25 @@ public:
         {
             file.clear();
             if (EEXIST == errno)
-                throw Poco::Exception("Pid file exists, should not start daemon.");
-            throw Poco::CreateFileException("Cannot create pid file.");
+                throw Poco::Exception("Interpreter test result file exists");
+            throw Poco::CreateFileException("Cannot create Interpreter test result file.");
         }
 
+        FmtBuffer fmt_buf;
+        auto serialize = SerializeExecutor(context, fmt_buf);
+        String expected_string = serialize.serialize(dag_request.get());
         try
         {
-            if (static_cast<ssize_t>(5) != write(fd, "test", 5))
+            if (static_cast<ssize_t>(expected_string.size()) != write(fd, expected_string.c_str(), expected_string.size()))
                 throw Poco::Exception("Cannot write to test file.");
         }
         catch (...)
         {
-            close(fd);
-            throw;
+            throw Exception("Can not write interpreter test result with name[" + name + "]");
         }
-
         close(fd);
     }
+
 
 protected:
     Context context;

@@ -48,20 +48,20 @@ try
         .join(right_builder, AstExprBuilder().appendColumnRef("l_a").appendList().build()) // ywq todo more types of join, should make sure have both field
         .limit(10);
 
-
     auto dag_request = left_builder.build(context);
-    dagRequestEqual(dag_request, dag_request);
-    String expect_tree_string = "limit_9\n"
-                                " project_7\n"
-                                "  selection_6\n"
-                                "   table_scan_5 columns: { column_id: -1, [String]}\n"
-                                " topn_4\n"
-                                "  project_3\n"
-                                "   selection_2\n"
-                                "    selection_1\n"
-                                "     table_scan_0 columns: { column_id: -1, [String]}\n";
-    ASSERT_TRUE(dagRequestEqual(expect_tree_string, dag_request));
-    writeResult("test_interpreter.txt");
+    writeTestResult(dag_request, "try");
+    // dagRequestEqual(dag_request, dag_request);
+    // String expect_tree_string = "limit_9\n"
+    //                             " project_7\n"
+    //                             "  selection_6\n"
+    //                             "   table_scan_5 columns: { column_id: -1, [String]}\n"
+    //                             " topn_4\n"
+    //                             "  project_3\n"
+    //                             "   selection_2\n"
+    //                             "    selection_1\n"
+    //                             "     table_scan_0 columns: { column_id: -1, [String]}\n";
+    // ASSERT_TRUE(dagRequestEqual(expect_tree_string, dag_request));
+    // writeResult("test_interpreter.txt");
 }
 CATCH
 
@@ -102,7 +102,6 @@ try
     // Don't care about regions information in this test
     DAGQuerySource dag(context);
     executeQuery(dag, context, false, QueryProcessingStage::Complete);
-    writeResult("test_interpreter.txt");
 }
 CATCH
 
