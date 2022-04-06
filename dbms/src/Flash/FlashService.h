@@ -44,7 +44,8 @@ public:
         const ::mpp::EstablishMPPConnectionRequest * request,
         ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
 
-    ::grpc::Status CancelMPPTask(::grpc::ServerContext* context, const ::mpp::CancelTaskRequest* request, ::mpp::CancelTaskResponse* response) override;
+    ::grpc::Status CancelMPPTask(
+        ::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
 private:
     std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;

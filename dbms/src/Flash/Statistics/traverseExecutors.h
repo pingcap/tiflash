@@ -16,14 +16,9 @@ class Children
 public:
     Children() = default;
 
-    explicit Children(const tipb::Executor * child)
-        : left(child)
-    {}
+    explicit Children(const tipb::Executor * child) : left(child) {}
 
-    Children(const tipb::Executor * left_, const tipb::Executor * right_)
-        : left(left_)
-        , right(right_)
-    {}
+    Children(const tipb::Executor * left_, const tipb::Executor * right_) : left(left_), right(right_) {}
 
     template <typename FF>
     void forEach(FF && f)
