@@ -261,7 +261,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSelectQueryInfos()
 {
     std::unordered_map<TableID, SelectQueryInfo> ret;
-    auto create_query_info = [&]() -> SelectQueryInfo {
+    auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
         SelectQueryInfo query_info;
         /// to avoid null point exception
         query_info.query = makeDummyQuery();
@@ -270,14 +270,14 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
-        query_info.req_id = log->identifier();
+        query_info.req_id = fmt::format("{} Table<{}>", log->identifier(), table_id);
         return query_info;
     };
     if (table_scan.isPartitionTableScan())
     {
         for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
         {
-            SelectQueryInfo query_info = create_query_info();
+            SelectQueryInfo query_info = create_query_info(physical_table_id);
             query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(mvcc_query_info->resolve_locks, mvcc_query_info->read_tso);
             ret.emplace(physical_table_id, std::move(query_info));
         }
@@ -293,8 +293,8 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     }
     else
     {
-        TableID table_id = logical_table_id;
-        SelectQueryInfo query_info = create_query_info();
+        const TableID table_id = logical_table_id;
+        SelectQueryInfo query_info = create_query_info(table_id);
         query_info.mvcc_query_info = std::move(mvcc_query_info);
         ret.emplace(table_id, std::move(query_info));
     }
