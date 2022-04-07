@@ -28,6 +28,7 @@
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/Logger.h>
+#include <Common/ThreadManager.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Encryption/FileProvider.h>
@@ -36,7 +37,6 @@
 #include <Poco/TemporaryFile.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <functional>
@@ -1048,14 +1048,19 @@ protected:
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const;
+    BlocksList prepareBlocksAndFillTwoLevel(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        ThreadPoolManager * thread_pool,
+        size_t max_threads) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
         AggregatedDataVariants & data_variants,
         Method & method,
         bool final,
-        ThreadPool * thread_pool) const;
+        ThreadPoolManager * thread_pool,
+        size_t max_threads) const;
 
     template <bool no_more_keys, typename Method, typename Table>
     void mergeStreamsImplCase(

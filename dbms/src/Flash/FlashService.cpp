@@ -78,7 +78,7 @@ grpc::Status FlashService::Coprocessor(
     coprocessor::Response * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "{}: Handling coprocessor request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -105,14 +105,14 @@ grpc::Status FlashService::Coprocessor(
         return cop_handler.execute();
     });
 
-    LOG_FMT_DEBUG(log, "{}: Handle coprocessor request done: {}, {}", __PRETTY_FUNCTION__, ret.error_code(), ret.error_message());
+    LOG_FMT_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
 ::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "{}: Handling coprocessor request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -139,7 +139,7 @@ grpc::Status FlashService::Coprocessor(
         return cop_handler.execute();
     });
 
-    LOG_FMT_DEBUG(log, "{}: Handle coprocessor request done: {}, {}", __PRETTY_FUNCTION__, ret.error_code(), ret.error_message());
+    LOG_FMT_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
@@ -149,7 +149,7 @@ grpc::Status FlashService::Coprocessor(
     ::mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "{}: Handling mpp dispatch request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -221,7 +221,7 @@ grpc::Status FlashService::Coprocessor(
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -281,7 +281,7 @@ grpc::Status FlashService::Coprocessor(
                 }
                 else
                 {
-                    LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
+                    LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
                     return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
                 }
             }
@@ -316,7 +316,7 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_FMT_DEBUG(log, "{}: cancel mpp task request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -376,7 +376,7 @@ grpc::Status FlashService::BatchCommands(
             GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
         });
 
-        LOG_FMT_DEBUG(log, "{}: Handling batch commands: {}", __PRETTY_FUNCTION__, request.DebugString());
+        LOG_FMT_DEBUG(log, "Handling batch commands: {}", request.DebugString());
 
         BatchCommandsContext batch_commands_context(
             *context,
@@ -388,8 +388,7 @@ grpc::Status FlashService::BatchCommands(
         {
             LOG_FMT_DEBUG(
                 log,
-                "{}: Handle batch commands request done: {}, {}",
-                __PRETTY_FUNCTION__,
+                "Handle batch commands request done: {}, {}",
                 ret.error_code(),
                 ret.error_message());
             return ret;
@@ -397,11 +396,11 @@ grpc::Status FlashService::BatchCommands(
 
         if (!stream->Write(response))
         {
-            LOG_FMT_DEBUG(log, "{}: Write response failed for unknown reason.", __PRETTY_FUNCTION__);
+            LOG_FMT_DEBUG(log, "Write response failed for unknown reason.");
             return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
         }
 
-        LOG_FMT_DEBUG(log, "{}: Handle batch commands request done: {}, {}", __PRETTY_FUNCTION__, ret.error_code(), ret.error_message());
+        LOG_FMT_DEBUG(log, "Handle batch commands request done: {}, {}", ret.error_code(), ret.error_message());
     }
 
     return grpc::Status::OK;
@@ -457,17 +456,17 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     }
     catch (Exception & e)
     {
-        LOG_FMT_ERROR(log, "{}: DB Exception: {}", __PRETTY_FUNCTION__, e.message());
+        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
     }
     catch (const std::exception & e)
     {
-        LOG_FMT_ERROR(log, "{}: std exception: {}", __PRETTY_FUNCTION__, e.what());
+        LOG_FMT_ERROR(log, "std exception: {}", e.what());
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
     }
     catch (...)
     {
-        LOG_FMT_ERROR(log, "{}: other exception", __PRETTY_FUNCTION__);
+        LOG_FMT_ERROR(log, "other exception");
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
     }
 }
