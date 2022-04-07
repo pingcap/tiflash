@@ -74,6 +74,35 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
 {
 }
 
+void BlobStore::registerPaths()
+{
+    for (const auto & path : delegator->listPaths())
+    {
+        Poco::File store_path(path);
+        if (!store_path.exists())
+        {
+            continue;
+        }
+
+        std::vector<String> file_list;
+        store_path.list(file_list);
+
+        for (const auto & blob_name : file_list)
+        {
+            const auto & blob_id = BlobStats::getBlobIdFromName(blob_name);
+            if (blob_id != INVALID_BLOBFILE_ID)
+            {
+                Poco::File blob(fmt::format("{}/{}", path, blob_name));
+                delegator->addPageFileUsedSize({blob_id, 0}, blob.getSize(), path, true);
+            }
+            else
+            {
+                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
+            }
+        }
+    }
+}
+
 PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
@@ -882,6 +911,38 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
     stat->restoreSpaceMap(entry.offset, entry.size);
 }
 
+BlobFileId BlobStore::BlobStats::getBlobIdFromName(String blob_name)
+{
+    if (!startsWith(blob_name, BlobFile::BLOB_PREFIX_NAME))
+    {
+        return INVALID_BLOBFILE_ID;
+    }
+
+    Strings ss;
+    boost::split(ss, blob_name, boost::is_any_of("_"));
+
+    if (ss.size() != 2)
+    {
+        return INVALID_BLOBFILE_ID;
+    }
+
+    String err_msg;
+    try
+    {
+        const auto & blob_id = std::stoull(ss[1]);
+        return blob_id;
+    }
+    catch (std::invalid_argument & e)
+    {
+        err_msg = e.what();
+    }
+    catch (std::out_of_range & e)
+    {
+        err_msg = e.what();
+    }
+    return INVALID_BLOBFILE_ID;
+}
+
 std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
 {
     std::set<BlobFileId> blob_ids_on_disk;
@@ -892,43 +953,20 @@ std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
         return blob_ids_on_disk;
     }
 
-
     std::vector<String> file_list;
     store_path.list(file_list);
 
     for (const auto & blob_name : file_list)
     {
-        if (!startsWith(blob_name, BlobFile::BLOB_PREFIX_NAME))
+        const auto & blob_id = getBlobIdFromName(blob_name);
+        if (blob_id != INVALID_BLOBFILE_ID)
+        {
+            blob_ids_on_disk.insert(blob_id);
+        }
+        else
         {
             LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
-            continue;
         }
-
-        Strings ss;
-        boost::split(ss, blob_name, boost::is_any_of("_"));
-
-        if (ss.size() != 2)
-        {
-            LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}]", path, blob_name);
-            continue;
-        }
-
-        String err_msg;
-        try
-        {
-            const auto & blob_id = std::stoull(ss[1]);
-            blob_ids_on_disk.insert(blob_id);
-            continue; // continue to handle next file
-        }
-        catch (std::invalid_argument & e)
-        {
-            err_msg = e.what();
-        }
-        catch (std::out_of_range & e)
-        {
-            err_msg = e.what();
-        }
-        LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}] [err={}]", path, blob_name, err_msg);
     }
 
     return blob_ids_on_disk;

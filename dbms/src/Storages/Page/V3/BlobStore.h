@@ -174,13 +174,15 @@ public:
             return stats_map;
         }
 
+        std::set<BlobFileId> getBlobIdsFromDisk(String path) const;
+
+        static BlobFileId getBlobIdFromName(String blob_name);
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
 #endif
         void restoreByEntry(const PageEntryV3 & entry);
         void restore();
-        std::set<BlobFileId> getBlobIdsFromDisk(String path) const;
         friend class PageDirectoryFactory;
 
 #ifndef DBMS_PUBLIC_GTEST
@@ -198,6 +200,8 @@ public:
     };
 
     BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
+
+    void registerPaths();
 
     std::vector<BlobFileId> getGCStats();
 
