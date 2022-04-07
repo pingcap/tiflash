@@ -1349,7 +1349,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
                                        UInt64 max_version) const
 {
     auto tracing_logger = Logger::get(log, dm_context.tracing_id);
-    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] getReadInfo start", segment_id);
+    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] [epoch={}] getReadInfo start", segment_id, epoch);
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs
@@ -1364,14 +1364,14 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
     // Hold compacted_index reference, to prevent it from deallocated.
     delta_reader->setDeltaIndex(compacted_index);
 
-    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] getReadInfo end", segment_id);
+    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] [epoch={}] getReadInfo end", segment_id, epoch);
 
     if (fully_indexed)
     {
         // Try update shared index, if my_delta_index is more advanced.
         bool ok = segment_snap->delta->getSharedDeltaIndex()->updateIfAdvanced(*my_delta_index);
         if (ok)
-            LOG_FMT_DEBUG(log, "{} Updated delta index", simpleInfo());
+            LOG_FMT_DEBUG(tracing_logger, "{} Updated delta index", simpleInfo());
     }
 
     // Refresh the reference in DeltaIndexManager, so that the index can be properly managed.
