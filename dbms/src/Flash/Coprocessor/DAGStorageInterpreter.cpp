@@ -127,9 +127,7 @@ MakeRegionQueryInfos(
         return std::make_tuple(std::move(region_need_retry), status_res);
 }
 
-std::vector<ExtraCastAfterTSMode> getExtraCastAfterTSModeFromTS(
-    const TiDBTableScan & table_scan,
-    const ManageableStoragePtr & storage_for_logical_table)
+std::vector<ExtraCastAfterTSMode> getExtraCastAfterTSModeFromTS(const TiDBTableScan & table_scan)
 {
     std::vector<ExtraCastAfterTSMode> need_cast_column;
     need_cast_column.reserve(table_scan.getColumnSize());
@@ -175,10 +173,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     for (const auto & column : source_columns)
         required_columns.push_back(column.name);
 
-    assert(storages_with_structure_lock.find(logical_table_id) != storages_with_structure_lock.end());
-    storage_for_logical_table = storages_with_structure_lock[logical_table_id].storage;
-
-    is_need_add_cast_column = getExtraCastAfterTSModeFromTS(table_scan, storage_for_logical_table);
+    is_need_add_cast_column = getExtraCastAfterTSModeFromTS(table_scan);
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
@@ -196,7 +191,10 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     if (!mvcc_query_info->regions_query_info.empty())
         doLocalRead(pipeline, settings.max_block_size);
 
-    null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
+    ColumnsWithTypeAndName columns;
+    for (const auto & column : source_columns)
+        columns.emplace_back(column.type, column.name);
+    null_stream_if_empty = std::make_shared<NullBlockInputStream>(Block(columns));
 
     // Should build these vars under protect of `table_structure_lock`.
     buildRemoteRequests();

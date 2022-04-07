@@ -111,7 +111,6 @@ private:
     /// of storage. After the input streams created, the `alter_lock` can be released so that reading
     /// won't block DDL operations.
     IDsAndStorageWithStructureLocks storages_with_structure_lock;
-    ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
     NamesAndTypes source_columns;
 };
