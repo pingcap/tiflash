@@ -50,6 +50,12 @@ namespace PS::V3
 {
 static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;
 
+#ifndef NDEBUG
+static constexpr bool CHECK_STATS_ALL_IN_DISK = true;
+#else
+static constexpr bool CHECK_STATS_ALL_IN_DISK = false;
+#endif
+
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
@@ -245,9 +251,17 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
         // So if we can't use id find blob, just ignore it.
         if (stat)
         {
-            LOG_FMT_TRACE(log, "Blob begin to recalculate capability [blob_id={}]", blob_id);
-            auto lock = stat->lock();
-            stat->recalculateCapacity();
+            {
+                auto lock = stat->lock();
+                stat->recalculateCapacity();
+            }
+            LOG_FMT_TRACE(log, "Blob recalculated capability [blob_id={}] [max_cap={}] "
+                               "[total_size={}] [valid_size={}] [valid_rate={}]",
+                          blob_id,
+                          stat->sm_max_caps,
+                          stat->sm_total_size,
+                          stat->sm_valid_size,
+                          stat->sm_valid_rate);
         }
     }
 }
@@ -559,10 +573,74 @@ BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * bu
 }
 
 
+struct BlobStoreGCInfo
+{
+    String toString() const
+    {
+        return fmt::format("{}. {}. {}. {}. ",
+                           toTypeString("Read-Only Blob", 0),
+                           toTypeString("No GC Blob", 1),
+                           toTypeString("Full GC Blob", 2),
+                           toTypeString("Truncated Blob", 3));
+    }
+
+    void appendToReadOnlyBlob(const BlobFileId blob_id, double valid_rate)
+    {
+        blob_gc_info[0].emplace_back(std::make_pair(blob_id, valid_rate));
+    }
+
+    void appendToNoNeedGCBlob(const BlobFileId blob_id, double valid_rate)
+    {
+        blob_gc_info[1].emplace_back(std::make_pair(blob_id, valid_rate));
+    }
+
+    void appendToNeedGCBlob(const BlobFileId blob_id, double valid_rate)
+    {
+        blob_gc_info[2].emplace_back(std::make_pair(blob_id, valid_rate));
+    }
+
+    void appendToTruncatedBlob(const BlobFileId blob_id, double valid_rate)
+    {
+        blob_gc_info[3].emplace_back(std::make_pair(blob_id, valid_rate));
+    }
+
+private:
+    // 1. read only blob
+    // 2. no need gc blob
+    // 3. full gc blob
+    // 4. need truncate blob
+    std::vector<std::pair<BlobFileId, double>> blob_gc_info[4];
+
+    String toTypeString(const std::string_view prefix, const size_t index) const
+    {
+        FmtBuffer fmt_buf;
+
+        if (blob_gc_info[index].empty())
+        {
+            fmt_buf.fmtAppend("{}: [null]", prefix);
+        }
+        else
+        {
+            fmt_buf.fmtAppend("{}: [", prefix);
+            fmt_buf.joinStr(
+                blob_gc_info[index].begin(),
+                blob_gc_info[index].end(),
+                [](const auto arg, FmtBuffer & fb) {
+                    fb.fmtAppend("{}/{:.2f}", arg.first, arg.second);
+                },
+                ", ");
+            fmt_buf.append("]");
+        }
+
+        return fmt_buf.toString();
+    }
+};
+
 std::vector<BlobFileId> BlobStore::getGCStats()
 {
     const auto stats_list = blob_stats.getStats();
     std::vector<BlobFileId> blob_need_gc;
+    BlobStoreGCInfo blobstore_gc_info;
 
     for (const auto & [path, stats] : stats_list)
     {
@@ -571,6 +649,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         {
             if (stat->isReadOnly())
             {
+                blobstore_gc_info.appendToReadOnlyBlob(stat->id, stat->sm_valid_rate);
                 LOG_FMT_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
                 continue;
             }
@@ -609,9 +688,11 @@ std::vector<BlobFileId> BlobStore::getGCStats()
 
                 // Change current stat to read only
                 stat->changeToReadOnly();
+                blobstore_gc_info.appendToNeedGCBlob(stat->id, stat->sm_valid_rate);
             }
             else
             {
+                blobstore_gc_info.appendToNoNeedGCBlob(stat->id, stat->sm_valid_rate);
                 LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
             }
 
@@ -621,9 +702,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
                 blobfile->truncate(right_margin);
                 stat->sm_total_size = right_margin;
+                stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
             }
         }
     }
+
+    LOG_FMT_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
 
     return blob_need_gc;
 }
@@ -797,17 +882,143 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
     stat->restoreSpaceMap(entry.offset, entry.size);
 }
 
+std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
+{
+    std::set<BlobFileId> blob_ids_on_disk;
+
+    Poco::File store_path(path);
+    if (!store_path.exists())
+    {
+        return blob_ids_on_disk;
+    }
+
+
+    std::vector<String> file_list;
+    store_path.list(file_list);
+
+    for (const auto & blob_name : file_list)
+    {
+        if (!startsWith(blob_name, BlobFile::BLOB_PREFIX_NAME))
+        {
+            LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
+            continue;
+        }
+
+        Strings ss;
+        boost::split(ss, blob_name, boost::is_any_of("_"));
+
+        if (ss.size() != 2)
+        {
+            LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}]", path, blob_name);
+            continue;
+        }
+
+        String err_msg;
+        try
+        {
+            const auto & blob_id = std::stoull(ss[1]);
+            blob_ids_on_disk.insert(blob_id);
+            continue; // continue to handle next file
+        }
+        catch (std::invalid_argument & e)
+        {
+            err_msg = e.what();
+        }
+        catch (std::out_of_range & e)
+        {
+            err_msg = e.what();
+        }
+        LOG_FMT_INFO(log, "Ignore unrecognized blob file [dir={}] [file={}] [err={}]", path, blob_name, err_msg);
+    }
+
+    return blob_ids_on_disk;
+}
+
 void BlobStore::BlobStats::restore()
 {
     BlobFileId max_restored_file_id = 0;
 
     for (auto & [path, stats] : stats_map)
     {
-        (void)path;
+        std::set<BlobFileId> blob_ids_in_stats;
         for (const auto & stat : stats)
         {
             stat->recalculateSpaceMap();
             max_restored_file_id = std::max(stat->id, max_restored_file_id);
+            blob_ids_in_stats.insert(stat->id);
+        }
+
+        // If a BlobFile on disk with a valid rate of 0 (but has not been deleted because of some reason),
+        // then it won't be restored to stats. But we should check and clean up if such files exist.
+
+        std::set<BlobFileId> blob_ids_on_disk = getBlobIdsFromDisk(path);
+
+        if (blob_ids_on_disk.size() < blob_ids_in_stats.size())
+        {
+            FmtBuffer fmt_buf;
+            fmt_buf.fmtAppend(
+                "Some of Blob are missing in disk.[path={}] [stats ids: ",
+                path);
+
+            fmt_buf.joinStr(
+                blob_ids_in_stats.begin(),
+                blob_ids_in_stats.end(),
+                [](const auto arg, FmtBuffer & fb) {
+                    fb.fmtAppend("{}", arg);
+                },
+                ", ");
+
+            fmt_buf.append("]");
+
+            throw Exception(fmt_buf.toString(),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+
+        if constexpr (CHECK_STATS_ALL_IN_DISK)
+        {
+            std::vector<BlobFileId> blob_ids_on_disk_not_in_stats(blob_ids_in_stats.size());
+            auto last_check_it = std::set_difference(blob_ids_in_stats.begin(),
+                                                     blob_ids_in_stats.end(),
+                                                     blob_ids_on_disk.begin(),
+                                                     blob_ids_on_disk.end(),
+                                                     blob_ids_on_disk_not_in_stats.begin());
+
+            if (last_check_it != blob_ids_on_disk_not_in_stats.begin())
+            {
+                FmtBuffer fmt_buf;
+                fmt_buf.fmtAppend(
+                    "Some of Blob are missing in disk.[path={}] [stats ids: ",
+                    path);
+
+                fmt_buf.joinStr(
+                    blob_ids_in_stats.begin(),
+                    blob_ids_in_stats.end(),
+                    [](const auto arg, FmtBuffer & fb) {
+                        fb.fmtAppend("{}", arg);
+                    },
+                    ", ");
+
+                fmt_buf.append("]");
+
+                throw Exception(fmt_buf.toString(),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+
+        std::vector<BlobFileId> invalid_blob_ids;
+
+        std::set_difference(blob_ids_on_disk.begin(),
+                            blob_ids_on_disk.end(),
+                            blob_ids_in_stats.begin(),
+                            blob_ids_in_stats.end(),
+                            std::back_inserter(invalid_blob_ids));
+
+        for (const auto & invalid_blob_id : invalid_blob_ids)
+        {
+            const auto & invalid_blob_path = fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, invalid_blob_id);
+            LOG_FMT_INFO(log, "Remove invalid blob file [file={}]", invalid_blob_path);
+            Poco::File invalid_blob(invalid_blob_path);
+            invalid_blob.remove();
         }
     }
 
