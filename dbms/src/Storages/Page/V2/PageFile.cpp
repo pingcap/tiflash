@@ -770,7 +770,7 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
+size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter, bool background)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -788,7 +788,7 @@ size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, cons
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, enable_failpoint);
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, background, enable_failpoint);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
@@ -865,7 +865,7 @@ PageFile::Reader::~Reader()
     data_file->close();
 }
 
-PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter)
+PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter, bool background)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
@@ -892,7 +892,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr 
     PageMap page_map;
     for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(data_file, entry.offset, pos, entry.size, read_limiter);
+        PageUtil::readFile(data_file, entry.offset, pos, entry.size, read_limiter, background);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {

@@ -235,7 +235,7 @@ public:
 private:
 #endif
 
-    BlobFilePtr read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
+    BlobFilePtr read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
     /**
      *  Ask BlobStats to get a span from BlobStat.

@@ -58,7 +58,7 @@ BlobFile::BlobFile(String parent_path_,
     }
 }
 
-void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter)
+void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
     if (unlikely(wrfile->isClosed()))
     {
@@ -66,10 +66,10 @@ void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiter
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    PageUtil::readFile(wrfile, offset, buffer, size, read_limiter);
+    PageUtil::readFile(wrfile, offset, buffer, size, read_limiter, background);
 }
 
-void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter)
+void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter, bool background)
 {
     /**
      * Precautions:
@@ -92,9 +92,9 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
               });
 
 #ifndef NDEBUG
-    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, true);
+    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, background, true);
 #else
-    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, false);
+    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, background, false);
 #endif
     PageUtil::syncFile(wrfile);
 
