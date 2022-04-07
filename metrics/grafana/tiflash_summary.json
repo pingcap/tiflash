@@ -3541,28 +3541,12 @@
               "refId": "E"
             },
             {
-              "expr": "sum((rate(tiflash_system_profile_event_PSMBackgroundWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "5min-all-{{instance}}",
-              "refId": "F"
-            },
-            {
-              "expr": "sum((rate(tiflash_system_profile_event_PSMBackgroundReadBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "5min-all-{{instance}}",
-              "refId": "G"
-            },
-            {
               "expr": "sum(rate(tiflash_system_profile_event_DMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
               "legendFormat": "5min-write-{{instance}}",
-              "refId": "H"
+              "refId": "F"
             }
           ],
           "thresholds": [],
@@ -4443,12 +4427,19 @@
               "refId": "B"
             },
             {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMBackgroundWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "PageBackGround",
+              "refId": "C"
+            },
+            {
               "expr": "sum(rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
               "legendFormat": "AIO",
-              "refId": "C"
+              "refId": "D"
             }
           ],
           "thresholds": [],
@@ -4566,11 +4557,18 @@
               "refId": "B"
             },
             {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMBackgroundReadBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "PageBackGround",
+              "refId": "C"
+            },
+            {
               "expr": "sum(rate(tiflash_system_profile_event_ReadBufferAIOReadBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "AIO",
-              "refId": "C"
+              "refId": "D"
             }
           ],
           "thresholds": [],
