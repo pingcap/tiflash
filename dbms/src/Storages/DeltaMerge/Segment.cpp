@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
@@ -85,6 +86,11 @@ extern const Metric DT_SnapshotOfPlaceIndex;
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_enable_dt_relevant_place[];
+extern const char force_disable_dt_relevant_place[];
+} // namespace FailPoints
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -1480,11 +1486,15 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
     bool relevant_place = dm_context.enable_relevant_place;
     bool skippable_place = dm_context.enable_skippable_place;
 
+    fiu_do_on(FailPoints::force_enable_dt_relevant_place, relevant_place = true);
+    fiu_do_on(FailPoints::force_disable_dt_relevant_place, relevant_place = false);
+
     // Note that, when enable_relevant_place is false , we cannot use the range of this segment.
     // Because some block / delete ranges could contain some data / range that are not belong to current segment.
     // If we use the range of this segment as relevant_range, fully_indexed will always be false in those cases.
-    RowKeyRange relevant_range = relevant_place ? mergeRanges(read_ranges, is_common_handle, rowkey_column_size)
-                                                : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+    RowKeyRange relevant_range
+        = relevant_place ? mergeRanges(read_ranges, is_common_handle, rowkey_column_size)
+                         : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 

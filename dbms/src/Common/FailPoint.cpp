@@ -84,7 +84,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_remote_read_for_batch_cop)                       \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
-    M(force_change_all_blobs_to_read_only)
+    M(force_change_all_blobs_to_read_only)                   \
+    M(force_enable_dt_relevant_place)                        \
+    M(force_disable_dt_relevant_place)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_with_alter_locks_acquired)            \

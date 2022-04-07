@@ -40,6 +40,11 @@ extern const Metric DT_SnapshotOfPlaceIndex;
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_enable_dt_relevant_place[];
+extern const char force_disable_dt_relevant_place[];
+} // namespace FailPoints
 namespace DM
 {
 extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
@@ -423,16 +428,10 @@ class SegmentDeletionRelevantPlaceTest
     : public SegmentTest
     , public testing::WithParamInterface<bool>
 {
-    DB::Settings getSettings()
+    void SetUp() override
     {
-        DB::Settings settings;
-        auto enable_relevant_place = GetParam();
-
-        if (enable_relevant_place)
-            settings.set("dt_enable_relevant_place", "1");
-        else
-            settings.set("dt_enable_relevant_place", "0");
-        return settings;
+        // init segment
+        SegmentTest::SetUp();
     }
 };
 
@@ -440,6 +439,10 @@ class SegmentDeletionRelevantPlaceTest
 TEST_P(SegmentDeletionRelevantPlaceTest, ShareDelteRangeIndex)
 try
 {
+    Settings my_settings;
+    my_settings.dt_enable_relevant_place = GetParam(); // set for test
+    this->reload({}, std::move(my_settings));
+
     const size_t num_rows_write = 300;
     {
         // write to segment
@@ -472,8 +475,8 @@ try
     auto rows1 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 150)));
     auto rows2 = get_rows(RowKeyRange::fromHandleRange(HandleRange(150, 300)));
 
-    ASSERT_EQ(rows1, (size_t)100);
-    ASSERT_EQ(rows2, (size_t)100);
+    ASSERT_EQ(rows1, 100);
+    ASSERT_EQ(rows2, 100);
 }
 CATCH
 
