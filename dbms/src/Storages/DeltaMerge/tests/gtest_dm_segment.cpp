@@ -18,6 +18,8 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -25,8 +27,6 @@
 
 #include <ctime>
 #include <memory>
-
-#include "dm_basic_include.h"
 
 namespace CurrentMetrics
 {
@@ -86,14 +86,14 @@ protected:
         *table_columns = *columns;
 
         dm_context = std::make_unique<DMContext>(*db_context,
-                                                  *storage_path_pool,
-                                                  *storage_pool,
-                                                  0,
-                                                  /*min_version_*/ 0,
-                                                  settings.not_compress_columns,
-                                                  false,
-                                                  1,
-                                                  db_context->getSettingsRef());
+                                                 *storage_path_pool,
+                                                 *storage_pool,
+                                                 0,
+                                                 /*min_version_*/ 0,
+                                                 settings.not_compress_columns,
+                                                 false,
+                                                 1,
+                                                 db_context->getSettingsRef());
     }
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
@@ -1268,7 +1268,7 @@ class SegmentTest2 : public SegmentTest
 {
 public:
     SegmentTest2() = default;
-    
+
 
     void SetUp() override
     {
