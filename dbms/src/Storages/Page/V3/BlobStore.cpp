@@ -251,9 +251,17 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
         // So if we can't use id find blob, just ignore it.
         if (stat)
         {
-            LOG_FMT_TRACE(log, "Blob begin to recalculate capability [blob_id={}]", blob_id);
-            auto lock = stat->lock();
-            stat->recalculateCapacity();
+            {
+                auto lock = stat->lock();
+                stat->recalculateCapacity();
+            }
+            LOG_FMT_TRACE(log, "Blob recalculated capability [blob_id={}] [max_cap={}] "
+                               "[total_size={}] [valid_size={}] [valid_rate={}]",
+                          blob_id,
+                          stat->sm_max_caps,
+                          stat->sm_total_size,
+                          stat->sm_valid_size,
+                          stat->sm_valid_rate);
         }
     }
 }
@@ -565,10 +573,74 @@ BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * bu
 }
 
 
+struct BlobStoreGCInfo
+{
+    String toString() const
+    {
+        return fmt::format("{}. {}. {}. {}. ",
+                           toTypeString("Read-Only Blob", 0),
+                           toTypeString("No GC Blob", 1),
+                           toTypeString("Full GC Blob", 2),
+                           toTypeString("Truncated Blob", 3));
+    }
+
+    void appendToReadOnlyBlob(const BlobFileId blob_id, double valid_rate)
+    {
+        blob_gc_info[0].emplace_back(std::make_pair(blob_id, valid_rate));
+    }
+
+    void appendToNoNeedGCBlob(const BlobFileId blob_id, double valid_rate)
+    {
+        blob_gc_info[1].emplace_back(std::make_pair(blob_id, valid_rate));
+    }
+
+    void appendToNeedGCBlob(const BlobFileId blob_id, double valid_rate)
+    {
+        blob_gc_info[2].emplace_back(std::make_pair(blob_id, valid_rate));
+    }
+
+    void appendToTruncatedBlob(const BlobFileId blob_id, double valid_rate)
+    {
+        blob_gc_info[3].emplace_back(std::make_pair(blob_id, valid_rate));
+    }
+
+private:
+    // 1. read only blob
+    // 2. no need gc blob
+    // 3. full gc blob
+    // 4. need truncate blob
+    std::vector<std::pair<BlobFileId, double>> blob_gc_info[4];
+
+    String toTypeString(const std::string_view prefix, const size_t index) const
+    {
+        FmtBuffer fmt_buf;
+
+        if (blob_gc_info[index].empty())
+        {
+            fmt_buf.fmtAppend("{}: [null]", prefix);
+        }
+        else
+        {
+            fmt_buf.fmtAppend("{}: [", prefix);
+            fmt_buf.joinStr(
+                blob_gc_info[index].begin(),
+                blob_gc_info[index].end(),
+                [](const auto arg, FmtBuffer & fb) {
+                    fb.fmtAppend("{}/{:.2f}", arg.first, arg.second);
+                },
+                ", ");
+            fmt_buf.append("]");
+        }
+
+        return fmt_buf.toString();
+    }
+};
+
 std::vector<BlobFileId> BlobStore::getGCStats()
 {
     const auto stats_list = blob_stats.getStats();
     std::vector<BlobFileId> blob_need_gc;
+    BlobStoreGCInfo blobstore_gc_info;
 
     for (const auto & [path, stats] : stats_list)
     {
@@ -577,6 +649,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         {
             if (stat->isReadOnly())
             {
+                blobstore_gc_info.appendToReadOnlyBlob(stat->id, stat->sm_valid_rate);
                 LOG_FMT_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
                 continue;
             }
@@ -615,9 +688,11 @@ std::vector<BlobFileId> BlobStore::getGCStats()
 
                 // Change current stat to read only
                 stat->changeToReadOnly();
+                blobstore_gc_info.appendToNeedGCBlob(stat->id, stat->sm_valid_rate);
             }
             else
             {
+                blobstore_gc_info.appendToNoNeedGCBlob(stat->id, stat->sm_valid_rate);
                 LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
             }
 
@@ -627,9 +702,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
                 blobfile->truncate(right_margin);
                 stat->sm_total_size = right_margin;
+                stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
             }
         }
     }
+
+    LOG_FMT_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
 
     return blob_need_gc;
 }
