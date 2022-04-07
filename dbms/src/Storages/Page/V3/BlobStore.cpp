@@ -89,7 +89,7 @@ void BlobStore::registerPaths()
 
         for (const auto & blob_name : file_list)
         {
-            const auto & blob_id = BlobStats::getBlobIdFromName(blob_name);
+            const auto & [blob_id, err_msg] = BlobStats::getBlobIdFromName(blob_name);
             if (blob_id != INVALID_BLOBFILE_ID)
             {
                 Poco::File blob(fmt::format("{}/{}", path, blob_name));
@@ -97,7 +97,7 @@ void BlobStore::registerPaths()
             }
             else
             {
-                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
+                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}][err_msg={}]", path, blob_name, err_msg);
             }
         }
     }
@@ -911,11 +911,12 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
     stat->restoreSpaceMap(entry.offset, entry.size);
 }
 
-BlobFileId BlobStore::BlobStats::getBlobIdFromName(String blob_name)
+std::pair<BlobFileId, String> BlobStore::BlobStats::getBlobIdFromName(String blob_name)
 {
+    String err_msg = "no error";
     if (!startsWith(blob_name, BlobFile::BLOB_PREFIX_NAME))
     {
-        return INVALID_BLOBFILE_ID;
+        return {INVALID_BLOBFILE_ID, err_msg};
     }
 
     Strings ss;
@@ -923,14 +924,13 @@ BlobFileId BlobStore::BlobStats::getBlobIdFromName(String blob_name)
 
     if (ss.size() != 2)
     {
-        return INVALID_BLOBFILE_ID;
+        return {INVALID_BLOBFILE_ID, err_msg};
     }
 
-    String err_msg;
     try
     {
         const auto & blob_id = std::stoull(ss[1]);
-        return blob_id;
+        return {blob_id, err_msg};
     }
     catch (std::invalid_argument & e)
     {
@@ -940,7 +940,7 @@ BlobFileId BlobStore::BlobStats::getBlobIdFromName(String blob_name)
     {
         err_msg = e.what();
     }
-    return INVALID_BLOBFILE_ID;
+    return {INVALID_BLOBFILE_ID, err_msg};
 }
 
 std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
@@ -958,14 +958,14 @@ std::set<BlobFileId> BlobStore::BlobStats::getBlobIdsFromDisk(String path) const
 
     for (const auto & blob_name : file_list)
     {
-        const auto & blob_id = getBlobIdFromName(blob_name);
+        const auto & [blob_id, err_msg] = getBlobIdFromName(blob_name);
         if (blob_id != INVALID_BLOBFILE_ID)
         {
             blob_ids_on_disk.insert(blob_id);
         }
         else
         {
-            LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}]", path, blob_name);
+            LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
         }
     }
 

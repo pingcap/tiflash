@@ -176,7 +176,7 @@ public:
 
         std::set<BlobFileId> getBlobIdsFromDisk(String path) const;
 
-        static BlobFileId getBlobIdFromName(String blob_name);
+        static std::pair<BlobFileId, String> getBlobIdFromName(String blob_name);
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
