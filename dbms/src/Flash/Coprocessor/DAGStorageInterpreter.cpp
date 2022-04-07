@@ -133,10 +133,6 @@ std::vector<ExtraCastAfterTSMode> getExtraCastAfterTSModeFromTS(
 {
     std::vector<ExtraCastAfterTSMode> need_cast_column;
     need_cast_column.reserve(table_scan.getColumnSize());
-    String handle_column_name = MutableSupport::tidb_pk_column_name;
-    if (auto pk_handle_col = storage_for_logical_table->getTableInfo().getPKHandleColumn())
-        handle_column_name = pk_handle_col->get().name;
-
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         auto const & ci = table_scan.getColumns()[i];
