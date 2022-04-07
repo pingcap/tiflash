@@ -3554,7 +3554,7 @@
               "hide": true,
               "intervalFactor": 1,
               "legendFormat": "5min-all-{{instance}}",
-              "refId": "F"
+              "refId": "G"
             },
             {
               "expr": "sum(rate(tiflash_system_profile_event_DMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m])) by (instance)",
