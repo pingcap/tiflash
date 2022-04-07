@@ -499,6 +499,22 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
             analyzer->getCurrentInputColumns(),
             pipeline.firstStream()->getHeader());
     }
+    else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
+    {
+        physical_plan_builder.build(query_block.source_name, query_block.source);
+    }
+    else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
+    {
+        const auto & input_sample_block = input_streams_vec.back().back()->getHeader();
+        NamesAndTypes input_columns;
+        for (const auto & column : input_sample_block)
+            input_columns.emplace_back(column.name, column.type);
+        physical_plan_builder.buildSource(
+            query_block.source_name,
+            input_columns,
+            input_sample_block);
+        physical_plan_builder.build(query_block.source_name, query_block.source);
+    }
     else if (query_block.isTableScanSource())
     {
         physical_plan_builder.build(query_block.source_name, query_block.source);
@@ -511,8 +527,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else
     {
-        // TypeExchangeReceiver, TypeProjection
-        physical_plan_builder.build(query_block.source_name, query_block.source);
+        throw TiFlashException(
+            std::string(__PRETTY_FUNCTION__) + ": Unsupported source node: " + query_block.source_name,
+            Errors::Coprocessor::BadRequest);
     }
 
     // this log measures the concurrent degree in this mpp task

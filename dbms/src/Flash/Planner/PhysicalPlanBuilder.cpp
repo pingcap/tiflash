@@ -8,6 +8,7 @@
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
 
 namespace DB
@@ -38,6 +39,10 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
         break;
     case tipb::ExecType::TypeExchangeReceiver:
         cur_plan = PhysicalExchangeReceiver::build(context, executor_id);
+        break;
+    case tipb::ExecType::TypeTableScan:
+    case tipb::ExecType::TypePartitionTableScan:
+        cur_plan = PhysicalTableScan::build(context, executor, executor_id);
         break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Coprocessor::Unimplemented);
