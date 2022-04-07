@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
@@ -198,7 +212,7 @@ PoolWithFailoverBase<TNestedPool>::getMany(
     /// At exit update shared error counts with error counts occured during this call.
     SCOPE_EXIT(
         {
-            std::lock_guard<std::mutex> lock(pool_states_mutex);
+            std::lock_guard lock(pool_states_mutex);
             for (const ShuffledPool & pool : shuffled_pools)
                 shared_pool_states[pool.index].error_count += pool.error_count;
         });
@@ -239,7 +253,7 @@ PoolWithFailoverBase<TNestedPool>::getMany(
             }
             else
             {
-                LOG_WARNING(log, "Connection failed at try №" << (shuffled_pool.error_count + 1) << ", reason: " << fail_message);
+                LOG_FMT_WARNING(log, "Connection failed at try No.{}, reason: {}", shuffled_pool.error_count + 1, fail_message);
                 ProfileEvents::increment(ProfileEvents::DistributedConnectionFailTry);
 
                 ++shuffled_pool.error_count;
@@ -303,7 +317,7 @@ void PoolWithFailoverBase<TNestedPool>::reportError(const Entry & entry)
     {
         if (nested_pools[i]->contains(entry))
         {
-            std::lock_guard<std::mutex> lock(pool_states_mutex);
+            std::lock_guard lock(pool_states_mutex);
             ++shared_pool_states[i].error_count;
             return;
         }
@@ -341,7 +355,7 @@ PoolWithFailoverBase<TNestedPool>::updatePoolStates()
     result.reserve(nested_pools.size());
 
     {
-        std::lock_guard<std::mutex> lock(pool_states_mutex);
+        std::lock_guard lock(pool_states_mutex);
 
         for (auto & state : shared_pool_states)
             state.randomize();

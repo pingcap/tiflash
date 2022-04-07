@@ -1,15 +1,28 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Client/MultiplexedConnections.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int MISMATCH_REPLICAS_DATA_SOURCES;
-    extern const int NO_AVAILABLE_REPLICA;
-    extern const int TIMEOUT_EXCEEDED;
-}
+extern const int LOGICAL_ERROR;
+extern const int MISMATCH_REPLICAS_DATA_SOURCES;
+extern const int NO_AVAILABLE_REPLICA;
+extern const int TIMEOUT_EXCEEDED;
+} // namespace ErrorCodes
 
 
 MultiplexedConnections::MultiplexedConnections(Connection & connection, const Settings & settings_, const ThrottlerPtr & throttler)
@@ -25,8 +38,10 @@ MultiplexedConnections::MultiplexedConnections(Connection & connection, const Se
 }
 
 MultiplexedConnections::MultiplexedConnections(
-        std::vector<IConnectionPool::Entry> && connections,
-        const Settings & settings_, const ThrottlerPtr & throttler, bool append_extra_info)
+    std::vector<IConnectionPool::Entry> && connections,
+    const Settings & settings_,
+    const ThrottlerPtr & throttler,
+    bool append_extra_info)
     : settings(settings_)
 {
     /// If we didn't get any connections from pool and getMany() did not throw exceptions, this means that
@@ -35,13 +50,13 @@ MultiplexedConnections::MultiplexedConnections(
         return;
 
     replica_states.reserve(connections.size());
-    for (size_t i = 0; i < connections.size(); ++i)
+    for (auto & conn : connections)
     {
-        Connection * connection = &(*connections[i]);
+        Connection * connection = &(*conn);
         connection->setThrottler(throttler);
 
         ReplicaState replica_state;
-        replica_state.pool_entry = std::move(connections[i]);
+        replica_state.pool_entry = std::move(conn);
         replica_state.connection = connection;
 
         replica_states.push_back(std::move(replica_state));
@@ -55,7 +70,7 @@ MultiplexedConnections::MultiplexedConnections(
 
 void MultiplexedConnections::sendExternalTablesData(std::vector<ExternalTablesData> & data)
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     if (!sent_query)
         throw Exception("Cannot send external tables data: query not yet sent.", ErrorCodes::LOGICAL_ERROR);
@@ -82,7 +97,7 @@ void MultiplexedConnections::sendQuery(
     const ClientInfo * client_info,
     bool with_pending_data)
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     if (sent_query)
         throw Exception("Query already sent.", ErrorCodes::LOGICAL_ERROR);
@@ -116,7 +131,7 @@ void MultiplexedConnections::sendQuery(
 
 Connection::Packet MultiplexedConnections::receivePacket()
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
     Connection::Packet packet = receivePacketUnlocked();
     if (block_extra_info)
     {
@@ -132,13 +147,13 @@ BlockExtraInfo MultiplexedConnections::getBlockExtraInfo() const
 {
     if (!block_extra_info)
         throw Exception("MultiplexedConnections object not configured for block extra info support",
-            ErrorCodes::LOGICAL_ERROR);
+                        ErrorCodes::LOGICAL_ERROR);
     return *block_extra_info;
 }
 
 void MultiplexedConnections::disconnect()
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     for (ReplicaState & state : replica_states)
     {
@@ -153,7 +168,7 @@ void MultiplexedConnections::disconnect()
 
 void MultiplexedConnections::sendCancel()
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     if (!sent_query || cancelled)
         throw Exception("Cannot cancel. Either no query sent or already cancelled.", ErrorCodes::LOGICAL_ERROR);
@@ -170,7 +185,7 @@ void MultiplexedConnections::sendCancel()
 
 Connection::Packet MultiplexedConnections::drain()
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
 
     if (!cancelled)
         throw Exception("Cannot drain connections: cancel first.", ErrorCodes::LOGICAL_ERROR);
@@ -184,19 +199,19 @@ Connection::Packet MultiplexedConnections::drain()
 
         switch (packet.type)
         {
-            case Protocol::Server::Data:
-            case Protocol::Server::Progress:
-            case Protocol::Server::ProfileInfo:
-            case Protocol::Server::Totals:
-            case Protocol::Server::Extremes:
-            case Protocol::Server::EndOfStream:
-                break;
+        case Protocol::Server::Data:
+        case Protocol::Server::Progress:
+        case Protocol::Server::ProfileInfo:
+        case Protocol::Server::Totals:
+        case Protocol::Server::Extremes:
+        case Protocol::Server::EndOfStream:
+            break;
 
-            case Protocol::Server::Exception:
-            default:
-                /// If we receive an exception or an unknown packet, we save it.
-                res = std::move(packet);
-                break;
+        case Protocol::Server::Exception:
+        default:
+            /// If we receive an exception or an unknown packet, we save it.
+            res = std::move(packet);
+            break;
         }
     }
 
@@ -205,7 +220,7 @@ Connection::Packet MultiplexedConnections::drain()
 
 std::string MultiplexedConnections::dumpAddresses() const
 {
-    std::lock_guard<std::mutex> lock(cancel_mutex);
+    std::lock_guard lock(cancel_mutex);
     return dumpAddressesUnlocked();
 }
 
@@ -242,22 +257,22 @@ Connection::Packet MultiplexedConnections::receivePacketUnlocked()
 
     switch (packet.type)
     {
-        case Protocol::Server::Data:
-        case Protocol::Server::Progress:
-        case Protocol::Server::ProfileInfo:
-        case Protocol::Server::Totals:
-        case Protocol::Server::Extremes:
-            break;
+    case Protocol::Server::Data:
+    case Protocol::Server::Progress:
+    case Protocol::Server::ProfileInfo:
+    case Protocol::Server::Totals:
+    case Protocol::Server::Extremes:
+        break;
 
-        case Protocol::Server::EndOfStream:
-            invalidateReplica(state);
-            break;
+    case Protocol::Server::EndOfStream:
+        invalidateReplica(state);
+        break;
 
-        case Protocol::Server::Exception:
-        default:
-            current_connection->disconnect();
-            invalidateReplica(state);
-            break;
+    case Protocol::Server::Exception:
+    default:
+        current_connection->disconnect();
+        invalidateReplica(state);
+        break;
     }
 
     return packet;
@@ -302,7 +317,7 @@ MultiplexedConnections::ReplicaState & MultiplexedConnections::getReplicaForRead
     /// TODO Absolutely wrong code: read_list could be empty; rand() is not thread safe and has low quality; motivation of rand is unclear.
     /// This code path is disabled by default.
 
-    auto & socket = read_list[rand() % read_list.size()];
+    auto & socket = read_list[rand() % read_list.size()]; // NOLINT(cert-msc50-cpp)
     if (fd_to_replica_state_idx.empty())
     {
         fd_to_replica_state_idx.reserve(replica_states.size());
@@ -323,4 +338,4 @@ void MultiplexedConnections::invalidateReplica(ReplicaState & state)
     --active_connection_count;
 }
 
-}
+} // namespace DB

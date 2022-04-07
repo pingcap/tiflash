@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/MemoryTracker.h>
 #include <PSBackground.h>
 #include <Poco/Logger.h>
@@ -56,18 +70,17 @@ void PSGc::start()
 
 void PSScanner::onTime(Poco::Timer & /*timer*/)
 {
-    size_t num_snapshots = 0;
-    double oldest_snapshot_seconds = 0.0;
-    unsigned oldest_snapshot_thread = 0;
     try
     {
-        LOG_INFO(StressEnv::logger, "Scanner start");
-        std::tie(num_snapshots, oldest_snapshot_seconds, oldest_snapshot_thread) = ps->getSnapshotsStat();
-        LOG_INFO(StressEnv::logger,
-                 fmt::format("Scanner get {} snapshots, longest lifetime: {:.3f}s longest from thread: {}",
-                             num_snapshots,
-                             oldest_snapshot_seconds,
-                             oldest_snapshot_thread));
+        LOG_FMT_INFO(StressEnv::logger, "Scanner start");
+        auto stat = ps->getSnapshotsStat();
+        LOG_FMT_INFO(
+            StressEnv::logger,
+            "Scanner get {} snapshots, longest lifetime: {:.3f}s longest from thread: {}, tracing_id: {}",
+            stat.num_snapshots,
+            stat.longest_living_seconds,
+            stat.longest_living_from_thread_id,
+            stat.longest_living_from_tracing_id);
     }
     catch (...)
     {

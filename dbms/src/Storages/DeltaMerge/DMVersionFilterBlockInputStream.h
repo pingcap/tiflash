@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnsCommon.h>
@@ -45,14 +59,16 @@ public:
 
     ~DMVersionFilterBlockInputStream()
     {
-        LOG_DEBUG(log,
-                  "Total rows: " << total_rows << ", pass: " << DB::toString((Float64)passed_rows * 100 / total_rows, 2)
-                                 << "%, complete pass: " << DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
-                                 << "%, complete not pass: " << DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2)
-                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2) //
-                                 << "%, effective: " << DB::toString((Float64)effective_num_rows * 100 / passed_rows, 2) //
-                                 << "%, read tso: " << version_limit
-                                 << ", query id: " << (query_id.empty() ? String("<non-query>") : query_id));
+        LOG_FMT_DEBUG(log,
+                      "Total rows: {}, pass: {:.2f}%, complete pass: {:.2f}%, complete not pass: {:.2f}%, not clean: {:.2f}%, effective: {:.2f}%, read tso: {}, query id: {}",
+                      total_rows,
+                      passed_rows * 100.0 / total_rows,
+                      complete_passed * 100.0 / total_blocks,
+                      complete_not_passed * 100.0 / total_blocks,
+                      not_clean_rows * 100.0 / passed_rows,
+                      effective_num_rows * 100.0 / passed_rows,
+                      version_limit,
+                      (query_id.empty() ? "<non-query>" : query_id));
     }
 
     void readPrefix() override;
@@ -169,7 +185,7 @@ private:
             }
         }
 
-        return matched ? cur_version : UINT64_MAX;
+        return matched ? cur_version : std::numeric_limits<UInt64>::max();
     }
 
 private:

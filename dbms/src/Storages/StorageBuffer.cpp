@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/FieldVisitors.h>
 #include <Common/MemoryTracker.h>
@@ -87,7 +101,7 @@ protected:
             return res;
         has_been_read = true;
 
-        std::lock_guard<std::mutex> lock(buffer.mutex);
+        std::lock_guard lock(buffer.mutex);
 
         if (!buffer.data.rows())
             return res;
@@ -249,7 +263,7 @@ public:
         {
             if (!storage.no_destination)
             {
-                LOG_TRACE(storage.log, "Writing block with " << rows << " rows, " << bytes << " bytes directly.");
+                LOG_FMT_TRACE(storage.log, "Writing block with {} rows, {} bytes directly.", rows, bytes);
                 storage.writeBlockToDestination(block, destination);
             }
             return;
@@ -267,7 +281,7 @@ public:
 
         for (size_t try_no = 0; try_no < storage.num_shards; ++try_no)
         {
-            std::unique_lock<std::mutex> lock(storage.buffers[shard_num].mutex, std::try_to_lock_t());
+            std::unique_lock lock(storage.buffers[shard_num].mutex, std::try_to_lock_t());
 
             if (lock.owns_lock())
             {
@@ -285,7 +299,7 @@ public:
 
         /// If you still can not lock anything at once, then we'll wait on mutex.
         if (!least_busy_buffer)
-            insertIntoBuffer(block, storage.buffers[start_shard_num], std::unique_lock<std::mutex>(storage.buffers[start_shard_num].mutex));
+            insertIntoBuffer(block, storage.buffers[start_shard_num], std::unique_lock(storage.buffers[start_shard_num].mutex));
         else
             insertIntoBuffer(block, *least_busy_buffer, std::move(least_busy_lock));
     }
@@ -348,8 +362,7 @@ void StorageBuffer::startup()
 {
     if (context.getSettingsRef().readonly)
     {
-        LOG_WARNING(log, "Storage " << getName() << " is run with readonly settings, it will not be able to insert data."
-                                    << " Set apropriate system_profile to fix this.");
+        LOG_FMT_WARNING(log, "Storage {} is run with readonly settings, it will not be able to insert data. Set apropriate system_profile to fix this.", getName());
     }
 
     flush_thread = std::thread(&StorageBuffer::flushThread, this);
@@ -459,7 +472,7 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
     size_t bytes = 0;
     time_t time_passed = 0;
 
-    std::lock_guard<std::mutex> lock(buffer.mutex);
+    std::lock_guard lock(buffer.mutex);
 
     block_to_write = buffer.data.cloneEmpty();
 
@@ -487,7 +500,7 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
 
     ProfileEvents::increment(ProfileEvents::StorageBufferFlush);
 
-    LOG_TRACE(log, "Flushing buffer with " << rows << " rows, " << bytes << " bytes, age " << time_passed << " seconds.");
+    LOG_FMT_TRACE(log, "Flushing buffer with {} rows, {} bytes, age {} seconds.", rows, bytes, time_passed);
 
     if (no_destination)
         return;
@@ -529,7 +542,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (!table)
     {
-        LOG_ERROR(log, "Destination table " << destination_database << "." << destination_table << " doesn't exist. Block of data is discarded.");
+        LOG_FMT_ERROR(log, "Destination table {}.{} doesn't exist. Block of data is discarded.", destination_database, destination_table);
         return;
     }
 
@@ -551,7 +564,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
         {
             if (!block.getByName(dst_col.name).type->equals(*dst_col.type))
             {
-                LOG_ERROR(log, "Destination table " << destination_database << "." << destination_table << " have different type of column " << dst_col.name << " (" << block.getByName(dst_col.name).type->getName() << " != " << dst_col.type->getName() << "). Block of data is discarded.");
+                LOG_FMT_ERROR(log, "Destination table {}.{} have different type of column {} ({} != {}). Block of data is discarded.", destination_database, destination_table, dst_col.name, block.getByName(dst_col.name).type->getName(), dst_col.type->getName());
                 return;
             }
 
@@ -561,12 +574,12 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (columns_intersection.empty())
     {
-        LOG_ERROR(log, "Destination table " << destination_database << "." << destination_table << " have no common columns with block in buffer. Block of data is discarded.");
+        LOG_FMT_ERROR(log, "Destination table {}.{} have no common columns with block in buffer. Block of data is discarded.", destination_database, destination_table);
         return;
     }
 
     if (columns_intersection.size() != block.columns())
-        LOG_WARNING(log, "Not all columns from block in buffer exist in destination table " << destination_database << "." << destination_table << ". Some columns are discarded.");
+        LOG_FMT_WARNING(log, "Not all columns from block in buffer exist in destination table {}.{}. Some columns are discarded.", destination_database, destination_table);
 
     auto list_of_columns = std::make_shared<ASTExpressionList>();
     insert->columns = list_of_columns;

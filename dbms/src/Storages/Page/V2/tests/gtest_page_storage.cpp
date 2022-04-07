@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Encryption/FileProvider.h>
@@ -231,10 +245,10 @@ try
     size_t times_remover_called = 0;
 
     ExternalPageCallbacks callbacks;
-    callbacks.v2_scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
+    callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.v2_remover
+    callbacks.remover
         = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
         times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 2UL);
@@ -275,7 +289,7 @@ try
     }
 
     snapshot.reset();
-    callbacks.v2_remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
         times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 1UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);

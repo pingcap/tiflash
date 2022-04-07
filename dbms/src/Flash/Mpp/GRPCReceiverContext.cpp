@@ -1,4 +1,19 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
+#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
 #include <tuple>
@@ -59,6 +74,44 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
     }
 };
 
+struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
+{
+    pingcap::kv::Cluster * cluster;
+    const ExchangeRecvRequest & request;
+    pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call;
+    grpc::ClientContext client_context;
+    std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
+
+    AsyncGrpcExchangePacketReader(
+        pingcap::kv::Cluster * cluster_,
+        const ExchangeRecvRequest & req)
+        : cluster(cluster_)
+        , request(req)
+        , call(req.req)
+    {
+    }
+
+    void init(UnaryCallback<bool> * callback) override
+    {
+        reader = cluster->rpc_client->sendStreamRequestAsync(
+            request.req->sender_meta().address(),
+            &client_context,
+            call,
+            GRPCCompletionQueuePool::global_instance->pickQueue(),
+            callback);
+    }
+
+    void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) override
+    {
+        reader->Read(packet.get(), callback);
+    }
+
+    void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
+    {
+        reader->Finish(&status, callback);
+    }
+};
+
 struct LocalExchangePacketReader : public ExchangePacketReader
 {
     MPPTunnelPtr tunnel;
@@ -73,7 +126,7 @@ struct LocalExchangePacketReader : public ExchangePacketReader
     {
         if (tunnel)
         {
-            // In case that ExchangeReceiver throw error before finish reading from mpptunnel
+            // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
             tunnel->consumerFinish("Receiver closed");
         }
     }
@@ -127,12 +180,14 @@ GRPCReceiverContext::GRPCReceiverContext(
     const mpp::TaskMeta & task_meta_,
     pingcap::kv::Cluster * cluster_,
     std::shared_ptr<MPPTaskManager> task_manager_,
-    bool enable_local_tunnel_)
+    bool enable_local_tunnel_,
+    bool enable_async_grpc_)
     : exchange_receiver_meta(exchange_receiver_meta_)
     , task_meta(task_meta_)
     , cluster(cluster_)
     , task_manager(std::move(task_manager_))
     , enable_local_tunnel(enable_local_tunnel_)
+    , enable_async_grpc(enable_async_grpc_)
 {}
 
 ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
@@ -151,6 +206,11 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
     req.req->set_allocated_sender_meta(sender_task.release());
     return req;
+}
+
+bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) const
+{
+    return enable_async_grpc && !request.is_local;
 }
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
@@ -173,6 +233,15 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
             *reader->call);
         return reader;
     }
+}
+
+void GRPCReceiverContext::makeAsyncReader(
+    const ExchangeRecvRequest & request,
+    AsyncExchangePacketReaderPtr & reader,
+    UnaryCallback<bool> * callback) const
+{
+    reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, request);
+    reader->init(callback);
 }
 
 void GRPCReceiverContext::fillSchema(DAGSchema & schema) const

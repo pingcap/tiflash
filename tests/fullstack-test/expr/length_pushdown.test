@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 mysql> drop table if exists test.test_tb
 mysql> create table if not exists test.test_tb(id int NOT NULL AUTO_INCREMENT,char_ CHAR(4) NULL,enum_ ENUM('enum1', 'enum2', 'enum3') NULL,longtext_ LONGTEXT NULL,mediumtext_ MEDIUMTEXT NULL,set_ SET('set1', 'set2', 'set3') NULL,text_ TEXT NULL,tinytext_ TINYTEXT NULL,varchar_ VARCHAR(10) NULL,bit_ BIT NULL,bigint_ BIGINT NULL,boolean_ BOOLEAN NULL,decimal_ DECIMAL NULL,double_ DOUBLE NULL,float_ FLOAT NULL,int_ INT NULL,mediumint_ MEDIUMINT NULL,real_ REAL NULL,smallint_ SMALLINT NULL,tinyint_ TINYINT NULL,date_ DATE NULL,datetime_ DATETIME NULL,timestamp_ TIMESTAMP NULL,time_ TIME NULL,year_ YEAR NULL,blob_ BLOB NULL,mediumblob_ MEDIUMBLOB NULL,longblob_ LONGBLOB NULL,tinyblob_ TINYBLOB NULL,json_ JSON NULL,PRIMARY KEY(id))
 

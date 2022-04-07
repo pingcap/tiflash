@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
@@ -14,7 +28,8 @@ using MemTableSetPtr = std::shared_ptr<MemTableSet>;
 /// MemTableSet contains column file which data just resides in memory and it cannot be restored after restart.
 /// And the column files will be flushed periodically to ColumnFilePersistedSet.
 ///
-/// This class is not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
+/// This class is mostly not thread safe, manipulate on it requires acquire extra synchronization on the DeltaValueSpace
+/// Only the method that just access atomic variable can be called without extra synchronization
 class MemTableSet : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {
@@ -22,7 +37,10 @@ private:
     /// To avoid serialize the same schema between continuous ColumnFileInMemory and ColumnFileTiny instance.
     BlockPtr last_schema;
 
+    // Note that we must update `column_files_count` for outer thread-safe after `column_files` changed
     ColumnFiles column_files;
+    // TODO: check the proper memory_order when use this atomic variable
+    std::atomic<size_t> column_files_count;
 
     std::atomic<size_t> rows = 0;
     std::atomic<size_t> bytes = 0;
@@ -39,6 +57,7 @@ public:
         , column_files(in_memory_files)
         , log(&Poco::Logger::get("MemTableSet"))
     {
+        column_files_count = column_files.size();
         for (const auto & file : column_files)
         {
             rows += file->getRows();
@@ -47,21 +66,24 @@ public:
         }
     }
 
+    /// Thread safe part start
     String info() const
     {
         return fmt::format("MemTableSet: {} column files, {} rows, {} bytes, {} deletes",
-                           column_files.size(),
+                           column_files_count.load(),
                            rows.load(),
                            bytes.load(),
                            deletes.load());
     }
 
+    size_t getColumnFileCount() const { return column_files_count.load(); }
+    size_t getRows() const { return rows.load(); }
+    size_t getBytes() const { return bytes.load(); }
+    size_t getDeletes() const { return deletes.load(); }
+    /// Thread safe part end
+
     ColumnFiles cloneColumnFiles(DMContext & context, const RowKeyRange & target_range, WriteBatches & wbs);
 
-    size_t getColumnFileCount() const { return column_files.size(); }
-    size_t getRows() const { return rows; }
-    size_t getBytes() const { return bytes; }
-    size_t getDeletes() const { return deletes; }
 
     /// The following methods returning false means this operation failed, caused by other threads could have done
     /// some updates on this instance. E.g. this instance have been abandoned.
@@ -75,7 +97,7 @@ public:
     void ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & new_column_files, bool clear_data_in_range);
 
     /// Create a constant snapshot for read.
-    ColumnFileSetSnapshotPtr createSnapshot();
+    ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap);
 
     /// Build a flush task which will try to flush all column files in MemTableSet now
     ColumnFileFlushTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);

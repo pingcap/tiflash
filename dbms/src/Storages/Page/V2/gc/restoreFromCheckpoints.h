@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <Storages/Page/V2/PageStorage.h>
 
@@ -60,10 +74,12 @@ restoreFromCheckpoints(MergineQueue & merging_queue,
         while (!merging_queue.empty() && merging_queue.top()->fileIdLevel() <= last_checkpoint_file_id)
         {
             auto reader = merging_queue.top();
-            LOG_INFO(logger,
-                     storage_name << " Removing old PageFile: " + reader->belongingPageFile().toString()
-                                  << " after restore checkpoint PageFile_" << last_checkpoint_file_id.first << "_"
-                                  << last_checkpoint_file_id.second);
+            LOG_FMT_INFO(logger,
+                         "{} Removing old PageFile: {} after restore checkpoint PageFile_{}_{}",
+                         storage_name,
+                         reader->belongingPageFile().toString(),
+                         last_checkpoint_file_id.first,
+                         last_checkpoint_file_id.second);
             if (reader->writeBatchSequence() != 0)
             {
                 throw Exception("Try to remove old PageFile: " + reader->belongingPageFile().toString()
@@ -78,10 +94,13 @@ restoreFromCheckpoints(MergineQueue & merging_queue,
             merging_queue.pop();
         }
     }
-    LOG_INFO(logger,
-             storage_name << " restore " << info.toString() << " from checkpoint PageFile_" //
-                          << last_checkpoint_file_id.first << "_" << last_checkpoint_file_id.second //
-                          << " sequence: " << checkpoint_wb_sequence);
+    LOG_FMT_INFO(logger,
+                 "{} restore {} from checkpoint PageFile_{}_{} sequence: {}",
+                 storage_name,
+                 info.toString(),
+                 last_checkpoint_file_id.first,
+                 last_checkpoint_file_id.second,
+                 checkpoint_wb_sequence);
     // The latest checkpoint, the WriteBatch's sequence of latest checkpoint, old PageFiles that somehow have not been clean before
     return {checkpoints.back(), checkpoint_wb_sequence, page_files_to_drop};
 }
