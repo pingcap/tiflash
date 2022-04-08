@@ -150,6 +150,26 @@ struct TableScan : public Executor
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &) override;
     void toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> &) override
     {}
+
+    void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
+    {
+        auto column_name = splitQualifiedName(dag_column_info.first).second;
+        if (column_name == MutableSupport::tidb_pk_column_name)
+            ci->set_column_id(-1);
+        else
+            ci->set_column_id(table_info.getColumnID(column_name));
+        ci->set_tp(dag_column_info.second.tp);
+        ci->set_flag(dag_column_info.second.flag);
+        ci->set_columnlen(dag_column_info.second.flen);
+        ci->set_decimal(dag_column_info.second.decimal);
+        if (!dag_column_info.second.elems.empty())
+        {
+            for (const auto & pair : dag_column_info.second.elems)
+            {
+                ci->add_elems(pair.first);
+            }
+        }
+    }
 };
 
 struct Selection : public Executor

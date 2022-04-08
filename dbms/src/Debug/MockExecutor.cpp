@@ -839,29 +839,25 @@ void TableScan::columnPrune(std::unordered_set<String> & used_columns)
 }
 bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &)
 {
-    tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
-    tipb_executor->set_executor_id(name);
-    auto * ts = tipb_executor->mutable_tbl_scan();
-    ts->set_table_id(table_info.id);
-    for (const auto & info : output_schema)
+    if (table_info.is_partition_table)
     {
-        tipb::ColumnInfo * ci = ts->add_columns();
-        auto column_name = splitQualifiedName(info.first).second;
-        if (column_name == MutableSupport::tidb_pk_column_name)
-            ci->set_column_id(-1);
-        else
-            ci->set_column_id(table_info.getColumnID(column_name));
-        ci->set_tp(info.second.tp);
-        ci->set_flag(info.second.flag);
-        ci->set_columnlen(info.second.flen);
-        ci->set_decimal(info.second.decimal);
-        if (!info.second.elems.empty())
-        {
-            for (const auto & pair : info.second.elems)
-            {
-                ci->add_elems(pair.first);
-            }
-        }
+        tipb_executor->set_tp(tipb::ExecType::TypePartitionTableScan);
+        tipb_executor->set_executor_id(name);
+        auto * partition_ts = tipb_executor->mutable_partition_table_scan();
+        partition_ts->set_table_id(table_info.id);
+        for (const auto & info : output_schema)
+            setTipbColumnInfo(partition_ts->add_columns(), info);
+        for (const auto & partition : table_info.partition.definitions)
+            partition_ts->add_partition_ids(partition.id);
+    }
+    else
+    {
+        tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
+        tipb_executor->set_executor_id(name);
+        auto * ts = tipb_executor->mutable_tbl_scan();
+        ts->set_table_id(table_info.id);
+        for (const auto & info : output_schema)
+            setTipbColumnInfo(ts->add_columns(), info);
     }
     return true;
 }
