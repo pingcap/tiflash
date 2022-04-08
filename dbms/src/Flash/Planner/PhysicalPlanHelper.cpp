@@ -1,4 +1,5 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 
