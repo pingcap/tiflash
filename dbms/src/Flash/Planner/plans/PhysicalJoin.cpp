@@ -4,11 +4,11 @@
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
 #include <Interpreters/Context.h>
 
@@ -28,7 +28,7 @@ void recordJoinExecuteInfo(
     assert(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[join_executor_id] = std::move(join_execute_info);
 }
-}
+} // namespace
 
 PhysicalPlanPtr PhysicalJoin::build(
     const Context & context,

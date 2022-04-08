@@ -5,7 +5,8 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
-'' namespace DB::PhysicalPlanHelper
+
+namespace DB::PhysicalPlanHelper
 {
     Names schemaToNames(const NamesAndTypes & schema);
 
