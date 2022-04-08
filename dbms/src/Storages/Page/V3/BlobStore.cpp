@@ -1053,9 +1053,14 @@ void BlobStore::BlobStats::restore()
 
         for (const auto & invalid_blob_id : invalid_blob_ids)
         {
-            const auto & invalid_blob_path = fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, invalid_blob_id);
             LOG_FMT_INFO(log, "Remove invalid blob file [file={}]", invalid_blob_path);
+            const auto & invalid_blob_path = fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, invalid_blob_id);
             Poco::File invalid_blob(invalid_blob_path);
+            if (delegator->fileExist({invalid_blob_id, 0}))
+            {
+                delegator->removePageFile({invalid_blob_id, 0}, invalid_blob.getSize(), false, false);
+            }
+
             invalid_blob.remove();
         }
     }
