@@ -51,6 +51,7 @@ PhysicalPlanPtr PhysicalJoin::build(
     const auto & probe_plan = build_side_index == 0 ? right : left;
 
     recordJoinExecuteInfo(*context.getDAGContext(), join_ptr, build_plan, executor_id);
+
     auto physical_join = std::make_shared<PhysicalJoin>(executor_id, schema, join_ptr, columns_added_by_join, prepare_build_actions, prepare_probe_actions);
     physical_join->appendChild(build_plan);
     physical_join->appendChild(probe_plan);
