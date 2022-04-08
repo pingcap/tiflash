@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -38,6 +39,11 @@ String PhysicalPlan::toString()
         executor_id,
         is_record_profile_streams,
         schema_to_string());
+}
+
+void PhysicalPlan::finalize()
+{
+    finalize(PhysicalPlanHelper::schemaToNames(schema));
 }
 
 void PhysicalPlan::recordProfileStreams(DAGPipeline & pipeline, const Context & context)

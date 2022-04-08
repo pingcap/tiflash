@@ -39,6 +39,9 @@ PhysicalPlanPtr PhysicalJoin::build(
     assert(left);
     assert(right);
 
+    left->finalize();
+    right->finalize();
+
     auto [kind, build_side_index] = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(join);
     assert(build_side_index == 1 || build_side_index == 0);
 

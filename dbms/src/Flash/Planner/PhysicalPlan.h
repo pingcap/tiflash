@@ -58,7 +58,7 @@ public:
     virtual void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
     virtual void finalize(const Names & parent_require) = 0;
-    void finalize() { finalize({}); }
+    void finalize();
 
     /// Obtain a sample block that contains the names and types of result columns.
     virtual const Block & getSampleBlock() const = 0;
