@@ -44,7 +44,7 @@ public:
                const String & file_name_base,
                size_t aio_threshold,
                size_t max_read_buffer_size,
-               const DB::LoggerPtr & log,
+               const LoggerPtr & log,
                const ReadLimiterPtr & read_limiter);
 
         const bool single_file_mode;
@@ -90,7 +90,7 @@ public:
         const ReadLimiterPtr & read_limiter,
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
-        const DB::LoggerPtr & tracing_logger);
+        const String & tracing_id_);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -142,7 +142,7 @@ private:
 
     FileProviderPtr file_provider;
 
-    DB::LoggerPtr log;
+    LoggerPtr log;
 };
 
 } // namespace DM
