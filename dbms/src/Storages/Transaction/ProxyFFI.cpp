@@ -1,4 +1,3 @@
-#include <ext/scope_guard.h>
 #include <Common/CurrentMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -8,6 +7,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/diagnosticspb.pb.h>
+
+#include <ext/scope_guard.h>
 
 #define CHECK_PARSE_PB_BUFF_IMPL(n, a, b, c)                                              \
     do                                                                                    \
