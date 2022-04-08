@@ -50,12 +50,6 @@ namespace PS::V3
 {
 static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;
 
-#ifndef NDEBUG
-static constexpr bool CHECK_STATS_ALL_IN_DISK = true;
-#else
-static constexpr bool CHECK_STATS_ALL_IN_DISK = false;
-#endif
-
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStatPtr = BlobStore::BlobStats::BlobStatPtr;
 using ChecksumClass = Digest::CRC64;
@@ -90,10 +84,12 @@ void BlobStore::registerPaths()
         for (const auto & blob_name : file_list)
         {
             const auto & [blob_id, err_msg] = BlobStats::getBlobIdFromName(blob_name);
+            auto lock_stats = blob_stats.lock();
             if (blob_id != INVALID_BLOBFILE_ID)
             {
                 Poco::File blob(fmt::format("{}/{}", path, blob_name));
                 delegator->addPageFileUsedSize({blob_id, 0}, blob.getSize(), path, true);
+                blob_stats.createStatNotChecking(blob_id, lock_stats);
             }
             else
             {
@@ -978,90 +974,10 @@ void BlobStore::BlobStats::restore()
 
     for (auto & [path, stats] : stats_map)
     {
-        std::set<BlobFileId> blob_ids_in_stats;
         for (const auto & stat : stats)
         {
             stat->recalculateSpaceMap();
             max_restored_file_id = std::max(stat->id, max_restored_file_id);
-            blob_ids_in_stats.insert(stat->id);
-        }
-
-        // If a BlobFile on disk with a valid rate of 0 (but has not been deleted because of some reason),
-        // then it won't be restored to stats. But we should check and clean up if such files exist.
-
-        std::set<BlobFileId> blob_ids_on_disk = getBlobIdsFromDisk(path);
-
-        if (blob_ids_on_disk.size() < blob_ids_in_stats.size())
-        {
-            FmtBuffer fmt_buf;
-            fmt_buf.fmtAppend(
-                "Some of Blob are missing in disk.[path={}] [stats ids: ",
-                path);
-
-            fmt_buf.joinStr(
-                blob_ids_in_stats.begin(),
-                blob_ids_in_stats.end(),
-                [](const auto arg, FmtBuffer & fb) {
-                    fb.fmtAppend("{}", arg);
-                },
-                ", ");
-
-            fmt_buf.append("]");
-
-            throw Exception(fmt_buf.toString(),
-                            ErrorCodes::LOGICAL_ERROR);
-        }
-
-        if constexpr (CHECK_STATS_ALL_IN_DISK)
-        {
-            std::vector<BlobFileId> blob_ids_on_disk_not_in_stats(blob_ids_in_stats.size());
-            auto last_check_it = std::set_difference(blob_ids_in_stats.begin(),
-                                                     blob_ids_in_stats.end(),
-                                                     blob_ids_on_disk.begin(),
-                                                     blob_ids_on_disk.end(),
-                                                     blob_ids_on_disk_not_in_stats.begin());
-
-            if (last_check_it != blob_ids_on_disk_not_in_stats.begin())
-            {
-                FmtBuffer fmt_buf;
-                fmt_buf.fmtAppend(
-                    "Some of Blob are missing in disk.[path={}] [stats ids: ",
-                    path);
-
-                fmt_buf.joinStr(
-                    blob_ids_in_stats.begin(),
-                    blob_ids_in_stats.end(),
-                    [](const auto arg, FmtBuffer & fb) {
-                        fb.fmtAppend("{}", arg);
-                    },
-                    ", ");
-
-                fmt_buf.append("]");
-
-                throw Exception(fmt_buf.toString(),
-                                ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-
-        std::vector<BlobFileId> invalid_blob_ids;
-
-        std::set_difference(blob_ids_on_disk.begin(),
-                            blob_ids_on_disk.end(),
-                            blob_ids_in_stats.begin(),
-                            blob_ids_in_stats.end(),
-                            std::back_inserter(invalid_blob_ids));
-
-        for (const auto & invalid_blob_id : invalid_blob_ids)
-        {
-            LOG_FMT_INFO(log, "Remove invalid blob file [file={}]", invalid_blob_path);
-            const auto & invalid_blob_path = fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, invalid_blob_id);
-            Poco::File invalid_blob(invalid_blob_path);
-            if (delegator->fileExist({invalid_blob_id, 0}))
-            {
-                delegator->removePageFile({invalid_blob_id, 0}, invalid_blob.getSize(), false, false);
-            }
-
-            invalid_blob.remove();
         }
     }
 
