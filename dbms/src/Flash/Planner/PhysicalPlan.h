@@ -73,7 +73,7 @@ protected:
     void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
 
     String executor_id;
-    PlanType type;
+    Planner::PlanType type;
     NamesAndTypes schema;
     bool is_record_profile_streams = true;
 };

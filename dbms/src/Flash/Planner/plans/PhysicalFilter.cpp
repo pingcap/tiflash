@@ -4,7 +4,6 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Planner/FinalizeHelper.h>
-#include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Interpreters/Context.h>

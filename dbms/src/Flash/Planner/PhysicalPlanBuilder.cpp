@@ -5,6 +5,7 @@
 #include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
+#include <Flash/Planner/plans/PhysicalJoin.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
@@ -13,36 +14,53 @@
 
 namespace DB
 {
+namespace
+{
+PhysicalPlanPtr popBack(std::vector<PhysicalPlanPtr> vec)
+{
+    assert(!vec.empty());
+    PhysicalPlanPtr back = vec.back();
+    vec.pop_back();
+    return back;
+}
+} // namespace
 void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor * executor)
 {
     assert(executor);
     switch (executor->tp())
     {
+    case tipb::ExecType::TypeJoin:
+    {
+        auto right = popBack(cur_plans);
+        auto left = popBack(cur_plans);
+        cur_plans.push_back(PhysicalJoin::build(context, executor_id, executor->join(), left, right));
+        break;
+    }
     case tipb::ExecType::TypeSelection:
-        cur_plan = PhysicalFilter::build(context, executor_id, executor->selection(), cur_plan);
+        cur_plans.push_back(PhysicalFilter::build(context, executor_id, executor->selection(), popBack(cur_plans)));
         break;
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
-        cur_plan = PhysicalAggregation::build(context, executor_id, executor->aggregation(), cur_plan);
+        cur_plans.push_back(PhysicalAggregation::build(context, executor_id, executor->aggregation(), popBack(cur_plans)));
         break;
     case tipb::ExecType::TypeTopN:
-        cur_plan = PhysicalTopN::build(context, executor_id, executor->topn(), cur_plan);
+        cur_plans.push_back(PhysicalTopN::build(context, executor_id, executor->topn(), popBack(cur_plans)));
         break;
     case tipb::ExecType::TypeLimit:
-        cur_plan = PhysicalLimit::build(executor_id, executor->limit(), cur_plan);
+        cur_plans.push_back(PhysicalLimit::build(executor_id, executor->limit(), popBack(cur_plans)));
         break;
     case tipb::ExecType::TypeProjection:
-        cur_plan = PhysicalProjection::build(context, executor_id, executor->projection(), cur_plan);
+        cur_plans.push_back(PhysicalProjection::build(context, executor_id, executor->projection(), popBack(cur_plans)));
         break;
     case tipb::ExecType::TypeExchangeSender:
-        cur_plan = PhysicalExchangeSender::build(executor_id, executor->exchange_sender(), cur_plan);
+        cur_plans.push_back(PhysicalExchangeSender::build(executor_id, executor->exchange_sender(), popBack(cur_plans)));
         break;
     case tipb::ExecType::TypeExchangeReceiver:
-        cur_plan = PhysicalExchangeReceiver::build(context, executor_id);
+        cur_plans.push_back(PhysicalExchangeReceiver::build(context, executor_id));
         break;
     case tipb::ExecType::TypeTableScan:
     case tipb::ExecType::TypePartitionTableScan:
-        cur_plan = PhysicalTableScan::build(context, executor, executor_id);
+        cur_plans.push_back(PhysicalTableScan::build(context, executor, executor_id));
         break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Coprocessor::Unimplemented);
@@ -54,14 +72,12 @@ void PhysicalPlanBuilder::buildSource(
     const NamesAndTypes & source_schema,
     const Block & source_sample_block)
 {
-    assert(!cur_plan);
-    cur_plan = PhysicalSource::build(executor_id, source_schema, source_sample_block);
+    cur_plans.push_back(PhysicalSource::build(executor_id, source_schema, source_sample_block));
 }
 
 void PhysicalPlanBuilder::buildNonRootFinalProjection(const String & column_prefix)
 {
-    assert(cur_plan);
-    cur_plan = PhysicalProjection::buildNonRootFinal(context, column_prefix, cur_plan);
+    cur_plans.push_back(PhysicalProjection::buildNonRootFinal(context, column_prefix, popBack(cur_plans)));
 }
 
 void PhysicalPlanBuilder::buildRootFinalProjection(
@@ -70,13 +86,12 @@ void PhysicalPlanBuilder::buildRootFinalProjection(
     const String & column_prefix,
     bool keep_session_timezone_info)
 {
-    assert(cur_plan);
-    cur_plan = PhysicalProjection::buildRootFinal(
+    cur_plans.push_back(PhysicalProjection::buildRootFinal(
         context,
         require_schema,
         output_offsets,
         column_prefix,
         keep_session_timezone_info,
-        cur_plan);
+        popBack(cur_plans)));
 }
 } // namespace DB

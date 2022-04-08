@@ -64,20 +64,7 @@ void PhysicalTableScan::transform(DAGPipeline & pipeline, Context & context, siz
         max_streams);
     storages_with_structure_lock.clear();
 
-    assert(pipeline.hasMoreThanOneStream());
-    const auto & header = pipeline.firstStream()->getHeader();
-
-    // to make sure that pipeline.header == schema
-    const auto & logger = context.getDAGContext()->log;
-    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(header, context);
-    const auto header_names = header.getNames();
-    assert(header_names.size() == schema.size());
-    FinalizeHelper::checkSchemaContainsSampleBlock(schema, header);
-    NamesWithAliases project_aliases;
-    for (size_t i = 0; i < header_names.size(); ++i)
-        project_aliases.emplace_back(header_names[i], schema[i].name);
-    project_actions->add(ExpressionAction::project(project_aliases));
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project_actions, logger->identifier()); });
+    PhysicalPlanHelper::executeSchemaProjectAction(context, pipeline, schema);
 }
 
 void PhysicalTableScan::finalize(const Names & parent_require)

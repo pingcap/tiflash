@@ -9,7 +9,7 @@ namespace DB
 class PhysicalPlanBuilder
 {
 public:
-    PhysicalPlanBuilder(Context & context_)
+    explicit PhysicalPlanBuilder(Context & context_)
         : context(context_)
     {}
 
@@ -29,12 +29,12 @@ public:
 
     PhysicalPlanPtr getResult() const
     {
-        assert(cur_plan);
-        return cur_plan;
+        assert(cur_plans.size() == 1);
+        return cur_plans.back();
     }
 
 private:
-    PhysicalPlanPtr cur_plan;
+    std::vector<PhysicalPlanPtr> cur_plans;
 
     Context & context;
 };

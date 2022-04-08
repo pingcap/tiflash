@@ -20,6 +20,7 @@ namespace DB
 {
 enum PlanType
 {
+    PhysicalJoinType,
     Selection,
     Aggregation,
     Limit,

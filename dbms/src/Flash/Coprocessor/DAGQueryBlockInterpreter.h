@@ -45,8 +45,7 @@ public:
         const std::vector<BlockInputStreams> & input_streams_vec_,
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
-        bool keep_session_timezone_info_,
-        std::vector<SubqueriesForSets> & subqueries_for_sets_);
+        bool keep_session_timezone_info_);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -54,27 +53,6 @@ public:
 
 private:
     void executeImpl(DAGPipeline & pipeline);
-    void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
-    void prepareJoin(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
-        DAGPipeline & pipeline,
-        Names & key_names,
-        bool left,
-        bool is_right_out_join,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-        String & filter_column_name);
-    ExpressionActionsPtr genJoinOtherConditionAction(
-        const tipb::Join & join,
-        std::vector<NameAndTypePair> & source_columns,
-        String & filter_column_for_other_condition,
-        String & filter_column_for_other_eq_condition);
-
-    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
-
-    void recordProfileStreams(DAGPipeline & pipeline, const String & key);
-
-    void recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr);
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
 
@@ -89,8 +67,6 @@ private:
     size_t max_streams = 1;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
-
-    std::vector<SubqueriesForSets> & subqueries_for_sets;
 
     LoggerPtr log;
 };

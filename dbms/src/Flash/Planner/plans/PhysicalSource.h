@@ -22,7 +22,9 @@ public:
         const Block & sample_block_)
         : PhysicalLeaf(executor_id_, PlanType::Source, schema_)
         , sample_block(sample_block_)
-    {}
+    {
+        is_record_profile_streams = false;
+    }
 
     void transformImpl(DAGPipeline &, Context &, size_t) override {}
 

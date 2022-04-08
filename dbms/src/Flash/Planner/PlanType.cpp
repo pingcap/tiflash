@@ -21,6 +21,8 @@ String toString(const PlanType & plan_type)
 {
     switch (plan_type)
     {
+    case PhysicalJoinType:
+        return "Join";
     case Selection:
         return "Selection";
     case Aggregation:

@@ -29,6 +29,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Interpreters/SubqueryForSet.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -294,6 +295,8 @@ public:
     bool keep_session_timezone_info = false;
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type = tipb::EncodeType::TypeDefault;
+
+    std::vector<SubqueriesForSets> subqueries_for_sets;
 
 private:
     /// Hold io for correcting the destruction order.
