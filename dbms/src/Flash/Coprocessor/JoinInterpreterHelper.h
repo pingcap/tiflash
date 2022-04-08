@@ -20,7 +20,7 @@
 #include <Core/Block.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Join.h>
