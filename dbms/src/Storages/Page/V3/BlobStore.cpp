@@ -97,7 +97,7 @@ void BlobStore::registerPaths()
             }
             else
             {
-                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}][err_msg={}]", path, blob_name, err_msg);
+                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
             }
         }
     }
@@ -913,7 +913,7 @@ void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 
 std::pair<BlobFileId, String> BlobStore::BlobStats::getBlobIdFromName(String blob_name)
 {
-    String err_msg = "no error";
+    String err_msg;
     if (!startsWith(blob_name, BlobFile::BLOB_PREFIX_NAME))
     {
         return {INVALID_BLOBFILE_ID, err_msg};
