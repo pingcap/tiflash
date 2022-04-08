@@ -12,28 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Flash/Planner/traversePhysicalPlans.h>
-#include <Interpreters/Join.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char pause_after_copr_streams_acquired[];
-extern const char minimum_block_size_for_cross_join[];
-} // namespace FailPoints
-
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     Context & context_,
     const std::vector<BlockInputStreams> & input_streams_vec_,
@@ -196,11 +184,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     physical_plan->transform(pipeline, context, max_streams);
 }
 
-void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
-{
-    restoreConcurrency(pipeline, dagContext().final_concurrency, log);
-}
-
 BlockInputStreams DAGQueryBlockInterpreter::execute()
 {
     DAGPipeline pipeline;
@@ -208,9 +191,8 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     if (!pipeline.streams_with_non_joined_data.empty())
     {
         executeUnion(pipeline, max_streams, log);
-        restorePipelineConcurrency(pipeline);
+        restoreConcurrency(pipeline, dagContext().final_concurrency, log);
     }
-
     return pipeline.streams;
 }
 } // namespace DB

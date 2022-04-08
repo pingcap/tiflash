@@ -14,26 +14,15 @@
 
 #pragma once
 
-#include <DataStreams/BlockIO.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Common/Logger.h>
+#include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Storages/Transaction/TiDB.h>
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-#include <kvproto/coprocessor.pb.h>
-#include <pingcap/coprocessor/Client.h>
-#include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
 
 namespace DB
 {
 class DAGQueryBlock;
-class ExchangeReceiver;
-class DAGExpressionAnalyzer;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
@@ -54,8 +43,6 @@ public:
 private:
     void executeImpl(DAGPipeline & pipeline);
 
-    void restorePipelineConcurrency(DAGPipeline & pipeline);
-
     DAGContext & dagContext() const { return *context.getDAGContext(); }
 
     Context & context;
@@ -65,8 +52,6 @@ private:
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
-
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
     LoggerPtr log;
 };
