@@ -3,7 +3,6 @@
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
