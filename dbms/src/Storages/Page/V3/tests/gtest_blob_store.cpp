@@ -67,13 +67,14 @@ try
 {
     BlobStats stats(logger, delegator, config);
 
-    BlobFileId file_id1 = 10;
-    BlobFileId file_id2 = 12;
+    BlobFileId file_id1 = 1;
+    BlobFileId file_id2 = 2;
 
-    const auto & path = getTemporaryPath();
-    createIfNotExist(path);
-    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
-    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
+    {
+        const auto & lock = stats.lock();
+        stats.createStat(file_id1, lock);
+        stats.createStat(file_id2, lock);
+    }
 
     {
         stats.restoreByEntry(PageEntryV3{
@@ -104,7 +105,7 @@ try
 
     ASSERT_EQ(stats_copy.size(), 1);
     ASSERT_EQ(stats_copy.begin()->second.size(), 2);
-    EXPECT_EQ(stats.roll_id, 13);
+    EXPECT_EQ(stats.roll_id, 3);
 
     auto stat1 = stats.blobIdToStat(file_id1);
     EXPECT_EQ(stat1->sm_total_size, 2048 + 512);
@@ -294,6 +295,7 @@ try
     createIfNotExist(path);
     Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
     Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
+    blob_store.registerPaths();
 
     {
         blob_store.blob_stats.restoreByEntry(PageEntryV3{
@@ -388,6 +390,7 @@ try
     };
 
     auto restore_blobs = [](BlobStore & blob_store, std::vector<BlobFileId> blob_ids) {
+        blob_store.registerPaths();
         for (const auto & id : blob_ids)
         {
             blob_store.blob_stats.restoreByEntry(PageEntryV3{
@@ -481,15 +484,7 @@ try
         ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
-        restore_blobs(blob_store_check, {4});
-        ASSERT_THROW(blob_store_check.blob_stats.restore(), DB::Exception);
-        // Won't remove blob if exception happened.
-        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
-
-        auto blob_store_check2 = BlobStore(getCurrentTestName(), file_provider, delegator, config);
-        restore_blobs(blob_store_check2, {1, 2, 3, 4});
-        ASSERT_THROW(blob_store_check2.blob_stats.restore(), DB::Exception);
-        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+        ASSERT_THROW(restore_blobs(blob_store_check, {4}), DB::Exception);
     }
 }
 CATCH
