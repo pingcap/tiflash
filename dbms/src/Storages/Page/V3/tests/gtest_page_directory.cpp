@@ -2006,9 +2006,9 @@ try
         EXPECT_SAME_ENTRY(entry_5_v2, restored_dir->get(5, temp_snap).second);
 
         // The entry_1_v1 should be restored to stats
-        auto stat_for_file_1 = stats.blobIdToStat(file_id1, false, false);
+        auto stat_for_file_1 = stats.blobIdToStat(file_id1, /*ignore_not_exist*/ false);
         EXPECT_TRUE(stat_for_file_1->smap->isMarkUsed(entry_1_v1.offset, entry_1_v1.size));
-        auto stat_for_file_5 = stats.blobIdToStat(file_id2, false, false);
+        auto stat_for_file_5 = stats.blobIdToStat(file_id2, /*ignore_not_exist*/ false);
         // entry_5_v1 should not be restored to stats
         EXPECT_FALSE(stat_for_file_5->smap->isMarkUsed(entry_5_v1.offset, entry_5_v1.size));
         EXPECT_TRUE(stat_for_file_5->smap->isMarkUsed(entry_5_v2.offset, entry_5_v2.size));

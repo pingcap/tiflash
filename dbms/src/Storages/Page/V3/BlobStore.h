@@ -166,7 +166,7 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false, bool ignore_not_exist = false);
+        BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
         std::map<String, std::list<BlobStatPtr>> getStats() const
         {

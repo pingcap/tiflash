@@ -269,7 +269,6 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
     for (const auto & blob_id : blob_updated)
     {
         const auto & stat = blob_stats.blobIdToStat(blob_id,
-                                                    /*restore_if_not_exist*/ false,
                                                     /*ignore_not_exist*/ true);
 
         // Some of blob may been removed.
@@ -903,7 +902,7 @@ BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, B
 
 void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
-    auto stat = blobIdToStat(entry.file_id, /*restore_if_not_exist=*/true);
+    auto stat = blobIdToStat(entry.file_id);
     stat->restoreSpaceMap(entry.offset, entry.size);
 }
 
@@ -1134,7 +1133,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
 }
 
-BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_if_not_exist, bool ignore_not_exist)
+BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_not_exist)
 {
     auto guard = lock();
     for (const auto & [path, stats] : stats_map)
@@ -1147,12 +1146,6 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool restore_
                 return stat;
             }
         }
-    }
-
-    if (restore_if_not_exist)
-    {
-        // Restore a stat without checking file_id exist or not and won't push forward the roll_id
-        return createStatNotChecking(file_id, guard);
     }
 
     if (!ignore_not_exist)
