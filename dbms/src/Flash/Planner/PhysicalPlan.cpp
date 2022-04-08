@@ -15,7 +15,6 @@
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Interpreters/Context.h>
