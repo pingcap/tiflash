@@ -56,4 +56,4 @@ struct SubqueryForSet
 
 /// ID of subquery -> what to do with it.
 using SubqueriesForSets = std::unordered_map<String, SubqueryForSet>;
-}
+} // namespace DB
