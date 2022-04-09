@@ -272,6 +272,12 @@ public:
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
+    size_t maxStreams(const Context & context) const;
+
+    const std::vector<tipb::FieldType> & outputFieldTypes() const { return output_field_types; }
+    const std::vector<Int32> & outputOffsets() const { return output_offsets; }
+    void initOutputDetails();
+
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
@@ -324,6 +330,9 @@ private:
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
+
+    std::vector<tipb::FieldType> output_field_types;
+    std::vector<Int32> output_offsets;
 };
 
 } // namespace DB

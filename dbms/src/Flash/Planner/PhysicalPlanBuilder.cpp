@@ -31,8 +31,12 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     {
     case tipb::ExecType::TypeJoin:
     {
+        buildNonRootFinalProjection(fmt::format("{}_right", executor_id));
         auto right = popBack(cur_plans);
+
+        buildNonRootFinalProjection(fmt::format("{}_left", executor_id));
         auto left = popBack(cur_plans);
+
         cur_plans.push_back(PhysicalJoin::build(context, executor_id, executor->join(), left, right));
         break;
     }
@@ -53,8 +57,16 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
         cur_plans.push_back(PhysicalProjection::build(context, executor_id, executor->projection(), popBack(cur_plans)));
         break;
     case tipb::ExecType::TypeExchangeSender:
+    {
+        const auto & dag_context = *context.getDAGContext();
+        buildRootFinalProjection(
+            dag_context.outputFieldTypes(),
+            dag_context.outputOffsets(),
+            executor_id,
+            dag_context.keep_session_timezone_info);
         cur_plans.push_back(PhysicalExchangeSender::build(executor_id, executor->exchange_sender(), popBack(cur_plans)));
         break;
+    }
     case tipb::ExecType::TypeExchangeReceiver:
         cur_plans.push_back(PhysicalExchangeReceiver::build(context, executor_id));
         break;

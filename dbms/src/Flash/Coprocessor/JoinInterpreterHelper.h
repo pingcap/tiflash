@@ -339,8 +339,7 @@ handleJoin(const Context & context, const tipb::Join & join, size_t build_side_i
         other_eq_filter_from_in_column_name);
 
     const Settings & settings = context.getSettingsRef();
-    // todo max_threads need refactor.
-    size_t join_build_concurrency = settings.join_concurrent_build ? static_cast<size_t>(settings.max_threads) : 1;
+    size_t join_build_concurrency = settings.join_concurrent_build ? context.getDAGContext()->maxStreams(context) : 1;
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 

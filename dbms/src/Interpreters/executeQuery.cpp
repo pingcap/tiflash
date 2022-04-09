@@ -422,10 +422,10 @@ BlockIO executeQuery(
 }
 
 
-BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage)
+BlockIO executeQuery(IQuerySource & source, Context & context, bool internal, QueryProcessingStage::Enum stage)
 {
     BlockIO streams;
-    std::tie(std::ignore, streams) = executeQueryImpl(dag, context, internal, stage);
+    std::tie(std::ignore, streams) = executeQueryImpl(source, context, internal, stage);
     context.getDAGContext()->attachBlockIO(streams);
     return streams;
 }

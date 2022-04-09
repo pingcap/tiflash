@@ -14,6 +14,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -46,6 +47,35 @@ bool DAGContext::allowInvalidDate() const
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
+}
+
+void DAGContext::initOutputDetails()
+{
+    output_field_types = collectOutputFieldTypes(*dag_request);
+    for (UInt32 i : dag_request->output_offsets())
+    {
+        output_offsets.push_back(i);
+        if (unlikely(i >= output_field_types.size()))
+            throw TiFlashException(
+                fmt::format("{}: Invalid output offset(schema has {} columns, access index {}", __PRETTY_FUNCTION__, output_field_types.size(), i),
+                Errors::Coprocessor::BadRequest);
+        result_field_types.push_back(output_field_types[i]);
+    }
+}
+
+size_t DAGContext::maxStreams(const Context & context) const
+{
+    const Settings & settings = context.getSettingsRef();
+    size_t max_streams;
+    if (isBatchCop() || isMPPTask())
+        max_streams = settings.max_threads;
+    else
+        max_streams = 1;
+    if (max_streams > 1)
+    {
+        max_streams *= settings.max_streams_to_max_threads_ratio;
+    }
+    return max_streams;
 }
 
 void DAGContext::initExecutorIdToJoinIdMap()
