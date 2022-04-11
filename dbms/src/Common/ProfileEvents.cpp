@@ -110,6 +110,8 @@
                                                 \
     M(PSMWritePages)                            \
     M(PSMWriteIOCalls)                          \
+    M(PSV3MBlobExpansion)                       \
+    M(PSV3MBlobReused)                          \
     M(PSMWriteBytes)                            \
     M(PSMReadPages)                             \
                                                 \

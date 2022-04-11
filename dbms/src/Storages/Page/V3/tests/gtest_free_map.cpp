@@ -283,14 +283,18 @@ TEST_P(SpaceMapTest, TestSearch)
     auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
     UInt64 offset;
     UInt64 max_cap;
+    bool expansion = true;
+
     Range ranges[] = {{.start = 0,
                        .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges, 1), 1));
     ASSERT_TRUE(smap->markUsed(50, 10));
 
-    std::tie(offset, max_cap) = smap->searchInsertOffset(20);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
+
     ASSERT_EQ(offset, 0);
     ASSERT_EQ(max_cap, 40);
+    ASSERT_EQ(expansion, false);
 
     Range ranges1[] = {{.start = 20,
                         .end = 50},
@@ -304,9 +308,10 @@ TEST_P(SpaceMapTest, TestSearch)
     smap = SpaceMap::createSpaceMap(test_type, 0, 100);
     ASSERT_TRUE(smap->markUsed(50, 10));
 
-    std::tie(offset, max_cap) = smap->searchInsertOffset(5);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(5);
     ASSERT_EQ(offset, 0);
     ASSERT_EQ(max_cap, 45);
+    ASSERT_EQ(expansion, false);
 
     Range ranges2[] = {{.start = 5,
                         .end = 50},
@@ -317,9 +322,10 @@ TEST_P(SpaceMapTest, TestSearch)
     // Test margin
     smap = SpaceMap::createSpaceMap(test_type, 0, 100);
     ASSERT_TRUE(smap->markUsed(50, 10));
-    std::tie(offset, max_cap) = smap->searchInsertOffset(50);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(50);
     ASSERT_EQ(offset, 0);
     ASSERT_EQ(max_cap, 40);
+    ASSERT_EQ(expansion, false);
 
     Range ranges3[] = {{.start = 60,
                         .end = 100}};
@@ -328,9 +334,10 @@ TEST_P(SpaceMapTest, TestSearch)
     // Test invalid Size
     smap = SpaceMap::createSpaceMap(test_type, 0, 100);
     ASSERT_TRUE(smap->markUsed(50, 10));
-    std::tie(offset, max_cap) = smap->searchInsertOffset(100);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(100);
     ASSERT_EQ(offset, UINT64_MAX);
     ASSERT_EQ(max_cap, 50);
+    ASSERT_EQ(expansion, false);
 
     // No changed
     Range ranges4[] = {{.start = 0,
@@ -338,6 +345,18 @@ TEST_P(SpaceMapTest, TestSearch)
                        {.start = 60,
                         .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges4, 2), 2));
+
+    // Test expansion
+    smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(10);
+    ASSERT_EQ(offset, 0);
+    ASSERT_EQ(max_cap, 90);
+    ASSERT_EQ(expansion, true);
+
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(10);
+    ASSERT_EQ(offset, 10);
+    ASSERT_EQ(max_cap, 80);
+    ASSERT_EQ(expansion, true);
 }
 
 

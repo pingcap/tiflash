@@ -551,11 +551,11 @@ bool RBTreeSpaceMap::isMarkUnused(UInt64 offset, size_t length)
     return retval;
 }
 
-std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
+std::tuple<UInt64, UInt64, bool> RBTreeSpaceMap::searchInsertOffset(size_t size)
 {
-    UInt64 offset = UINT64_MAX;
+    UInt64 offset = UINT64_MAX, last_offset = UINT64_MAX;
     UInt64 max_cap = 0;
-    struct rb_node * node = nullptr;
+    struct rb_node *node = nullptr, *last_node = nullptr;
     struct SmapRbEntry * entry;
 
     UInt64 scan_biggest_cap = 0;
@@ -566,7 +566,17 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
     {
         LOG_ERROR(log, "Current spacemap is full.");
         biggest_cap = 0;
-        return std::make_pair(offset, biggest_cap);
+        return std::make_tuple(offset, biggest_cap, false);
+    }
+
+    last_node = rb_tree_last(&rb_tree->root);
+    if (last_node != nullptr)
+    {
+        last_offset = node_to_entry(last_node)->start;
+    }
+    else
+    {
+        assert(false);
     }
 
     for (; node != nullptr; node = rb_tree_next(node))
@@ -600,7 +610,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
         biggest_range = scan_biggest_offset;
         biggest_cap = scan_biggest_cap;
 
-        return std::make_pair(offset, biggest_cap);
+        return std::make_tuple(offset, biggest_cap, false);
     }
 
     // Update return start
@@ -622,7 +632,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
             rb_node_remove(node, &rb_tree->root);
             rb_free_entry(rb_tree, entry);
             max_cap = biggest_cap;
-            return std::make_pair(offset, max_cap);
+            return std::make_tuple(offset, max_cap, offset == last_offset);
         }
     }
     else // must be entry->count > size
@@ -645,7 +655,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
         else // It not champion, just return
         {
             max_cap = biggest_cap;
-            return std::make_pair(offset, max_cap);
+            return std::make_tuple(offset, max_cap, offset == last_offset);
         }
     }
 
@@ -661,7 +671,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
     biggest_range = scan_biggest_offset;
     biggest_cap = scan_biggest_cap;
     max_cap = biggest_cap;
-    return std::make_pair(offset, max_cap);
+    return std::make_tuple(offset, max_cap, offset == last_offset);
 }
 
 UInt64 RBTreeSpaceMap::updateAccurateMaxCapacity()
