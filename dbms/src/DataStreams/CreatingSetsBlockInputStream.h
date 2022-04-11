@@ -17,7 +17,7 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Interpreters/ExpressionAnalyzer.h> /// SubqueriesForSets
+#include <Interpreters/SubqueryForSet.h>
 
 
 namespace DB
@@ -29,17 +29,18 @@ namespace DB
 class CreatingSetsBlockInputStream : public IProfilingBlockInputStream
 {
 public:
+    template <typename Subqueries>
     CreatingSetsBlockInputStream(
         const BlockInputStreamPtr & input,
-        const SubqueriesForSets & subqueries_for_sets_,
+        Subqueries && subqueries_for_sets_,
         const SizeLimits & network_transfer_limits,
-        const String & req_id);
-
-    CreatingSetsBlockInputStream(
-        const BlockInputStreamPtr & input,
-        std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-        const SizeLimits & network_transfer_limits,
-        const String & req_id);
+        const String & req_id)
+        : subqueries_for_sets(std::forward<Subqueries>(subqueries_for_sets_))
+        , network_transfer_limits(network_transfer_limits)
+        , log(Logger::get(name, req_id))
+    {
+        init(input);
+    }
 
     ~CreatingSetsBlockInputStream() = default;
 
@@ -86,7 +87,7 @@ protected:
 private:
     void init(const BlockInputStreamPtr & input);
 
-    std::vector<SubqueriesForSets> subqueries_for_sets_list;
+    SubqueriesForSets subqueries_for_sets;
     bool created = false;
 
     SizeLimits network_transfer_limits;

@@ -43,6 +43,13 @@ bool DAGContext::allowInvalidDate() const
     return sql_mode & TiDBSQLMode::ALLOW_INVALID_DATES;
 }
 
+void DAGContext::addSubqueryForSet(const String & subquery_id, const SubqueryForSet & subquery)
+{
+    if (join_build_subqueries.find(subquery_id) != join_build_subqueries.end())
+        throw TiFlashException(fmt::format("subquery_id [{}] duplicate", subquery_id), Errors::Coprocessor::Internal);
+    subqueries_for_sets[subquery_id] = subquery;
+}
+
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
