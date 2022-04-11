@@ -158,7 +158,8 @@ Field ColumnInfo::defaultValueToField() const
             // For binary column, we have to pad trailing zeros according to the specified type length.
             // User may define default value `0x1234` for a `BINARY(4)` column, TiDB stores it in a string "\u12\u34" (sized 2).
             // But it actually means `0x12340000`.
-            v.append(flen - v.length(), '\0');
+            if (Int32 vlen = v.length(); flen >= 0 && vlen < flen)
+                v.append(flen - vlen, '\0');
         }
         return v;
     }
