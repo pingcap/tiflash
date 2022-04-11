@@ -94,7 +94,7 @@ extern const char force_triggle_foreground_flush[];
 extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
 extern const char random_exception_after_dt_write_done[];
-extern const char random_slow_page_storage_snapshot_release[];
+extern const char force_slow_page_storage_snapshot_release[];
 } // namespace FailPoints
 
 namespace DM
@@ -1033,17 +1033,16 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
 
-                fiu_do_on(FailPoints::random_slow_page_storage_snapshot_release, {
-                    static int num_call = 0;
-                    if (num_call++ % 50 == 0)
-                    {
-                        std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
-                    }
-                });
-
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
             }
         }
+
+        fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
+            std::thread thread_hold_snapshots([tasks]() {
+                std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
+                (void)tasks;
+            });
+        });
     }
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
