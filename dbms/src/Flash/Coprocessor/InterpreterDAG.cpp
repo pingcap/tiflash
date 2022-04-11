@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <DataStreams/CreatingSetsBlockInputStream.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Interpreters/Aggregator.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -33,6 +33,11 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     {
         max_streams *= settings.max_streams_to_max_threads_ratio;
     }
+}
+
+DAGContext & InterpreterDAG::dagContext() const
+{
+    return *context.getDAGContext();
 }
 
 /** executeQueryBlock recursively converts all the children of the DAGQueryBlock and itself (Coprocessor DAG request)
