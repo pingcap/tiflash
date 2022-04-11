@@ -2001,8 +2001,8 @@ try
         BlobStore::BlobStats stats(log, delegator, BlobStore::Config{});
         {
             const auto & lock = stats.lock();
-            stats.createStat(file_id1, lock);
-            stats.createStat(file_id2, lock);
+            stats.createStatNotChecking(file_id1, lock);
+            stats.createStatNotChecking(file_id2, lock);
         }
         auto restored_dir = restore_from_edit(edit, stats);
         auto temp_snap = restored_dir->createSnapshot();

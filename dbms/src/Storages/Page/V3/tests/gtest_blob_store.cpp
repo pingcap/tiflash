@@ -67,13 +67,13 @@ try
 {
     BlobStats stats(logger, delegator, config);
 
-    BlobFileId file_id1 = 1;
-    BlobFileId file_id2 = 2;
+    BlobFileId file_id1 = 10;
+    BlobFileId file_id2 = 12;
 
     {
         const auto & lock = stats.lock();
-        stats.createStat(file_id1, lock);
-        stats.createStat(file_id2, lock);
+        stats.createStatNotChecking(file_id1, lock);
+        stats.createStatNotChecking(file_id2, lock);
     }
 
     {
@@ -105,7 +105,6 @@ try
 
     ASSERT_EQ(stats_copy.size(), 1);
     ASSERT_EQ(stats_copy.begin()->second.size(), 2);
-    EXPECT_EQ(stats.roll_id, 3);
 
     auto stat1 = stats.blobIdToStat(file_id1);
     EXPECT_EQ(stat1->sm_total_size, 2048 + 512);
