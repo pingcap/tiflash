@@ -290,7 +290,7 @@ size_t LegacyCompactor::writeToCheckpoint(const String & storage_path,
         auto checkpoint_writer = checkpoint_file.createWriter(false, true);
 
         PageEntriesEdit edit;
-        bytes_written += checkpoint_writer->write(wb, edit, write_limiter);
+        bytes_written += checkpoint_writer->write(wb, edit, write_limiter, /*background*/ true);
     }
     // drop "data" part for checkpoint file.
     bytes_written -= checkpoint_file.setCheckpoint();
