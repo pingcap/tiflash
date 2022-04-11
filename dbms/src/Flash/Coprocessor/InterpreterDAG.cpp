@@ -71,17 +71,17 @@ BlockIO InterpreterDAG::execute()
     pipeline.streams = streams;
 
     /// add union to run in parallel if needed
-    if (context.getDAGContext()->isMPPTask())
+    if (dagContext().isMPPTask())
         /// MPPTask do not need the returned blocks.
         executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true);
     else
         executeUnion(pipeline, max_streams, dagContext().log);
-    if (context.getDAGContext()->subqueries_for_sets.empty())
+    if (dagContext().subqueries_for_sets.empty())
     {
         const Settings & settings = context.getSettingsRef();
         pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
             pipeline.firstStream(),
-            std::move(context.getDAGContext()->subqueries_for_sets),
+            std::move(dagContext().subqueries_for_sets),
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
             dagContext().log->identifier());
     }
