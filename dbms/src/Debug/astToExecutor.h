@@ -47,7 +47,7 @@ namespace Debug
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
 
-std::pair<String, String> splitQualifiedName(String s);
+std::pair<String, String> splitQualifiedName(const String & s);
 
 struct MPPCtx
 {
@@ -142,7 +142,7 @@ struct TableScan : public Executor
 {
     TableInfo table_info;
     /// used by column pruner
-    TableScan(size_t & index_, const DAGSchema & output_schema_, TableInfo & table_info_)
+    TableScan(size_t & index_, const DAGSchema & output_schema_, const TableInfo & table_info_)
         : Executor(index_, "table_scan_" + std::to_string(index_), output_schema_)
         , table_info(table_info_)
     {}
@@ -175,7 +175,7 @@ struct TableScan : public Executor
 struct Selection : public Executor
 {
     std::vector<ASTPtr> conditions;
-    Selection(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && conditions_)
+    Selection(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> conditions_)
         : Executor(index_, "selection_" + std::to_string(index_), output_schema_)
         , conditions(std::move(conditions_))
     {}
@@ -187,7 +187,7 @@ struct TopN : public Executor
 {
     std::vector<ASTPtr> order_columns;
     size_t limit;
-    TopN(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && order_columns_, size_t limit_)
+    TopN(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> order_columns_, size_t limit_)
         : Executor(index_, "topn_" + std::to_string(index_), output_schema_)
         , order_columns(std::move(order_columns_))
         , limit(limit_)
@@ -215,7 +215,7 @@ struct Aggregation : public Executor
     std::vector<ASTPtr> gby_exprs;
     bool is_final_mode;
     DAGSchema output_schema_for_partial_agg;
-    Aggregation(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_, std::vector<ASTPtr> && agg_exprs_, std::vector<ASTPtr> && gby_exprs_, bool is_final_mode_)
+    Aggregation(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_, std::vector<ASTPtr> agg_exprs_, std::vector<ASTPtr> gby_exprs_, bool is_final_mode_)
         : Executor(index_, "aggregation_" + std::to_string(index_), output_schema_)
         , has_uniq_raw_res(has_uniq_raw_res_)
         , need_append_project(need_append_project_)
