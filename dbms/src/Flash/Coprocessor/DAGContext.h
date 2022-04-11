@@ -326,7 +326,7 @@ private:
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
-    /// set of join build subquery. it will be clear after `moveJoinBuildSubQueries` called.
+    /// set of SubqueryForSet(such as join build subquery). it will `std::move` after `moveJoinBuildSubQueries` called.
     SubqueriesForSets subqueries_for_sets;
 };
 
