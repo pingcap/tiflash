@@ -45,7 +45,7 @@ bool DAGContext::allowInvalidDate() const
 
 void DAGContext::addSubqueryForSet(const String & subquery_id, const SubqueryForSet & subquery)
 {
-    if (join_build_subqueries.find(subquery_id) != join_build_subqueries.end())
+    if (subqueries_for_sets.find(subquery_id) != subqueries_for_sets.end())
         throw TiFlashException(fmt::format("subquery_id [{}] duplicate", subquery_id), Errors::Coprocessor::Internal);
     subqueries_for_sets[subquery_id] = subquery;
 }
