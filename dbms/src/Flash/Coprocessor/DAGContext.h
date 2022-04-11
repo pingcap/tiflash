@@ -272,9 +272,7 @@ public:
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
-    bool hasSubqueryForSet() const { return subqueries_for_sets.empty(); }
-    SubqueriesForSets && moveSubqueriesForSets() { return std::move(subqueries_for_sets); }
-    void addSubqueryForSet(const String & subquery_id, const SubqueryForSet & subquery);
+    void addSubqueryForSet(const String & subquery_id, SubqueryForSet && subquery);
 
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
@@ -299,6 +297,9 @@ public:
     bool keep_session_timezone_info = false;
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type = tipb::EncodeType::TypeDefault;
+
+    /// set of SubqueryForSet(such as join build subquery).
+    SubqueriesForSets subqueries_for_sets;
 
 private:
     /// Hold io for correcting the destruction order.
@@ -326,8 +327,6 @@ private:
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
-    /// set of SubqueryForSet(such as join build subquery). it will `std::move` after `moveJoinBuildSubQueries` called.
-    SubqueriesForSets subqueries_for_sets;
 };
 
 } // namespace DB

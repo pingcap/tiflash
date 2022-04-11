@@ -1023,7 +1023,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         SubqueryForSet right_query;
         handleJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
-        dagContext().addSubqueryForSet(query_block.source_name, right_query);
+        dagContext().addSubqueryForSet(query_block.source_name, std::move(right_query));
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
