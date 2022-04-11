@@ -20,7 +20,7 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Debug/DAGProperties.h>
-#include <Debug/MockExecutor.h>
+#include <Debug/astToExecutor.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgNaturalDag.h>

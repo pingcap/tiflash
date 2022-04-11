@@ -15,7 +15,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <DataTypes/FieldToDataType.h>
-#include <Debug/MockExecutor.h>
+#include <Debug/astToExecutor.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -1241,7 +1241,7 @@ bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
     join->set_join_exec_type(tipb::JoinExecType::TypeHashJoin);
     join->set_inner_idx(1);
     for (auto & key : join_params.using_expression_list->children)
-    { // ywq todo
+    {
         fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
         fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
     }
@@ -1332,10 +1332,7 @@ ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, St
         ci.setNotNullFlag();
         ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
     }
-    // // todo remove print schema
-    // for (auto & item : ts_output) {
-    //     std::cout << item.first << ":" << item.second.tp << item.second.flag << item.second.flen << item.second.decimal << std::endl;
-    // }
+
     return std::make_shared<mock::TableScan>(executor_index, ts_output, table_info);
 }
 
@@ -1454,7 +1451,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
     DAGSchema output_schema;
     for (const auto & expr : select_list->children)
     {
-        if (typeid_cast<ASTAsterisk *>(expr.get())) // ywq todo
+        if (typeid_cast<ASTAsterisk *>(expr.get()))
         {
             /// special case, select *
             exprs.push_back(expr);
