@@ -79,7 +79,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
     M(force_remote_read_for_batch_cop)                       \
-    M(force_context_path)
+    M(force_context_path)                                    \
+    M(random_slow_page_storage_snapshot_release)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_after_learner_read)                   \
