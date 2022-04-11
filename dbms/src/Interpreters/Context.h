@@ -8,7 +8,6 @@
 #include <Interpreters/TimezoneInfo.h>
 #include <Storages/PartPathSelector.h>
 #include <common/MultiVersion.h>
-#include <grpc++/grpc++.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -415,10 +414,10 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration& config);
+    void initializeRateLimiter(TiFlashMetricsPtr metrics, Poco::Util::AbstractConfiguration & config);
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
-    IORateLimiter& getIORateLimiter() const;
+    IORateLimiter & getIORateLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
