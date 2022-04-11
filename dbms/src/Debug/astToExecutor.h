@@ -40,10 +40,9 @@ extern const int NO_SUCH_COLUMN_IN_TABLE;
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 
-extern String LOCAL_HOST;
-
 namespace Debug
 {
+extern String LOCAL_HOST;
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
 

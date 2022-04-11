@@ -752,10 +752,9 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
 }
 } // namespace
 
-String LOCAL_HOST = "127.0.0.1:3930";
-
 namespace Debug
 {
+String LOCAL_HOST = "127.0.0.1:3930";
 void setServiceAddr(const std::string & addr)
 {
     LOCAL_HOST = addr;
@@ -808,7 +807,7 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t col
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
-        meta.set_address(LOCAL_HOST);
+        meta.set_address(Debug::LOCAL_HOST);
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
@@ -838,7 +837,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t c
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        meta.set_address(LOCAL_HOST);
+        meta.set_address(Debug::LOCAL_HOST);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }

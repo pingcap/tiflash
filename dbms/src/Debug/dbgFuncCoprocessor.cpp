@@ -199,7 +199,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             auto * tm = req->mutable_meta();
             tm->set_start_ts(properties.start_ts);
             tm->set_partition_id(task.partition_id);
-            tm->set_address(LOCAL_HOST);
+            tm->set_address(Debug::LOCAL_HOST);
             tm->set_task_id(task.task_id);
             auto * encoded_plan = req->mutable_encoded_plan();
             task.dag_request->AppendToString(encoded_plan);
@@ -250,7 +250,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                 }
             }
             pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-            context.getTMTContext().getCluster()->rpc_client->sendRequest(LOCAL_HOST, call, 1000);
+            context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
             if (call.getResp()->has_error())
                 throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
         }
@@ -259,7 +259,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         {
             mpp::TaskMeta tm;
             tm.set_start_ts(properties.start_ts);
-            tm.set_address(LOCAL_HOST);
+            tm.set_address(Debug::LOCAL_HOST);
             tm.set_task_id(root_task_id);
             tm.set_partition_id(-1);
             auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
@@ -274,7 +274,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         }
         mpp::TaskMeta root_tm;
         root_tm.set_start_ts(properties.start_ts);
-        root_tm.set_address(LOCAL_HOST);
+        root_tm.set_address(Debug::LOCAL_HOST);
         root_tm.set_task_id(-1);
         root_tm.set_partition_id(-1);
         std::shared_ptr<ExchangeReceiver> exchange_receiver
