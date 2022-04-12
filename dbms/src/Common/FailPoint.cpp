@@ -48,7 +48,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_formal_page_file_not_exists)                          \
     M(force_legacy_or_checkpoint_page_file_exists)                \
     M(exception_in_creating_set_input_stream)                     \
-    M(exception_when_read_from_log)                               \
     M(exception_mpp_hash_build)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
