@@ -1036,14 +1036,14 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
             }
         }
-
-        fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
-            std::thread thread_hold_snapshots([tasks]() {
-                std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
-                (void)tasks;
-            });
-        });
     }
+
+    fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
+        std::thread thread_hold_snapshots([tasks]() {
+            std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
+            (void)tasks;
+        });
+    });
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
