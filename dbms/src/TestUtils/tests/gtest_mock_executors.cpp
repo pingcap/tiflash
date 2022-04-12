@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Common/FmtUtils.h>
-#include <TestUtils/mockExecutor.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/mockExecutor.h>
 
 namespace DB
 {
 namespace tests
 {
-
-    namespace
+namespace
 {
 String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
 
@@ -121,7 +120,7 @@ try
     DAGRequestBuilder left_builder;
     left_builder
         .mockTable(left_table, l_columns)
-        .topN({{"l_a",false}}, 10)
+        .topN({{"l_a", false}}, 10)
         .join(right_builder, col("l_a")) // ywq todo more types of join, should make sure have both field
         .limit(10);
 
@@ -164,7 +163,6 @@ try
     auto dag_request = left_builder.build(context);
     String to_tree_string = toTreeString(dag_request.get());
     std::cout << to_tree_string << std::endl;
-
 }
 CATCH
 

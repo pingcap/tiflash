@@ -41,12 +41,12 @@ ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, const String & name)
 ASTPtr buildOrderByItemList(std::initializer_list<std::pair<String, bool>> order_by_items)
 {
     std::vector<ASTPtr> vec;
-    for (auto item: order_by_items)
+    for (auto item : order_by_items)
     {
         int direction = item.second ? 1 : -1;
         ASTPtr locale_node;
         auto order_by_item = std::make_shared<ASTOrderByElement>(direction, direction, false, locale_node);
-        order_by_item->children.push_back(std::make_shared<ASTIdentifier>(item.first));        
+        order_by_item->children.push_back(std::make_shared<ASTIdentifier>(item.first));
         vec.push_back(order_by_item);
     }
     auto exp_list = std::make_shared<ASTExpressionList>();
