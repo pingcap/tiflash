@@ -99,7 +99,6 @@ public:
          ASTTableJoin::Kind kind_,
          ASTTableJoin::Strictness strictness_,
          const String & req_id,
-         size_t build_concurrency = 1,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
@@ -156,6 +155,11 @@ public:
     size_t getBuildConcurrency() const { return build_concurrency; }
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
     size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
+
+    /** Set Join build concurrency and init hash map.
+       * You must call this method before subsequent calls to insertFromBlock and setSampleBlock.
+       */
+    void setBuildConcurrencyAndInitMap(size_t build_concurrency_);
 
     enum BuildTableState
     {
@@ -318,6 +322,7 @@ private:
 
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
 
+    ColumnRawPtrs sample_key_columns;
     Sizes key_sizes;
 
     /// Block with columns from the right-side table except key columns.

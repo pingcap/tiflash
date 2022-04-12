@@ -88,7 +88,6 @@ Join::Join(
     ASTTableJoin::Kind kind_,
     ASTTableJoin::Strictness strictness_,
     const String & req_id,
-    size_t build_concurrency_,
     const TiDB::TiDBCollators & collators_,
     const String & left_filter_column_,
     const String & right_filter_column_,
@@ -103,7 +102,6 @@ Join::Join(
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , use_nulls(use_nulls_)
-    , build_concurrency(std::max(1, build_concurrency_))
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
@@ -117,8 +115,6 @@ Join::Join(
     , limits(limits)
 {
     build_set_exceeded.store(false);
-    for (size_t i = 0; i < build_concurrency; i++)
-        pools.emplace_back(std::make_shared<Arena>());
     if (other_condition_ptr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
@@ -127,15 +123,27 @@ Join::Join(
             strictness = ASTTableJoin::Strictness::All;
         }
     }
+    if (!left_filter_column.empty() && !isLeftJoin(kind))
+        throw Exception("Not supported: non left join with left conditions");
+    if (!right_filter_column.empty() && !isRightJoin(kind))
+        throw Exception("Not supported: non right join with right conditions");
+}
+
+void Join::setBuildConcurrencyAndInitMap(size_t build_concurrency_)
+{
+    build_concurrency = std::max(1, build_concurrency_);
+
+    for (size_t i = 0; i < build_concurrency; ++i)
+        pools.emplace_back(std::make_shared<Arena>());
+    // init for non-joined-streams.
     if (getFullness(kind))
     {
         for (size_t i = 0; i < build_concurrency; i++)
             rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
     }
-    if (!left_filter_column.empty() && !isLeftJoin(kind))
-        throw Exception("Not supported: non left join with left conditions");
-    if (!right_filter_column.empty() && !isRightJoin(kind))
-        throw Exception("Not supported: non right join with right conditions");
+
+    /// Choose data structure to use for JOIN.
+    init(chooseMethod(sample_key_columns, key_sizes));
 }
 
 void Join::setBuildTableState(BuildTableState state_)
@@ -412,20 +420,22 @@ void Join::setSampleBlock(const Block & block)
     if (!empty())
         return;
 
-    size_t keys_size = key_names_right.size();
-    ColumnRawPtrs key_columns(keys_size);
-
-    for (size_t i = 0; i < keys_size; ++i)
     {
-        key_columns[i] = block.getByName(key_names_right[i]).column.get();
+        size_t keys_size = key_names_right.size();
+        ColumnRawPtrs key_columns(keys_size);
 
-        /// We will join only keys, where all components are not NULL.
-        if (key_columns[i]->isColumnNullable())
-            key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
+        for (size_t i = 0; i < keys_size; ++i)
+        {
+            key_columns[i] = block.getByName(key_names_right[i]).column.get();
+
+            /// We will join only keys, where all components are not NULL.
+            if (key_columns[i]->isColumnNullable())
+                key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
+        }
+
+        // init sample key_columns from sample block.
+        sample_key_columns = std::move(key_columns);
     }
-
-    /// Choose data structure to use for JOIN.
-    init(chooseMethod(key_columns, key_sizes));
 
     sample_block_with_columns_to_add = materializeBlock(block);
 
@@ -1956,7 +1966,7 @@ public:
         , max_block_size(max_block_size_)
         , add_not_mapped_rows(true)
     {
-        if (step > parent.build_concurrency || index >= parent.build_concurrency)
+        if (step > parent.getBuildConcurrency() || index >= parent.getBuildConcurrency())
             throw Exception("The concurrency of NonJoinedBlockInputStream should not be larger than join build concurrency");
 
         /** left_sample_block contains keys and "left" columns.
