@@ -1,14 +1,19 @@
 mysql> drop table if exists test.t1;
 mysql> drop table if exists test.t2;
+mysql> drop table if exists test.t3;
 mysql> create table test.t1(a char(20),b double);
 mysql> create table test.t2(a char(20));
+mysql> create table test.t3(a int);
 mysql> insert into test.t1 values(1,null),('j',0),(1,12.991),(0,0),(0,0),('they',1.009),('can',-99),(0,12.991),(1,-9.183),(null,1);
 mysql> insert into test.t2 values(0),(0),(0),(0),(0),(0),(1),('with'),('see'),(null);
+mysql> insert into test.t3 values(0),(1);
 mysql> alter table test.t1 set tiflash replica 1;
 mysql> alter table test.t2 set tiflash replica 1;
+mysql> alter table test.t3 set tiflash replica 1;
 
 func> wait_table test t1
 func> wait_table test t2
+func> wait_table test t3
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) from test.t1 where (b between null and 100) is null;
 +----------+
@@ -24,5 +29,44 @@ mysql> set session tidb_allow_mpp=1; set session tidb_isolation_read_engines='ti
 |       10 |
 +----------+
 
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select null and a > 0, a from test.t3;
++----------------+------+
+| null and a > 0 | a    |
++----------------+------+
+|              0 |    0 |
+|           NULL |    1 |
++----------------+------+
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select null or a > 0, a from test.t3;
++---------------+------+
+| null or a > 0 | a    |
++---------------+------+
+|          NULL |    0 |
+|             1 |    1 |
++---------------+------+
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select null xor a > 0, a from test.t3;
++----------------+------+
+| null xor a > 0 | a    |
++----------------+------+
+|           NULL |    0 |
+|           NULL |    1 |
++----------------+------+
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select !null, a from test.t3;
++-------+------+
+| !null | a    |
++-------+------+
+|  NULL |    0 |
+|  NULL |    1 |
++-------+------+
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select count(*) from test.t3 group by a having min(null) and a > 0;
+# empty
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select count(*) from test.t3 group by a having ifnull(null,count(*)) and min(null);
+# empty
+
 #mysql> drop table if exists test.t1;
 #mysql> drop table if exists test.t2;
+#mysql> drop table if exists test.t3;
