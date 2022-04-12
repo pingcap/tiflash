@@ -1,9 +1,10 @@
 mysql> drop table if exists test.t
 
 mysql> create table if not exists test.t(s varchar(256), i int)
-mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc';
 mysql> delete from test.t
 mysql> insert into test.t values('Hello world', 666)
+
+mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc';
 
 func> wait_table test t
 
@@ -12,6 +13,16 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select s, i from test.
 | s           | i    |
 +-------------+------+
 | Hello world | 666  |
++-------------+------+
+
+mysql> insert into test.t values('test', -1)
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select s, i from test.t
++-------------+------+
+| s           | i    |
++-------------+------+
+| Hello world | 666  |
+| test        |  -1  |
 +-------------+------+
 
 mysql> delete from test.t
