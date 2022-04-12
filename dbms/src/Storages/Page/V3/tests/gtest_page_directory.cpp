@@ -1960,7 +1960,7 @@ TEST_F(PageDirectoryGCTest, RestoreWithRef)
 try
 {
     BlobFileId file_id1 = 1;
-    BlobFileId file_id2 = 2;
+    BlobFileId file_id2 = 5;
 
     const auto & path = getTemporaryPath();
     createIfNotExist(path);
@@ -1968,19 +1968,19 @@ try
     Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
 
     PageEntryV3 entry_1_v1{.file_id = file_id1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_2_v1{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x100, .checksum = 0x4567};
-    PageEntryV3 entry_2_v2{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x400, .checksum = 0x4567};
+    PageEntryV3 entry_5_v1{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x100, .checksum = 0x4567};
+    PageEntryV3 entry_5_v2{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x400, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry_1_v1);
-        edit.put(5, entry_2_v1);
+        edit.put(5, entry_5_v1);
         dir->apply(std::move(edit));
     }
     {
         PageEntriesEdit edit;
         edit.ref(2, 1);
         edit.del(1);
-        edit.put(5, entry_2_v2); // replaced for page 5 entry
+        edit.put(5, entry_5_v2); // replaced for page 5 entry
         dir->apply(std::move(edit));
     }
 
@@ -2008,15 +2008,15 @@ try
         auto temp_snap = restored_dir->createSnapshot();
         EXPECT_SAME_ENTRY(entry_1_v1, restored_dir->get(2, temp_snap).second);
         EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
-        EXPECT_SAME_ENTRY(entry_2_v2, restored_dir->get(5, temp_snap).second);
+        EXPECT_SAME_ENTRY(entry_5_v2, restored_dir->get(5, temp_snap).second);
 
         // The entry_1_v1 should be restored to stats
         auto stat_for_file_1 = stats.blobIdToStat(file_id1, /*ignore_not_exist*/ false);
         EXPECT_TRUE(stat_for_file_1->smap->isMarkUsed(entry_1_v1.offset, entry_1_v1.size));
         auto stat_for_file_5 = stats.blobIdToStat(file_id2, /*ignore_not_exist*/ false);
-        // entry_2_v1 should not be restored to stats
-        EXPECT_FALSE(stat_for_file_5->smap->isMarkUsed(entry_2_v1.offset, entry_2_v1.size));
-        EXPECT_TRUE(stat_for_file_5->smap->isMarkUsed(entry_2_v2.offset, entry_2_v2.size));
+        // entry_5_v1 should not be restored to stats
+        EXPECT_FALSE(stat_for_file_5->smap->isMarkUsed(entry_5_v1.offset, entry_5_v1.size));
+        EXPECT_TRUE(stat_for_file_5->smap->isMarkUsed(entry_5_v2.offset, entry_5_v2.size));
     }
 }
 CATCH

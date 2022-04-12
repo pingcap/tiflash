@@ -105,6 +105,7 @@ try
 
     ASSERT_EQ(stats_copy.size(), 1);
     ASSERT_EQ(stats_copy.begin()->second.size(), 2);
+    EXPECT_EQ(stats.roll_id, 13);
 
     auto stat1 = stats.blobIdToStat(file_id1);
     EXPECT_EQ(stat1->sm_total_size, 2048 + 512);
