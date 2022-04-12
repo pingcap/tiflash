@@ -856,13 +856,8 @@ public:
                 {
                     auto col_null_map = ColumnUInt8::create();
                     ColumnUInt8::Container & vec_null_map = col_null_map->getData();
-<<<<<<< HEAD
-                    vec_null_map.assign(block.rows(), (UInt8) 0);
-                    auto uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
-=======
                     vec_null_map.assign(block.rows(), static_cast<UInt8>(0));
                     const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
->>>>>>> 3f00a04136 (fix error result for function `in` (#4032))
                     const auto & data = uint8_column->getData();
                     for (size_t i = 0, size = vec_null_map.size(); i < size; i++)
                     {
