@@ -44,8 +44,7 @@ public:
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           mpp_task_meta(meta_),
-          max_recorded_error_count(getMaxErrorCount(dag_request)),
-          warnings(max_recorded_error_count)
+          warnings(std::numeric_limits<int>::max())
     {
         assert(dag_request.has_root_executor());
         exchange_sender_executor_id = dag_request.root_executor().executor_id();
