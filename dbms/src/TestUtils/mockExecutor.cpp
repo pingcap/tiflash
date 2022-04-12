@@ -11,7 +11,6 @@
 #include <common/types.h>
 
 #include <cassert>
-#include <initializer_list>
 #include <memory>
 
 namespace DB
@@ -26,7 +25,7 @@ ASTPtr buildLiteral(const Field & field)
     return std::make_shared<ASTLiteral>(field);
 }
 
-ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, const String & name)
+ASTPtr buildFunction(MockAsts exprs, const String & name)
 {
     auto func = std::make_shared<ASTFunction>();
     func->name = name;
@@ -38,7 +37,7 @@ ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, const String & name)
     return func;
 }
 
-ASTPtr buildOrderByItemList(std::initializer_list<std::pair<String, bool>> order_by_items)
+ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
 {
     std::vector<ASTPtr> vec;
     for (auto item : order_by_items)
@@ -83,7 +82,7 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(Context & context)
     return dag_request_ptr;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(String db, String table, const std::vector<std::pair<String, TiDB::TP>> & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, const MockColumnInfos & columns)
 {
     assert(!columns.empty());
     TableInfo table_info;
@@ -100,7 +99,7 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(String db, String table, const 
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(MockTableName name, const std::vector<std::pair<String, TiDB::TP>> & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const std::vector<std::pair<String, TiDB::TP>> & columns)
 {
     return mockTable(name.first, name.second, columns);
 }
@@ -152,19 +151,19 @@ DAGRequestBuilder & DAGRequestBuilder::topN(MockOrderByItems order_by_items, AST
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::project(String col_name)
+DAGRequestBuilder & DAGRequestBuilder::project(const String & col_name)
 {
     assert(root);
     root = compileProject(root, getExecutorIndex(), buildColumn(col_name));
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::project(std::initializer_list<ASTPtr> cols)
+DAGRequestBuilder & DAGRequestBuilder::project(MockAsts exprs)
 {
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
-    for (const auto & col : cols)
-        exp_list->children.push_back(col);
+    for (const auto & expr : exprs)
+        exp_list->children.push_back(expr);
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }

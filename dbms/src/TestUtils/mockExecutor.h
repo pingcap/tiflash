@@ -10,10 +10,12 @@ namespace DB
 {
 // <name, type>
 using MockColumnInfo = std::pair<String, TiDB::TP>;
+using MockColumnInfos = std::vector<MockColumnInfo>;
 using MockTableName = std::pair<String, String>;
 using MockOrderByItem = std::pair<String, bool>;
 using MockOrderByItems = std::initializer_list<MockOrderByItem>;
 using MockColumnNames = std::initializer_list<String>;
+using MockAsts = std::initializer_list<ASTPtr>;
 
 class DAGRequestBuilder
 {
@@ -26,8 +28,8 @@ public:
 
     std::shared_ptr<tipb::DAGRequest> build(Context & context);
 
-    DAGRequestBuilder & mockTable(String db, String table, const std::vector<MockColumnInfo> & columns);
-    DAGRequestBuilder & mockTable(MockTableName name, const std::vector<MockColumnInfo> & columns);
+    DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfos & columns);
+    DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfos & columns);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -39,8 +41,8 @@ public:
     DAGRequestBuilder & topN(MockOrderByItems order_by_items, int limit);
     DAGRequestBuilder & topN(MockOrderByItems order_by_items, ASTPtr limit_expr);
 
-    DAGRequestBuilder & project(String col_name);
-    DAGRequestBuilder & project(std::initializer_list<ASTPtr> cols);
+    DAGRequestBuilder & project(const String & col_name);
+    DAGRequestBuilder & project(MockAsts expr);
     DAGRequestBuilder & project(MockColumnNames col_names);
 
     // only support inner join
@@ -56,8 +58,8 @@ private:
 
 ASTPtr buildColumn(const String & column_name);
 ASTPtr buildLiteral(const Field & field);
-ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, const String & name);
-ASTPtr buildOrderByItemList(std::initializer_list<std::pair<String, bool>> order_by_items);
+ASTPtr buildFunction(MockAsts exprs, const String & name);
+ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 
 
 #define col(name) buildColumn((name))
