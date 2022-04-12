@@ -8,7 +8,7 @@ namespace DB
 class GCManager
 {
 public:
-    GCManager(Context & context) : global_context{context.getGlobalContext()}, log(&Logger::get("GCManager")) {};
+    GCManager(Context & context) : global_context{context.getGlobalContext()}, log(&Logger::get("GCManager")){};
 
     ~GCManager() = default;
 
