@@ -98,11 +98,7 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
             }
         }
-<<<<<<< HEAD
-=======
-        Stopwatch watch;
-        auto thread_manager = newThreadManager();
->>>>>>> cc8a5c51b7 (MPP: update the state of building a hash table when createOnce throw exceptions (#4202))
+
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
@@ -142,16 +138,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     Stopwatch watch;
     try
     {
-<<<<<<< HEAD
-        LOG_DEBUG(log,
-            (subquery.set ? "Creating set. " : "")
-                << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
-                << std::to_string(mpp_task_id));
-        Stopwatch watch;
-
-=======
         LOG_FMT_DEBUG(log, "{}", log_msg);
->>>>>>> cc8a5c51b7 (MPP: update the state of building a hash table when createOnce throw exceptions (#4202))
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
@@ -248,21 +235,12 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
             msg << "In " << watch.elapsedSeconds() << " sec. ";
             msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
-<<<<<<< HEAD
             msg << "for task " << std::to_string(mpp_task_id) << ".";
             LOG_DEBUG(log, msg.rdbuf());
         }
         else
         {
-            LOG_DEBUG(log, "Subquery has empty result for task " << std::to_string(mpp_task_id) << ".");
-=======
-
-            LOG_FMT_DEBUG(log, "{}", msg.rdbuf()->str());
-        }
-        else
-        {
             LOG_FMT_DEBUG(log, "Subquery has empty result for task {}. ", mpp_task_id.toString());
->>>>>>> cc8a5c51b7 (MPP: update the state of building a hash table when createOnce throw exceptions (#4202))
         }
     }
     catch (...)
