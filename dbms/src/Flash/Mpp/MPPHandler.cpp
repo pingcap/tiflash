@@ -1,6 +1,7 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -205,7 +206,7 @@ std::vector<RegionInfo> MPPTask::prepare(const mpp::DispatchTaskRequest & task_r
         assert(isColumnExpr(expr));
         auto column_index = decodeDAGInt64(expr.val());
         partition_col_id.emplace_back(column_index);
-        if (has_collator_info && getDataTypeByFieldType(expr.field_type())->isString())
+        if (has_collator_info && removeNullable(getDataTypeByFieldType(expr.field_type()))->isString())
         {
             collators.emplace_back(getCollatorFromFieldType(exchangeSender.types(i)));
         }
