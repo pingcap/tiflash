@@ -102,4 +102,3 @@ bool isGroupByCollationSensitive(const Context & context)
     return context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
 }
 } // namespace DB::AggregationInterpreterHelper
-
