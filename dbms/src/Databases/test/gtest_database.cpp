@@ -94,7 +94,7 @@ public:
         }
     }
 
-    static void recreateMetadataPath() 
+    static void recreateMetadataPath()
     {
         String path = TiFlashTestEnv::getContext().getPath();
 
@@ -737,7 +737,7 @@ try
     DatabaseLoading::loadTable(ctx, *db, meta_path, db_name, db_data_path, "TiFlash", "t_45.sql", false);
 
     // Get storage from database
-    const auto *const tbl_name = "t_45";
+    const auto * const tbl_name = "t_45";
     auto storage = db->tryGetTable(ctx, tbl_name);
     ASSERT_NE(storage, nullptr);
     EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
@@ -825,7 +825,7 @@ try
         auto db = ctx.getDatabase(name_mapper.mapDatabaseName(*db_info));
         ASSERT_NE(db, nullptr);
         EXPECT_EQ(db->getEngineName(), "TiFlash");
-        auto *flash_db = typeid_cast<DatabaseTiFlash *>(db.get());
+        auto * flash_db = typeid_cast<DatabaseTiFlash *>(db.get());
         auto & db_info_get = flash_db->getDatabaseInfo();
         ASSERT_EQ(db_info_get.name, expect_name);
     }
