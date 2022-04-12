@@ -77,12 +77,12 @@ BlockIO InterpreterDAG::execute()
         executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true);
     else
         executeUnion(pipeline, max_streams, dagContext().log);
-    if (!dagContext().subqueries_for_sets.empty())
+    if (dagContext().hasSubquery())
     {
         const Settings & settings = context.getSettingsRef();
         pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
             pipeline.firstStream(),
-            std::move(dagContext().subqueries_for_sets),
+            std::move(dagContext().moveSubqueries()),
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
             dagContext().log->identifier());
     }
