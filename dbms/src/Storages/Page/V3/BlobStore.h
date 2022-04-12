@@ -140,6 +140,16 @@ public:
     public:
         BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
+        // Don't require a lock from BlobStats When you already hold a BlobStat lock
+        //
+        // Safe options:
+        // 1. Hold a BlobStats lock, then Hold a/many BlobStat lock(s).
+        // 2. Without hold a BlobStats lock, But hold a/many BlobStat lock(s).
+        // 3. Hold a BlobStats lock, without hold a/many BlobStat lock(s).
+        //
+        // Not safe options:
+        // 1. then Hold a/many BlobStat lock(s), then a BlobStats lock.
+        //
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
         BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);

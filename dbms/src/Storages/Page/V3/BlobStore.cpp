@@ -340,9 +340,13 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
 void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size)
 {
     const auto & stat = blob_stats.blobIdToStat(blob_id);
-    auto lock = stat->lock();
-    stat->removePosFromStat(offset, size, lock);
+    {
+        auto lock = stat->lock();
+        stat->removePosFromStat(offset, size, lock);
+    }
 
+    // We don't need hold the BlobStat lock(Also can't do that).
+    // Because once BlobStat become Read-Only type, Then valid size won't increase.
     if (stat->isReadOnly() && stat->sm_valid_size == 0)
     {
         LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
