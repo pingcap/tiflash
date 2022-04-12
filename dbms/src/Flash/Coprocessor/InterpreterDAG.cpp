@@ -77,7 +77,7 @@ BlockIO InterpreterDAG::execute()
         executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true);
     else
         executeUnion(pipeline, max_streams, dagContext().log);
-    if (dagContext().subqueries_for_sets.empty())
+    if (!dagContext().subqueries_for_sets.empty())
     {
         const Settings & settings = context.getSettingsRef();
         pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
