@@ -119,26 +119,28 @@ void CreatingSetsBlockInputStream::createAll()
 
         if (!exception_from_workers.empty())
         {
-            LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception and rethrow the first of total {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
+            LOG_ERROR(log,
+                "Creating all tasks of " << std::to_string(mpp_task_id) << " takes " << std::to_string(watch.elapsedSeconds())
+                                         << " sec with exception and rethrow the first of total " << exception_from_workers.size()
+                                         << " exceptions.");
             std::rethrow_exception(exception_from_workers.front());
         }
-        LOG_FMT_DEBUG(log, "Creating all tasks of {} takes {} sec. ", mpp_task_id.toString(), watch.elapsedSeconds());
-
+        LOG_DEBUG(
+            log, "Creating all tasks of " << std::to_string(mpp_task_id) << " takes " << std::to_string(watch.elapsedSeconds()) << "sec. ");
         created = true;
     }
 }
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
-    auto log_msg = fmt::format("{} for task {}",
-                               subquery.set ? "Creating set. " : subquery.join ? "Creating join. "
-                                   : subquery.table                            ? "Filling temporary table. "
-                                                                               : "null subquery",
-                               mpp_task_id.toString());
     Stopwatch watch;
     try
     {
-        LOG_FMT_DEBUG(log, "{}", log_msg);
+        LOG_DEBUG(log,
+            (subquery.set ? "Creating set. " : "")
+                << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
+                << std::to_string(mpp_task_id));
+
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
@@ -157,7 +159,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         {
             if (isCancelled())
             {
-                LOG_FMT_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
+                LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
                 return;
             }
 
@@ -240,7 +242,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         }
         else
         {
-            LOG_FMT_DEBUG(log, "Subquery has empty result for task {}. ", mpp_task_id.toString());
+            LOG_DEBUG(log, "Subquery has empty result for task" << std::to_string(mpp_task_id));
         }
     }
     catch (...)
@@ -249,7 +251,9 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         exception_from_workers.push_back(std::current_exception());
         if (subquery.join)
             subquery.join->setBuildTableState(Join::BuildTableState::FAILED);
-        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg, getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
+        LOG_ERROR(log,
+            "task" << std::to_string(mpp_task_id) << " throw exception: " << getCurrentExceptionMessage(false, true) << " In "
+                   << std::to_string(watch.elapsedSeconds()) << " sec. ");
     }
 }
 
