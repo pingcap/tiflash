@@ -106,7 +106,7 @@ std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"group_concat", tipb::ExprType::GroupConcat},
 });
 
-DAGColumnInfo toNullableDAGColumnInfo(DAGColumnInfo & input)
+DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
 {
     DAGColumnInfo output = input;
     output.second.clearNotNullFlag();
