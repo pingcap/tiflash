@@ -41,7 +41,6 @@ public:
           return_executor_id(true),
           is_mpp_task(true),
           is_root_mpp_task(is_root_mpp_task_),
-          tunnel_set(nullptr),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           mpp_task_meta(meta_),
