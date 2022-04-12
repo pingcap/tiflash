@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <Encryption/EncryptedWritableFile.h>
@@ -95,7 +109,7 @@ public:
         ret = EVP_EncryptUpdate(ctx, ciphertext, &output_size, plaintext, static_cast<int>(MAX_SIZE));
         DBMS_ASSERT(ret == 1);
         int final_output_size = 0;
-        ret = EVP_EncryptFinal(ctx, ciphertext + output_size, &final_output_size);
+        ret = EVP_EncryptFinal_ex(ctx, ciphertext + output_size, &final_output_size);
         DBMS_ASSERT(ret == 1);
         DBMS_ASSERT(output_size + final_output_size == MAX_SIZE);
         FreeCipherContext(ctx);
@@ -329,6 +343,81 @@ try
     // Do it twice to ensure we can call close safely on a closed file
     enc_file->close();
     ASSERT_TRUE(enc_file->isClosed());
+}
+CATCH
+
+class FtruncateTest : public ::testing::Test
+{
+public:
+    template <typename B, typename T, typename E>
+    void testEncFtruncate(String file_name)
+    {
+        String file_path = tests::TiFlashTestEnv::getTemporaryPath(file_name);
+        B file = std::make_shared<T>(file_path, true, -1, 0600);
+
+        std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+        std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
+        auto encryption_info = key_manager->newFile("encryption");
+        BlockAccessCipherStreamPtr cipher_stream
+            = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+
+        auto enc_file = std::make_shared<E>(file, cipher_stream);
+
+        size_t buff_size = 123;
+        size_t buff_need_delete_size = 23;
+        char buff_write[buff_size];
+
+        size_t truncate_size = buff_size - buff_need_delete_size;
+
+        for (size_t i = 0; i < buff_size; i++)
+        {
+            buff_write[i] = i % 0xFF;
+        }
+
+        ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, 0));
+        ASSERT_EQ(enc_file->fsync(), 0);
+        ASSERT_EQ(enc_file->ftruncate(truncate_size), 0);
+        ASSERT_EQ(Poco::File(file_path).getSize(), truncate_size);
+
+        enc_file->close();
+        ASSERT_TRUE(enc_file->isClosed());
+    }
+
+    template <typename T>
+    void testFtruncate(String file_name)
+    {
+        size_t buff_size = 123;
+        size_t buff_need_delete_size = 23;
+        char buff_write[buff_size];
+
+        size_t truncate_size = buff_size - buff_need_delete_size;
+
+        for (size_t i = 0; i < buff_size; i++)
+        {
+            buff_write[i] = i % 0xFF;
+        }
+
+        String file_path = tests::TiFlashTestEnv::getTemporaryPath(file_name);
+        auto file = std::make_shared<T>(file_path, true, -1, 0600);
+
+        ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, 0));
+        ASSERT_EQ(file->fsync(), 0);
+        ASSERT_EQ(file->ftruncate(truncate_size), 0);
+        ASSERT_EQ(Poco::File(file_path).getSize(), truncate_size);
+
+        file->close();
+        ASSERT_TRUE(file->isClosed());
+    }
+};
+
+TEST_F(FtruncateTest, Ftruncate)
+try
+{
+    testFtruncate<PosixWritableFile>("posix_w_file");
+    testFtruncate<PosixWriteReadableFile>("posix_wr_file");
+    testEncFtruncate<WritableFilePtr, PosixWritableFile, EncryptedWritableFile>("enc_posix_w_file");
+    testEncFtruncate<WriteReadableFilePtr, PosixWriteReadableFile, EncryptedWriteReadableFile>("enc_posix_wr_file");
 }
 CATCH
 

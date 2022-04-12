@@ -1,17 +1,31 @@
-#include <type_traits>
-#include <DataTypes/DataTypeNumberBase.h>
-#include <Columns/ColumnVector.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnConst.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
+#include <Columns/ColumnVector.h>
 #include <Common/NaNUtils.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeNumberBase.h>
 #include <DataTypes/FormatSettingsJSON.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+
+#include <type_traits>
 
 
 namespace DB
 {
-
 template <typename T>
 void DataTypeNumberBase<T>::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
@@ -113,7 +127,7 @@ template <typename T>
 void DataTypeNumberBase<T>::deserializeTextJSON(IColumn & column, ReadBuffer & istr) const
 {
     bool has_quote = false;
-    if (!istr.eof() && *istr.position() == '"')        /// We understand the number both in quotes and without.
+    if (!istr.eof() && *istr.position() == '"') /// We understand the number both in quotes and without.
     {
         has_quote = true;
         ++istr.position();
@@ -250,7 +264,7 @@ void DataTypeNumberBase<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer &
     typename ColumnVector<T>::Container & x = typeid_cast<ColumnVector<T> &>(column).getData();
     size_t initial_size = x.size();
     x.resize(initial_size + limit);
-    size_t size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(typename ColumnVector<T>::value_type) * limit);
+    size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(typename ColumnVector<T>::value_type) * limit);
     x.resize(initial_size + size / sizeof(typename ColumnVector<T>::value_type));
 }
 
@@ -289,7 +303,7 @@ void DataTypeNumberBase<T>::deserializeWidenBinaryBulk(IColumn & column, ReadBuf
 
     using WidestType = typename NearestFieldType<T>::Type;
     typename ColumnVector<WidestType>::Container y(limit);
-    size_t size = istr.readBig(reinterpret_cast<char*>(&y[0]), sizeof(typename ColumnVector<WidestType>::value_type) * limit);
+    size_t size = istr.readBig(reinterpret_cast<char *>(&y[0]), sizeof(typename ColumnVector<WidestType>::value_type) * limit);
     size_t elem_size = size / sizeof(typename ColumnVector<WidestType>::value_type);
     for (size_t i = 0; i < elem_size; i++)
     {
@@ -325,4 +339,4 @@ template class DataTypeNumberBase<Int64>;
 template class DataTypeNumberBase<Float32>;
 template class DataTypeNumberBase<Float64>;
 
-}
+} // namespace DB

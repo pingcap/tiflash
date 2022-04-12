@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #pragma GCC diagnostic push
@@ -29,7 +43,7 @@ using RegionPtr = std::shared_ptr<Region>;
 class InterpreterDAG : public IInterpreter
 {
 public:
-    InterpreterDAG(Context & context_, const DAGQuerySource & dag_, const LogWithPrefixPtr & log_);
+    InterpreterDAG(Context & context_, const DAGQuerySource & dag_);
 
     ~InterpreterDAG() = default;
 
@@ -37,21 +51,12 @@ public:
 
 private:
     BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets);
-    void initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block);
 
-private:
+    DAGContext & dagContext() const { return *context.getDAGContext(); }
+
     Context & context;
-
     const DAGQuerySource & dag;
-
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
-
-    // key: source_name of ExchangeReceiver nodes in dag.
-    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_maps;
-
-    const bool keep_session_timezone_info;
-
-    LogWithPrefixPtr log;
 };
 } // namespace DB

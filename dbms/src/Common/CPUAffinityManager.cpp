@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #if !__clang__
 #pragma GCC diagnostic push
@@ -110,7 +124,7 @@ void CPUAffinityManager::bindSelfQueryThread() const
 {
     if (enable())
     {
-        LOG_INFO(log, "Thread: " << ::getThreadName() << " bindQueryThread.");
+        LOG_FMT_INFO(log, "Thread: {} bindQueryThread.", ::getThreadName());
         // If tid is zero, then the calling thread is used.
         bindQueryThread(0);
     }
@@ -120,7 +134,7 @@ void CPUAffinityManager::bindSelfOtherThread() const
 {
     if (enable())
     {
-        LOG_INFO(log, "Thread: " << ::getThreadName() << " bindOtherThread.");
+        LOG_FMT_INFO(log, "Thread: {} bindOtherThread.", ::getThreadName());
         // If tid is zero, then the calling thread is used.
         bindOtherThread(0);
     }
@@ -183,7 +197,7 @@ void CPUAffinityManager::setAffinity(pid_t tid, const cpu_set_t & cpu_set) const
     int ret = sched_setaffinity(tid, sizeof(cpu_set), &cpu_set);
     if (ret != 0)
     {
-        LOG_ERROR(log, "sched_setaffinity fail but ignore error: " << std::strerror(errno));
+        LOG_FMT_ERROR(log, "sched_setaffinity fail but ignore error: {}", std::strerror(errno));
     }
 }
 
@@ -192,7 +206,7 @@ bool CPUAffinityManager::enable() const
     return 0 < query_cpu_percent && query_cpu_percent < 100 && cpu_cores > 1;
 }
 
-std::string CPUAffinityManager::cpuSetToString(const cpu_set_t & cpu_set) const
+std::string CPUAffinityManager::cpuSetToString(const cpu_set_t & cpu_set)
 {
     auto v = cpuSetToVec(cpu_set);
     std::string s;
@@ -203,7 +217,7 @@ std::string CPUAffinityManager::cpuSetToString(const cpu_set_t & cpu_set) const
     return s;
 }
 
-std::vector<int> CPUAffinityManager::cpuSetToVec(const cpu_set_t & cpu_set) const
+std::vector<int> CPUAffinityManager::cpuSetToVec(const cpu_set_t & cpu_set)
 {
     std::vector<int> v;
     for (int i = 0; i < static_cast<int>(sizeof(cpu_set)); i++)
@@ -217,7 +231,7 @@ std::vector<int> CPUAffinityManager::cpuSetToVec(const cpu_set_t & cpu_set) cons
 }
 
 // /proc/17022/task/17022 -> 17022
-std::string CPUAffinityManager::getShortFilename(const std::string & path) const
+std::string CPUAffinityManager::getShortFilename(const std::string & path)
 {
     auto pos = path.find_last_of('/');
     if (pos == std::string::npos)
@@ -243,13 +257,13 @@ std::vector<pid_t> CPUAffinityManager::getThreadIDs(const std::string & dir) con
         }
         catch (std::exception & e)
         {
-            LOG_ERROR(log, "dir " << dir << " path " << iter->path() << " exception " << e.what());
+            LOG_FMT_ERROR(log, "dir {} path {} exception {}", dir, iter->path(), e.what());
         }
     }
     return tids;
 }
 
-std::string CPUAffinityManager::getThreadName(const std::string & fname) const
+std::string CPUAffinityManager::getThreadName(const std::string & fname)
 {
     std::ifstream ifs(fname);
     if (ifs.fail())
@@ -265,7 +279,7 @@ std::unordered_map<pid_t, std::string> CPUAffinityManager::getThreads(pid_t pid)
 {
     std::string task_dir = "/proc/" + std::to_string(pid) + "/task";
     auto tids = getThreadIDs(task_dir);
-    LOG_DEBUG(log, task_dir << " thread count " << tids.size());
+    LOG_FMT_DEBUG(log, "{} thread count {}", task_dir, tids.size());
     std::unordered_map<pid_t, std::string> threads;
     for (auto tid : tids)
     {
@@ -286,12 +300,12 @@ void CPUAffinityManager::bindThreadCPUAffinity() const
     {
         if (isQueryThread(t.second))
         {
-            LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindQueryThread.");
+            LOG_FMT_INFO(log, "Thread: {} {} bindQueryThread.", t.first, t.second);
             bindQueryThread(t.first);
         }
         else
         {
-            LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bindOtherThread.");
+            LOG_FMT_INFO(log, "Thread: {} {} bindOtherThread.", t.first, t.second);
             bindOtherThread(t.first);
         }
     }
@@ -309,17 +323,17 @@ void CPUAffinityManager::checkThreadCPUAffinity() const
         int ret = sched_getaffinity(t.first, sizeof(cpu_set), &cpu_set);
         if (ret != 0)
         {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " sched_getaffinity ret " << ret << " error " << strerror(errno));
+            LOG_FMT_ERROR(log, "Thread: {} {} sched_getaffinity ret {} error {}", t.first, t.second, ret, strerror(errno));
             continue;
         }
-        LOG_INFO(log, "Thread: " << t.first << " " << t.second << " bind on CPU: " << cpuSetToString(cpu_set));
+        LOG_FMT_INFO(log, "Thread: {} {} bind on CPU: {}", t.first, t.second, cpuSetToString(cpu_set));
         if (isQueryThread(t.second) && !CPU_EQUAL(&cpu_set, &query_cpu_set))
         {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is query thread and bind CPU info is error.");
+            LOG_FMT_ERROR(log, "Thread: {} {} is query thread and bind CPU info is error.", t.first, t.second);
         }
         else if (!isQueryThread(t.second) && !CPU_EQUAL(&cpu_set, &other_cpu_set))
         {
-            LOG_ERROR(log, "Thread: " << t.first << " " << t.second << " is other thread and bind CPU info is error.");
+            LOG_FMT_ERROR(log, "Thread: {} {} is other thread and bind CPU info is error.", t.first, t.second);
         }
     }
 }

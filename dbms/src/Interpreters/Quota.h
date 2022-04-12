@@ -1,25 +1,35 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Common/Exception.h>
+#include <Core/Types.h>
+#include <IO/WriteHelpers.h>
+#include <Poco/Net/IPAddress.h>
+#include <Poco/Timespan.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <Poco/Util/Application.h>
+
 #include <cstring>
-#include <unordered_map>
 #include <memory>
 #include <pcg_random.hpp>
-
-#include <Poco/Timespan.h>
-
-#include <Poco/Util/Application.h>
-#include <Poco/Util/AbstractConfiguration.h>
-
-#include <Poco/Net/IPAddress.h>
-
-#include <Core/Types.h>
-#include <Common/Exception.h>
-#include <IO/WriteHelpers.h>
+#include <unordered_map>
 
 
 namespace DB
 {
-
 /** Quota for resources consumption for specific interval.
   * Used to limit resource usage by user.
   * Quota is applied "softly" - could be slightly exceed, because it is checked usually only on each block of processed data.
@@ -30,17 +40,17 @@ namespace DB
   */
 
 /// Used both for maximum allowed values and for counters of current accumulated values.
-template <typename Counter>        /// either size_t or std::atomic<size_t>
+template <typename Counter> /// either size_t or std::atomic<size_t>
 struct QuotaValues
 {
     /// Zero values (for maximums) means no limit.
-    Counter queries;                /// Number of queries.
-    Counter errors;                 /// Number of queries with exceptions.
-    Counter result_rows;            /// Number of rows returned as result.
-    Counter result_bytes;           /// Number of bytes returned as result.
-    Counter read_rows;              /// Number of rows read from tables.
-    Counter read_bytes;             /// Number of bytes read from tables.
-    Counter execution_time_usec;    /// Total amount of query execution time in microseconds.
+    Counter queries; /// Number of queries.
+    Counter errors; /// Number of queries with exceptions.
+    Counter result_rows; /// Number of rows returned as result.
+    Counter result_bytes; /// Number of bytes returned as result.
+    Counter read_rows; /// Number of rows read from tables.
+    Counter read_bytes; /// Number of bytes read from tables.
+    Counter execution_time_usec; /// Total amount of query execution time in microseconds.
 
     QuotaValues()
     {
@@ -65,7 +75,7 @@ struct QuotaValues
 
     void initFromConfig(const String & config_elem, Poco::Util::AbstractConfiguration & config);
 
-    bool operator== (const QuotaValues & rhs) const
+    bool operator==(const QuotaValues & rhs) const
     {
         return tuple() == rhs.tuple();
     }
@@ -101,15 +111,17 @@ struct QuotaForInterval
 {
     constexpr static const char * DEFAULT_QUOTA_NAME = "default";
 
-    std::atomic<time_t> rounded_time {0};
+    std::atomic<time_t> rounded_time{0};
     size_t duration = 0;
     bool randomize = false;
-    time_t offset = 0;        /// Offset of interval for randomization (to avoid DoS if intervals for many users end at one time).
+    time_t offset = 0; /// Offset of interval for randomization (to avoid DoS if intervals for many users end at one time).
     QuotaValues<size_t> max;
     QuotaValues<std::atomic<size_t>> used;
 
     QuotaForInterval() = default;
-    QuotaForInterval(time_t duration_) : duration(duration_) {}
+    QuotaForInterval(time_t duration_)
+        : duration(duration_)
+    {}
 
     void initFromConfig(const String & config_elem, time_t duration_, bool randomize_, time_t offset_, Poco::Util::AbstractConfiguration & config);
 
@@ -129,14 +141,14 @@ struct QuotaForInterval
     String toString() const;
 
     /// Only compare configuration, not accumulated (used) values or random offsets.
-    bool operator== (const QuotaForInterval & rhs) const
+    bool operator==(const QuotaForInterval & rhs) const
     {
         return randomize == rhs.randomize
             && duration == rhs.duration
             && max == rhs.max;
     }
 
-    QuotaForInterval & operator= (const QuotaForInterval & rhs)
+    QuotaForInterval & operator=(const QuotaForInterval & rhs)
     {
         rounded_time.store(rhs.rounded_time.load(std::memory_order_relaxed));
         duration = rhs.duration;
@@ -155,8 +167,7 @@ struct QuotaForInterval
 private:
     /// Reset counters of used resources, if interval for quota is expired.
     void updateTime(time_t current_time);
-    void check(size_t max_amount, size_t used_amount,
-        const String & quota_name, const String & user_name, const char * resource_name);
+    void check(size_t max_amount, size_t used_amount, const String & quota_name, const String & user_name, const char * resource_name);
 };
 
 
@@ -172,11 +183,13 @@ private:
     Container cont;
 
     std::string quota_name;
-    std::string user_name;    /// user name is set only for current counters for user, not for object that contain maximum values (limits).
+    std::string user_name; /// user name is set only for current counters for user, not for object that contain maximum values (limits).
 
 public:
     QuotaForIntervals(const std::string & quota_name_, const std::string & user_name_)
-        : quota_name(quota_name_), user_name(user_name_) {}
+        : quota_name(quota_name_)
+        , user_name(user_name_)
+    {}
 
     QuotaForIntervals(const QuotaForIntervals & other, const std::string & user_name_)
         : QuotaForIntervals(other)
@@ -186,6 +199,7 @@ public:
 
     QuotaForIntervals() = default;
     QuotaForIntervals(const QuotaForIntervals & other) = default;
+    QuotaForIntervals & operator=(const QuotaForIntervals & other) = default;
 
     /// Is there at least one interval for counting quota?
     bool empty() const
@@ -257,8 +271,7 @@ private:
 
 public:
     void loadFromConfig(Poco::Util::AbstractConfiguration & config);
-    QuotaForIntervalsPtr get(const String & name, const String & quota_key,
-        const String & user_name, const Poco::Net::IPAddress & ip);
+    QuotaForIntervalsPtr get(const String & name, const String & quota_key, const String & user_name, const Poco::Net::IPAddress & ip);
 };
 
-}
+} // namespace DB

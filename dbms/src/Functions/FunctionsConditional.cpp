@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnNullable.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsArray.h>
@@ -180,15 +194,11 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
         throw Exception{"Invalid number of arguments for function " + getName(),
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
-    /// Conditions must be UInt8, Nullable(UInt8) or Null. If one of conditions is Nullable, the result is also Nullable.
-    bool have_nullable_condition = false;
-
     for_conditions([&](const DataTypePtr & arg) {
         const IDataType * nested_type;
+        /// Conditions must be UInt8, Nullable(UInt8) or Null.
         if (arg->isNullable())
         {
-            have_nullable_condition = true;
-
             if (arg->onlyNull())
                 return;
 
@@ -214,11 +224,7 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
         types_of_branches.emplace_back(arg);
     });
 
-    DataTypePtr common_type_of_branches = getLeastSupertype(types_of_branches);
-
-    return have_nullable_condition
-        ? makeNullable(common_type_of_branches)
-        : common_type_of_branches;
+    return getLeastSupertype(types_of_branches);
 }
 
 
@@ -239,7 +245,7 @@ String FunctionCaseWithExpression::getName() const
 
 DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args) const
 {
-    if (!args.size())
+    if (args.empty())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
                         ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 
@@ -271,7 +277,7 @@ DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args
 
 void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers & args, size_t result) const
 {
-    if (!args.size())
+    if (args.empty())
         throw Exception{"Function " + getName() + " expects at least 1 arguments",
                         ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
 

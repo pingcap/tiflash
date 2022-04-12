@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataTypes/IDataType.h>
@@ -5,7 +19,6 @@
 
 namespace DB
 {
-
 /** Tuple data type.
   * Used as an intermediate result when evaluating expressions.
   * Also can be used as a column - the result of the query execution.
@@ -22,6 +35,7 @@ private:
     DataTypes elems;
     Strings names;
     bool have_explicit_names;
+
 public:
     static constexpr bool is_parametric = true;
 
@@ -94,5 +108,4 @@ public:
     size_t getPositionByName(const String & name) const;
 };
 
-}
-
+} // namespace DB

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Types.h>
@@ -48,7 +62,9 @@ struct ExecutionSummary
 class DAGResponseWriter
 {
 public:
-    DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_);
+    DAGResponseWriter(
+        Int64 records_per_chunk_,
+        DAGContext & dag_context_);
     void fillTiExecutionSummary(
         tipb::ExecutorExecutionSummary * execution_summary,
         ExecutionSummary & current,
@@ -58,11 +74,10 @@ public:
     virtual void write(const Block & block) = 0;
     virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;
+    const DAGContext & dagContext() const { return dag_context; }
 
 protected:
     Int64 records_per_chunk;
-    tipb::EncodeType encode_type;
-    std::vector<tipb::FieldType> result_field_types;
     DAGContext & dag_context;
     std::unordered_map<String, ExecutionSummary> previous_execution_stats;
     std::unordered_set<String> local_executors;

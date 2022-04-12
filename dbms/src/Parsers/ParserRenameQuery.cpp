@@ -1,19 +1,31 @@
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTRenameQuery.h>
-
-#include <Parsers/CommonParsers.h>
-#include <Parsers/ParserRenameQuery.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <Common/typeid_cast.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTRenameQuery.h>
+#include <Parsers/CommonParsers.h>
+#include <Parsers/ParserRenameQuery.h>
 
 
 namespace DB
 {
-
-
 /// Parse database.table or table.
 static bool parseDatabaseAndTable(
-    ASTRenameQuery::Table & db_and_table, IParser::Pos & pos, Expected & expected)
+    ASTRenameQuery::Table & db_and_table,
+    IParser::Pos & pos,
+    Expected & expected)
 {
     ParserIdentifier name_p;
     ParserToken s_dot(TokenType::Dot);
@@ -62,15 +74,7 @@ bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
     }
 
-    String cluster_str;
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
-
     auto query = std::make_shared<ASTRenameQuery>();
-    query->cluster = cluster_str;
     node = query;
 
     query->elements = elements;
@@ -78,4 +82,4 @@ bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-}
+} // namespace DB

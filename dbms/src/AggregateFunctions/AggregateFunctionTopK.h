@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <AggregateFunctions/IAggregateFunction.h>
@@ -37,7 +51,7 @@ private:
     UInt64 reserved;
 
 public:
-    AggregateFunctionTopK(UInt64 threshold)
+    explicit AggregateFunctionTopK(UInt64 threshold)
         : threshold(threshold)
         , reserved(TOP_K_LOAD_FACTOR * threshold)
     {}
@@ -83,7 +97,7 @@ public:
         auto result_vec = set.topK(threshold);
         size_t size = result_vec.size();
 
-        offsets_to.push_back((offsets_to.size() == 0 ? 0 : offsets_to.back()) + size);
+        offsets_to.push_back((offsets_to.empty() ? 0 : offsets_to.back()) + size);
 
         typename ColumnVector<T>::Container & data_to = static_cast<ColumnVector<T> &>(arr_to.getData()).getData();
         size_t old_size = data_to.size();
@@ -198,7 +212,7 @@ public:
         IColumn & data_to = arr_to.getData();
 
         auto result_vec = this->data(place).value.topK(threshold);
-        offsets_to.push_back((offsets_to.size() == 0 ? 0 : offsets_to.back()) + result_vec.size());
+        offsets_to.push_back((offsets_to.empty() ? 0 : offsets_to.back()) + result_vec.size());
 
         for (auto & elem : result_vec)
         {

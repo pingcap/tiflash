@@ -1,3 +1,18 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/FmtUtils.h>
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -25,7 +40,7 @@ void UnifiedLogPatternFormatter::format(const Poco::Message & msg, std::string &
 
     std::string source_str = "<unknown>";
     if (msg.getSourceFile())
-        source_str = "<" + std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine()) + ">";
+        source_str = std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine());
 
     std::string message;
     const std::string & source = msg.getSource();
@@ -87,10 +102,14 @@ std::string UnifiedLogPatternFormatter::getPriorityString(const Poco::Message::P
 
 std::string UnifiedLogPatternFormatter::getTimestamp()
 {
+    // The format is "yyyy/MM/dd HH:mm:ss.SSS ZZZZZ"
     auto time_point = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(time_point);
 
-    std::tm * local_tm = std::localtime(&tt);
+    std::tm buf_tm;
+    std::tm * local_tm = localtime_r(&tt, &buf_tm);
+    if (unlikely(!local_tm))
+        return "1970/01/01 00:00:00.000 +00:00";
     int year = local_tm->tm_year + 1900;
     int month = local_tm->tm_mon + 1;
     int day = local_tm->tm_mday;
@@ -101,28 +120,25 @@ std::string UnifiedLogPatternFormatter::getTimestamp()
 
     int zone_offset = local_tm->tm_gmtoff;
 
-    std::string buffer
-        = fmt::format("{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:03d}", year, month, day, hour, minute, second, milliseconds);
-
-    std::stringstream ss;
-    ss << buffer << " ";
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:03d} ", year, month, day, hour, minute, second, milliseconds);
 
     // Handle time zone section
     int offset_value = std::abs(zone_offset);
     auto offset_seconds = std::chrono::seconds(offset_value);
     auto offset_tp = std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>(offset_seconds);
     auto offset_tt = std::chrono::system_clock::to_time_t(offset_tp);
-    std::tm * offset_tm = std::gmtime(&offset_tt);
+    std::tm * offset_tm = gmtime_r(&offset_tt, &buf_tm);
+    if (unlikely(!offset_tm))
+        return fmt_buf.toString() + "+00:00";
     if (zone_offset < 0)
-        ss << "-";
+        fmt_buf.append("-");
     else
-        ss << "+";
-    buffer = fmt::format("{0:02d}:{1:02d}", offset_tm->tm_hour, offset_tm->tm_min);
+        fmt_buf.append("+");
 
-    ss << buffer;
+    fmt_buf.fmtAppend("{0:02d}:{1:02d}", offset_tm->tm_hour, offset_tm->tm_min);
 
-    std::string result = ss.str();
-    return result;
+    return fmt_buf.toString();
 }
 
 void UnifiedLogPatternFormatter::writeEscapedString(DB::WriteBuffer & wb, const std::string & str)

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -6,7 +20,6 @@
 
 namespace DB
 {
-
 /// Sort one block by `description`. If limit != 0, then the partial sort of the first `limit` rows is produced.
 void sortBlock(Block & block, const SortDescription & description, size_t limit = 0);
 
@@ -29,4 +42,4 @@ void stableGetPermutation(const Block & block, const SortDescription & descripti
   */
 bool isAlreadySorted(const Block & block, const SortDescription & description);
 
-}
+} // namespace DB

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnVector.h>
@@ -54,7 +68,6 @@ inline ::testing::AssertionResult RowKeyRangeCompare(
 #define GET_GTEST_FULL_NAME                                                                     \
     (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." \
      + ::testing::UnitTest::GetInstance()->current_test_info()->name())
-
 
 inline Strings createNumberStrings(size_t beg, size_t end)
 {
@@ -198,6 +211,15 @@ public:
                 pk_type,
                 pk_name_,
                 pk_col_id});
+            // add extra column if need
+            if (pk_col_id != EXTRA_HANDLE_COLUMN_ID)
+            {
+                block.insert(ColumnWithTypeAndName{
+                    DB::tests::makeColumn<Int64>(EXTRA_HANDLE_COLUMN_INT_TYPE, createNumbers<Int64>(beg, end, reversed)),
+                    EXTRA_HANDLE_COLUMN_INT_TYPE,
+                    EXTRA_HANDLE_COLUMN_NAME,
+                    EXTRA_HANDLE_COLUMN_ID});
+            }
         }
         // version_col
         block.insert(DB::tests::createColumn<UInt64>(

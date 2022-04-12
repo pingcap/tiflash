@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Types.h>
@@ -73,6 +87,14 @@ public:
     /// if multi == false, this task can only be called by one thread at same time.
     /// If interval_ms is zero, this task will be scheduled with `sleep_seconds`.
     /// If interval_ms is not zero, this task will be scheduled with `interval_ms`.
+    ///
+    /// But at each scheduled time, there may be multiple threads try to run the same task,
+    ///   and then execute the same task one by one in sequential order(not simultaneously) even if `multi` is false.
+    /// For example, consider the following case when it's time to schedule a task,
+    /// 1. thread A get the task, mark the task as occupied and begin to execute it
+    /// 2. thread B also get the same task
+    /// 3. thread A finish the execution of the task quickly, release the task and try to update the next schedule time of the task
+    /// 4. thread B find the task is not occupied and execute the task again almost immediately
     TaskHandle addTask(const Task & task, const bool multi = true, const size_t interval_ms = 0);
     void removeTask(const TaskHandle & task);
 

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
@@ -24,13 +38,11 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsMiscellaneous.h>
-#include <Interpreters/Cluster.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Set.h>
 #include <Poco/Net/DNS.h>
 #include <Storages/IStorage.h>
-#include <Storages/getStructureOfRemoteTable.h>
 
 #include <cmath>
 #include <ext/bit_cast.h>
@@ -270,9 +282,9 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        if (auto type = checkAndGetDataType<DataTypeEnum8>(block.getByPosition(arguments[0]).type.get()))
+        if (const auto * type = checkAndGetDataType<DataTypeEnum8>(block.getByPosition(arguments[0]).type.get()))
             block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(type->getValues().size()));
-        else if (auto type = checkAndGetDataType<DataTypeEnum16>(block.getByPosition(arguments[0]).type.get()))
+        else if (const auto * type = checkAndGetDataType<DataTypeEnum16>(block.getByPosition(arguments[0]).type.get()))
             block.getByPosition(result).column = DataTypeUInt16().createColumnConst(block.rows(), UInt64(type->getValues().size()));
         else
             throw Exception("The argument for function " + getName() + " must be Enum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -753,7 +765,7 @@ public:
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         bool return_nullable = arguments[0].type->isNullable();
         ColumnPtr column_set_ptr = arguments[1].column;
-        auto * column_set = typeid_cast<const ColumnSet *>(&*column_set_ptr);
+        const auto * column_set = typeid_cast<const ColumnSet *>(&*column_set_ptr);
         return_nullable |= column_set->getData()->containsNullValue();
 
         if (return_nullable)
@@ -798,6 +810,11 @@ public:
             materialized_tuple = const_tuple->convertToFullColumn();
             tuple = typeid_cast<const ColumnTuple *>(materialized_tuple.get());
         }
+        auto left_column_vector = left_arg.column;
+        if (left_arg.column->isColumnConst())
+        {
+            left_column_vector = left_column_vector->convertToFullColumnIfConst();
+        }
 
         if (tuple)
         {
@@ -808,7 +825,16 @@ public:
                 block_of_key_columns.insert({tuple_columns[i], tuple_types[i], ""});
         }
         else
-            block_of_key_columns.insert(left_arg);
+        {
+            if (left_arg.column->isColumnConst())
+            {
+                block_of_key_columns.insert({left_column_vector, left_arg.type, ""});
+            }
+            else
+            {
+                block_of_key_columns.insert(left_arg);
+            }
+        }
 
         if constexpr (ignore_null)
         {
@@ -821,14 +847,14 @@ public:
             if (return_nullable)
             {
                 auto nested_res = column_set->getData()->execute(block_of_key_columns, negative);
-                if (left_arg.column->isColumnNullable())
+                if (left_column_vector->isColumnNullable())
                 {
-                    ColumnPtr result_null_map_column = dynamic_cast<const ColumnNullable &>(*left_arg.column).getNullMapColumnPtr();
+                    ColumnPtr result_null_map_column = dynamic_cast<const ColumnNullable &>(*left_column_vector).getNullMapColumnPtr();
                     if (set_contains_null)
                     {
                         MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
                         NullMap & result_null_map = dynamic_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
-                        auto uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
+                        const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
                         const auto & data = uint8_column->getData();
                         for (size_t i = 0, size = result_null_map.size(); i < size; i++)
                         {
@@ -843,8 +869,8 @@ public:
                 {
                     auto col_null_map = ColumnUInt8::create();
                     ColumnUInt8::Container & vec_null_map = col_null_map->getData();
-                    vec_null_map.assign(block.rows(), (UInt8)0);
-                    auto uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
+                    vec_null_map.assign(block.rows(), static_cast<UInt8>(0));
+                    const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
                     const auto & data = uint8_column->getData();
                     for (size_t i = 0, size = vec_null_map.size(); i < size; i++)
                     {
@@ -1053,7 +1079,7 @@ void FunctionReplicate::executeImpl(Block & block, const ColumnNumbers & argumen
 
     if (!array_column)
     {
-        auto const_array_column = checkAndGetColumnConst<ColumnArray>(block.getByPosition(arguments[1]).column.get());
+        const auto * const_array_column = checkAndGetColumnConst<ColumnArray>(block.getByPosition(arguments[1]).column.get());
         if (!const_array_column)
             throw Exception("Unexpected column for replicate", ErrorCodes::ILLEGAL_COLUMN);
         temp_column = const_array_column->convertToFullColumn();
@@ -1237,7 +1263,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        const auto in = block.getByPosition(arguments.front()).column.get();
+        const auto * const in = block.getByPosition(arguments.front()).column.get();
 
         if (!execute<UInt8>(block, in, result)
             && !execute<UInt16>(block, in, result)
@@ -1371,7 +1397,7 @@ public:
     }
 
 private:
-    std::string getVersion() const;
+    static std::string getVersion();
 };
 
 
@@ -1836,18 +1862,11 @@ void FunctionHasColumnInTable::executeImpl(Block & block, const ColumnNumbers & 
     String table_name = get_string_from_block(arguments[arg++]);
     String column_name = get_string_from_block(arguments[arg++]);
 
-    bool has_column;
+    bool has_column = false;
     if (host_name.empty())
     {
         const StoragePtr & table = global_context.getTable(database_name, table_name);
         has_column = table->hasColumn(column_name);
-    }
-    else
-    {
-        std::vector<std::vector<String>> host_names = {{host_name}};
-        auto cluster = std::make_shared<Cluster>(global_context.getSettings(), host_names, !user_name.empty() ? user_name : "default", password, global_context.getTCPPort(), false);
-        auto remote_columns = getStructureOfRemoteTable(*cluster, database_name, table_name, global_context);
-        has_column = remote_columns.hasPhysical(column_name);
     }
 
     block.getByPosition(result).column = DataTypeUInt8().createColumnConst(block.rows(), UInt64(has_column));
@@ -1886,7 +1905,7 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        const auto in = block.getByPosition(arguments.front()).column.get();
+        const auto * const in = block.getByPosition(arguments.front()).column.get();
 
         if (!execute<UInt8>(block, in, result)
             && !execute<UInt16>(block, in, result)
@@ -1920,7 +1939,7 @@ public:
 };
 
 
-std::string FunctionVersion::getVersion() const
+std::string FunctionVersion::getVersion()
 {
     std::ostringstream os;
     os << TiFlashBuildInfo::getVersion();

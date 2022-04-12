@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /** Allows to build programs with libc 2.18 and run on systems with at least libc 2.4,
   *  such as Ubuntu Lucid or CentOS 6.
   *
@@ -85,7 +99,14 @@ int __vasprintf_chk(char **s, int unused, const char *fmt, va_list ap)
     return vasprintf(s, fmt, ap);
 }
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wbuiltin-requires-header"
+#endif
 size_t fread(void *ptr, size_t size, size_t nmemb, void *stream);
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 size_t __fread_chk(void *ptr, size_t unused, size_t size, size_t nmemb, void *stream)
 {

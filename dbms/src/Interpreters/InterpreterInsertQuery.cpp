@@ -1,47 +1,58 @@
-#include <IO/ConcatReadBuffer.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <Common/typeid_cast.h>
-
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
-#include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/ConvertingBlockInputStream.h>
+#include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/copyData.h>
-
+#include <IO/ConcatReadBuffer.h>
+#include <Interpreters/InterpreterInsertQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-
-#include <Interpreters/InterpreterInsertQuery.h>
-#include <Interpreters/InterpreterSelectWithUnionQuery.h>
-
-#include <TableFunctions/TableFunctionFactory.h>
-#include <Parsers/ASTFunction.h>
-
 #include <Storages/MutableSupport.h>
+#include <TableFunctions/TableFunctionFactory.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event InsertQuery;
+extern const Event InsertQuery;
 }
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
-    extern const int READONLY;
-    extern const int ILLEGAL_COLUMN;
-}
+extern const int NO_SUCH_COLUMN_IN_TABLE;
+extern const int READONLY;
+extern const int ILLEGAL_COLUMN;
+} // namespace ErrorCodes
 
 
 InterpreterInsertQuery::InterpreterInsertQuery(
-    const ASTPtr & query_ptr_, const Context & context_, bool allow_materialized_)
-    : query_ptr(query_ptr_), context(context_), allow_materialized(allow_materialized_)
+    const ASTPtr & query_ptr_,
+    const Context & context_,
+    bool allow_materialized_)
+    : query_ptr(query_ptr_)
+    , context(context_)
+    , allow_materialized(allow_materialized_)
 {
     ProfileEvents::increment(ProfileEvents::InsertQuery);
 }
@@ -116,14 +127,20 @@ BlockIO InterpreterInsertQuery::execute()
     out = std::make_shared<PushingToViewsBlockOutputStream>(query.database, query.table, table, context, query_ptr, query.no_destination);
 
     out = std::make_shared<AddingDefaultBlockOutputStream>(
-        out, getSampleBlock(query, table), required_columns, table->getColumns().defaults, context);
+        out,
+        getSampleBlock(query, table),
+        required_columns,
+        table->getColumns().defaults,
+        context);
 
     /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
     /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
     if (!(context.getSettingsRef().insert_distributed_sync && table->getName() == "Distributed"))
     {
         out = std::make_shared<SquashingBlockOutputStream>(
-            out, context.getSettingsRef().min_insert_block_size_rows, context.getSettingsRef().min_insert_block_size_bytes);
+            out,
+            context.getSettingsRef().min_insert_block_size_rows,
+            context.getSettingsRef().min_insert_block_size_bytes);
     }
 
     auto out_wrapper = std::make_shared<CountingBlockOutputStream>(out);
@@ -172,4 +189,4 @@ void InterpreterInsertQuery::checkAccess(const ASTInsertQuery & query)
     throw Exception("Cannot insert into table in readonly mode", ErrorCodes::READONLY);
 }
 
-}
+} // namespace DB

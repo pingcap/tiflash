@@ -1,0 +1,83 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.cmp
+mysql> create table test.cmp (a varchar(30), b varchar(30)); insert into test.cmp values ('aaaa', 'bbbb'), ('aaaa', '%a%'), ('a', 'a'), ('a', 'b'), ('b', 'a'), ('', ''), ('', NULL), (NULL, ''), (NULL, NULL)
+mysql> alter table test.cmp set tiflash replica 1
+
+func> wait_table test cmp
+
+mysql> set @@tidb_enforce_mpp = 1; select strcmp(a, b) from test.cmp;
++--------------+
+| strcmp(a, b) |
++--------------+
+|           -1 |
+|            1 |
+|            0 |
+|           -1 |
+|            1 |
+|            0 |
+|         NULL |
+|         NULL |
+|         NULL |
++--------------+
+
+mysql> drop table if exists test.t;
+mysql> create table test.t (a varchar(30));
+mysql> insert into test.t values ('a'), ('b'), ('c'), (NULL);
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+mysql> set @@tidb_enforce_mpp = 1; select strcmp('b', a) from test.t;
++----------------+
+| strcmp('b', a) |
++----------------+
+|              1 |
+|              0 |
+|             -1 |
+|           NULL |
++----------------+
+
+
+mysql> set @@tidb_enforce_mpp = 1; select strcmp(a, 'b') from test.t;
++----------------+
+| strcmp(a, 'b') |
++----------------+
+|             -1 |
+|              0 |
+|              1 |
+|           NULL |
++----------------+
+
+mysql> set @@tidb_enforce_mpp = 1; select strcmp(a, NULL) from test.t;
++-----------------+
+| strcmp(a, NULL) |
++-----------------+
+|            NULL |
+|            NULL |
+|            NULL |
+|            NULL |
++-----------------+
+
+mysql> set @@tidb_enforce_mpp = 1; select strcmp(NULL, a) from test.t;
++-----------------+
+| strcmp(NULL, a) |
++-----------------+
+|            NULL |
+|            NULL |
+|            NULL |
+|            NULL |
++-----------------+
+

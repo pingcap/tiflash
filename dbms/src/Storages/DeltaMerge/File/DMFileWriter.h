@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataStreams/IBlockOutputStream.h>
@@ -82,7 +96,7 @@ public:
         // Get written bytes of `plain_file` && `mark_file`. Should be called after `flush`.
         // Note that this class don't take responsible for serializing `minmaxes`,
         // bytes of `minmaxes` won't be counted in this method.
-        size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file->getPositionInFile(); }
+        size_t getWrittenBytes() const { return plain_file->getMaterializedBytes() + mark_file->getMaterializedBytes(); }
 
         // compressed_buf -> plain_file
         WriteBufferFromFileBasePtr plain_file;
@@ -235,6 +249,9 @@ private:
 
     FileProviderPtr file_provider;
     WriteLimiterPtr write_limiter;
+
+    // use to avoid write index data for empty file
+    bool is_empty_file = true;
 };
 
 } // namespace DM

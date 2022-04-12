@@ -1,11 +1,25 @@
-#include <IO/WriteBufferFromString.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/UTF8Helpers.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Parsers/IAST.h>
+#include <IO/WriteBufferFromString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
-#include <Common/typeid_cast.h>
-#include <Common/UTF8Helpers.h>
+#include <Parsers/IAST.h>
 #include <Poco/UTF8Encoding.h>
 
 #include <limits>
@@ -13,19 +27,27 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int SYNTAX_ERROR;
-    extern const int EMPTY_DATA_PASSED;
-    extern const int UNEXPECTED_AST_STRUCTURE;
-    extern const int ARGUMENT_OUT_OF_BOUND;
-}
+extern const int SYNTAX_ERROR;
+extern const int EMPTY_DATA_PASSED;
+extern const int UNEXPECTED_AST_STRUCTURE;
+extern const int ARGUMENT_OUT_OF_BOUND;
+} // namespace ErrorCodes
 
 
-template <typename FieldType> struct EnumName;
-template <> struct EnumName<Int8> { static constexpr auto value = "Enum8"; };
-template <> struct EnumName<Int16> { static constexpr auto value = "Enum16"; };
+template <typename FieldType>
+struct EnumName;
+template <>
+struct EnumName<Int8>
+{
+    static constexpr auto value = "Enum8";
+};
+template <>
+struct EnumName<Int16>
+{
+    static constexpr auto value = "Enum16";
+};
 
 
 template <typename Type>
@@ -67,31 +89,31 @@ void DataTypeEnum<Type>::fillMaps()
     for (const auto & name_and_value : values)
     {
         const auto name_to_value_pair = name_to_value_map.insert(
-            { StringRef{name_and_value.first}, name_and_value.second });
+            {StringRef{name_and_value.first}, name_and_value.second});
 
         if (!name_to_value_pair.second)
             throw Exception{"Duplicate names in enum: '" + name_and_value.first + "' = " + toString(name_and_value.second)
-                    + " and '" + name_to_value_pair.first->getKey().toString() + "' = " + toString(name_to_value_pair.first->getMapped()),
-                ErrorCodes::SYNTAX_ERROR};
+                                + " and '" + name_to_value_pair.first->getKey().toString() + "' = " + toString(name_to_value_pair.first->getMapped()),
+                            ErrorCodes::SYNTAX_ERROR};
 
         const auto value_to_name_pair = value_to_name_map.insert(
-            { name_and_value.second, StringRef{name_and_value.first} });
+            {name_and_value.second, StringRef{name_and_value.first}});
 
         if (!value_to_name_pair.second)
             throw Exception{"Duplicate values in enum: '" + name_and_value.first + "' = " + toString(name_and_value.second)
-                    + " and '" + value_to_name_pair.first->second.toString() + "' = " + toString(value_to_name_pair.first->first),
-                ErrorCodes::SYNTAX_ERROR};
+                                + " and '" + value_to_name_pair.first->second.toString() + "' = " + toString(value_to_name_pair.first->first),
+                            ErrorCodes::SYNTAX_ERROR};
     }
 }
 
 template <typename Type>
-DataTypeEnum<Type>::DataTypeEnum(const Values & values_) : values{values_}
+DataTypeEnum<Type>::DataTypeEnum(const Values & values_)
+    : values{values_}
 {
     if (values.empty())
         throw Exception{"DataTypeEnum enumeration cannot be empty", ErrorCodes::EMPTY_DATA_PASSED};
 
-    std::sort(std::begin(values), std::end(values), [] (auto & left, auto & right)
-    {
+    std::sort(std::begin(values), std::end(values), [](auto & left, auto & right) {
         return left.second < right.second;
     });
 
@@ -199,7 +221,10 @@ void DataTypeEnum<Type>::deserializeTextCSV(IColumn & column, ReadBuffer & istr,
 
 template <typename Type>
 void DataTypeEnum<Type>::serializeBinaryBulk(
-    const IColumn & column, WriteBuffer & ostr, const size_t offset, size_t limit) const
+    const IColumn & column,
+    WriteBuffer & ostr,
+    const size_t offset,
+    size_t limit) const
 {
     const auto & x = typeid_cast<const ColumnType &>(column).getData();
     const auto size = x.size();
@@ -212,12 +237,15 @@ void DataTypeEnum<Type>::serializeBinaryBulk(
 
 template <typename Type>
 void DataTypeEnum<Type>::deserializeBinaryBulk(
-    IColumn & column, ReadBuffer & istr, const size_t limit, const double /*avg_value_size_hint*/) const
+    IColumn & column,
+    ReadBuffer & istr,
+    const size_t limit,
+    const double /*avg_value_size_hint*/) const
 {
     auto & x = typeid_cast<ColumnType &>(column).getData();
     const auto initial_size = x.size();
     x.resize(initial_size + limit);
-    const auto size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(FieldType) * limit);
+    const auto size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(FieldType) * limit);
     x.resize(initial_size + size / sizeof(FieldType));
 }
 
@@ -295,7 +323,7 @@ Field DataTypeEnum<Type>::castToValue(const Field & value_or_name) const
         return static_cast<Int64>(getValue(value_or_name.get<String>()));
     }
     else if (value_or_name.getType() == Field::Types::Int64
-          || value_or_name.getType() == Field::Types::UInt64)
+             || value_or_name.getType() == Field::Types::UInt64)
     {
         Int64 value = value_or_name.get<Int64>();
         checkOverflow<Type>(value);
@@ -333,7 +361,7 @@ static DataTypePtr create(const ASTPtr & arguments)
             || !func->arguments
             || func->arguments->children.size() != 2)
             throw Exception("Elements of Enum data type must be of form: 'name' = number, where name is string literal and number is an integer",
-                ErrorCodes::UNEXPECTED_AST_STRUCTURE);
+                            ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
         const ASTLiteral * name_literal = typeid_cast<const ASTLiteral *>(func->arguments->children[0].get());
         const ASTLiteral * value_literal = typeid_cast<const ASTLiteral *>(func->arguments->children[1].get());
@@ -343,14 +371,14 @@ static DataTypePtr create(const ASTPtr & arguments)
             || name_literal->value.getType() != Field::Types::String
             || (value_literal->value.getType() != Field::Types::UInt64 && value_literal->value.getType() != Field::Types::Int64))
             throw Exception("Elements of Enum data type must be of form: 'name' = number, where name is string literal and number is an integer",
-                ErrorCodes::UNEXPECTED_AST_STRUCTURE);
+                            ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 
         const String & name = name_literal->value.get<String>();
         const auto value = value_literal->value.get<typename NearestFieldType<FieldType>::Type>();
 
         if (value > std::numeric_limits<FieldType>::max() || value < std::numeric_limits<FieldType>::min())
             throw Exception{"Value " + toString(value) + " for element '" + name + "' exceeds range of " + EnumName<FieldType>::value,
-                ErrorCodes::ARGUMENT_OUT_OF_BOUND};
+                            ErrorCodes::ARGUMENT_OUT_OF_BOUND};
 
         values.emplace_back(name, value);
     }
@@ -365,4 +393,4 @@ void registerDataTypeEnum(DataTypeFactory & factory)
     factory.registerDataType("Enum16", create<DataTypeEnum<Int16>>);
 }
 
-}
+} // namespace DB

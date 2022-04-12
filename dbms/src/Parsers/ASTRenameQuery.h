@@ -1,6 +1,19 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Parsers/ASTQueryWithOnCluster.h>
 #include <Parsers/ASTQueryWithOutput.h>
 #include <Parsers/IAST.h>
 
@@ -8,11 +21,9 @@
 
 namespace DB
 {
-
-
 /** RENAME query
   */
-class ASTRenameQuery : public ASTQueryWithOutput, public ASTQueryWithOnCluster
+class ASTRenameQuery : public ASTQueryWithOutput
 {
 public:
     struct Table
@@ -21,7 +32,10 @@ public:
         String table;
 
         Table() = default;
-        Table(String db, String tbl) : database(std::move(db)), table(std::move(tbl)) {}
+        Table(String db, String tbl)
+            : database(std::move(db))
+            , table(std::move(tbl))
+        {}
     };
 
     struct Element
@@ -45,23 +59,6 @@ public:
         return res;
     }
 
-    ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override
-    {
-        auto query_ptr = clone();
-        auto & query = static_cast<ASTRenameQuery &>(*query_ptr);
-
-        query.cluster.clear();
-        for (Element & elem : query.elements)
-        {
-            if (elem.from.database.empty())
-                elem.from.database = new_database;
-            if (elem.to.database.empty())
-                elem.to.database = new_database;
-        }
-
-        return query_ptr;
-    }
-
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {
@@ -76,8 +73,6 @@ protected:
                           << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
                           << (!it->to.database.empty() ? backQuoteIfNeed(it->to.database) + "." : "") << backQuoteIfNeed(it->to.table);
         }
-
-        formatOnCluster(settings);
     }
 };
 

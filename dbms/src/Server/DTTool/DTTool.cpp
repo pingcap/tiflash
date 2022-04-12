@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Server/DTTool/DTTool.h>
 
 #include <boost/program_options.hpp>
@@ -12,9 +26,9 @@ static constexpr char MAIN_HELP[] =
     "Usage: dttool <subcommand> [args]\n"
     "Available Subcommands:\n"
     "  help        Print help message and exit.\n"
-    "  migrate     Migrate dmfile version.\n"
-    "  inspect     Inspect dmfile info.\n"
-    "  bench       Benchmark dmfile IO performance.";
+    "  migrate     Migrate dtfile version.\n"
+    "  inspect     Inspect dtfile info.\n"
+    "  bench       Benchmark dtfile IO performance.";
 // clang-format on
 
 extern "C" {

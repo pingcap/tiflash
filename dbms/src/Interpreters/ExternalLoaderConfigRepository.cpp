@@ -1,17 +1,28 @@
-#include <Interpreters/ExternalLoaderConfigRepository.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-#include <Common/StringUtils/StringUtils.h>
 #include <Common/Config/ConfigProcessor.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/getMultipleKeysFromConfig.h>
-
-#include <Poco/Glob.h>
+#include <Interpreters/ExternalLoaderConfigRepository.h>
 #include <Poco/File.h>
+#include <Poco/Glob.h>
 #include <Poco/Path.h>
 
 
 namespace DB
 {
-
 ExternalLoaderConfigRepository::Files ExternalLoaderConfigRepository::list(
     const Poco::Util::AbstractConfiguration & config,
     const std::string & path_key) const
@@ -69,4 +80,4 @@ Poco::AutoPtr<Poco::Util::AbstractConfiguration> ExternalLoaderConfigRepository:
     return preprocessed.configuration;
 }
 
-}
+} // namespace DB

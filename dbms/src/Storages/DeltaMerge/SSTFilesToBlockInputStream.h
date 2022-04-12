@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
@@ -42,7 +56,7 @@ public:
     SSTFilesToBlockInputStream(RegionPtr region_,
                                const SSTViewVec & snaps_,
                                const TiFlashRaftProxyHelper * proxy_helper_,
-                               const DecodingStorageSchemaSnapshot & schema_snap_,
+                               DecodingStorageSchemaSnapshotConstPtr schema_snap_,
                                Timestamp gc_safepoint_,
                                bool force_decode_,
                                TMTContext & tmt_,
@@ -51,7 +65,7 @@ public:
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 
-    Block getHeader() const override { return toEmptyBlock(*(schema_snap.column_defines)); }
+    Block getHeader() const override { return toEmptyBlock(*(schema_snap->column_defines)); }
 
     void readPrefix() override;
     void readSuffix() override;
@@ -76,7 +90,7 @@ private:
     RegionPtr region;
     const SSTViewVec & snaps;
     const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    const DecodingStorageSchemaSnapshot & schema_snap;
+    DecodingStorageSchemaSnapshotConstPtr schema_snap;
     TMTContext & tmt;
     const Timestamp gc_safepoint;
     size_t expected_size;
@@ -105,7 +119,7 @@ class BoundedSSTFilesToBlockInputStream final
 public:
     BoundedSSTFilesToBlockInputStream(SSTFilesToBlockInputStreamPtr child,
                                       const ColId pk_column_id_,
-                                      const DecodingStorageSchemaSnapshot & schema_snap);
+                                      const DecodingStorageSchemaSnapshotConstPtr & schema_snap);
 
     String getName() const { return "BoundedSSTFilesToBlockInputStream"; }
 

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Checksum.h>
@@ -9,6 +23,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/String.h>
 #include <Poco/Timespan.h>
 
 
@@ -22,7 +37,6 @@ extern const int UNKNOWN_OVERFLOW_MODE;
 extern const int ILLEGAL_OVERFLOW_MODE;
 extern const int UNKNOWN_TOTALS_MODE;
 extern const int UNKNOWN_COMPRESSION_METHOD;
-extern const int UNKNOWN_DISTRIBUTED_PRODUCT_MODE;
 extern const int UNKNOWN_GLOBAL_SUBQUERIES_METHOD;
 extern const int CANNOT_PARSE_BOOL;
 extern const int INVALID_CONFIG_PARAMETER;
@@ -834,11 +848,12 @@ public:
 
     static CompressionMethod getCompressionMethod(const String & s)
     {
-        if (s == "lz4")
+        String lower_str = Poco::toLower(s);
+        if (lower_str == "lz4")
             return CompressionMethod::LZ4;
-        if (s == "lz4hc")
+        if (lower_str == "lz4hc")
             return CompressionMethod::LZ4HC;
-        if (s == "zstd")
+        if (lower_str == "zstd")
             return CompressionMethod::ZSTD;
 
         throw Exception("Unknown compression method: '" + s + "', must be one of 'lz4', 'lz4hc', 'zstd'", ErrorCodes::UNKNOWN_COMPRESSION_METHOD);
@@ -899,83 +914,6 @@ enum class DistributedProductMode
     GLOBAL, /// Convert to global query
     ALLOW /// Enable
 };
-
-struct SettingDistributedProductMode
-{
-public:
-    bool changed = false;
-
-    SettingDistributedProductMode(DistributedProductMode x)
-        : value(x)
-    {}
-
-    operator DistributedProductMode() const { return value; }
-    SettingDistributedProductMode & operator=(DistributedProductMode x)
-    {
-        set(x);
-        return *this;
-    }
-
-    static DistributedProductMode getDistributedProductMode(const String & s)
-    {
-        if (s == "deny")
-            return DistributedProductMode::DENY;
-        if (s == "local")
-            return DistributedProductMode::LOCAL;
-        if (s == "global")
-            return DistributedProductMode::GLOBAL;
-        if (s == "allow")
-            return DistributedProductMode::ALLOW;
-
-        throw Exception("Unknown distributed product mode: '" + s + "', must be one of 'deny', 'local', 'global', 'allow'",
-                        ErrorCodes::UNKNOWN_DISTRIBUTED_PRODUCT_MODE);
-    }
-
-    String toString() const
-    {
-        const char * strings[] = {"deny", "local", "global", "allow"};
-        if (value < DistributedProductMode::DENY || value > DistributedProductMode::ALLOW)
-            throw Exception("Unknown distributed product mode", ErrorCodes::UNKNOWN_DISTRIBUTED_PRODUCT_MODE);
-        return strings[static_cast<size_t>(value)];
-    }
-
-    void set(DistributedProductMode x)
-    {
-        value = x;
-        changed = true;
-    }
-
-    void set(const Field & x)
-    {
-        set(safeGet<const String &>(x));
-    }
-
-    void set(const String & x)
-    {
-        set(getDistributedProductMode(x));
-    }
-
-    void set(ReadBuffer & buf)
-    {
-        String x;
-        readBinary(x, buf);
-        set(x);
-    }
-
-    void write(WriteBuffer & buf) const
-    {
-        writeBinary(toString(), buf);
-    }
-
-    DistributedProductMode get() const
-    {
-        return value;
-    }
-
-private:
-    DistributedProductMode value;
-};
-
 
 struct SettingString
 {

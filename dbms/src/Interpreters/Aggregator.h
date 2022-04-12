@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnAggregateFunction.h>
@@ -13,17 +27,16 @@
 #include <Common/HashTable/StringHashMap.h>
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashMap.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
+#include <Common/ThreadManager.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Encryption/FileProvider.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
-#include <Interpreters/Compiler.h>
 #include <Poco/TemporaryFile.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <functional>
@@ -775,7 +788,7 @@ public:
     };
 
 
-    explicit Aggregator(const Params & params_, const LogWithPrefixPtr & log_ = nullptr);
+    Aggregator(const Params & params_, const String & req_id);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
@@ -842,7 +855,7 @@ public:
 
         bool empty() const
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             return files.empty();
         }
     };
@@ -895,7 +908,7 @@ protected:
 
     std::mutex mutex;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     /// Returns true if you can abort the current task.
     CancellationHook isCancelled;
@@ -939,11 +952,11 @@ protected:
         AggregateDataPtr overflow_row) const;
 
     /// For case when there are no keys (all aggregate into one row).
-    void executeWithoutKeyImpl(
+    static void executeWithoutKeyImpl(
         AggregatedDataWithoutKey & res,
         size_t rows,
         AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena) const;
+        Arena * arena);
 
     template <typename Method>
     void writeToTemporaryFileImpl(
@@ -1035,14 +1048,19 @@ protected:
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const;
+    BlocksList prepareBlocksAndFillTwoLevel(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        ThreadPoolManager * thread_pool,
+        size_t max_threads) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
         AggregatedDataVariants & data_variants,
         Method & method,
         bool final,
-        ThreadPool * thread_pool) const;
+        ThreadPoolManager * thread_pool,
+        size_t max_threads) const;
 
     template <bool no_more_keys, typename Method, typename Table>
     void mergeStreamsImplCase(

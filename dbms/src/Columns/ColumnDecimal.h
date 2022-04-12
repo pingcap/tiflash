@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnVectorHelper.h>
@@ -102,8 +116,8 @@ public:
     void reserve(size_t n) override { data.reserve(n); }
 
     void insertFrom(const IColumn & src, size_t n) override { data.push_back(static_cast<const Self &>(src).getData()[n]); }
-    void insertData(const char * pos, size_t /*length*/)
-        override;
+    void insertData(const char * pos, size_t /*length*/) override;
+    bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool force_decode) override;
     void insertDefault() override { data.push_back(T()); }
     void insert(const Field & x) override { data.push_back(DB::get<typename NearestFieldType<T>::Type>(x)); }
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
@@ -176,6 +190,8 @@ public:
     const Container & getData() const { return data; }
     const T & getElement(size_t n) const { return data[n]; }
     T & getElement(size_t n) { return data[n]; }
+
+    UInt32 getScale() const { return scale; }
 
 protected:
     Container data;

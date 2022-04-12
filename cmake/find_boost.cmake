@@ -1,7 +1,21 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 option (USE_INTERNAL_BOOST_LIBRARY "Set to FALSE to use system boost library instead of bundled" ${NOT_UNBUNDLED})
 
 # Test random file existing in all package variants
-if (USE_INTERNAL_BOOST_LIBRARY AND NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/boost/libs/filesystem/src/path.cpp")
+if (USE_INTERNAL_BOOST_LIBRARY AND NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/boost/libs/filesystem/src/path.cpp")
    message (WARNING "submodules in contrib/boost is missing. to fix try run: \n git submodule update --init --recursive")
    set (USE_INTERNAL_BOOST_LIBRARY 0)
 endif ()
@@ -33,14 +47,14 @@ if (NOT Boost_SYSTEM_LIBRARY)
     set (Boost_INCLUDE_DIRS)
 
     # For boost from github:
-    file (GLOB Boost_INCLUDE_DIRS_ "${ClickHouse_SOURCE_DIR}/contrib/boost/*/include")
+    file (GLOB Boost_INCLUDE_DIRS_ "${TiFlash_SOURCE_DIR}/contrib/boost/*/include")
     list (APPEND Boost_INCLUDE_DIRS ${Boost_INCLUDE_DIRS_})
     # numeric has additional level
-    file (GLOB Boost_INCLUDE_DIRS_ "${ClickHouse_SOURCE_DIR}/contrib/boost/numeric/*/include")
+    file (GLOB Boost_INCLUDE_DIRS_ "${TiFlash_SOURCE_DIR}/contrib/boost/numeric/*/include")
     list (APPEND Boost_INCLUDE_DIRS ${Boost_INCLUDE_DIRS_})
 
     # For packaged version:
-    list (APPEND Boost_INCLUDE_DIRS "${ClickHouse_SOURCE_DIR}/contrib/boost")
+    list (APPEND Boost_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/boost")
 
 endif ()
 

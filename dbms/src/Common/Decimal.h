@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
@@ -20,6 +34,12 @@ using ScaleType = UInt32;
 constexpr PrecType decimal_max_prec = 65;
 constexpr ScaleType decimal_max_scale = 30;
 
+// IntPrec indicates the max precision of different integer types.
+// For now, the binary arithmetic functions use it to calculate result precision.
+// And cast function use it to do some optimizations, such as skipping overflow check.
+// But in TiDB the signed types will plus 1, for example IntPrec<int8_t>::prec is 4.
+// This is a little confusing because we will add 1 when return result to client.
+// Here we make sure TiFlash code is clean and will fix TiDB later.
 template <typename T>
 struct IntPrec
 {
@@ -27,7 +47,7 @@ struct IntPrec
 template <>
 struct IntPrec<int8_t>
 {
-    static constexpr PrecType prec = 4;
+    static constexpr PrecType prec = 3;
 };
 template <>
 struct IntPrec<uint8_t>
@@ -37,7 +57,7 @@ struct IntPrec<uint8_t>
 template <>
 struct IntPrec<int16_t>
 {
-    static constexpr PrecType prec = 6;
+    static constexpr PrecType prec = 5;
 };
 template <>
 struct IntPrec<uint16_t>
@@ -47,7 +67,7 @@ struct IntPrec<uint16_t>
 template <>
 struct IntPrec<int32_t>
 {
-    static constexpr PrecType prec = 11;
+    static constexpr PrecType prec = 10;
 };
 template <>
 struct IntPrec<uint32_t>
@@ -57,12 +77,24 @@ struct IntPrec<uint32_t>
 template <>
 struct IntPrec<int64_t>
 {
-    static constexpr PrecType prec = 20;
+    static constexpr PrecType prec = 19;
 };
 template <>
 struct IntPrec<uint64_t>
 {
     static constexpr PrecType prec = 20;
+};
+
+template <>
+struct IntPrec<Int128>
+{
+    static constexpr PrecType prec = 39;
+};
+
+template <>
+struct IntPrec<Int256>
+{
+    static constexpr PrecType prec = 78;
 };
 
 //  1) If the declared type of both operands of a dyadic arithmetic operator is exact numeric, then the declared
@@ -76,65 +108,66 @@ struct IntPrec<uint64_t>
 
 struct PlusDecimalInferer
 {
-    static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale, PrecType & result_prec, ScaleType & result_scale)
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
     {
-        result_scale = std::max(left_scale, right_scale);
+        ScaleType result_scale = std::max(left_scale, right_scale);
         PrecType result_int = std::max(left_prec - left_scale, right_prec - right_scale);
-        result_prec = std::min(result_scale + result_int + 1, decimal_max_prec);
+        PrecType result_prec = std::min(result_scale + result_int + 1, decimal_max_prec);
+        return {result_prec, result_scale};
     }
 };
 
 struct MulDecimalInferer
 {
-    static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale, PrecType & result_prec, ScaleType & result_scale)
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
     {
-        result_scale = std::min(left_scale + right_scale, decimal_max_scale);
-        result_prec = std::min(left_prec + right_prec, decimal_max_prec);
+        return {std::min(left_prec + right_prec, decimal_max_prec), std::min(left_scale + right_scale, decimal_max_scale)};
     }
 };
 
 struct DivDecimalInferer
 {
     static const ScaleType div_precincrement = 4;
-    static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType /* right_prec is not used */, ScaleType right_scale, PrecType & result_prec, ScaleType & result_scale)
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType /* right_prec is not used */, ScaleType right_scale)
     {
-        result_prec = std::min(left_prec + right_scale + div_precincrement, decimal_max_prec);
-        result_scale = std::min(left_scale + div_precincrement, decimal_max_scale);
+        return {
+            std::min(left_prec + right_scale + div_precincrement, decimal_max_prec),
+            std::min(left_scale + div_precincrement, decimal_max_scale)};
     }
 };
 
 struct SumDecimalInferer
 {
     static constexpr PrecType decimal_longlong_digits = 22;
-    static inline void infer(PrecType prec, ScaleType scale, PrecType & result_prec, ScaleType & result_scale)
+    static std::tuple<PrecType, ScaleType> infer(PrecType prec, ScaleType scale)
     {
-        result_prec = std::min(prec + decimal_longlong_digits, decimal_max_prec);
-        result_scale = scale;
+        return {std::min(prec + decimal_longlong_digits, decimal_max_prec), scale};
     }
 };
 
 struct AvgDecimalInferer
 {
     static const ScaleType div_precincrement = 4;
-    static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType & result_prec, ScaleType & result_scale)
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale)
     {
-        result_prec = std::min(left_prec + div_precincrement, decimal_max_prec);
-        result_scale = std::min(left_scale + div_precincrement, decimal_max_scale);
+        return {std::min(left_prec + div_precincrement, decimal_max_prec), std::min(left_scale + div_precincrement, decimal_max_scale)};
     }
 };
 
 struct ModDecimalInferer
 {
-    static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale, PrecType & result_prec, ScaleType & result_scale)
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
     {
-        result_prec = std::max(left_prec, right_prec);
-        result_scale = std::max(left_scale, right_scale);
+        return {std::max(left_prec, right_prec), std::max(left_scale, right_scale)};
     }
 };
 
 struct OtherInferer
 {
-    static inline void infer(PrecType, ScaleType, PrecType, ScaleType, PrecType &, ScaleType &) {}
+    static std::tuple<PrecType, ScaleType> infer(PrecType, ScaleType, PrecType, ScaleType)
+    {
+        return {};
+    }
 };
 
 template <typename T>
@@ -358,6 +391,8 @@ class DecimalMaxValue final : public ext::Singleton<DecimalMaxValue>
 public:
     static Int256 get(PrecType idx)
     {
+        // In case DecimalMaxValue::get(IntPrec<Int256>::prec), where IntPrec<Int256>::prec > 65.
+        assert(idx <= decimal_max_prec);
         return instance().getInternal(idx);
     }
 
@@ -381,10 +416,18 @@ private:
     }
 };
 
-template <typename T>
-inline typename T::NativeType getScaleMultiplier(ScaleType scale)
+// In some case, getScaleMultiplier and its callee may not be auto inline by the compiler.
+// This may hurt performance. __attribute__((flatten)) tells compliler to inline the callee of this function.
+template <typename T, std::enable_if_t<IsDecimal<T>> * = nullptr>
+__attribute__((flatten)) inline typename T::NativeType getScaleMultiplier(ScaleType scale)
 {
     return static_cast<typename T::NativeType>(DecimalMaxValue::get(scale) + 1);
+}
+
+template <typename T, std::enable_if_t<is_integer_v<T>> * = nullptr>
+__attribute__((flatten)) inline T getScaleMultiplier(ScaleType scale)
+{
+    return static_cast<T>(DecimalMaxValue::get(scale) + 1);
 }
 
 template <typename T>

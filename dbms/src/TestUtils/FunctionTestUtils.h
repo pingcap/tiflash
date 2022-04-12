@@ -1,6 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Common/UnifiedLogPatternFormatter.h>
+#include <Common/MyDuration.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
@@ -8,6 +22,10 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDuration.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -34,12 +52,44 @@ struct TypeTraits
     using FieldType = typename NearestFieldType<T>::Type;
 };
 
+template <>
+struct TypeTraits<Null>
+{
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
+    using FieldType = Null;
+};
+
+template <>
+struct TypeTraits<MyDate>
+{
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
+    using FieldType = DataTypeMyDate::FieldType;
+};
+
+template <>
+struct TypeTraits<MyDateTime>
+{
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
+    using FieldType = DataTypeMyDateTime::FieldType;
+};
+
+template <>
+struct TypeTraits<MyDuration>
+{
+    static constexpr bool is_nullable = false;
+    static constexpr bool is_decimal = false;
+    using FieldType = DataTypeMyDuration::FieldType;
+};
+
 template <typename T>
 struct TypeTraits<Nullable<T>>
 {
     static constexpr bool is_nullable = true;
     static constexpr bool is_decimal = false;
-    using FieldType = std::optional<typename NearestFieldType<T>::Type>;
+    using FieldType = std::optional<typename TypeTraits<T>::FieldType>;
 };
 
 template <typename T>
@@ -62,6 +112,12 @@ struct TypeTraits<Nullable<Decimal<T>>>
 
 template <typename T>
 struct InferredDataType;
+
+template <>
+struct InferredDataType<Null>
+{
+    using Type = DataTypeNothing;
+};
 
 template <>
 struct InferredDataType<UInt8>
@@ -129,6 +185,24 @@ struct InferredDataType<String>
     using Type = DataTypeString;
 };
 
+template <>
+struct InferredDataType<MyDate>
+{
+    using Type = DataTypeMyDate;
+};
+
+template <>
+struct InferredDataType<MyDateTime>
+{
+    using Type = DataTypeMyDateTime;
+};
+
+template <>
+struct InferredDataType<MyDuration>
+{
+    using Type = DataTypeMyDuration;
+};
+
 template <typename T>
 struct InferredDataType<Decimal<T>>
 {
@@ -194,6 +268,7 @@ ColumnPtr makeConstColumn(const DataTypePtr & data_type, size_t size, const Infe
     return data_type->createColumnConst(size, makeField(value));
 }
 
+ColumnWithTypeAndName createOnlyNullColumnConst(size_t size, const String & name = "");
 ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name = "");
 
 template <typename T>
@@ -248,12 +323,66 @@ ColumnWithTypeAndName createConstColumn(
     return {makeConstColumn<T>(data_type, size, value), data_type, name};
 }
 
+template <bool is_nullable = true>
+ColumnWithTypeAndName createDateTimeColumn(std::initializer_list<std::optional<MyDateTime>> init, int fraction)
+{
+    DataTypePtr data_type_ptr = std::make_shared<DataTypeMyDateTime>(fraction);
+    if constexpr (is_nullable)
+    {
+        data_type_ptr = makeNullable(data_type_ptr);
+    }
+    auto col = data_type_ptr->createColumn();
+    for (const auto & dt : init)
+    {
+        if (dt.has_value())
+            col->insert(Field(dt->toPackedUInt()));
+        else
+        {
+            if constexpr (is_nullable)
+            {
+                col->insert(Null());
+            }
+            else
+            {
+                throw Exception("Null value for not nullable DataTypeMyDateTime");
+            }
+        }
+    }
+    return {std::move(col), data_type_ptr, "datetime"};
+}
+
+template <bool is_nullable = true>
+ColumnWithTypeAndName createDateTimeColumnConst(size_t size, const std::optional<MyDateTime> & dt, int fraction)
+{
+    DataTypePtr data_type_ptr = std::make_shared<DataTypeMyDateTime>(fraction);
+    if constexpr (is_nullable)
+    {
+        data_type_ptr = makeNullable(data_type_ptr);
+    }
+
+    ColumnPtr col;
+    if (dt.has_value())
+        col = data_type_ptr->createColumnConst(size, Field(dt->toPackedUInt()));
+    else
+    {
+        if constexpr (is_nullable)
+        {
+            col = data_type_ptr->createColumnConst(size, Field(Null()));
+        }
+        else
+        {
+            throw Exception("Null value for not nullable DataTypeMyDateTime");
+        }
+    }
+    return {std::move(col), data_type_ptr, "datetime"};
+}
+
 // parse a string into decimal field.
 template <typename T>
 typename TypeTraits<T>::FieldType parseDecimal(
     const InferredLiteralType<T> & literal_,
-    PrecType max_prec = std::numeric_limits<PrecType>::max(),
-    ScaleType expected_scale = std::numeric_limits<ScaleType>::max())
+    PrecType max_prec,
+    ScaleType expected_scale)
 {
     using Traits = TypeTraits<T>;
     using DecimalType = typename Traits::DecimalType;
@@ -282,17 +411,36 @@ typename TypeTraits<T>::FieldType parseDecimal(
 
     auto [parsed_value, prec, scale] = parsed.value();
 
+    (void)prec;
     max_prec = std::min(max_prec, maxDecimalPrecision<DecimalType>());
-    if (prec > max_prec)
-        throw TiFlashTestException(
-            fmt::format("Precision is too large for {}({}): prec = {}", TypeName<DecimalType>::get(), max_prec, prec));
-    if (expected_scale != std::numeric_limits<ScaleType>::max() && scale != expected_scale)
-        throw TiFlashTestException(fmt::format("Scale does not match: expected = {}, actual = {}", expected_scale, scale));
-    if (scale > max_prec)
-        throw TiFlashTestException(fmt::format("Scale is larger than max_prec: max_prec = {}, scale = {}", max_prec, scale));
-
+    if (scale != expected_scale)
+    {
+        Int256 scale_factor = 1;
+        size_t scale_diff = expected_scale > scale ? expected_scale - scale : scale - expected_scale;
+        for (size_t i = 0; i < scale_diff; i++)
+            scale_factor *= 10;
+        if (expected_scale > scale)
+        {
+            parsed_value *= scale_factor;
+        }
+        else
+        {
+            bool need_round = (parsed_value >= 0 ? parsed_value : -parsed_value) % scale_factor >= scale_factor / 2;
+            parsed_value /= scale_factor;
+            if (need_round)
+            {
+                if (parsed_value > 0)
+                    parsed_value++;
+                else
+                    parsed_value--;
+            }
+        }
+    }
+    auto max_value = DecimalMaxValue::get(max_prec);
+    if (parsed_value > max_value || parsed_value < -max_value)
+        throw TiFlashTestException(fmt::format("Input {} overflow for decimal({},{})", literal, max_prec, expected_scale));
     auto value = static_cast<NativeType>(parsed_value);
-    return DecimalField<DecimalType>(value, scale);
+    return DecimalField<DecimalType>(value, expected_scale);
 }
 
 // e.g. `createColumn<Decimal32>(std::make_tuple(9, 4), {"99999.9999"})`
@@ -382,6 +530,13 @@ ColumnWithTypeAndName createConstColumn(
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator = nullptr);
+
+ColumnWithTypeAndName executeFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
     const ColumnsWithTypeAndName & columns);
 
 template <typename... Args>
@@ -393,6 +548,102 @@ ColumnWithTypeAndName executeFunction(
 {
     ColumnsWithTypeAndName vec({first_column, columns...});
     return executeFunction(context, func_name, vec);
+}
+
+DataTypePtr getReturnTypeForFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator = nullptr);
+
+template <typename T>
+ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto updated_vec = InferredDataVector<Nullable<T>>();
+    size_t vec_length = std::min(init_vec.size(), null_map.size());
+    for (size_t i = 0; i < vec_length; i++)
+    {
+        if (null_map[i])
+            updated_vec.push_back({});
+        else
+            updated_vec.push_back(init_vec[i]);
+    }
+    return createColumn<Nullable<T>>(updated_vec, name);
+}
+
+template <typename T>
+ColumnWithTypeAndName createNullableColumn(InferredDataInitializerList<T> init, const std::vector<Int32> & null_map, const String name = "")
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto vec = InferredDataVector<T>(init);
+    return createNullableColumn<T>(vec, null_map, name);
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createNullableColumn(
+    const std::tuple<Args...> & data_type_args,
+    const InferredDataVector<T> & init_vec,
+    const std::vector<Int32> & null_map,
+    const String & name = "")
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto updated_vec = InferredDataVector<Nullable<T>>();
+    size_t vec_length = std::min(init_vec.size(), null_map.size());
+    for (size_t i = 0; i < vec_length; i++)
+    {
+        if (null_map[i])
+            updated_vec.push_back({});
+        else
+            updated_vec.push_back(init_vec[i]);
+    }
+    return createColumn<Nullable<T>>(data_type_args, updated_vec, name);
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createNullableColumn(
+    const std::tuple<Args...> & data_type_args,
+    InferredDataInitializerList<T> init,
+    const std::vector<Int32> & null_map,
+    const String & name = "")
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto vec = InferredDataVector<T>(init);
+    return createNullableColumn<T>(data_type_args, vec, null_map, name);
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createNullableColumn(
+    const std::tuple<Args...> & data_type_args,
+    const InferredLiteralVector<T> & init_vec,
+    const std::vector<Int32> & null_map,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto updated_vec = InferredLiteralVector<Nullable<T>>();
+    size_t vec_length = std::min(init_vec.size(), null_map.size());
+    for (size_t i = 0; i < vec_length; i++)
+    {
+        if (null_map[i])
+            updated_vec.push_back({});
+        else
+            updated_vec.push_back(init_vec[i]);
+    }
+    return createColumn<Nullable<T>>(data_type_args, updated_vec, name, 0);
+}
+
+template <typename T, typename... Args>
+ColumnWithTypeAndName createNullableColumn(
+    const std::tuple<Args...> & data_type_args,
+    const InferredLiteralInitializerList<T> & init,
+    const std::vector<Int32> & null_map,
+    const String & name = "",
+    std::enable_if_t<TypeTraits<T>::is_decimal, int> = 0)
+{
+    static_assert(TypeTraits<T>::is_nullable == false);
+    auto vec = InferredLiteralVector<T>(init);
+    return createNullableColumn<T>(data_type_args, vec, null_map, name, 0);
 }
 
 class FunctionTest : public ::testing::Test
@@ -423,7 +674,11 @@ public:
         dag_context_ptr = std::make_unique<DAGContext>(1024);
         context.setDAGContext(dag_context_ptr.get());
     }
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns);
+
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator = nullptr)
+    {
+        return DB::tests::executeFunction(context, func_name, columns, collator);
+    }
 
     template <typename... Args>
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnWithTypeAndName & first_column, const Args &... columns)
@@ -432,7 +687,10 @@ public:
         return executeFunction(func_name, vec);
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns);
+    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+    {
+        return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns);
+    }
 
     template <typename... Args>
     ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnWithTypeAndName & first_column, const Args &... columns)
@@ -453,6 +711,5 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
-
 } // namespace tests
 } // namespace DB

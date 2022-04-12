@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/ProfileEvents.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -40,8 +54,9 @@ extern const int QUERY_IS_TOO_LARGE;
 extern const int INTO_OUTFILE_NOT_ALLOWED;
 } // namespace ErrorCodes
 
-
-static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
+namespace
+{
+void checkASTSizeLimits(const IAST & ast, const Settings & settings)
 {
     if (settings.max_ast_depth)
         ast.checkDepth(settings.max_ast_depth);
@@ -50,33 +65,41 @@ static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
 }
 
 
-static String joinLines(const String & query)
+String joinLines(const String & query)
 {
     String res = query;
     std::replace(res.begin(), res.end(), '\n', ' ');
     return res;
 }
 
+LoggerPtr getLogger(const Context & context)
+{
+    auto * dag_context = context.getDAGContext();
+    return (dag_context && dag_context->log)
+        ? dag_context->log
+        : Logger::get("executeQuery");
+}
 
 /// Log query into text log (not into system table).
-static void logQuery(const String & query, const Context & context)
+void logQuery(const String & query, const Context & context, const LoggerPtr & logger)
 {
     const auto & current_query_id = context.getClientInfo().current_query_id;
     const auto & initial_query_id = context.getClientInfo().initial_query_id;
     const auto & current_user = context.getClientInfo().current_user;
 
-    LOG_DEBUG(&Poco::Logger::get("executeQuery"),
-              fmt::format("(from {}{}, query_id: {}{}) {}",
-                          context.getClientInfo().current_address.toString(),
-                          (current_user != "default" ? ", user: " + context.getClientInfo().current_user : ""),
-                          current_query_id,
-                          (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
-                          joinLines(query)));
+    LOG_FMT_DEBUG(
+        logger,
+        "(from {}{}, query_id: {}{}) {}",
+        context.getClientInfo().current_address.toString(),
+        (current_user != "default" ? ", user: " + current_user : ""),
+        current_query_id,
+        (!initial_query_id.empty() && current_query_id != initial_query_id ? ", initial_query_id: " + initial_query_id : ""),
+        joinLines(query));
 }
 
 
 /// Call this inside catch block.
-static void setExceptionStackTrace(QueryLogElement & elem)
+void setExceptionStackTrace(QueryLogElement & elem)
 {
     try
     {
@@ -93,18 +116,19 @@ static void setExceptionStackTrace(QueryLogElement & elem)
 
 
 /// Log exception (with query info) into text log (not into system table).
-static void logException(Context & context, QueryLogElement & elem)
+void logException(Context & context, QueryLogElement & elem, const LoggerPtr & logger)
 {
-    LOG_ERROR(&Poco::Logger::get("executeQuery"),
-              fmt::format("{} (from {}) (in query: {}){}",
-                          elem.exception,
-                          context.getClientInfo().current_address.toString(),
-                          joinLines(elem.query),
-                          (!elem.stack_trace.empty() ? ", Stack trace:\n\n" + elem.stack_trace : "")));
+    LOG_FMT_ERROR(
+        logger,
+        "{} (from {}) (in query: {}){}",
+        elem.exception,
+        context.getClientInfo().current_address.toString(),
+        joinLines(elem.query),
+        (!elem.stack_trace.empty() ? ", Stack trace:\n\n" + elem.stack_trace : ""));
 }
 
 
-static void onExceptionBeforeStart(const String & query, Context & context, time_t current_time)
+void onExceptionBeforeStart(const String & query, Context & context, time_t current_time, const LoggerPtr & logger)
 {
     /// Exception before the query execution.
     context.getQuota().addError();
@@ -127,20 +151,21 @@ static void onExceptionBeforeStart(const String & query, Context & context, time
         elem.client_info = context.getClientInfo();
 
         setExceptionStackTrace(elem);
-        logException(context, elem);
+        logException(context, elem, logger);
 
         if (auto * query_log = context.getQueryLog())
             query_log->add(elem);
     }
 }
 
-
-static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
+std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     IQuerySource & query_src,
     Context & context,
     bool internal,
     QueryProcessingStage::Enum stage)
 {
+    auto execute_query_logger = getLogger(context);
+
     ProfileEvents::increment(ProfileEvents::Query);
     time_t current_time = time(nullptr);
 
@@ -166,8 +191,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             /// Anyway log the query.
             String str = query_src.str(max_query_size);
-            logQuery(str.substr(0, settings.log_queries_cut_to_length), context);
-            onExceptionBeforeStart(str, context, current_time);
+            logQuery(str.substr(0, settings.log_queries_cut_to_length), context, execute_query_logger);
+            onExceptionBeforeStart(str, context, current_time, execute_query_logger);
         }
 
         throw;
@@ -178,7 +203,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     try
     {
         if (!internal)
-            logQuery(query.substr(0, settings.log_queries_cut_to_length), context);
+            logQuery(query.substr(0, settings.log_queries_cut_to_length), context, execute_query_logger);
 
         /// Check the limits.
         checkASTSizeLimits(*ast, settings);
@@ -263,7 +288,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
 
             /// Also make possible for caller to log successful query finish and exception during execution.
-            res.finish_callback = [elem, &context, log_queries](IBlockInputStream * stream_in, IBlockOutputStream * stream_out) mutable {
+            res.finish_callback = [elem, &context, log_queries, execute_query_logger](IBlockInputStream * stream_in, IBlockOutputStream * stream_out) mutable {
                 ProcessListElement * process_list_elem = context.getProcessListElement();
 
                 if (!process_list_elem)
@@ -309,14 +334,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (elem.read_rows != 0)
                 {
-                    LOG_INFO(&Poco::Logger::get("executeQuery"),
-                             std::fixed << std::setprecision(3)
-                                        << fmt::format("Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
-                                                       elem.read_rows,
-                                                       formatReadableSizeWithBinarySuffix(elem.read_bytes),
-                                                       elapsed_seconds,
-                                                       static_cast<size_t>(elem.read_rows / elapsed_seconds),
-                                                       formatReadableSizeWithBinarySuffix(elem.read_bytes / elapsed_seconds)));
+                    LOG_FMT_INFO(
+                        execute_query_logger,
+                        "Read {} rows, {} in {:.3f} sec., {} rows/sec., {}/sec.",
+                        elem.read_rows,
+                        formatReadableSizeWithBinarySuffix(elem.read_bytes),
+                        elapsed_seconds,
+                        static_cast<size_t>(elem.read_rows / elapsed_seconds),
+                        formatReadableSizeWithBinarySuffix(elem.read_bytes / elapsed_seconds));
                 }
 
                 if (log_queries)
@@ -326,7 +351,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
             };
 
-            res.exception_callback = [elem, &context, log_queries]() mutable {
+            res.exception_callback = [elem, &context, log_queries, execute_query_logger]() mutable {
                 context.getQuota().addError();
 
                 elem.type = QueryLogElement::EXCEPTION_WHILE_PROCESSING;
@@ -350,7 +375,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
 
                 setExceptionStackTrace(elem);
-                logException(context, elem);
+                logException(context, elem, execute_query_logger);
 
                 if (log_queries)
                 {
@@ -361,23 +386,27 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             if (!internal && res.in)
             {
-                std::stringstream log_str;
-                log_str << "Query pipeline:\n";
-                res.in->dumpTree(log_str);
-                LOG_DEBUG(&Poco::Logger::get("executeQuery"), log_str.str());
+                auto pipeline_log_str = [&res]() {
+                    FmtBuffer log_buffer;
+                    log_buffer.append("Query pipeline:\n");
+                    res.in->dumpTree(log_buffer);
+                    return log_buffer.toString();
+                };
+                LOG_DEBUG(execute_query_logger, pipeline_log_str());
             }
         }
     }
     catch (...)
     {
         if (!internal)
-            onExceptionBeforeStart(query, context, current_time);
+            onExceptionBeforeStart(query, context, current_time, execute_query_logger);
 
         throw;
     }
 
     return std::make_tuple(ast, res);
 }
+} // namespace
 
 
 BlockIO executeQuery(
@@ -397,6 +426,7 @@ BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, Que
 {
     BlockIO streams;
     std::tie(std::ignore, streams) = executeQueryImpl(dag, context, internal, stage);
+    context.getDAGContext()->attachBlockIO(streams);
     return streams;
 }
 

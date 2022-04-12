@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
@@ -102,7 +116,7 @@ WriteLimiter::~WriteLimiter()
 
 void WriteLimiter::request(Int64 bytes)
 {
-    std::unique_lock<std::mutex> lock(request_mutex);
+    std::unique_lock lock(request_mutex);
 
     if (stop)
         return;
@@ -308,12 +322,13 @@ Int64 ReadLimiter::refreshAvailableBalance()
     Int64 bytes = getIOStatistic();
     if (bytes < last_stat_bytes)
     {
-        LOG_WARNING(log,
-                    fmt::format("last_stat {}:{} current_stat {}:{}",
-                                last_stat_time.time_since_epoch().count(),
-                                last_stat_bytes,
-                                us.time_since_epoch().count(),
-                                bytes));
+        LOG_FMT_WARNING(
+            log,
+            "last_stat {}:{} current_stat {}:{}",
+            last_stat_time.time_since_epoch().count(),
+            last_stat_bytes,
+            us.time_since_epoch().count(),
+            bytes);
     }
     else
     {
@@ -394,13 +409,13 @@ extern thread_local bool is_background_thread;
 
 WriteLimiterPtr IORateLimiter::getWriteLimiter()
 {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard lock(mtx_);
     return is_background_thread ? bg_write_limiter : fg_write_limiter;
 }
 
 ReadLimiterPtr IORateLimiter::getReadLimiter()
 {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard lock(mtx_);
     return is_background_thread ? bg_read_limiter : fg_read_limiter;
 }
 
@@ -424,25 +439,25 @@ bool IORateLimiter::readConfig(Poco::Util::AbstractConfiguration & config_, Stor
     }
     else
     {
-        LOG_INFO(log, "storage.io_rate_limit is not found in config, use default config.");
+        LOG_FMT_INFO(log, "storage.io_rate_limit is not found in config, use default config.");
     }
     if (io_config == new_io_config)
     {
-        LOG_INFO(log, "storage.io_rate_limit is not changed.");
+        LOG_FMT_INFO(log, "storage.io_rate_limit is not changed.");
         return false;
     }
-    LOG_INFO(log, fmt::format("storage.io_rate_limit is changed: {} => {}", io_config.toString(), new_io_config.toString()));
+    LOG_FMT_INFO(log, "storage.io_rate_limit is changed: {} => {}", io_config.toString(), new_io_config.toString());
     io_config = new_io_config;
     return true;
 }
 
 void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
 {
-    LOG_INFO(log, fmt::format("updateReadLimiter: bg_bytes {} fg_bytes {}", bg_bytes, fg_bytes));
-    auto getBgReadIOStatistic = [&]() {
+    LOG_FMT_INFO(log, "updateReadLimiter: bg_bytes {} fg_bytes {}", bg_bytes, fg_bytes);
+    auto get_bg_read_io_statistic = [&]() {
         return getCurrentIOInfo().bg_read_bytes;
     };
-    auto getFgReadIOStatistic = [&]() {
+    auto get_fg_read_io_statistic = [&]() {
         auto io_info = getCurrentIOInfo();
         return std::max(0, io_info.total_read_bytes - io_info.bg_read_bytes);
     };
@@ -453,7 +468,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (bg_read_limiter == nullptr) // bg_bytes != 0 && bg_read_limiter == nullptr
     {
-        bg_read_limiter = std::make_shared<ReadLimiter>(getBgReadIOStatistic, bg_bytes, LimiterType::BG_READ);
+        bg_read_limiter = std::make_shared<ReadLimiter>(get_bg_read_io_statistic, bg_bytes, LimiterType::BG_READ);
     }
     else // bg_bytes != 0 && bg_read_limiter != nullptr
     {
@@ -466,7 +481,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     }
     else if (fg_read_limiter == nullptr) // fg_bytes != 0 && fg_read_limiter == nullptr
     {
-        fg_read_limiter = std::make_shared<ReadLimiter>(getFgReadIOStatistic, fg_bytes, LimiterType::FG_READ);
+        fg_read_limiter = std::make_shared<ReadLimiter>(get_fg_read_io_statistic, fg_bytes, LimiterType::FG_READ);
     }
     else // fg_bytes != 0 && fg_read_limiter != nullptr
     {
@@ -476,7 +491,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
 
 void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
 {
-    LOG_INFO(log, fmt::format("updateWriteLimiter: bg_bytes {} fg_bytes {}", bg_bytes, fg_bytes));
+    LOG_FMT_INFO(log, "updateWriteLimiter: bg_bytes {} fg_bytes {}", bg_bytes, fg_bytes);
     if (bg_bytes == 0)
     {
         bg_write_limiter = nullptr;
@@ -533,7 +548,7 @@ std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fna
         boost::split(values, s, boost::is_any_of(":"));
         if (values.size() != 2)
         {
-            LOG_WARNING(log, "readTaskIOInfo: " << s << " is invalid.");
+            LOG_FMT_WARNING(log, "readTaskIOInfo: {} is invalid.", s);
             continue;
         }
         if (values[0] == "read_bytes")
@@ -587,28 +602,28 @@ void IORateLimiter::setStop()
     if (bg_write_limiter != nullptr)
     {
         auto sz = bg_write_limiter->setStop();
-        LOG_DEBUG(log, "bg_write_limiter setStop request size " << sz);
+        LOG_FMT_DEBUG(log, "bg_write_limiter setStop request size {}", sz);
     }
     if (fg_write_limiter != nullptr)
     {
         auto sz = fg_write_limiter->setStop();
-        LOG_DEBUG(log, "fg_write_limiter setStop request size " << sz);
+        LOG_FMT_DEBUG(log, "fg_write_limiter setStop request size {}", sz);
     }
     if (bg_read_limiter != nullptr)
     {
         auto sz = bg_read_limiter->setStop();
-        LOG_DEBUG(log, "bg_read_limiter setStop request size " << sz);
+        LOG_FMT_DEBUG(log, "bg_read_limiter setStop request size {}", sz);
     }
     if (fg_read_limiter != nullptr)
     {
         auto sz = fg_read_limiter->setStop();
-        LOG_DEBUG(log, "fg_read_limiter setStop request size " << sz);
+        LOG_FMT_DEBUG(log, "fg_read_limiter setStop request size {}", sz);
     }
 }
 
 void IORateLimiter::runAutoTune()
 {
-    auto autoTuneWorker = [&]() {
+    auto auto_tune_worker = [&]() {
         while (!stop.load(std::memory_order_relaxed))
         {
             ::sleep(io_config.auto_tune_sec > 0 ? io_config.auto_tune_sec : 1);
@@ -618,28 +633,28 @@ void IORateLimiter::runAutoTune()
             }
         }
     };
-    auto_tune_thread = std::thread(autoTuneWorker);
+    auto_tune_thread = std::thread(auto_tune_worker);
 }
 
 std::unique_ptr<IOLimitTuner> IORateLimiter::createIOLimitTuner()
 {
     WriteLimiterPtr bg_write, fg_write;
     ReadLimiterPtr bg_read, fg_read;
-    StorageIORateLimitConfig io_config_;
+    StorageIORateLimitConfig t_io_config;
     {
         std::lock_guard lock(mtx_);
         bg_write = bg_write_limiter;
         fg_write = fg_write_limiter;
         bg_read = bg_read_limiter;
         fg_read = fg_read_limiter;
-        io_config_ = io_config;
+        t_io_config = io_config;
     }
     return std::make_unique<IOLimitTuner>(
         bg_write != nullptr ? std::make_unique<LimiterStat>(bg_write->getStat()) : nullptr,
         fg_write != nullptr ? std::make_unique<LimiterStat>(fg_write->getStat()) : nullptr,
         bg_read != nullptr ? std::make_unique<LimiterStat>(bg_read->getStat()) : nullptr,
         fg_read != nullptr ? std::make_unique<LimiterStat>(fg_read->getStat()) : nullptr,
-        io_config_);
+        t_io_config);
 }
 
 void IORateLimiter::autoTune()
@@ -685,41 +700,48 @@ IOLimitTuner::TuneResult IOLimitTuner::tune() const
     auto msg = fmt::format("limiter {} write {} read {}", limiterCount(), writeLimiterCount(), readLimiterCount());
     if (limiterCount() < 2)
     {
-        LOG_INFO(log, msg << " NOT need to tune.");
+        LOG_FMT_INFO(log, "{} NOT need to tune.", msg);
         return {0, 0, false, 0, 0, false};
     }
-    LOG_INFO(log, msg << " need to tune.");
+    LOG_FMT_INFO(log, "{} need to tune.", msg);
     if (bg_write_stat)
     {
-        LOG_DEBUG(log, "bg_write_stat => " << bg_write_stat->toString());
+        LOG_FMT_DEBUG(log, "bg_write_stat => {}", bg_write_stat->toString());
     }
     if (fg_write_stat)
     {
-        LOG_DEBUG(log, "fg_write_stat => " << fg_write_stat->toString());
+        LOG_FMT_DEBUG(log, "fg_write_stat => {}", fg_write_stat->toString());
     }
     if (bg_read_stat)
     {
-        LOG_DEBUG(log, "bg_read_stat => " << bg_read_stat->toString());
+        LOG_FMT_DEBUG(log, "bg_read_stat => {}", bg_read_stat->toString());
     }
     if (fg_read_stat)
     {
-        LOG_DEBUG(log, "fg_read_stat => " << fg_read_stat->toString());
+        LOG_FMT_DEBUG(log, "fg_read_stat => {}", fg_read_stat->toString());
     }
 
     auto [max_read_bytes_per_sec, max_write_bytes_per_sec, rw_tuned] = tuneReadWrite();
-    LOG_INFO(
+    LOG_FMT_INFO(
         log,
-        fmt::format("tuneReadWrite: max_read {} max_write {} rw_tuned {}", max_read_bytes_per_sec, max_write_bytes_per_sec, rw_tuned));
+        "tuneReadWrite: max_read {} max_write {} rw_tuned {}",
+        max_read_bytes_per_sec,
+        max_write_bytes_per_sec,
+        rw_tuned);
     auto [max_bg_read_bytes_per_sec, max_fg_read_bytes_per_sec, read_tuned] = tuneRead(max_read_bytes_per_sec);
-    LOG_INFO(log,
-             fmt::format("tuneRead: bg_read {} fg_read {} read_tuned {}", max_bg_read_bytes_per_sec, max_fg_read_bytes_per_sec, read_tuned));
+    LOG_FMT_INFO(
+        log,
+        "tuneRead: bg_read {} fg_read {} read_tuned {}",
+        max_bg_read_bytes_per_sec,
+        max_fg_read_bytes_per_sec,
+        read_tuned);
     auto [max_bg_write_bytes_per_sec, max_fg_write_bytes_per_sec, write_tuned] = tuneWrite(max_write_bytes_per_sec);
-    LOG_INFO(log,
-             fmt::format(
-                 "tuneWrite: bg_write {} fg_write {} write_tuned {}",
-                 max_bg_write_bytes_per_sec,
-                 max_fg_write_bytes_per_sec,
-                 write_tuned));
+    LOG_FMT_INFO(
+        log,
+        "tuneWrite: bg_write {} fg_write {} write_tuned {}",
+        max_bg_write_bytes_per_sec,
+        max_fg_write_bytes_per_sec,
+        write_tuned);
     return {.max_bg_read_bytes_per_sec = max_bg_read_bytes_per_sec,
             .max_fg_read_bytes_per_sec = max_fg_read_bytes_per_sec,
             .read_tuned = read_tuned || rw_tuned,
@@ -753,7 +775,7 @@ std::tuple<Int64, Int64, bool> IOLimitTuner::tuneReadWrite() const
 
     TuneInfo read_info(maxReadBytesPerSec(), avgReadBytesPerSec(), readWatermark(), io_config.getReadMaxBytesPerSec());
     TuneInfo write_info(maxWriteBytesPerSec(), avgWriteBytesPerSec(), writeWatermark(), io_config.getWriteMaxBytesPerSec());
-    LOG_INFO(log, "read_tune_info => " << read_info.toString() << " write_tune_info => " << write_info.toString());
+    LOG_FMT_INFO(log, "read_tune_info => {} write_tune_info => {}", read_info.toString(), write_info.toString());
     return tune(read_info, write_info);
 }
 
@@ -797,7 +819,7 @@ IOLimitTuner::tuneBgFg(
 
     TuneInfo bg_info(bg->maxBytesPerSec(), bg->avgBytesPerSec(), getWatermark(bg->pct()), config_bg_max_bytes_per_sec);
     TuneInfo fg_info(fg->maxBytesPerSec(), fg->avgBytesPerSec(), getWatermark(fg->pct()), config_fg_max_bytes_per_sec);
-    LOG_INFO(log, "bg_tune_info => " << bg_info.toString() << " fg_tune_info => " << fg_info.toString());
+    LOG_FMT_INFO(log, "bg_tune_info => {} fg_tune_info => {}", bg_info.toString(), fg_info.toString());
     auto [tuned_bg_max_bytes_per_sec, tuned_fg_max_bytes_per_sec, has_tuned] = tune(bg_info, fg_info);
     tuned_bg_max_bytes_per_sec = max_bytes_per_sec * tuned_bg_max_bytes_per_sec / (tuned_bg_max_bytes_per_sec + tuned_fg_max_bytes_per_sec);
     tuned_fg_max_bytes_per_sec = max_bytes_per_sec - tuned_bg_max_bytes_per_sec;

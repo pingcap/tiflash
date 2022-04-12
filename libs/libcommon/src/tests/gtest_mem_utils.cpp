@@ -1,4 +1,19 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <common/StringRef.h>
+#include <fmt/core.h>
 #include <gtest/gtest.h>
 
 #include <random>
@@ -10,7 +25,8 @@ struct AlignedCharArray
     char * data;
 
     AlignedCharArray(size_t size_, std::align_val_t alignment_)
-        : alignment(alignment_), data(static_cast<char *>(operator new(size_, alignment)))
+        : alignment(alignment_)
+        , data(static_cast<char *>(operator new(size_, alignment)))
     {}
 
     ~AlignedCharArray() { ::operator delete(data, alignment); }
@@ -45,13 +61,19 @@ TEST_P(MemUtilsTest, CompareTrivial)
 {
     TempOption _option(GetParam().first, GetParam().second);
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123", "123"}, {"abc", "abc"}, {"\v\a\t\n213@3213", "\v\a\t\n213@3213"}, {std::string(1024, '@'), std::string(1024, '@')}})
+             {"123", "123"},
+             {"abc", "abc"},
+             {"\v\a\t\n213@3213", "\v\a\t\n213@3213"},
+             {std::string(1024, '@'), std::string(1024, '@')}})
     {
         ASSERT_EQ(StringRef(a), StringRef(b));
     }
 
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123-", "-123"}, {"ab", "abc"}, {"\a\t\n213#3213", "\v\a\t\n213@3213"}, {std::string(1024, '@'), std::string(1024, '!')}})
+             {"123-", "-123"},
+             {"ab", "abc"},
+             {"\a\t\n213#3213", "\v\a\t\n213@3213"},
+             {std::string(1024, '@'), std::string(1024, '!')}})
     {
         ASSERT_NE(StringRef(a), StringRef(b));
     }
@@ -68,8 +90,8 @@ TEST_P(MemUtilsTest, CompareLongEq)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
     auto aligned1 = aligned1_.data;
     auto aligned2 = aligned2_.data;
     aligned2 += 23;
@@ -95,8 +117,8 @@ TEST_P(MemUtilsTest, CompareLongNe)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
     auto aligned1 = aligned1_.data;
     auto aligned2 = aligned2_.data;
 
@@ -121,13 +143,10 @@ using Parm = std::pair<bool, bool>;
 
 std::string parmToName(const ::testing::TestParamInfo<Parm> & info)
 {
-    std::stringstream ss;
-    ss << "avx_" << info.param.first << "_avx512_" << info.param.second;
-    return ss.str();
+    return fmt::format("avx_{}_avx512_{}", info.param.first, info.param.second);
 }
 
-INSTANTIATE_TEST_CASE_P(Parm, MemUtilsTest,
-    testing::Values(MAKE_PAIR(false, false), MAKE_PAIR(false, true), MAKE_PAIR(true, false), MAKE_PAIR(true, true)), parmToName);
+INSTANTIATE_TEST_CASE_P(Parm, MemUtilsTest, testing::Values(MAKE_PAIR(false, false), MAKE_PAIR(false, true), MAKE_PAIR(true, false), MAKE_PAIR(true, true)), parmToName);
 
 #endif
 
@@ -150,7 +169,7 @@ TEST(MemUtilsTest, MemoryIsZeroGeneric)
 TEST(MemUtilsTest, MemoryIsZeroAVX2)
 {
     using namespace simd_option;
-    if (!SIMDRuntimeSupport(SIMDFeature::avx2))
+    if (!common::cpu_feature_flags.avx2)
     {
         return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
     }
@@ -172,7 +191,8 @@ TEST(MemUtilsTest, MemoryIsZeroAVX2)
 TEST(MemUtilsTest, MemoryIsZeroAVX512)
 {
     using namespace simd_option;
-    if (!SIMDRuntimeSupport(SIMDFeature::avx512vl) || !SIMDRuntimeSupport(SIMDFeature::avx512bw))
+    if (!common::cpu_feature_flags.avx512vl
+        || !common::cpu_feature_flags.avx512bw)
     {
         return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
     }
@@ -212,7 +232,7 @@ TEST(MemUtilsTest, MemoryIsZeroSSE2)
 TEST(MemUtilsTest, MemoryIsZeroASIMD)
 {
     using namespace simd_option;
-    if (!SIMDRuntimeSupport(SIMDFeature::asimd))
+    if (!common::cpu_feature_flags.asimd)
     {
         return GTEST_MESSAGE_("skipped", ::testing::TestPartResult::kSuccess);
     }
@@ -248,13 +268,19 @@ TEST_P(MemUtilsTest, CompareTrivial)
 {
     TempOption _option(GetParam());
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123", "123"}, {"abc", "abc"}, {"\v\a\t\n213@3213", "\v\a\t\n213@3213"}, {std::string(1024, '@'), std::string(1024, '@')}})
+             {"123", "123"},
+             {"abc", "abc"},
+             {"\v\a\t\n213@3213", "\v\a\t\n213@3213"},
+             {std::string(1024, '@'), std::string(1024, '@')}})
     {
         ASSERT_EQ(StringRef(a), StringRef(b));
     }
 
     for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123-", "-123"}, {"ab", "abc"}, {"\a\t\n213#3213", "\v\a\t\n213@3213"}, {std::string(1024, '@'), std::string(1024, '!')}})
+             {"123-", "-123"},
+             {"ab", "abc"},
+             {"\a\t\n213#3213", "\v\a\t\n213@3213"},
+             {std::string(1024, '@'), std::string(1024, '!')}})
     {
         ASSERT_NE(StringRef(a), StringRef(b));
     }
@@ -271,8 +297,8 @@ TEST_P(MemUtilsTest, CompareLongEq)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
     auto aligned1 = aligned1_.data;
     auto aligned2 = aligned2_.data;
 
@@ -299,8 +325,8 @@ TEST_P(MemUtilsTest, CompareLongNe)
     std::uniform_int_distribution<char> dist(1, 'z');
     std::string data(1024 * 1024 * 64, ' ');
 
-    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64, std::align_val_t{128});
-    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23, std::align_val_t{128});
+    auto aligned1_ = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
+    auto aligned2_ = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
     auto aligned1 = aligned1_.data;
     auto aligned2 = aligned2_.data;
 

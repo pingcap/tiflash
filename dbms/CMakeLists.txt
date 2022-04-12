@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 if (USE_INCLUDE_WHAT_YOU_USE)
     set (CMAKE_CXX_INCLUDE_WHAT_YOU_USE ${IWYU_PATH})
 endif ()
@@ -13,8 +27,8 @@ message (STATUS "Will build ${VERSION_FULL} (TiFlash ${TIFLASH_RELEASE_VERSION})
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config.h.in ${CONFIG_COMMON})
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config_version.h.in ${CONFIG_VERSION})
 
-get_property (BUILD_COMPILE_DEFINITIONS DIRECTORY ${ClickHouse_SOURCE_DIR} PROPERTY COMPILE_DEFINITIONS)
-get_property (BUILD_INCLUDE_DIRECTORIES DIRECTORY ${ClickHouse_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+get_property (BUILD_COMPILE_DEFINITIONS DIRECTORY ${TiFlash_SOURCE_DIR} PROPERTY COMPILE_DEFINITIONS)
+get_property (BUILD_INCLUDE_DIRECTORIES DIRECTORY ${TiFlash_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
 string (TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/src/Common/config_build.cpp.in ${CONFIG_BUILD})
 
@@ -28,10 +42,6 @@ if (NOT NO_WERROR)
 endif ()
 
 find_package (Threads)
-find_package (CURL) # CURL_LIBRARIES can be unset till this file, so we find it explicitly
-if (TARGET CURL::libcurl)
-    set(CURL_LIBRARIES CURL::libcurl)
-endif()
 
 if (ENABLE_FAILPOINTS)
     add_definitions(-DFIU_ENABLE)
@@ -43,7 +53,7 @@ add_subdirectory (src)
 set(dbms_headers)
 set(dbms_sources)
 
-include(${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
+include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
 add_headers_and_sources(clickhouse_common_io src/Common)
 add_headers_and_sources(clickhouse_common_io src/Common/HashTable)
@@ -54,10 +64,10 @@ add_headers_and_sources(dbms src/Core)
 add_headers_and_sources(dbms src/DataStreams)
 add_headers_and_sources(dbms src/DataTypes)
 add_headers_and_sources(dbms src/Databases)
+add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Dictionaries/Embedded)
 add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
-add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Encryption)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/ClusterProxy)
@@ -68,9 +78,9 @@ add_headers_and_sources(dbms src/Storages/DeltaMerge/Index)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/Filter)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/FilterParser)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/File)
+add_headers_and_sources(dbms src/Storages/DeltaMerge/ColumnFile)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/Delta)
 add_headers_and_sources(dbms src/Storages/Distributed)
-add_headers_and_sources(dbms src/Storages/MergeTree)
 add_headers_and_sources(dbms src/Storages/Transaction)
 add_headers_and_sources(dbms src/Storages/Page/V1)
 add_headers_and_sources(dbms src/Storages/Page/V1/mvcc)
@@ -79,6 +89,12 @@ add_headers_and_sources(dbms src/Storages/Page/V2)
 add_headers_and_sources(dbms src/Storages/Page/V2/mvcc)
 add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
 add_headers_and_sources(dbms src/Storages/Page/V2/gc)
+if (ENABLE_V3_PAGESTORAGE)
+    add_headers_and_sources(dbms src/Storages/Page/V3)
+    add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
+    add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
+    add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
+endif()
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
@@ -128,7 +144,7 @@ else ()
     install (TARGETS dbms LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT clickhouse)
 endif ()
 
-target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_FFI_SRC}")
+target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_INCLUDE_DIR}")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
@@ -173,9 +189,10 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
     cpptoml
+    libsymbolization
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
-
+target_compile_definitions(clickhouse_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
     clickhouse_parsers
     clickhouse_common_config
@@ -185,9 +202,6 @@ target_link_libraries (dbms
     kv_client
     tipb
     dtpb
-    ${Protobuf_LIBRARIES}
-    gRPC::grpc++_unsecure
-    ${CURL_LIBRARIES}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
@@ -205,8 +219,10 @@ if (Poco_Data_FOUND AND NOT USE_INTERNAL_POCO_LIBRARY)
     target_include_directories (dbms PRIVATE ${Poco_Data_INCLUDE_DIRS})
 endif()
 
+# NetSSL headers are exposed in clickhouse_common_io's headers.
+# We mark it public to make the headers available.
 if (Poco_NetSSL_FOUND)
-    target_link_libraries (clickhouse_common_io PRIVATE ${Poco_NetSSL_LIBRARY})
+    target_link_libraries (clickhouse_common_io PUBLIC ${Poco_NetSSL_LIBRARY})
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
@@ -238,17 +254,17 @@ target_include_directories (clickhouse_common_io BEFORE PUBLIC ${DOUBLE_CONVERSI
 # also for copy_headers.sh:
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 # https://cmake.org/pipermail/cmake/2016-May/063400.html
-target_link_libraries (clickhouse_common_io PUBLIC xxHash::xxhash)
+target_link_libraries (clickhouse_common_io PUBLIC ${TIFLASH_XXHASH_LIBRARY})
 
 if (ENABLE_TESTS)
-    include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
+    include (${TiFlash_SOURCE_DIR}/cmake/find_gtest.cmake)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
         # Google Test from sources
-        add_subdirectory(${ClickHouse_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
+        add_subdirectory(${TiFlash_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
         target_compile_definitions (gtest INTERFACE GTEST_HAS_POSIX_RE=0)
-        target_include_directories (gtest INTERFACE ${ClickHouse_SOURCE_DIR}/contrib/googletest/include)
+        target_include_directories (gtest INTERFACE ${TiFlash_SOURCE_DIR}/contrib/googletest/googletest/include)
     endif ()
 
     macro(grep_gtest_sources BASE_DIR DST_VAR)
@@ -256,24 +272,44 @@ if (ENABLE_TESTS)
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
     endmacro()
 
+    macro(grep_bench_sources BASE_DIR DST_VAR)
+        # Cold match files that are not in tests/ directories
+        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "bench*.cpp")
+    endmacro()
+
     # attach all dbms gtest sources
-    grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
+    grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
         ${dbms_gtest_sources}
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestBasic.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/TestUtils/FunctionTestUtils.cpp
-        ${ClickHouse_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
-    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions tiflash-dttool-lib)
+    target_link_libraries(gtests_dbms test_util_gtest_main clickhouse_functions tiflash-dttool-lib)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
+
+    grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources)
+    add_executable(bench_dbms EXCLUDE_FROM_ALL
+        ${dbms_bench_sources}
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
+        )
+    target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
+
+    target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark clickhouse_functions)
+    if (ENABLE_TIFLASH_DTWORKLOAD)
+        target_link_libraries(bench_dbms dt-workload-lib)
+    endif ()
+
+    add_check(bench_dbms)
 endif ()
 
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")

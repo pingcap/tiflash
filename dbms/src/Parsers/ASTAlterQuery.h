@@ -1,13 +1,25 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Parsers/IAST.h>
 #include <Parsers/ASTQueryWithOutput.h>
-#include <Parsers/ASTQueryWithOnCluster.h>
+#include <Parsers/IAST.h>
 
 
 namespace DB
 {
-
 /** ALTER query:
  *  ALTER TABLE [db.]name_type
  *      ADD COLUMN col_name type [AFTER col_after],
@@ -16,7 +28,7 @@ namespace DB
  *      DROP PARTITION partition,
  */
 
-class ASTAlterQuery : public ASTQueryWithOutput, public ASTQueryWithOnCluster
+class ASTAlterQuery : public ASTQueryWithOutput
 {
 public:
     enum ParameterType
@@ -59,13 +71,13 @@ public:
           */
         ASTPtr partition;
 
-        bool detach = false;        /// true for DETACH PARTITION
+        bool detach = false; /// true for DETACH PARTITION
 
-        bool part = false;          /// true for ATTACH PART
+        bool part = false; /// true for ATTACH PART
 
-        bool do_copy = false;       /// for RESHARD PARTITION
+        bool do_copy = false; /// for RESHARD PARTITION
 
-        bool clear_column = false;  /// for CLEAR COLUMN (do not drop column from metadata)
+        bool clear_column = false; /// for CLEAR COLUMN (do not drop column from metadata)
 
         /** For FETCH PARTITION - the path in ZK to the shard, from which to download the partition.
           */
@@ -92,10 +104,8 @@ public:
 
     ASTPtr clone() const override;
 
-    ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override;
-
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
 
-}
+} // namespace DB

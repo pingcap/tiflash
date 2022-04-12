@@ -1,0 +1,131 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table test.t(a varchar(30) charset utf8mb4 collate utf8mb4_general_ci, b varchar(30) charset utf8mb4 collate utf8mb4_general_ci);
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values ('abc', 'ABC'),('Abc', 'abc'),('def', 'dEf'), ('a', 'A'), ('b', 'B'), ('c', 'C'), (NULL, NULL), ('a', NULL), (NULL, 'a'), ('', NULL), (NULL, ''), ('', '');
+func> wait_table test t
+
+>> DBGInvoke __try_flush()
+
+mysql> set tidb_enforce_mpp=1; select a, b, strcmp(a, b) from test.t;
++------+------+--------------+
+| a    | b    | strcmp(a, b) |
++------+------+--------------+
+| abc  | ABC  |            0 |
+| Abc  | abc  |            0 |
+| def  | dEf  |            0 |
+| a    | A    |            0 |
+| b    | B    |            0 |
+| c    | C    |            0 |
+| NULL | NULL |         NULL |
+| a    | NULL |         NULL |
+| NULL | a    |         NULL |
+|      | NULL |         NULL |
+| NULL |      |         NULL |
+|      |      |            0 |
++------+------+--------------+
+
+mysql> set tidb_enforce_mpp=1; select a, b, strcmp('b', a) from test.t;
++------+------+----------------+
+| a    | b    | strcmp('b', a) |
++------+------+----------------+
+| abc  | ABC  |              1 |
+| Abc  | abc  |              1 |
+| def  | dEf  |             -1 |
+| a    | A    |              1 |
+| b    | B    |              0 |
+| c    | C    |             -1 |
+| NULL | NULL |           NULL |
+| a    | NULL |              1 |
+| NULL | a    |           NULL |
+|      | NULL |              1 |
+| NULL |      |           NULL |
+|      |      |              1 |
++------+------+----------------+
+
+mysql> set tidb_enforce_mpp=1; select a, b, strcmp(a, 'b') from test.t;
++------+------+----------------+
+| a    | b    | strcmp(a, 'b') |
++------+------+----------------+
+| abc  | ABC  |             -1 |
+| Abc  | abc  |             -1 |
+| def  | dEf  |              1 |
+| a    | A    |             -1 |
+| b    | B    |              0 |
+| c    | C    |              1 |
+| NULL | NULL |           NULL |
+| a    | NULL |             -1 |
+| NULL | a    |           NULL |
+|      | NULL |             -1 |
+| NULL |      |           NULL |
+|      |      |             -1 |
++------+------+----------------+
+
+mysql> set tidb_enforce_mpp=1; select a, b, strcmp('b', b) from test.t;
++------+------+----------------+
+| a    | b    | strcmp('b', b) |
++------+------+----------------+
+| abc  | ABC  |              1 |
+| Abc  | abc  |              1 |
+| def  | dEf  |             -1 |
+| a    | A    |              1 |
+| b    | B    |              0 |
+| c    | C    |             -1 |
+| NULL | NULL |           NULL |
+| a    | NULL |           NULL |
+| NULL | a    |              1 |
+|      | NULL |           NULL |
+| NULL |      |              1 |
+|      |      |              1 |
++------+------+----------------+
+
+mysql> set tidb_enforce_mpp=1; select a, b, strcmp(b, 'b') from test.t;
++------+------+----------------+
+| a    | b    | strcmp(b, 'b') |
++------+------+----------------+
+| abc  | ABC  |             -1 |
+| Abc  | abc  |             -1 |
+| def  | dEf  |              1 |
+| a    | A    |             -1 |
+| b    | B    |              0 |
+| c    | C    |              1 |
+| NULL | NULL |           NULL |
+| a    | NULL |           NULL |
+| NULL | a    |             -1 |
+|      | NULL |           NULL |
+| NULL |      |             -1 |
+|      |      |             -1 |
++------+------+----------------+
+
+mysql> set tidb_enforce_mpp=1; select a, b, strcmp(NULL, a) from test.t;
++------+------+-----------------+
+| a    | b    | strcmp(NULL, a) |
++------+------+-----------------+
+| abc  | ABC  |            NULL |
+| Abc  | abc  |            NULL |
+| def  | dEf  |            NULL |
+| a    | A    |            NULL |
+| b    | B    |            NULL |
+| c    | C    |            NULL |
+| NULL | NULL |            NULL |
+| a    | NULL |            NULL |
+| NULL | a    |            NULL |
+|      | NULL |            NULL |
+| NULL |      |            NULL |
+|      |      |            NULL |
++------+------+-----------------+
+
+mysql> drop table if exists test.t

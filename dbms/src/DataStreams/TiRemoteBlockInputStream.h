@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -5,6 +19,7 @@
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
@@ -24,9 +39,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     std::shared_ptr<RemoteReader> remote_reader;
     size_t source_num;
+    std::vector<ConnectionProfileInfo> connection_profile_infos;
 
     Block sample_block;
-    DataTypes expected_types;
 
     std::queue<Block> block_queue;
 
@@ -39,7 +54,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     uint64_t total_rows;
 
@@ -76,7 +91,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
-                    LOG_WARNING(log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
+                    LOG_FMT_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
                     continue;
                 }
                 auto & current_execution_summary = execution_summaries_map[executor_id];
@@ -105,17 +120,17 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     bool fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult(block_queue, expected_types);
+        auto result = remote_reader->nextResult(block_queue, sample_block);
         if (result.meet_error)
         {
-            LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
+            LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
             throw Exception(result.error_msg);
         }
         if (result.eof)
             return false;
         if (result.resp != nullptr && result.resp->has_error())
         {
-            LOG_WARNING(log, "remote reader meets error: " << result.resp->error().DebugString());
+            LOG_FMT_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
             throw Exception(result.resp->error().DebugString());
         }
         /// only the last response contains execution summaries
@@ -130,22 +145,35 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 addRemoteExecutionSummaries(*result.resp, 0, false);
             }
         }
-        total_rows += result.rows;
-        LOG_TRACE(
+
+        const auto & decode_detail = result.decode_detail;
+
+        size_t index = 0;
+        if constexpr (is_streaming_reader)
+            index = result.call_index;
+
+        ++connection_profile_infos[index].packets;
+        connection_profile_infos[index].bytes += decode_detail.packet_bytes;
+
+        total_rows += decode_detail.rows;
+        LOG_FMT_TRACE(
             log,
-            fmt::format("recv {} rows from remote for {}, total recv row num: {}", result.rows, result.req_info, total_rows));
-        if (result.rows == 0)
+            "recv {} rows from remote for {}, total recv row num: {}",
+            decode_detail.rows,
+            result.req_info,
+            total_rows);
+        if (decode_detail.rows == 0)
             return fetchRemoteResult();
         return true;
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const LogWithPrefixPtr & log_)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
-        , name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")")
+        , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(Logger::get(name, req_id, executor_id))
         , total_rows(0)
     {
         // generate sample block
@@ -154,7 +182,6 @@ public:
         {
             auto tp = getDataTypeByColumnInfoForComputingLayer(dag_col.second);
             ColumnWithTypeAndName col(tp, dag_col.first);
-            expected_types.push_back(col.type);
             columns.emplace_back(col);
         }
         for (size_t i = 0; i < source_num; i++)
@@ -162,6 +189,7 @@ public:
             execution_summaries_inited[i].store(false);
         }
         execution_summaries.resize(source_num);
+        connection_profile_infos.resize(source_num);
         sample_block = Block(columns);
     }
 
@@ -194,6 +222,28 @@ public:
 
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
+    const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
+
+    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    {
+        remote_reader->collectNewThreadCount(cnt);
+    }
+
+    virtual void resetNewThreadCountCompute() override
+    {
+        if (collected)
+        {
+            collected = false;
+            remote_reader->resetNewThreadCountCompute();
+        }
+    }
+
+protected:
+    virtual void readSuffixImpl() override
+    {
+        LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
+        remote_reader->close();
+    }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;

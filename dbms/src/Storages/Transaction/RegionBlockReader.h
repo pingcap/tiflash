@@ -1,8 +1,28 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
 #include <Core/Names.h>
 #include <Storages/ColumnsDescription.h>
+#include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/RowCodec.h>
 
 namespace TiDB
 {
@@ -11,7 +31,6 @@ struct TableInfo;
 
 namespace DB
 {
-
 class IManageableStorage;
 using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 
@@ -49,8 +68,12 @@ class RegionScanFilter
 
 public:
     RegionScanFilter(
-        bool is_full_range_scan_, std::vector<HandleRange<Int64>> int64_ranges_, std::vector<HandleRange<UInt64>> uint64_ranges_)
-        : is_full_range_scan(is_full_range_scan_), int64_ranges(std::move(int64_ranges_)), uint64_ranges(std::move(uint64_ranges_))
+        bool is_full_range_scan_,
+        std::vector<HandleRange<Int64>> int64_ranges_,
+        std::vector<HandleRange<UInt64>> uint64_ranges_)
+        : is_full_range_scan(is_full_range_scan_)
+        , int64_ranges(std::move(int64_ranges_))
+        , uint64_ranges(std::move(uint64_ranges_))
     {}
     bool filter(UInt64 handle) { return !is_full_range_scan && !isValidHandle(handle); }
     bool filter(Int64 handle) { return !is_full_range_scan && !isValidHandle(handle); }
@@ -64,22 +87,11 @@ using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 /// The Reader to read the region data in `data_list` and decode based on the given table_info and columns, as a block.
 class RegionBlockReader : private boost::noncopyable
 {
-    /// The schema to decode rows
-    const TiDB::TableInfo & table_info;
-    const ColumnsDescription & columns;
-
     RegionScanFilterPtr scan_filter;
     Timestamp start_ts = std::numeric_limits<Timestamp>::max();
 
-    // Whether to reorder the rows when pk is uint64.
-    // For Delta-Tree, we don't need to reorder rows to be sorted by uint64 pk
-    bool do_reorder_for_uint64_pk = true;
-
 public:
-    // Decode and read columns from `storage`
-    RegionBlockReader(const ManageableStoragePtr & storage);
-
-    RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_);
+    RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schema_snapshot_);
 
     inline RegionBlockReader & setFilter(RegionScanFilterPtr filter)
     {
@@ -98,16 +110,6 @@ public:
         return *this;
     }
 
-    /// Set whether to reorder rows when the type of primary key is UInt64.
-    /// It is false if this reader is created by `RegionBlockReader(const ManageableStoragePtr &)` and the
-    /// storage engine is Delta-Tree.
-    /// Otherwise it is true by default.
-    inline RegionBlockReader & setReorderUInt64PK(bool flag)
-    {
-        do_reorder_for_uint64_pk = flag;
-        return *this;
-    }
-
     /// Read `data_list` as a block.
     ///
     /// On decode error, i.e. column number/type mismatch, will do force apply schema,
@@ -116,13 +118,14 @@ public:
     ///
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
     /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
-    std::tuple<Block, bool> read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode);
+    bool read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
 
-    ///  Read all columns from `data_list` as a block.
-    inline std::tuple<Block, bool> read(RegionDataReadInfoList & data_list, bool force_decode)
-    {
-        return read(columns.getNamesOfPhysical(), data_list, force_decode);
-    }
+private:
+    template <TMTPKType pk_type>
+    bool readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
+
+private:
+    DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 };
 
 } // namespace DB

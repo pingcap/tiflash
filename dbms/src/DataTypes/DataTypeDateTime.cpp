@@ -1,24 +1,34 @@
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-#include <common/DateLUT.h>
-#include <Common/typeid_cast.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFactory.h>
-
-#include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
-
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
+#include <common/DateLUT.h>
 
 
 namespace DB
 {
-
 DataTypeDateTime::DataTypeDateTime(const std::string & time_zone_name)
-    : has_explicit_time_zone(!time_zone_name.empty()),
-    time_zone(DateLUT::instance(time_zone_name))
+    : has_explicit_time_zone(!time_zone_name.empty())
+    , time_zone(DateLUT::instance(time_zone_name))
 {
 }
 
@@ -68,7 +78,7 @@ void DataTypeDateTime::deserializeTextQuoted(IColumn & column, ReadBuffer & istr
     {
         readIntText(x, istr);
     }
-    static_cast<ColumnUInt32 &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
+    static_cast<ColumnUInt32 &>(column).getData().push_back(x); /// It's important to do this at the end - for exception safety.
 }
 
 void DataTypeDateTime::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
@@ -117,9 +127,9 @@ bool DataTypeDateTime::equals(const IDataType & rhs) const
 
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+} // namespace ErrorCodes
 
 static DataTypePtr create(const ASTPtr & arguments)
 {
@@ -142,4 +152,4 @@ void registerDataTypeDateTime(DataTypeFactory & factory)
 }
 
 
-}
+} // namespace DB

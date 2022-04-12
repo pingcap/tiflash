@@ -1,11 +1,26 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
@@ -43,13 +58,26 @@ public:
 
     void cancel(const String & reason);
 
-    std::vector<RegionInfo> prepare(const mpp::DispatchTaskRequest & task_request);
-
-    void preprocess();
+    void prepare(const mpp::DispatchTaskRequest & task_request);
 
     void run();
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
+
+    int getNeededThreads();
+
+    enum class ScheduleState
+    {
+        WAITING,
+        SCHEDULED,
+        FAILED,
+        EXCEEDED,
+        COMPLETED
+    };
+
+    void scheduleThisTask(ScheduleState state);
+
+    bool isScheduled();
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -57,7 +85,7 @@ public:
     ~MPPTask();
 
 private:
-    MPPTask(const mpp::TaskMeta & meta_, const Context & context_);
+    MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_);
 
     void runImpl();
 
@@ -73,17 +101,17 @@ private:
 
     bool switchStatus(TaskStatus from, TaskStatus to);
 
-    RegionInfoMap local_regions;
-    RegionInfoList remote_regions;
+    void preprocess();
+
+    void scheduleOrWait();
+
+    int estimateCountOfNewThreads();
 
     tipb::DAGRequest dag_req;
 
-    Context context;
-    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
-    /// BlockIO contains some information stored in Context, so need deconstruct it before Context
-    BlockIO io;
-    /// The inputStreams should be released in the destructor of BlockIO, since DAGContext contains
-    /// some reference to inputStreams, so it need to be destructed before BlockIO
+    ContextPtr context;
+    // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
+    // before `context`.
     std::unique_ptr<DAGContext> dag_context;
     MemoryTracker * memory_tracker = nullptr;
 
@@ -100,11 +128,19 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
+
+    MPPTaskStatistics mpp_task_statistics;
 
     Exception err;
 
     friend class MPPTaskManager;
+
+    int needed_threads;
+
+    std::mutex schedule_mu;
+    std::condition_variable schedule_cv;
+    ScheduleState schedule_state;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

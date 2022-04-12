@@ -1,34 +1,52 @@
-#include <Core/Block.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
+#include <Core/Block.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ExpressionElementParsers.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/evaluateConstantExpression.h>
-#include <Common/typeid_cast.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int LOGICAL_ERROR;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 std::pair<Field, std::shared_ptr<const IDataType>> evaluateConstantExpression(const ASTPtr & node, const Context & context)
 {
     ExpressionActionsPtr expr_for_constant_folding = ExpressionAnalyzer(
-        node, context, nullptr, NamesAndTypesList{{ "_dummy", std::make_shared<DataTypeUInt8>() }}, Names()).getConstActions();
+                                                         node,
+                                                         context,
+                                                         nullptr,
+                                                         NamesAndTypesList{{"_dummy", std::make_shared<DataTypeUInt8>()}},
+                                                         Names())
+                                                         .getConstActions();
 
     /// There must be at least one column in the block so that it knows the number of rows.
-    Block block_with_constants{{ ColumnConst::create(ColumnUInt8::create(1, 0), 1), std::make_shared<DataTypeUInt8>(), "_dummy" }};
+    Block block_with_constants{{ColumnConst::create(ColumnUInt8::create(1, 0), 1), std::make_shared<DataTypeUInt8>(), "_dummy"}};
 
     expr_for_constant_folding->execute(block_with_constants);
 
@@ -67,4 +85,4 @@ ASTPtr evaluateConstantExpressionOrIdentifierAsLiteral(const ASTPtr & node, cons
     return evaluateConstantExpressionAsLiteral(node, context);
 }
 
-}
+} // namespace DB

@@ -1,8 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
+#include <Common/ThreadManager.h>
 #include <Common/setThreadName.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <common/logger_useful.h>
@@ -80,11 +96,17 @@ public:
       * - where you must first make JOIN in parallel, while noting which keys are not found,
       *   and only after the completion of this work, create blocks of keys that are not found.
       */
-    ParallelInputsProcessor(const BlockInputStreams & inputs_, const BlockInputStreamPtr & additional_input_at_end_, size_t max_threads_, Handler & handler_)
+    ParallelInputsProcessor(
+        const BlockInputStreams & inputs_,
+        const BlockInputStreamPtr & additional_input_at_end_,
+        size_t max_threads_,
+        Handler & handler_,
+        const LoggerPtr & log_)
         : inputs(inputs_)
         , additional_input_at_end(additional_input_at_end_)
         , max_threads(std::min(inputs_.size(), max_threads_))
         , handler(handler_)
+        , log(log_)
     {
         for (size_t i = 0; i < inputs_.size(); ++i)
             unprepared_inputs.emplace(inputs_[i], i);
@@ -98,17 +120,18 @@ public:
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 
     /// Start background threads, start work.
     void process()
     {
+        if (!thread_manager)
+            thread_manager = newThreadManager();
         active_threads = max_threads;
-        threads.reserve(max_threads);
         for (size_t i = 0; i < max_threads; ++i)
-            threads.emplace_back(ThreadFactory(true, handler.getName()).newThread([this, i] { thread(i); }));
+            thread_manager->schedule(true, handler.getName(), [this, i] { this->thread(i); });
     }
 
     /// Ask all sources to stop earlier than they run out.
@@ -130,7 +153,7 @@ public:
                       * (for example, the connection is broken for distributed query processing)
                       * - then do not care.
                       */
-                    LOG_ERROR(log, "Exception while cancelling " << child->getName());
+                    LOG_FMT_ERROR(log, "Exception while cancelling {}", child->getName());
                 }
             }
         }
@@ -141,17 +164,19 @@ public:
     {
         if (joined_threads)
             return;
-
-        for (auto & thread : threads)
-            thread.join();
-
-        threads.clear();
+        if (thread_manager)
+            thread_manager->wait();
         joined_threads = true;
     }
 
     size_t getNumActiveThreads() const
     {
         return active_threads;
+    }
+
+    size_t getMaxThreads() const
+    {
+        return max_threads;
     }
 
 private:
@@ -183,7 +208,6 @@ private:
     {
         std::exception_ptr exception;
 
-        setThreadName("ParalInputsProc");
         CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
 
         try
@@ -192,7 +216,7 @@ private:
             {
                 InputData unprepared_input;
                 {
-                    std::lock_guard<std::mutex> lock(unprepared_inputs_mutex);
+                    std::lock_guard lock(unprepared_inputs_mutex);
 
                     if (unprepared_inputs.empty())
                         break;
@@ -204,7 +228,7 @@ private:
                 unprepared_input.in->readPrefix();
 
                 {
-                    std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                    std::lock_guard lock(available_inputs_mutex);
                     available_inputs.push(unprepared_input);
                 }
             }
@@ -258,7 +282,7 @@ private:
 
             /// Select the next source.
             {
-                std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                std::lock_guard lock(available_inputs_mutex);
 
                 /// If there are no free sources, then this thread is no longer needed. (But other threads can work with their sources.)
                 if (available_inputs.empty())
@@ -279,7 +303,7 @@ private:
 
                 /// If this source is not run out yet, then put the resulting block in the ready queue.
                 {
-                    std::lock_guard<std::mutex> lock(available_inputs_mutex);
+                    std::lock_guard lock(available_inputs_mutex);
 
                     if (block)
                     {
@@ -307,9 +331,7 @@ private:
 
     Handler & handler;
 
-    /// Streams.
-    using ThreadsData = std::vector<std::thread>;
-    ThreadsData threads;
+    std::shared_ptr<ThreadManager> thread_manager;
 
     /** A set of available sources that are not currently processed by any thread.
       * Each thread takes one source from this set, takes a block out of the source (at this moment the source does the calculations)
@@ -351,7 +373,7 @@ private:
     /// Wait for the completion of all threads.
     std::atomic<bool> joined_threads{false};
 
-    Poco::Logger * log = &Poco::Logger::get("ParallelInputsProcessor");
+    const LoggerPtr log;
 };
 
 

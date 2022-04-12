@@ -1,7 +1,18 @@
-include_directories (${CMAKE_CURRENT_BINARY_DIR})
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-add_executable (region_test region.cpp)
-target_link_libraries (region_test dbms)
+include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
 # glob all unit tests of tmt into gtests_tmt
 macro (grep_gtest_sources BASE_DIR DST_VAR)
@@ -10,7 +21,7 @@ macro (grep_gtest_sources BASE_DIR DST_VAR)
 endmacro ()
 
 # attach all tmt gtest sources
-grep_gtest_sources (${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Transaction/tests gtests_tmt_sources)
+grep_gtest_sources (${TiFlash_SOURCE_DIR}/dbms/src/Storages/Transaction/tests gtests_tmt_sources)
 
 add_executable (gtests_tmt EXCLUDE_FROM_ALL ${gtests_tmt_sources})
 target_include_directories (gtests_tmt BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})

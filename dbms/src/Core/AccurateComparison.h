@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/NaNUtils.h>
@@ -201,5 +215,23 @@ struct GreaterOrEqualsOp
     using SymmetricOp = LessOrEqualsOp<B, A>;
     static UInt8 apply(A a, B b) { return accurate::greaterOrEqualsOp(a, b); }
 };
+
+template <typename A, typename B>
+struct ReversedCmpOp;
+
+template <typename A, typename B>
+struct CmpOp
+{
+    using SymmetricOp = ReversedCmpOp<B, A>;
+    static Int8 apply(A a, B b) { return accurate::equalsOp(a, b) ? 0 : (accurate::lessOp(a, b) ? -1 : 1); }
+};
+
+template <typename A, typename B>
+struct ReversedCmpOp
+{
+    using SymmetricOp = CmpOp<B, A>;
+    static Int8 apply(A a, B b) { return SymmetricOp::apply(b, a); }
+};
+
 
 } // namespace DB

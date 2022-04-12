@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Types.h>
@@ -35,13 +49,16 @@ private:
     std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>> //
     collectPageFilesToCompact(const PageFileSet & page_files, const WritingFilesSnapshot & writing_files);
 
-    static WriteBatch prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
-    [[nodiscard]] static size_t writeToCheckpoint(const String & storage_path,
-                                                  const PageFileIdAndLevel & file_id,
-                                                  WriteBatch && wb,
-                                                  FileProviderPtr & file_provider,
-                                                  Poco::Logger * log,
-                                                  const WriteLimiterPtr & write_limiter);
+    static WriteBatch prepareCheckpointWriteBatch(
+        const PageStorage::ConcreteSnapshotPtr & snapshot,
+        const WriteBatch::SequenceID wb_sequence);
+    [[nodiscard]] static size_t writeToCheckpoint(
+        const String & storage_path,
+        const PageFileIdAndLevel & file_id,
+        WriteBatch && wb,
+        FileProviderPtr & file_provider,
+        Poco::Logger * log,
+        const WriteLimiterPtr & write_limiter);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

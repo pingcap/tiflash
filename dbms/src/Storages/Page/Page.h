@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <IO/BufferBase.h>
@@ -6,6 +20,7 @@
 #include <Storages/Page/PageDefines.h>
 
 #include <map>
+#include <set>
 #include <unordered_map>
 
 
@@ -25,7 +40,7 @@ public:
         size_t index;
         size_t offset;
 
-        FieldOffset(size_t index_)
+        FieldOffset(size_t index_) // NOLINT(google-explicit-constructor)
             : index(index_)
             , offset(0)
         {}
@@ -46,9 +61,9 @@ public:
 public:
     ByteBuffer getFieldData(size_t index) const
     {
-        auto iter = field_offsets.find(index);
+        auto iter = field_offsets.find(FieldOffset(index));
         if (unlikely(iter == field_offsets.end()))
-            throw Exception("Try to getFieldData of Page" + DB::toString(page_id) + " with invalid field index: " + DB::toString(index),
+            throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [field_index={}]", page_id, index),
                             ErrorCodes::LOGICAL_ERROR);
 
         PageFieldOffset beg = iter->offset;
@@ -69,6 +84,7 @@ using Pages = std::vector<Page>;
 using PageMap = std::map<PageId, Page>;
 using PageHandler = std::function<void(PageId page_id, const Page &)>;
 
+// TODO: Move it into V2
 // Indicate the page size && offset in PageFile.
 struct PageEntry
 {
@@ -110,9 +126,9 @@ public:
     std::pair<size_t, size_t> getFieldOffsets(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))
-            throw Exception("Try to getFieldData with invalid index: " + DB::toString(index)
-                                + ", fields size: " + DB::toString(field_offsets.size()),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format("Try to getFieldOffsets with invalid index [index={}] [fields_size={}]", index, field_offsets.size()),
+                ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
             return {field_offsets.back().first, size};
         else
@@ -121,22 +137,21 @@ public:
 
     bool operator==(const PageEntry & rhs) const
     {
-        bool isOk = file_id == rhs.file_id && size == rhs.size && offset == rhs.offset && tag == rhs.tag && checksum == rhs.checksum
+        bool is_ok = file_id == rhs.file_id && size == rhs.size && offset == rhs.offset && tag == rhs.tag && checksum == rhs.checksum
             && level == rhs.level && ref == rhs.ref && field_offsets.size() == rhs.field_offsets.size();
-        if (!isOk)
-            return isOk;
-        else
+        if (!is_ok)
+            return is_ok;
+        // compare the fields offsets
+        for (size_t i = 0; i < field_offsets.size(); ++i)
         {
-            for (size_t i = 0; i < field_offsets.size(); ++i)
-            {
-                if (field_offsets[i] != rhs.field_offsets[i])
-                    return false;
-            }
-            return true;
+            if (field_offsets[i] != rhs.field_offsets[i])
+                return false;
         }
+        return true;
     }
 };
 using PageIdAndEntry = std::pair<PageId, PageEntry>;
 using PageIdAndEntries = std::vector<PageIdAndEntry>;
+
 
 } // namespace DB

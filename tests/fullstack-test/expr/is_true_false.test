@@ -1,0 +1,60 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t1
+mysql> create table test.t1 (id int, id1 TINYINT, id2 SMALLINT, id3 MEDIUMINT, id4 BIGINT, id5 FLOAT, id6 DOUBLE, id7 TINYINT UNSIGNED, id8 SMALLINT UNSIGNED, id9 BIGINT UNSIGNED, id10 decimal(10, 1), id11 float, id12 double);
+mysql> alter table test.t1 set tiflash replica 1
+mysql> insert into test.t1 values (1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100.0, 100.0, 100.0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (null, null, null, null, null, null, null, null, null, null, null, null, null)
+func> wait_table test t1
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select istrue(id), istrue(id1), istrue(id2), istrue(id3), istrue(id4), istrue(id5), istrue(id6) from test.t1;
+
++------------+-------------+-------------+-------------+-------------+-------------+-------------+
+| istrue(id) | istrue(id1) | istrue(id2) | istrue(id3) | istrue(id4) | istrue(id5) | istrue(id6) |
++------------+-------------+-------------+-------------+-------------+-------------+-------------+
+|          1 |           1 |           1 |           1 |           1 |           1 |           1 |
+|          0 |           0 |           0 |           0 |           0 |           0 |           0 |
+|          0 |           0 |           0 |           0 |           0 |           0 |           0 |
++------------+-------------+-------------+-------------+-------------+-------------+-------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select istrue(id7), istrue(id8), istrue(id9), istrue(id10), istrue(id11), istrue(id12) from test.t1;
+
++-------------+-------------+-------------+--------------+--------------+--------------+
+| istrue(id7) | istrue(id8) | istrue(id9) | istrue(id10) | istrue(id11) | istrue(id12) |
++-------------+-------------+-------------+--------------+--------------+--------------+
+|           1 |           1 |           1 |            1 |            1 |            1 |
+|           0 |           0 |           0 |            0 |            0 |            0 |
+|           0 |           0 |           0 |            0 |            0 |            0 |
++-------------+-------------+-------------+--------------+--------------+--------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select isfalse(id), isfalse(id1), isfalse(id2), isfalse(id3), isfalse(id4), isfalse(id5), isfalse(id6) from test.t1;
+
++-------------+--------------+--------------+--------------+--------------+--------------+--------------+
+| isfalse(id) | isfalse(id1) | isfalse(id2) | isfalse(id3) | isfalse(id4) | isfalse(id5) | isfalse(id6) |
++-------------+--------------+--------------+--------------+--------------+--------------+--------------+
+|           0 |            0 |            0 |            0 |            0 |            0 |            0 |
+|           1 |            1 |            1 |            1 |            1 |            1 |            1 |
+|           0 |            0 |            0 |            0 |            0 |            0 |            0 |
++-------------+--------------+--------------+--------------+--------------+--------------+--------------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select isfalse(id7), isfalse(id8), isfalse(id9), isfalse(id10), isfalse(id11), isfalse(id12) from test.t1;
+
++--------------+--------------+--------------+---------------+---------------+---------------+
+| isfalse(id7) | isfalse(id8) | isfalse(id9) | isfalse(id10) | isfalse(id11) | isfalse(id12) |
++--------------+--------------+--------------+---------------+---------------+---------------+
+|            0 |            0 |            0 |             0 |             0 |             0 |
+|            1 |            1 |            1 |             1 |             1 |             1 |
+|            0 |            0 |            0 |             0 |             0 |             0 |
++--------------+--------------+--------------+---------------+---------------+---------------+
+

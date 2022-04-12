@@ -1,36 +1,50 @@
-#include <Common/StringUtils/StringUtils.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnTuple.h>
-#include <DataTypes/DataTypeTuple.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Parsers/IAST.h>
-#include <Parsers/ASTNameTypePair.h>
-#include <Common/typeid_cast.h>
-#include <IO/WriteHelpers.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
-#include <IO/Operators.h>
+#include <IO/WriteHelpers.h>
+#include <Parsers/ASTNameTypePair.h>
+#include <Parsers/IAST.h>
 
-#include <ext/map.h>
 #include <ext/enumerate.h>
+#include <ext/map.h>
 #include <ext/range.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int EMPTY_DATA_PASSED;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int DUPLICATE_COLUMN;
-    extern const int BAD_ARGUMENTS;
-    extern const int NOT_FOUND_COLUMN_IN_BLOCK;
-}
+extern const int EMPTY_DATA_PASSED;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int DUPLICATE_COLUMN;
+extern const int BAD_ARGUMENTS;
+extern const int NOT_FOUND_COLUMN_IN_BLOCK;
+} // namespace ErrorCodes
 
 
 DataTypeTuple::DataTypeTuple(const DataTypes & elems_)
-    : elems(elems_), have_explicit_names(false)
+    : elems(elems_)
+    , have_explicit_names(false)
 {
     /// Automatically assigned names in form of '1', '2', ...
     size_t size = elems.size();
@@ -41,7 +55,9 @@ DataTypeTuple::DataTypeTuple(const DataTypes & elems_)
 
 
 DataTypeTuple::DataTypeTuple(const DataTypes & elems_, const Strings & names_)
-    : elems(elems_), names(names_), have_explicit_names(true)
+    : elems(elems_)
+    , names(names_)
+    , have_explicit_names(true)
 {
     size_t size = elems.size();
     if (names.size() != size)
@@ -60,7 +76,6 @@ DataTypeTuple::DataTypeTuple(const DataTypes & elems_, const Strings & names_)
             throw Exception("Names of tuple elements must be unique", ErrorCodes::DUPLICATE_COLUMN);
     }
 }
-
 
 
 std::string DataTypeTuple::getName() const
@@ -145,8 +160,7 @@ static void addElementSafe(const DataTypes & elems, IColumn & column, F && impl)
 
 void DataTypeTuple::deserializeBinary(IColumn & column, ReadBuffer & istr) const
 {
-    addElementSafe(elems, column, [&]
-    {
+    addElementSafe(elems, column, [&] {
         for (const auto & i : ext::range(0, ext::size(elems)))
             elems[i]->deserializeBinary(extractElementColumn(column, i), istr);
     });
@@ -169,8 +183,7 @@ void DataTypeTuple::deserializeText(IColumn & column, ReadBuffer & istr) const
     const size_t size = elems.size();
     assertChar('(', istr);
 
-    addElementSafe(elems, column, [&]
-    {
+    addElementSafe(elems, column, [&] {
         for (const auto i : ext::range(0, size))
         {
             skipWhitespaceIfAny(istr);
@@ -224,8 +237,7 @@ void DataTypeTuple::deserializeTextJSON(IColumn & column, ReadBuffer & istr) con
     const size_t size = elems.size();
     assertChar('[', istr);
 
-    addElementSafe(elems, column, [&]
-    {
+    addElementSafe(elems, column, [&] {
         for (const auto i : ext::range(0, size))
         {
             skipWhitespaceIfAny(istr);
@@ -266,8 +278,7 @@ void DataTypeTuple::serializeTextCSV(const IColumn & column, size_t row_num, Wri
 
 void DataTypeTuple::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const
 {
-    addElementSafe(elems, column, [&]
-    {
+    addElementSafe(elems, column, [&] {
         const size_t size = elems.size();
         for (const auto i : ext::range(0, size))
         {
@@ -305,7 +316,12 @@ void DataTypeTuple::serializeBinaryBulkWithMultipleStreams(
     {
         path.back().tuple_element_name = names[i];
         elems[i]->serializeBinaryBulkWithMultipleStreams(
-            extractElementColumn(column, i), getter, offset, limit, position_independent_encoding, path);
+            extractElementColumn(column, i),
+            getter,
+            offset,
+            limit,
+            position_independent_encoding,
+            path);
     }
 }
 
@@ -322,7 +338,12 @@ void DataTypeTuple::deserializeBinaryBulkWithMultipleStreams(
     {
         path.back().tuple_element_name = names[i];
         elems[i]->deserializeBinaryBulkWithMultipleStreams(
-            extractElementColumn(column, i), getter, limit, avg_value_size_hint, position_independent_encoding, path);
+            extractElementColumn(column, i),
+            getter,
+            limit,
+            avg_value_size_hint,
+            position_independent_encoding,
+            path);
     }
 }
 
@@ -337,13 +358,12 @@ MutableColumnPtr DataTypeTuple::createColumn() const
 
 Field DataTypeTuple::getDefault() const
 {
-    return Tuple(ext::map<TupleBackend>(elems, [] (const DataTypePtr & elem) { return elem->getDefault(); }));
+    return Tuple(ext::map<TupleBackend>(elems, [](const DataTypePtr & elem) { return elem->getDefault(); }));
 }
 
 void DataTypeTuple::insertDefaultInto(IColumn & column) const
 {
-    addElementSafe(elems, column, [&]
-    {
+    addElementSafe(elems, column, [&] {
         for (const auto & i : ext::range(0, ext::size(elems)))
             elems[i]->insertDefaultInto(extractElementColumn(column, i));
     });
@@ -449,10 +469,9 @@ void registerDataTypeTuple(DataTypeFactory & factory)
 void registerDataTypeNested(DataTypeFactory & factory)
 {
     /// Nested(...) data type is just a sugar for Array(Tuple(...))
-    factory.registerDataType("Nested", [&factory](const ASTPtr & arguments)
-    {
+    factory.registerDataType("Nested", [&factory](const ASTPtr & arguments) {
         return std::make_shared<DataTypeArray>(factory.get("Tuple", arguments));
     });
 }
 
-}
+} // namespace DB

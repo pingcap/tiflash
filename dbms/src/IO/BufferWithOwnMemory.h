@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Allocator.h>
@@ -21,7 +35,8 @@ namespace DB
   * Differs in that is doesn't do unneeded memset. (And also tries to do as little as possible.)
   * Also allows to allocate aligned piece of memory (to use with O_DIRECT, for example).
   */
-struct Memory : boost::noncopyable
+struct Memory
+    : private boost::noncopyable
     , Allocator<false>
 {
     size_t m_capacity = 0;
@@ -29,10 +44,10 @@ struct Memory : boost::noncopyable
     char * m_data = nullptr;
     size_t alignment = 0;
 
-    Memory() {}
+    Memory() = default;
 
     /// If alignment != 0, then allocate memory aligned to specified value.
-    Memory(size_t size_, size_t alignment_ = 0)
+    explicit Memory(size_t size_, size_t alignment_ = 0)
         : m_capacity(size_)
         , m_size(m_capacity)
         , alignment(alignment_)
@@ -135,7 +150,7 @@ protected:
 
 public:
     /// If non-nullptr 'existing_memory' is passed, then buffer will not create its own memory and will use existing_memory without ownership.
-    BufferWithOwnMemory(size_t size = DBMS_DEFAULT_BUFFER_SIZE, char * existing_memory = nullptr, size_t alignment = 0)
+    explicit BufferWithOwnMemory(size_t size = DBMS_DEFAULT_BUFFER_SIZE, char * existing_memory = nullptr, size_t alignment = 0)
         : Base(nullptr, 0)
         , memory(existing_memory ? 0 : size, alignment)
     {

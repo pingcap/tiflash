@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/MockKeyManager.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
@@ -8,6 +22,7 @@
 #include <Poco/Timer.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V2/gc/DataCompactor.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -93,10 +108,12 @@ PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * 
         config.gc_max_valid_rate = n;
     }
 
-    LOG_INFO(logger,
-             "[gc_min_files=" << config.gc_min_files << "] [gc_min_bytes=" << config.gc_min_bytes
-                              << "] [gc_max_valid_rate=" << DB::toString(config.gc_max_valid_rate.get(), 3) << "]");
-
+    LOG_FMT_INFO(
+        logger,
+        "[gc_min_files={}] [gc_min_bytes={}] [gc_max_valid_rate={:.3f}]",
+        config.gc_min_files,
+        config.gc_min_bytes,
+        config.gc_max_valid_rate.get());
     return config;
 }
 
@@ -133,7 +150,7 @@ try
     case LIST_ALL_CAPACITY:
     case LIST_ALL_PAGE_FILE:
     case RUN_GC:
-        LOG_INFO(logger, "Running with [mode=" << mode << "]");
+        LOG_FMT_INFO(logger, "Running with [mode={}]", mode);
         break;
     default:
         Usage(argv[0]);
@@ -143,7 +160,7 @@ try
     if (mode == DUMP_VALID_ENTRIES && argc > 3)
     {
         debugging_recover_stop_sequence = strtoull(argv[3], nullptr, 10);
-        LOG_TRACE(logger, "debug early stop sequence set to: " << debugging_recover_stop_sequence);
+        LOG_FMT_TRACE(logger, "debug early stop sequence set to: {}", debugging_recover_stop_sequence);
     }
     DB::KeyManagerPtr key_manager = std::make_shared<DB::MockKeyManager>(false);
     DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
@@ -162,7 +179,7 @@ try
         dump_all_entries(page_files, mode);
         return 0;
     case LIST_ALL_PAGE_FILE:
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             std::cout << page_file.toString() << std::endl;
         }
@@ -176,7 +193,7 @@ try
     {
     case DUMP_VALID_ENTRIES:
     {
-        auto snapshot = storage.getSnapshot();
+        auto snapshot = storage.getConcreteSnapshot();
         auto page_ids = snapshot->version()->validPageIds();
         for (auto page_id : page_ids)
         {
@@ -199,9 +216,9 @@ try
         }
         for (Int64 idx = 0; num_gc == -1 || idx < num_gc; ++idx)
         {
-            LOG_INFO(logger, "Running GC, [round=" << (idx + 1) << "] [num_gc=" << num_gc << "]");
-            storage.gc(/*not_skip=*/true);
-            LOG_INFO(logger, "Run GC done, [round=" << (idx + 1) << "] [num_gc=" << num_gc << "]");
+            LOG_FMT_INFO(logger, "Running GC, [round={}] [num_gc={}]", (idx + 1), num_gc);
+            storage.gcImpl(/*not_skip=*/true, nullptr, nullptr);
+            LOG_FMT_INFO(logger, "Run GC done, [round={}] [num_gc={}]", (idx + 1), num_gc);
         }
         break;
     }
@@ -225,7 +242,7 @@ catch (const DB::Exception & e)
 
 void dump_all_entries(PageFileSet & page_files, int32_t mode)
 {
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         PageEntriesEdit edit;
         DB::PageIdAndEntries id_and_caches;
@@ -242,6 +259,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                 printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
+                case DB::WriteBatch::WriteType::PUT_EXTERNAL:
                 case DB::WriteBatch::WriteType::PUT:
                     printf("PUT");
                     printPageEntry(record.page_id, record.entry);
@@ -289,13 +307,13 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
 
 void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config)
 {
-    constexpr double MB = 1.0 * 1024 * 1024;
+    static constexpr double MB = 1.0 * 1024 * 1024;
 
-    auto snapshot = storage.getSnapshot();
+    auto snapshot = storage.getConcreteSnapshot();
 
-    DataCompactor<PageStorage::SnapshotPtr>::ValidPages file_valid_pages;
+    DataCompactor<PageStorage::ConcreteSnapshotPtr>::ValidPages file_valid_pages;
     {
-        DataCompactor<PageStorage::SnapshotPtr> compactor(storage, config, nullptr, nullptr);
+        DataCompactor<PageStorage::ConcreteSnapshotPtr> compactor(storage, config, nullptr, nullptr);
         file_valid_pages = compactor.collectValidPagesInPageFile(snapshot);
     }
 
@@ -303,7 +321,7 @@ void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, co
     size_t global_total_valid_size = 0;
 
     printf("PageFileId\tPageFileLevel\tPageFileSize\tValidSize\tValidPercent\tNumValidPages\n");
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         if (page_file.getType() != PageFile::Type::Formal)
         {

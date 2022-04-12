@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
@@ -165,11 +179,22 @@ try
     TableID table_id = 100;
     {
         raft_serverpb::RaftApplyState apply_state;
-        apply_state.set_applied_index(6671);
-        apply_state.mutable_truncated_state()->set_index(6672);
-        apply_state.mutable_truncated_state()->set_term(6673);
+        raft_serverpb::RegionLocalState region_state;
+        {
+            apply_state.set_applied_index(6671);
+            apply_state.mutable_truncated_state()->set_index(6672);
+            apply_state.mutable_truncated_state()->set_term(6673);
 
-        region = std::make_shared<Region>(createRegionMeta(1001, table_id, std::make_optional(apply_state)));
+            *region_state.mutable_region() = createRegionInfo(1001, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300));
+            region_state.mutable_merge_state()->set_commit(888);
+            region_state.mutable_merge_state()->set_min_index(777);
+            *region_state.mutable_merge_state()->mutable_target() = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
+        };
+        region = std::make_shared<Region>(RegionMeta(
+            createPeer(31, true),
+            apply_state,
+            5,
+            region_state));
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
@@ -243,7 +268,7 @@ try
             auto new_iter = new_regions.find(i);
             if (new_iter == new_regions.end())
             {
-                LOG_ERROR(&Poco::Logger::get("RegionPersister_test"), "Region missed, id=" << i);
+                LOG_FMT_ERROR(&Poco::Logger::get("RegionPersister_test"), "Region missed, id={}", i);
                 ++num_regions_missed;
             }
             else
@@ -498,8 +523,7 @@ void RegionPersister_test::runTest(const String & path, bool sync_on_write)
     }
 
     auto seconds = watch.elapsedSeconds();
-    LOG_INFO(&Poco::Logger::get("RegionPersister_test"), //
-             "[sync_on_write=" << sync_on_write << "], [time=" << DB::toString(seconds, 4) << "s]");
+    LOG_FMT_INFO(&Poco::Logger::get("RegionPersister_test"), "[sync_on_write={}], [time={:.4f}s]", sync_on_write, seconds);
 }
 
 // This test takes about 10 minutes. Disable by default

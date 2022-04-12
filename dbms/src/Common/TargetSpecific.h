@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <common/defines.h>
 #include <common/simd.h>
@@ -115,7 +129,7 @@ struct AVXChecker
 {
     __attribute__((pure, always_inline)) static bool runtimeSupport()
     {
-        return simd_option::ENABLE_AVX && __builtin_cpu_supports("avx2");
+        return simd_option::ENABLE_AVX && common::cpu_feature_flags.avx2;
     }
 };
 #else
@@ -150,11 +164,12 @@ struct AVX512Checker
 {
     __attribute__((pure, always_inline)) static bool runtimeSupport()
     {
+        using namespace common;
         return simd_option::ENABLE_AVX512
-            && __builtin_cpu_supports("avx512f")
-            && __builtin_cpu_supports("avx512bw")
-            && __builtin_cpu_supports("avx512vl")
-            && __builtin_cpu_supports("avx512cd");
+            && common::cpu_feature_flags.avx512f
+            && common::cpu_feature_flags.avx512bw
+            && common::cpu_feature_flags.avx512vl
+            && common::cpu_feature_flags.avx512cd;
     }
 };
 #else
@@ -190,7 +205,8 @@ struct SSE4Checker
 {
     __attribute__((pure, always_inline)) static bool runtimeSupport()
     {
-        return __builtin_cpu_supports("sse4.2");
+        return common::cpu_feature_flags.sse4_1
+            && common::cpu_feature_flags.sse4_2;
     }
 };
 #else
@@ -520,12 +536,15 @@ struct SimdImpl<Generic::WORD_SIZE>
     TIFLASH_AVX512_NAMESPACE(__VA_ARGS__)      \
     TIFLASH_SSE4_NAMESPACE(__VA_ARGS__)        \
     TIFLASH_GENERIC_NAMESPACE(__VA_ARGS__)
-
 } // namespace DB::TargetSpecific
 
 
-#define DECLARE_TYPE(TYPE_PREFIX) \
-    typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) TYPE_PREFIX##vec_t;
+#define DECLARE_TYPE(TYPE_PREFIX)                                                         \
+    struct TYPE_PREFIX##_wrapper                                                          \
+    {                                                                                     \
+        typedef TYPE_PREFIX##_t __attribute__((vector_size(LENGTH), __may_alias__)) type; \
+    };                                                                                    \
+    using TYPE_PREFIX##vec_t = typename TYPE_PREFIX##_wrapper::type;
 
 #define ENUM_TYPE(TYPE_PREFIX) \
     TYPE_PREFIX##vec_t as_##TYPE_PREFIX;
@@ -550,6 +569,38 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         DECLARE_TYPE(uint32);
         DECLARE_TYPE(uint64);
 
+        template <typename First, typename Second>
+        struct TypePair
+        {
+            using FirstType = First;
+            using SecondType = Second;
+        };
+
+        template <typename Key, typename Head, typename... Tail>
+        struct TypeMatch
+        {
+            using MatchedType = std::conditional_t<std::is_same_v<Key, typename Head::FirstType>, typename Head::SecondType, typename TypeMatch<Key, Tail...>::MatchedType>;
+        };
+
+        template <typename Key, typename Head>
+        struct TypeMatch<Key, Head>
+        {
+            using MatchedType = typename Head::SecondType;
+        };
+
+        template <typename Key>
+        using MatchedVectorType =
+            typename TypeMatch<
+                Key,
+                TypePair<int8_t, int8_wrapper>,
+                TypePair<int16_t, int16_wrapper>,
+                TypePair<int32_t, int32_wrapper>,
+                TypePair<int64_t, int64_wrapper>,
+                TypePair<uint8_t, uint8_wrapper>,
+                TypePair<uint16_t, uint16_wrapper>,
+                TypePair<uint32_t, uint32_wrapper>,
+                TypePair<uint64_t, uint64_wrapper>>::MatchedType::type;
+
         union
         {
             typename Detail::SimdImpl<LENGTH>::InternalType as_internal;
@@ -564,7 +615,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         };
 
         template <class T>
-        __attribute__((always_inline)) auto & get()
+        __attribute__((always_inline)) MatchedVectorType<T> & get()
         {
             GET_TYPE(int8);
             GET_TYPE(int16);
@@ -578,7 +629,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
         }
 
         template <class T>
-        __attribute__((always_inline)) const auto & get() const
+        __attribute__((always_inline)) const MatchedVectorType<T> & get() const
         {
             GET_TYPE(int8);
             GET_TYPE(int16);

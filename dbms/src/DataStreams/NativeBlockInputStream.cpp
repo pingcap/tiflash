@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
 #include <DataStreams/NativeBlockInputStream.h>
@@ -5,6 +19,7 @@
 #include <IO/CompressedReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
+#include <fmt/core.h>
 
 #include <ext/range.h>
 
@@ -19,27 +34,66 @@ extern const int CANNOT_READ_ALL_DATA;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, std::vector<String> && output_names_)
+namespace
+{
+void checkColumnSize(size_t expected, size_t actual)
+{
+    if (expected != actual)
+        throw Exception(
+            fmt::format("NativeBlockInputStream schema mismatch, expected {}, actual {}.", expected, actual),
+            ErrorCodes::LOGICAL_ERROR);
+}
+
+void checkDataTypeName(size_t column_index, const String & expected, const String & actual)
+{
+    if (expected != actual)
+        throw Exception(
+            fmt::format(
+                "NativeBlockInputStream schema mismatch at column {}, expected {}, actual {}",
+                column_index,
+                expected,
+                actual),
+            ErrorCodes::LOGICAL_ERROR);
+}
+} // namespace
+
+NativeBlockInputStream::NativeBlockInputStream(
+    ReadBuffer & istr_,
+    UInt64 server_revision_,
+    std::vector<String> && output_names_)
     : istr(istr_)
     , server_revision(server_revision_)
     , output_names(std::move(output_names_))
 {
 }
 
-NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_)
+NativeBlockInputStream::NativeBlockInputStream(
+    ReadBuffer & istr_,
+    UInt64 server_revision_)
     : istr(istr_)
     , server_revision(server_revision_)
 {
 }
 
-NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, const Block & header_, UInt64 server_revision_)
+NativeBlockInputStream::NativeBlockInputStream(
+    ReadBuffer & istr_,
+    const Block & header_,
+    UInt64 server_revision_,
+    bool align_column_name_with_header_)
     : istr(istr_)
     , header(header_)
     , server_revision(server_revision_)
+    , align_column_name_with_header(align_column_name_with_header_)
 {
+    for (const auto & column : header)
+        header_datatypes.emplace_back(column.type, column.type->getName());
 }
 
-NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, IndexForNativeFormat::Blocks::const_iterator index_block_it_, IndexForNativeFormat::Blocks::const_iterator index_block_end_)
+NativeBlockInputStream::NativeBlockInputStream(
+    ReadBuffer & istr_,
+    UInt64 server_revision_,
+    IndexForNativeFormat::Blocks::const_iterator index_block_it_,
+    IndexForNativeFormat::Blocks::const_iterator index_block_end_)
     : istr(istr_)
     , server_revision(server_revision_)
     , use_index(true)
@@ -60,11 +114,17 @@ NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server
     {
         auto type = DataTypeFactory::instance().get(column.type);
         header.insert(ColumnWithTypeAndName{type, column.name});
+        header_datatypes.emplace_back(type, column.type);
     }
 }
 
 
-void NativeBlockInputStream::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows, double avg_value_size_hint)
+void NativeBlockInputStream::readData(
+    const IDataType & type,
+    IColumn & column,
+    ReadBuffer & istr,
+    size_t rows,
+    double avg_value_size_hint)
 {
     IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &istr;
@@ -118,31 +178,43 @@ Block NativeBlockInputStream::readImpl()
         rows = index_block_it->num_rows;
     }
 
-    if (output_names.size() > 0 && output_names.size() != columns)
-        throw Exception("NativeBlockInputStream with explicity output name, but the block column size "
-                        "is not equal to the size of output names",
-                        ErrorCodes::LOGICAL_ERROR);
-    bool explicit_output_name = output_names.size() > 0;
+    if (header)
+        checkColumnSize(header.columns(), columns);
+    else if (!output_names.empty())
+        checkColumnSize(output_names.size(), columns);
 
     for (size_t i = 0; i < columns; ++i)
     {
         if (use_index)
         {
             /// If the current position is what is required, the real seek does not occur.
-            istr_concrete->seek(index_column_it->location.offset_in_compressed_file, index_column_it->location.offset_in_decompressed_block);
+            istr_concrete->seek(
+                index_column_it->location.offset_in_compressed_file,
+                index_column_it->location.offset_in_decompressed_block);
         }
 
         ColumnWithTypeAndName column;
 
         /// Name
         readBinary(column.name, istr);
-        if (explicit_output_name)
+        /// TODO: may need to throw if header && header[i].name != type_name && !align_column_name_with_header
+        if (align_column_name_with_header)
+            column.name = header.getByPosition(i).name;
+        else if (!output_names.empty())
             column.name = output_names[i];
 
         /// Type
         String type_name;
         readBinary(type_name, istr);
-        column.type = data_type_factory.get(type_name);
+        if (header)
+        {
+            checkDataTypeName(i, header_datatypes[i].name, type_name);
+            column.type = header_datatypes[i].type;
+        }
+        else
+        {
+            column.type = data_type_factory.get(type_name);
+        }
 
         if (use_index)
         {

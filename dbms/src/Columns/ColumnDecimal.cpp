@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/Arena.h>
@@ -5,6 +19,7 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <IO/WriteHelpers.h>
 #include <common/unaligned.h>
 
@@ -20,6 +35,9 @@ extern const int PARAMETER_OUT_OF_BOUND;
 extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
+
+template <typename T>
+T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, ScaleType frac);
 
 template <typename T>
 int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) const
@@ -230,6 +248,22 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
         memcpy(&tmp, src, sizeof(T));
         data.emplace_back(tmp);
     }
+}
+
+template <typename T>
+bool ColumnDecimal<T>::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
+{
+    PrecType prec_ = raw_value[cursor++];
+    ScaleType scale_ = raw_value[cursor++];
+    auto type = createDecimal(prec_, scale_);
+    if (unlikely(!checkDecimal<T>(*type)))
+    {
+        throw Exception("Detected unmatched decimal value type: Decimal( " + std::to_string(prec_) + ", " + std::to_string(scale_) + ") when decoding with column type " + this->getName(),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+    auto res = DecodeDecimalImpl<T>(cursor, raw_value, prec_, scale_);
+    data.push_back(DecimalField<T>(res, scale_));
+    return true;
 }
 
 template <typename T>

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseOrdinary.h>
@@ -24,13 +38,12 @@
 
 namespace DB
 {
-
 static void executeCreateQuery(const String & query,
-    Context & context,
-    const String & database,
-    const String & file_name,
-    ThreadPool * pool,
-    bool has_force_restore_data_flag)
+                               Context & context,
+                               const String & database,
+                               const String & file_name,
+                               ThreadPool * pool,
+                               bool has_force_restore_data_flag)
 {
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "in file " + file_name, 0);
@@ -51,7 +64,11 @@ static void executeCreateQuery(const String & query,
 #define SYSTEM_DATABASE "system"
 
 static void loadDatabase(
-    Context & context, const String & database, const String & database_metadata_file, ThreadPool * thread_pool, bool force_restore_data)
+    Context & context,
+    const String & database,
+    const String & database_metadata_file,
+    ThreadPool * thread_pool,
+    bool force_restore_data)
 {
     /// There may exist .sql file with database creation statement.
     /// Or, if it is absent, then database with default engine is created.
@@ -116,11 +133,12 @@ void loadMetadata(Context & context)
             if (databases.find(db_name) != databases.end()) // already detected
                 continue;
             LOG_WARNING(
-                log, "Directory \"" + it.path().toString() + "\" is ignored while loading metadata since we can't find its .sql file.");
+                log,
+                "Directory \"" + it.path().toString() + "\" is ignored while loading metadata since we can't find its .sql file.");
         }
     }
 
-    for (const auto & [db_name, meta_file]: databases)
+    for (const auto & [db_name, meta_file] : databases)
         loadDatabase(context, db_name, meta_file, &thread_pool, has_force_restore_data_flag);
 
     thread_pool.wait();

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Encryption/RateLimiter.h>
 #include <fcntl.h>
@@ -5,6 +19,7 @@
 #include <unistd.h>
 
 #include <ctime>
+#include <random>
 #include <thread>
 
 #ifdef __linux__
@@ -22,14 +37,15 @@ extern const int LOGICAL_ERROR;
 
 namespace tests
 {
-TEST(WriteLimiter_test, Rate)
+TEST(WriteLimiterTest, Rate)
 {
-    srand((unsigned)time(NULL));
     auto write = [](const WriteLimiterPtr & write_limiter, UInt64 max_request_size) {
+        std::default_random_engine e;
+        e.seed(std::hash<std::thread::id>()(std::this_thread::get_id()));
         AtomicStopwatch watch;
         while (watch.elapsedSeconds() < 4)
         {
-            auto size = rand() % max_request_size + 1;
+            auto size = e() % max_request_size + 1;
             write_limiter->request(size);
         }
     };
@@ -59,7 +75,7 @@ TEST(WriteLimiter_test, Rate)
     }
 }
 
-TEST(WriteLimiter_test, LimiterStat_NotLimit)
+TEST(WriteLimiterTest, LimiterStatNotLimit)
 {
     WriteLimiter write_limiter(0, LimiterType::UNKNOW, 100);
     try
@@ -87,7 +103,7 @@ TEST(WriteLimiter_test, LimiterStat_NotLimit)
     }
 }
 
-TEST(WriteLimiter_test, LimiterStat)
+TEST(WriteLimiterTest, LimiterStat)
 {
     WriteLimiter write_limiter(1000, LimiterType::UNKNOW, 100);
     try
@@ -161,10 +177,10 @@ TEST(WriteLimiter_test, LimiterStat)
     ASSERT_EQ(stat.pct(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
 }
 
-TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
+TEST(ReadLimiterTest, GetIOStatPeroid2000us)
 {
     Int64 consumed = 0;
-    auto getStat = [&consumed]() {
+    auto get_stat = [&consumed]() {
         return consumed;
     };
     auto request = [&consumed](ReadLimiter & limiter, Int64 bytes) {
@@ -172,7 +188,7 @@ TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
         consumed += bytes;
     };
     Int64 get_io_stat_period_us = 2000;
-    auto waitRefresh = [&]() {
+    auto wait_refresh = [&]() {
         std::chrono::microseconds sleep_time(get_io_stat_period_us + 1);
         std::this_thread::sleep_for(sleep_time);
     };
@@ -180,7 +196,7 @@ TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
     using TimePointMS = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
     Int64 bytes_per_sec = 1000;
     UInt64 refill_period_ms = 20;
-    ReadLimiter limiter(getStat, bytes_per_sec, LimiterType::UNKNOW, get_io_stat_period_us, refill_period_ms);
+    ReadLimiter limiter(get_stat, bytes_per_sec, LimiterType::UNKNOW, get_io_stat_period_us, refill_period_ms);
 
     TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     // Refill 20 every 20ms.
@@ -190,17 +206,17 @@ TEST(ReadLimiter_test, GetIOStatPeroid_2000us)
     ASSERT_EQ(limiter.refreshAvailableBalance(), 19);
     request(limiter, 9);
     ASSERT_EQ(limiter.getAvailableBalance(), 19);
-    waitRefresh();
+    wait_refresh();
     ASSERT_EQ(limiter.getAvailableBalance(), 10);
     request(limiter, 11);
-    waitRefresh();
+    wait_refresh();
     ASSERT_EQ(limiter.getAvailableBalance(), -1);
     request(limiter, 50);
     TimePointMS t1 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     UInt64 elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     ASSERT_GE(elasped, refill_period_ms);
     ASSERT_EQ(limiter.getAvailableBalance(), 19);
-    waitRefresh();
+    wait_refresh();
     ASSERT_EQ(limiter.getAvailableBalance(), -31);
     request(limiter, 1);
     TimePointMS t2 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
@@ -220,6 +236,7 @@ void testSetStop(int blocked_thread_cnt)
         finished_count.fetch_add(1, std::memory_order_relaxed);
     };
     std::vector<std::thread> threads;
+    threads.reserve(blocked_thread_cnt);
     for (int i = 0; i < blocked_thread_cnt; i++)
     {
         // All threads are blocked inside limiter.
@@ -243,7 +260,7 @@ void testSetStop(int blocked_thread_cnt)
     }
 }
 
-TEST(WriteLimiter_test, setStop)
+TEST(WriteLimiterTest, setStop)
 {
     for (int i = 1; i < 128; i++)
     {
@@ -251,10 +268,10 @@ TEST(WriteLimiter_test, setStop)
     }
 }
 
-TEST(ReadLimiter_test, LimiterStat)
+TEST(ReadLimiterTest, LimiterStat)
 {
     Int64 consumed = 0;
-    auto getStat = [&consumed]() {
+    auto get_stat = [&consumed]() {
         return consumed;
     };
     auto request = [&consumed](ReadLimiter & limiter, Int64 bytes) {
@@ -262,7 +279,7 @@ TEST(ReadLimiter_test, LimiterStat)
         consumed += bytes;
     };
     Int64 get_io_stat_period_us = 2000;
-    ReadLimiter read_limiter(getStat, 1000, LimiterType::UNKNOW, get_io_stat_period_us, 100);
+    ReadLimiter read_limiter(get_stat, 1000, LimiterType::UNKNOW, get_io_stat_period_us, 100);
     try
     {
         read_limiter.getStat();
@@ -340,7 +357,7 @@ TEST(ReadLimiter_test, LimiterStat)
 }
 
 #ifdef __linux__
-TEST(IORateLimiter_test, IOStat)
+TEST(IORateLimiterTest, IOStat)
 {
     IORateLimiter io_rate_limiter;
 
@@ -353,7 +370,7 @@ TEST(IORateLimiter_test, IOStat)
     std::string fname = "/tmp/rate_limit_io_stat_test";
     int fd = ::open(fname.c_str(), O_CREAT | O_RDWR | O_DIRECT, 0666);
     ASSERT_GT(fd, 0) << strerror(errno);
-    std::unique_ptr<int, std::function<void(int * fd)>> defer_close(&fd, [](int * fd) { ::close(*fd); });
+    std::unique_ptr<int, std::function<void(int * fd)>> defer_close(&fd, [](const int * fd) { ::close(*fd); });
 
     void * buf = nullptr;
     int buf_size = 4096;
@@ -375,11 +392,11 @@ TEST(IORateLimiter_test, IOStat)
     ASSERT_GE(io_info.total_read_bytes, buf_size);
 }
 
-TEST(IORateLimiter_test, IOStatMultiThread)
+TEST(IORateLimiterTest, IOStatMultiThread)
 {
     std::mutex bg_pids_mtx;
     std::vector<pid_t> bg_pids;
-    auto addBgPid = [&](pid_t tid) {
+    auto add_bg_pid = [&](pid_t tid) {
         std::lock_guard lock(bg_pids_mtx);
         bg_pids.push_back(tid);
     };
@@ -392,12 +409,12 @@ TEST(IORateLimiter_test, IOStatMultiThread)
     auto write = [&](int id, bool is_bg) {
         if (is_bg)
         {
-            addBgPid(syscall(SYS_gettid));
+            add_bg_pid(syscall(SYS_gettid));
         }
         std::string fname = "/tmp/rate_limit_io_stat_test_" + std::to_string(id) + (is_bg ? "_bg" : "_fg");
         int fd = ::open(fname.c_str(), O_CREAT | O_RDWR | O_DIRECT, 0666);
         ASSERT_GT(fd, 0) << strerror(errno);
-        std::unique_ptr<int, std::function<void(int * fd)>> defer_close(&fd, [](int * fd) { ::close(*fd); });
+        std::unique_ptr<int, std::function<void(int * fd)>> defer_close(&fd, [](const int * fd) { ::close(*fd); });
 
         void * buf = nullptr;
         int ret = ::posix_memalign(&buf, buf_size, buf_size);
@@ -418,6 +435,7 @@ TEST(IORateLimiter_test, IOStatMultiThread)
     };
 
     std::vector<std::thread> threads;
+    threads.reserve(bg_thread_count);
     for (int i = 0; i < bg_thread_count; i++)
     {
         threads.push_back(std::thread(write, i, true));
@@ -455,7 +473,7 @@ LimiterStatUPtr createLimiterStat(UInt64 alloc_bytes, UInt64 elapsed_ms, UInt64 
     return std::make_unique<LimiterStat>(alloc_bytes, elapsed_ms, refill_period_ms, refill_bytes_per_period);
 }
 
-TEST(IOLimitTuner_test, Watermark)
+TEST(IOLimitTunerTest, Watermark)
 {
     StorageIORateLimitConfig io_config;
     io_config.emergency_pct = 95;
@@ -482,12 +500,12 @@ TEST(IOLimitTuner_test, Watermark)
     }
 }
 
-TEST(IOLimitTuner_test, NotNeedTune)
+TEST(IOLimitTunerTest, NotNeedTune)
 {
     StorageIORateLimitConfig io_config;
     io_config.max_bytes_per_sec = 1000;
 
-    auto assertTuner = [](const auto & tuner, int write_limiter_cnt, int read_limiter_cnt) {
+    auto assert_tuner = [](const auto & tuner, int write_limiter_cnt, int read_limiter_cnt) {
         ASSERT_EQ(tuner.writeLimiterCount(), write_limiter_cnt);
         ASSERT_EQ(tuner.readLimiterCount(), read_limiter_cnt);
         ASSERT_EQ(tuner.limiterCount(), write_limiter_cnt + read_limiter_cnt);
@@ -507,27 +525,27 @@ TEST(IOLimitTuner_test, NotNeedTune)
 
     {
         IOLimitTuner tuner(nullptr, nullptr, nullptr, nullptr, io_config);
-        assertTuner(tuner, 0, 0);
+        assert_tuner(tuner, 0, 0);
     }
 
     {
         IOLimitTuner tuner(createLimiterStat(100, 100, 100, 100), nullptr, nullptr, nullptr, io_config);
-        assertTuner(tuner, 1, 0);
+        assert_tuner(tuner, 1, 0);
     }
 
     {
         IOLimitTuner tuner(nullptr, createLimiterStat(100, 100, 100, 100), nullptr, nullptr, io_config);
-        assertTuner(tuner, 1, 0);
+        assert_tuner(tuner, 1, 0);
     }
 
     {
         IOLimitTuner tuner(nullptr, nullptr, createLimiterStat(100, 100, 100, 100), nullptr, io_config);
-        assertTuner(tuner, 0, 1);
+        assert_tuner(tuner, 0, 1);
     }
 
     {
         IOLimitTuner tuner(nullptr, nullptr, nullptr, createLimiterStat(100, 100, 100, 100), io_config);
-        assertTuner(tuner, 0, 1);
+        assert_tuner(tuner, 0, 1);
     }
 }
 
@@ -575,7 +593,7 @@ constexpr auto Medium = IOLimitTuner::Watermark::Medium;
 constexpr auto High = IOLimitTuner::Watermark::High;
 constexpr auto Emergency = IOLimitTuner::Watermark::Emergency;
 
-TEST(IOLimitTuner_test, Tune)
+TEST(IOLimitTunerTest, Tune)
 {
     StorageIORateLimitConfig io_config;
     io_config.max_bytes_per_sec = 2000;

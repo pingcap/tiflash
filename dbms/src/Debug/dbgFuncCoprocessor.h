@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST.h>
@@ -16,23 +31,12 @@ class Context;
 //   ./storages-client.sh "DBGInvoke dag(query[, region_id])"
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args);
 
+void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 // Mock a DAG request using given query that will be compiled (with the metadata from MockTiDB) to DAG request, with the given region ID and (optional) start ts.
 // Usage:
 //   ./storages-client.sh "DBGInvoke mock_dag(query, region_id[, start_ts])"
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args);
-
-struct DAGProperties
-{
-    String encode_type;
-    Int64 tz_offset = 0;
-    String tz_name;
-    Int32 collator = 0;
-    bool is_mpp_query = false;
-    bool use_broadcast_join = false;
-    Int32 mpp_partition_num = 1;
-    Timestamp start_ts = DEFAULT_MAX_READ_TSO;
-    Int32 mpp_timeout = 10;
-};
 
 DAGProperties getDAGProperties(const String & prop_string);
 

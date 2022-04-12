@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Decimal.h>
@@ -30,6 +44,13 @@ std::string compareTypeToString(const T & v)
         return String(TypeName<T>::get());
 }
 
+enum class ValueCompareResult
+{
+    False = 0,
+    True = 1,
+    CanNotCompare = 2,
+};
+
 template <template <typename, typename> class Op>
 struct ValueComparision
 {
@@ -41,27 +62,26 @@ struct ValueComparision
     using GreaterInt = GreaterOp<int, int>;
     using GreaterOrEqualsInt = GreaterOrEqualsOp<int, int>;
 
-    /// 1: true, -1: false, 0: cannot compare.
     template <typename Right>
-    static int compare(const Field & left_field, const DataTypePtr & right_type, const Right & right)
+    static ValueCompareResult compare(const Field & left_field, const DataTypePtr & right_type, const Right & right)
     {
-        bool res = 0;
+        bool res = false;
         bool ok;
 
-        auto LeftGroupType = getGroupType(left_field);
-        if (LeftGroupType == Number)
+        auto left_group_type = getGroupType(left_field);
+        if (left_group_type == Number)
             ok = compare<Number, Right>(left_field, right_type, right, res);
-        else if (LeftGroupType == Decimal)
+        else if (left_group_type == Decimal)
             ok = compare<Decimal, Right>(left_field, right_type, right, res);
-        else if (LeftGroupType == String)
+        else if (left_group_type == String)
             ok = compare<String, Right>(left_field, right_type, right, res);
         else
             ok = compare<Generic, Right>(left_field, right_type, right, res);
 
         if (ok)
-            return res ? 1 : -1;
+            return res ? ValueCompareResult::True : ValueCompareResult::False;
         else
-            return 0;
+            return ValueCompareResult::CanNotCompare;
     }
 
 private:
@@ -124,7 +144,7 @@ private:
                   || compareNumberLeftType<Field::Types::Which::Int64, Int64>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Float64, Float64>(left_field, right, res)
                   || compareNumberLeftType<Field::Types::Which::Int128, Int128>(left_field, right, res)))
-                throw Exception("Illegal compare " + std::string(left_field.getTypeName()) + " with " + compareTypeToString(right));
+                throw Exception(fmt::format("Illegal compare {} with {}", left_field.getTypeName(), compareTypeToString(right)));
             return true;
         }
         else if constexpr (LeftGroupType == Decimal || RightGroupType == Decimal)
@@ -188,8 +208,8 @@ private:
     {
         if (left_field.getType() != LeftFieldType)
             return false;
-        auto left = left_field.safeGet<Left>();
 
+        auto left = left_field.safeGet<Left>();
         res = Op<Left, Right>::apply(left, right);
         return true;
     }
@@ -214,7 +234,6 @@ private:
             left_scale = left.getScale();
         if constexpr (RightGroupType == Decimal)
             right_scale = right.getScale();
-
         else if constexpr ((LeftGroupType == Number || LeftGroupType == Decimal) && (RightGroupType == Number || RightGroupType == Decimal))
             res = DecimalComparison<Left, Right, Op, true>::compare(left, right, left_scale, right_scale);
 
@@ -223,8 +242,7 @@ private:
 
     static void compareStringLeftType(const Field & left_field, const std::string & right, bool & res)
     {
-        auto & left = left_field.safeGet<std::string>();
-
+        const auto & left = left_field.safeGet<std::string>();
         if constexpr (std::is_same_v<OpInt, EqualsInt>)
             res = left == right;
         else if constexpr (std::is_same_v<OpInt, LessInt>)
@@ -258,7 +276,6 @@ private:
 
         if (!legal_types)
             return false;
-
 
         if (is_date)
         {
@@ -303,7 +320,7 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeEnum8::FieldType, Right>)
             {
-                auto type = static_cast<const DataTypeEnum8 *>(right_type.get());
+                const auto * type = static_cast<const DataTypeEnum8 *>(right_type.get());
                 auto left_enum_value = type->getValue(left);
                 res = Op<Int8, Right>::apply(left_enum_value, right);
                 return true;
@@ -313,7 +330,7 @@ private:
         {
             if constexpr (std::is_same_v<DataTypeEnum16::FieldType, Right>)
             {
-                auto type = static_cast<const DataTypeEnum16 *>(right_type.get());
+                const auto * type = static_cast<const DataTypeEnum16 *>(right_type.get());
                 auto left_enum_value = type->getValue(left);
                 res = Op<Int16, Right>::apply(left_enum_value, right);
                 return true;

@@ -1,6 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Poco/Logger.h>
 
@@ -23,7 +37,7 @@ class SquashingTransform
 {
 public:
     /// Conditions on rows and bytes are OR-ed. If one of them is zero, then corresponding condition is ignored.
-    SquashingTransform(size_t min_block_size_rows, size_t min_block_size_bytes, const LogWithPrefixPtr & log_ = nullptr);
+    SquashingTransform(size_t min_block_size_rows, size_t min_block_size_bytes, const String & req_id);
 
     /// When not ready, you need to pass more blocks to add function.
     struct Result
@@ -55,7 +69,7 @@ private:
 
     bool isEnoughSize(size_t rows, size_t bytes) const;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
 } // namespace DB

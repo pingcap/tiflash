@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/NamesAndTypes.h>
@@ -7,7 +21,6 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <common/MultiVersion.h>
-#include <grpc++/grpc++.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -40,8 +53,6 @@ class ExternalDictionaries;
 class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
-class Cluster;
-class Compiler;
 class MarkCache;
 class UncompressedCache;
 class DBGInvoker;
@@ -51,7 +62,6 @@ class ProcessList;
 class ProcessListElement;
 class Macros;
 struct Progress;
-class Clusters;
 class QueryLog;
 class IDatabase;
 class DDLGuard;
@@ -93,6 +103,8 @@ namespace DM
 {
 class MinMaxIndexCache;
 class DeltaIndexManager;
+class GlobalStoragePool;
+using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 } // namespace DM
 
 /// (database name, table name)
@@ -215,8 +227,8 @@ public:
       * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
       * made this check.
       */
-    void assertTableDoesntExist(const String & database_name, const String & table_name, bool check_database_acccess_rights = true) const;
-    void assertDatabaseExists(const String & database_name, bool check_database_acccess_rights = true) const;
+    void assertTableDoesntExist(const String & database_name, const String & table_name, bool check_database_access_rights = true) const;
+    void assertDatabaseExists(const String & database_name, bool check_database_access_rights = true) const;
 
     void assertDatabaseDoesntExist(const String & database_name) const;
     void checkDatabaseAccessRights(const std::string & database_name) const;
@@ -281,12 +293,12 @@ public:
     ASTPtr getCreateExternalTableQuery(const String & table_name) const;
     ASTPtr getCreateDatabaseQuery(const String & database_name) const;
 
-    const DatabasePtr getDatabase(const String & database_name) const;
+    DatabasePtr getDatabase(const String & database_name) const;
     DatabasePtr getDatabase(const String & database_name);
-    const DatabasePtr tryGetDatabase(const String & database_name) const;
+    DatabasePtr tryGetDatabase(const String & database_name) const;
     DatabasePtr tryGetDatabase(const String & database_name);
 
-    const Databases getDatabases() const;
+    Databases getDatabases() const;
     Databases getDatabases();
 
     std::shared_ptr<Context> acquireSession(
@@ -387,7 +399,7 @@ public:
         const std::vector<size_t> & latest_capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
-    void initializeTiFlashMetrics();
+    void initializeTiFlashMetrics() const;
 
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
@@ -397,15 +409,9 @@ public:
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    Clusters & getClusters() const;
-    std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
-    std::shared_ptr<Cluster> tryGetCluster(const std::string & cluster_name) const;
-    void setClustersConfig(const ConfigurationPtr & config, const String & config_name = "remote_servers");
-    /// Sets custom cluster, but doesn't update configuration
-    void setCluster(const String & cluster_name, const std::shared_ptr<Cluster> & cluster);
-    void reloadClusterConfig();
+    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3);
 
-    Compiler & getCompiler();
+    DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
@@ -416,9 +422,6 @@ public:
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
     void setMaxTableSizeToDrop(size_t max_size);
     void checkTableCanBeDropped(const String & database, const String & table, size_t table_size);
-
-    /// Lets you select the compression settings according to the conditions described in the configuration file.
-    CompressionSettings chooseCompressionSettings(size_t part_size, double part_size_ratio) const;
 
     /// Get the server uptime in seconds.
     time_t getUptimeSeconds() const;
@@ -476,6 +479,8 @@ private:
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
 };
+
+using ContextPtr = std::shared_ptr<Context>;
 
 
 /// Puts an element into the map, erases it in the destructor.

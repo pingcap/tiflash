@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnConst.h>
@@ -23,6 +37,7 @@
 #include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/ExpressionActions.h>
+#include <fmt/core.h>
 
 #include <boost/integer/common_factor.hpp>
 #include <ext/range.h>
@@ -50,16 +65,16 @@ using If = std::conditional_t<B, T1, T2>;
   * Etc.
   */
 
-template <typename A, typename B, typename Op, typename ResultType_ = typename Op::ResultType>
+template <typename A, typename B, typename Op, typename OpResultType = typename Op::ResultType>
 struct BinaryOperationImplBase
 {
-    using ResultType = ResultType_;
+    using ResultType = OpResultType;
     using ColVecA = std::conditional_t<IsDecimal<A>, ColumnDecimal<A>, ColumnVector<A>>;
     using ColVecB = std::conditional_t<IsDecimal<B>, ColumnDecimal<B>, ColumnVector<B>>;
     using ArrayA = typename ColVecA::Container;
     using ArrayB = typename ColVecB::Container;
 
-    static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, PaddedPODArray<ResultType> & c)
+    static void NO_INLINE vectorVector(const ArrayA & a, const ArrayB & b, PaddedPODArray<ResultType> & c)
     {
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
@@ -73,19 +88,19 @@ struct BinaryOperationImplBase
                 c[i] = Op::template apply<ResultType>(a[i], b[i]);
     }
 
-    static void NO_INLINE vector_vector_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
+    static void NO_INLINE vectorVectorNullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
         size_t size = a.size();
         if (a_nullmap != nullptr && b_nullmap != nullptr)
         {
-            auto & a_nullmap_data = a_nullmap->getData();
-            auto & b_nullmap_data = b_nullmap->getData();
+            const auto & a_nullmap_data = a_nullmap->getData();
+            const auto & b_nullmap_data = b_nullmap->getData();
             for (size_t i = 0; i < size; i++)
                 res_null[i] = a_nullmap_data[i] || b_nullmap_data[i];
         }
         else if (a_nullmap != nullptr || b_nullmap != nullptr)
         {
-            auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
+            const auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
             for (size_t i = 0; i < size; i++)
                 res_null[i] = nullmap_data[i];
         }
@@ -102,7 +117,7 @@ struct BinaryOperationImplBase
         }
     }
 
-    static void NO_INLINE vector_constant(const ArrayA & a, typename NearestFieldType<B>::Type b, PaddedPODArray<ResultType> & c)
+    static void NO_INLINE vectorConstant(const ArrayA & a, typename NearestFieldType<B>::Type b, PaddedPODArray<ResultType> & c)
     {
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
@@ -112,12 +127,12 @@ struct BinaryOperationImplBase
                 c[i] = Op::template apply<ResultType>(a[i], b);
     }
 
-    static void NO_INLINE vector_constant_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, typename NearestFieldType<B>::Type b, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
+    static void NO_INLINE vectorConstantNullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, typename NearestFieldType<B>::Type b, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
         size_t size = a.size();
         if (a_nullmap != nullptr)
         {
-            auto & nullmap_data = a_nullmap->getData();
+            const auto & nullmap_data = a_nullmap->getData();
             for (size_t i = 0; i < size; ++i)
                 res_null[i] = nullmap_data[i];
         }
@@ -128,7 +143,7 @@ struct BinaryOperationImplBase
                 c[i] = Op::template apply<ResultType>(a[i], b, res_null[i]);
     }
 
-    static void NO_INLINE constant_vector(typename NearestFieldType<A>::Type a, const ArrayB & b, PaddedPODArray<ResultType> & c)
+    static void NO_INLINE constantVector(typename NearestFieldType<A>::Type a, const ArrayB & b, PaddedPODArray<ResultType> & c)
     {
         size_t size = b.size();
         for (size_t i = 0; i < size; ++i)
@@ -140,12 +155,12 @@ struct BinaryOperationImplBase
         }
     }
 
-    static void NO_INLINE constant_vector_nullable(typename NearestFieldType<A>::Type a, const ArrayB & b, const ColumnUInt8 * b_nullmap, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
+    static void NO_INLINE constantVectorNullable(typename NearestFieldType<A>::Type a, const ArrayB & b, const ColumnUInt8 * b_nullmap, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
         size_t size = b.size();
         if (b_nullmap != nullptr)
         {
-            auto & nullmap_data = b_nullmap->getData();
+            const auto & nullmap_data = b_nullmap->getData();
             for (size_t i = 0; i < size; i++)
                 res_null[i] = nullmap_data[i];
         }
@@ -158,11 +173,11 @@ struct BinaryOperationImplBase
         }
     }
 
-    static ResultType constant_constant(typename NearestFieldType<A>::Type a, typename NearestFieldType<B>::Type b)
+    static ResultType constantConstant(typename NearestFieldType<A>::Type a, typename NearestFieldType<B>::Type b)
     {
         return Op::template apply<ResultType>(a, b);
     }
-    static ResultType constant_constant_nullable(typename NearestFieldType<A>::Type a, typename NearestFieldType<B>::Type b, UInt8 & res_null)
+    static ResultType constantConstantNullable(typename NearestFieldType<A>::Type a, typename NearestFieldType<B>::Type b, UInt8 & res_null)
     {
         return Op::template apply<ResultType>(a, b, res_null);
     }
@@ -183,7 +198,7 @@ using Else = T;
 /// +|- scale one of args (which scale factor is not 1). ScaleR = oneof(Scale1, Scale2);
 /// *   no agrs scale. ScaleR = Scale1 + Scale2;
 /// /   first arg scale. ScaleR = Scale1 (scale_a = DecimalType<B>::getScale()).
-template <typename A, typename B, template <typename, typename> typename Operation, typename ResultType_>
+template <typename A, typename B, template <typename, typename> typename Operation, typename OpResultType>
 struct DecimalBinaryOperation
 {
     //static_assert((IsDecimal<A> || IsDecimal<B>) && IsDecimal<ResultType_>);
@@ -200,10 +215,10 @@ struct DecimalBinaryOperation
     static constexpr bool is_plus_minus_compare = is_plus_minus || is_compare;
     static constexpr bool can_overflow = is_plus_minus || is_multiply;
 
-    static constexpr bool need_promote_type = (std::is_same_v<ResultType_, A> || std::is_same_v<ResultType_, B>)&&(is_plus_minus_compare || is_division || is_multiply || is_modulo); // And is multiple / division / modulo
-    static constexpr bool check_overflow = need_promote_type && std::is_same_v<ResultType_, Decimal256>; // Check if exceeds 10 * 66;
+    static constexpr bool need_promote_type = (std::is_same_v<OpResultType, A> || std::is_same_v<OpResultType, B>)&&(is_plus_minus_compare || is_division || is_multiply || is_modulo); // And is multiple / division / modulo
+    static constexpr bool check_overflow = need_promote_type && std::is_same_v<OpResultType, Decimal256>; // Check if exceeds 10 * 66;
 
-    using ResultType = ResultType_;
+    using ResultType = OpResultType;
     using NativeResultType = typename ResultType::NativeType;
     using ColVecA = std::conditional_t<IsDecimal<A>, ColumnDecimal<A>, ColumnVector<A>>;
     using ColVecB = std::conditional_t<IsDecimal<B>, ColumnDecimal<B>, ColumnVector<B>>;
@@ -218,20 +233,20 @@ struct DecimalBinaryOperation
     {
         if (a_nullmap != nullptr && b_nullmap != nullptr)
         {
-            auto & a_nullmap_data = a_nullmap->getData();
-            auto & b_nullmap_data = b_nullmap->getData();
+            const auto & a_nullmap_data = a_nullmap->getData();
+            const auto & b_nullmap_data = b_nullmap->getData();
             for (size_t i = 0; i < size; ++i)
                 res_null[i] = a_nullmap_data[i] || b_nullmap_data[i];
         }
         else if (a_nullmap != nullptr || b_nullmap != nullptr)
         {
-            auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
+            const auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
             for (size_t i = 0; i < size; ++i)
                 res_null[i] = nullmap_data[i];
         }
     }
 
-    static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE vectorVector(const ArrayA & a, const ArrayB & b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
         if constexpr (is_plus_minus_compare)
@@ -267,7 +282,7 @@ struct DecimalBinaryOperation
             c[i] = apply(a[i], b[i]);
     }
 
-    static void NO_INLINE vector_vector_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE vectorVectorNullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
 
@@ -298,7 +313,7 @@ struct DecimalBinaryOperation
         throw Exception("Should not reach here");
     }
 
-    static void NO_INLINE vector_constant(const ArrayA & a, B b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE vectorConstant(const ArrayA & a, B b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
         if constexpr (is_plus_minus_compare)
@@ -334,7 +349,7 @@ struct DecimalBinaryOperation
             c[i] = apply(a[i], b);
     }
 
-    static void NO_INLINE vector_constant_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, B b, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE vectorConstantNullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, B b, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
 
@@ -365,7 +380,7 @@ struct DecimalBinaryOperation
         throw Exception("Should not reach here");
     }
 
-    static void NO_INLINE constant_vector(A a, const ArrayB & b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE constantVector(A a, const ArrayB & b, ArrayC & c, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = b.size();
         if constexpr (is_plus_minus_compare)
@@ -401,7 +416,7 @@ struct DecimalBinaryOperation
             c[i] = apply(a, b[i]);
     }
 
-    static void NO_INLINE constant_vector_nullable(A a, const ArrayB & b, const ColumnUInt8 * b_nullmap, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static void NO_INLINE constantVectorNullable(A a, const ArrayB & b, const ColumnUInt8 * b_nullmap, ArrayC & c, typename ColumnUInt8::Container & res_null, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = b.size();
 
@@ -432,7 +447,7 @@ struct DecimalBinaryOperation
         throw Exception("Should not reach here");
     }
 
-    static ResultType constant_constant(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    static ResultType constantConstant(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         if constexpr (is_plus_minus_compare)
         {
@@ -451,7 +466,7 @@ struct DecimalBinaryOperation
         return apply(a, b);
     }
 
-    static ResultType constant_constant_nullable(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]], UInt8 & res_null)
+    static ResultType constantConstantNullable(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]], UInt8 & res_null)
     {
         if constexpr (is_division)
         {
@@ -635,7 +650,7 @@ struct DateBinaryOperationTraits
                                          Else<InvalidType>>>>>,
                            Else<InvalidType>>>,
                     Else<
-                        If<std::is_same_v<T0, T1> && (std::is_same_v<Op, LeastImpl<T0, T1>> || std::is_same_v<Op, GreatestImpl<T0, T1>>),
+                        If<std::is_same_v<T0, T1> && (std::is_same_v<Op, BinaryLeastBaseImpl<T0, T1>> || std::is_same_v<Op, BinaryGreatestBaseImpl<T0, T1>>),
                            Then<LeftDataType>,
                            Else<InvalidType>>>>>>;
 };
@@ -667,7 +682,7 @@ public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(const Context & context) { return std::make_shared<FunctionBinaryArithmetic>(context); }
 
-    FunctionBinaryArithmetic(const Context & context)
+    explicit FunctionBinaryArithmetic(const Context & context)
         : context(context)
     {}
 
@@ -694,24 +709,24 @@ private:
         const IDataType * type = input_type;
         if constexpr (!default_impl_for_nulls)
         {
-            if (auto ptr = typeid_cast<const DataTypeNullable *>(input_type))
+            if (const auto * ptr = typeid_cast<const DataTypeNullable *>(input_type))
             {
                 type = ptr->getNestedType().get();
             }
         }
-        if (auto ptr = typeid_cast<const DataTypeDecimal32 *>(type))
+        if (const auto * ptr = typeid_cast<const DataTypeDecimal32 *>(type))
         {
             return std::make_pair(ptr->getPrec(), ptr->getScale());
         }
-        if (auto ptr = typeid_cast<const DataTypeDecimal64 *>(type))
+        if (const auto * ptr = typeid_cast<const DataTypeDecimal64 *>(type))
         {
             return std::make_pair(ptr->getPrec(), ptr->getScale());
         }
-        if (auto ptr = typeid_cast<const DataTypeDecimal128 *>(type))
+        if (const auto * ptr = typeid_cast<const DataTypeDecimal128 *>(type))
         {
             return std::make_pair(ptr->getPrec(), ptr->getScale());
         }
-        auto ptr = typeid_cast<const DataTypeDecimal256 *>(type);
+        const auto * ptr = typeid_cast<const DataTypeDecimal256 *>(type);
         return std::make_pair(ptr->getPrec(), ptr->getScale());
     }
 
@@ -726,26 +741,25 @@ private:
         }
         else
         {
-            PrecType result_prec = 0;
-            ScaleType result_scale = 0;
             // Treat integer as a kind of decimal;
             if constexpr (std::is_integral_v<LeftFieldType>)
             {
-                PrecType leftPrec = IntPrec<LeftFieldType>::prec;
-                auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
-                Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, 0, rightPrec, rightScale, result_prec, result_scale);
+                PrecType left_prec = IntPrec<LeftFieldType>::prec;
+                auto [right_prec, right_scale] = getPrecAndScale(arguments[1].get());
+
+                auto [result_prec, result_scale] = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, 0, right_prec, right_scale);
                 return createDecimal(result_prec, result_scale);
             }
             else if constexpr (std::is_integral_v<RightFieldType>)
             {
-                ScaleType rightPrec = IntPrec<RightFieldType>::prec;
-                auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
-                Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, 0, result_prec, result_scale);
+                ScaleType right_prec = IntPrec<RightFieldType>::prec;
+                auto [left_prec, left_scale] = getPrecAndScale(arguments[0].get());
+                auto [result_prec, result_scale] = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, left_scale, right_prec, 0);
                 return createDecimal(result_prec, result_scale);
             }
-            auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
-            auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
-            Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, rightScale, result_prec, result_scale);
+            auto [left_prec, left_scale] = getPrecAndScale(arguments[0].get());
+            auto [right_prec, right_scale] = getPrecAndScale(arguments[1].get());
+            auto [result_prec, result_scale] = Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(left_prec, left_scale, right_prec, right_scale);
 
             return createDecimal(result_prec, result_scale);
         }
@@ -834,7 +848,7 @@ private:
 
         if (interval_arg == 0 && function_is_minus)
             throw Exception(
-                "Wrong order of arguments for function " + getName() + ": argument of type Interval cannot be first.",
+                fmt::format("Wrong order of arguments for function {}: argument of type Interval cannot be first.", getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         const DataTypeDate * date_data_type = checkAndGetDataType<DataTypeDate>(interval_arg == 0 ? type1.get() : type0.get());
@@ -844,14 +858,11 @@ private:
             date_time_data_type = checkAndGetDataType<DataTypeDateTime>(interval_arg == 0 ? type1.get() : type0.get());
             if (!date_time_data_type)
                 throw Exception(
-                    "Wrong argument types for function " + getName() + ": if one argument is Interval, then another must be Date or DateTime.",
+                    fmt::format("Wrong argument types for function {}: if one argument is Interval, then another must be Date or DateTime.", getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
-        std::stringstream function_name;
-        function_name << (function_is_plus ? "add" : "subtract") << interval_data_type->kindToString() << 's';
-
-        return FunctionFactory::instance().get(function_name.str(), context);
+        return FunctionFactory::instance().get(fmt::format("{}{}s", (function_is_plus ? "add" : "subtract"), interval_data_type->kindToString()), context);
     }
 
 public:
@@ -887,11 +898,11 @@ public:
         if constexpr (!default_impl_for_nulls)
         {
             /// if one of the input is null constant, return null constant
-            auto * left_null_type = typeid_cast<const DataTypeNullable *>(arguments[0].get());
+            const auto * left_null_type = typeid_cast<const DataTypeNullable *>(arguments[0].get());
             bool left_null_const = left_null_type != nullptr && left_null_type->onlyNull();
             if (left_null_const)
                 type_res = arguments[0];
-            auto * right_null_type = typeid_cast<const DataTypeNullable *>(arguments[1].get());
+            const auto * right_null_type = typeid_cast<const DataTypeNullable *>(arguments[1].get());
             bool right_null_const = right_null_type != nullptr && right_null_type->onlyNull();
             if (right_null_const)
                 type_res = arguments[1];
@@ -916,7 +927,7 @@ public:
               || checkLeftType<DataTypeFloat32>(arguments, type_res)
               || checkLeftType<DataTypeFloat64>(arguments, type_res)))
             throw Exception(
-                "Illegal types " + arguments[0]->getName() + " and " + arguments[1]->getName() + " of arguments of function " + getName(),
+                fmt::format("Illegal types {} and {} of arguments of function {}", arguments[0]->getName(), arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if constexpr (!default_impl_for_nulls)
@@ -1046,10 +1057,10 @@ public:
                 using OpImpl = std::conditional_t<
                     result_is_decimal,
                     DecimalBinaryOperation<T0, T1, Op, ResultType>,
-                    BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0, T1>::ResultType>>; // Use template to resolve !!!!!
+                    BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0, T1>::ResultType>>;
 
-                auto col_left_raw = block.getByPosition(arguments[0]).column.get();
-                auto col_right_raw = block.getByPosition(arguments[1]).column.get();
+                const auto * col_left_raw = block.getByPosition(arguments[0]).column.get();
+                const auto * col_right_raw = block.getByPosition(arguments[1]).column.get();
                 const ColumnUInt8 * col_left_nullmap [[maybe_unused]] = nullptr;
                 const ColumnUInt8 * col_right_nullmap [[maybe_unused]] = nullptr;
                 bool is_left_null_constant [[maybe_unused]] = false;
@@ -1068,12 +1079,12 @@ public:
                 {
                     if (is_left_nullable)
                     {
-                        if (auto * col_nullable = typeid_cast<const ColumnNullable *>(col_left_raw))
+                        if (const auto * col_nullable = typeid_cast<const ColumnNullable *>(col_left_raw))
                         {
                             col_left_nullmap = &col_nullable->getNullMapColumn();
                             col_left_raw = &col_nullable->getNestedColumn();
                         }
-                        else if (auto * col_const = typeid_cast<const ColumnConst *>(col_left_raw))
+                        else if (const auto * col_const = typeid_cast<const ColumnConst *>(col_left_raw))
                         {
                             if (col_const->isNullAt(0))
                                 is_left_null_constant = true;
@@ -1085,12 +1096,12 @@ public:
                     }
                     if (is_right_nullable)
                     {
-                        if (auto * col_nullable = typeid_cast<const ColumnNullable *>(col_right_raw))
+                        if (const auto * col_nullable = typeid_cast<const ColumnNullable *>(col_right_raw))
                         {
                             col_right_nullmap = &col_nullable->getNullMapColumn();
                             col_right_raw = &col_nullable->getNestedColumn();
                         }
-                        else if (auto * col_const = typeid_cast<const ColumnConst *>(col_right_raw))
+                        else if (const auto * col_const = typeid_cast<const ColumnConst *>(col_right_raw))
                         {
                             if (col_const->isNullAt(0))
                                 is_right_null_constant = true;
@@ -1119,14 +1130,14 @@ public:
 
                             if constexpr (default_impl_for_nulls)
                             {
-                                auto res = OpImpl::constant_constant(col_left->template getValue<T0>(), col_right->template getValue<T1>(), scale_a, scale_b, scale_result);
+                                auto res = OpImpl::constantConstant(col_left->template getValue<T0>(), col_right->template getValue<T1>(), scale_a, scale_b, scale_result);
                                 block.getByPosition(result).column = ResultDataType(result_type.getPrec(), result_type.getScale()).createColumnConst(col_left->size(), toField(res, result_type.getScale()));
                             }
                             else
                             {
                                 UInt8 res_null = false;
                                 Field result_field = Null();
-                                auto res = OpImpl::constant_constant_nullable(
+                                auto res = OpImpl::constantConstantNullable(
                                     col_left->template getValue<T0>(),
                                     col_right->template getValue<T1>(),
                                     scale_a,
@@ -1142,14 +1153,14 @@ public:
                         {
                             if constexpr (default_impl_for_nulls)
                             {
-                                auto res = OpImpl::constant_constant(col_left->getField().template safeGet<FieldT0>(), col_right->getField().template safeGet<FieldT1>());
+                                auto res = OpImpl::constantConstant(col_left->getField().template safeGet<FieldT0>(), col_right->getField().template safeGet<FieldT1>());
                                 block.getByPosition(result).column = ResultDataType().createColumnConst(col_left->size(), toField(res));
                             }
                             else
                             {
                                 UInt8 res_null = false;
                                 Field result_field = Null();
-                                auto res = OpImpl::constant_constant_nullable(
+                                auto res = OpImpl::constantConstantNullable(
                                     col_left->getField().template safeGet<FieldT0>(),
                                     col_right->getField().template safeGet<FieldT1>(),
                                     res_null);
@@ -1177,7 +1188,7 @@ public:
                 typename ColumnUInt8::Container & vec_res_nulmap = res_nullmap->getData();
                 if constexpr (!default_impl_for_nulls)
                 {
-                    vec_res_nulmap.assign(block.rows(), (UInt8)0);
+                    vec_res_nulmap.assign(block.rows(), static_cast<UInt8>(0));
                 }
 
                 if (auto col_left_const = checkAndGetColumnConst<ColVecT0>(col_left_raw, is_left_nullable))
@@ -1189,7 +1200,7 @@ public:
                             auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
                             if constexpr (default_impl_for_nulls)
                             {
-                                OpImpl::constant_vector(
+                                OpImpl::constantVector(
                                     col_left_const->template getValue<T0>(),
                                     col_right->getData(),
                                     vec_res,
@@ -1199,18 +1210,18 @@ public:
                             }
                             else
                             {
-                                OpImpl::constant_vector_nullable(col_left_const->template getValue<T0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                                OpImpl::constantVectorNullable(col_left_const->template getValue<T0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
                             }
                         }
                         else
                         {
                             if constexpr (default_impl_for_nulls)
                             {
-                                OpImpl::constant_vector(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), vec_res);
+                                OpImpl::constantVector(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), vec_res);
                             }
                             else
                             {
-                                OpImpl::constant_vector_nullable(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
+                                OpImpl::constantVectorNullable(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
                             }
                         }
                     }
@@ -1226,7 +1237,7 @@ public:
                             auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
                             if constexpr (default_impl_for_nulls)
                             {
-                                OpImpl::vector_constant(
+                                OpImpl::vectorConstant(
                                     col_left->getData(),
                                     col_right_const->template getValue<T1>(),
                                     vec_res,
@@ -1236,18 +1247,18 @@ public:
                             }
                             else
                             {
-                                OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->template getValue<T1>(), vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                                OpImpl::vectorConstantNullable(col_left->getData(), col_left_nullmap, col_right_const->template getValue<T1>(), vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
                             }
                         }
                         else
                         {
                             if constexpr (default_impl_for_nulls)
                             {
-                                OpImpl::vector_constant(col_left->getData(), col_right_const->getField().template safeGet<FieldT1>(), vec_res);
+                                OpImpl::vectorConstant(col_left->getData(), col_right_const->getField().template safeGet<FieldT1>(), vec_res);
                             }
                             else
                             {
-                                OpImpl::vector_constant_nullable(col_left->getData(), col_left_nullmap, col_right_const->getField().template safeGet<FieldT1>(), vec_res, vec_res_nulmap);
+                                OpImpl::vectorConstantNullable(col_left->getData(), col_left_nullmap, col_right_const->getField().template safeGet<FieldT1>(), vec_res, vec_res_nulmap);
                             }
                         }
                     }
@@ -1258,22 +1269,22 @@ public:
                             auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
                             if constexpr (default_impl_for_nulls)
                             {
-                                OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b, scale_result);
+                                OpImpl::vectorVector(col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b, scale_result);
                             }
                             else
                             {
-                                OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
+                                OpImpl::vectorVectorNullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap, scale_a, scale_b, scale_result);
                             }
                         }
                         else
                         {
                             if constexpr (default_impl_for_nulls)
                             {
-                                OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res);
+                                OpImpl::vectorVector(col_left->getData(), col_right->getData(), vec_res);
                             }
                             else
                             {
-                                OpImpl::vector_vector_nullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
+                                OpImpl::vectorVectorNullable(col_left->getData(), col_left_nullmap, col_right->getData(), col_right_nullmap, vec_res, vec_res_nulmap);
                             }
                         }
                     }
@@ -1296,7 +1307,7 @@ public:
             return false;
         });
         if (!valid)
-            throw Exception(getName() + "'s arguments do not match the expected data types", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("{}'s arguments do not match the expected data types", getName()), ErrorCodes::LOGICAL_ERROR);
     }
 };
 

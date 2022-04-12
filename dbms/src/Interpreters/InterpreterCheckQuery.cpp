@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
@@ -8,7 +22,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCheckQuery.h>
 #include <Parsers/ASTCheckQuery.h>
-#include <Storages/StorageDistributed.h>
+#include <Storages/IStorage.h>
 #include <openssl/sha.h>
 
 #include <array>
@@ -76,11 +90,6 @@ struct TableDescription
     UInt32 structure_class;
 };
 
-inline bool operator<(const TableDescription & lhs, const TableDescription & rhs)
-{
-    return lhs.hash < rhs.hash;
-}
-
 using TableDescriptions = std::deque<TableDescription>;
 
 } // namespace
@@ -100,113 +109,6 @@ BlockIO InterpreterCheckQuery::execute()
 
     StoragePtr table = context.getTable(database_name, table_name);
 
-    auto distributed_table = dynamic_cast<StorageDistributed *>(&*table);
-    if (distributed_table != nullptr)
-    {
-        /// For tables with the Distributed engine, the CHECK TABLE query sends a DESCRIBE TABLE request to all replicas.
-        /// The identity of the structures is checked (column names + column types + default types + expressions
-        /// by default) of the tables that the distributed table looks at.
-
-        const auto & settings = context.getSettingsRef();
-
-        BlockInputStreams streams = distributed_table->describe(context, settings);
-        streams[0] = std::make_shared<UnionBlockInputStream<StreamUnionMode::ExtraInfo>>(
-            streams,
-            nullptr,
-            settings.max_distributed_connections,
-            nullptr);
-        streams.resize(1);
-
-        auto stream_ptr = dynamic_cast<IProfilingBlockInputStream *>(&*streams[0]);
-        if (stream_ptr == nullptr)
-            throw Exception("InterpreterCheckQuery: Internal error", ErrorCodes::LOGICAL_ERROR);
-        auto & stream = *stream_ptr;
-
-        /// Get all data from the DESCRIBE TABLE queries.
-
-        TableDescriptions table_descriptions;
-
-        while (true)
-        {
-            if (stream.isCancelledOrThrowIfKilled())
-            {
-                BlockIO res;
-                res.in = std::make_shared<OneBlockInputStream>(result);
-                return res;
-            }
-
-            Block block = stream.read();
-            if (!block)
-                break;
-
-            BlockExtraInfo info = stream.getBlockExtraInfo();
-            if (!info.is_valid)
-                throw Exception("Received invalid block extra info", ErrorCodes::INVALID_BLOCK_EXTRA_INFO);
-
-            table_descriptions.emplace_back(block, info);
-        }
-
-        if (table_descriptions.empty())
-            throw Exception("Received empty data", ErrorCodes::RECEIVED_EMPTY_DATA);
-
-        /// Define an equivalence class for each table structure.
-
-        std::sort(table_descriptions.begin(), table_descriptions.end());
-
-        UInt32 structure_class = 0;
-
-        auto it = table_descriptions.begin();
-        it->structure_class = structure_class;
-
-        auto prev = it;
-        for (++it; it != table_descriptions.end(); ++it)
-        {
-            if (*prev < *it)
-                ++structure_class;
-            it->structure_class = structure_class;
-            prev = it;
-        }
-
-        /// Construct the result.
-
-        MutableColumnPtr status_column = ColumnUInt8::create();
-        MutableColumnPtr host_name_column = ColumnString::create();
-        MutableColumnPtr host_address_column = ColumnString::create();
-        MutableColumnPtr port_column = ColumnUInt16::create();
-        MutableColumnPtr user_column = ColumnString::create();
-        MutableColumnPtr structure_class_column = ColumnUInt32::create();
-        MutableColumnPtr structure_column = ColumnString::create();
-
-        /// This value is 1 if the structure is not disposed of anywhere, but 0 otherwise.
-        UInt8 status_value = (structure_class == 0) ? 1 : 0;
-
-        for (const auto & desc : table_descriptions)
-        {
-            status_column->insert(static_cast<UInt64>(status_value));
-            structure_class_column->insert(static_cast<UInt64>(desc.structure_class));
-            host_name_column->insert(desc.extra_info.host);
-            host_address_column->insert(desc.extra_info.resolved_address);
-            port_column->insert(static_cast<UInt64>(desc.extra_info.port));
-            user_column->insert(desc.extra_info.user);
-            structure_column->insert(desc.names_with_types);
-        }
-
-        Block block;
-
-        block.insert(ColumnWithTypeAndName(std::move(status_column), std::make_shared<DataTypeUInt8>(), "status"));
-        block.insert(ColumnWithTypeAndName(std::move(host_name_column), std::make_shared<DataTypeString>(), "host_name"));
-        block.insert(ColumnWithTypeAndName(std::move(host_address_column), std::make_shared<DataTypeString>(), "host_address"));
-        block.insert(ColumnWithTypeAndName(std::move(port_column), std::make_shared<DataTypeUInt16>(), "port"));
-        block.insert(ColumnWithTypeAndName(std::move(user_column), std::make_shared<DataTypeString>(), "user"));
-        block.insert(ColumnWithTypeAndName(std::move(structure_class_column), std::make_shared<DataTypeUInt32>(), "structure_class"));
-        block.insert(ColumnWithTypeAndName(std::move(structure_column), std::make_shared<DataTypeString>(), "structure"));
-
-        BlockIO res;
-        res.in = std::make_shared<OneBlockInputStream>(block);
-
-        return res;
-    }
-    else
     {
         auto column = ColumnUInt8::create();
         column->insert(UInt64(table->checkData()));

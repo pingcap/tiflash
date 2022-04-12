@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -90,7 +104,7 @@ void ExternalLoader::reloadAndUpdate(bool throw_on_error)
     /// list of recreated loadable objects to perform delayed removal from unordered_map
     std::list<std::string> recreated_failed_loadable_objects;
 
-    std::unique_lock<std::mutex> all_lock(all_mutex);
+    std::unique_lock all_lock(all_mutex);
 
     /// retry loading failed loadable objects
     for (auto & failed_loadable_object : failed_loadable_objects)
@@ -121,7 +135,7 @@ void ExternalLoader::reloadAndUpdate(bool throw_on_error)
             }
             else
             {
-                const std::lock_guard<std::mutex> lock{map_mutex};
+                const std::lock_guard lock{map_mutex};
 
                 const auto & lifetime = loadable_ptr->getLifetime();
                 std::uniform_int_distribution<UInt64> distribution{lifetime.min_sec, lifetime.max_sec};
@@ -236,11 +250,11 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
 {
     if (config_path.empty() || !config_repository->exists(config_path))
     {
-        LOG_WARNING(log, "config file '" + config_path + "' does not exist");
+        LOG_FMT_WARNING(log, "config file '{}' does not exist", config_path);
     }
     else
     {
-        std::unique_lock<std::mutex> all_lock(all_mutex);
+        std::unique_lock all_lock(all_mutex);
 
         auto modification_time_it = last_modification_times.find(config_path);
         if (modification_time_it == std::end(last_modification_times))
@@ -270,7 +284,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                 if (!startsWith(key, config_settings.external_config))
                 {
                     if (!startsWith(key, "comment") && !startsWith(key, "include_from"))
-                        LOG_WARNING(log, config_path << ": unknown node in file: '" << key << "', expected '" << config_settings.external_config << "'");
+                        LOG_FMT_WARNING(log, "{}: unknown node in file: '{}', expected '{}'", config_path, key, config_settings.external_config);
                     continue;
                 }
 
@@ -279,7 +293,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                     name = config->getString(key + "." + config_settings.external_name);
                     if (name.empty())
                     {
-                        LOG_WARNING(log, config_path << ": " + config_settings.external_name + " name cannot be empty");
+                        LOG_FMT_WARNING(log, "{}: {} name cannot be empty", config_path, config_settings.external_name);
                         continue;
                     }
 
@@ -288,7 +302,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
 
                     decltype(loadable_objects.begin()) object_it;
                     {
-                        std::lock_guard<std::mutex> lock{map_mutex};
+                        std::lock_guard lock{map_mutex};
                         object_it = loadable_objects.find(name);
                     }
 
@@ -324,7 +338,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                         }
                     }
 
-                    const std::lock_guard<std::mutex> lock{map_mutex};
+                    const std::lock_guard lock{map_mutex};
 
                     /// add new loadable object or update an existing version
                     if (object_it == std::end(loadable_objects))
@@ -347,7 +361,7 @@ void ExternalLoader::reloadFromConfigFile(const std::string & config_path, const
                         /// If the loadable object could not load data or even failed to initialize from the config.
                         /// - all the same we insert information into the `loadable_objects`, with the zero pointer `loadable`.
 
-                        const std::lock_guard<std::mutex> lock{map_mutex};
+                        const std::lock_guard lock{map_mutex};
 
                         const auto exception_ptr = std::current_exception();
                         const auto loadable_it = loadable_objects.find(name);
@@ -378,14 +392,14 @@ void ExternalLoader::reload(const std::string & name)
     reloadFromConfigFiles(true, true, name);
 
     /// Check that specified object was loaded
-    const std::lock_guard<std::mutex> lock{map_mutex};
+    const std::lock_guard lock{map_mutex};
     if (!loadable_objects.count(name))
         throw Exception("Failed to load " + object_name + " '" + name + "' during the reload process", ErrorCodes::BAD_ARGUMENTS);
 }
 
 ExternalLoader::LoadablePtr ExternalLoader::getLoadableImpl(const std::string & name, bool throw_on_error) const
 {
-    const std::lock_guard<std::mutex> lock{map_mutex};
+    const std::lock_guard lock{map_mutex};
 
     const auto it = loadable_objects.find(name);
     if (it == std::end(loadable_objects))

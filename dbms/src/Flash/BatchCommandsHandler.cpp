@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashMetrics.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/CoprocessorHandler.h>
@@ -46,7 +60,7 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
         SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_cop).Decrement(); });
 
         const auto & cop_req = req.coprocessor();
-        auto cop_resp = resp.mutable_coprocessor();
+        auto * cop_resp = resp.mutable_coprocessor();
 
         auto [context, status] = batch_commands_context.db_context_creation_func(&batch_commands_context.grpc_server_context);
         if (!status.ok())
@@ -55,7 +69,7 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
             return;
         }
 
-        CoprocessorContext cop_context(context, cop_req.context(), batch_commands_context.grpc_server_context);
+        CoprocessorContext cop_context(*context, cop_req.context(), batch_commands_context.grpc_server_context);
         CoprocessorHandler cop_handler(cop_context, &cop_req, cop_resp);
 
         ret = cop_handler.execute();
@@ -72,10 +86,10 @@ grpc::Status BatchCommandsHandler::execute()
     /// Shortcut for only one request by not going to thread pool.
     if (request.requests_size() == 1)
     {
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling the only batch command in place.");
+        LOG_FMT_DEBUG(log, "Handling the only batch command in place.");
 
         const auto & req = request.requests(0);
-        auto resp = response.add_responses();
+        auto * resp = response.add_responses();
         response.add_request_ids(request.request_ids(0));
         auto ret = grpc::Status::OK;
         handleCommandJob(req, *resp, ret)();
@@ -87,9 +101,11 @@ grpc::Status BatchCommandsHandler::execute()
     size_t max_threads = settings.batch_commands_threads ? static_cast<size_t>(settings.batch_commands_threads)
                                                          : static_cast<size_t>(settings.max_threads);
 
-    LOG_DEBUG(
+    LOG_FMT_DEBUG(
         log,
-        __PRETTY_FUNCTION__ << ": Handling " << request.requests_size() << " batch commands using " << max_threads << " threads.");
+        "Handling {} batch commands using {} threads.",
+        request.requests_size(),
+        max_threads);
 
     ThreadPool thread_pool(max_threads);
 
@@ -99,7 +115,7 @@ grpc::Status BatchCommandsHandler::execute()
 
     for (const auto & req : request.requests())
     {
-        auto resp = response.add_responses();
+        auto * resp = response.add_responses();
         response.add_request_ids(request.request_ids(i++));
         rets.emplace_back(grpc::Status::OK);
 

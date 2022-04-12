@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Config/ConfigProcessor.h>
 #include <cxxabi.h>
 #include <daemon/BaseDaemon.h>
@@ -11,8 +25,17 @@
 #include <sys/types.h>
 
 #if USE_UNWIND
+#ifndef USE_LLVM_LIBUNWIND
 #define UNW_LOCAL_ONLY
+#endif
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextern-c-compat"
+#endif
 #include <libunwind.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #endif
 
 #ifdef __APPLE__
@@ -25,6 +48,7 @@
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
+#include <Flash/Mpp/getMPPTaskTracingLog.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
@@ -36,6 +60,7 @@
 #include <Poco/Exception.h>
 #include <Poco/Ext/LevelFilterChannel.h>
 #include <Poco/Ext/ReloadableSplitterChannel.h>
+#include <Poco/Ext/SourceFilterChannel.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Poco/Ext/TiFlashLogFileChannel.h>
 #include <Poco/File.h>
@@ -67,6 +92,9 @@
 #include <sstream>
 #include <typeinfo>
 
+#ifdef TIFLASH_LLVM_COVERAGE
+extern "C" int __llvm_profile_write_file(void);
+#endif
 
 using Poco::AutoPtr;
 using Poco::ConsoleChannel;
@@ -76,7 +104,6 @@ using Poco::Logger;
 using Poco::Message;
 using Poco::Path;
 using Poco::Util::AbstractConfiguration;
-
 
 constexpr char BaseDaemon::DEFAULT_GRAPHITE_CONFIG_NAME[];
 
@@ -143,7 +170,14 @@ static void call_default_signal_handler(int sig)
 
 
 using ThreadNumber = decltype(Poco::ThreadNumber::get());
-static const size_t buf_size = sizeof(int) + sizeof(siginfo_t) + sizeof(ucontext_t) + sizeof(ThreadNumber);
+static const size_t buf_size
+    = sizeof(int)
+    + sizeof(siginfo_t)
+    + sizeof(ucontext_t)
+#if USE_UNWIND
+    + sizeof(unw_context_t)
+#endif
+    + sizeof(ThreadNumber);
 
 using signal_function = void(int, siginfo_t *, void *);
 
@@ -180,16 +214,28 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
     char buf[buf_size];
     DB::WriteBufferFromFileDescriptor out(signal_pipe.write_fd, buf_size, buf);
 
+#if USE_UNWIND
+    // different arch, different unwinder will have different definition for unwind
+    // context; therefore, we catpure unw_context_t instead of ucontext_t
+    unw_context_t unw_context;
+    unw_getcontext(&unw_context);
+#endif
+
     DB::writeBinary(sig, out);
     DB::writePODBinary(*info, out);
     DB::writePODBinary(*reinterpret_cast<const ucontext_t *>(context), out);
+#if USE_UNWIND
+    DB::writePODBinary(unw_context, out);
+#endif
     DB::writeBinary(Poco::ThreadNumber::get(), out);
 
     out.next();
 
     /// The time that is usually enough for separate thread to print info into log.
     ::sleep(10);
-
+#ifdef TIFLASH_LLVM_COVERAGE
+    __llvm_profile_write_file();
+#endif
     call_default_signal_handler(sig);
 }
 
@@ -197,28 +243,22 @@ static void faultSignalHandler(int sig, siginfo_t * info, void * context)
 static bool already_printed_stack_trace = false;
 
 #if USE_UNWIND
-size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, ucontext_t & context)
+size_t backtraceLibUnwind(void ** out_frames, size_t max_frames, unw_context_t & unw_context)
 {
     if (already_printed_stack_trace)
         return 0;
 
     unw_cursor_t cursor;
 
-#ifdef __aarch64__
-    // translate context for aarch64
-    unw_context_t unw_context;
-    unw_context.uc_flags = context.uc_flags;
-    unw_context.uc_link = context.uc_link;
-    unw_context.uc_stack = context.uc_stack;
-    unw_context.uc_sigmask = context.uc_sigmask;
-    std::memcpy(&unw_context.uc_mcontext, &context.uc_mcontext, sizeof(unw_context.uc_mcontext));
-    unw_context_t * context_ptr = &unw_context;
-#else
-    ucontext_t * context_ptr = &context;
-#endif
-
-    if (unw_init_local2(&cursor, context_ptr, UNW_INIT_SIGNAL_FRAME) < 0)
+#ifdef USE_LLVM_LIBUNWIND
+    // LLVM does not require UNW_INIT_SIGNAL_FRAME (assuming that signal frame CFIs are set correctly)
+    // see https://lists.llvm.org/pipermail/llvm-dev/2021-December/154419.html
+    if (unw_init_local(&cursor, &unw_context) < 0)
         return 0;
+#else
+    if (unw_init_local2(&cursor, &unw_context, UNW_INIT_SIGNAL_FRAME) < 0)
+        return 0;
+#endif
 
     size_t i = 0;
     for (; i < max_frames; ++i)
@@ -299,13 +339,22 @@ public:
             {
                 siginfo_t info;
                 ucontext_t context;
+#if USE_UNWIND
+                unw_context_t unw_context;
+#endif
                 ThreadNumber thread_num;
 
                 DB::readPODBinary(info, in);
                 DB::readPODBinary(context, in);
+#if USE_UNWIND
+                DB::readPODBinary(unw_context, in);
+#endif
                 DB::readBinary(thread_num, in);
-
+#if USE_UNWIND
+                onFault(sig, info, context, unw_context, thread_num);
+#else
                 onFault(sig, info, context, thread_num);
+#endif
             }
         }
     }
@@ -317,15 +366,16 @@ private:
 private:
     void onTerminate(const std::string & message, ThreadNumber thread_num) const
     {
-        LOG_ERROR(log, "(from thread " << thread_num << ") " << message);
+        LOG_FMT_ERROR(log, "(from thread {}) {}", thread_num, message);
     }
-
+#if USE_UNWIND
+    void onFault(int sig, siginfo_t & info, ucontext_t & context, unw_context_t & unw_context, ThreadNumber thread_num) const
+#else
     void onFault(int sig, siginfo_t & info, ucontext_t & context, ThreadNumber thread_num) const
+#endif
     {
-        LOG_ERROR(log, "########################################");
-        LOG_ERROR(log, "(from thread " << thread_num << ") "
-                                       << "Received signal " << strsignal(sig) << " (" << sig << ")"
-                                       << ".");
+        LOG_FMT_ERROR(log, "########################################");
+        LOG_FMT_ERROR(log, "(from thread {}) Received signal {}({}).", thread_num, strsignal(sig), sig);
 
         void * caller_address = nullptr;
 
@@ -355,7 +405,7 @@ private:
             if (nullptr == info.si_addr)
                 LOG_ERROR(log, "Address: NULL pointer.");
             else
-                LOG_ERROR(log, "Address: " << info.si_addr);
+                LOG_FMT_ERROR(log, "Address: {}", info.si_addr);
 
 #if defined(__x86_64__) && !defined(__FreeBSD__) && !defined(__APPLE__)
             if ((err_mask & 0x02))
@@ -486,66 +536,38 @@ private:
         if (already_printed_stack_trace)
             return;
 
-        static const int max_frames = 50;
+        static constexpr size_t max_frames = 50;
+        size_t frames_size = 0;
         void * frames[max_frames];
 
 #if USE_UNWIND
-        int frames_size = backtraceLibUnwind(frames, max_frames, context);
-
-        if (frames_size)
-        {
+        frames_size = backtraceLibUnwind(frames, max_frames, unw_context);
+        UNUSED(caller_address);
 #else
         /// No libunwind means no backtrace, because we are in a different thread from the one where the signal happened.
         /// So at least print the function where the signal happened.
         if (caller_address)
         {
             frames[0] = caller_address;
-            int frames_size = 1;
+            frames_size = 1;
+        }
 #endif
 
-            char ** symbols = backtrace_symbols(frames, frames_size);
+        DB::FmtBuffer output;
 
-            if (!symbols)
-            {
-                if (caller_address)
-                    LOG_ERROR(log, "Caller address: " << caller_address);
-            }
-            else
-            {
-                for (int i = 0; i < frames_size; ++i)
-                {
-                    /// Perform demangling of names. Name is in parentheses, before '+' character.
-
-                    char * name_start = nullptr;
-                    char * name_end = nullptr;
-                    char * demangled_name = nullptr;
-                    int status = 0;
-
-                    if (nullptr != (name_start = strchr(symbols[i], '('))
-                        && nullptr != (name_end = strchr(name_start, '+')))
-                    {
-                        ++name_start;
-                        *name_end = '\0';
-                        demangled_name = abi::__cxa_demangle(name_start, 0, 0, &status);
-                        *name_end = '+';
-                    }
-
-                    std::stringstream res;
-
-                    res << i << ". ";
-
-                    if (nullptr != demangled_name && 0 == status)
-                    {
-                        res.write(symbols[i], name_start - symbols[i]);
-                        res << demangled_name << name_end;
-                    }
-                    else
-                        res << symbols[i];
-
-                    LOG_ERROR(log, res.rdbuf());
-                }
-            }
+        for (size_t f = 0; f < frames_size; ++f)
+        {
+            output.append("\n");
+            auto demangle_func = [](const char * name) {
+                int status = 0;
+                // __cxa_demangle will leak memory; but we are failing anyway
+                // freeing memory may increase possibilities to trigger other errors
+                auto * result = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+                return std::pair<const char *, int>{result, status};
+            };
+            StackTrace::addr2line(demangle_func, output, frames[f]);
         }
+        LOG_ERROR(log, output.toString());
     }
 };
 
@@ -577,7 +599,7 @@ static void terminate_handler()
             int status = -1;
             char * dem = nullptr;
 
-            dem = abi::__cxa_demangle(name, 0, 0, &status);
+            dem = abi::__cxa_demangle(name, nullptr, nullptr, &status);
 
             log << "Terminate called after throwing an instance of " << (status == 0 ? dem : name) << std::endl;
 
@@ -652,7 +674,7 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     }
     catch (...)
     {
-        LOG_WARNING(logger, __PRETTY_FUNCTION__ << ": when creating " << path << ", " << DB::getCurrentExceptionMessage(true));
+        LOG_FMT_WARNING(logger, "when creating {}, {}", path, DB::getCurrentExceptionMessage(true));
     }
     return false;
 }
@@ -735,7 +757,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
 
     bool is_daemon = config.getBool("application.runAsDaemon", true);
 
-    // Split log and error log.
+    // Split log, error log and tracing log.
     Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
 
     auto log_level = normalize(config.getString("logger.level", "debug"));
@@ -786,6 +808,32 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         level->setChannel(errorlog);
         split->addChannel(level);
         errorlog->open();
+    }
+
+    const auto tracing_log_path = config.getString("logger.tracing_log", "");
+    if (!tracing_log_path.empty())
+    {
+        createDirectory(tracing_log_path);
+        std::cerr << "Logging tracing log to " << tracing_log_path << std::endl;
+        /// to filter the tracing log.
+        Poco::AutoPtr<Poco::SourceFilterChannel> source = new Poco::SourceFilterChannel;
+        source->setSource(DB::tracing_log_source);
+        Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
+        pf->setProperty("times", "local");
+        Poco::AutoPtr<FormattingChannel> tracing_log = new FormattingChannel(pf);
+        tracing_log_file = new Poco::TiFlashLogFileChannel;
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(tracing_log_path).absolute().toString());
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_ROTATION, config.getRawString("logger.size", "100M"));
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_TIMES, "local");
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_ARCHIVE, "timestamp");
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_COMPRESS, /*config.getRawString("logger.compress", "true")*/ "true");
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
+        tracing_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
+        tracing_log->setChannel(tracing_log_file);
+        source->setChannel(tracing_log);
+        split->addChannel(source);
+        tracing_log->open();
     }
 
     /// "dynamic_layer_selection" is needed only for Yandex.Metrika, that share part of ClickHouse code.
@@ -849,8 +897,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     config.keys("logger.levels", levels);
 
     if (!levels.empty())
-        for (AbstractConfiguration::Keys::iterator it = levels.begin(); it != levels.end(); ++it)
-            Logger::get(*it).setLevel(config.getString("logger.levels." + *it, "trace"));
+        for (auto & level : levels)
+            Logger::get(level).setLevel(config.getString("logger.levels." + level, "trace"));
 }
 
 
@@ -860,6 +908,8 @@ void BaseDaemon::closeLogs()
         log_file->close();
     if (error_log_file)
         error_log_file->close();
+    if (tracing_log_file)
+        tracing_log_file->close();
 
     if (!log_file)
         logger().warning("Logging to console but received signal to close log file (ignoring).");
@@ -879,7 +929,7 @@ void BaseDaemon::initialize(Application & self)
         /// Test: -- --1=1 --1=2 --3 5 7 8 -9 10 -11=12 14= 15== --16==17 --=18 --19= --20 21 22 --23 --24 25 --26 -27 28 ---29=30 -- ----31 32 --33 3-4
         Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
         std::string key;
-        for (auto & arg : argv())
+        for (const auto & arg : argv())
         {
             auto key_start = arg.find_first_not_of('-');
             auto pos_minus = arg.find('-');
@@ -1080,7 +1130,7 @@ void BaseDaemon::initialize(Application & self)
                         throw Poco::Exception("Cannot set signal handler.");
 
                 for (auto signal : signals)
-                    if (sigaction(signal, &sa, 0))
+                    if (sigaction(signal, &sa, nullptr))
                         throw Poco::Exception("Cannot set signal handler.");
             }
         };
@@ -1119,7 +1169,7 @@ void BaseDaemon::handleNotification(Poco::TaskFailedNotification * _tfn)
     task_failed = true;
     AutoPtr<Poco::TaskFailedNotification> fn(_tfn);
     Logger * lg = &(logger());
-    LOG_ERROR(lg, "Task '" << fn->task()->name() << "' failed. Daemon is shutting down. Reason - " << fn->reason().displayText());
+    LOG_FMT_ERROR(lg, "Task '{}' failed. Daemon is shutting down. Reason - {}", fn->task()->name(), fn->reason().displayText());
     ServerApplication::terminate();
 }
 
@@ -1147,6 +1197,13 @@ void BaseDaemon::defineOptions(Poco::Util::OptionSet & _options)
             .repeatable(false)
             .argument("<file>")
             .binding("logger.errorlog"));
+
+    _options.addOption(
+        Poco::Util::Option("tracing-log-file", "T", "use given log file for mpp task tracing only")
+            .required(false)
+            .repeatable(false)
+            .argument("<file>")
+            .binding("logger.tracing_log"));
 
     _options.addOption(
         Poco::Util::Option("pid-file", "P", "use given pidfile")
@@ -1239,7 +1296,7 @@ void BaseDaemon::handleSignal(int signal_id)
 void BaseDaemon::onInterruptSignals(int signal_id)
 {
     is_cancelled = true;
-    LOG_INFO(&logger(), "Received termination signal (" << strsignal(signal_id) << ")");
+    LOG_FMT_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id));
 
     if (sigint_signals_counter >= 2)
     {

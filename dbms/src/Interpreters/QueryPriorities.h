@@ -1,23 +1,37 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <map>
-#include <mutex>
-#include <condition_variable>
-#include <memory>
-#include <chrono>
 #include <Common/CurrentMetrics.h>
 #include <Common/Stopwatch.h>
+
+#include <chrono>
+#include <condition_variable>
+#include <map>
+#include <memory>
+#include <mutex>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric QueryPreempted;
+extern const Metric QueryPreempted;
 }
 
 
 namespace DB
 {
-
 /** Implements query priorities in very primitive way.
   * Allows to freeze query execution if at least one query of higher priority is executed.
   *
@@ -60,7 +74,7 @@ private:
         std::chrono::nanoseconds cur_timeout = timeout;
         Stopwatch watch(CLOCK_MONOTONIC_COARSE);
 
-        std::unique_lock<std::mutex> lock(mutex);
+        std::unique_lock lock(mutex);
 
         while (true)
         {
@@ -104,12 +118,14 @@ public:
 
     public:
         HandleImpl(QueryPriorities & parent_, QueryPriorities::Container::value_type & value_)
-            : parent(parent_), value(value_) {}
+            : parent(parent_)
+            , value(value_)
+        {}
 
         ~HandleImpl()
         {
             {
-                std::lock_guard<std::mutex> lock(parent.mutex);
+                std::lock_guard lock(parent.mutex);
                 --value.second;
             }
             parent.condvar.notify_all();
@@ -132,11 +148,11 @@ public:
         if (0 == priority)
             return {};
 
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         auto it = container.emplace(priority, 0).first;
         ++it->second;
         return std::make_shared<HandleImpl>(*this, *it);
     }
 };
 
-}
+} // namespace DB

@@ -1,17 +1,33 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Common/RecyclableBuffer.h>
+#include <Common/MPMCQueue.h>
+#include <Common/ThreadManager.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <kvproto/mpp.pb.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <future>
 #include <mutex>
 #include <thread>
 
@@ -19,10 +35,6 @@ namespace DB
 {
 struct ReceivedMessage
 {
-    ReceivedMessage()
-    {
-        packet = std::make_shared<mpp::MPPDataPacket>();
-    }
     std::shared_ptr<mpp::MPPDataPacket> packet;
     size_t source_index = 0;
     String req_info;
@@ -36,7 +48,7 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    Int64 rows;
+    DecodeDetail decode_detail;
 
     ExchangeReceiverResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
@@ -51,7 +63,6 @@ struct ExchangeReceiverResult
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
-        , rows(0)
     {}
 
     ExchangeReceiverResult()
@@ -73,34 +84,66 @@ class ExchangeReceiverBase
 {
 public:
     static constexpr bool is_streaming_reader = true;
+    static constexpr auto name = "ExchangeReceiver";
 
 public:
     ExchangeReceiverBase(
         std::shared_ptr<RPCContext> rpc_context_,
-        const ::tipb::ExchangeReceiver & exc,
-        const ::mpp::TaskMeta & meta,
+        size_t source_num_,
         size_t max_streams_,
-        const LogWithPrefixPtr & log_);
+        const String & req_id,
+        const String & executor_id);
 
     ~ExchangeReceiverBase();
 
     void cancel();
 
+    void close();
+
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    ExchangeReceiverResult nextResult(std::queue<Block> & block_queue, const DataTypes & expected_types);
+    ExchangeReceiverResult nextResult(
+        std::queue<Block> & block_queue,
+        const Block & header);
 
-    void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
+    size_t getSourceNum() const { return source_num; }
 
-    Int64 decodeChunks(std::shared_ptr<ReceivedMessage> & recv_msg, std::queue<Block> & block_queue, const DataTypes & expected_types);
+    int computeNewThreadCount() const { return thread_count; }
 
-    size_t getSourceNum() { return source_num; }
-    String getName() { return "ExchangeReceiver"; }
+    void collectNewThreadCount(int & cnt)
+    {
+        if (!collected)
+        {
+            collected = true;
+            cnt += computeNewThreadCount();
+        }
+    }
+
+    void resetNewThreadCountCompute()
+    {
+        collected = false;
+    }
 
 private:
-    void setUpConnection();
+    using Request = typename RPCContext::Request;
 
-    void readLoop(size_t source_index);
+    void setUpConnection();
+    void readLoop(const Request & req);
+    void reactor(const std::vector<Request> & async_requests);
+
+    bool setEndState(ExchangeReceiverState new_state);
+    ExchangeReceiverState getState();
+
+    DecodeDetail decodeChunks(
+        const std::shared_ptr<ReceivedMessage> & recv_msg,
+        std::queue<Block> & block_queue,
+        const Block & header);
+
+
+    void connectionDone(
+        bool meet_error,
+        const String & local_err_msg,
+        const LoggerPtr & log);
 
     std::shared_ptr<RPCContext> rpc_context;
 
@@ -110,18 +153,21 @@ private:
     const size_t max_streams;
     const size_t max_buffer_size;
 
-    std::vector<std::thread> workers;
+    std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
+    MPMCQueue<std::shared_ptr<ReceivedMessage>> msg_channel;
+
     std::mutex mu;
-    std::condition_variable cv;
     /// should lock `mu` when visit these members
-    RecyclableBuffer<ReceivedMessage> res_buffer;
     Int32 live_connections;
     ExchangeReceiverState state;
     String err_msg;
 
-    LogWithPrefixPtr log;
+    LoggerPtr exc_log;
+
+    bool collected = false;
+    int thread_count = 0;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

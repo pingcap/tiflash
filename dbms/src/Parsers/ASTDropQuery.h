@@ -1,6 +1,19 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Parsers/ASTQueryWithOnCluster.h>
 #include <Parsers/ASTQueryWithOutput.h>
 #include <Parsers/IAST.h>
 
@@ -8,11 +21,9 @@
 
 namespace DB
 {
-
-
 /** DROP query
   */
-class ASTDropQuery : public ASTQueryWithOutput, public ASTQueryWithOnCluster
+class ASTDropQuery : public ASTQueryWithOutput
 {
 public:
     bool detach{false}; /// DETACH query, not DROP.
@@ -33,18 +44,6 @@ public:
         return res;
     }
 
-    ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override
-    {
-        auto query_ptr = clone();
-        auto & query = static_cast<ASTDropQuery &>(*query_ptr);
-
-        query.cluster.clear();
-        if (query.database.empty())
-            query.database = new_database;
-
-        return query_ptr;
-    }
-
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {
@@ -52,14 +51,12 @@ protected:
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << (detach ? "DETACH DATABASE " : "DROP DATABASE ")
                           << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "") << backQuoteIfNeed(database);
-            formatOnCluster(settings);
         }
         else
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << (detach ? "DETACH TABLE " : "DROP TABLE ")
                           << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "")
                           << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
-            formatOnCluster(settings);
         }
     }
 };

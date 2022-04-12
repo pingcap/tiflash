@@ -1,72 +1,44 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
-#include <Flash/Coprocessor/RegionInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IQuerySource.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/Types.h>
-#include <tipb/select.pb.h>
-
 
 namespace DB
 {
-/// Query source of a DAG request via gRPC.
-/// This is also an IR of a DAG.
+/// DAGQuerySource is an adaptor between DAG and CH's executeQuery.
+/// TODO: consider to directly use DAGContext instead.
 class DAGQuerySource : public IQuerySource
 {
 public:
-    DAGQuerySource(
-        Context & context_,
-        const RegionInfoMap & regions_,
-        const RegionInfoList & regions_needs_remote_read_,
-        const tipb::DAGRequest & dag_request_,
-        const LogWithPrefixPtr & log_,
-        const bool is_batch_cop_or_mpp_ = false);
+    explicit DAGQuerySource(Context & context_);
 
     std::tuple<std::string, ASTPtr> parse(size_t) override;
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
-    const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
-
-    const std::vector<tipb::FieldType> & getResultFieldTypes() const { return result_field_types; }
-
-    ASTPtr getAST() const { return ast; };
-
-    tipb::EncodeType getEncodeType() const { return encode_type; }
-
     std::shared_ptr<DAGQueryBlock> getRootQueryBlock() const { return root_query_block; }
-    const RegionInfoMap & getRegions() const { return regions; }
-    const RegionInfoList & getRegionsForRemoteRead() const { return regions_for_remote_read; }
-
-    bool isBatchCopOrMpp() const { return is_batch_cop_or_mpp; }
 
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
-    std::string getExecutorNames() const;
-
-protected:
-    void analyzeDAGEncodeType();
-
-protected:
+private:
     Context & context;
-
-    const RegionInfoMap & regions;
-    const RegionInfoList & regions_for_remote_read;
-
-    const tipb::DAGRequest & dag_request;
-
-    std::vector<tipb::FieldType> result_field_types;
-    tipb::EncodeType encode_type;
     std::shared_ptr<DAGQueryBlock> root_query_block;
-    ASTPtr ast;
-
-    const bool is_batch_cop_or_mpp;
-
-    LogWithPrefixPtr log;
 };
 
 } // namespace DB

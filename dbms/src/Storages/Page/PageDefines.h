@@ -1,7 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Defines.h>
 #include <Core/Types.h>
+#include <fmt/format.h>
 
 #include <chrono>
 #include <unordered_set>
@@ -24,13 +39,24 @@ static constexpr UInt64 PAGE_FILE_SMALL_SIZE = 2 * MB;
 static constexpr UInt64 PAGE_FILE_ROLL_SIZE = 128 * MB;
 static constexpr UInt64 PAGE_META_ROLL_SIZE = 2 * MB;
 
+static constexpr UInt64 BLOBFILE_LIMIT_SIZE = 512 * MB;
+static constexpr UInt64 BLOBSTORE_CACHED_FD_SIZE = 100;
+
 static_assert(PAGE_SIZE_STEP >= ((1 << 10) * 16), "PAGE_SIZE_STEP should be at least 16 KB");
 static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP should be power of 2");
 static_assert(PAGE_BUFFER_SIZE % PAGE_SIZE_STEP == 0, "PAGE_BUFFER_SIZE should be dividable by PAGE_SIZE_STEP");
 
+using NamespaceId = UInt64;
+static constexpr NamespaceId MAX_NAMESPACE_ID = UINT64_MAX;
+// just a random namespace id for test, the value doesn't matter
+static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
+
 using PageId = UInt64;
 using PageIds = std::vector<PageId>;
 using PageIdSet = std::unordered_set<PageId>;
+
+using PageIdV3Internal = UInt128;
+using PageIdV3Internals = std::vector<PageIdV3Internal>;
 
 using PageFieldOffset = UInt64;
 using PageFieldOffsets = std::vector<PageFieldOffset>;
@@ -44,6 +70,11 @@ using PageFileIdAndLevel = std::pair<PageFileId, PageFileLevel>;
 using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;
+
+using BlobFileId = UInt32;
+using BlobFileOffset = UInt64;
+static constexpr BlobFileId INVALID_BLOBFILE_ID = 0;
+static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = std::numeric_limits<BlobFileOffset>::max();
 
 struct ByteBuffer
 {
@@ -71,3 +102,19 @@ inline size_t alignPage(size_t n)
 }
 
 } // namespace DB
+
+// https://github.com/fmtlib/fmt/blob/master/doc/api.rst#formatting-user-defined-types
+template <>
+struct fmt::formatter<DB::PageIdV3Internal>
+{
+    constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PageIdV3Internal & value, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "{}.{}", value.high, value.low);
+    }
+};

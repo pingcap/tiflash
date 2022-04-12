@@ -1,15 +1,27 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <AggregateFunctions/AggregateFunctionArray.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
 #include <AggregateFunctions/AggregateFunctionState.h>
-#include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
-#include <Columns/ColumnsNumber.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
-#include <Common/ThreadFactory.h>
-#include <Common/setThreadName.h>
+#include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
+#include <Common/wrapInvocable.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
@@ -60,7 +72,7 @@ AggregatedDataVariants::~AggregatedDataVariants()
         }
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(aggregator->log, __PRETTY_FUNCTION__);
         }
     }
 }
@@ -69,15 +81,15 @@ AggregatedDataVariants::~AggregatedDataVariants()
 void AggregatedDataVariants::convertToTwoLevel()
 {
     if (aggregator)
-        LOG_TRACE(aggregator->log, "Converting aggregation data to two-level.");
+        LOG_FMT_TRACE(aggregator->log, "Converting aggregation data to two-level.");
 
     switch (type)
     {
-#define M(NAME)                                                                               \
-    case Type::NAME:                                                                          \
-        NAME##_two_level = std::make_unique<decltype(NAME##_two_level)::element_type>(*NAME); \
-        NAME.reset();                                                                         \
-        type = Type::NAME##_two_level;                                                        \
+#define M(NAME)                                                                                 \
+    case Type::NAME:                                                                            \
+        NAME##_two_level = std::make_unique<decltype(NAME##_two_level)::element_type>(*(NAME)); \
+        (NAME).reset();                                                                         \
+        type = Type::NAME##_two_level;                                                          \
         break;
 
         APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
@@ -145,9 +157,9 @@ Block Aggregator::Params::getHeader(
 }
 
 
-Aggregator::Aggregator(const Params & params_, const LogWithPrefixPtr & log_)
+Aggregator::Aggregator(const Params & params_, const String & req_id)
     : params(params_)
-    , log(getLogWithPrefix(log_, "Aggregator"))
+    , log(Logger::get("Aggregator", req_id))
     , isCancelled([]() { return false; })
 {
     if (current_memory_tracker)
@@ -452,7 +464,7 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
     AggregatedDataWithoutKey & res,
     size_t rows,
     AggregateFunctionInstruction * aggregate_instructions,
-    Arena * arena) const
+    Arena * arena)
 {
     /// Adding values
     for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
@@ -525,7 +537,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
         result.keys_size = params.keys_size;
         result.key_sizes = key_sizes;
         result.collators = params.collators;
-        LOG_TRACE(log, "Aggregation method: " << result.getMethodName());
+        LOG_FMT_TRACE(log, "Aggregation method: {}", result.getMethodName());
     }
 
     /** Constant columns are not supported directly during aggregation.
@@ -578,9 +590,9 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
     else if (result.type == AggregatedDataVariants::Type::NAME) \
         executeImpl(*result.NAME, result.aggregates_pool, num_rows, key_columns, result.collators, aggregate_functions_instructions.data(), no_more_keys, overflow_row_ptr);
 
-        if (false)
+        if (false) // NOLINT
         {
-        } // NOLINT
+        }
         APPLY_FOR_AGGREGATED_VARIANTS(M)
 #undef M
     }
@@ -632,7 +644,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     CompressedWriteBuffer compressed_buf(file_buf);
     NativeBlockOutputStream block_out(compressed_buf, ClickHouseRevision::get(), getHeader(false));
 
-    LOG_DEBUG(log, "Writing part of aggregation data into temporary file " << path << ".");
+    LOG_FMT_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationWritePart);
 
     /// Flush only two-level data and possibly overflow data.
@@ -641,7 +653,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
         writeToTemporaryFileImpl(data_variants, *data_variants.NAME, block_out);
 
-    if (false)
+    if (false) // NOLINT
     {
     }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
@@ -663,7 +675,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     double uncompressed_bytes = compressed_buf.count();
 
     {
-        std::lock_guard<std::mutex> lock(temporary_files.mutex);
+        std::lock_guard lock(temporary_files.mutex);
         temporary_files.files.emplace_back(std::move(file));
         temporary_files.sum_size_uncompressed += uncompressed_bytes;
         temporary_files.sum_size_compressed += compressed_bytes;
@@ -672,8 +684,21 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     ProfileEvents::increment(ProfileEvents::ExternalAggregationCompressedBytes, compressed_bytes);
     ProfileEvents::increment(ProfileEvents::ExternalAggregationUncompressedBytes, uncompressed_bytes);
 
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Written part in " << elapsed_seconds << " sec., " << rows << " rows, " << (uncompressed_bytes / 1048576.0) << " MiB uncompressed, " << (compressed_bytes / 1048576.0) << " MiB compressed, " << (uncompressed_bytes / rows) << " uncompressed bytes per row, " << (compressed_bytes / rows) << " compressed bytes per row, "
-                              << "compression rate: " << (uncompressed_bytes / compressed_bytes) << " (" << (rows / elapsed_seconds) << " rows/sec., " << (uncompressed_bytes / elapsed_seconds / 1048576.0) << " MiB/sec. uncompressed, " << (compressed_bytes / elapsed_seconds / 1048576.0) << " MiB/sec. compressed)");
+    LOG_FMT_TRACE(
+        log,
+        "Written part in {:.3f} sec., {} rows, "
+        "{:.3f} MiB uncompressed, {:.3f} MiB compressed, {:.3f} uncompressed bytes per row, {:.3f} compressed bytes per row, "
+        "compression rate: {:.3f} ({:.3f} rows/sec., {:.3f} MiB/sec. uncompressed, {:.3f} MiB/sec. compressed)",
+        elapsed_seconds,
+        rows,
+        (uncompressed_bytes / 1048576.0),
+        (compressed_bytes / 1048576.0),
+        (uncompressed_bytes / rows),
+        (compressed_bytes / rows),
+        (uncompressed_bytes / compressed_bytes),
+        (rows / elapsed_seconds),
+        (uncompressed_bytes / elapsed_seconds / 1048576.0),
+        (compressed_bytes / elapsed_seconds / 1048576.0));
 }
 
 
@@ -731,7 +756,7 @@ void Aggregator::writeToTemporaryFileImpl(
     /// `data_variants` will not destroy them in the destructor, they are now owned by ColumnAggregateFunction objects.
     data_variants.aggregator = nullptr;
 
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Max size of temporary block: " << max_temporary_block_size_rows << " rows, " << (max_temporary_block_size_bytes / 1048576.0) << " MiB.");
+    LOG_FMT_TRACE(log, "Max size of temporary block: {} rows, {:.3f} MiB.", max_temporary_block_size_rows, (max_temporary_block_size_bytes / 1048576.0));
 }
 
 
@@ -774,7 +799,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
       */
     bool no_more_keys = false;
 
-    LOG_TRACE(log, "Aggregating");
+    LOG_FMT_TRACE(log, "Aggregating");
 
     Stopwatch watch;
 
@@ -801,9 +826,15 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
 
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = result.sizeWithoutOverflowRow();
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Aggregated. " << src_rows << " to " << rows << " rows (from " << src_bytes / 1048576.0 << " MiB)"
-                              << " in " << elapsed_seconds << " sec."
-                              << " (" << src_rows / elapsed_seconds << " rows/sec., " << src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_FMT_TRACE(
+        log,
+        "Aggregated. {} to {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+        src_rows,
+        rows,
+        src_bytes / 1048576.0,
+        elapsed_seconds,
+        src_rows / elapsed_seconds,
+        src_bytes / elapsed_seconds / 1048576.0);
 }
 
 template <typename Method, typename Table>
@@ -1079,9 +1110,9 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
 #define M(NAME)                                                        \
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
         convertToBlockImpl(*data_variants.NAME, data_variants.NAME->data, key_columns, aggregate_columns, final_aggregate_columns, data_variants.aggregates_pool, final_);
-        if (false)
+        if (false) // NOLINT
         {
-        } // NOLINT
+        }
         APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
 #undef M
         else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -1091,14 +1122,18 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
 }
 
 
-BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const
+BlocksList Aggregator::prepareBlocksAndFillTwoLevel(
+    AggregatedDataVariants & data_variants,
+    bool final,
+    ThreadPoolManager * thread_pool,
+    size_t max_threads) const
 {
 #define M(NAME) \
-    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool);
+    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool, max_threads);
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -1110,9 +1145,9 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
     AggregatedDataVariants & data_variants,
     Method & method,
     bool final,
-    ThreadPool * thread_pool) const
+    ThreadPoolManager * thread_pool,
+    size_t max_threads) const
 {
-    size_t max_threads = thread_pool ? thread_pool->size() : 1;
     if (max_threads > data_variants.aggregates_pools.size())
         for (size_t i = data_variants.aggregates_pools.size(); i < max_threads; ++i)
             data_variants.aggregates_pools.push_back(std::make_shared<Arena>());
@@ -1150,7 +1185,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
                 [thread_id, &converter] { return converter(thread_id); });
 
             if (thread_pool)
-                thread_pool->schedule(ThreadFactory().newJob([thread_id, &tasks] { tasks[thread_id](); }));
+                thread_pool->schedule(true, [thread_id, &tasks] { tasks[thread_id](); });
             else
                 tasks[thread_id]();
         }
@@ -1186,7 +1221,7 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     if (isCancelled())
         return BlocksList();
 
-    LOG_TRACE(log, "Converting aggregated data to blocks");
+    LOG_FMT_TRACE(log, "Converting aggregated data to blocks");
 
     Stopwatch watch;
 
@@ -1196,10 +1231,10 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     if (data_variants.empty())
         return blocks;
 
-    std::unique_ptr<ThreadPool> thread_pool;
+    std::shared_ptr<ThreadPoolManager> thread_pool;
     if (max_threads > 1 && data_variants.sizeWithoutOverflowRow() > 100000 /// TODO Make a custom threshold.
         && data_variants.isTwoLevel()) /// TODO Use the shared thread pool with the `merge` function.
-        thread_pool = std::make_unique<ThreadPool>(max_threads);
+        thread_pool = newThreadPoolManager(max_threads);
 
     if (isCancelled())
         return BlocksList();
@@ -1218,7 +1253,7 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
         if (!data_variants.isTwoLevel())
             blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final));
         else
-            blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, thread_pool.get()));
+            blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, thread_pool.get(), max_threads));
     }
 
     if (!final)
@@ -1241,9 +1276,14 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     }
 
     double elapsed_seconds = watch.elapsedSeconds();
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Converted aggregated data to blocks. " << rows << " rows, " << bytes / 1048576.0 << " MiB"
-                              << " in " << elapsed_seconds << " sec."
-                              << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_FMT_TRACE(
+        log,
+        "Converted aggregated data to blocks. {} rows, {:.3f} MiB in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+        rows,
+        bytes / 1048576.0,
+        elapsed_seconds,
+        rows / elapsed_seconds,
+        bytes / elapsed_seconds / 1048576.0);
 
     return blocks;
 }
@@ -1430,7 +1470,7 @@ public:
       *  which are all either single-level, or are two-level.
       */
     MergingAndConvertingBlockInputStream(const Aggregator & aggregator_, ManyAggregatedDataVariants & data_, bool final_, size_t threads_)
-        : log(getLogWithPrefix(aggregator_.log, "MergingAndConvertingBlockInputStream"))
+        : log(Logger::get("MergingAndConvertingBlockInputStream", aggregator_.log ? aggregator_.log->identifier() : ""))
         , aggregator(aggregator_)
         , data(data_)
         , final(final_)
@@ -1451,12 +1491,12 @@ public:
 
     ~MergingAndConvertingBlockInputStream()
     {
-        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Waiting for threads to finish");
+        LOG_FMT_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Waiting for threads to finish");
 
         /// We need to wait for threads to finish before destructor of 'parallel_merge_data',
         ///  because the threads access 'parallel_merge_data'.
-        if (parallel_merge_data)
-            parallel_merge_data->pool.wait();
+        if (parallel_merge_data && parallel_merge_data->thread_pool)
+            parallel_merge_data->thread_pool->wait();
     }
 
 protected:
@@ -1497,7 +1537,7 @@ protected:
 #define M(NAME)                                                 \
     else if (first->type == AggregatedDataVariants::Type::NAME) \
         aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(data);
-            if (false)
+            if (false) // NOLINT
             {
             }
             APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
@@ -1519,7 +1559,7 @@ protected:
 
             while (true)
             {
-                std::unique_lock<std::mutex> lock(parallel_merge_data->mutex);
+                std::unique_lock lock(parallel_merge_data->mutex);
 
                 if (parallel_merge_data->exception)
                     std::rethrow_exception(parallel_merge_data->exception);
@@ -1547,7 +1587,7 @@ protected:
     }
 
 private:
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
     const Aggregator & aggregator;
     ManyAggregatedDataVariants data;
     bool final;
@@ -1563,10 +1603,10 @@ private:
         std::exception_ptr exception;
         std::mutex mutex;
         std::condition_variable condvar;
-        ThreadPool pool;
+        std::shared_ptr<ThreadPoolManager> thread_pool;
 
         explicit ParallelMergeData(size_t threads)
-            : pool(threads)
+            : thread_pool(newThreadPoolManager(threads))
         {}
     };
 
@@ -1578,8 +1618,7 @@ private:
         if (num >= NUM_BUCKETS)
             return;
 
-        parallel_merge_data->pool.schedule(
-            ThreadFactory(true, "MergingAggregtd").newJob([this, num] { thread(num); }));
+        parallel_merge_data->thread_pool->schedule(true, [this, num] { thread(num); });
     }
 
     void thread(Int32 bucket_num)
@@ -1598,7 +1637,7 @@ private:
             size_t thread_number = static_cast<size_t>(bucket_num) % threads;
             Arena * arena = merged_data.aggregates_pools.at(thread_number).get();
 
-            if (false) {}
+            if (false) {} // NOLINT
 #define M(NAME)                                                                                               \
     else if (method == AggregatedDataVariants::Type::NAME)                                                    \
     {                                                                                                         \
@@ -1609,12 +1648,12 @@ private:
             APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
 
-            std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
+            std::lock_guard lock(parallel_merge_data->mutex);
             parallel_merge_data->ready_blocks[bucket_num] = std::move(block);
         }
         catch (...)
         {
-            std::lock_guard<std::mutex> lock(parallel_merge_data->mutex);
+            std::lock_guard lock(parallel_merge_data->mutex);
             if (!parallel_merge_data->exception)
                 parallel_merge_data->exception = std::current_exception();
         }
@@ -1632,7 +1671,7 @@ std::unique_ptr<IBlockInputStream> Aggregator::mergeAndConvertToBlocks(
     if (data_variants.empty())
         throw Exception("Empty data passed to Aggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
 
-    LOG_TRACE(log, "Merging aggregated data");
+    LOG_FMT_TRACE(log, "Merging aggregated data");
 
     ManyAggregatedDataVariants non_empty_data;
     non_empty_data.reserve(data_variants.size());
@@ -1693,7 +1732,7 @@ ManyAggregatedDataVariants Aggregator::prepareVariantsToMerge(ManyAggregatedData
     if (data_variants.empty())
         throw Exception("Empty data passed to Aggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
 
-    LOG_TRACE(log, "Merging aggregated data");
+    LOG_FMT_TRACE(log, "Merging aggregated data");
 
     ManyAggregatedDataVariants non_empty_data;
     non_empty_data.reserve(data_variants.size());
@@ -1889,7 +1928,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
     BucketToBlocks bucket_to_blocks;
 
     /// Read all the data.
-    LOG_TRACE(log, "Reading blocks of partially aggregated data.");
+    LOG_FMT_TRACE(log, "Reading blocks of partially aggregated data.");
 
     size_t total_input_rows = 0;
     size_t total_input_blocks = 0;
@@ -1903,7 +1942,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
         bucket_to_blocks[block.info.bucket_num].emplace_back(std::move(block));
     }
 
-    LOG_TRACE(log, "Read " << total_input_blocks << " blocks of partially aggregated data, total " << total_input_rows << " rows.");
+    LOG_FMT_TRACE(log, "Read {} blocks of partially aggregated data, total {} rows.", total_input_blocks, total_input_rows);
 
     if (bucket_to_blocks.empty())
         return;
@@ -1946,7 +1985,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
           * That is, the keys in the end can be significantly larger than max_rows_to_group_by.
           */
 
-        LOG_TRACE(log, "Merging partially aggregated two-level data.");
+        LOG_FMT_TRACE(log, "Merging partially aggregated two-level data.");
 
         auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool) {
             for (Block & block : bucket_to_blocks[bucket])
@@ -1958,7 +1997,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
     else if (result.type == AggregatedDataVariants::Type::NAME) \
         mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data.impls[bucket], nullptr, false);
 
-                if (false)
+                if (false) // NOLINT
                 {
                 }
                 APPLY_FOR_VARIANTS_TWO_LEVEL(M)
@@ -1967,10 +2006,10 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             }
         };
 
-        std::unique_ptr<ThreadPool> thread_pool;
+        std::shared_ptr<ThreadPoolManager> thread_pool;
         if (max_threads > 1 && total_input_rows > 100000 /// TODO Make a custom threshold.
             && has_two_level)
-            thread_pool = std::make_unique<ThreadPool>(max_threads);
+            thread_pool = newThreadPoolManager(max_threads);
 
         for (const auto & bucket_blocks : bucket_to_blocks)
         {
@@ -1982,10 +2021,12 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             result.aggregates_pools.push_back(std::make_shared<Arena>());
             Arena * aggregates_pool = result.aggregates_pools.back().get();
 
-            auto task = std::bind(merge_bucket, bucket, aggregates_pool);
+            auto task = [&merge_bucket, bucket, aggregates_pool] {
+                return merge_bucket(bucket, aggregates_pool);
+            };
 
             if (thread_pool)
-                thread_pool->schedule(ThreadFactory().newJob(task));
+                thread_pool->schedule(true, task);
             else
                 task();
         }
@@ -1993,7 +2034,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
         if (thread_pool)
             thread_pool->wait();
 
-        LOG_TRACE(log, "Merged partially aggregated two-level data.");
+        LOG_FMT_TRACE(log, "Merged partially aggregated two-level data.");
     }
 
     if (isCancelled())
@@ -2004,7 +2045,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
 
     if (has_blocks_with_unknown_bucket)
     {
-        LOG_TRACE(log, "Merging partially aggregated single-level data.");
+        LOG_FMT_TRACE(log, "Merging partially aggregated single-level data.");
 
         bool no_more_keys = false;
 
@@ -2032,7 +2073,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             else if (result.type != AggregatedDataVariants::Type::without_key) throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
 
-        LOG_TRACE(log, "Merged partially aggregated single-level data.");
+        LOG_FMT_TRACE(log, "Merged partially aggregated single-level data.");
     }
 }
 
@@ -2045,7 +2086,7 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     auto bucket_num = blocks.front().info.bucket_num;
     bool is_overflows = blocks.front().info.is_overflows;
 
-    LOG_TRACE(log, "Merging partially aggregated blocks (bucket = {})." << bucket_num);
+    LOG_FMT_TRACE(log, "Merging partially aggregated blocks (bucket = {}).", bucket_num);
     Stopwatch watch;
 
     /** If possible, change 'method' to some_hash64. Otherwise, leave as is.
@@ -2114,9 +2155,14 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     size_t rows = block.rows();
     size_t bytes = block.bytes();
     double elapsed_seconds = watch.elapsedSeconds();
-    LOG_TRACE(log, std::fixed << std::setprecision(3) << "Merged partially aggregated blocks. " << rows << " rows, " << bytes / 1048576.0 << " MiB."
-                              << " in " << elapsed_seconds << " sec."
-                              << " (" << rows / elapsed_seconds << " rows/sec., " << bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+    LOG_FMT_TRACE(
+        log,
+        "Merged partially aggregated blocks. {} rows, {:.3f} MiB. in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+        rows,
+        bytes / 1048576.0,
+        elapsed_seconds,
+        rows / elapsed_seconds,
+        bytes / elapsed_seconds / 1048576.0);
 
     block.info.bucket_num = bucket_num;
     return block;
@@ -2198,9 +2244,9 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
         type                                             \
         = AggregatedDataVariants::Type::NAME##_two_level;
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2214,9 +2260,9 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
         num_buckets                                           \
         = data.NAME->data.NUM_BUCKETS;
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2227,9 +2273,9 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
     else if (data.type == AggregatedDataVariants::Type::NAME) \
         convertBlockToTwoLevelImpl(*data.NAME, data.aggregates_pool, key_columns, block, splitted_blocks);
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2276,7 +2322,7 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result)
     if (result.empty())
         return;
 
-    LOG_TRACE(log, "Destroying aggregate states");
+    LOG_FMT_TRACE(log, "Destroying aggregate states");
 
     /// In what data structure is the data aggregated?
     if (result.type == AggregatedDataVariants::Type::without_key || params.overflow_row)
@@ -2286,9 +2332,9 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result)
     else if (result.type == AggregatedDataVariants::Type::NAME) \
         destroyImpl<decltype(result.NAME)::element_type>(result.NAME->data);
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_AGGREGATED_VARIANTS(M)
 #undef M
     else if (result.type != AggregatedDataVariants::Type::without_key) throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);

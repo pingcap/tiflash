@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/StringUtils/StringUtils.h>
 #include <Flash/LogSearch.h>
 #include <Poco/InflatingStream.h>
@@ -156,7 +170,7 @@ static inline bool read_sint(const char * s, size_t n, int & result)
     return true;
 }
 
-bool LogIterator::read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size)
+bool LogIterator::readLevel(size_t limit, const char * s, size_t & level_start, size_t & level_size)
 {
     level_start = 33;
     level_size = 0;
@@ -183,7 +197,7 @@ bool LogIterator::read_level(size_t limit, const char * s, size_t & level_start,
     return true;
 }
 
-bool LogIterator::read_date(
+bool LogIterator::readDate(
     size_t limit,
     const char * s,
     int & y,
@@ -247,7 +261,7 @@ std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
         // If we can reuse prev_time
         entry.time = prev_time_t;
 
-        if (!LogIterator::read_level(line.size(), line.data(), loglevel_s, loglevel_size))
+        if (!LogIterator::readLevel(line.size(), line.data(), loglevel_s, loglevel_size))
         {
             return std::optional<Error>(Error{Error::Type::UNEXPECTED_LOG_HEAD});
         }
@@ -262,8 +276,8 @@ std::optional<LogIterator::Error> LogIterator::readLog(LogEntry & entry)
         int timezone_hour, timezone_min;
         std::tm time{};
         int year, month, day, hour, minute, second;
-        if (LogIterator::read_date(line.size(), line.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
-            && LogIterator::read_level(line.size(), line.data(), loglevel_s, loglevel_size))
+        if (LogIterator::readDate(line.size(), line.data(), year, month, day, hour, minute, second, milli_second, timezone_hour, timezone_min)
+            && LogIterator::readLevel(line.size(), line.data(), loglevel_s, loglevel_size))
         {
             loglevel_start = line.data() + loglevel_s;
         }
@@ -340,7 +354,7 @@ LogIterator::~LogIterator()
 {
     if (err_info.has_value())
     {
-        LOG_DEBUG(log, "LogIterator search end with error " << std::to_string(err_info->second) << " at line " << std::to_string(err_info->first));
+        LOG_FMT_DEBUG(log, "LogIterator search end with error {} at line {}.", err_info->second, err_info->first);
     }
 }
 
@@ -392,16 +406,18 @@ static const std::string gz_suffix = ".gz";
 // if timestamp of log file could be told, return whether it can be filtered.
 bool FilterFileByDatetime(
     const std::string & path,
-    const std::string & error_log_file_prefix,
+    const std::vector<std::string> & ignore_log_file_prefixes,
     const int64_t start_time)
 {
     static const std::string date_format_example = "0000-00-00-00:00:00.000";
     static const std::string raftstore_proxy_date_format_example = "0000-00-00-00:00:00.000000000";
     static const char * date_format = "%d-%d-%d-%d:%d:%d.%d";
 
-    // ignore tiflash error log
-    if (!error_log_file_prefix.empty() && startsWith(path, error_log_file_prefix))
-        return true;
+    for (const auto & ignore_log_file_prefix : ignore_log_file_prefixes)
+    {
+        if (!ignore_log_file_prefix.empty() && startsWith(path, ignore_log_file_prefix))
+            return true;
+    }
     if (endsWith(path, gz_suffix))
     {
         if (path.size() <= gz_suffix.size() + date_format_example.size())

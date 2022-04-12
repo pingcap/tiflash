@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
@@ -28,7 +42,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     RegionPtr region_,
     const SSTViewVec & snaps_,
     const TiFlashRaftProxyHelper * proxy_helper_,
-    const DecodingStorageSchemaSnapshot & schema_snap_,
+    DecodingStorageSchemaSnapshotConstPtr schema_snap_,
     Timestamp gc_safepoint_,
     bool force_decode_,
     TMTContext & tmt_,
@@ -36,7 +50,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     : region(std::move(region_))
     , snaps(snaps_)
     , proxy_helper(proxy_helper_)
-    , schema_snap(schema_snap_)
+    , schema_snap(std::move(schema_snap_))
     , tmt(tmt_)
     , gc_safepoint(gc_safepoint_)
     , expected_size(expected_size_)
@@ -163,10 +177,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
             (*p_process_keys) += 1;
         }
 #ifndef NDEBUG
-        LOG_DEBUG(log,
-                  "Done loading all kvpairs from [CF=" << CFToName(cf) << "] [offset=" << (*p_process_keys)
-                                                       << "] [write_cf_offset=" << process_keys.write_cf << "] ");
-
+        LOG_FMT_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] ", CFToName(cf), (*p_process_keys), process_keys.write_cf);
 #endif
         return;
     }
@@ -179,15 +190,14 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
 #ifndef NDEBUG
-            LOG_DEBUG(log,
-                      "Done loading from [CF=" << CFToName(cf) << "] [offset=" << (*p_process_keys)
-                                               << "] [write_cf_offset=" << process_keys.write_cf << "] [last_loaded_rowkey="
-                                               << Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size())
-                                               << "] [rowkey_to_be_included="
-                                               << (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(),
-                                                                                                    rowkey_to_be_included->size())
-                                                                         : "<end>")
-                                               << "]");
+            LOG_FMT_DEBUG(
+                log,
+                "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] [rowkey_to_be_included={}]",
+                CFToName(cf),
+                (*p_process_keys),
+                process_keys.write_cf,
+                Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size()),
+                (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size()) : "<end>"));
 #endif
             break;
         }
@@ -232,9 +242,7 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, stop decoding.
-            LOG_WARNING(log,
-                        "Got error while reading region committed cache: "
-                            << e.displayText() << ". Stop decoding rows into DTFiles and keep uncommitted data in region.");
+            LOG_FMT_WARNING(log, "Got error while reading region committed cache: {}. Stop decoding rows into DTFiles and keep uncommitted data in region.", e.displayText());
             // Cancel the decoding process.
             // Note that we still need to scan data from CFs and keep them in `region`
             is_decode_cancelled = true;
@@ -250,11 +258,11 @@ Block SSTFilesToBlockInputStream::readCommitedBlock()
 BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     SSTFilesToBlockInputStreamPtr child,
     const ColId pk_column_id_,
-    const DecodingStorageSchemaSnapshot & schema_snap)
+    const DecodingStorageSchemaSnapshotConstPtr & schema_snap)
     : pk_column_id(pk_column_id_)
     , _raw_child(std::move(child))
 {
-    const bool is_common_handle = schema_snap.is_common_handle;
+    const bool is_common_handle = schema_snap->is_common_handle;
     // Initlize `mvcc_compact_stream`
     // First refine the boundary of blocks. Note that the rows decoded from SSTFiles are sorted by primary key asc, timestamp desc
     // (https://github.com/tikv/tikv/blob/v5.0.1/components/txn_types/src/types.rs#L103-L108).
@@ -262,7 +270,7 @@ BoundedSSTFilesToBlockInputStream::BoundedSSTFilesToBlockInputStream( //
     auto stream = std::make_shared<PKSquashingBlockInputStream</*need_extra_sort=*/true>>(_raw_child, pk_column_id, is_common_handle);
     mvcc_compact_stream = std::make_unique<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         stream,
-        *(schema_snap.column_defines),
+        *(schema_snap->column_defines),
         _raw_child->gc_safepoint,
         is_common_handle);
 }

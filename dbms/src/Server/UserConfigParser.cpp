@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Config/ConfigReloader.h>
 #include <Interpreters/Context.h>
 #include <Poco/File.h>
@@ -12,7 +26,6 @@ namespace DB
 {
 namespace UserConfig
 {
-
 static std::string tryGetAbsolutePath(const std::string & config_path, std::string && users_config_path)
 {
     if (users_config_path[0] != '/')
@@ -33,8 +46,11 @@ static std::string tryGetAbsolutePath(const std::string & config_path, std::stri
     return std::move(users_config_path);
 }
 
-ConfigReloaderPtr parseSettings(Poco::Util::LayeredConfiguration & config, const std::string & config_path,
-    std::unique_ptr<Context> & global_context, Poco::Logger * log)
+ConfigReloaderPtr parseSettings(
+    Poco::Util::LayeredConfiguration & config,
+    const std::string & config_path,
+    std::unique_ptr<Context> & global_context,
+    Poco::Logger * log)
 {
     std::string users_config_path = config.getString("users_config", String(1, '\0'));
     bool load_from_main_config_path = true;
@@ -51,12 +67,13 @@ ConfigReloaderPtr parseSettings(Poco::Util::LayeredConfiguration & config, const
     if (load_from_main_config_path)
         users_config_path = config_path;
 
-    LOG_INFO(log, "Set users config file to: " << users_config_path);
+    LOG_FMT_INFO(log, "Set users config file to: {}", users_config_path);
 
     return std::make_unique<ConfigReloader>(
         users_config_path, //
         /*updater=*/[&global_context](ConfigurationPtr cfg) { global_context->setUsersConfig(cfg); },
-        /*already_loaded=*/false, /*name=*/"UserCfgReloader");
+        /*already_loaded=*/false,
+        /*name=*/"UserCfgReloader");
 }
 
 } // namespace UserConfig

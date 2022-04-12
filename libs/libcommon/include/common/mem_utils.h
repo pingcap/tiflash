@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <common/simd.h>
 #include <common/unaligned.h>
@@ -123,6 +137,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqualSSE2(const char * p1
 /// relatively old libc.
 __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, const char * p2, size_t size) noexcept
 {
+    using namespace common;
     if (p1 == p2)
         return true;
 
@@ -133,14 +148,14 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
 #ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
         // for ASIMD target, it is a little bit different because all the compare function is defined in a
         // separate file other than the main loop itself.
-        if (ENABLE_ASIMD && SIMDRuntimeSupport(SIMDFeature::asimd))
+        if (ENABLE_ASIMD && cpu_feature_flags.asimd)
         {
             return _detail::memoryEqualASIMD(p1, p2, size);
         }
 #endif
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-        if (ENABLE_AVX512 && SIMDRuntimeSupport(SIMDFeature::avx512f) && SIMDRuntimeSupport(SIMDFeature::avx512vl))
+        if (ENABLE_AVX512 && cpu_feature_flags.avx512f && cpu_feature_flags.avx512vl)
         {
             if (!_detail::memoryEqualAVX512x4Loop(p1, p2, size))
             {
@@ -150,7 +165,7 @@ __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, co
         }
 #endif
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-        if (ENABLE_AVX && SIMDRuntimeSupport(SIMDFeature::avx2))
+        if (ENABLE_AVX && cpu_feature_flags.avx2)
         {
             if (!_detail::memoryEqualAVX2x4Loop(p1, p2, size))
             {
@@ -223,18 +238,19 @@ __attribute__((always_inline, pure)) inline bool memoryIsByteGeneric(const void 
 __attribute__((always_inline, pure)) inline bool memoryIsByte(const void * data, size_t size, std::byte target)
 {
     using namespace simd_option;
+    using namespace common;
     if (size == 0)
         return true;
 
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-    if (size >= /* sizeof(_m512i) */ 64 && ENABLE_AVX512 && SIMDRuntimeSupport(SIMDFeature::avx512vl)
-        && SIMDRuntimeSupport(SIMDFeature::avx512bw))
+    if (size >= /* sizeof(_m512i) */ 64 && ENABLE_AVX512 && cpu_feature_flags.avx512vl
+        && cpu_feature_flags.avx512bw)
     {
         return _detail::memoryIsByteAVX512(data, size, target);
     }
 #endif
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    if (size >= /* sizeof(_m256i) */ 32 && ENABLE_AVX && SIMDRuntimeSupport(SIMDFeature::avx2))
+    if (size >= /* sizeof(_m256i) */ 32 && ENABLE_AVX && cpu_feature_flags.avx2)
     {
         return _detail::memoryIsByteAVX2(data, size, target);
     }
@@ -246,7 +262,7 @@ __attribute__((always_inline, pure)) inline bool memoryIsByte(const void * data,
     }
 #endif
 #if TIFLASH_ENABLE_ASIMD_SUPPORT
-    if (size > /* sizeof(uint8x16_t) */ 16 && ENABLE_ASIMD && SIMDRuntimeSupport(SIMDFeature::asimd))
+    if (size > /* sizeof(uint8x16_t) */ 16 && ENABLE_ASIMD && cpu_feature_flags.asimd)
     {
         return _detail::memoryIsByteASIMD(data, size, target);
     }

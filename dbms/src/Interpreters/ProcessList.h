@@ -1,30 +1,44 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <map>
+#include <Common/CurrentMetrics.h>
+#include <Common/MemoryTracker.h>
+#include <Common/Stopwatch.h>
+#include <Common/Throttler.h>
+#include <Core/Defines.h>
+#include <DataStreams/BlockIO.h>
+#include <IO/Progress.h>
+#include <Interpreters/ClientInfo.h>
+#include <Interpreters/QueryPriorities.h>
+
+#include <condition_variable>
 #include <list>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <condition_variable>
 #include <unordered_map>
-#include <Common/Stopwatch.h>
-#include <Core/Defines.h>
-#include <IO/Progress.h>
-#include <Common/MemoryTracker.h>
-#include <Interpreters/QueryPriorities.h>
-#include <Interpreters/ClientInfo.h>
-#include <Common/CurrentMetrics.h>
-#include <DataStreams/BlockIO.h>
-#include <Common/Throttler.h>
 
 
 namespace CurrentMetrics
 {
-    extern const Metric Query;
+extern const Metric Query;
 }
 
 namespace DB
 {
-
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
 using Tables = std::map<String, StoragePtr>;
@@ -76,9 +90,9 @@ private:
 
     QueryPriorities::Handle priority_handle;
 
-    CurrentMetrics::Increment num_queries {CurrentMetrics::Query};
+    CurrentMetrics::Increment num_queries{CurrentMetrics::Query};
 
-    std::atomic<bool> is_killed { false };
+    std::atomic<bool> is_killed{false};
 
     /// Be careful using it. For example, queries field could be modified concurrently.
     const ProcessListForUser * user_process_list = nullptr;
@@ -107,8 +121,10 @@ public:
         size_t max_memory_usage,
         double memory_tracker_fault_probability,
         QueryPriorities::Handle && priority_handle_)
-        : query(query_), client_info(client_info_), memory_tracker(max_memory_usage),
-        priority_handle(std::move(priority_handle_))
+        : query(query_)
+        , client_info(client_info_)
+        , memory_tracker(max_memory_usage)
+        , priority_handle(std::move(priority_handle_))
     {
         memory_tracker.setDescription("(for query)");
         current_memory_tracker = &memory_tracker;
@@ -144,7 +160,7 @@ public:
         progress_in.incrementPiecewiseAtomically(value);
 
         if (priority_handle)
-            priority_handle->waitIfNeed(std::chrono::seconds(1));        /// NOTE Could make timeout customizable.
+            priority_handle->waitIfNeed(std::chrono::seconds(1)); /// NOTE Could make timeout customizable.
 
         return !is_killed.load(std::memory_order_relaxed);
     }
@@ -160,16 +176,16 @@ public:
     {
         ProcessInfo res;
 
-        res.query             = query;
-        res.client_info       = client_info;
-        res.elapsed_seconds   = watch.elapsedSeconds();
-        res.is_cancelled      = is_killed.load(std::memory_order_relaxed);
-        res.read_rows         = progress_in.rows;
-        res.read_bytes        = progress_in.bytes;
-        res.total_rows        = progress_in.total_rows;
-        res.written_rows      = progress_out.rows;
-        res.written_bytes     = progress_out.bytes;
-        res.memory_usage      = memory_tracker.get();
+        res.query = query;
+        res.client_info = client_info;
+        res.elapsed_seconds = watch.elapsedSeconds();
+        res.is_cancelled = is_killed.load(std::memory_order_relaxed);
+        res.read_rows = progress_in.rows;
+        res.read_bytes = progress_in.bytes;
+        res.total_rows = progress_in.total_rows;
+        res.written_rows = progress_out.rows;
+        res.written_bytes = progress_out.bytes;
+        res.memory_usage = memory_tracker.get();
         res.peak_memory_usage = memory_tracker.getPeak();
 
         return res;
@@ -226,9 +242,12 @@ private:
 
     ProcessList & parent;
     Container::iterator it;
+
 public:
     ProcessListEntry(ProcessList & parent_, Container::iterator it_)
-        : parent(parent_), it(it_) {}
+        : parent(parent_)
+        , it(it_)
+    {}
 
     ~ProcessListEntry();
 
@@ -243,6 +262,7 @@ public:
 class ProcessList
 {
     friend class ProcessListEntry;
+
 public:
     using Element = ProcessListElement;
     using Entry = ProcessListEntry;
@@ -255,12 +275,12 @@ public:
 
 private:
     mutable std::mutex mutex;
-    mutable std::condition_variable have_space;        /// Number of currently running queries has become less than maximum.
+    mutable std::condition_variable have_space; /// Number of currently running queries has become less than maximum.
 
     /// List of queries
     Container cont;
-    size_t cur_size;        /// In C++03 or C++11 and old ABI, std::list::size is not O(1).
-    size_t max_size;        /// 0 means no limit. Otherwise, when limit exceeded, an exception is thrown.
+    size_t cur_size; /// In C++03 or C++11 and old ABI, std::list::size is not O(1).
+    size_t max_size; /// 0 means no limit. Otherwise, when limit exceeded, an exception is thrown.
 
     /// Stores per-user info: queries, statistics and limits
     UserToQueries user_to_queries;
@@ -278,7 +298,10 @@ private:
     ProcessListElement * tryGetProcessListElement(const String & current_query_id, const String & current_user);
 
 public:
-    ProcessList(size_t max_size_ = 0) : cur_size(0), max_size(max_size_) {}
+    ProcessList(size_t max_size_ = 0)
+        : cur_size(0)
+        , max_size(max_size_)
+    {}
 
     using EntryPtr = std::shared_ptr<ProcessListEntry>;
 
@@ -295,7 +318,7 @@ public:
     /// Get current state of process list.
     Info getInfo() const
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
         Info res;
         res.reserve(cur_size);
@@ -307,13 +330,13 @@ public:
 
     void setMaxSize(size_t max_size_)
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         max_size = max_size_;
     }
 
     enum class CancellationCode
     {
-        NotFound = 0,                     /// already cancelled
+        NotFound = 0, /// already cancelled
         QueryIsNotInitializedYet = 1,
         CancelCannotBeSent = 2,
         CancelSent = 3,
@@ -324,4 +347,4 @@ public:
     CancellationCode sendCancelToQuery(const String & current_query_id, const String & current_user, bool kill = false);
 };
 
-}
+} // namespace DB

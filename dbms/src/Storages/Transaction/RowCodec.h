@@ -1,35 +1,71 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Storages/Transaction/DecodedRow.h>
+#include <Core/Block.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
-
-#include <sparsehash/dense_hash_map>
-#include <sparsehash/dense_hash_set>
 
 namespace DB
 {
-
 using TiDB::ColumnInfo;
 using TiDB::TableInfo;
-
-using ColumnIdToIndex = google::dense_hash_map<ColumnID, size_t>;
-constexpr ColumnID EmptyColumnID = TiDBPkColumnID - 1;
-constexpr ColumnID DeleteColumnID = EmptyColumnID - 1;
-
-// should keep the same way tidb does.
-Field GenDefaultField(const TiDB::ColumnInfo & col_info);
-
-DecodedFields::const_iterator findByColumnID(const Int64 col_id, const DecodedFields & row);
-
-/// TiDB row encode/decode, handles both row format V1/V2, and respects schema (outer should take care of schema mismatching cases).
-DecodedRow * decodeRow(const TiKVValue::Base & raw_value, const TableInfo & table_info, const ColumnIdToIndex & column_lut);
-
-/// Decode an unknown column's raw value (as string) in V2 row format, based on the given column info.
-/// It is used for force decoding when the column info is certain, before which pre-decoding hasn't seen its column info yet thus can only record its raw value.
-Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_info);
 
 /// The following two encode functions are used for testing.
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
+
+bool appendRowToBlock(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    ColumnID pk_handle_id, // when pk is handle, we need skip pk column when decoding value
+    bool force_decode);
+
+bool appendRowV2ToBlock(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    ColumnID pk_handle_id,
+    bool force_decode);
+
+template <bool is_big>
+bool appendRowV2ToBlockImpl(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    ColumnID pk_handle_id,
+    bool force_decode);
+
+bool appendRowV1ToBlock(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    ColumnID pk_handle_id,
+    bool force_decode);
 
 } // namespace DB

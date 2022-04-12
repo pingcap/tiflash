@@ -1,12 +1,23 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <string.h>
-#include <string>
-#include <sstream>
-#include <exception>
 #include <common/DateLUT.h>
+#include <fmt/format.h>
 
-
+#include <exception>
 /** Stores a calendar date in broken-down form (year, month, day-in-month).
   * Could be initialized from date in text form, like '2011-01-01' or from time_t with rounding to date.
   * Also could be initialized from date in text form like '20110101... (only first 8 symbols are used).
@@ -51,8 +62,8 @@ private:
         }
         else
         {
-            m_month = (s[4] -'0') * 10 + (s[5] -'0');
-            m_day = (s[6] - '0')* 10 + (s[7] -'0');
+            m_month = (s[4] - '0') * 10 + (s[5] - '0');
+            m_day = (s[6] - '0') * 10 + (s[7] - '0');
         }
     }
 
@@ -65,13 +76,15 @@ public:
     LocalDate(DayNum day_num)
     {
         const auto & values = DateLUT::instance().getValues(day_num);
-        m_year  = values.year;
+        m_year = values.year;
         m_month = values.month;
-        m_day   = values.day_of_month;
+        m_day = values.day_of_month;
     }
 
     LocalDate(unsigned short year_, unsigned char month_, unsigned char day_)
-        : m_year(year_), m_month(month_), m_day(day_)
+        : m_year(year_)
+        , m_month(month_)
+        , m_day(day_)
     {
     }
 
@@ -85,12 +98,15 @@ public:
         init(data, length);
     }
 
-    LocalDate() : m_year(0), m_month(0), m_day(0)
+    LocalDate()
+        : m_year(0)
+        , m_month(0)
+        , m_day(0)
     {
     }
 
     LocalDate(const LocalDate &) noexcept = default;
-    LocalDate & operator= (const LocalDate &) noexcept = default;
+    LocalDate & operator=(const LocalDate &) noexcept = default;
 
     DayNum getDayNum() const
     {
@@ -111,32 +127,32 @@ public:
     void month(unsigned char x) { m_month = x; }
     void day(unsigned char x) { m_day = x; }
 
-    bool operator< (const LocalDate & other) const
+    bool operator<(const LocalDate & other) const
     {
         return 0 > memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator> (const LocalDate & other) const
+    bool operator>(const LocalDate & other) const
     {
         return 0 < memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator<= (const LocalDate & other) const
+    bool operator<=(const LocalDate & other) const
     {
         return 0 >= memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator>= (const LocalDate & other) const
+    bool operator>=(const LocalDate & other) const
     {
         return 0 <= memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator== (const LocalDate & other) const
+    bool operator==(const LocalDate & other) const
     {
         return 0 == memcmp(this, &other, sizeof(*this));
     }
 
-    bool operator!= (const LocalDate & other) const
+    bool operator!=(const LocalDate & other) const
     {
         return !(*this == other);
     }
@@ -144,14 +160,10 @@ public:
     /// NOTE Inefficient.
     std::string toString(char separator = '-') const
     {
-        std::stringstream ss;
         if (separator)
-            ss << year() << separator << (month() / 10) << (month() % 10)
-                << separator << (day() / 10) << (day() % 10);
+            return fmt::format("{}{}{}{}{}{}{}", year(), separator, month() / 10, month() % 10, separator, day() / 10, day() % 10);
         else
-            ss << year() << (month() / 10) << (month() % 10)
-                << (day() / 10) << (day() % 10);
-        return ss.str();
+            return fmt::format("{}{}{}{}{}", year(), month() / 10, month() % 10, day() / 10, day() % 10);
     }
 };
 

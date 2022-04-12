@@ -1,25 +1,33 @@
-#include <string.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-#include <Common/typeid_cast.h>
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnTuple.h>
 #include <Common/StringUtils/StringUtils.h>
-
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/NestedUtils.h>
-
-#include <Columns/ColumnArray.h>
-#include <Columns/ColumnTuple.h>
-#include <Columns/ColumnConst.h>
-
 #include <Parsers/IAST.h>
+#include <string.h>
 
 
 namespace DB
 {
-
 namespace Nested
 {
-
 std::string concatenateName(const std::string & nested_table_name, const std::string & nested_field_name)
 {
     return nested_table_name + "." + nested_field_name;
@@ -60,7 +68,7 @@ std::pair<std::string, std::string> splitName(const std::string & name)
     if (pos != end)
         return {name, {}};
 
-    return {{ begin, first_end }, { second_begin, end }};
+    return {{begin, first_end}, {second_begin, end}};
 }
 
 
@@ -175,12 +183,11 @@ NamesAndTypesList collect(const NamesAndTypesList & names_and_types)
     }
 
     for (const auto & name_elems : nested)
-        res.emplace_back(name_elems.first, std::make_shared<DataTypeArray>(
-            std::make_shared<DataTypeTuple>(name_elems.second.getTypes(), name_elems.second.getNames())));
+        res.emplace_back(name_elems.first, std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(name_elems.second.getTypes(), name_elems.second.getNames())));
 
     return res;
 }
 
-}
+} // namespace Nested
 
-}
+} // namespace DB

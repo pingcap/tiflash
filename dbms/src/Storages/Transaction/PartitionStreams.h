@@ -1,49 +1,37 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
-
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
 
-/**
- * A snapshot of the table structure of a DeltaTree storage. We use it to decode Raft snapshot
- * data with a consistent table structure.
- * TODO: consider refactoring the table structure related classes
- * Now there are some classes in IStorage/IManageableStorage/DeltaMergeStore level are both
- * related to the table structure. It make applying DDL operations and decoding Raft data
- * more complicated.
- */
-struct DecodingStorageSchemaSnapshot
-{
-    bool is_common_handle = false;
-    TiDB::TableInfo table_info;
-    ColumnsDescription columns;
-    DM::ColumnDefinesPtr column_defines;
-    DM::ColumnDefine original_table_handle_define;
-
-
-    DecodingStorageSchemaSnapshot() = default;
-
-    DecodingStorageSchemaSnapshot(const DecodingStorageSchemaSnapshot &) = delete;
-    DecodingStorageSchemaSnapshot & operator=(const DecodingStorageSchemaSnapshot &) = delete;
-
-    DecodingStorageSchemaSnapshot(DecodingStorageSchemaSnapshot &&) = default;
-    DecodingStorageSchemaSnapshot & operator=(DecodingStorageSchemaSnapshot &&) = default;
-};
-
-std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshot> //
+std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
 
 Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
-    const DecodingStorageSchemaSnapshot & schema_snap,
-    Timestamp gc_safepoint,
-    bool force_decode,
-    TMTContext & tmt);
+                                   const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
+                                   Timestamp gc_safepoint,
+                                   bool force_decode,
+                                   TMTContext & tmt);
 
 } // namespace DB

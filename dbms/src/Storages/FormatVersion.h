@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
@@ -59,6 +73,7 @@ struct StorageFormatVersion
     StableFormat::Version stable;
     DeltaFormat::Version delta;
     PageFormat::Version page;
+    size_t identifier;
 };
 
 inline static const StorageFormatVersion STORAGE_FORMAT_V1 = StorageFormatVersion{
@@ -67,6 +82,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V1 = StorageFormatVersio
     .stable = StableFormat::V1,
     .delta = DeltaFormat::V2,
     .page = PageFormat::V2,
+    .identifier = 1,
 };
 
 inline static const StorageFormatVersion STORAGE_FORMAT_V2 = StorageFormatVersion{
@@ -75,6 +91,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V2 = StorageFormatVersio
     .stable = StableFormat::V1,
     .delta = DeltaFormat::V3, // diff
     .page = PageFormat::V2,
+    .identifier = 2,
 };
 
 inline static const StorageFormatVersion STORAGE_FORMAT_V3 = StorageFormatVersion{
@@ -83,9 +100,10 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V3 = StorageFormatVersio
     .stable = StableFormat::V1,
     .delta = DeltaFormat::V3,
     .page = PageFormat::V2,
+    .identifier = 3,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V2;
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V3;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {

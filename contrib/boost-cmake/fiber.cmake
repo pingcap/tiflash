@@ -1,4 +1,4 @@
-set (BOOST_FIBER_LIBRARY_DIR ${ClickHouse_SOURCE_DIR}/contrib/boost/libs/fiber)
+set (BOOST_FIBER_LIBRARY_DIR ${TiFlash_SOURCE_DIR}/contrib/boost/libs/fiber)
 
 if(WIN32 AND NOT CMAKE_CXX_PLATFORM_ID MATCHES "Cygwin")
   set(_default_target windows)
@@ -73,6 +73,8 @@ add_library(boost_fiber_numa
   ${BOOST_FIBER_NUMA_SOURCES}
   ${BOOST_FIBER_LIBRARY_DIR}/src/numa/algo/work_stealing.cpp
 )
+
+target_include_directories (boost_fiber_numa BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
 add_library(Boost::fiber_numa ALIAS boost_fiber_numa)
 

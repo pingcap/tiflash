@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -15,25 +29,23 @@ extern const int LOGICAL_ERROR;
 UnaryDAGResponseWriter::UnaryDAGResponseWriter(
     tipb::SelectResponse * dag_response_,
     Int64 records_per_chunk_,
-    tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_,
     DAGContext & dag_context_)
-    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_)
+    : DAGResponseWriter(records_per_chunk_, dag_context_)
     , dag_response(dag_response_)
 {
-    if (encode_type == tipb::EncodeType::TypeDefault)
+    if (dag_context.encode_type == tipb::EncodeType::TypeDefault)
     {
-        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
+        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types);
     }
-    else if (encode_type == tipb::EncodeType::TypeChunk)
+    else if (dag_context.encode_type == tipb::EncodeType::TypeChunk)
     {
-        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
+        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types);
     }
-    else if (encode_type == tipb::EncodeType::TypeCHBlock)
+    else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
-        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
+        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
     }
-    dag_response->set_encode_type(encode_type);
+    dag_response->set_encode_type(dag_context.encode_type);
     current_records_num = 0;
 }
 
@@ -70,7 +82,7 @@ void UnaryDAGResponseWriter::finishWrite()
 
 void UnaryDAGResponseWriter::write(const Block & block)
 {
-    if (block.columns() != result_field_types.size())
+    if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
     if (records_per_chunk == -1)
     {

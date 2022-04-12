@@ -1,36 +1,47 @@
-#include <iomanip>
-
-#include <common/logger_useful.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/ReadHelpers.h>
 #include <Interpreters/Quota.h>
+#include <common/logger_useful.h>
 
-#include <set>
+#include <iomanip>
 #include <random>
+#include <set>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int QUOTA_EXPIRED;
-    extern const int QUOTA_DOESNT_ALLOW_KEYS;
-    extern const int UNKNOWN_QUOTA;
-}
+extern const int QUOTA_EXPIRED;
+extern const int QUOTA_DOESNT_ALLOW_KEYS;
+extern const int UNKNOWN_QUOTA;
+} // namespace ErrorCodes
 
 
 template <typename Counter>
 void QuotaValues<Counter>::initFromConfig(const String & config_elem, Poco::Util::AbstractConfiguration & config)
 {
-    queries             = config.getUInt64(config_elem + ".queries",        0);
-    errors              = config.getUInt64(config_elem + ".errors",         0);
-    result_rows         = config.getUInt64(config_elem + ".result_rows",    0);
-    result_bytes        = config.getUInt64(config_elem + ".result_bytes",   0);
-    read_rows           = config.getUInt64(config_elem + ".read_rows",      0);
-    read_bytes          = config.getUInt64(config_elem + ".read_bytes",     0);
+    queries = config.getUInt64(config_elem + ".queries", 0);
+    errors = config.getUInt64(config_elem + ".errors", 0);
+    result_rows = config.getUInt64(config_elem + ".result_rows", 0);
+    result_bytes = config.getUInt64(config_elem + ".result_bytes", 0);
+    read_rows = config.getUInt64(config_elem + ".read_rows", 0);
+    read_bytes = config.getUInt64(config_elem + ".read_bytes", 0);
     execution_time_usec = config.getUInt64(config_elem + ".execution_time", 0) * 1000000ULL;
 }
 
@@ -67,12 +78,12 @@ String QuotaForInterval::toString() const
 
     res << std::fixed << std::setprecision(3)
         << "Interval:       " << LocalDateTime(loaded_rounded_time).toString() << " - " << LocalDateTime(loaded_rounded_time + duration).toString() << ".\n"
-        << "Queries:        " << used.queries         << ".\n"
-        << "Errors:         " << used.errors         << ".\n"
-        << "Result rows:    " << used.result_rows     << ".\n"
-        << "Result bytes:   " << used.result_bytes     << ".\n"
-        << "Read rows:      " << used.read_rows     << ".\n"
-        << "Read bytes:     " << used.read_bytes     << ".\n"
+        << "Queries:        " << used.queries << ".\n"
+        << "Errors:         " << used.errors << ".\n"
+        << "Result rows:    " << used.result_rows << ".\n"
+        << "Result bytes:   " << used.result_bytes << ".\n"
+        << "Read rows:      " << used.read_rows << ".\n"
+        << "Read bytes:     " << used.read_bytes << ".\n"
         << "Execution time: " << used.execution_time_usec / 1000000.0 << " sec.\n";
 
     return res.str();
@@ -131,8 +142,11 @@ void QuotaForInterval::updateTime(time_t current_time)
 }
 
 void QuotaForInterval::check(
-    size_t max_amount, size_t used_amount,
-    const String & quota_name, const String & user_name, const char * resource_name)
+    size_t max_amount,
+    size_t used_amount,
+    const String & quota_name,
+    const String & user_name,
+    const char * resource_name)
 {
     if (max_amount && used_amount > max_amount)
     {
@@ -151,9 +165,9 @@ void QuotaForInterval::check(
             message << duration << " seconds";
 
         message << " has been exceeded. "
-            << resource_name << ": " << used_amount << ", max: " << max_amount << ". "
-            << "Interval will end at " << LocalDateTime(rounded_time.load(std::memory_order_relaxed) + duration).toString() << ". "
-            << "Name of quota template: '" << quota_name << "'.";
+                << resource_name << ": " << used_amount << ", max: " << max_amount << ". "
+                << "Interval will end at " << LocalDateTime(rounded_time.load(std::memory_order_relaxed) + duration).toString() << ". "
+                << "Name of quota template: '" << quota_name << "'.";
 
         throw Exception(message.str(), ErrorCodes::QUOTA_EXPIRED);
     }
@@ -195,7 +209,7 @@ void QuotaForIntervals::setMax(const QuotaForIntervals & quota)
             cont.erase(it++);
     }
 
-    for (auto & x : quota.cont)
+    for (const auto & x : quota.cont)
     {
         if (!cont.count(x.first))
             cont.emplace(x.first, x.second);
@@ -245,7 +259,8 @@ String QuotaForIntervals::toString() const
     std::stringstream res;
 
     for (Container::const_reverse_iterator it = cont.rbegin(); it != cont.rend(); ++it)
-        res << std::endl << it->second.toString();
+        res << std::endl
+            << it->second.toString();
 
     return res.str();
 }
@@ -282,7 +297,7 @@ QuotaForIntervalsPtr Quota::get(const String & quota_key, const String & user_na
 {
     if (!quota_key.empty() && !ignore_key_if_not_keyed && (!is_keyed || keyed_by_ip))
         throw Exception("Quota " + name + " (for user " + user_name + ") doesn't allow client supplied keys.",
-            ErrorCodes::QUOTA_DOESNT_ALLOW_KEYS);
+                        ErrorCodes::QUOTA_DOESNT_ALLOW_KEYS);
 
     /** Quota is calculated separately:
       * - for each IP-address, if 'keyed_by_ip';
@@ -294,10 +309,10 @@ QuotaForIntervalsPtr Quota::get(const String & quota_key, const String & user_na
         keyed_by_ip
             ? ip.toString()
             : (!quota_key.empty()
-                ? quota_key
-                : user_name));
+                   ? quota_key
+                   : user_name));
 
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     Container::iterator it = quota_for_keys.find(quota_key_hashed);
     if (quota_for_keys.end() == it)
@@ -345,4 +360,4 @@ QuotaForIntervalsPtr Quotas::get(const String & name, const String & quota_key, 
     return it->second.get(quota_key, user_name, ip);
 }
 
-}
+} // namespace DB

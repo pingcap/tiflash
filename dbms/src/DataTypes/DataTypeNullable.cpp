@@ -1,26 +1,39 @@
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeFactory.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnNullable.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ConcatReadBuffer.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
-#include <IO/ConcatReadBuffer.h>
 #include <Parsers/IAST.h>
-#include <Common/typeid_cast.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-}
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+} // namespace ErrorCodes
 
 
 DataTypeNullable::DataTypeNullable(const DataTypePtr & nested_data_type_)
@@ -117,7 +130,7 @@ void DataTypeNullable::deserializeWidenBinaryBulkWithMultipleStreams(
     bool position_independent_encoding,
     SubstreamPath & path) const
 {
-    ColumnNullable &col = static_cast<ColumnNullable &>(column);
+    ColumnNullable & col = static_cast<ColumnNullable &>(column);
 
     path.push_back(Substream::NullMap);
     if (auto stream = getter(path))
@@ -143,7 +156,8 @@ void DataTypeNullable::serializeBinary(const IColumn & column, size_t row_num, W
 template <typename CheckForNull, typename DeserializeNested>
 static void safeDeserialize(
     IColumn & column,
-    CheckForNull && check_for_null, DeserializeNested && deserialize_nested)
+    CheckForNull && check_for_null,
+    DeserializeNested && deserialize_nested)
 {
     ColumnNullable & col = static_cast<ColumnNullable &>(column);
 
@@ -170,9 +184,10 @@ static void safeDeserialize(
 
 void DataTypeNullable::deserializeBinary(IColumn & column, ReadBuffer & istr) const
 {
-    safeDeserialize(column,
+    safeDeserialize(
+        column,
         [&istr] { bool is_null = 0; readBinary(is_null, istr); return is_null; },
-        [this, &istr] (IColumn & nested) { nested_data_type->deserializeBinary(nested, istr); } );
+        [this, &istr](IColumn & nested) { nested_data_type->deserializeBinary(nested, istr); });
 }
 
 
@@ -197,9 +212,10 @@ void DataTypeNullable::deserializeTextEscaped(IColumn & column, ReadBuffer & ist
     /// This is not null, surely.
     if (*istr.position() != '\\')
     {
-        safeDeserialize(column,
+        safeDeserialize(
+            column,
             [] { return false; },
-            [this, &istr] (IColumn & nested) { nested_data_type->deserializeTextEscaped(nested, istr); } );
+            [this, &istr](IColumn & nested) { nested_data_type->deserializeTextEscaped(nested, istr); });
     }
     else
     {
@@ -209,9 +225,9 @@ void DataTypeNullable::deserializeTextEscaped(IColumn & column, ReadBuffer & ist
         if (istr.eof())
             throw Exception("Unexpected end of stream, while parsing value of Nullable type, after backslash", ErrorCodes::CANNOT_READ_ALL_DATA);
 
-        safeDeserialize(column,
-            [&istr]
-            {
+        safeDeserialize(
+            column,
+            [&istr] {
                 if (*istr.position() == 'N')
                 {
                     ++istr.position();
@@ -219,8 +235,7 @@ void DataTypeNullable::deserializeTextEscaped(IColumn & column, ReadBuffer & ist
                 }
                 return false;
             },
-            [this, &istr] (IColumn & nested)
-            {
+            [this, &istr](IColumn & nested) {
                 if (istr.position() != istr.buffer().begin())
                 {
                     /// We could step back to consume backslash again.
@@ -257,9 +272,10 @@ void DataTypeNullable::serializeTextQuoted(const IColumn & column, size_t row_nu
 
 void DataTypeNullable::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const
 {
-    safeDeserialize(column,
+    safeDeserialize(
+        column,
         [&istr] { return checkStringByFirstCharacterAndAssertTheRestCaseInsensitive("NULL", istr); },
-        [this, &istr] (IColumn & nested) { nested_data_type->deserializeTextQuoted(nested, istr); } );
+        [this, &istr](IColumn & nested) { nested_data_type->deserializeTextQuoted(nested, istr); });
 }
 
 void DataTypeNullable::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -274,9 +290,10 @@ void DataTypeNullable::serializeTextCSV(const IColumn & column, size_t row_num, 
 
 void DataTypeNullable::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const
 {
-    safeDeserialize(column,
+    safeDeserialize(
+        column,
         [&istr] { return checkStringByFirstCharacterAndAssertTheRest("\\N", istr); },
-        [this, delimiter, &istr] (IColumn & nested) { nested_data_type->deserializeTextCSV(nested, istr, delimiter); } );
+        [this, delimiter, &istr](IColumn & nested) { nested_data_type->deserializeTextCSV(nested, istr, delimiter); });
 }
 
 void DataTypeNullable::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -301,9 +318,10 @@ void DataTypeNullable::serializeTextJSON(const IColumn & column, size_t row_num,
 
 void DataTypeNullable::deserializeTextJSON(IColumn & column, ReadBuffer & istr) const
 {
-    safeDeserialize(column,
+    safeDeserialize(
+        column,
         [&istr] { return checkStringByFirstCharacterAndAssertTheRest("null", istr); },
-        [this, &istr] (IColumn & nested) { nested_data_type->deserializeTextJSON(nested, istr); } );
+        [this, &istr](IColumn & nested) { nested_data_type->deserializeTextJSON(nested, istr); });
 }
 
 void DataTypeNullable::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -365,4 +383,4 @@ DataTypePtr removeNullable(const DataTypePtr & type)
     return type;
 }
 
-}
+} // namespace DB

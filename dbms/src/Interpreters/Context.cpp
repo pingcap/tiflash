@@ -1,6 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -15,8 +30,6 @@
 #include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
-#include <Interpreters/Cluster.h>
-#include <Interpreters/Compiler.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ExternalDictionaries.h>
@@ -37,11 +50,12 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Storages/BackgroundProcessingPool.h>
-#include <Storages/CompressionSettingsSelector.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -50,6 +64,7 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
+#include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
 #include <map>
@@ -138,9 +153,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
-    /// Rules for selecting the compression settings, depending on the size of the part.
-    mutable std::unique_ptr<CompressionSettingsSelector> compression_settings_selector;
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
@@ -149,6 +161,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
+    DM::GlobalStoragePoolPtr global_storage_pool;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -171,12 +184,6 @@ struct ContextShared
     std::chrono::steady_clock::time_point close_cycle_time = std::chrono::steady_clock::now();
     UInt64 close_cycle = 0;
 
-    /// Clusters for distributed tables
-    /// Initialized on demand (on distributed storages initialization) since Settings should be initialized
-    std::unique_ptr<Clusters> clusters;
-    ConfigurationPtr clusters_config; /// Soteres updated configs
-    mutable std::mutex clusters_mutex; /// Guards clusters and clusters_config
-
     bool shutdown_called = false;
 
     /// Do not allow simultaneous execution of DDL requests on the same table.
@@ -196,7 +203,7 @@ struct ContextShared
 
     Context::ConfigReloadCallback config_reload_callback;
 
-    ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
+    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
     {
         /// TODO: make it singleton (?)
@@ -313,7 +320,7 @@ const ProcessList & Context::getProcessList() const
 }
 
 
-const Databases Context::getDatabases() const
+Databases Context::getDatabases() const
 {
     auto lock = getLock();
     return shared->databases;
@@ -328,7 +335,7 @@ Databases Context::getDatabases()
 
 Context::SessionKey Context::getSessionKey(const String & session_id) const
 {
-    auto & user_name = client_info.current_user;
+    const auto & user_name = client_info.current_user;
 
     if (user_name.empty())
         throw Exception("Empty user name.", ErrorCodes::LOGICAL_ERROR);
@@ -443,7 +450,7 @@ static String resolveDatabase(const String & database_name, const String & curre
 }
 
 
-const DatabasePtr Context::getDatabase(const String & database_name) const
+DatabasePtr Context::getDatabase(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -459,7 +466,7 @@ DatabasePtr Context::getDatabase(const String & database_name)
     return shared->databases[db];
 }
 
-const DatabasePtr Context::tryGetDatabase(const String & database_name) const
+DatabasePtr Context::tryGetDatabase(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -686,7 +693,7 @@ void Context::checkDatabaseAccessRightsImpl(const std::string & database_name) c
         return;
     }
     if (!shared->security_manager->hasAccessToDatabase(client_info.current_user, database_name))
-        throw Exception("Access denied to database " + database_name, ErrorCodes::DATABASE_ACCESS_DENIED);
+        throw Exception(fmt::format("Access denied to database {}", database_name), ErrorCodes::DATABASE_ACCESS_DENIED);
 }
 
 void Context::addDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where)
@@ -772,10 +779,10 @@ void Context::assertTableExists(const String & database_name, const String & tab
 
     Databases::const_iterator it = shared->databases.find(db);
     if (shared->databases.end() == it)
-        throw Exception("Database " + backQuoteIfNeed(db) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
+        throw Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
 
     if (!it->second->isTableExist(*this, table_name))
-        throw Exception("Table " + backQuoteIfNeed(db) + "." + backQuoteIfNeed(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+        throw Exception(fmt::format("Table {}.{} doesn't exist.", backQuoteIfNeed(db), backQuoteIfNeed(table_name)), ErrorCodes::UNKNOWN_TABLE);
 }
 
 
@@ -789,7 +796,7 @@ void Context::assertTableDoesntExist(const String & database_name, const String 
 
     Databases::const_iterator it = shared->databases.find(db);
     if (shared->databases.end() != it && it->second->isTableExist(*this, table_name))
-        throw Exception("Table " + backQuoteIfNeed(db) + "." + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception(fmt::format("Table {}.{} already exists.", backQuoteIfNeed(db), backQuoteIfNeed(table_name)), ErrorCodes::TABLE_ALREADY_EXISTS);
 }
 
 
@@ -802,7 +809,7 @@ void Context::assertDatabaseExists(const String & database_name, bool check_data
         checkDatabaseAccessRightsImpl(db);
 
     if (shared->databases.end() == shared->databases.find(db))
-        throw Exception("Database " + backQuoteIfNeed(db) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
+        throw Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
 }
 
 
@@ -814,7 +821,7 @@ void Context::assertDatabaseDoesntExist(const String & database_name) const
     checkDatabaseAccessRightsImpl(db);
 
     if (shared->databases.end() != shared->databases.find(db))
-        throw Exception("Database " + backQuoteIfNeed(db) + " already exists.", ErrorCodes::DATABASE_ALREADY_EXISTS);
+        throw Exception(fmt::format("Database {} already exists.", backQuoteIfNeed(db)), ErrorCodes::DATABASE_ALREADY_EXISTS);
 }
 
 
@@ -823,7 +830,7 @@ Tables Context::getExternalTables() const
     auto lock = getLock();
 
     Tables res;
-    for (auto & table : external_tables)
+    for (const auto & table : external_tables)
         res[table.first] = table.second.first;
 
     if (session_context && session_context != this)
@@ -855,7 +862,7 @@ StoragePtr Context::getTable(const String & database_name, const String & table_
     Exception exc;
     auto res = getTableImpl(database_name, table_name, &exc);
     if (!res)
-        throw exc;
+        throw Exception(exc);
     return res;
 }
 
@@ -884,7 +891,7 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
     if (shared->databases.end() == it)
     {
         if (exception)
-            *exception = Exception("Database " + backQuoteIfNeed(db) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
+            *exception = Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
         return {};
     }
 
@@ -892,7 +899,7 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
     if (!table)
     {
         if (exception)
-            *exception = Exception("Table " + backQuoteIfNeed(db) + "." + backQuoteIfNeed(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+            *exception = Exception(fmt::format("Table {}.{} doesn't exist.", backQuoteIfNeed(db), backQuoteIfNeed(table_name)), ErrorCodes::UNKNOWN_TABLE);
         return {};
     }
 
@@ -903,7 +910,7 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
 void Context::addExternalTable(const String & table_name, const StoragePtr & storage, const ASTPtr & ast)
 {
     if (external_tables.end() != external_tables.find(table_name))
-        throw Exception("Temporary table " + backQuoteIfNeed(table_name) + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception(fmt::format("Temporary table {} already exists.", backQuoteIfNeed(table_name)), ErrorCodes::TABLE_ALREADY_EXISTS);
 
     external_tables[table_name] = std::pair(storage, ast);
 }
@@ -955,13 +962,13 @@ DDLGuard::DDLGuard(Map & map_, std::mutex & mutex_, std::unique_lock<std::mutex>
 
 DDLGuard::~DDLGuard()
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     map.erase(it);
 }
 
 std::unique_ptr<DDLGuard> Context::getDDLGuard(const String & database, const String & table, const String & message) const
 {
-    std::unique_lock<std::mutex> lock(shared->ddl_guards_mutex);
+    std::unique_lock lock(shared->ddl_guards_mutex);
     return std::make_unique<DDLGuard>(shared->ddl_guards[database], shared->ddl_guards_mutex, std::move(lock), table, message);
 }
 
@@ -1011,7 +1018,7 @@ ASTPtr Context::getCreateExternalTableQuery(const String & table_name) const
 {
     TableAndCreateASTs::const_iterator jt = external_tables.find(table_name);
     if (external_tables.end() == jt)
-        throw Exception("Temporary table " + backQuoteIfNeed(table_name) + " doesn't exist", ErrorCodes::UNKNOWN_TABLE);
+        throw Exception(fmt::format("Temporary table {} doesn't exist", backQuoteIfNeed(table_name)), ErrorCodes::UNKNOWN_TABLE);
 
     return jt->second.second;
 }
@@ -1227,7 +1234,7 @@ ExternalModels & Context::getExternalModels()
 
 EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->embedded_dictionaries_mutex);
+    std::lock_guard lock(shared->embedded_dictionaries_mutex);
 
     if (!shared->embedded_dictionaries)
     {
@@ -1245,7 +1252,7 @@ EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_
 
 ExternalDictionaries & Context::getExternalDictionariesImpl(const bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->external_dictionaries_mutex);
+    std::lock_guard lock(shared->external_dictionaries_mutex);
 
     if (!shared->external_dictionaries)
     {
@@ -1265,7 +1272,7 @@ ExternalDictionaries & Context::getExternalDictionariesImpl(const bool throw_on_
 
 ExternalModels & Context::getExternalModelsImpl(bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->external_models_mutex);
+    std::lock_guard lock(shared->external_models_mutex);
 
     if (!shared->external_models)
     {
@@ -1521,7 +1528,7 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
     return shared->schema_sync_service;
 }
 
-void Context::initializeTiFlashMetrics()
+void Context::initializeTiFlashMetrics() const
 {
     auto lock = getLock();
     (void)TiFlashMetrics::instance();
@@ -1565,86 +1572,79 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
+static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
+{
+    // Check whether v3 is already enabled
+    for (const auto & path : path_pool.listGlobalPagePaths())
+    {
+        if (PS::V3::PageStorageImpl::isManifestsFileExists(path))
+        {
+            return true;
+        }
+    }
+
+    // Check whether v3 on new node is enabled in the config, if not, no need to check anymore
+    if (!enable_ps_v3)
+        return false;
+
+    // Check whether there are any files in kvstore path, if exists, then this is not a new node.
+    // If it's a new node, then we enable v3. Otherwise, we use v2.
+    for (const auto & path : path_pool.listKVStorePaths())
+    {
+        Poco::File dir(path);
+        if (!dir.exists())
+            continue;
+
+        std::vector<std::string> files;
+        dir.list(files);
+        if (!files.empty())
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3)
+{
+    auto lock = getLock();
+    if (isUsingPageStorageV3(path_pool, enable_ps_v3))
+    {
+        try
+        {
+            // create manifests file before initialize GlobalStoragePool
+            for (const auto & path : path_pool.listGlobalPagePaths())
+                PS::V3::PageStorageImpl::createManifestsFileIfNeed(path);
+
+            shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
+            shared->global_storage_pool->restore();
+            return true;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
+        }
+    }
+    else
+    {
+        shared->global_storage_pool = nullptr;
+        return false;
+    }
+}
+
+DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
+{
+    auto lock = getLock();
+    return shared->global_storage_pool;
+}
+
 UInt16 Context::getTCPPort() const
 {
     auto lock = getLock();
 
     auto & config = getConfigRef();
     return config.getInt("tcp_port");
-}
-
-
-std::shared_ptr<Cluster> Context::getCluster(const std::string & cluster_name) const
-{
-    auto res = getClusters().getCluster(cluster_name);
-
-    if (!res)
-        throw Exception("Requested cluster '" + cluster_name + "' not found", ErrorCodes::BAD_GET);
-
-    return res;
-}
-
-
-std::shared_ptr<Cluster> Context::tryGetCluster(const std::string & cluster_name) const
-{
-    return getClusters().getCluster(cluster_name);
-}
-
-
-void Context::reloadClusterConfig()
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-    auto & config = shared->clusters_config ? *shared->clusters_config : getConfigRef();
-    shared->clusters = std::make_unique<Clusters>(config, settings);
-}
-
-
-Clusters & Context::getClusters() const
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-    if (!shared->clusters)
-    {
-        auto & config = shared->clusters_config ? *shared->clusters_config : getConfigRef();
-        shared->clusters = std::make_unique<Clusters>(config, settings);
-    }
-
-    return *shared->clusters;
-}
-
-
-/// On repeating calls updates existing clusters and adds new clusters, doesn't delete old clusters
-void Context::setClustersConfig(const ConfigurationPtr & config, const String & config_name)
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-
-    shared->clusters_config = config;
-
-    if (!shared->clusters)
-        shared->clusters = std::make_unique<Clusters>(*shared->clusters_config, settings, config_name);
-    else
-        shared->clusters->updateClusters(*shared->clusters_config, settings, config_name);
-}
-
-
-void Context::setCluster(const String & cluster_name, const std::shared_ptr<Cluster> & cluster)
-{
-    std::lock_guard<std::mutex> lock(shared->clusters_mutex);
-
-    if (!shared->clusters)
-        throw Exception("Clusters are not set", ErrorCodes::LOGICAL_ERROR);
-
-    shared->clusters->setCluster(cluster_name, cluster);
-}
-
-
-Compiler & Context::getCompiler()
-{
-    auto lock = getLock();
-
-    if (!shared->compiler)
-        shared->compiler = std::make_unique<Compiler>(shared->path + "build/", 1);
-
-    return *shared->compiler;
 }
 
 
@@ -1686,25 +1686,6 @@ QueryLog * Context::getQueryLog()
 }
 
 
-CompressionSettings Context::chooseCompressionSettings(size_t part_size, double part_size_ratio) const
-{
-    auto lock = getLock();
-
-    if (!shared->compression_settings_selector)
-    {
-        constexpr auto config_name = "compression";
-        auto & config = getConfigRef();
-
-        if (config.has(config_name))
-            shared->compression_settings_selector = std::make_unique<CompressionSettingsSelector>(config, "compression");
-        else
-            shared->compression_settings_selector = std::make_unique<CompressionSettingsSelector>();
-    }
-
-    return shared->compression_settings_selector->choose(part_size, part_size_ratio);
-}
-
-
 void Context::setMaxTableSizeToDrop(size_t max_size)
 {
     // Is initialized at server startup
@@ -1737,20 +1718,23 @@ void Context::checkTableCanBeDropped(const String & database, const String & tab
 
     String table_size_str = formatReadableSizeWithDecimalSuffix(table_size);
     String max_table_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_table_size_to_drop);
-    std::stringstream ostr;
 
-    ostr << "Table " << backQuoteIfNeed(database) << "." << backQuoteIfNeed(table) << " was not dropped.\n"
-         << "Reason:\n"
-         << "1. Table size (" << table_size_str << ") is greater than max_table_size_to_drop (" << max_table_size_to_drop_str << ")\n"
-         << "2. File '" << force_file.path() << "' intended to force DROP "
-         << (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist") << "\n";
+    std::string exception_msg = fmt::format("Table {0}.{1} was not dropped.\n"
+                                            "Reason:\n"
+                                            "1. Table size({2}) is greater than max_table_size_to_drop ({3})\n"
+                                            "2. File '{4}' intended to force DROP {5}\n",
+                                            "How to fix this:\n"
+                                            "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
+                                            "2. Either create forcing file {4} and make sure that ClickHouse has write permission for it.\n"
+                                            "Example:\nsudo touch '{4}' && sudo chmod 666 '{4}'",
+                                            backQuoteIfNeed(database),
+                                            backQuoteIfNeed(table),
+                                            table_size_str,
+                                            max_table_size_to_drop_str,
+                                            force_file.path(),
+                                            (force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist"));
 
-    ostr << "How to fix this:\n"
-         << "1. Either increase (or set to zero) max_table_size_to_drop in server config and restart ClickHouse\n"
-         << "2. Either create forcing file " << force_file.path() << " and make sure that ClickHouse has write permission for it.\n"
-         << "Example:\nsudo touch '" << force_file.path() << "' && sudo chmod 666 '" << force_file.path() << "'";
-
-    throw Exception(ostr.str(), ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
+    throw Exception(exception_msg, ErrorCodes::TABLE_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT);
 }
 
 
@@ -1857,7 +1841,7 @@ SessionCleaner::~SessionCleaner()
     try
     {
         {
-            std::lock_guard<std::mutex> lock{mutex};
+            std::lock_guard lock{mutex};
             quit = true;
         }
 
@@ -1875,7 +1859,7 @@ void SessionCleaner::run()
 {
     setThreadName("SessionCleaner");
 
-    std::unique_lock<std::mutex> lock{mutex};
+    std::unique_lock lock{mutex};
 
     while (true)
     {

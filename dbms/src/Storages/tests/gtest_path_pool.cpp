@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -13,11 +27,11 @@ namespace DB
 {
 namespace tests
 {
-class PathPool_test : public ::testing::Test
+class PathPoolTest : public ::testing::Test
 {
 public:
-    PathPool_test()
-        : log(&Poco::Logger::get("PathPool_test"))
+    PathPoolTest()
+        : log(&Poco::Logger::get("PathPoolTest"))
     {}
 
     static void SetUpTestCase() {}
@@ -38,7 +52,7 @@ protected:
     Poco::Logger * log;
 };
 
-TEST_F(PathPool_test, AlignPaths)
+TEST_F(PathPoolTest, AlignPaths)
 try
 {
     Strings paths = getMultiTestPaths();
@@ -66,10 +80,10 @@ try
             ASSERT_EQ(path_get, chosen);
         }
 
-        for (size_t i = 0; i < res.size(); ++i)
+        for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -99,10 +113,10 @@ try
             ASSERT_EQ(path_get, chosen);
         }
 
-        for (size_t i = 0; i < res.size(); ++i)
+        for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -133,10 +147,10 @@ try
             ASSERT_EQ(path_get, chosen);
         }
 
-        for (size_t i = 0; i < res.size(); ++i)
+        for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -167,10 +181,10 @@ try
             ASSERT_EQ(path_get, chosen);
         }
 
-        for (size_t i = 0; i < res.size(); ++i)
+        for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -182,7 +196,7 @@ try
 }
 CATCH
 
-TEST_F(PathPool_test, UnalignPaths)
+TEST_F(PathPoolTest, UnalignPaths)
 try
 {
     Strings paths = getMultiTestPaths();
@@ -210,10 +224,10 @@ try
             ASSERT_EQ(path_get, chosen);
         }
 
-        for (size_t i = 0; i < res.size(); ++i)
+        for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -243,10 +257,10 @@ try
             ASSERT_EQ(path_get, chosen);
         }
 
-        for (size_t i = 0; i < res.size(); ++i)
+        for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -277,10 +291,10 @@ try
             ASSERT_EQ(path_get, chosen);
         }
 
-        for (size_t i = 0; i < res.size(); ++i)
+        for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -311,10 +325,10 @@ try
             ASSERT_EQ(path_get, chosen);
         }
 
-        for (size_t i = 0; i < res.size(); ++i)
+        for (const auto & r : res)
         {
-            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(res[i]));
-            LOG_INFO(log, "[path=" << res[i] << "] [used_size=" << stat.used_size << "]");
+            auto stat = std::get<0>(ctx.getPathCapacity()->getFsStatsOfPath(r));
+            LOG_FMT_INFO(log, "[path={}] [used_size={}]", r, stat.used_size);
         }
 
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
@@ -343,7 +357,7 @@ private:
     std::map<FSID, DiskCapacity> disk_stats_map;
 };
 
-class PathCapcatity : public DB::base::TiFlashStorageTestBasic
+class PathCapacity : public DB::base::TiFlashStorageTestBasic
 {
     void SetUp() override
     {
@@ -373,7 +387,7 @@ protected:
     std::string latest_data_path;
 };
 
-TEST_F(PathCapcatity, SingleDiskSinglePathTest)
+TEST_F(PathCapacity, SingleDiskSinglePathTest)
 {
     size_t capactity = 100;
     size_t used = 10;
@@ -425,7 +439,7 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
     }
 }
 
-TEST_F(PathCapcatity, MultiDiskMultiPathTest)
+TEST_F(PathCapacity, MultiDiskMultiPathTest)
 {
     MockPathCapacityMetrics capacity = MockPathCapacityMetrics(0, {main_data_path}, {100}, {latest_data_path}, {100});
 
@@ -486,7 +500,7 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
 }
 
-TEST_F(PathCapcatity, FsStats)
+TEST_F(PathCapacity, FsStats)
 try
 {
     size_t global_capacity_quota = 10;

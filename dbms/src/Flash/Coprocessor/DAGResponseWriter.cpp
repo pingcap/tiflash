@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
@@ -56,12 +70,23 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
         return;
     /// get executionSummary info from remote input streams
     std::unordered_map<String, std::vector<ExecutionSummary>> merged_remote_execution_summaries;
-    for (auto & streamPtr : dag_context.getRemoteInputStreams())
+    for (const auto & map_entry : dag_context.getInBoundIOInputStreamsMap())
     {
-        if (dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get()) != nullptr)
-            mergeRemoteExecuteSummaries(dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get()), merged_remote_execution_summaries);
-        else
-            mergeRemoteExecuteSummaries(dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()), merged_remote_execution_summaries);
+        for (const auto & stream_ptr : map_entry.second)
+        {
+            if (auto * exchange_receiver_stream_ptr = dynamic_cast<ExchangeReceiverInputStream *>(stream_ptr.get()))
+            {
+                mergeRemoteExecuteSummaries(exchange_receiver_stream_ptr, merged_remote_execution_summaries);
+            }
+            else if (auto * cop_stream_ptr = dynamic_cast<CoprocessorBlockInputStream *>(stream_ptr.get()))
+            {
+                mergeRemoteExecuteSummaries(cop_stream_ptr, merged_remote_execution_summaries);
+            }
+            else
+            {
+                /// local read input stream
+            }
+        }
     }
 
     /// add execution_summary for local executor
@@ -69,9 +94,9 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     {
         ExecutionSummary current;
         /// part 1: local execution info
-        for (auto & streamPtr : p.second.input_streams)
+        for (auto & stream_ptr : p.second)
         {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
             {
                 current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time);
                 current.num_produced_rows += p_stream->getProfileInfo().rows;
@@ -86,31 +111,34 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
                 current.merge(remote, false);
         }
         /// part 3: for join need to add the build time
-        for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
+        /// In TiFlash, a hash join's build side is finished before probe side starts,
+        /// so the join probe side's running time does not include hash table's build time,
+        /// when construct ExecSummaries, we need add the build cost to probe executor
+        auto all_join_id_it = dag_context.getExecutorIdToJoinIdMap().find(p.first);
+        if (all_join_id_it != dag_context.getExecutorIdToJoinIdMap().end())
         {
-            UInt64 process_time_for_build = 0;
-            if (dag_context.getProfileStreamsMapForJoinBuildSide().find(join_alias)
-                != dag_context.getProfileStreamsMapForJoinBuildSide().end())
+            for (const auto & join_executor_id : all_join_id_it->second)
             {
-                for (auto & join_stream : dag_context.getProfileStreamsMapForJoinBuildSide()[join_alias])
+                auto it = dag_context.getJoinExecuteInfoMap().find(join_executor_id);
+                if (it != dag_context.getJoinExecuteInfoMap().end())
                 {
-                    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
-                        process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
+                    auto build_side_it = dag_context.getProfileStreamsMap().find(it->second.build_side_root_executor_id);
+                    if (build_side_it != dag_context.getProfileStreamsMap().end())
+                    {
+                        UInt64 process_time_for_build = 0;
+                        for (const auto & join_build_stream : build_side_it->second)
+                        {
+                            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_build_stream.get()))
+                                process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
+                        }
+                        current.time_processed_ns += process_time_for_build;
+                    }
                 }
             }
-            current.time_processed_ns += process_time_for_build;
         }
 
         current.time_processed_ns += dag_context.compile_time_ns;
         fillTiExecutionSummary(response.add_execution_summaries(), current, p.first, delta_mode);
-        /// do not have an easy and meaningful way to get the execution summary for exchange sender
-        /// executor, however, TiDB requires execution summary for all the executors, so just return
-        /// its child executor's execution summary
-        if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
-        {
-            current.concurrency = dag_context.final_concurrency;
-            fillTiExecutionSummary(response.add_execution_summaries(), current, dag_context.exchange_sender_executor_id, delta_mode);
-        }
     }
     for (auto & p : merged_remote_execution_summaries)
     {
@@ -126,24 +154,20 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
 
 DAGResponseWriter::DAGResponseWriter(
     Int64 records_per_chunk_,
-    tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_,
     DAGContext & dag_context_)
     : records_per_chunk(records_per_chunk_)
-    , encode_type(encode_type_)
-    , result_field_types(std::move(result_field_types_))
     , dag_context(dag_context_)
 {
     for (auto & p : dag_context.getProfileStreamsMap())
     {
         local_executors.insert(p.first);
     }
-    if (encode_type == tipb::EncodeType::TypeCHBlock)
+    if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         records_per_chunk = -1;
     }
-    if (encode_type != tipb::EncodeType::TypeCHBlock && encode_type != tipb::EncodeType::TypeChunk
-        && encode_type != tipb::EncodeType::TypeDefault)
+    if (dag_context.encode_type != tipb::EncodeType::TypeCHBlock && dag_context.encode_type != tipb::EncodeType::TypeChunk
+        && dag_context.encode_type != tipb::EncodeType::TypeDefault)
     {
         throw TiFlashException(
             "Only Default/Arrow/CHBlock encode type is supported in DAGBlockOutputStream.",

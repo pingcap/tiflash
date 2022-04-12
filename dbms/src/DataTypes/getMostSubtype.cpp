@@ -1,26 +1,37 @@
-#include <IO/WriteBufferFromString.h>
-#include <IO/Operators.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/typeid_cast.h>
-
-#include <DataTypes/getMostSubtype.h>
-
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/getMostSubtype.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int NO_COMMON_TYPE;
-}
+} // namespace ErrorCodes
 
 namespace
 {
@@ -42,14 +53,12 @@ String getExceptionMessagePrefix(const DataTypes & types)
     return res.str();
 }
 
-}
+} // namespace
 
 
 DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_nothing, bool force_support_conversion)
 {
-
-    auto getNothingOrThrow = [throw_if_result_is_nothing, & types](const std::string & reason)
-    {
+    auto getNothingOrThrow = [throw_if_result_is_nothing, &types](const std::string & reason) {
         if (throw_if_result_is_nothing)
             throw Exception(getExceptionMessagePrefix(types) + reason, ErrorCodes::NO_COMMON_TYPE);
         return std::make_shared<DataTypeNothing>();
@@ -162,8 +171,7 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
 
             DataTypes common_tuple_types(tuple_size);
             for (size_t elem_idx = 0; elem_idx < tuple_size; ++elem_idx)
-                common_tuple_types[elem_idx] =
-                        getMostSubtype(nested_types[elem_idx], throw_if_result_is_nothing, force_support_conversion);
+                common_tuple_types[elem_idx] = getMostSubtype(nested_types[elem_idx], throw_if_result_is_nothing, force_support_conversion);
 
             return std::make_shared<DataTypeTuple>(common_tuple_types);
         }
@@ -266,8 +274,7 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
         size_t min_bits_of_unsigned_integer = 0;
         size_t min_mantissa_bits_of_floating = 0;
 
-        auto minimize = [](size_t & what, size_t value)
-        {
+        auto minimize = [](size_t & what, size_t value) {
             if (what == 0 || value < what)
                 what = value;
         };
@@ -312,12 +319,12 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
                     return std::make_shared<DataTypeFloat64>();
                 else
                     throw Exception("Logical error: " + getExceptionMessagePrefix(types)
-                                    + " but as all data types are floats, we must have found maximum float type", ErrorCodes::NO_COMMON_TYPE);
+                                        + " but as all data types are floats, we must have found maximum float type",
+                                    ErrorCodes::NO_COMMON_TYPE);
             }
 
             /// If there are signed and unsigned types of same bit-width, the result must be unsigned number.
-            if (min_bits_of_unsigned_integer &&
-                (min_bits_of_signed_integer == 0 || min_bits_of_unsigned_integer <= min_bits_of_signed_integer))
+            if (min_bits_of_unsigned_integer && (min_bits_of_signed_integer == 0 || min_bits_of_unsigned_integer <= min_bits_of_signed_integer))
             {
                 if (min_bits_of_unsigned_integer <= 8)
                     return std::make_shared<DataTypeUInt8>();
@@ -329,7 +336,8 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
                     return std::make_shared<DataTypeUInt64>();
                 else
                     throw Exception("Logical error: " + getExceptionMessagePrefix(types)
-                                    + " but as all data types are integers, we must have found maximum unsigned integer type", ErrorCodes::NO_COMMON_TYPE);
+                                        + " but as all data types are integers, we must have found maximum unsigned integer type",
+                                    ErrorCodes::NO_COMMON_TYPE);
             }
 
             /// All signed.
@@ -344,7 +352,8 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
                     return std::make_shared<DataTypeInt64>();
                 else
                     throw Exception("Logical error: " + getExceptionMessagePrefix(types)
-                                    + " but as all data types are integers, we must have found maximum signed integer type", ErrorCodes::NO_COMMON_TYPE);
+                                        + " but as all data types are integers, we must have found maximum signed integer type",
+                                    ErrorCodes::NO_COMMON_TYPE);
             }
         }
     }
@@ -353,4 +362,4 @@ DataTypePtr getMostSubtype(const DataTypes & types, bool throw_if_result_is_noth
     return getNothingOrThrow("");
 }
 
-}
+} // namespace DB

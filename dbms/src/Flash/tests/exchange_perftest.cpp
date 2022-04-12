@@ -1,6 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/MPMCQueue.h>
-#include <DataStreams/ExchangeSender.h>
+#include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -48,6 +62,11 @@ struct MockReceiverContext
         {
             return error_msg;
         }
+
+        int error_code() const
+        {
+            return status_code;
+        }
     };
 
     struct Request
@@ -57,7 +76,9 @@ struct MockReceiverContext
             return "{Request}";
         }
 
+        int source_index = 0;
         int send_task_id = 0;
+        int recv_task_id = -1;
     };
 
     struct Reader
@@ -70,14 +91,16 @@ struct MockReceiverContext
         {
         }
 
-        bool read(mpp::MPPDataPacket * packet [[maybe_unused]]) const
+        bool read(PacketPtr & packet [[maybe_unused]]) const
         {
-            auto res = queue->pop();
-            if (!res.has_value() || !res.value())
-                return false;
-            *packet = *res.value();
-            received_data_size.fetch_add(packet->ByteSizeLong());
-            return true;
+            PacketPtr res;
+            if (queue->pop(res))
+            {
+                received_data_size.fetch_add(res->ByteSizeLong());
+                *packet = *res; // avoid change shared packets
+                return true;
+            }
+            return false;
         }
 
         Status finish() const
@@ -88,20 +111,31 @@ struct MockReceiverContext
         PacketQueuePtr queue;
     };
 
-    explicit MockReceiverContext(const std::vector<PacketQueuePtr> & queues_)
+    MockReceiverContext(
+        const std::vector<PacketQueuePtr> & queues_,
+        const std::vector<tipb::FieldType> & field_types_)
         : queues(queues_)
+        , field_types(field_types_)
     {
     }
 
-    Request makeRequest(
-        int index [[maybe_unused]],
-        const tipb::ExchangeReceiver & pb_exchange_receiver [[maybe_unused]],
-        const ::mpp::TaskMeta & task_meta [[maybe_unused]]) const
+    void fillSchema(DAGSchema & schema) const
     {
-        return {index};
+        schema.clear();
+        for (size_t i = 0; i < field_types.size(); ++i)
+        {
+            String name = "exchange_receiver_" + std::to_string(i);
+            ColumnInfo info = TiDB::fieldTypeToColumnInfo(field_types[i]);
+            schema.emplace_back(std::move(name), std::move(info));
+        }
     }
 
-    std::shared_ptr<Reader> makeReader(const Request & request [[maybe_unused]])
+    Request makeRequest(int index) const
+    {
+        return {index, index, -1};
+    }
+
+    std::shared_ptr<Reader> makeReader(const Request & request)
     {
         return std::make_shared<Reader>(queues[request.send_task_id]);
     }
@@ -112,6 +146,7 @@ struct MockReceiverContext
     }
 
     std::vector<PacketQueuePtr> queues;
+    std::vector<tipb::FieldType> field_types;
 };
 
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
@@ -124,14 +159,10 @@ struct MockWriter
         : queue(std::move(queue_))
     {}
 
-    void Write(const Packet & packet)
+    bool Write(const Packet & packet)
     {
         queue->push(std::make_shared<Packet>(packet));
-    }
-
-    void Write(Packet && packet)
-    {
-        queue->push(std::make_shared<Packet>(std::move(packet)));
+        return true;
     }
 
     void finish()
@@ -223,14 +254,10 @@ mpp::MPPDataPacket makePacket(ChunkCodecStream & codec, int row_num)
     auto block = makeBlock(row_num);
     codec.encode(block, 0, row_num);
 
-    tipb::SelectResponse response;
-    response.set_encode_type(tipb::TypeCHBlock);
-    auto chunk = response.add_chunks();
-    chunk->set_rows_data(codec.getString());
+    mpp::MPPDataPacket packet;
+    packet.add_chunks(codec.getString());
     codec.clear();
 
-    mpp::MPPDataPacket packet;
-    response.SerializeToString(packet.mutable_data());
     return packet;
 }
 
@@ -288,9 +315,9 @@ void receivePacket(const PacketQueuePtr & queue)
 {
     while (true)
     {
-        auto res = queue->pop();
-        if (res.has_value())
-            received_data_size.fetch_add(res.value()->ByteSizeLong());
+        PacketPtr packet;
+        if (queue->pop(packet))
+            received_data_size.fetch_add(packet->ByteSizeLong());
         else
             break;
     }
@@ -403,9 +430,8 @@ struct ReceiverHelper
     MockExchangeReceiverPtr buildReceiver()
     {
         return std::make_shared<MockExchangeReceiver>(
-            std::make_shared<MockReceiverContext>(queues),
-            pb_exchange_receiver,
-            task_meta,
+            std::make_shared<MockReceiverContext>(queues, fields),
+            source_num,
             source_num * 5,
             nullptr);
     }
@@ -416,7 +442,7 @@ struct ReceiverHelper
         std::vector<BlockInputStreamPtr> streams;
         for (int i = 0; i < concurrency; ++i)
             streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, nullptr));
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     BlockInputStreamPtr buildUnionStreamWithHashJoinBuildStream(int concurrency)
@@ -448,16 +474,16 @@ struct ReceiverHelper
         join_ptr->setSampleBlock(receiver_header);
 
         for (int i = 0; i < concurrency; ++i)
-            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, nullptr);
+            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, /*req_id=*/"");
 
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     void finish()
     {
         if (join_ptr)
         {
-            join_ptr->setFinishBuildTable(true);
+            join_ptr->setBuildTableState(Join::BuildTableState::SUCCEED);
             std::cout << fmt::format("Hash table size: {} bytes", join_ptr->getTotalByteCount()) << std::endl;
         }
     }
@@ -474,7 +500,11 @@ struct SenderHelper
     MockTunnelSetPtr tunnel_set;
     std::unique_ptr<DAGContext> dag_context;
 
-    SenderHelper(int source_num_, int concurrency_, const std::vector<PacketQueuePtr> & queues_)
+    SenderHelper(
+        int source_num_,
+        int concurrency_,
+        const std::vector<PacketQueuePtr> & queues_,
+        const std::vector<tipb::FieldType> & fields)
         : source_num(source_num_)
         , concurrency(concurrency_)
         , queues(queues_)
@@ -490,26 +520,28 @@ struct SenderHelper
                 task_meta,
                 task_meta,
                 std::chrono::seconds(60),
-                [] { return false; },
-                concurrency);
+                concurrency,
+                false);
             tunnel->connect(writer.get());
             tunnels.push_back(tunnel);
             tunnel_set->addTunnel(tunnel);
         }
 
         tipb::DAGRequest dag_request;
-        *dag_request.mutable_root_executor() = tipb::Executor{};
+        tipb::Executor root_executor;
+        root_executor.set_executor_id("ExchangeSender_100");
+        *dag_request.mutable_root_executor() = root_executor;
 
         dag_context = std::make_unique<DAGContext>(dag_request);
-        dag_context->final_concurrency = concurrency; // just for execution_summary
         dag_context->is_mpp_task = true;
         dag_context->is_root_mpp_task = false;
+        dag_context->encode_type = tipb::EncodeType::TypeCHBlock;
+        dag_context->result_field_types = fields;
     }
 
     BlockInputStreamPtr buildUnionStream(
         StopFlag & stop_flag,
-        const std::vector<Block> & blocks,
-        const std::vector<tipb::FieldType> & fields)
+        const std::vector<Block> & blocks)
     {
         std::vector<BlockInputStreamPtr> send_streams;
         for (int i = 0; i < concurrency; ++i)
@@ -524,14 +556,11 @@ struct SenderHelper
                     -1,
                     -1,
                     true,
-                    tipb::TypeCHBlock,
-                    fields,
-                    *dag_context,
-                    nullptr));
-            send_streams.push_back(std::make_shared<ExchangeSender>(stream, std::move(response_writer)));
+                    *dag_context));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
 
-        return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, nullptr);
+        return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");
     }
 
     void finish()
@@ -581,8 +610,8 @@ void testSenderReceiver(int concurrency, int source_num, int block_rows, int sec
     StopFlag stop_flag(false);
     auto blocks = makeBlocks(100, block_rows);
 
-    SenderHelper sender_helper(source_num, concurrency, receiver_helper.queues);
-    auto union_send_stream = sender_helper.buildUnionStream(stop_flag, blocks, receiver_helper.fields);
+    SenderHelper sender_helper(source_num, concurrency, receiver_helper.queues, receiver_helper.fields);
+    auto union_send_stream = sender_helper.buildUnionStream(stop_flag, blocks);
 
     auto write_thread = std::thread(readBlock<false>, union_send_stream);
     auto read_thread = std::thread(readBlock<true>, union_receive_stream);
@@ -605,8 +634,8 @@ void testOnlySender(int concurrency, int source_num, int block_rows, int seconds
     StopFlag stop_flag(false);
     auto blocks = makeBlocks(100, block_rows);
 
-    SenderHelper sender_helper(source_num, concurrency, queues);
-    auto union_send_stream = sender_helper.buildUnionStream(stop_flag, blocks, fields);
+    SenderHelper sender_helper(source_num, concurrency, queues, fields);
+    auto union_send_stream = sender_helper.buildUnionStream(stop_flag, blocks);
 
     auto write_thread = std::thread(readBlock<true>, union_send_stream);
     std::vector<std::thread> read_threads;

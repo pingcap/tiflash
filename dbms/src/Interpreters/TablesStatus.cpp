@@ -1,12 +1,25 @@
-#include <Interpreters/TablesStatus.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/TablesStatus.h>
 
 namespace DB
 {
-
 void TableStatus::write(WriteBuffer & out) const
 {
     writeBinary(is_replicated, out);
@@ -30,8 +43,8 @@ void TablesStatusRequest::write(WriteBuffer & out, UInt64 server_protocol_revisi
 {
     if (server_protocol_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
         throw Exception(
-                "Logical error: method TablesStatusRequest::write is called for unsupported server revision",
-                ErrorCodes::LOGICAL_ERROR);
+            "Logical error: method TablesStatusRequest::write is called for unsupported server revision",
+            ErrorCodes::LOGICAL_ERROR);
 
     writeVarUInt(tables.size(), out);
     for (const auto & table_name : tables)
@@ -45,8 +58,8 @@ void TablesStatusRequest::read(ReadBuffer & in, UInt64 client_protocol_revision)
 {
     if (client_protocol_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
         throw Exception(
-                "method TablesStatusRequest::read is called for unsupported client revision",
-                ErrorCodes::LOGICAL_ERROR);
+            "method TablesStatusRequest::read is called for unsupported client revision",
+            ErrorCodes::LOGICAL_ERROR);
 
     size_t size = 0;
     readVarUInt(size, in);
@@ -67,11 +80,11 @@ void TablesStatusResponse::write(WriteBuffer & out, UInt64 client_protocol_revis
 {
     if (client_protocol_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
         throw Exception(
-                "method TablesStatusResponse::write is called for unsupported client revision",
-                ErrorCodes::LOGICAL_ERROR);
+            "method TablesStatusResponse::write is called for unsupported client revision",
+            ErrorCodes::LOGICAL_ERROR);
 
     writeVarUInt(table_states_by_id.size(), out);
-    for (const auto & kv: table_states_by_id)
+    for (const auto & kv : table_states_by_id)
     {
         const QualifiedTableName & table_name = kv.first;
         writeBinary(table_name.database, out);
@@ -86,8 +99,8 @@ void TablesStatusResponse::read(ReadBuffer & in, UInt64 server_protocol_revision
 {
     if (server_protocol_revision < DBMS_MIN_REVISION_WITH_TABLES_STATUS)
         throw Exception(
-                "method TablesStatusResponse::read is called for unsupported server revision",
-                ErrorCodes::LOGICAL_ERROR);
+            "method TablesStatusResponse::read is called for unsupported server revision",
+            ErrorCodes::LOGICAL_ERROR);
 
     size_t size = 0;
     readVarUInt(size, in);
@@ -107,4 +120,4 @@ void TablesStatusResponse::read(ReadBuffer & in, UInt64 server_protocol_revision
     }
 }
 
-}
+} // namespace DB

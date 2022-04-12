@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBData.h>
@@ -7,10 +21,10 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
@@ -27,9 +41,7 @@ void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().setFlushThresholds({{bytes, Seconds(seconds)}});
 
-    std::stringstream ss;
-    ss << "set flush threshold to (" << bytes << " bytes, " << seconds << " seconds)";
-    output(ss.str());
+    output(fmt::format("set flush threshold to ({} bytes, {} seconds)", bytes, seconds));
 }
 
 void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -48,17 +60,15 @@ void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer outp
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 4, args.end(), context);
 
-    std::stringstream ss;
-    ss << "wrote one row to " << database_name << "." + table_name << " region #" << region_id;
-    ss << " with raft commands";
-    output(ss.str());
+    output(fmt::format("wrote one row to {}.{} region #{} with raft commands", database_name, table_name, region_id));
 }
 
 void dbgInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 6)
         throw Exception(
-            "Args not matched, should be: database-name, table-name, region-id, handle-id, tso, del, values", ErrorCodes::BAD_ARGUMENTS);
+            "Args not matched, should be: database-name, table-name, region-id, handle-id, tso, del, values",
+            ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -76,15 +86,18 @@ void dbgInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 6, args.end(), context, extra_data);
 
-    std::stringstream ss;
-    ss << "wrote one row to " << database_name << "." + table_name << " region #" << region_id;
-    ss << " with raft commands";
-    output(ss.str());
+    output(fmt::format("wrote one row to {}.{} region #{} with raft commands", database_name, table_name, region_id));
 }
 
-void dbgFuncRaftInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output) { dbgInsertRow(context, args, output); }
+void dbgFuncRaftInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    dbgInsertRow(context, args, output);
+}
 
-void dbgFuncRaftInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer output) { dbgInsertRowFull(context, args, output); }
+void dbgFuncRaftInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    dbgInsertRowFull(context, args, output);
+}
 
 void dbgFuncRaftDeleteRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
@@ -99,9 +112,7 @@ void dbgFuncRaftDeleteRow(Context & context, const ASTs & args, DBGInvoker::Prin
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::remove(table->table_info, region_id, handle_id, context);
 
-    std::stringstream ss;
-    ss << "delete one row in " << database_name << "." + table_name << ", region #" << region_id;
-    output(ss.str());
+    output(fmt::format("delete one row in {}.{}, region #{}", database_name, table_name, region_id));
 }
 
 void dbgInsertRows(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -132,10 +143,13 @@ void dbgInsertRows(Context & context, const ASTs & args, DBGInvoker::Printer out
     RegionBench::concurrentBatchInsert(table->table_info, concurrent_num, flush_num, batch_num, min_strlen, max_strlen, context);
 
     output("wrote " + std::to_string(concurrent_num * flush_num * batch_num) + " row to " + database_name + "." + table_name
-        + (" with raft commands"));
+           + (" with raft commands"));
 }
 
-void dbgFuncRaftInsertRows(Context & context, const ASTs & args, DBGInvoker::Printer output) { dbgInsertRows(context, args, output); }
+void dbgFuncRaftInsertRows(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    dbgInsertRows(context, args, output);
+}
 
 void dbgFuncRaftUpdateRows(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {

@@ -1,7 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>
@@ -10,7 +24,6 @@
 
 namespace DB
 {
-
 bool ParserNestedTable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserToken open(TokenType::OpeningRoundBracket);
@@ -83,7 +96,7 @@ bool ParserTypeInCastExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     if (ParserIdentifierWithOptionalParameters().parse(pos, node, expected))
     {
         const auto & id_with_params = typeid_cast<const ASTFunction &>(*node);
-        node = std::make_shared<ASTIdentifier>(String{ id_with_params.range.first, id_with_params.range.second });
+        node = std::make_shared<ASTIdentifier>(String{id_with_params.range.first, id_with_params.range.second});
         return true;
     }
 
@@ -206,7 +219,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr as_database;
     ASTPtr as_table;
     ASTPtr select;
-    String cluster_str;
     bool attach = false;
     bool if_not_exists = false;
     bool is_view = false;
@@ -239,12 +251,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             database = table;
             if (!name_p.parse(pos, table, expected))
-                return false;
-        }
-
-        if (ParserKeyword{"ON"}.ignore(pos, expected))
-        {
-            if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
                 return false;
         }
 
@@ -312,12 +318,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!name_p.parse(pos, database, expected))
             return false;
 
-        if (ParserKeyword{"ON"}.ignore(pos, expected))
-        {
-            if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-                return false;
-        }
-
         storage_p.parse(pos, storage, expected);
     }
     else
@@ -343,12 +343,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             database = table;
             if (!name_p.parse(pos, table, expected))
-                return false;
-        }
-
-        if (ParserKeyword{"ON"}.ignore(pos, expected))
-        {
-            if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
                 return false;
         }
 
@@ -408,7 +402,6 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         query->database = typeid_cast<ASTIdentifier &>(*database).name;
     if (table)
         query->table = typeid_cast<ASTIdentifier &>(*table).name;
-    query->cluster = cluster_str;
 
     if (to_database)
         query->to_database = typeid_cast<ASTIdentifier &>(*to_database).name;
@@ -427,4 +420,4 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 }
 
 
-}
+} // namespace DB

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <string>
@@ -80,32 +94,35 @@ private:
     int getCPUCores() const;
     int getQueryCPUCores() const;
     int getOtherCPUCores() const;
-    void initCPUSet(cpu_set_t & cpu_set, int start, int count);
+    static void initCPUSet(cpu_set_t & cpu_set, int start, int count);
     void checkThreadCPUAffinity() const;
     // Bind thread t on cpu_set.
     void setAffinity(pid_t tid, const cpu_set_t & cpu_set) const;
     bool enable() const;
 
-    std::string cpuSetToString(const cpu_set_t & cpu_set) const;
-    std::vector<int> cpuSetToVec(const cpu_set_t & cpu_set) const;
+    static std::string cpuSetToString(const cpu_set_t & cpu_set);
+    static std::vector<int> cpuSetToVec(const cpu_set_t & cpu_set);
+
 
     std::unordered_map<pid_t, std::string> getThreads(pid_t pid) const;
     std::vector<pid_t> getThreadIDs(const std::string & dir) const;
-    std::string getThreadName(const std::string & fname) const;
-    std::string getShortFilename(const std::string & path) const;
+    static std::string getThreadName(const std::string & fname);
+    static std::string getShortFilename(const std::string & path);
     bool isQueryThread(const std::string & name) const;
 
     cpu_set_t query_cpu_set;
     cpu_set_t other_cpu_set;
 #endif
 
-    int query_cpu_percent;
-    int cpu_cores;
+    // unused except Linux
+    [[maybe_unused]] int query_cpu_percent;
+    [[maybe_unused]] int cpu_cores;
     std::vector<std::string> query_threads;
     Poco::Logger * log;
 
     CPUAffinityManager();
     // Disable copy and move
+public:
     CPUAffinityManager(const CPUAffinityManager &) = delete;
     CPUAffinityManager & operator=(const CPUAffinityManager &) = delete;
     CPUAffinityManager(CPUAffinityManager &&) = delete;

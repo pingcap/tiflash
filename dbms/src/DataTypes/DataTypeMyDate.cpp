@@ -1,15 +1,27 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMyDate.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
 {
-
 void DataTypeMyDate::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
     writeMyDateText(static_cast<const ColumnUInt64 &>(column).getData()[row_num], ostr);
@@ -27,7 +39,10 @@ void DataTypeMyDate::serializeTextEscaped(const IColumn & column, size_t row_num
     serializeText(column, row_num, ostr);
 }
 
-void DataTypeMyDate::deserializeTextEscaped(IColumn & column, ReadBuffer & istr) const { deserializeText(column, istr); }
+void DataTypeMyDate::deserializeTextEscaped(IColumn & column, ReadBuffer & istr) const
+{
+    deserializeText(column, istr);
+}
 
 void DataTypeMyDate::serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
@@ -75,13 +90,18 @@ void DataTypeMyDate::deserializeTextCSV(IColumn & column, ReadBuffer & istr, con
     static_cast<ColumnUInt64 &>(column).getData().push_back(value);
 }
 
-bool DataTypeMyDate::equals(const IDataType & rhs) const { return typeid(rhs) == typeid(*this); }
+bool DataTypeMyDate::equals(const IDataType & rhs) const
+{
+    return typeid(rhs) == typeid(*this);
+}
 
 
 void registerDataTypeMyDate(DataTypeFactory & factory)
 {
     factory.registerSimpleDataType(
-        "MyDate", [] { return DataTypePtr(std::make_shared<DataTypeMyDate>()); }, DataTypeFactory::CaseInsensitive);
+        "MyDate",
+        [] { return DataTypePtr(std::make_shared<DataTypeMyDate>()); },
+        DataTypeFactory::CaseInsensitive);
 }
 
 } // namespace DB

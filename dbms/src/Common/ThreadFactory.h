@@ -1,6 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Common/MemoryTracker.h>
+#include <Common/MemoryTrackerSetter.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <common/ThreadPool.h>
 
@@ -17,55 +32,22 @@ namespace DB
 class ThreadFactory
 {
 public:
-    /// force_overwrite_thread_attribute is only used for ThreadPool's jobs.
-    /// For new threads it is treated as always true.
-    explicit ThreadFactory(bool force_overwrite_thread_attribute = false, std::string thread_name_ = "")
-        : force_overwrite(force_overwrite_thread_attribute)
-        , thread_name(thread_name_)
-    {}
-
-    ThreadFactory(const ThreadFactory &) = delete;
-    ThreadFactory & operator=(const ThreadFactory &) = delete;
-
-    ThreadFactory(ThreadFactory &&) = default;
-    ThreadFactory & operator=(ThreadFactory &&) = default;
-
     template <typename F, typename... Args>
-    std::thread newThread(F && f, Args &&... args)
+    static std::thread newThread(bool propagate_memory_tracker, String thread_name, F && f, Args &&... args)
     {
-        auto memory_tracker = current_memory_tracker;
-        auto wrapped_func = [memory_tracker, thread_name = thread_name, f = std::move(f)](auto &&... args) {
-            setAttributes(memory_tracker, thread_name, true);
+        /// submit current local delta memory if the memory tracker needs to be propagated to other threads
+        if (propagate_memory_tracker)
+            CurrentMemoryTracker::submitLocalDeltaMemory();
+        auto * memory_tracker = current_memory_tracker;
+        auto wrapped_func = [propagate_memory_tracker, memory_tracker, thread_name = std::move(thread_name), f = std::move(f)](auto &&... args) {
+            UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_raw, type_max_threads_of_raw);
+            MemoryTrackerSetter setter(propagate_memory_tracker, memory_tracker);
+            if (!thread_name.empty())
+                setThreadName(thread_name.c_str());
             return std::invoke(f, std::forward<Args>(args)...);
         };
         return std::thread(wrapped_func, std::forward<Args>(args)...);
     }
-
-    template <typename F, typename... Args>
-    ThreadPool::Job newJob(F && f, Args &&... args)
-    {
-        auto memory_tracker = current_memory_tracker;
-        /// Use std::tuple to workaround the limit on the lambda's init-capture of C++17.
-        /// See https://stackoverflow.com/questions/47496358/c-lambdas-how-to-capture-variadic-parameter-pack-from-the-upper-scope
-        return [force_overwrite = force_overwrite, memory_tracker, thread_name = thread_name, f = std::move(f), args = std::make_tuple(std::move(args)...)] {
-            setAttributes(memory_tracker, thread_name, force_overwrite);
-            return std::apply(f, std::move(args));
-        };
-    }
-
-private:
-    static void setAttributes(MemoryTracker * memory_tracker, const std::string & thread_name, bool force_overwrite)
-    {
-        if (force_overwrite || !current_memory_tracker)
-        {
-            current_memory_tracker = memory_tracker;
-            if (!thread_name.empty())
-                setThreadName(thread_name.c_str());
-        }
-    }
-
-    bool force_overwrite = false;
-    std::string thread_name;
 };
 
 } // namespace DB

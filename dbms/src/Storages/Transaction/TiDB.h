@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Field.h>
@@ -195,9 +209,9 @@ struct ColumnInfo
     DB::Field getDecimalValue(const String &) const;
     Int64 getEnumIndex(const String &) const;
     UInt64 getSetValue(const String &) const;
-    Int64 getTimeValue(const String &) const;
-    Int64 getYearValue(const String &) const;
-    UInt64 getBitValue(const String &) const;
+    static Int64 getTimeValue(const String &);
+    static Int64 getYearValue(const String &);
+    static UInt64 getBitValue(const String &);
 };
 
 enum PartitionType
@@ -315,11 +329,17 @@ struct TableInfo
 
     TableInfo(const TableInfo &) = default;
 
+    TableInfo & operator=(const TableInfo &) = default;
+
+    explicit TableInfo(Poco::JSON::Object::Ptr json);
+
     explicit TableInfo(const String & table_info_json);
 
     String serialize() const;
 
     void deserialize(const String & json_str);
+
+    void deserialize(Poco::JSON::Object::Ptr obj);
 
     // The meaning of this ID changed after we support TiDB partition table.
     // It is the physical table ID, i.e. table ID for non-partition table,

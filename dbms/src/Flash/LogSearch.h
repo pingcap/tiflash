@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Poco/File.h>
@@ -10,9 +24,14 @@
 #include <memory>
 #include <optional>
 #include <variant>
+#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <kvproto/diagnosticspb.grpc.pb.h>
 #pragma GCC diagnostic pop
 
@@ -45,8 +64,8 @@ public:
 
 public:
     std::optional<::diagnosticspb::LogMessage> next();
-    static bool read_level(size_t limit, const char * s, size_t & level_start, size_t & level_size);
-    static bool read_date(
+    static bool readLevel(size_t limit, const char * s, size_t & level_start, size_t & level_size);
+    static bool readDate(
         size_t limit,
         const char * s,
         int & y,
@@ -95,7 +114,7 @@ public:
 
 private:
     static Result<::diagnosticspb::LogMessage> parseLog(const std::string & log_content);
-    bool match(const int64_t time, const diagnosticspb::LogLevel level, const char * c, size_t sz) const;
+    bool match(int64_t time, diagnosticspb::LogLevel level, const char * c, size_t sz) const;
     void init();
 
     std::optional<Error> readLog(LogEntry &);
@@ -119,8 +138,8 @@ void ReadLogFile(const std::string & path, std::function<void(std::istream &)> &
 
 bool FilterFileByDatetime(
     const std::string & path,
-    const std::string & error_log_file_prefix,
-    const int64_t start_time);
+    const std::vector<std::string> & ignore_log_file_prefixes,
+    int64_t start_time);
 
 
 }; // namespace DB

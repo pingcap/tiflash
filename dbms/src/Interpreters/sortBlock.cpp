@@ -1,16 +1,28 @@
-#include <Interpreters/sortBlock.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
+#include <Interpreters/sortBlock.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int BAD_COLLATION;
+extern const int BAD_COLLATION;
 }
 
 
@@ -55,9 +67,11 @@ struct PartialSortingLess
 {
     const ColumnsWithSortDescriptions & columns;
 
-    explicit PartialSortingLess(const ColumnsWithSortDescriptions & columns_) : columns(columns_) {}
+    explicit PartialSortingLess(const ColumnsWithSortDescriptions & columns_)
+        : columns(columns_)
+    {}
 
-    bool operator() (size_t a, size_t b) const
+    bool operator()(size_t a, size_t b) const
     {
         for (ColumnsWithSortDescriptions::const_iterator it = columns.begin(); it != columns.end(); ++it)
         {
@@ -75,9 +89,11 @@ struct PartialSortingLessWithCollation
 {
     const ColumnsWithSortDescriptions & columns;
 
-    explicit PartialSortingLessWithCollation(const ColumnsWithSortDescriptions & columns_) : columns(columns_) {}
+    explicit PartialSortingLessWithCollation(const ColumnsWithSortDescriptions & columns_)
+        : columns(columns_)
+    {}
 
-    bool operator() (size_t a, size_t b) const
+    bool operator()(size_t a, size_t b) const
     {
         for (ColumnsWithSortDescriptions::const_iterator it = columns.begin(); it != columns.end(); ++it)
         {
@@ -234,4 +250,4 @@ void stableSortBlock(Block & block, const SortDescription & description)
         block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->permute(perm, 0);
 }
 
-}
+} // namespace DB

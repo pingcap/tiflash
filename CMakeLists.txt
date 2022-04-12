@@ -1,8 +1,31 @@
-project (ClickHouse)
-cmake_minimum_required (VERSION 2.8)
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ClickHouse_SOURCE_DIR}/cmake/Modules/")
+project (TiFlash)
+cmake_minimum_required (VERSION 3.21)
+
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
+
+option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
+
+if(CMAKE_PREFIX_PATH)
+    # append paths for cmake to check libs
+    set(ENV{LD_LIBRARY_PATH}
+            "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
+endif()
 
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -84,8 +107,7 @@ endif ()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
-    # clang: warning: private field 'hash_salt' is not used [-Wunused-private-field]
-    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument -Wno-unused-private-field")
+    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument")
 endif ()
 
 if (ARCH_LINUX)
@@ -96,7 +118,6 @@ option (USE_STATIC_LIBRARIES "Set to FALSE to use shared libraries" ON)
 option (MAKE_STATIC_LIBRARIES "Set to FALSE to make shared libraries" ${USE_STATIC_LIBRARIES})
 if (NOT MAKE_STATIC_LIBRARIES)
     option (SPLIT_SHARED_LIBRARIES "DEV ONLY. Keep all internal libs as separate .so for faster linking" OFF)
-    option (CLICKHOUSE_SPLIT_BINARY "Make several binaries instead one bundled (clickhouse-server, clickhouse-client, ... )" OFF)
 endif ()
 
 if (SPLIT_SHARED_LIBRARIES)
@@ -130,6 +151,22 @@ endif ()
 set (COMPILER_FLAGS                      "${COMPILER_FLAGS} ${CXX11_ABI_FLAGS}")
 
 string(REGEX MATCH "-?[0-9]+(.[0-9]+)?$" COMPILER_POSTFIX ${CMAKE_CXX_COMPILER})
+
+find_program (LLVM_OBJCOPY_PATH NAMES "llvm-objcopy${COMPILER_POSTFIX}" "llvm-objcopy")
+find_program (LLVM_AR_PATH NAMES "llvm-ar${COMPILER_POSTFIX}" "llvm-ar")
+find_program (LLVM_RANLIB_PATH NAMES "llvm-ranlib${COMPILER_POSTFIX}" "llvm-ranlib")
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_OBJCOPY_PATH)
+    set(CMAKE_OBJCOPY ${LLVM_OBJCOPY_PATH})
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_AR_PATH)
+    set(CMAKE_AR ${LLVM_AR_PATH})
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLVM_RANLIB_PATH)
+    set(CMAKE_RANLIB ${LLVM_RANLIB_PATH})
+endif()
 
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
@@ -196,7 +233,7 @@ set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fn
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
-if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND ARCH_FREEBSD))
+if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 endif ()
 
@@ -205,25 +242,37 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 include (cmake/test_compiler.cmake)
 
 if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set (TIFLASH_LLVM_TOOLCHAIN 1)
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
-    set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
+    option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" OFF)
+    option (USE_LLVM_COMPILER_RT "Use compiler-rt from LLVM" OFF)
 
+
+    set (LIBCXX_PATH "" CACHE STRING "Use custom path for libc++. It should be used for MSan.")
+    set (TIFLASH_LLVM_LINKAGE_FLAGS "")
     if (USE_LIBCXX)
         set (CMAKE_CXX_FLAGS             "${CMAKE_CXX_FLAGS} -stdlib=libc++") # Ok for clang6, for older can cause 'not used option' warning
         set (CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -D_LIBCPP_DEBUG=0") # More checks in debug build.
-        if (MAKE_STATIC_LIBRARIES)
-            link_libraries (-Wl,-Bstatic -stdlib=libc++ c++ c++abi -Wl,-Bdynamic)
-        else ()
-            link_libraries (-stdlib=libc++ c++ c++abi)
-        endif ()
 
+        list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -stdlib=libc++ -lc++ -lc++abi)
         if (LIBCXX_PATH)
-#            include_directories (BEFORE SYSTEM "${LIBCXX_PATH}/include" "${LIBCXX_PATH}/include/c++/v1")
-            link_directories ("${LIBCXX_PATH}/lib")
-        endif ()
+          link_directories ("${LIBCXX_PATH}/lib")
+        endif()
     endif ()
+
+    if (USE_LLVM_LIBUNWIND)
+      set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -unwindlib=libunwind")
+      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -unwindlib=libunwind -lunwind)
+    endif ()
+
+    if (USE_LLVM_COMPILER_RT)
+      set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rtlib=compiler-rt")
+      list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -rtlib=compiler-rt)
+    endif ()
+
+    link_libraries (-Wl,-Bdynamic ${TIFLASH_LLVM_LINKAGE_FLAGS})
 endif ()
 
 if (USE_STATIC_LIBRARIES AND HAVE_NO_PIE)
@@ -249,13 +298,6 @@ if (USE_INCLUDE_WHAT_YOU_USE)
     endif()
 endif ()
 
-# when installing to /usr - place configs to /etc but for /usr/local place to /usr/local/etc
-if (CMAKE_INSTALL_PREFIX STREQUAL "/usr")
-    set (CLICKHOUSE_ETC_DIR "/etc")
-else ()
-    set (CLICKHOUSE_ETC_DIR "${CMAKE_INSTALL_PREFIX}/etc")
-endif ()
-
 option (UNBUNDLED "Try find all libraries in system (if fail - use bundled from contrib/)" OFF)
 if (UNBUNDLED)
     set(NOT_UNBUNDLED 0)
@@ -266,6 +308,11 @@ endif ()
 if (UNBUNDLED OR NOT (ARCH_LINUX OR APPLE) OR ARCH_32)
     option (NO_WERROR "Disable -Werror compiler option" ON)
 endif ()
+
+if (PREBUILT_LIBS_ROOT)
+    list(PREPEND CMAKE_SYSTEM_PREFIX_PATH ${PREBUILT_LIBS_ROOT})
+    message(STATUS "Add ${PREBUILT_LIBS_ROOT} to cmake search path for pre-built libraries")
+endif()
 
 message (STATUS "Building for: ${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR} ${CMAKE_LIBRARY_ARCHITECTURE} ; USE_STATIC_LIBRARIES=${USE_STATIC_LIBRARIES} MAKE_STATIC_LIBRARIES=${MAKE_STATIC_LIBRARIES} UNBUNDLED=${UNBUNDLED}")
 
@@ -281,7 +328,6 @@ include (cmake/lib_name.cmake)
 include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
 
-set (USE_INTERNAL_ZLIB_LIBRARY OFF CACHE BOOL "" FORCE)
 option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
 
 include (cmake/find_zlib.cmake)
@@ -302,12 +348,13 @@ include (cmake/find_rt.cmake)
 include (cmake/find_execinfo.cmake)
 include (cmake/find_readline_edit.cmake)
 include (cmake/find_re2.cmake)
-include (cmake/find_llvm.cmake)
+include (cmake/find_protobuf.cmake)
 include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
+include (cmake/find_curl.cmake)
 include (cmake/find_prometheus.cmake)
-include (cmake/find_raftstore_proxy.cmake)
+include (cmake/find_tiflash_proxy.cmake)
 include (cmake/find_xxhash.cmake)
 
 include (cmake/find_contrib_lib.cmake)
@@ -326,17 +373,8 @@ include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
 include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
-if (ENABLE_MYSQL_STORAGE)
-    include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
-endif()
 
 include (cmake/print_flags.cmake)
-
-# Directory for Yandex specific files
-set (CLICKHOUSE_PRIVATE_DIR ${ClickHouse_SOURCE_DIR}/private/)
-if (EXISTS ${CLICKHOUSE_PRIVATE_DIR})
-    add_subdirectory (${CLICKHOUSE_PRIVATE_DIR})
-endif ()
 
 # Enable tests by default when build type is debug
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
@@ -364,12 +402,20 @@ else (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are disabled")
 endif (ENABLE_FAILPOINTS)
 
+# Enable PageStorage V3 test.
+option (ENABLE_V3_PAGESTORAGE "Enables V3 PageStorage" ON)
+
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
 option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     include(CodeCoverage)
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
+endif ()
+
+option (TEST_LLVM_COVERAGE "Enables flags for test coverage" OFF)
+if (TEST_LLVM_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-instr-generate -fcoverage-mapping -DTIFLASH_LLVM_COVERAGE=1")
 endif ()
 
 if (ARCH_AMD64)
@@ -389,3 +435,10 @@ add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
 
+# Building a rust project may require setting up toolchains. Rustup cannot handle parallel requests, hence it may fail to
+# finish the setup if multiple projects want to install a same version. To mitigate the situation, we force cargo targets
+# to be invoked sequentially by adding linear dependency relations between them.
+# Another way to do so is to use JOB_POOL with single concurrency. However, it is Ninja specific and it seems to have bugs
+# with a large number of threads.
+include (cmake/sequential.cmake)
+build_sequentially (symbolization tiflash_proxy)

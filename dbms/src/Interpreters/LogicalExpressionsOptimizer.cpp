@@ -1,27 +1,41 @@
-#include <Interpreters/LogicalExpressionsOptimizer.h>
-#include <Interpreters/Settings.h>
-
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTLiteral.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <Common/typeid_cast.h>
+#include <Interpreters/LogicalExpressionsOptimizer.h>
+#include <Interpreters/Settings.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
 
 #include <deque>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
 LogicalExpressionsOptimizer::OrWithExpression::OrWithExpression(ASTFunction * or_function_,
-    const IAST::Hash & expression_, const std::string & alias_)
-    : or_function(or_function_), expression(expression_), alias(alias_)
+                                                                const IAST::Hash & expression_,
+                                                                const std::string & alias_)
+    : or_function(or_function_)
+    , expression(expression_)
+    , alias(alias_)
 {
 }
 
@@ -31,7 +45,8 @@ bool LogicalExpressionsOptimizer::OrWithExpression::operator<(const OrWithExpres
 }
 
 LogicalExpressionsOptimizer::LogicalExpressionsOptimizer(ASTSelectQuery * select_query_, const Settings & settings_)
-    : select_query(select_query_), settings(settings_)
+    : select_query(select_query_)
+    , settings(settings_)
 {
 }
 
@@ -150,7 +165,7 @@ void LogicalExpressionsOptimizer::collectDisjunctiveEqualityChains()
                 auto res = or_parent_map.insert(std::make_pair(function, ParentNodes{from_node}));
                 if (!res.second)
                     throw Exception("LogicalExpressionsOptimizer: parent node information is corrupted",
-                        ErrorCodes::LOGICAL_ERROR);
+                                    ErrorCodes::LOGICAL_ERROR);
             }
         }
         else
@@ -186,18 +201,17 @@ void LogicalExpressionsOptimizer::collectDisjunctiveEqualityChains()
 
 namespace
 {
-
 inline ASTs & getFunctionOperands(ASTFunction * or_function)
 {
     auto expression_list = static_cast<ASTExpressionList *>(&*(or_function->children[0]));
     return expression_list->children;
 }
 
-}
+} // namespace
 
 bool LogicalExpressionsOptimizer::mayOptimizeDisjunctiveEqualityChain(const DisjunctiveEqualityChain & chain) const
 {
-    const auto & equalities =  chain.second;
+    const auto & equalities = chain.second;
     const auto & equality_functions = equalities.functions;
 
     /// We eliminate too short chains.
@@ -236,8 +250,7 @@ void LogicalExpressionsOptimizer::addInExpression(const DisjunctiveEqualityChain
 
     /// Sort the literals so that they are specified in the same order in the IN expression.
     /// Otherwise, they would be specified in the order of the ASTLiteral addresses, which is nondeterministic.
-    std::sort(value_list->children.begin(), value_list->children.end(), [](const DB::ASTPtr & lhs, const DB::ASTPtr & rhs)
-    {
+    std::sort(value_list->children.begin(), value_list->children.end(), [](const DB::ASTPtr & lhs, const DB::ASTPtr & rhs) {
         const auto val_lhs = static_cast<const ASTLiteral *>(&*lhs);
         const auto val_rhs = static_cast<const ASTLiteral *>(&*rhs);
         return val_lhs->value < val_rhs->value;
@@ -305,11 +318,10 @@ void LogicalExpressionsOptimizer::cleanupOrExpressions()
         auto it = garbage_map.find(or_with_expression.or_function);
         if (it == garbage_map.end())
             throw Exception("LogicalExpressionsOptimizer: garbage map is corrupted",
-                ErrorCodes::LOGICAL_ERROR);
+                            ErrorCodes::LOGICAL_ERROR);
 
         auto & first_erased = it->second;
-        first_erased = std::remove_if(operands.begin(), first_erased, [&](const ASTPtr & operand)
-        {
+        first_erased = std::remove_if(operands.begin(), first_erased, [&](const ASTPtr & operand) {
             return std::binary_search(equality_functions.begin(), equality_functions.end(), &*operand);
         });
     }
@@ -342,7 +354,7 @@ void LogicalExpressionsOptimizer::fixBrokenOrExpressions()
             auto it = or_parent_map.find(or_function);
             if (it == or_parent_map.end())
                 throw Exception("LogicalExpressionsOptimizer: parent node information is corrupted",
-                    ErrorCodes::LOGICAL_ERROR);
+                                ErrorCodes::LOGICAL_ERROR);
             auto & parents = it->second;
 
             auto it2 = column_to_position.find(or_function);
@@ -358,8 +370,7 @@ void LogicalExpressionsOptimizer::fixBrokenOrExpressions()
             for (auto & parent : parents)
             {
                 parent->children.push_back(operands[0]);
-                auto first_erased = std::remove_if(parent->children.begin(), parent->children.end(),
-                    [or_function](const ASTPtr & ptr) { return ptr.get() == or_function; });
+                auto first_erased = std::remove_if(parent->children.begin(), parent->children.end(), [or_function](const ASTPtr & ptr) { return ptr.get() == or_function; });
 
                 parent->children.erase(first_erased, parent->children.end());
             }
@@ -376,4 +387,4 @@ void LogicalExpressionsOptimizer::fixBrokenOrExpressions()
     }
 }
 
-}
+} // namespace DB

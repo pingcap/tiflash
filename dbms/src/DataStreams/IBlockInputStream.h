@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <Storages/TableLockHolder.h>
@@ -79,6 +94,20 @@ public:
     virtual void readPrefix() {}
     virtual void readSuffix() {}
 
+    /** Estimate count of threads to be created through the InputStream.
+     *  Note: Since some new threads in some InputStream(e.g. ParallelAggregatingBlockInputStream) won't be clear until runtime.
+     *  The result may not be 100% identical to the actual number of threads.
+     *  However, most of new threads in certainty are considered
+     *  and that's enough to be used to estimate the expected threads load of the system.
+     */
+    int estimateNewThreadCount()
+    {
+        int cnt = 0;
+        resetNewThreadCountCompute();
+        collectNewThreadCount(cnt);
+        return cnt;
+    }
+
     virtual ~IBlockInputStream() = default;
 
     /** To output the data stream transformation tree (query execution plan).
@@ -94,7 +123,7 @@ public:
 
     /** Must be called before read, readPrefix.
       */
-    void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1);
+    void dumpTree(FmtBuffer & buffer, size_t indent = 0, size_t multiplier = 1);
 
     /** Check the depth of the pipeline.
       * If max_depth is specified and the `depth` is greater - throw an exception.
@@ -118,16 +147,49 @@ public:
                 return;
     }
 
+    virtual void collectNewThreadCount(int & cnt)
+    {
+        if (!collected)
+        {
+            collected = true;
+            collectNewThreadCountOfThisLevel(cnt);
+            for (auto & child : children)
+            {
+                if (child)
+                    child->collectNewThreadCount(cnt);
+            }
+        }
+    }
+
+    virtual void collectNewThreadCountOfThisLevel(int &) {}
+
+    virtual void resetNewThreadCountCompute()
+    {
+        if (collected)
+        {
+            collected = false;
+            for (auto & child : children)
+            {
+                if (child)
+                    child->resetNewThreadCountCompute();
+            }
+        }
+    }
+
 protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;
+    bool collected = false; // a flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
 
 private:
     TableLockHolders table_locks;
 
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
+    mutable std::mutex tree_id_mutex;
+    mutable String tree_id;
 
-    /// Get text with names of this source and the entire subtree.
+    /// Get text with names of this source and the entire subtree, this function should only be called after the
+    /// InputStream tree is constructed.
     String getTreeID() const;
 };
 

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/typeid_cast.h>
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/dbgFuncSchemaName.h>
@@ -9,12 +23,12 @@
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <fmt/core.h>
 
 #include <boost/algorithm/string/replace.hpp>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
@@ -51,13 +65,11 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
 
-    std::stringstream ss;
     auto mapped = mappedDatabase(context, database_name);
     if (mapped == std::nullopt)
-        ss << "Database " << database_name << " not found.";
+        output(fmt::format("Database {} not found.", database_name));
     else
-        ss << mapped.value();
-    output(ss.str());
+        output(fmt::format(mapped.value()));
 }
 
 void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -71,15 +83,13 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
     if (args.size() == 3)
         qualify = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value) == "true";
 
-    std::stringstream ss;
     auto mapped = mappedTable(context, database_name, table_name);
     if (mapped == std::nullopt)
-        ss << "Table " << database_name << "." << table_name << " not found.";
+        output(fmt::format("Table {}.{} not found.", database_name, table_name));
     else if (qualify)
-        ss << mapped->first << "." << mapped->second;
+        output(fmt::format("{}.{}", mapped->first, mapped->second));
     else
-        ss << mapped->second;
-    output(ss.str());
+        output(fmt::format(mapped->second));
 }
 
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args)

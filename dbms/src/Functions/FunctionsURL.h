@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnString.h>
@@ -8,6 +22,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsString.h>
 #include <Functions/FunctionsStringArray.h>
+#include <fmt/core.h>
 
 #ifdef __APPLE__
 #include <common/apple_memrchr.h>
@@ -177,10 +192,10 @@ struct ExtractFirstSignificantSubdomain
         res_data = tmp;
         res_size = domain_length;
 
-        auto begin = tmp;
-        auto end = begin + domain_length;
+        const auto * begin = tmp;
+        const auto * end = begin + domain_length;
         const char * last_3_periods[3]{};
-        auto pos = static_cast<const char *>(memchr(begin, '.', domain_length));
+        const auto * pos = static_cast<const char *>(memchr(begin, '.', domain_length));
 
         while (pos)
         {
@@ -587,14 +602,15 @@ public:
     static void checkArguments(const DataTypes & arguments)
     {
         if (!arguments[0]->isString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}. Must be String.", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     void init(Block & /*block*/, const ColumnNumbers & /*arguments*/) {}
 
     /// Returns the position of the argument that is the column of rows
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 0;
     }
@@ -672,12 +688,13 @@ public:
     static void checkArguments(const DataTypes & arguments)
     {
         if (!arguments[0]->isString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}. Must be String.", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     /// Returns the position of the argument that is the column of rows
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 0;
     }
@@ -749,14 +766,15 @@ public:
     static void checkArguments(const DataTypes & arguments)
     {
         if (!arguments[0]->isString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}. Must be String.", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     void init(Block & /*block*/, const ColumnNumbers & /*arguments*/) {}
 
     /// Returns the position of the argument that is the column of rows
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 0;
     }
@@ -844,14 +862,15 @@ public:
     static void checkArguments(const DataTypes & arguments)
     {
         if (!arguments[0]->isString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be String.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}. Must be String.", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     void init(Block & /*block*/, const ColumnNumbers & /*arguments*/) {}
 
     /// Returns the position of the argument that is the column of rows
-    size_t getStringsArgumentPosition()
+    static size_t getStringsArgumentPosition()
     {
         return 0;
     }
@@ -960,7 +979,7 @@ struct ExtractSubstringImpl
         res_data.assign(start, length);
     }
 
-    static void vector_fixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
+    static void vectorFixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
     {
         throw Exception("Column of type FixedString is not supported by URL functions", ErrorCodes::ILLEGAL_COLUMN);
     }
@@ -1018,7 +1037,7 @@ struct CutSubstringImpl
         res_data.append(start + length, data.data() + data.size());
     }
 
-    static void vector_fixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
+    static void vectorFixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
     {
         throw Exception("Column of type FixedString is not supported by URL functions", ErrorCodes::ILLEGAL_COLUMN);
     }
@@ -1033,7 +1052,7 @@ struct DecodeURLComponentImpl
     static void constant(const std::string & data,
                          std::string & res_data);
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
 };
 
 } // namespace DB

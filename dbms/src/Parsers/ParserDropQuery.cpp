@@ -1,16 +1,26 @@
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTDropQuery.h>
-
-#include <Parsers/CommonParsers.h>
-#include <Parsers/ParserDropQuery.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <Common/typeid_cast.h>
+#include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/CommonParsers.h>
+#include <Parsers/ParserDropQuery.h>
 
 
 namespace DB
 {
-
-
 bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_drop("DROP");
@@ -24,7 +34,6 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ASTPtr database;
     ASTPtr table;
-    String cluster_str;
     bool detach = false;
     bool if_exists = false;
     bool temporary = false;
@@ -44,12 +53,6 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         if (!name_p.parse(pos, database, expected))
             return false;
-
-        if (ParserKeyword{"ON"}.ignore(pos, expected))
-        {
-            if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-                return false;
-        }
     }
     else
     {
@@ -71,12 +74,6 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (!name_p.parse(pos, table, expected))
                 return false;
         }
-
-        if (ParserKeyword{"ON"}.ignore(pos, expected))
-        {
-            if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-                return false;
-        }
     }
 
     auto query = std::make_shared<ASTDropQuery>();
@@ -89,10 +86,9 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         query->database = typeid_cast<ASTIdentifier &>(*database).name;
     if (table)
         query->table = typeid_cast<ASTIdentifier &>(*table).name;
-    query->cluster = cluster_str;
 
     return true;
 }
 
 
-}
+} // namespace DB

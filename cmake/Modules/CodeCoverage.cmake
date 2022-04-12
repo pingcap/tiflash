@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Copyright (c) 2012 - 2017, Lars Bilke
 # All rights reserved.
 #
@@ -140,23 +154,6 @@ find_program( CPPFILT_PATH NAMES c++filt )
 if(NOT GCOV_PATH)
     message(FATAL_ERROR "gcov not found! Aborting...")
 endif() # NOT GCOV_PATH
-
-get_property(LANGUAGES GLOBAL PROPERTY ENABLED_LANGUAGES)
-list(GET LANGUAGES 0 LANG)
-
-if("${CMAKE_${LANG}_COMPILER_ID}" MATCHES "(Apple)?[Cc]lang")
-    if("${CMAKE_${LANG}_COMPILER_VERSION}" VERSION_LESS 3)
-        message(FATAL_ERROR "Clang version must be 3.0.0 or greater! Aborting...")
-    endif()
-elseif(NOT CMAKE_COMPILER_IS_GNUCXX)
-    if("${CMAKE_Fortran_COMPILER_ID}" MATCHES "[Ff]lang")
-        # Do nothing; exit conditional without error if true
-    elseif("${CMAKE_Fortran_COMPILER_ID}" MATCHES "GNU")
-        # Do nothing; exit conditional without error if true
-    else()
-        message(FATAL_ERROR "Compiler is not GNU gcc! Aborting...")
-    endif()
-endif()
 
 set(COVERAGE_COMPILER_FLAGS "-g -fprofile-arcs -ftest-coverage"
         CACHE INTERNAL "")

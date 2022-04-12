@@ -1,0 +1,113 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t
+mysql> create table test.t(c1 tinyint, c2 varchar(100), c3 varchar(100))
+mysql> insert into test.t values(1, 'abc', 'def')
+mysql> insert into test.t values(1, 'abc', '')
+mysql> insert into test.t values(100, 'abc', '')
+mysql> insert into test.t values(-1, 'abc', '')
+mysql> insert into test.t values(Null, 'abc', 'def')
+mysql> alter table test.t set tiflash replica 1
+mysql> drop table if exists test.t1
+mysql> create table test.t1(c1 tinyint, c2 varchar(100), c3 varchar(100))
+mysql> insert into test.t1 values(1, '杭州', '')
+mysql> insert into test.t1 values(5, '杭州', '')
+mysql> insert into test.t1 values(5, '杭州', '西湖')
+mysql> insert into test.t1 values(5, '杭州', 'test')
+mysql> insert into test.t1 values(5, '', '西湖')
+mysql> alter table test.t1 set tiflash replica 1
+mysql> drop table if exists test.t2
+mysql> create table test.t2(c1 varchar(100))
+mysql> insert into test.t2 values('b')
+mysql> alter table test.t2 set tiflash replica 1
+func> wait_table test t
+func> wait_table test t1
+func> wait_table test t2
+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lpad(c2, c1, c3) from test.t
++------------------+
+| lpad(c2, c1, c3) |
++------------------+
+| a                |
+| a                |
+| NULL             |
+| NULL             |
+| NULL             |
++------------------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select rpad(c2, c1, c3) from test.t
++------------------+
+| rpad(c2, c1, c3) |
++------------------+
+| a                |
+| a                |
+| NULL             |
+| NULL             |
+| NULL             |
++------------------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lpad(c2, c1, c3) from test.t1
++------------------+
+| lpad(c2, c1, c3) |
++------------------+
+| 杭               |
+| NULL             |
+| 西湖西杭州       |
+| tes杭州          |
+| 西湖西湖西       |
++------------------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select rpad(c2, c1, c3) from test.t1
++------------------+
+| rpad(c2, c1, c3) |
++------------------+
+| 杭               |
+| NULL             |
+| 杭州西湖西       |
+| 杭州tes          |
+| 西湖西湖西       |
++------------------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select rpad(c1, c1, c3) from test.t1
++------------------+
+| rpad(c1, c1, c3) |
++------------------+
+| 1                |
+| NULL             |
+| 5西湖西湖        |
+| 5test            |
+| 5西湖西湖        |
++------------------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select rpad(c1, c1, c1) from test.t1
++------------------+
+| rpad(c1, c1, c1) |
++------------------+
+| 1                |
+| 55555            |
+| 55555            |
+| 55555            |
+| 55555            |
++------------------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select rpad(c2,c2,c2), count(*) from test.t1 group by rpad(c2,c2,c2);
++----------------+----------+
+| rpad(c2,c2,c2) | count(*) |
++----------------+----------+
+|                |        5 |
++----------------+----------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; SELECT max(lpad('y',0,c1)) FROM test.t2
+max(lpad('y',0,c1))
