@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/ColumnsDescription.h>
@@ -59,6 +73,12 @@ public:
         const String & handle_pk_name,
         const String & engine_type);
 
+    int newTables(
+        const String & database_name,
+        const std::vector<std::tuple<String, ColumnsDescription, String>> & tables,
+        Timestamp tso,
+        const String & engine_type);
+
     TableID addTable(const String & database_name, TiDB::TableInfo && table_info);
 
     static TiDB::TableInfoPtr parseColumns(
@@ -94,6 +114,8 @@ public:
         const String & new_column_name);
 
     void renameTable(const String & database_name, const String & table_name, const String & new_table_name);
+
+    void renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map);
 
     void truncateTable(const String & database_name, const String & table_name);
 

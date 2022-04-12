@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 if (APPLE)
     if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin" AND NOT "${CMAKE_SYSTEM_VERSION}" VERSION_LESS "16.0.0")
         set (APPLE_SIERRA_OR_NEWER 1)
@@ -122,6 +136,8 @@ target_include_directories (common PUBLIC ${COMMON_INCLUDE_DIR})
 
 target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
+# `libcommon` provides a bridge for many other libs.
+# We expose the linkage to public because we want headers to be inherited.
 target_link_libraries (
     common
     PUBLIC
@@ -139,7 +155,7 @@ target_link_libraries (
 )
 
 if (RT_LIBRARY)
-    target_link_libraries (common ${RT_LIBRARY})
+    target_link_libraries (common PUBLIC ${RT_LIBRARY})
 endif ()
 
 if (ENABLE_TESTS)

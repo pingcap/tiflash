@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #if !__clang__
 #pragma GCC diagnostic push
@@ -155,6 +169,38 @@ dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
 dt_storage_pool_data_gc_min_bytes = 256
 dt_storage_pool_data_gc_max_valid_rate = 0.5
+dt_compression_method = "zstd"
+dt_compression_level = -1
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "zstd"
+dt_compression_level = 1
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "lz4"
+dt_compression_level = 2
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "lz4hc"
+dt_compression_level = 9
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "Zstd"
+dt_compression_level = 1
+        )",
+        R"(
+[profiles]
+[profiles.default]
+dt_compression_method = "LZ4"
+dt_compression_level = 1
         )"};
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
@@ -175,13 +221,44 @@ dt_storage_pool_data_gc_max_valid_rate = 0.5
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_pack_size, 8388608);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_pack_rows, 2048);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_column_file_size, 8388608);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_column_file_rows, 2048);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_size, 536870912);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_limit_size, 42991616);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_force_merge_delta_size, 1073741824);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_force_split_size, 1610612736);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
+
+        if (i == 0)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::ZSTD);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, -1);
+        }
+        if (i == 1)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::ZSTD);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 1);
+        }
+        if (i == 2)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::LZ4);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 2);
+        }
+        if (i == 3)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::LZ4HC);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 9);
+        }
+        if (i == 4)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::ZSTD);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 1);
+        }
+        if (i == 5)
+        {
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_method, CompressionMethod::LZ4);
+            ASSERT_EQ(global_ctx.getSettingsRef().dt_compression_level, 1);
+        }
     }
     global_ctx.setSettings(origin_settings);
 }
@@ -279,7 +356,7 @@ dt_page_gc_low_write_prob = 0.2
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
     std::unique_ptr<StoragePathPool> path_pool = std::make_unique<StoragePathPool>(global_ctx.getPathPool().withTable("test", "t1", false));
-    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", *path_pool, global_ctx, global_ctx.getSettingsRef());
+    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", /*table_id*/ 100, *path_pool, global_ctx, global_ctx.getSettingsRef());
 
     auto verify_storage_pool_reload_config = [&global_ctx](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();

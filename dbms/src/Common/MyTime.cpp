@@ -1,7 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Functions/FunctionsDateTime.h>
+#include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
@@ -18,6 +32,18 @@ namespace ErrorCodes
 extern const int BAD_ARGUMENTS;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
+
+// day number per 400 years, from the year that year % 400 = 1
+static constexpr int DAY_NUM_PER_400_YEARS = 365 * 400 + 97;
+// day number per 100 years in every 400 years, from the year that year % 100 = 1
+// note the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
+static constexpr int DAY_NUM_PER_100_YEARS = 365 * 100 + 24;
+// day number per 4 years in every 100 years, from the year that year % 4 = 1
+// note the day number of the last 4 years should be DAY_NUM_PER_4_YEARS - 1
+static constexpr int DAY_NUM_PER_4_YEARS = 365 * 4 + 1;
+// day number per years in every 4 years
+// note the day number of the last 1 years maybe DAY_NUM_PER_YEARS + 1
+static constexpr int DAY_NUM_PER_YEARS = 365;
 
 // adjustYear adjusts year according to y.
 // See https://dev.mysql.com/doc/refman/5.7/en/two-digit-years.html
@@ -501,29 +527,33 @@ int MyTimeBase::weekDay() const
     return diff;
 }
 
+const String & MyTimeBase::weekDayName() const
+{
+    static const String invalid_weekday;
+    if (month == 0 || day == 0)
+        return invalid_weekday;
+    return weekday_names[weekDay()];
+}
+
+const String & MyTimeBase::monthName() const
+{
+    static const String invalid_month_name;
+    if (month <= 0 || month > 12)
+        return invalid_month_name;
+    return month_names[month - 1];
+}
+
 bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
     if (year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59)
     {
         return false;
     }
-    static int days_of_month_table[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    if (month != 2)
-        return day <= days_of_month_table[month];
-    bool is_leap_year = false;
-    if ((year & 0b0011) == 0)
-    {
-        is_leap_year = year % 100 != 0 || year % 400 == 0;
-    }
-    return day <= (is_leap_year ? 29 : 28);
+    return day <= getLastDay(year, month);
 }
 
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
 {
-    // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
-    // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
-    static const DateLUTImpl & lut = DateLUT::instance("UTC");
-
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
     bool is_date = false;
@@ -581,51 +611,59 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         {
         case 14: // YYYYMMDDHHMMSS
         {
-            std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
+            int ret = std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
+            truncated_or_incorrect = (ret != 6);
             hhmmss = true;
             break;
         }
         case 12: // YYMMDDHHMMSS
         {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
+            truncated_or_incorrect = (ret != 6);
             year = adjustYear(year);
             hhmmss = true;
             break;
         }
         case 11: // YYMMDDHHMMS
         {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
+            truncated_or_incorrect = (ret != 6);
             year = adjustYear(year);
             hhmmss = true;
             break;
         }
         case 10: // YYMMDDHHMM
         {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT(cert-err34-c): check conversion error manually
+            truncated_or_incorrect = (ret != 5);
             year = adjustYear(year);
             break;
         }
         case 9: // YYMMDDHHM
         {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT(cert-err34-c): check conversion error manually
+            truncated_or_incorrect = (ret != 5);
             year = adjustYear(year);
             break;
         }
         case 8: // YYYYMMDD
         {
-            std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT
+            int ret = std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT(cert-err34-c): check conversion error manually
+            truncated_or_incorrect = (ret != 3);
             break;
         }
         case 7: // YYMMDDH
         {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT(cert-err34-c): check conversion error manually
+            truncated_or_incorrect = (ret != 4);
             year = adjustYear(year);
             break;
         }
         case 6: // YYMMDD
         case 5: // YYMMD
         {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT
+            int ret = std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT(cert-err34-c): check conversion error manually
+            truncated_or_incorrect = (ret != 3);
             year = adjustYear(year);
             break;
         }
@@ -644,28 +682,29 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             switch (frac_str.size())
             {
             case 0:
-                ret = 1;
                 is_date = true;
                 break;
             case 1:
             case 2:
             {
-                ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT
+                ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT(cert-err34-c): check conversion error manually
+                truncated_or_incorrect = (ret != 1);
                 break;
             }
             case 3:
             case 4:
             {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT
+                ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT(cert-err34-c): check conversion error manually
+                truncated_or_incorrect = (ret != 2);
                 break;
             }
             default:
             {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT
+                ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT(cert-err34-c): check conversion error manually
+                truncated_or_incorrect = (ret != 3);
                 break;
             }
             }
-            truncated_or_incorrect = (ret == 0);
         }
         if (l == 9 || l == 10)
         {
@@ -751,7 +790,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             if (micro_second >= std::pow(10, fsp))
             {
                 MyDateTime datetime(year, month, day, hour, minute, second, 0);
-                UInt64 result = AddSecondsImpl::execute(datetime.toPackedUInt(), 1, lut);
+                UInt64 result = addSeconds(datetime.toPackedUInt(), 1);
                 MyDateTime result_datetime(result);
                 year = result_datetime.year;
                 month = result_datetime.month;
@@ -803,7 +842,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         {
             offset = -offset;
         }
-        auto tmp = AddSecondsImpl::execute(result.toPackedUInt(), -offset, lut);
+        auto tmp = addSeconds(result.toPackedUInt(), -offset);
         result = MyDateTime(tmp);
     }
 
@@ -885,6 +924,7 @@ void convertTimeZoneImpl(UInt64 from_time, UInt64 & to_time, const DateLUTImpl &
         }
         else
         {
+            /// For time earlier than 1970-01-01 00:00:00 UTC, return 0, aligned with mysql and tidb
             to_time = 0;
             return;
         }
@@ -937,7 +977,7 @@ std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt
 // the implementation is the same as TiDB
 int calcDayNum(int year, int month, int day)
 {
-    if (year == 0 || month == 0)
+    if (year == 0 && month == 0)
         return 0;
     int delsum = 365 * year + 31 * (month - 1) + day;
     if (month <= 2)
@@ -1045,11 +1085,15 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     UInt8 max_day = 31;
     if (!allow_invalid_date)
     {
+        if (month < 1)
+        {
+            throw TiFlashException(fmt::format("Incorrect time value: month {}", month), Errors::Types::WrongValue);
+        }
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         static auto is_leap_year = [](UInt16 _year) {
             return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0);
         };
-        max_day = max_days_in_month[month - 1]; // NOLINT
+        max_day = max_days_in_month[month - 1];
         if (month == 2 && is_leap_year(year))
         {
             max_day = 29;
@@ -1088,6 +1132,147 @@ bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 &
     }
     result = MyDateTime(year, month, day, hour, minute, second, microsecond);
     return false;
+}
+
+UInt64 addSeconds(UInt64 t, Int64 delta)
+{
+    // todo support zero date
+    if (t == 0)
+    {
+        return t;
+    }
+    MyDateTime my_time(t);
+    Int64 current_second = my_time.hour * 3600 + my_time.minute * 60 + my_time.second;
+    current_second += delta;
+    if (current_second >= 0)
+    {
+        Int64 days = current_second / MyTimeBase::SECOND_IN_ONE_DAY;
+        current_second = current_second % MyTimeBase::SECOND_IN_ONE_DAY;
+        if (days != 0)
+            addDays(my_time, days);
+    }
+    else
+    {
+        Int64 days = (-current_second) / MyTimeBase::SECOND_IN_ONE_DAY;
+        if ((-current_second) % MyTimeBase::SECOND_IN_ONE_DAY != 0)
+        {
+            days++;
+        }
+        current_second += days * MyTimeBase::SECOND_IN_ONE_DAY;
+        addDays(my_time, -days);
+    }
+    my_time.hour = current_second / 3600;
+    my_time.minute = (current_second % 3600) / 60;
+    my_time.second = current_second % 60;
+    return my_time.toPackedUInt();
+}
+
+void fillMonthAndDay(int day_num, int & month, int & day, const int * accumulated_days_per_month)
+{
+    month = day_num / 31;
+    if (accumulated_days_per_month[month] < day_num)
+        month++;
+    day = day_num - (month == 0 ? 0 : accumulated_days_per_month[month - 1] + 1);
+}
+
+void fromDayNum(MyDateTime & t, int day_num)
+{
+    // day_num is the days from 0000-01-01
+    if (day_num < 0)
+        throw Exception("MyDate/MyDateTime only support date after 0000-01-01");
+    int year = 0, month = 0, day = 0;
+    if (likely(day_num >= 366))
+    {
+        // year 0000 is leap year
+        day_num -= 366;
+
+        int num_of_400_years = day_num / DAY_NUM_PER_400_YEARS;
+        day_num = day_num % DAY_NUM_PER_400_YEARS;
+
+        int num_of_100_years = day_num / DAY_NUM_PER_100_YEARS;
+        // the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
+        // so can not use day_num % DAY_NUM_PER_100_YEARS
+        day_num = day_num - (num_of_100_years * DAY_NUM_PER_100_YEARS);
+
+        int num_of_4_years = day_num / DAY_NUM_PER_4_YEARS;
+        // can not use day_num % DAY_NUM_PER_4_YEARS
+        day_num = day_num - (num_of_4_years * DAY_NUM_PER_4_YEARS);
+
+        int num_of_years = day_num / DAY_NUM_PER_YEARS;
+        // can not use day_num % DAY_NUM_PER_YEARS
+        day_num = day_num - (num_of_years * DAY_NUM_PER_YEARS);
+
+        year = 1 + num_of_400_years * 400 + num_of_100_years * 100 + num_of_4_years * 4 + num_of_years;
+    }
+    static const int ACCUMULATED_DAYS_PER_MONTH[] = {30, 58, 89, 119, 150, 180, 211, 242, 272, 303, 333, 364};
+    static const int ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR[] = {30, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
+    bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+    fillMonthAndDay(day_num, month, day, is_leap_year ? ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR : ACCUMULATED_DAYS_PER_MONTH);
+    if (year < 0 || year > 9999)
+    {
+        throw Exception("datetime overflow");
+    }
+    else if (year == 0)
+    {
+        t.year = 0;
+        t.month = 0;
+        t.day = 0;
+        return;
+    }
+    t.year = year;
+    t.month = month + 1;
+    t.day = day + 1;
+}
+
+void addDays(MyDateTime & t, Int64 days)
+{
+    Int32 current_days = calcDayNum(t.year, t.month, t.day);
+    current_days += days;
+    fromDayNum(t, current_days);
+}
+
+void addMonths(MyDateTime & t, Int64 months)
+{
+    // month in my_time start from 1
+    Int64 current_month = t.month - 1;
+    current_month += months;
+    Int64 current_year = 0;
+    Int64 year = static_cast<Int64>(t.year);
+    if (current_month >= 0)
+    {
+        current_year = current_month / 12;
+        current_month = current_month % 12;
+        year += current_year;
+    }
+    else
+    {
+        current_year = (-current_month) / 12;
+        if ((-current_month) % 12 != 0)
+            current_year++;
+        current_month += current_year * 12;
+        year -= current_year;
+    }
+    if (year < 0 || year > 9999)
+    {
+        throw Exception("datetime overflow");
+    }
+    else if (year == 0)
+    {
+        t.year = 0;
+        t.month = 0;
+        t.day = 0;
+        return;
+    }
+    t.year = year;
+    static const int day_num_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    static const int day_num_in_month_leap_year[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    int max_day = 0;
+    if (t.year % 400 == 0 || (t.year % 100 != 0 && t.year % 4 == 0))
+        max_day = day_num_in_month_leap_year[current_month];
+    else
+        max_day = day_num_in_month[current_month];
+    t.month = current_month + 1;
+    t.day = t.day > max_day ? max_day : t.day;
 }
 
 MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
@@ -1987,8 +2172,11 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
         if (!f(ctx, my_time))
         {
 #ifndef NDEBUG
-            LOG_TRACE(&Poco::Logger::get("MyDateTimeParser"),
-                      "parse error, [str=" << ctx.view.toString() << "] [format=" << format << "] [parse_pos=" << ctx.pos << "]");
+            LOG_FMT_TRACE(&Poco::Logger::get("MyDateTimeParser"),
+                          "parse error, [str={}] [format={}] [parse_pos={}]",
+                          ctx.view.toString(),
+                          format,
+                          ctx.pos);
 #endif
             return std::nullopt;
         }

@@ -3,8 +3,6 @@ set(_TIFLASH_PROXY_LIBRARY "${_TIFLASH_PROXY_SOURCE_DIR}/target/release/${CMAKE_
 file(GLOB_RECURSE _TIFLASH_PROXY_SRCS "${_TIFLASH_PROXY_SOURCE_DIR}/*.rs")
 list(FILTER _TIFLASH_PROXY_SRCS EXCLUDE REGEX ${_TIFLASH_PROXY_SOURCE_DIR}/target/.*)
 
-option(ENABLE_PROXY_RUNTIME_RELATIVE_PATH "Make proxy dynamic lib to be linked by relative path" OFF)
-
 if(TIFLASH_LLVM_TOOLCHAIN AND USE_LIBCXX)
     set(TIFLASH_RUST_LINKER ${CMAKE_CURRENT_BINARY_DIR}/tiflash-linker)
     set(TIFLASH_RUST_LINKER_TMP ${CMAKE_CURRENT_BINARY_DIR}/tmp/tiflash-linker)
@@ -13,17 +11,14 @@ if(TIFLASH_LLVM_TOOLCHAIN AND USE_LIBCXX)
     file(COPY ${TIFLASH_RUST_LINKER_TMP}
             DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
             FILE_PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE)
-    set(TIFLASH_RUSTFLAGS "-C linker=${TIFLASH_RUST_LINKER}")
+    set(TIFLASH_RUSTFLAGS "-C rpath=yes -C linker=${TIFLASH_RUST_LINKER}")
     if(ARCH_AARCH64)
         set(TIFLASH_RUSTFLAGS "-C link-arg=-Wl,-Bsymbolic ${TIFLASH_RUSTFLAGS}")
     endif()
     if(LINKER_NAME)
         set(TIFLASH_RUSTFLAGS "-C link-arg=-fuse-ld=${LINKER_NAME} ${TIFLASH_RUSTFLAGS}")
     endif()
-    if(TIFLASH_ENABLE_RUNTIME_RPATH)
-        set(TIFLASH_RUSTFLAGS "-C rpath=yes ${TIFLASH_RUSTFLAGS}")
-    endif()
-    set(TIFLASH_RUST_ENV CXXSTDLIB=c++ CMAKE=${CMAKE_COMMAND} CFLAGS=-w CXXFLAGS=-w RUSTFLAGS=${TIFLASH_RUSTFLAGS})
+    set(TIFLASH_RUST_ENV CXXSTDLIB=c++ CMAKE=${CMAKE_COMMAND} CFLAGS=-w CXXFLAGS=-w RUSTFLAGS=${TIFLASH_RUSTFLAGS} PROTOC=${Protobuf_PROTOC_EXECUTABLE} PROTOC_INCLUDE=${Protobuf_INCLUDE_DIR})
     message(STATUS "enforce LLVM toolchain for rust: ${TIFLASH_RUST_ENV}")
 endif()
 
@@ -34,14 +29,6 @@ add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
     VERBATIM
     WORKING_DIRECTORY ${_TIFLASH_PROXY_SOURCE_DIR}
     DEPENDS "${_TIFLASH_PROXY_SRCS}" "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.lock" "${_TIFLASH_PROXY_SOURCE_DIR}/rust-toolchain")
-
-if(APPLE AND ENABLE_PROXY_RUNTIME_RELATIVE_PATH)
-    # For MacOS, we need to explicitly adjust install name for tiflash_proxy library, as it is copied from raftstore_proxy library and the install name is kept as "raftstore_proxy".
-    add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
-        APPEND
-        COMMENT "Changing install name for tiflash proxy library on MacOS"
-        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -id @executable_path/libtiflash_proxy.dylib ${_TIFLASH_PROXY_LIBRARY})
-endif()
 
 add_custom_target(tiflash_proxy ALL
     DEPENDS ${_TIFLASH_PROXY_LIBRARY})

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Allocator.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
@@ -42,13 +56,13 @@ static void writeRegionDataToStorage(
     RegionDataReadInfoList & data_list_read,
     Poco::Logger * log)
 {
-    constexpr auto FUNCTION_NAME = __FUNCTION__;
+    constexpr auto FUNCTION_NAME = __FUNCTION__; // NOLINT(readability-identifier-naming)
     const auto & tmt = context.getTMTContext();
     TableID table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     /// Declare lambda of atomic read then write to call multiple times.
-    auto atomicReadWrite = [&](bool force_decode) {
+    auto atomic_read_write = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
@@ -75,25 +89,24 @@ static void writeRegionDataToStorage(
         }
 
         Block block;
-        bool ok = false, need_decode = true;
+        bool need_decode = true;
 
         // try to use block cache if exists
         if (region.pre_decode_cache)
         {
             auto schema_version = storage->getTableInfo().schema_version;
-            LOG_DEBUG(log, FUNCTION_NAME << ": " << region->toString() << " got pre-decode cache";
-                      region.pre_decode_cache->toString(oss_internal_rare);
-                      oss_internal_rare << ", storage schema version: " << schema_version);
+            std::stringstream ss;
+            region.pre_decode_cache->toString(ss);
+            LOG_FMT_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}", FUNCTION_NAME, region->toString(), ss.str(), schema_version);
 
             if (region.pre_decode_cache->schema_version == schema_version)
             {
                 block = std::move(region.pre_decode_cache->block);
-                ok = true;
                 need_decode = false;
             }
             else
             {
-                LOG_DEBUG(log, FUNCTION_NAME << ": schema version not equal, try to re-decode region cache into block");
+                LOG_FMT_DEBUG(log, "{}: schema version not equal, try to re-decode region cache into block", FUNCTION_NAME);
                 region.pre_decode_cache->block.clear();
             }
         }
@@ -111,8 +124,7 @@ static void writeRegionDataToStorage(
             block_schema_version = decoding_schema_snapshot->schema_version;
 
             auto reader = RegionBlockReader(decoding_schema_snapshot);
-            ok = reader.read(*block_ptr, data_list_read, force_decode);
-            if (!ok)
+            if (!reader.read(*block_ptr, data_list_read, force_decode))
                 return false;
             region_decode_cost = watch.elapsedMilliseconds();
             GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(region_decode_cost / 1000.0);
@@ -143,9 +155,7 @@ static void writeRegionDataToStorage(
         if (need_decode)
             storage->releaseDecodingBlock(block_schema_version, std::move(block_ptr));
 
-        LOG_TRACE(log,
-                  FUNCTION_NAME << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
-                                << ", write part " << write_part_cost << "] ms");
+        LOG_FMT_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
         return true;
     };
 
@@ -156,7 +166,7 @@ static void writeRegionDataToStorage(
 
     /// Try read then write once.
     {
-        if (atomicReadWrite(false))
+        if (atomic_read_write(false))
             return;
     }
 
@@ -165,7 +175,7 @@ static void writeRegionDataToStorage(
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
-        if (!atomicReadWrite(true))
+        if (!atomic_read_write(true))
             // Failure won't be tolerated this time.
             // TODO: Enrich exception message.
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
@@ -458,8 +468,9 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-            LOG_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
-                        "Got error while reading region committed cache: " << e.displayText() << ". Skip pre-decode and keep original cache.");
+            LOG_FMT_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
+                            "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
+                            e.displayText());
             // set data_list_read and let apply snapshot process use empty block
             data_list_read = RegionDataReadInfoList();
         }
@@ -471,7 +482,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     Block res_block;
 
-    const auto atomicDecode = [&](bool force_decode) -> bool {
+    const auto atomic_decode = [&](bool force_decode) -> bool {
         Stopwatch watch;
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
@@ -512,12 +523,12 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     /// decoding data. Check the test case for more details.
     FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_snapshot);
 
-    if (!atomicDecode(false))
+    if (!atomic_decode(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
-        if (!atomicDecode(true))
+        if (!atomic_decode(true))
             throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
                             ErrorCodes::LOGICAL_ERROR);
     }
@@ -535,8 +546,9 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 
     auto table_id = region->getMappedTableID();
+    LOG_FMT_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
     auto context = tmt.getContext();
-    const auto atomicGet = [&](bool force_decode) -> bool {
+    const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr)
         {
@@ -555,12 +567,12 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         return true;
     };
 
-    if (!atomicGet(false))
+    if (!atomic_get(false))
     {
         GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
-        if (!atomicGet(true))
+        if (!atomic_get(true))
             throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
                             ErrorCodes::LOGICAL_ERROR);
     }

@@ -1,11 +1,23 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <TestUtils/FunctionTestUtils.h>
 
 namespace DB
 {
-
 namespace tests
 {
-
 class TestFunctionTestUtils : public ::testing::Test
 {
 };
@@ -15,13 +27,16 @@ try
 {
     using DecimalField64 = DecimalField<Decimal64>;
 
-    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>(std::nullopt), std::nullopt);
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>(std::nullopt, 3, 0), std::nullopt);
     ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123", 3, 0), DecimalField64(123, 0));
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123.4", 3, 0), DecimalField64(123, 0));
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123.5", 3, 0), DecimalField64(124, 0));
+    ASSERT_EQ(parseDecimal<Nullable<Decimal64>>("123.4", 5, 2), DecimalField64(12340, 2));
 
     constexpr auto parse = parseDecimal<Decimal64>;
     ASSERT_EQ(parse("123.123", 6, 3), DecimalField64(123123, 3));
     ASSERT_THROW(parse("123.123", 3, 3), TiFlashTestException);
-    ASSERT_THROW(parse("123.123", 6, 0), TiFlashTestException);
+    ASSERT_EQ(parse("123.123", 6, 0), DecimalField64(123, 0));
     ASSERT_NO_THROW(parse("123.123", 10, 3));
     ASSERT_THROW(parse(" 123.123", 6, 3), TiFlashTestException);
     ASSERT_NO_THROW(parse("123.123", 60, 3));

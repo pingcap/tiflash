@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
@@ -107,6 +121,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
+    is_empty_file = false;
     DMFile::PackStat stat;
     stat.rows = block.rows();
     stat.not_clean = block_property.not_clean_rows;
@@ -114,17 +129,17 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
 
-    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : (const ColumnVector<UInt8> *)del_mark_column.get();
+    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
 
     for (auto & cd : write_columns)
     {
-        auto & col = getByColumnId(block, cd.id).column;
+        const auto & col = getByColumnId(block, cd.id).column;
         writeColumn(cd.id, *cd.type, *col, del_mark);
 
         if (cd.id == VERSION_COLUMN_ID)
             stat.first_version = col->get64(0);
         else if (cd.id == TAG_COLUMN_ID)
-            stat.first_tag = (UInt8)(col->get64(0));
+            stat.first_tag = static_cast<UInt8>(col->get64(0));
     }
 
     if (!options.flags.isSingleFile())
@@ -345,7 +360,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                         dmfile->encryptionIndexPath(stream_name),
                         false,
                         write_limiter);
-                    stream->minmaxes->write(*type, buf);
+                    if (!is_empty_file)
+                        stream->minmaxes->write(*type, buf);
                     buf.sync();
                     bytes_written += buf.getMaterializedBytes();
                 }
@@ -358,7 +374,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                                                                            write_limiter,
                                                                            dmfile->configuration->getChecksumAlgorithm(),
                                                                            dmfile->configuration->getChecksumFrameLength());
-                    stream->minmaxes->write(*type, *buf);
+                    if (!is_empty_file)
+                        stream->minmaxes->write(*type, *buf);
                     buf->sync();
                     bytes_written += buf->getMaterializedBytes();
 #ifndef NDEBUG

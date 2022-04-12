@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -19,10 +33,17 @@ ColumnFileBig::ColumnFileBig(const DMContext & context, const DMFilePtr & file_,
 void ColumnFileBig::calculateStat(const DMContext & context)
 {
     auto index_cache = context.db_context.getGlobalContext().getMinMaxIndexCache();
-    auto hash_salt = context.hash_salt;
 
-    auto pack_filter
-        = DMFilePackFilter::loadFrom(file, index_cache, hash_salt, {segment_range}, EMPTY_FILTER, {}, context.db_context.getFileProvider(), context.getReadLimiter());
+    auto pack_filter = DMFilePackFilter::loadFrom(
+        file,
+        index_cache,
+        /*set_cache_if_miss*/ false,
+        {segment_range},
+        EMPTY_FILTER,
+        {},
+        context.db_context.getFileProvider(),
+        context.getReadLimiter(),
+        /*tracing_logger*/ nullptr);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
@@ -30,7 +51,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
 ColumnFileReaderPtr
 ColumnFileBig::getReader(const DMContext & context, const StorageSnapshotPtr & /*storage_snap*/, const ColumnDefinesPtr & col_defs) const
 {
-    return std::make_shared<ColumnBigFileReader>(context, *this, col_defs);
+    return std::make_shared<ColumnFileBigReader>(context, *this, col_defs);
 }
 
 void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
@@ -40,9 +61,9 @@ void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
     writeIntBinary(valid_bytes, buf);
 }
 
-ColumnFilePtr ColumnFileBig::deserializeMetadata(DMContext & context, //
-                                                 const RowKeyRange & segment_range,
-                                                 ReadBuffer & buf)
+ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, //
+                                                          const RowKeyRange & segment_range,
+                                                          ReadBuffer & buf)
 {
     UInt64 file_ref_id;
     size_t valid_rows, valid_bytes;
@@ -51,30 +72,22 @@ ColumnFilePtr ColumnFileBig::deserializeMetadata(DMContext & context, //
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto file_id = context.storage_pool.data()->getNormalPageId(file_ref_id);
+    auto file_id = context.storage_pool.dataReader().getNormalPageId(file_ref_id);
     auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
     auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
 
-    auto dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
+    auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
 }
 
-void ColumnBigFileReader::initStream()
+void ColumnFileBigReader::initStream()
 {
     if (file_stream)
         return;
 
-    file_stream = std::make_shared<DMFileBlockInputStream>(context.db_context,
-                                                           /*max_version*/ MAX_UINT64,
-                                                           /*clean_read*/ false,
-                                                           context.hash_salt,
-                                                           column_file.getFile(),
-                                                           *col_defs,
-                                                           RowKeyRanges{column_file.segment_range},
-                                                           RSOperatorPtr{},
-                                                           ColumnCachePtr{},
-                                                           IdSetPtr{});
+    DMFileBlockInputStreamBuilder builder(context.db_context);
+    file_stream = builder.build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
 
     // If we only need to read pk and version columns, then cache columns data in memory.
     if (pk_ver_only)
@@ -94,7 +107,7 @@ void ColumnBigFileReader::initStream()
     }
 }
 
-size_t ColumnBigFileReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+size_t ColumnFileBigReader::readRowsRepeatedly(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     if (unlikely(rows_offset + rows_limit > column_file.valid_rows))
         throw Exception("Try to read more rows", ErrorCodes::LOGICAL_ERROR);
@@ -126,13 +139,13 @@ size_t ColumnBigFileReader::readRowsRepeatedly(MutableColumns & output_cols, siz
     return actual_read;
 }
 
-size_t ColumnBigFileReader::readRowsOnce(MutableColumns & output_cols, //
+size_t ColumnFileBigReader::readRowsOnce(MutableColumns & output_cols, //
                                          size_t rows_offset,
                                          size_t rows_limit,
                                          const RowKeyRange * range)
 {
     auto read_next_block = [&, this]() -> bool {
-        rows_before_cur_block += ((bool)cur_block) ? cur_block.rows() : 0;
+        rows_before_cur_block += (static_cast<bool>(cur_block)) ? cur_block.rows() : 0;
         cur_block_data.clear();
 
         cur_block = file_stream->read();
@@ -186,7 +199,7 @@ size_t ColumnBigFileReader::readRowsOnce(MutableColumns & output_cols, //
     return actual_read;
 }
 
-size_t ColumnBigFileReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
+size_t ColumnFileBigReader::readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range)
 {
     initStream();
 
@@ -204,17 +217,17 @@ size_t ColumnBigFileReader::readRows(MutableColumns & output_cols, size_t rows_o
     }
 }
 
-Block ColumnBigFileReader::readNextBlock()
+Block ColumnFileBigReader::readNextBlock()
 {
     initStream();
 
     return file_stream->read();
 }
 
-ColumnFileReaderPtr ColumnBigFileReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
+ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr & new_col_defs)
 {
     // Currently we don't reuse the cache data.
-    return std::make_shared<ColumnBigFileReader>(context, column_file, new_col_defs);
+    return std::make_shared<ColumnFileBigReader>(context, column_file, new_col_defs);
 }
 
 } // namespace DM

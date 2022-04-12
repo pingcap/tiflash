@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
@@ -81,7 +95,7 @@ void PathCapacityMetrics::addUsedSize(std::string_view file_path, size_t used_by
         return;
     }
 
-    // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
+    // Now we expect size of path_infos not change, don't acquire heavy lock on `path_infos` now.
     path_infos[path_idx].used_bytes += used_bytes;
 }
 
@@ -94,7 +108,7 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
         return;
     }
 
-    // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
+    // Now we expect size of path_infos not change, don't acquire heavy lock on `path_infos` now.
     path_infos[path_idx].used_bytes -= used_bytes;
 }
 
@@ -129,7 +143,7 @@ FsStats PathCapacityMetrics::getFsStats()
     FsStats total_stat{};
 
     // Build the disk stats map
-    // which use to measure single disk capacoty and available size
+    // which use to measure single disk capacity and available size
     auto disk_stats_map = getDiskStats();
 
     for (auto & fs_it : disk_stats_map)
@@ -150,7 +164,7 @@ FsStats PathCapacityMetrics::getFsStats()
         if (disk_stat.capacity_size == 0 || disk_capacity_size < disk_stat.capacity_size)
             disk_stat.capacity_size = disk_capacity_size;
 
-        // Calutate single disk info
+        // Calculate single disk info
         const uint64_t disk_free_bytes = vfs_info.f_bavail * vfs_info.f_frsize;
         disk_stat.avail_size = std::min(disk_free_bytes, disk_stat.avail_size);
 

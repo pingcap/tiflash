@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <Storages/TableLockHolder.h>
@@ -108,7 +123,7 @@ public:
 
     /** Must be called before read, readPrefix.
       */
-    void dumpTree(std::ostream & ostr, size_t indent = 0, size_t multiplier = 1);
+    void dumpTree(FmtBuffer & buffer, size_t indent = 0, size_t multiplier = 1);
 
     /** Check the depth of the pipeline.
       * If max_depth is specified and the `depth` is greater - throw an exception.
@@ -170,8 +185,11 @@ private:
     TableLockHolders table_locks;
 
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
+    mutable std::mutex tree_id_mutex;
+    mutable String tree_id;
 
-    /// Get text with names of this source and the entire subtree.
+    /// Get text with names of this source and the entire subtree, this function should only be called after the
+    /// InputStream tree is constructed.
     String getTreeID() const;
 };
 

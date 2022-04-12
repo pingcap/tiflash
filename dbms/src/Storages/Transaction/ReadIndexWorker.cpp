@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Storages/Transaction/KVStore.h>
@@ -260,7 +274,7 @@ RawRustPtr TiFlashRaftProxyHelper::makeAsyncWaker(void (*wake_fn)(RawVoidPtr), R
 std::optional<ReadIndexTask> TiFlashRaftProxyHelper::makeReadIndexTask(const kvrpcpb::ReadIndexRequest & req) const
 {
     thread_local std::string buff_cache;
-    req.SerializePartialToString(&buff_cache);
+    req.SerializeToString(&buff_cache);
     auto req_view = strIntoView(&buff_cache);
     if (RawRustPtr ptr = fn_make_read_index_task(proxy_ptr, req_view); ptr.ptr)
     {
@@ -286,13 +300,6 @@ bool TiFlashRaftProxyHelper::pollTimerTask(TimerTask & task, RawVoidPtr waker) c
 {
     return fn_poll_timer_task(task.ptr, waker);
 }
-
-void SetReadIndexResp(RawVoidPtr resp, BaseBuffView view)
-{
-    auto * res = reinterpret_cast<kvrpcpb::ReadIndexResponse *>(resp);
-    res->ParseFromArray(view.data, view.len);
-}
-
 
 struct ReadIndexNotifyCtrl : MutexLockWrap
 {
@@ -569,7 +576,8 @@ void ReadIndexDataNode::runOneRound(const TiFlashRaftProxyHelper & helper, const
             waiting_tasks.size(),
             running_tasks.size());
 
-        if (history_success_tasks && history_success_tasks->first >= max_ts)
+        // start-ts `0` will be used to only get the latest index, do not use history
+        if (history_success_tasks && history_success_tasks->first >= max_ts && max_ts)
         {
             TEST_LOG_FMT("find history_tasks resp {}", history_success_tasks->second.ShortDebugString());
 

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/ClickHouseRevision.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
@@ -20,10 +34,10 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     bool final_,
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
-    const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, NAME))
+    const String & req_id)
+    : log(Logger::get(NAME, req_id))
     , params(params_)
-    , aggregator(params, log)
+    , aggregator(params, req_id)
     , file_provider(file_provider_)
     , final(final_)
     , max_threads(std::min(inputs.size(), max_threads_))
@@ -31,7 +45,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
     , handler(*this)
-    , processor(inputs, additional_input_at_end, max_threads, handler)
+    , processor(inputs, additional_input_at_end, max_threads, handler, log)
 {
     children = inputs;
     if (additional_input_at_end)
@@ -94,9 +108,12 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 input_streams.emplace_back(temporary_inputs.back()->block_in);
             }
 
-            LOG_TRACE(
+            LOG_FMT_TRACE(
                 log,
-                "Will merge " << files.files.size() << " temporary files of size " << (files.sum_size_compressed / 1048576.0) << " MiB compressed, " << (files.sum_size_uncompressed / 1048576.0) << " MiB uncompressed.");
+                "Will merge {} temporary files of size {:.2f} MiB compressed, {:.2f} MiB uncompressed.",
+                files.files.size(),
+                (files.sum_size_compressed / 1048576.0),
+                (files.sum_size_uncompressed / 1048576.0));
 
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(
                 input_streams,
@@ -104,7 +121,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 final,
                 temporary_data_merge_threads,
                 temporary_data_merge_threads,
-                log);
+                log->identifier());
         }
 
         executed = true;
@@ -181,9 +198,13 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
 void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_ptr & exception, size_t thread_num)
 {
     parent.exceptions[thread_num] = exception;
+    Int32 old_value = -1;
+    parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
+
     /// can not cancel parent inputStream or the exception might be lost
     if (!parent.executed)
-        parent.processor.cancel(false);
+        /// kill the processor so ExchangeReceiver will be closed
+        parent.processor.cancel(true);
 }
 
 
@@ -195,7 +216,7 @@ void ParallelAggregatingBlockInputStream::execute()
     for (size_t i = 0; i < max_threads; ++i)
         threads_data.emplace_back(keys_size, aggregates_size);
 
-    LOG_TRACE(log, "Aggregating");
+    LOG_FMT_TRACE(log, "Aggregating");
 
     Stopwatch watch;
 
@@ -205,7 +226,8 @@ void ParallelAggregatingBlockInputStream::execute()
     processor.process();
     processor.wait();
 
-    rethrowFirstException(exceptions);
+    if (first_exception_index != -1)
+        std::rethrow_exception(exceptions[first_exception_index]);
 
     if (isCancelledOrThrowIfKilled())
         return;
@@ -217,21 +239,27 @@ void ParallelAggregatingBlockInputStream::execute()
     for (size_t i = 0; i < max_threads; ++i)
     {
         size_t rows = many_data[i]->size();
-        LOG_TRACE(
+        LOG_FMT_TRACE(
             log,
-            std::fixed << std::setprecision(3) << "Aggregated. " << threads_data[i].src_rows << " to " << rows << " rows"
-                       << " (from " << threads_data[i].src_bytes / 1048576.0 << " MiB)"
-                       << " in " << elapsed_seconds << " sec."
-                       << " (" << threads_data[i].src_rows / elapsed_seconds << " rows/sec., " << threads_data[i].src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+            "Aggregated. {} to {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+            threads_data[i].src_rows,
+            rows,
+            (threads_data[i].src_bytes / 1048576.0),
+            elapsed_seconds,
+            threads_data[i].src_rows / elapsed_seconds,
+            threads_data[i].src_bytes / elapsed_seconds / 1048576.0);
 
         total_src_rows += threads_data[i].src_rows;
         total_src_bytes += threads_data[i].src_bytes;
     }
-    LOG_TRACE(
+    LOG_FMT_TRACE(
         log,
-        std::fixed << std::setprecision(3) << "Total aggregated. " << total_src_rows << " rows (from " << total_src_bytes / 1048576.0 << " MiB)"
-                   << " in " << elapsed_seconds << " sec."
-                   << " (" << total_src_rows / elapsed_seconds << " rows/sec., " << total_src_bytes / elapsed_seconds / 1048576.0 << " MiB/sec.)");
+        "Total aggregated. {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+        total_src_rows,
+        (total_src_bytes / 1048576.0),
+        elapsed_seconds,
+        total_src_rows / elapsed_seconds,
+        total_src_bytes / elapsed_seconds / 1048576.0);
 
     /// If there was no data, and we aggregate without keys, we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <IO/HashingWriteBuffer.h>
@@ -93,7 +107,7 @@ public:
 
         for (unsigned i = 0; i < connection_retries; ++i)
         {
-            LOG_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "Sending write request to " << host << ":" << port << uri_str);
+            LOG_FMT_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "Sending write request to {}:{}{}", host, port, uri_str);
 
             try
             {
@@ -104,7 +118,7 @@ public:
                 if (i + 1 == connection_retries)
                     throw;
 
-                LOG_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), e.displayText() << ", URL: " << host << ":" << port << uri_str << ", try No " << i + 1 << ".");
+                LOG_FMT_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "{}, URL: {}:{}{}, try No {}.", e.displayText(), host, port, uri_str, i + 1);
                 session.reset();
                 continue;
             }
@@ -113,7 +127,7 @@ public:
                 if (i + 1 == connection_retries)
                     throw;
 
-                LOG_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "Connection timeout from " << host << ":" << port << uri_str << ", try No " << i + 1 << ".");
+                LOG_FMT_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "Connection timeout from {}:{}{}, try No {}.", host, port, uri_str, i + 1);
                 session.reset();
                 continue;
             }
@@ -214,7 +228,7 @@ private:
 
         for (unsigned i = 0; i < connection_retries; ++i)
         {
-            LOG_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "Sending rename request to " << host << ":" << port << uri_str);
+            LOG_FMT_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "Sending rename request to {}:{}{}", host, port, uri_str);
 
             try
             {
@@ -226,7 +240,7 @@ private:
                 if (i + 1 == connection_retries)
                     throw;
 
-                LOG_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), e.what() << ", message: " << e.displayText() << ", URL: " << host << ":" << port << uri_str << ", try No " << i + 1 << ".");
+                LOG_FMT_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "{}, message: {}, URL: {}:{}{}, try No {}.", e.what(), e.displayText(), host, port, uri_str, i + 1);
                 session.reset();
                 continue;
             }
@@ -235,7 +249,7 @@ private:
                 if (i + 1 == connection_retries)
                     throw;
 
-                LOG_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "Connection timeout from " << host << ":" << port << uri_str << ", try No " << i + 1 << ".");
+                LOG_FMT_WARNING((&Poco::Logger::get("RemoteWriteBuffer")), "Connection timeout from {}:{}{}, try No {}.", host, port, uri_str, i + 1);
                 session.reset();
                 continue;
             }
@@ -245,7 +259,7 @@ private:
                 if (i != 0 && e.code() == ErrorCodes::RECEIVED_ERROR_FROM_REMOTE_IO_SERVER
                     && nullptr != strstr(e.displayText().data(), "File not found"))
                 {
-                    LOG_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "File already renamed");
+                    LOG_FMT_TRACE((&Poco::Logger::get("RemoteWriteBuffer")), "File already renamed");
                 }
                 else
                     throw;

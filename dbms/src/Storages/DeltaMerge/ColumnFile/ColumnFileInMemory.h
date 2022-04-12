@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
@@ -12,7 +26,7 @@ using ColumnInMemoryFilePtr = std::shared_ptr<ColumnFileInMemory>;
 /// A column file which is only resides in memory
 class ColumnFileInMemory : public ColumnFile
 {
-    friend class ColumnInMemoryFileReader;
+    friend class ColumnFileInMemoryReader;
 
 private:
     BlockPtr schema;
@@ -80,11 +94,6 @@ public:
 
     Block readDataForFlush() const;
 
-    void serializeMetadata(WriteBuffer & /*buf*/, bool /*save_schema*/) const override
-    {
-        throw Exception("Unsupported operation", ErrorCodes::LOGICAL_ERROR);
-    }
-
     String toString() const override
     {
         String s = "{in_memory_file,rows:" + DB::toString(rows) //
@@ -97,7 +106,7 @@ public:
 };
 
 
-class ColumnInMemoryFileReader : public ColumnFileReader
+class ColumnFileInMemoryReader : public ColumnFileReader
 {
 private:
     const ColumnFileInMemory & memory_file;
@@ -107,7 +116,7 @@ private:
     bool read_done = false;
 
 public:
-    ColumnInMemoryFileReader(const ColumnFileInMemory & memory_file_,
+    ColumnFileInMemoryReader(const ColumnFileInMemory & memory_file_,
                              const ColumnDefinesPtr & col_defs_,
                              const Columns & cols_data_cache_)
         : memory_file(memory_file_)
@@ -116,7 +125,7 @@ public:
     {
     }
 
-    ColumnInMemoryFileReader(const ColumnFileInMemory & memory_file_, const ColumnDefinesPtr & col_defs_)
+    ColumnFileInMemoryReader(const ColumnFileInMemory & memory_file_, const ColumnDefinesPtr & col_defs_)
         : memory_file(memory_file_)
         , col_defs(col_defs_)
     {

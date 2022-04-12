@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
@@ -9,6 +23,7 @@
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/DeltaMerge.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaPlace.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -112,7 +127,7 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
         // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
         size_t cur_effective_num_rows = block.rows();
         size_t cur_not_clean_rows = 1;
-        size_t gc_hint_version = UINT64_MAX;
+        size_t gc_hint_version = std::numeric_limits<UInt64>::max();
         if (mvcc_stream)
         {
             cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
@@ -221,7 +236,7 @@ SegmentPtr Segment::newSegment(
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 {
-    Page page = context.storage_pool.meta()->read(segment_id, nullptr); // not limit restore
+    Page page = context.storage_pool.metaReader().read(segment_id); // not limit restore
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     SegmentFormat::Version version;
@@ -296,10 +311,10 @@ bool Segment::write(DMContext & dm_context, const Block & block)
     LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}", segment_id, block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
-    auto pack = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
+    auto column_file = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
 
-    if (delta->appendColumnFile(dm_context, pack))
+    if (delta->appendColumnFile(dm_context, column_file))
     {
         flushCache(dm_context);
         return true;
@@ -445,7 +460,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
                                                          const SegmentSnapshotPtr & segment_snap,
                                                          const RowKeyRange & data_range,
                                                          size_t expected_block_size,
-                                                         bool reorgnize_block) const
+                                                         bool reorganize_block) const
 {
     RowKeyRanges data_ranges{data_range};
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, data_ranges);
@@ -462,7 +477,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
 
 
     data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_ranges, 0);
-    if (reorgnize_block)
+    if (reorganize_block)
     {
         data_stream = std::make_shared<PKSquashingBlockInputStream<false>>(data_stream, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
     }
@@ -510,7 +525,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         *new_columns_to_read,
         rowkey_ranges,
         EMPTY_FILTER,
-        MAX_UINT64,
+        std::numeric_limits<UInt64>::max(),
         expected_block_size,
         false);
 
@@ -538,7 +553,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         streams.push_back(delta_stream);
         streams.push_back(stable_stream);
     }
-    return std::make_shared<ConcatBlockInputStream>(streams, nullptr);
+    return std::make_shared<ConcatBlockInputStream>(streams, /*req_id=*/"");
 }
 
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
@@ -574,9 +589,9 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
                                                WriteBatches & wbs) const
 {
     LOG_FMT_INFO(log,
-                 "Segment [{}] prepare merge delta start. delta packs: {}, delta total rows: {}, delta total size: {}",
+                 "Segment [{}] prepare merge delta start. delta column files: {}, delta total rows: {}, delta total size: {}",
                  segment_id,
-                 segment_snap->delta->getPackCount(),
+                 segment_snap->delta->getColumnFileCount(),
                  segment_snap->delta->getRows(),
                  segment_snap->delta->getBytes());
 
@@ -604,11 +619,11 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
 {
     LOG_FMT_INFO(log, "Before apply merge delta: {}", info());
 
-    auto later_packs = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getColumnFiles(), wbs);
+    auto [persisted_column_files, in_memory_files] = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getColumnFilesInSnapshot(), wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
-    auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId(), later_packs);
+    auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId(), persisted_column_files, in_memory_files);
     new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>(epoch + 1, //
@@ -625,7 +640,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
     new_me->serialize(wbs.meta);
 
     // Remove old segment's delta.
-    delta->recordRemovePacksPages(wbs);
+    delta->recordRemoveColumnFilesPages(wbs);
     // Remove old stable's files.
     stable->recordRemovePacksPages(wbs);
 
@@ -708,22 +723,20 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     if (unlikely(!read_file))
         throw Exception("Logical error: failed to find split point");
 
-    DMFileBlockInputStream stream(dm_context.db_context,
-                                  MAX_UINT64,
-                                  false,
-                                  dm_context.hash_salt,
-                                  read_file,
-                                  {getExtraHandleColumnDefine(is_common_handle)},
-                                  {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
-                                  EMPTY_FILTER,
-                                  stable_snap->getColumnCaches()[file_index],
-                                  read_pack);
+    DMFileBlockInputStreamBuilder builder(dm_context.db_context);
+    auto stream = builder
+                      .setColumnCache(stable_snap->getColumnCaches()[file_index])
+                      .setReadPacks(read_pack)
+                      .build(
+                          read_file,
+                          /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
+                          /*rowkey_ranges=*/{RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
 
-    stream.readPrefix();
-    auto block = stream.read();
+    stream->readPrefix();
+    auto block = stream->read();
     if (!block)
         throw Exception("Unexpected empty block");
-    stream.readSuffix();
+    stream->readSuffix();
 
     RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
     RowKeyValue split_point(rowkey_column.getRowKeyValue(read_row_in_pack));
@@ -735,8 +748,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     {
         LOG_FMT_WARNING(
             log,
-            "{} unexpected split_handle: {}, should be in range {}, cur_rows: {}, read_row_in_pack: {}, file_index: {}",
-            __FUNCTION__,
+            "unexpected split_handle: {}, should be in range {}, cur_rows: {}, read_row_in_pack: {}, file_index: {}",
             split_point.toRowKeyValueRef().toDebugString(),
             rowkey_range.toDebugString(),
             cur_rows,
@@ -785,7 +797,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
 
     if (exact_rows == 0)
     {
-        LOG_FMT_WARNING(log, "{} Segment {} has no rows, should not split.", __FUNCTION__, info());
+        LOG_FMT_WARNING(log, "Segment {} has no rows, should not split.", info());
         return {};
     }
 
@@ -828,8 +840,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
     {
         LOG_FMT_WARNING(
             log,
-            "{} unexpected split_handle: {}, should be in range {}, exact_rows: {}, cur count: {}, split_row_index: {}",
-            __FUNCTION__,
+            "unexpected split_handle: {}, should be in range {}, exact_rows: {}, cur count: {}, split_row_index: {}",
             split_point.toRowKeyValueRef().toDebugString(),
             rowkey_range.toDebugString(),
             exact_rows,
@@ -891,14 +902,15 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     {
         LOG_FMT_WARNING(
             log,
-            "{}: unexpected range! my_range: {}, other_range: {}, aborted",
-            __FUNCTION__,
+            "unexpected range! my_range: {}, other_range: {}, aborted",
             my_range.toDebugString(),
             other_range.toDebugString());
         return {};
     }
 
-    GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
+    GenPageId log_gen_page_id = [&]() {
+        return storage_pool.newLogPageId();
+    };
 
     DMFiles my_stable_files;
     DMFiles other_stable_files;
@@ -970,8 +982,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     {
         LOG_FMT_WARNING(
             log,
-            "{}: unexpected range! my_range: {}, other_range: {}, aborted",
-            __FUNCTION__,
+            "unexpected range! my_range: {}, other_range: {}, aborted",
             my_range.toDebugString(),
             other_range.toDebugString());
         return {};
@@ -1065,10 +1076,10 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
     ColumnFiles empty_files;
-    ColumnFiles * head_files = split_info.is_logical ? &empty_files : &segment_snap->delta->getColumnFiles();
+    ColumnFiles * head_files = split_info.is_logical ? &empty_files : &segment_snap->delta->getColumnFilesInSnapshot();
 
-    auto my_delta_files = delta->checkHeadAndCloneTail(dm_context, my_range, *head_files, wbs);
-    auto other_delta_files = delta->checkHeadAndCloneTail(dm_context, other_range, *head_files, wbs);
+    auto [my_persisted_files, my_in_memory_files] = delta->checkHeadAndCloneTail(dm_context, my_range, *head_files, wbs);
+    auto [other_persisted_files, other_in_memory_files] = delta->checkHeadAndCloneTail(dm_context, other_range, *head_files, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
@@ -1076,8 +1087,8 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     auto other_segment_id = dm_context.storage_pool.newMetaPageId();
     auto other_delta_id = dm_context.storage_pool.newMetaPageId();
 
-    auto my_delta = std::make_shared<DeltaValueSpace>(delta->getId(), my_delta_files);
-    auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, other_delta_files);
+    auto my_delta = std::make_shared<DeltaValueSpace>(delta->getId(), my_persisted_files, my_in_memory_files);
+    auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, other_persisted_files, other_in_memory_files);
 
     auto new_me = std::make_shared<Segment>(this->epoch + 1, //
                                             my_range,
@@ -1102,7 +1113,7 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     other->serialize(wbs.meta);
 
     // Remove old segment's delta.
-    delta->recordRemovePacksPages(wbs);
+    delta->recordRemoveColumnFilesPages(wbs);
     // Remove old stable's files.
     stable->recordRemovePacksPages(wbs);
 
@@ -1181,7 +1192,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
     auto left_stream = get_stream(left, left_snap);
     auto right_stream = get_stream(right, right_snap);
 
-    BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream}, nullptr);
+    BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream}, /*req_id=*/"");
     // for the purpose to calculate StableProperty of the new segment
     merged_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         merged_stream,
@@ -1209,27 +1220,19 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
 
     RowKeyRange merged_range(left->rowkey_range.start, right->rowkey_range.end, left->is_common_handle, left->rowkey_column_size);
 
-    auto left_tail_files = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getColumnFiles(), wbs);
-    auto right_tail_files = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getColumnFiles(), wbs);
+    auto [left_persisted_files, left_in_memory_files] = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getColumnFilesInSnapshot(), wbs);
+    auto [right_persisted_files, right_in_memory_files] = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getColumnFilesInSnapshot(), wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
-    /// Make sure saved packs are appended before unsaved packs.
-    ColumnFiles merged_files;
+    ColumnFilePersisteds merged_persisted_column_files = std::move(left_persisted_files);
+    ColumnFiles merged_in_memory_files = std::move(left_in_memory_files);
 
-    auto l_first_unsaved
-        = std::find_if(left_tail_files.begin(), left_tail_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
-    auto r_first_unsaved
-        = std::find_if(right_tail_files.begin(), right_tail_files.end(), [](const ColumnFilePtr & p) { return !p->isSaved(); });
+    merged_persisted_column_files.insert(merged_persisted_column_files.end(), right_persisted_files.begin(), right_persisted_files.end());
+    merged_in_memory_files.insert(merged_in_memory_files.end(), right_in_memory_files.begin(), right_in_memory_files.end());
 
-    merged_files.insert(merged_files.end(), left_tail_files.begin(), l_first_unsaved);
-    merged_files.insert(merged_files.end(), right_tail_files.begin(), r_first_unsaved);
-
-    merged_files.insert(merged_files.end(), l_first_unsaved, left_tail_files.end());
-    merged_files.insert(merged_files.end(), r_first_unsaved, right_tail_files.end());
-
-    auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_files);
+    auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_persisted_column_files, merged_in_memory_files);
 
     auto merged = std::make_shared<Segment>(left->epoch + 1, //
                                             merged_range,
@@ -1243,10 +1246,10 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     merged->stable->saveMeta(wbs.meta);
     merged->serialize(wbs.meta);
 
-    left->delta->recordRemovePacksPages(wbs);
+    left->delta->recordRemoveColumnFilesPages(wbs);
     left->stable->recordRemovePacksPages(wbs);
 
-    right->delta->recordRemovePacksPages(wbs);
+    right->delta->recordRemoveColumnFilesPages(wbs);
     right->stable->recordRemovePacksPages(wbs);
 
     wbs.removed_meta.delPage(right->segmentId());
@@ -1256,6 +1259,20 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     LOG_FMT_INFO(left->log, "Segment [{}] and [{}] merged into {}", left->info(), right->info(), merged->info());
 
     return merged;
+}
+
+SegmentPtr Segment::dropNextSegment(WriteBatches & wbs)
+{
+    auto new_segment = std::make_shared<Segment>(epoch + 1, //
+                                                 rowkey_range,
+                                                 segment_id,
+                                                 0,
+                                                 delta,
+                                                 stable);
+    new_segment->serialize(wbs.meta);
+    wbs.writeMeta();
+    LOG_FMT_INFO(log, "Segment [{}] drop its next segment done", info());
+    return new_segment;
 }
 
 void Segment::check(DMContext &, const String &) const {}
@@ -1312,13 +1329,25 @@ String Segment::info() const
                        stable->getBytes());
 }
 
+void Segment::drop(const FileProviderPtr & file_provider, WriteBatches & wbs)
+{
+    delta->recordRemoveColumnFilesPages(wbs);
+    stable->recordRemovePacksPages(wbs);
+
+    wbs.removed_meta.delPage(segment_id);
+    wbs.removed_meta.delPage(delta->getId());
+    wbs.removed_meta.delPage(stable->getId());
+    wbs.writeAll();
+    stable->drop(file_provider);
+}
+
 Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
                                        const ColumnDefines & read_columns,
                                        const SegmentSnapshotPtr & segment_snap,
                                        const RowKeyRanges & read_ranges,
                                        UInt64 max_version) const
 {
-    LOG_FMT_DEBUG(log, "{} start", __FUNCTION__);
+    LOG_FMT_DEBUG(log, "Segment[{}] getReadInfo start", segment_id);
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs
@@ -1333,7 +1362,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
     // Hold compacted_index reference, to prevent it from deallocated.
     delta_reader->setDeltaIndex(compacted_index);
 
-    LOG_FMT_DEBUG(log, "{} end", __FUNCTION__);
+    LOG_FMT_DEBUG(log, "Segment[{}] getReadInfo end", segment_id);
 
     if (fully_indexed)
     {
@@ -1491,19 +1520,20 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
     }
 
     if (unlikely(my_placed_rows != delta_snap->getRows() || my_placed_deletes != delta_snap->getDeletes()))
+    {
         throw Exception(
             fmt::format("Placed status not match! Expected place rows:{}, deletes:{}, but actually placed rows:{}, deletes:{}",
                         delta_snap->getRows(),
                         delta_snap->getDeletes(),
                         my_placed_rows,
                         my_placed_deletes));
+    }
 
     my_delta_index->update(my_delta_tree, my_placed_rows, my_placed_deletes);
 
     LOG_FMT_DEBUG(
         log,
-        "{} {} read_ranges:{}, place item count: {}, shared delta index: {}, my delta index: {}",
-        __FUNCTION__,
+        "{} read_ranges:{}, place item count: {}, shared delta index: {}, my delta index: {}",
         simpleInfo(),
         DB::DM::toDebugString(read_ranges),
         items.size(),
@@ -1602,7 +1632,7 @@ bool Segment::placeDelete(const DMContext & dm_context,
         delete_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(delete_stream, delete_ranges, 0);
 
         // Try to merge into big block. 128 MB should be enough.
-        SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20), nullptr);
+        SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20), /*req_id=*/"");
 
         while (true)
         {

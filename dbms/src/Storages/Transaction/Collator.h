@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/Collator.h>
@@ -53,6 +67,17 @@ public:
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }
+    bool isBinary() const { return collator_id == BINARY; }
+    bool isCI() const
+    {
+        return collator_id == UTF8_UNICODE_CI || collator_id == UTF8_GENERAL_CI
+            || collator_id == UTF8MB4_UNICODE_CI || collator_id == UTF8MB4_GENERAL_CI;
+    }
+    bool isBin() const
+    {
+        return collator_id == UTF8_BIN || collator_id == UTF8MB4_BIN
+            || collator_id == ASCII_BIN || collator_id == LATIN1_BIN;
+    }
 
 protected:
     explicit ITiDBCollator(int32_t collator_id_)
