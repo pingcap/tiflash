@@ -1,10 +1,9 @@
 #pragma once
 
-#include <common/logger_useful.h>
-
 #include <Common/ConcurrentBoundedQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
@@ -12,7 +11,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
@@ -73,11 +72,11 @@ private:
 
 public:
     UnionBlockInputStream(BlockInputStreams inputs, BlockInputStreamPtr additional_input_at_end, size_t max_threads,
-        ExceptionCallback exception_callback_ = ExceptionCallback()) :
-        output_queue(std::min(inputs.size(), max_threads)),
-        handler(*this),
-        processor(inputs, additional_input_at_end, max_threads, handler),
-        exception_callback(exception_callback_)
+        ExceptionCallback exception_callback_ = ExceptionCallback())
+        : output_queue(std::min(inputs.size(), max_threads)),
+          handler(*this),
+          processor(inputs, additional_input_at_end, max_threads, handler),
+          exception_callback(exception_callback_)
     {
         children = inputs;
         if (additional_input_at_end)
@@ -125,10 +124,7 @@ public:
         processor.cancel(kill);
     }
 
-    BlockExtraInfo getBlockExtraInfo() const override
-    {
-        return doGetBlockExtraInfo();
-    }
+    BlockExtraInfo getBlockExtraInfo() const override { return doGetBlockExtraInfo(); }
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
 
@@ -175,9 +171,7 @@ protected:
     }
 
     /// Do nothing, to make the preparation for the query execution in parallel, in ParallelInputsProcessor.
-    void readPrefix() override
-    {
-    }
+    void readPrefix() override {}
 
     /** The following options are possible:
       * 1. `readImpl` function is called until it returns an empty block.
@@ -235,8 +229,7 @@ private:
         if constexpr (mode == StreamUnionMode::ExtraInfo)
             return received_payload.extra_info;
         else
-            throw Exception("Method getBlockExtraInfo is not supported for mode StreamUnionMode::Basic",
-                ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception("Method getBlockExtraInfo is not supported for mode StreamUnionMode::Basic", ErrorCodes::NOT_IMPLEMENTED);
     }
 
 private:
@@ -256,24 +249,16 @@ private:
     {
         Handler(Self & parent_) : parent(parent_) {}
 
-        void onBlock(Block & block, size_t /*thread_num*/)
-        {
-            parent.output_queue.push(Payload(block));
-        }
+        void onBlock(Block & block, size_t /*thread_num*/) { parent.output_queue.push(Payload(block)); }
 
         void onBlock(Block & block, BlockExtraInfo & extra_info, size_t /*thread_num*/)
         {
             parent.output_queue.push(Payload(block, extra_info));
         }
 
-        void onFinish()
-        {
-            parent.output_queue.push(Payload());
-        }
+        void onFinish() { parent.output_queue.push(Payload()); }
 
-        void onFinishThread(size_t /*thread_num*/)
-        {
-        }
+        void onFinishThread(size_t /*thread_num*/) {}
 
         void onException(std::exception_ptr & exception, size_t /*thread_num*/)
         {
@@ -284,7 +269,8 @@ private:
             ///  and the exception is lost.
 
             parent.output_queue.push(exception);
-            parent.cancel(false);    /// Does not throw exceptions.
+            /// can not cancel parent inputStream or the exception might be lost
+            parent.processor.cancel(false); /// Does not throw exceptions.
         }
 
         Self & parent;
@@ -303,4 +289,4 @@ private:
     Logger * log = &Logger::get("UnionBlockInputStream");
 };
 
-}
+} // namespace DB
