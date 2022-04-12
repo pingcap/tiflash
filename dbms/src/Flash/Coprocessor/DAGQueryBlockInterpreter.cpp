@@ -39,8 +39,8 @@ extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_,
-    const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, const DAGQuerySource & dag_,
+    std::vector<SubqueriesForSets> & subqueriesForSets_,
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_)
     : context(context_),
       input_streams_vec(input_streams_vec_),
@@ -108,10 +108,7 @@ struct AnalysisResult
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool addTimeZoneCastAfterTS(
-    DAGExpressionAnalyzer & analyzer,
-    const BoolVec & is_ts_column,
-    ExpressionActionsChain & chain)
+bool addTimeZoneCastAfterTS(DAGExpressionAnalyzer & analyzer, const BoolVec & is_ts_column, ExpressionActionsChain & chain)
 {
     bool hasTSColumn = false;
     for (auto b : is_ts_column)
@@ -122,8 +119,7 @@ bool addTimeZoneCastAfterTS(
     return analyzer.appendTimeZoneCastsAfterTS(chain, is_ts_column);
 }
 
-AnalysisResult analyzeExpressions(
-    Context & context,
+AnalysisResult analyzeExpressions(Context & context,
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
@@ -159,8 +155,7 @@ AnalysisResult analyzeExpressions(
             /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
             context.getDAGContext()->isMPPTask();
 
-        analyzer.appendAggregation(
-            chain,
+        analyzer.appendAggregation(chain,
             query_block.aggregation->aggregation(),
             res.aggregation_keys,
             res.aggregation_collators,
@@ -192,8 +187,7 @@ AnalysisResult analyzeExpressions(
         analyzer.appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
     }
 
-    analyzer.generateFinalProject(
-        chain,
+    analyzer.generateFinalProject(chain,
         query_block.output_field_types,
         query_block.output_offsets,
         query_block.qb_column_prefix,
@@ -993,13 +987,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     auto res = analyzeExpressions(
-        context,
-        *analyzer,
-        query_block,
-        conditions,
-        timestamp_column_flag_for_tablescan,
-        keep_session_timezone_info,
-        final_project);
+        context, *analyzer, query_block, conditions, timestamp_column_flag_for_tablescan, keep_session_timezone_info, final_project);
 
     if (res.need_timezone_cast_after_tablescan)
     {
@@ -1106,7 +1094,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     }
 
     /// expand concurrency after agg
-    if(!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size()==1)
+    if (!query_block.isRootQueryBlock() && before_agg_streams > 1 && pipeline.streams.size() == 1)
     {
         size_t concurrency = before_agg_streams;
         BlockInputStreamPtr shared_query_block_input_stream
