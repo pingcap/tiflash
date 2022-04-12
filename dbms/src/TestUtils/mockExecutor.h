@@ -1,12 +1,29 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Debug/astToExecutor.h>
 #include <Interpreters/Context.h>
 
+#include <cstddef>
 #include <initializer_list>
 #include <utility>
 
 namespace DB
+{
+namespace tests
 {
 // <name, type>
 using MockColumnInfo = std::pair<String, TiDB::TP>;
@@ -20,9 +37,9 @@ using MockAsts = std::initializer_list<ASTPtr>;
 class DAGRequestBuilder
 {
 public:
+    static size_t executor_index;
     static size_t & getExecutorIndex()
     {
-        thread_local size_t executor_index = 0;
         return executor_index;
     }
 
@@ -45,7 +62,7 @@ public:
     DAGRequestBuilder & project(MockAsts expr);
     DAGRequestBuilder & project(MockColumnNames col_names);
 
-    // only support inner join
+    // Currentlt only support inner join.
     // TODO support more joins
     DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list);
 
@@ -55,6 +72,8 @@ private:
     ExecutorPtr root;
     DAGProperties properties;
 };
+
+size_t DAGRequestBuilder::executor_index = 0;
 
 ASTPtr buildColumn(const String & column_name);
 ASTPtr buildLiteral(const Field & field);
@@ -71,5 +90,5 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 #define And(expr1, expr2) buildFunction({(expr1), (expr2)}, "and")
 #define Or(expr1, expr2) buildFunction({(expr1), (expr2)}, "or")
 #define NOT(expr) buildFunction({expr1}, "not")
-
+} // namespace tests
 } // namespace DB
