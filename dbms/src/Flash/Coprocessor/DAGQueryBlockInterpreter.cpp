@@ -171,14 +171,15 @@ AnalysisResult analyzeExpressions(
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
     }
 
+    const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,
-            dagContext().output_field_types,
-            dagContext().output_offsets,
+            dag_context.output_field_types,
+            dag_context.output_offsets,
             query_block.qb_column_prefix,
-            dagContext().keep_session_timezone_info)
+            dag_context.keep_session_timezone_info)
         : analyzer.appendFinalProjectForNonRootQueryBlock(
             chain,
             query_block.qb_column_prefix);

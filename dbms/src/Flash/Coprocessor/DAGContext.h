@@ -25,6 +25,7 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
+#include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
@@ -291,10 +292,10 @@ public:
     LoggerPtr log;
 
     // initialized in `initOutputInfo`.
-    bool keep_session_timezone_info = false;
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type = tipb::EncodeType::TypeDefault;
     // only meaningful in final projection.
+    bool keep_session_timezone_info = false;
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
 
