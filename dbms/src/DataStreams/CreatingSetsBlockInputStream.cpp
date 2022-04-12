@@ -98,7 +98,7 @@ void CreatingSetsBlockInputStream::createAll()
                     elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
             }
         }
-
+        Stopwatch watch;
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
