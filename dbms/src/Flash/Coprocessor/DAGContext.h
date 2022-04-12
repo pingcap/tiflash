@@ -271,6 +271,8 @@ public:
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
+    void initOutputInfo();
+
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
@@ -298,8 +300,6 @@ public:
     bool keep_session_timezone_info = false;
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
-
-    void initOutputInfo();
 
 private:
     /// Hold io for correcting the destruction order.
