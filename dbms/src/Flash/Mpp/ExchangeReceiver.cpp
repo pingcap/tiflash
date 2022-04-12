@@ -42,7 +42,6 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
     bool meet_error = false;
     String local_err_msg;
-<<<<<<< HEAD
     try
     {
         auto sender_task = new mpp::TaskMeta();
@@ -52,21 +51,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         req->set_allocated_sender_meta(sender_task);
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
         ::grpc::Status status = ::grpc::Status::OK;
-        for (int i = 0; i < 10; i++)
-=======
-
-    Int64 send_task_id = -2; //Do not use -1 as default, since -1 has special meaning to show it's the root sender from the TiDB.
-    Int64 recv_task_id = task_meta.task_id();
-    static const Int32 MAX_RETRY_TIMES = 10;
-    try
-    {
-        auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
-        send_task_id = req.send_task_id;
-        String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
-        LOG_DEBUG(log, "begin start and read : " << req.debugString());
-        auto status = RPCContext::getStatusOK();
+        static const Int32 MAX_RETRY_TIMES = 10;
         for (int i = 0; i < MAX_RETRY_TIMES; i++)
->>>>>>> 8463cef05a (Fix ha test random failure (#3649))
         {
             pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
             grpc::ClientContext client_context;
@@ -108,16 +94,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             }
             else
             {
-<<<<<<< HEAD
-                LOG_WARNING(log,
-                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
-=======
                 bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
-                LOG_WARNING(
-                    log,
+                LOG_WARNING(log,
                     "EstablishMPPConnectionRequest meets rpc fail for req " << req_info << ". Err code = " << status.error_code()
-                                                                            << ", err msg = " << status.error_message() << ", retriable = " << retriable);
->>>>>>> 8463cef05a (Fix ha test random failure (#3649))
+                                                                            << ", err msg = " << status.error_message()
+                                                                            << ", retriable = " << retriable);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
