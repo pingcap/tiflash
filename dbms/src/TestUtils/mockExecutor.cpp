@@ -16,12 +16,47 @@
 
 namespace DB
 {
-std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(Context & context)
+ASTPtr buildColumn(const String & column_name)
 {
-    DAGProperties properties;
-    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, {});
-    std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
-    tipb::DAGRequest & dag_request = *dag_request_ptr;
+    return std::make_shared<ASTIdentifier>(column_name);
+}
+
+ASTPtr buildLiteral(const Field & field)
+{
+    return std::make_shared<ASTLiteral>(field);
+}
+
+ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, const String & name)
+{
+    auto func = std::make_shared<ASTFunction>();
+    func->name = name;
+    auto expr_list = std::make_shared<ASTExpressionList>();
+    for (const auto & expr : exprs)
+        expr_list->children.push_back(expr);
+    func->arguments = expr_list;
+    func->children.push_back(func->arguments);
+    return func;
+}
+
+ASTPtr buildOrderByItemList(std::initializer_list<std::pair<String, bool>> order_by_items)
+{
+    std::vector<ASTPtr> vec;
+    for (auto item: order_by_items)
+    {
+        int direction = item.second ? 1 : -1;
+        ASTPtr locale_node;
+        auto order_by_item = std::make_shared<ASTOrderByElement>(direction, direction, false, locale_node);
+        order_by_item->children.push_back(std::make_shared<ASTIdentifier>(item.first));        
+        vec.push_back(order_by_item);
+    }
+    auto exp_list = std::make_shared<ASTExpressionList>();
+    for (const auto & ast_ptr : vec)
+        exp_list->children.push_back(ast_ptr);
+    return exp_list;
+}
+
+void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
+{
     dag_request.set_time_zone_name(properties.tz_name);
     dag_request.set_time_zone_offset(properties.tz_offset);
     dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
@@ -35,9 +70,16 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(Context & context)
 
     for (size_t i = 0; i < root->output_schema.size(); ++i)
         dag_request.add_output_offsets(i);
-    auto * root_tipb_executor = dag_request.mutable_root_executor();
+}
 
-    root->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info, context);
+std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(Context & context)
+{
+    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, {});
+    std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
+    tipb::DAGRequest & dag_request = *dag_request_ptr;
+    initDAGRequest(dag_request);
+    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, context);
+
     return dag_request_ptr;
 }
 
@@ -70,20 +112,19 @@ DAGRequestBuilder & DAGRequestBuilder::filter(ASTPtr filter_expr)
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::filter(AstExprBuilder filter_expr)
-{
-    assert(root);
-    root = compileSelection(root, getExecutorIndex(), filter_expr.build());
-    return *this;
-}
-
 DAGRequestBuilder & DAGRequestBuilder::limit(int limit)
 {
     assert(root);
-    root = compileLimit(root, getExecutorIndex(), AstExprBuilder().appendLiteral(Field(static_cast<UInt64>(limit))).build());
+    root = compileLimit(root, getExecutorIndex(), buildLiteral(Field(static_cast<UInt64>(limit))));
     return *this;
 }
 
+DAGRequestBuilder & DAGRequestBuilder::limit(ASTPtr limit_expr)
+{
+    assert(root);
+    root = compileLimit(root, getExecutorIndex(), limit_expr);
+    return *this;
+}
 
 DAGRequestBuilder & DAGRequestBuilder::topN(ASTPtr order_exprs, ASTPtr limit_expr)
 {
@@ -92,36 +133,29 @@ DAGRequestBuilder & DAGRequestBuilder::topN(ASTPtr order_exprs, ASTPtr limit_exp
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::topN(String col_name, bool desc, int limit)
+DAGRequestBuilder & DAGRequestBuilder::topN(const String & col_name, bool desc, int limit)
 {
     assert(root);
-    root = compileTopN(root,
-                       getExecutorIndex(),
-                       AstExprBuilder().appendOrderByItem(col_name, desc).appendList().build(),
-                       AstExprBuilder().appendLiteral(Field(static_cast<UInt64>(limit))).build());
+    root = compileTopN(root, getExecutorIndex(), buildOrderByItemList({{col_name, desc}}), buildLiteral(Field(static_cast<UInt64>(limit))));
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::topN(std::initializer_list<String> cols, bool desc, int limit)
+DAGRequestBuilder & DAGRequestBuilder::topN(MockOrderByItems order_by_items, int limit)
 {
-    assert(root);
-    auto exp_list = std::make_shared<ASTExpressionList>();
-    AstExprBuilder expr_builder;
-    for (const auto & name : cols)
-        expr_builder.appendOrderByItem(name, desc);
-
-    root = compileTopN(root,
-                       getExecutorIndex(),
-                       expr_builder.appendList().build(),
-                       AstExprBuilder().appendLiteral(Field(static_cast<UInt64>(limit))).build());
-    return *this;
+    return topN(order_by_items, buildLiteral(Field(static_cast<UInt64>(limit))));
 }
 
+DAGRequestBuilder & DAGRequestBuilder::topN(MockOrderByItems order_by_items, ASTPtr limit_expr)
+{
+    assert(root);
+    root = compileTopN(root, getExecutorIndex(), buildOrderByItemList(order_by_items), limit_expr);
+    return *this;
+}
 
 DAGRequestBuilder & DAGRequestBuilder::project(String col_name)
 {
     assert(root);
-    root = compileProject(root, getExecutorIndex(), AstExprBuilder().appendColumnRef(col_name).appendList().build());
+    root = compileProject(root, getExecutorIndex(), buildColumn(col_name));
     return *this;
 }
 
@@ -130,20 +164,17 @@ DAGRequestBuilder & DAGRequestBuilder::project(std::initializer_list<ASTPtr> col
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
     for (const auto & col : cols)
-    {
         exp_list->children.push_back(col);
-    }
-
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::project(std::initializer_list<String> cols)
+DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNames col_names)
 {
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
-    for (const auto & name : cols)
-        exp_list->children.push_back(COL(name));
+    for (const auto & name : col_names)
+        exp_list->children.push_back(col(name));
 
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
@@ -158,80 +189,6 @@ DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, AST
     join_ast->strictness = ASTTableJoin::Strictness::All;
     root = compileJoin(getExecutorIndex(), root, right.root, join_ast);
     return *this;
-}
-
-AstExprBuilder & AstExprBuilder::appendColumnRef(const String & column_name)
-{
-    vec.push_back(std::make_shared<ASTIdentifier>(column_name));
-    return *this;
-}
-
-AstExprBuilder & AstExprBuilder::appendLiteral(const Field & field)
-{
-    vec.push_back(std::make_shared<ASTLiteral>(field));
-    return *this;
-}
-
-AstExprBuilder & AstExprBuilder::appendOrderByItem(const String & column_name, bool asc)
-{
-    int direction = asc ? 1 : -1;
-    ASTPtr locale_node;
-    auto order_by_item = std::make_shared<ASTOrderByElement>(direction, direction, false, locale_node);
-    order_by_item->children.push_back(std::make_shared<ASTIdentifier>(column_name));
-    vec.push_back(order_by_item);
-    return *this;
-}
-
-AstExprBuilder & AstExprBuilder::appendList()
-{
-    auto exp_list = std::make_shared<ASTExpressionList>();
-    for (const auto & ast_ptr : vec)
-        exp_list->children.push_back(ast_ptr);
-    vec.clear();
-    vec.push_back(exp_list);
-    return *this;
-}
-
-AstExprBuilder & AstExprBuilder::appendAlias(String alias)
-{
-    assert(vec.size() == 1);
-    auto i = std::make_shared<ASTIdentifier>(alias);
-    i->children.push_back(vec.back());
-    vec.clear();
-    return *this;
-}
-
-AstExprBuilder & AstExprBuilder::appendFunction(const String & func_name)
-{
-    appendList();
-    auto func = std::make_shared<ASTFunction>();
-    func->name = func_name;
-    ASTPtr exp_list = vec.back();
-    func->arguments = exp_list;
-    func->children.push_back(func->arguments);
-    vec.clear();
-    vec.push_back(func);
-    return *this;
-}
-
-ASTPtr AstExprBuilder::build()
-{
-    assert(vec.size() == 1);
-    ASTPtr ret = vec.back();
-    vec.clear();
-    return ret;
-}
-
-ASTPtr buildFunction(std::initializer_list<ASTPtr> exprs, String name)
-{
-    auto func = std::make_shared<ASTFunction>();
-    func->name = name;
-    auto expr_list = std::make_shared<ASTExpressionList>();
-    for (const auto & expr : exprs)
-        expr_list->children.push_back(expr);
-    func->arguments = expr_list;
-    func->children.push_back(func->arguments);
-    return func;
 }
 
 } // namespace DB
