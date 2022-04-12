@@ -73,8 +73,6 @@ private:
     DAGProperties properties;
 };
 
-size_t DAGRequestBuilder::executor_index = 0;
-
 ASTPtr buildColumn(const String & column_name);
 ASTPtr buildLiteral(const Field & field);
 ASTPtr buildFunction(MockAsts exprs, const String & name);

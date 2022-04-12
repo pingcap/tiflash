@@ -14,81 +14,16 @@
 
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/InterpreterTestUtils.h>
+
+#include <iostream>
 
 namespace DB
 {
 namespace tests
 {
-namespace
-{
-String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
-
-String toTreeString(const tipb::DAGRequest * dag_request)
-{
-    assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-    if (dag_request->has_root_executor())
-    {
-        return toTreeString(dag_request->root_executor());
-    }
-    else
-    {
-        FmtBuffer buffer;
-        String prefix;
-        traverseExecutors(dag_request, [&buffer, &prefix](const tipb::Executor & executor) {
-            assert(executor.has_executor_id());
-            buffer.fmtAppend("{}{}\n", prefix, executor.executor_id());
-            prefix.append(" ");
-            return true;
-        });
-        return buffer.toString();
-    }
-}
-
-String toTreeString(const tipb::Executor & root_executor, size_t level)
-{
-    FmtBuffer buffer;
-
-    auto append_str = [&buffer, &level](const tipb::Executor & executor) {
-        assert(executor.has_executor_id());
-        for (size_t i = 0; i < level; ++i)
-            buffer.append(" ");
-        buffer.append(executor.executor_id()).append("\n");
-    };
-
-    traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
-        if (executor.has_join())
-        {
-            for (const auto & child : executor.join().children())
-                buffer.append(toTreeString(child, level));
-            return false;
-        }
-        else
-        {
-            append_str(executor);
-            ++level;
-            return true;
-        }
-    });
-
-    return buffer.toString();
-}
-
-String & trim(String & str)
-{
-    if (str.empty())
-    {
-        return str;
-    }
-
-    str.erase(0, str.find_first_not_of(' '));
-    str.erase(str.find_last_not_of(' ') + 1);
-    return str;
-}
-} // namespace
 class MockDAGRequestTest : public DB::tests::MockExecutorTest
 {
 };
@@ -167,6 +102,7 @@ try
                              "  project_2\n"
                              "   selection_1\n"
                              "    table_scan_0\n";
+    std::cout << to_tree_string << std::endl;
     ASSERT_EQ(trim(to_tree_string), trim(expected_string));
 }
 CATCH

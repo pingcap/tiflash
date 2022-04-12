@@ -31,6 +31,8 @@ namespace DB
 {
 namespace tests
 {
+size_t DAGRequestBuilder::executor_index = 0;
+
 ASTPtr buildColumn(const String & column_name)
 {
     return std::make_shared<ASTIdentifier>(column_name);
