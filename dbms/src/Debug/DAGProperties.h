@@ -14,18 +14,21 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Core/Defines.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
-
-namespace DM
+struct DAGProperties
 {
-void sortRangesByStartEdge(RowKeyRanges & ranges);
-
-RowKeyRanges tryMergeRanges(RowKeyRanges && ranges, size_t expected_ranges_count, const LoggerPtr & log = nullptr);
-
-} // namespace DM
+    String encode_type;
+    Int64 tz_offset = 0;
+    String tz_name;
+    Int32 collator = 0;
+    bool is_mpp_query = false;
+    bool use_broadcast_join = false;
+    Int32 mpp_partition_num = 1;
+    Timestamp start_ts = DEFAULT_MAX_READ_TSO;
+    Int32 mpp_timeout = 10;
+};
 } // namespace DB

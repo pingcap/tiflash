@@ -28,7 +28,8 @@
 namespace DB
 {
 
-StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(name_)
+StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
+    : name(name_)
 {
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
@@ -85,6 +86,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
         {"storage_stable_num_snapshots", std::make_shared<DataTypeUInt64>()},
         {"storage_stable_oldest_snapshot_lifetime", std::make_shared<DataTypeFloat64>()},
         {"storage_stable_oldest_snapshot_thread_id", std::make_shared<DataTypeUInt64>()},
+        {"storage_stable_oldest_snapshot_tracing_id", std::make_shared<DataTypeString>()},
         {"storage_stable_num_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_stable_num_normal_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_stable_max_page_id", std::make_shared<DataTypeUInt64>()},
@@ -92,6 +94,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
         {"storage_delta_num_snapshots", std::make_shared<DataTypeUInt64>()},
         {"storage_delta_oldest_snapshot_lifetime", std::make_shared<DataTypeFloat64>()},
         {"storage_delta_oldest_snapshot_thread_id", std::make_shared<DataTypeUInt64>()},
+        {"storage_delta_oldest_snapshot_tracing_id", std::make_shared<DataTypeString>()},
         {"storage_delta_num_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_delta_num_normal_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_delta_max_page_id", std::make_shared<DataTypeUInt64>()},
@@ -99,6 +102,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
         {"storage_meta_num_snapshots", std::make_shared<DataTypeUInt64>()},
         {"storage_meta_oldest_snapshot_lifetime", std::make_shared<DataTypeFloat64>()},
         {"storage_meta_oldest_snapshot_thread_id", std::make_shared<DataTypeUInt64>()},
+        {"storage_meta_oldest_snapshot_tracing_id", std::make_shared<DataTypeString>()},
         {"storage_meta_num_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_meta_num_normal_pages", std::make_shared<DataTypeUInt64>()},
         {"storage_meta_max_page_id", std::make_shared<DataTypeUInt64>()},
@@ -108,7 +112,8 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
 }
 
 
-BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
+BlockInputStreams StorageSystemDTTables::read(
+    const Names & column_names,
     const SelectQueryInfo &,
     const Context & context,
     QueryProcessingStage::Enum & processed_stage,
@@ -126,19 +131,19 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
     for (const auto & d : databases)
     {
         String database_name = d.first;
-        auto & database = d.second;
+        const auto & database = d.second;
         const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.get());
 
         auto it = database->getIterator(context);
         for (; it->isValid(); it->next())
         {
-            auto & table_name = it->name();
+            const auto & table_name = it->name();
             auto & storage = it->table();
             if (storage->getName() != MutableSupport::delta_tree_storage_name)
                 continue;
 
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            auto & table_info = dm_storage->getTableInfo();
+            const auto & table_info = dm_storage->getTableInfo();
             auto table_id = table_info.id;
             auto stat = dm_storage->getStore()->getStat();
 
@@ -201,6 +206,7 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
             res_columns[j++]->insert(stat.storage_stable_num_snapshots);
             res_columns[j++]->insert(stat.storage_stable_oldest_snapshot_lifetime);
             res_columns[j++]->insert(stat.storage_stable_oldest_snapshot_thread_id);
+            res_columns[j++]->insert(stat.storage_stable_oldest_snapshot_tracing_id);
             res_columns[j++]->insert(stat.storage_stable_num_pages);
             res_columns[j++]->insert(stat.storage_stable_num_normal_pages);
             res_columns[j++]->insert(stat.storage_stable_max_page_id);
@@ -208,6 +214,7 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
             res_columns[j++]->insert(stat.storage_delta_num_snapshots);
             res_columns[j++]->insert(stat.storage_delta_oldest_snapshot_lifetime);
             res_columns[j++]->insert(stat.storage_delta_oldest_snapshot_thread_id);
+            res_columns[j++]->insert(stat.storage_delta_oldest_snapshot_tracing_id);
             res_columns[j++]->insert(stat.storage_delta_num_pages);
             res_columns[j++]->insert(stat.storage_delta_num_normal_pages);
             res_columns[j++]->insert(stat.storage_delta_max_page_id);
@@ -215,6 +222,7 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
             res_columns[j++]->insert(stat.storage_meta_num_snapshots);
             res_columns[j++]->insert(stat.storage_meta_oldest_snapshot_lifetime);
             res_columns[j++]->insert(stat.storage_meta_oldest_snapshot_thread_id);
+            res_columns[j++]->insert(stat.storage_meta_oldest_snapshot_tracing_id);
             res_columns[j++]->insert(stat.storage_meta_num_pages);
             res_columns[j++]->insert(stat.storage_meta_num_normal_pages);
             res_columns[j++]->insert(stat.storage_meta_max_page_id);
