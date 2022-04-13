@@ -27,15 +27,8 @@ class Context;
 class ExpressionActions;
 struct ExpressionActionsChain;
 
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-
-class Set;
-using SetPtr = std::shared_ptr<Set>;
 using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
-class IStorage;
-using StoragePtr = std::shared_ptr<IStorage>;
 using Tables = std::map<String, StoragePtr>;
 
 class ASTFunction;

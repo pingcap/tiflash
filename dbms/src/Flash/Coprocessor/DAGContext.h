@@ -273,8 +273,8 @@ public:
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
-    bool hasSubquery() const { return !subqueries_for_sets.empty(); }
-    SubqueriesForSets && moveSubqueries() { return std::move(subqueries_for_sets); }
+    bool hasSubquery() const { return !subqueries.empty(); }
+    std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
 
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
@@ -326,8 +326,9 @@ private:
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
-    /// set of SubqueryForSet(such as join build subquery).
-    SubqueriesForSets subqueries_for_sets;
+    /// vector of SubqueriesForSets(such as join build subquery).
+    /// The order of the vector is also the order of the subquery.
+    std::vector<SubqueriesForSets> subqueries;
 };
 
 } // namespace DB

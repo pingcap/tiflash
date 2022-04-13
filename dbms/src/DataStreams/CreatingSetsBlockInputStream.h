@@ -29,18 +29,17 @@ namespace DB
 class CreatingSetsBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    template <typename Subqueries>
     CreatingSetsBlockInputStream(
         const BlockInputStreamPtr & input,
-        Subqueries && subqueries_for_sets_,
+        const SubqueriesForSets & subqueries_for_sets_,
         const SizeLimits & network_transfer_limits,
-        const String & req_id)
-        : subqueries_for_sets(std::forward<Subqueries>(subqueries_for_sets_))
-        , network_transfer_limits(network_transfer_limits)
-        , log(Logger::get(name, req_id))
-    {
-        init(input);
-    }
+        const String & req_id);
+
+    CreatingSetsBlockInputStream(
+        const BlockInputStreamPtr & input,
+        std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
+        const SizeLimits & network_transfer_limits,
+        const String & req_id);
 
     ~CreatingSetsBlockInputStream() = default;
 
@@ -87,7 +86,7 @@ protected:
 private:
     void init(const BlockInputStreamPtr & input);
 
-    SubqueriesForSets subqueries_for_sets;
+    std::vector<SubqueriesForSets> subqueries_for_sets_list;
     bool created = false;
 
     SizeLimits network_transfer_limits;

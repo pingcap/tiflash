@@ -37,16 +37,43 @@ namespace ErrorCodes
 extern const int SET_SIZE_LIMIT_EXCEEDED;
 }
 
+CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
+    const BlockInputStreamPtr & input,
+    std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
+    const SizeLimits & network_transfer_limits,
+    const String & req_id)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_))
+    , network_transfer_limits(network_transfer_limits)
+    , log(Logger::get(name, req_id))
+{
+    init(input);
+}
+
+CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
+    const BlockInputStreamPtr & input,
+    const SubqueriesForSets & subqueries_for_sets,
+    const SizeLimits & network_transfer_limits,
+    const String & req_id)
+    : network_transfer_limits(network_transfer_limits)
+    , log(Logger::get(name, req_id))
+{
+    subqueries_for_sets_list.push_back(subqueries_for_sets);
+    init(input);
+}
+
 void CreatingSetsBlockInputStream::init(const BlockInputStreamPtr & input)
 {
-    for (auto & elem : subqueries_for_sets)
+    for (auto & subqueries_for_sets : subqueries_for_sets_list)
     {
-        if (elem.second.source)
+        for (auto & elem : subqueries_for_sets)
         {
-            children.push_back(elem.second.source);
+            if (elem.second.source)
+            {
+                children.push_back(elem.second.source);
 
-            if (elem.second.set)
-                elem.second.set->setHeader(elem.second.source->getHeader());
+                if (elem.second.set)
+                    elem.second.set->setHeader(elem.second.source->getHeader());
+            }
         }
     }
 
@@ -88,21 +115,27 @@ void CreatingSetsBlockInputStream::createAll()
 {
     if (!created)
     {
-        for (auto & elem : subqueries_for_sets)
+        for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
-            if (elem.second.join)
-                elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
+            for (auto & elem : subqueries_for_sets)
+            {
+                if (elem.second.join)
+                    elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
+            }
         }
         Stopwatch watch;
         auto thread_manager = newThreadManager();
-        for (auto & elem : subqueries_for_sets)
+        for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
-            if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
+            for (auto & elem : subqueries_for_sets)
             {
-                if (isCancelledOrThrowIfKilled())
-                    return;
-                thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
-                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
+                if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
+                {
+                    if (isCancelledOrThrowIfKilled())
+                        return;
+                    thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
+                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
+                }
             }
         }
 
