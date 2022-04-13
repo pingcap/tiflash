@@ -553,7 +553,7 @@ class DTEntriesCopy : Allocator
 
     const size_t       entry_count;
     const Int64        delta;
-    UInt64 * const     sids = nullptr;
+    UInt64 * const     sids      = nullptr;
     DTMutation * const mutations = nullptr;
 
 public:
@@ -730,17 +730,17 @@ public:
     static_assert(std::is_standard_layout_v<Intern>);
 
 private:
-    NodePtr root = nullptr;
-    LeafPtr left_leaf = nullptr;
+    NodePtr root       = nullptr;
+    LeafPtr left_leaf  = nullptr;
     LeafPtr right_leaf = nullptr;
-    size_t  height = 1;
+    size_t  height     = 1;
 
     size_t num_inserts = 0;
     size_t num_deletes = 0;
     size_t num_entries = 0;
 
     Allocator * allocator = nullptr;
-    size_t      bytes = 0;
+    size_t      bytes     = 0;
 
     Logger * log = nullptr;
 
