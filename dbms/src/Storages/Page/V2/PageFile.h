@@ -134,8 +134,14 @@ public:
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter = nullptr);
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter = nullptr);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file,
+                                               size_t max_meta_offset,
+                                               const ReadLimiterPtr & read_limiter = nullptr,
+                                               const bool background = false);
+
+        static MetaMergingReaderPtr createFrom(PageFile & page_file,
+                                               const ReadLimiterPtr & read_limiter = nullptr,
+                                               const bool background = false);
 
         MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
 
@@ -184,7 +190,7 @@ public:
         }
 
     private:
-        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
+        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter, const bool background = false);
 
     private:
         PageFile & page_file;

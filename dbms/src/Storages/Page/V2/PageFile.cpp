@@ -471,14 +471,18 @@ PageFile::MetaMergingReader::~MetaMergingReader()
     page_file.free(meta_buffer, meta_size);
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter)
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(
+    PageFile & page_file,
+    size_t max_meta_offset,
+    const ReadLimiterPtr & read_limiter,
+    const bool background)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
     reader->initialize(max_meta_offset, read_limiter);
     return reader;
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter)
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter, const bool background)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
     reader->initialize(std::nullopt, read_limiter);
@@ -488,7 +492,7 @@ PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile 
 // Try to initiallize access to meta, read the whole metadata to memory.
 // Status -> Finished if metadata size is zero.
 //        -> Opened if metadata successfully load from disk.
-void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter)
+void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter, const bool background = false)
 {
     if (status == Status::Opened)
         return;
@@ -523,7 +527,7 @@ void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offs
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
     SCOPE_EXIT({ underlying_file->close(); });
     meta_buffer = static_cast<char *>(page_file.alloc(meta_size));
-    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter, background);
     status = Status::Opened;
 }
 
