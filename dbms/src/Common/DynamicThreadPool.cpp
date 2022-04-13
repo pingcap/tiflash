@@ -123,7 +123,7 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
     UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_thdpool, type_max_threads_of_thdpool);
     executeTask(initial_task);
 
-    DynamicNode node;
+    DynamicNode * node = new DynamicNode;
     while (true)
     {
         {
@@ -131,9 +131,9 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
             if (in_destructing)
                 break;
             // attach to just after head to reuse hot threads so that cold threads have chance to exit
-            node.appendTo(&dynamic_idle_head);
-            node.cv.wait_for(lock, dynamic_auto_shrink_cooldown);
-            node.detach();
+            node->appendTo(&dynamic_idle_head);
+            node->cv.wait_for(lock, dynamic_auto_shrink_cooldown);
+            node->detach();
         }
 
         if (!node.task) // may be timeout or cancelled
@@ -141,6 +141,7 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
         executeTask(node.task);
     }
     alive_dynamic_threads.fetch_sub(1);
+    node->prependTo(&dynamic_idle_head);
 }
 
 std::unique_ptr<DynamicThreadPool> DynamicThreadPool::global_instance;
