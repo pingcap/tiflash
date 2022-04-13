@@ -28,6 +28,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
+#include <fmt/core.h>
 
 #include <cstddef>
 #include <memory>

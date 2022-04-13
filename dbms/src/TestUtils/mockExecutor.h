@@ -25,9 +25,10 @@ namespace DB
 {
 namespace tests
 {
-// <name, type>
+
 using MockColumnInfo = std::pair<String, TiDB::TP>;
 using MockColumnInfos = std::vector<MockColumnInfo>;
+using MockColumnInfoList = std::initializer_list<MockColumnInfo>;
 using MockTableName = std::pair<String, String>;
 using MockOrderByItem = std::pair<String, bool>;
 using MockOrderByItems = std::initializer_list<MockOrderByItem>;
@@ -45,8 +46,10 @@ public:
 
     std::shared_ptr<tipb::DAGRequest> build(Context & context);
 
+    // ywq todo check arguments
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfos & columns);
+    DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoList & columns);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -62,12 +65,17 @@ public:
     DAGRequestBuilder & project(MockAsts expr);
     DAGRequestBuilder & project(MockColumnNames col_names);
 
-    // Currentlt only support inner join.
-    // TODO support more joins
+    // Currentlt only support inner join, left join and right join.
+    // TODO support more types of join.
     DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list);
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list, ASTTableJoin::Kind kind);
 
+    // aggregation
+    DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
+    DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
+    DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
 
     ExecutorPtr root;
     DAGProperties properties;
@@ -88,5 +96,6 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 #define And(expr1, expr2) buildFunction({(expr1), (expr2)}, "and")
 #define Or(expr1, expr2) buildFunction({(expr1), (expr2)}, "or")
 #define NOT(expr) buildFunction({expr1}, "not")
+#define Max(expr1, expr2) buildFunction({(expr1), (expr2)}, "max")
 } // namespace tests
 } // namespace DB
