@@ -726,7 +726,10 @@ try
                         "id":330,
                         "index_info":[],
                         "is_common_handle":false,
-                        "name":{"L":"test","O":"test"},
+                        "name":{
+                            "L":"test",
+                            "O":"test"
+                        },
                         "partition":null,
                         "pk_is_handle":true,
                         "schema_version":465,
