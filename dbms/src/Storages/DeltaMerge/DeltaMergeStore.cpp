@@ -1043,6 +1043,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
             (void)tasks;
         });
+        thread_hold_snapshots.detach();
     });
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
