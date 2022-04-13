@@ -978,6 +978,7 @@ void BlobStore::BlobStats::restore()
 
     for (auto & [path, stats] : stats_map)
     {
+        (void)path;
         for (const auto & stat : stats)
         {
             stat->recalculateSpaceMap();
