@@ -25,8 +25,8 @@
 
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Logger.h>
+#include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
@@ -113,6 +113,7 @@ constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 class DAGContext
 {
 public:
+    // for non-mpp(cop/batchCop)
     explicit DAGContext(const tipb::DAGRequest & dag_request_)
         : dag_request(&dag_request_)
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
@@ -127,8 +128,11 @@ public:
     {
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
+
+        initOutputInfo();
     }
 
+    // for mpp
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
         : dag_request(&dag_request_)
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
@@ -145,8 +149,13 @@ public:
         , warning_count(0)
     {
         assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
+
+        // only mpp task has join executor.
+        initExecutorIdToJoinIdMap();
+        initOutputInfo();
     }
 
+    // for test
     explicit DAGContext(UInt64 max_error_count_)
         : dag_request(nullptr)
         , collect_execution_summaries(false)
@@ -163,7 +172,6 @@ public:
     void attachBlockIO(const BlockIO & io_);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
-    void initExecutorIdToJoinIdMap();
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
@@ -296,9 +304,17 @@ public:
 
     LoggerPtr log;
 
-    bool keep_session_timezone_info = false;
+    // initialized in `initOutputInfo`.
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type = tipb::EncodeType::TypeDefault;
+    // only meaningful in final projection.
+    bool keep_session_timezone_info = false;
+    std::vector<tipb::FieldType> output_field_types;
+    std::vector<Int32> output_offsets;
+
+private:
+    void initExecutorIdToJoinIdMap();
+    void initOutputInfo();
 
 private:
     /// Hold io for correcting the destruction order.
