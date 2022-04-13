@@ -660,7 +660,67 @@ try
     {
         /// Create table
         ParserCreateQuery parser;
-        const String stmt = fmt::format("CREATE TABLE `{}`.`{}` ", db_name, tbl_name) + R"stmt( (`id` Int32,`b` String) Engine = DeltaMerge((`id`),'{"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"id","O":"id"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":515,"Flen":16,"Tp":3}},{"comment":"","default":"","default_bit":null,"id":15,"name":{"L":"b","O":"b"},"offset":12,"origin_default":"","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4225,"Flen":-1,"Tp":251}}],"comment":"","id":330,"index_info":[],"is_common_handle":false,"name":{"L":"test","O":"test"},"partition":null,"pk_is_handle":true,"schema_version":465,"state":5,"update_timestamp":99999}'))stmt";
+        const String stmt = fmt::format("CREATE TABLE `{}`.`{}` ", db_name, tbl_name) +
+            R"stmt( 
+                (`id` Int32,`b` String) Engine = DeltaMerge((`id`),
+                    '{
+                        "cols":[{
+                            "comment":"",
+                            "default":null,
+                            "default_bit":null,
+                            "id":1,
+                            "name":{
+                                "L":"id",
+                                "O":"id"
+                            },
+                            "offset":0,
+                            "origin_default":null,
+                            "state":5,
+                            "type":{
+                                "Charset":"binary",
+                                "Collate":"binary",
+                                "Decimal":0,
+                                "Elems":null,
+                                "Flag":515,
+                                "Flen":16,
+                                "Tp":3
+                            }
+                        },
+                        {
+                            "comment":"",
+                            "default":"",
+                            "default_bit":null,
+                            "id":15,
+                            "name":{
+                                "L":"b",
+                                "O":"b"
+                            },
+                            "offset":12,
+                            "origin_default":"",
+                            "state":5,
+                            "type":{
+                                "Charset":"binary",
+                                "Collate":"binary",
+                                "Decimal":0,
+                                "Elems":null,
+                                "Flag":4225,
+                                "Flen":-1,
+                                "Tp":251
+                            }
+                        }],
+                        "comment":"",
+                        "id":330,
+                        "index_info":[],
+                        "is_common_handle":false,
+                        "name":{"L":"test","O":"test"},
+                        "partition":null,
+                        "pk_is_handle":true,
+                        "schema_version":465,
+                        "state":5,
+                        "update_timestamp":99999
+                    }'
+                )
+            )stmt";
         ASTPtr ast = parseQuery(parser, stmt, 0);
 
         InterpreterCreateQuery interpreter(ast, ctx);
