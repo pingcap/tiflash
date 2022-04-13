@@ -71,11 +71,6 @@ CATCH
 TEST_F(MockDAGRequestTest, Test2)
 try
 {
-    MockTableName right_table{"r_db", "r_table"};
-    std::vector<MockColumnInfo> r_columns;
-    r_columns.emplace_back("r_a", TiDB::TP::TypeString);
-    r_columns.emplace_back("r_b", TiDB::TP::TypeString);
-
     MockTableName left_table{"l_db", "l_table"};
     std::vector<MockColumnInfo> l_columns;
     l_columns.emplace_back("l_a", TiDB::TP::TypeString);
@@ -83,7 +78,7 @@ try
 
     DAGRequestBuilder right_builder;
     right_builder
-        .mockTable(right_table, r_columns)
+        .mockTable({"r_db", "r_table"}, {{"r_a", TiDB::TP::TypeString}, {"r_b", TiDB::TP::TypeString}})
         .filter(eq(col("r_a"), col("r_b")))
         .project({col("r_a")})
         .topN("r_a", false, 20);
