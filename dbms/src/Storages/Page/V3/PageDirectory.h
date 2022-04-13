@@ -65,13 +65,8 @@ public:
         return diff.count();
     }
 
-    unsigned getTid() const
-    {
-        return create_thread;
-    }
-
 public:
-    UInt64 sequence;
+    const UInt64 sequence;
     const unsigned create_thread;
     const String tracing_id;
 

@@ -261,7 +261,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSelectQueryInfos()
 {
     std::unordered_map<TableID, SelectQueryInfo> ret;
-    auto create_query_info = [&]() -> SelectQueryInfo {
+    auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
         SelectQueryInfo query_info;
         /// to avoid null point exception
         query_info.query = makeDummyQuery();
@@ -270,13 +270,14 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
+        query_info.req_id = fmt::format("{} Table<{}>", log->identifier(), table_id);
         return query_info;
     };
     if (table_scan.isPartitionTableScan())
     {
         for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
         {
-            SelectQueryInfo query_info = create_query_info();
+            SelectQueryInfo query_info = create_query_info(physical_table_id);
             query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(mvcc_query_info->resolve_locks, mvcc_query_info->read_tso);
             ret.emplace(physical_table_id, std::move(query_info));
         }
@@ -292,8 +293,8 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     }
     else
     {
-        TableID table_id = logical_table_id;
-        SelectQueryInfo query_info = create_query_info();
+        const TableID table_id = logical_table_id;
+        SelectQueryInfo query_info = create_query_info(table_id);
         query_info.mvcc_query_info = std::move(mvcc_query_info);
         ret.emplace(table_id, std::move(query_info));
     }
@@ -549,7 +550,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
     auto log_schema_version = [&](const String & result, const std::vector<Int64> & storage_schema_versions) {
         FmtBuffer buffer;
-        buffer.fmtAppend("{} Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}]", __PRETTY_FUNCTION__, logical_table_id, result, storage_schema_versions[0], global_schema_version, query_schema_version);
+        buffer.fmtAppend("Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}]", logical_table_id, result, storage_schema_versions[0], global_schema_version, query_schema_version);
         if (table_scan.isPartitionTableScan())
         {
             assert(storage_schema_versions.size() == 1 + table_scan.getPhysicalTableIDs().size());
@@ -567,7 +568,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         GET_METRIC(tiflash_schema_trigger_count, type_cop_read).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_FMT_INFO(log, "{} Table {} schema sync cost {}ms.", __PRETTY_FUNCTION__, logical_table_id, schema_sync_cost);
+        LOG_FMT_INFO(log, "Table {} schema sync cost {}ms.", logical_table_id, schema_sync_cost);
     };
 
     /// Try get storage and lock once.

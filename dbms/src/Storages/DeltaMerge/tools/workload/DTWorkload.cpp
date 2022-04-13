@@ -191,7 +191,7 @@ void DTWorkload::read(const ColumnDefines & columns, int stream_count, T func)
     auto filter = EMPTY_FILTER;
     int excepted_block_size = 1024;
     uint64_t read_ts = ts_gen->get();
-    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, excepted_block_size);
+    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, "DTWorkload", excepted_block_size);
     std::vector<std::thread> threads;
     threads.reserve(streams.size());
     for (auto & stream : streams)
