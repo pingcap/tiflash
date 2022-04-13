@@ -24,8 +24,8 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
@@ -1162,8 +1162,20 @@ struct TiDBConvertToDecimal
             /// cast int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; ++i)
-                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+            if constexpr (std::is_integral_v<FromFieldType>)
+            {
+                /// cast enum/int as decimal
+                for (size_t i = 0; i < size; ++i)
+                    vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+            }
+            else
+            {
+                /// cast real as decimal
+                static_assert(std::is_floating_point_v<FromFieldType>);
+                for (size_t i = 0; i < size; ++i)
+                    // Always use Float64 to avoid overflow for vec_from[i] * 10^scale.
+                    vec_to[i] = toTiDBDecimal<Float64, ToFieldType>(static_cast<Float64>(vec_from[i]), prec, scale, context);
+            }
         }
         else
         {
@@ -1751,7 +1763,8 @@ private:
         //  other type, its parameter should be the same
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
-        return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString();
+        return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type)
+            && !from_inner_type->isParametric() && !from_inner_type->isString();
     }
 
     WrapperType prepare(const DataTypePtr & from_type, const DataTypePtr & to_type) const
