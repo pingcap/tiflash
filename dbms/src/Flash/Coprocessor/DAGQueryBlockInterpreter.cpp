@@ -137,6 +137,7 @@ AnalysisResult analyzeExpressions(
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
 
+        // `res.before_aggregation` has called `finalize`, get column index in here is safe.
         AggregationInterpreterHelper::fillArgColumnNumbers(res.aggregate_descriptions, res.before_aggregation->getSampleBlock());
 
         if (query_block.having != nullptr)
