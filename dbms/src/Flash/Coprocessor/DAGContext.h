@@ -112,6 +112,7 @@ constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 class DAGContext
 {
 public:
+    // for non-mpp
     explicit DAGContext(const tipb::DAGRequest & dag_request_)
         : dag_request(&dag_request_)
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
@@ -126,8 +127,11 @@ public:
     {
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
+
+        initOutputInfo();
     }
 
+    // for mpp
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
         : dag_request(&dag_request_)
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
@@ -144,8 +148,13 @@ public:
         , warning_count(0)
     {
         assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
+
+        // only mpp task has join executor.
+        initExecutorIdToJoinIdMap();
+        initOutputInfo();
     }
 
+    // for test
     explicit DAGContext(UInt64 max_error_count_)
         : dag_request(nullptr)
         , collect_execution_summaries(false)

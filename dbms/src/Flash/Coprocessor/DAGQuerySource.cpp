@@ -33,9 +33,6 @@ DAGQuerySource::DAGQuerySource(Context & context_)
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
     }
-
-    getDAGContext().initExecutorIdToJoinIdMap();
-    getDAGContext().initOutputInfo();
 }
 
 std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
