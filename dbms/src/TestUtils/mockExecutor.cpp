@@ -115,12 +115,12 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, con
     return mockTable(name.first, name.second, columns);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const MockColumnInfoList & columns) 
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const MockColumnInfoList & columns)
 {
     assert(columns.size() != 0);
     TableInfo table_info;
     table_info.name = name.first + "." + name.second;
-    for (const auto & column: columns)
+    for (const auto & column : columns)
     {
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
@@ -230,7 +230,7 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
     agg_funcs->children.push_back(agg_func);
     group_by_exprs->children.push_back(group_by_expr);
-    return buildAggregation(agg_funcs,group_by_exprs);
+    return buildAggregation(agg_funcs, group_by_exprs);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAsts agg_funcs, MockAsts group_by_exprs)
@@ -239,9 +239,9 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAsts agg_funcs, MockAsts 
     auto group_by_expr_list = std::make_shared<ASTExpressionList>();
     for (const auto & func : agg_funcs)
         agg_func_list->children.push_back(func);
-    for (const auto & group_by: group_by_exprs)
+    for (const auto & group_by : group_by_exprs)
         group_by_expr_list->children.push_back(group_by);
-    
+
     return buildAggregation(agg_func_list, group_by_expr_list);
 }
 

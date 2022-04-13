@@ -64,7 +64,7 @@ try
                              "  project_2\n"
                              "   selection_1\n"
                              "    table_scan_0\n";
-    ASSERT_EQ(trim(to_tree_string), trim(expected_string)); 
+    ASSERT_EQ(trim(to_tree_string), trim(expected_string));
 }
 CATCH
 
@@ -98,15 +98,14 @@ try
         .limit(10);
     auto dag_request = join_builder.build(context);
     auto to_tree_string = toTreeString(dag_request.get());
-    String expected_string = 
-        "limit_8\n"
-        " aggregation_6\n"
-        "  topn_5\n"
-        "   table_scan_4\n"
-        " topn_3\n"
-        "  project_2\n"
-        "   selection_1\n"
-        "    table_scan_0\n";
+    String expected_string = "limit_8\n"
+                             " aggregation_6\n"
+                             "  topn_5\n"
+                             "   table_scan_4\n"
+                             " topn_3\n"
+                             "  project_2\n"
+                             "   selection_1\n"
+                             "    table_scan_0\n";
     ASSERT_EQ(trim(to_tree_string), trim(expected_string));
 }
 CATCH

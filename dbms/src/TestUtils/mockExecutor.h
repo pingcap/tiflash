@@ -25,7 +25,6 @@ namespace DB
 {
 namespace tests
 {
-
 using MockColumnInfo = std::pair<String, TiDB::TP>;
 using MockColumnInfos = std::vector<MockColumnInfo>;
 using MockColumnInfoList = std::initializer_list<MockColumnInfo>;
@@ -73,6 +72,7 @@ public:
     // aggregation
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
     DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
+
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
