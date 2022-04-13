@@ -224,19 +224,11 @@ std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
 template <typename Writer>
 void MPPTunnelBase<Writer>::connect(Writer * writer_)
 {
-<<<<<<< HEAD
     std::lock_guard<std::mutex> lk(mu);
     if (connected)
         throw Exception("has connected");
-=======
-    {
-        std::unique_lock lk(mu);
-        if (connected)
-            throw Exception("MPPTunnel has connected");
-        if (finished)
-            throw Exception("MPPTunnel has finished");
->>>>>>> b3a2cd587b (Fix a bug that MPP tasks may leak threads forever (#4241))
-
+    if (finished)
+        throw Exception("has finished");
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
     if (!is_local)
