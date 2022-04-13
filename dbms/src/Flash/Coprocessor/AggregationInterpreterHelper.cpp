@@ -23,25 +23,15 @@ Aggregator::Params buildAggregatorParams(
     const Context & context,
     const Block & before_agg_header,
     size_t before_agg_streams_size,
-    Names & key_names,
-    TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
+    const Names & key_names,
+    const TiDB::TiDBCollators & collators,
+    const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg)
 {
     ColumnNumbers keys;
     for (const auto & name : key_names)
     {
         keys.push_back(before_agg_header.getPositionByName(name));
-    }
-    for (auto & descr : aggregate_descriptions)
-    {
-        if (descr.arguments.empty())
-        {
-            for (const auto & name : descr.argument_names)
-            {
-                descr.arguments.push_back(before_agg_header.getPositionByName(name));
-            }
-        }
     }
 
     const Settings & settings = context.getSettingsRef();
@@ -68,6 +58,20 @@ Aggregator::Params buildAggregatorParams(
         has_collator ? collators : TiDB::dummy_collators);
 
     return params;
+}
+
+void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header)
+{
+    for (auto & descr : aggregate_descriptions)
+    {
+        if (descr.arguments.empty())
+        {
+            for (const auto & name : descr.argument_names)
+            {
+                descr.arguments.push_back(before_agg_header.getPositionByName(name));
+            }
+        }
+    }
 }
 
 bool isFinalAgg(const tipb::Aggregation & aggregation)

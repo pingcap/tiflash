@@ -137,6 +137,8 @@ AnalysisResult analyzeExpressions(
             query_block.aggregation->aggregation(),
             group_by_collation_sensitive);
 
+        AggregationInterpreterHelper::fillArgColumnNumbers(res.aggregate_descriptions, res.before_aggregation->getSampleBlock());
+
         if (query_block.having != nullptr)
         {
             std::vector<const tipb::Expr *> having_conditions;
@@ -741,9 +743,9 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
 void DAGQueryBlockInterpreter::executeAggregation(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expression_actions_ptr,
-    Names & key_names,
-    TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
+    const Names & key_names,
+    const TiDB::TiDBCollators & collators,
+    const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log->identifier()); });

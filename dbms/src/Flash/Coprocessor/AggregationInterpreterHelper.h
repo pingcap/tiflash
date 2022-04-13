@@ -28,10 +28,13 @@ Aggregator::Params buildAggregatorParams(
     const Context & context,
     const Block & before_agg_header,
     size_t before_agg_streams_size,
-    Names & key_names,
-    TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
+    const Names & key_names,
+    const TiDB::TiDBCollators & collators,
+    const AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg);
+
+// get and fill the column number of agg func's arguments to aggregate_descriptions.
+void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header);
 
 bool isFinalAgg(const tipb::Aggregation & aggregation);
 

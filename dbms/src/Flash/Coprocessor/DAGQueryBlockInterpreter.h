@@ -88,9 +88,9 @@ private:
     void executeAggregation(
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expression_actions_ptr,
-        Names & key_names,
-        TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions,
+        const Names & key_names,
+        const TiDB::TiDBCollators & collators,
+        const AggregateDescriptions & aggregate_descriptions,
         bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
     void handleExchangeSender(DAGPipeline & pipeline);
