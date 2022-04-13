@@ -112,7 +112,7 @@ constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 class DAGContext
 {
 public:
-    // for non-mpp
+    // for non-mpp(cop/batchCop)
     explicit DAGContext(const tipb::DAGRequest & dag_request_)
         : dag_request(&dag_request_)
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
@@ -171,7 +171,6 @@ public:
     void attachBlockIO(const BlockIO & io_);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
 
-    void initExecutorIdToJoinIdMap();
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
@@ -280,8 +279,6 @@ public:
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
-    void initOutputInfo();
-
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
@@ -309,6 +306,10 @@ public:
     bool keep_session_timezone_info = false;
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
+
+private:
+    void initExecutorIdToJoinIdMap();
+    void initOutputInfo();
 
 private:
     /// Hold io for correcting the destruction order.
