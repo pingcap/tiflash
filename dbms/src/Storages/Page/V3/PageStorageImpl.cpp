@@ -47,6 +47,8 @@ void PageStorageImpl::restore()
 {
     // TODO: clean up blobstore.
     // TODO: Speedup restoring
+    blob_store.registerPaths();
+
     PageDirectoryFactory factory;
     page_directory = factory
                          .setBlobStore(blob_store)
