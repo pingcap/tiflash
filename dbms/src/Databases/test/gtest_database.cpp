@@ -797,7 +797,7 @@ try
     DatabaseLoading::loadTable(ctx, *db, meta_path, db_name, db_data_path, "TiFlash", "t_45.sql", false);
 
     // Get storage from database
-    const auto * const tbl_name = "t_45";
+    const auto * tbl_name = "t_45";
     auto storage = db->tryGetTable(ctx, tbl_name);
     ASSERT_NE(storage, nullptr);
     EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
