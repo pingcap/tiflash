@@ -129,6 +129,8 @@ struct MPPTunnel
         {
             throw Exception("has connected");
         }
+        if (finished)
+            throw Exception("has finished");
         LOG_DEBUG(log, "ready to connect");
         connected = true;
         writer = writer_;
