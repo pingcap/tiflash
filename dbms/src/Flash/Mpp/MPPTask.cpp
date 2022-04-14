@@ -356,6 +356,7 @@ void MPPTask::runImpl()
     }
     else
     {
+        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
         if (dag_context)
             dag_context->cancelAllExchangeReceiver();
         writeErrToAllTunnels(err_msg);
