@@ -19,13 +19,12 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 namespace DB
 {
 namespace tests
 {
-size_t DAGRequestBuilder::executor_index = 0;
-
 ASTPtr buildColumn(const String & column_name)
 {
     return std::make_shared<ASTIdentifier>(column_name);
@@ -36,6 +35,7 @@ ASTPtr buildLiteral(const Field & field)
     return std::make_shared<ASTLiteral>(field);
 }
 
+// todo remove
 ASTPtr buildFunction(MockAsts exprs, const String & name)
 {
     auto func = std::make_shared<ASTFunction>();
@@ -60,8 +60,7 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
         vec.push_back(order_by_item);
     }
     auto exp_list = std::make_shared<ASTExpressionList>();
-    for (const auto & ast_ptr : vec)
-        exp_list->children.push_back(ast_ptr);
+    exp_list->children.insert(exp_list->children.end(), vec.begin(), vec.end());
     return exp_list;
 }
 
@@ -89,7 +88,8 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(Context & context)
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
     root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, context);
-
+    root.reset();
+    executor_index = 0;
     return dag_request_ptr;
 }
 
@@ -117,19 +117,7 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, con
 
 DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const MockColumnInfoList & columns)
 {
-    assert(columns.size() != 0);
-    TableInfo table_info;
-    table_info.name = name.first + "." + name.second;
-    for (const auto & column : columns)
-    {
-        TiDB::ColumnInfo ret;
-        ret.tp = column.second;
-        ret.name = column.first;
-        table_info.columns.push_back(std::move(ret));
-    }
-    String empty_alias;
-    root = compileTableScan(getExecutorIndex(), table_info, empty_alias, false);
-    return *this;
+    return mockTable(name.first, name.second, columns);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::filter(ASTPtr filter_expr)
@@ -191,7 +179,13 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockAsts exprs)
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
     for (const auto & expr : exprs)
+    {
+        if (typeid_cast<const ASTFunction *>(expr.get()))
+        {
+            throw TiFlashTestException(fmt::format("Can't include Function in project."));
+        }
         exp_list->children.push_back(expr);
+    }
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }
@@ -201,7 +195,9 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNames col_names)
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
     for (const auto & name : col_names)
+    {
         exp_list->children.push_back(col(name));
+    }
 
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;

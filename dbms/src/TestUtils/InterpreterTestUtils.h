@@ -14,9 +14,11 @@
 
 #pragma once
 
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TestUtils/mockExecutor.h>
@@ -25,82 +27,33 @@ namespace DB
 {
 namespace tests
 {
+String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request);
 String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
-
-String toTreeString(const tipb::DAGRequest * dag_request)
-{
-    assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-    if (dag_request->has_root_executor())
-    {
-        return toTreeString(dag_request->root_executor());
-    }
-    else
-    {
-        FmtBuffer buffer;
-        String prefix;
-        traverseExecutors(dag_request, [&buffer, &prefix](const tipb::Executor & executor) {
-            assert(executor.has_executor_id());
-            buffer.fmtAppend("{}{}\n", prefix, executor.executor_id());
-            prefix.append(" ");
-            return true;
-        });
-        return buffer.toString();
-    }
-}
-
-String toTreeString(const tipb::Executor & root_executor, size_t level)
-{
-    FmtBuffer buffer;
-
-    auto append_str = [&buffer, &level](const tipb::Executor & executor) {
-        assert(executor.has_executor_id());
-        for (size_t i = 0; i < level; ++i)
-            buffer.append(" ");
-        buffer.append(executor.executor_id()).append("\n");
-    };
-
-    traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
-        if (executor.has_join())
-        {
-            for (const auto & child : executor.join().children())
-                buffer.append(toTreeString(child, level));
-            return false;
-        }
-        else
-        {
-            append_str(executor);
-            ++level;
-            return true;
-        }
-    });
-
-    return buffer.toString();
-}
-
-String & trim(String & str)
-{
-    if (str.empty())
-    {
-        return str;
-    }
-
-    str.erase(0, str.find_first_not_of(' '));
-    str.erase(str.find_last_not_of(' ') + 1);
-    return str;
-}
+void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 class MockExecutorTest : public ::testing::Test
 {
 protected:
     void SetUp() override
     {
         initializeDAGContext();
-        DAGRequestBuilder::executor_index = 0;
     }
 
 public:
     MockExecutorTest()
         : context(TiFlashTestEnv::getContext())
     {}
+
+    static void SetUpTestCase()
+    {
+        try
+        {
+            DB::registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registered, ignore exception here.
+        }
+    }
 
     virtual void initializeDAGContext()
     {
@@ -119,5 +72,6 @@ protected:
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
+#define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual(str, request);
 } // namespace tests
 } // namespace DB

@@ -16,10 +16,9 @@
 
 #include <Debug/astToExecutor.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTFunction.h>
 
-#include <cstddef>
 #include <initializer_list>
-#include <utility>
 
 namespace DB
 {
@@ -37,11 +36,16 @@ using MockAsts = std::initializer_list<ASTPtr>;
 class DAGRequestBuilder
 {
 public:
-    static size_t executor_index;
-    static size_t & getExecutorIndex()
+    size_t & executor_index;
+
+    size_t & getExecutorIndex() const
     {
         return executor_index;
     }
+
+    explicit DAGRequestBuilder(size_t & index)
+        : executor_index(index)
+    {}
 
     std::shared_ptr<tipb::DAGRequest> build(Context & context);
 
@@ -81,6 +85,15 @@ private:
     DAGProperties properties;
 };
 
+class DAGRequestBuilderFactory
+{
+public:
+    static DAGRequestBuilder createDAGRequestBuilder(size_t & executor_id)
+    {
+        return DAGRequestBuilder(executor_id);
+    }
+};
+
 ASTPtr buildColumn(const String & column_name);
 ASTPtr buildLiteral(const Field & field);
 ASTPtr buildFunction(MockAsts exprs, const String & name);
@@ -96,6 +109,6 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 #define And(expr1, expr2) buildFunction({(expr1), (expr2)}, "and")
 #define Or(expr1, expr2) buildFunction({(expr1), (expr2)}, "or")
 #define NOT(expr) buildFunction({expr1}, "not")
-#define Max(expr1, expr2) buildFunction({(expr1), (expr2)}, "max")
+#define Max(expr) makeASTFunction("max", expr)
 } // namespace tests
 } // namespace DB
