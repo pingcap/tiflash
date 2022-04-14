@@ -33,6 +33,13 @@ using MockOrderByItems = std::initializer_list<MockOrderByItem>;
 using MockColumnNames = std::initializer_list<String>;
 using MockAsts = std::initializer_list<ASTPtr>;
 
+
+/** Responsible for Hand write tipb::DAGRequest
+  * Use this class to mock DAGRequest, then feed the DAGRequest into 
+  * the Interpreter for test purpose.
+  * The mockTable() method must called first in order to generate the table schema.
+  * After construct all necessary operators in DAGRequest, call build() to generate DAGRequest。
+  */
 class DAGRequestBuilder
 {
 public:
@@ -103,7 +110,6 @@ ASTPtr buildColumn(const String & column_name);
 ASTPtr buildLiteral(const Field & field);
 ASTPtr buildFunction(MockAsts exprs, const String & name);
 ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
-
 
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))

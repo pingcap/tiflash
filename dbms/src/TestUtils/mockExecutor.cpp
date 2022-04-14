@@ -51,6 +51,7 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
     return exp_list;
 }
 
+// a mock DAGRequest should prepare its time_zone, flags, encode_type and output_schema.
 void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 {
     dag_request.set_time_zone_name(properties.tz_name);
@@ -68,6 +69,7 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
         dag_request.add_output_offsets(i);
 }
 
+// traval the AST tree to build tipb::Executor recursively.
 std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(Context & context)
 {
     MPPInfo mpp_info(properties.start_ts, -1, -1, {}, {});
