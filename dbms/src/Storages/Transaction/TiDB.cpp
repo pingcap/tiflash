@@ -93,10 +93,13 @@ Field ColumnInfo::defaultValueToField() const
         auto v = value.convert<String>();
         if (hasBinaryFlag())
         {
-            // For binary column, we have to pad trailing zeros according to the specified type length.
+            // For some binary column(like varchar(20)), we have to pad trailing zeros according to the specified type length.
             // User may define default value `0x1234` for a `BINARY(4)` column, TiDB stores it in a string "\u12\u34" (sized 2).
             // But it actually means `0x12340000`.
-            v.append(flen - v.length(), '\0');
+            // And for some binary column(like longblob), we do not need to pad trailing zeros.
+            // And the `Flen` is set to -1, therefore we need to check `Flen >= 0` here.
+            if (Int32 vlen = v.length(); flen >= 0 && vlen < flen)
+                v.append(flen - vlen, '\0');
         }
         return v;
     }

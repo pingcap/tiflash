@@ -78,7 +78,7 @@ enum TP
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(tt, v, cf, ct, w) Type##tt = v,
+#define M(tt, v, cf, ct, w) Type##tt = (v),
     COLUMN_TYPES(M)
 #undef M
 };
@@ -110,7 +110,7 @@ enum ColumnFlag
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(cf, v) ColumnFlag##cf = v,
+#define M(cf, v) ColumnFlag##cf = (v),
     COLUMN_FLAGS(M)
 #undef M
 };
@@ -139,7 +139,7 @@ enum CodecFlag
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(cf, v) CodecFlag##cf = v,
+#define M(cf, v) CodecFlag##cf = (v),
     CODEC_FLAGS(M)
 #undef M
 };
@@ -184,10 +184,10 @@ struct ColumnInfo
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v)                                                  \
-    inline bool has##f##Flag() const { return (flag & v) != 0; } \
-    inline void set##f##Flag() { flag |= v; }                    \
-    inline void clear##f##Flag() { flag &= (~v); }
+#define M(f, v)                                                    \
+    inline bool has##f##Flag() const { return (flag & (v)) != 0; } \
+    inline void set##f##Flag() { flag |= (v); }                    \
+    inline void clear##f##Flag() { flag &= (~(v)); }
     COLUMN_FLAGS(M)
 #undef M
 
@@ -212,7 +212,7 @@ struct PartitionDefinition
 {
     PartitionDefinition() = default;
 
-    PartitionDefinition(Poco::JSON::Object::Ptr json);
+    explicit PartitionDefinition(Poco::JSON::Object::Ptr json);
 
     Poco::JSON::Object::Ptr getJSONObject() const;
 
@@ -228,7 +228,7 @@ struct PartitionInfo
 {
     PartitionInfo() = default;
 
-    PartitionInfo(Poco::JSON::Object::Ptr json);
+    explicit PartitionInfo(Poco::JSON::Object::Ptr json);
 
     Poco::JSON::Object::Ptr getJSONObject() const;
 
@@ -251,7 +251,7 @@ struct DBInfo
     SchemaState state;
 
     DBInfo() = default;
-    DBInfo(const String & json) { deserialize(json); }
+    explicit DBInfo(const String & json) { deserialize(json); }
 
     String serialize() const;
 
@@ -356,9 +356,9 @@ struct TableInfo
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
     ColumnID getColumnID(const String & name) const;
-    String getColumnName(const ColumnID id) const;
+    String getColumnName(ColumnID id) const;
 
-    const ColumnInfo & getColumnInfo(const ColumnID id) const;
+    const ColumnInfo & getColumnInfo(ColumnID id) const;
 
     std::optional<std::reference_wrapper<const ColumnInfo>> getPKHandleColumn() const;
 
