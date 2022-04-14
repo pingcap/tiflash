@@ -75,7 +75,7 @@ void PathCapacityMetrics::addUsedSize(std::string_view file_path, size_t used_by
         return;
     }
 
-    // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
+    // Now we expect size of path_infos not change, don't acquire heavy lock on `path_infos` now.
     path_infos[path_idx].used_bytes += used_bytes;
 }
 
@@ -88,7 +88,7 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
         return;
     }
 
-    // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
+    // Now we expect size of path_infos not change, don't acquire heavy lock on `path_infos` now.
     path_infos[path_idx].used_bytes -= used_bytes;
 }
 
