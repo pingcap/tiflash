@@ -9,7 +9,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int ARGUMENT_OUT_OF_BOUND;
@@ -129,7 +128,7 @@ public:
     template <typename U>
     typename T::NativeType scaleFactorFor(const DataTypeDecimal<U> & x) const
     {
-        if (scale < x.getScale())
+        if (getScale() < x.getScale())
         {
             return 1;
         }
