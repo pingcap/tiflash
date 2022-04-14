@@ -254,7 +254,7 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": can't parse set type value.");
 }
 
-Int64 ColumnInfo::getTimeValue(const String & time_str) const
+Int64 ColumnInfo::getTimeValue(const String & time_str) const   // NOLINT
 {
     const static Int64 fractional_seconds_multiplier[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
     bool negative = time_str[0] == '-';
