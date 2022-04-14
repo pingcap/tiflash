@@ -1,17 +1,18 @@
 #pragma once
 
-#include <thread>
-#include <set>
-#include <map>
-#include <list>
-#include <condition_variable>
-#include <mutex>
-#include <shared_mutex>
-#include <atomic>
-#include <functional>
+#include <Core/Types.h>
 #include <Poco/Event.h>
 #include <Poco/Timestamp.h>
-#include <Core/Types.h>
+
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <list>
+#include <map>
+#include <mutex>
+#include <set>
+#include <shared_mutex>
+#include <thread>
 
 namespace DB
 {
@@ -49,11 +50,11 @@ public:
 
         /// Read lock is hold when task is executed.
         std::shared_mutex rwlock;
-        std::atomic<bool> removed {false};
+        std::atomic<bool> removed{false};
 
         /// only can be invoked by one thread at same time.
         const bool multi;
-        std::atomic_bool occupied {false};
+        std::atomic_bool occupied{false};
 
         const uint64_t interval_milliseconds;
 
@@ -65,14 +66,19 @@ public:
 
     BackgroundProcessingPool(int size_);
 
-    size_t getNumberOfThreads() const
-    {
-        return size;
-    }
+    size_t getNumberOfThreads() const { return size; }
 
     /// if multi == false, this task can only be called by one thread at same time.
     /// If interval_ms is zero, this task will be scheduled with `sleep_seconds`.
     /// If interval_ms is not zero, this task will be scheduled with `interval_ms`.
+    ///
+    /// But at each scheduled time, there may be multiple threads try to run the same task,
+    ///   and then execute the same task one by one in sequential order(not simultaneously) even if `multi` is false.
+    /// For example, consider the following case when it's time to schedule a task,
+    /// 1. thread A get the task, mark the task as occupied and begin to execute it
+    /// 2. thread B also get the same task
+    /// 3. thread A finish the execution of the task quickly, release the task and try to update the next schedule time of the task
+    /// 4. thread B find the task is not occupied and execute the task again almost immediately
     TaskHandle addTask(const Task & task, const bool multi = true, const size_t interval_ms = 0);
     void removeTask(const TaskHandle & task);
 
@@ -80,22 +86,23 @@ public:
 
     std::vector<pid_t> getThreadIds();
     void addThreadId(pid_t tid);
+
 private:
-    using Tasks = std::multimap<Poco::Timestamp, TaskHandle>;    /// key is desired next time to execute (priority).
+    using Tasks = std::multimap<Poco::Timestamp, TaskHandle>; /// key is desired next time to execute (priority).
     using Threads = std::vector<std::thread>;
 
     const size_t size;
     static constexpr double sleep_seconds = 10;
     static constexpr double sleep_seconds_random_part = 1.0;
 
-    Tasks tasks;         /// Ordered in priority.
+    Tasks tasks; /// Ordered in priority.
     std::mutex tasks_mutex;
 
     Threads threads;
-    std::vector<pid_t> thread_ids;  // Linux Thread ID
+    std::vector<pid_t> thread_ids; // Linux Thread ID
     std::mutex thread_ids_mtx;
 
-    std::atomic<bool> shutdown {false};
+    std::atomic<bool> shutdown{false};
     std::condition_variable wake_event;
 
 
@@ -104,4 +111,4 @@ private:
 
 using BackgroundProcessingPoolPtr = std::shared_ptr<BackgroundProcessingPool>;
 
-}
+} // namespace DB
