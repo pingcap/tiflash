@@ -102,13 +102,13 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
-#define eq(expr1, expr2) buildFunction({(expr1), (expr2)}, "equals")
-#define Not_eq(expr1, expr2) buildFunction({(expr1), (expr2)}, "notEquals")
-#define lt(expr1, expr2) buildFunction({(expr1), (expr2)}, "less")
-#define gt(expr1, expr2) buildFunction({(expr1), (expr2)}, "greater")
-#define And(expr1, expr2) buildFunction({(expr1), (expr2)}, "and")
-#define Or(expr1, expr2) buildFunction({(expr1), (expr2)}, "or")
-#define NOT(expr) buildFunction({expr1}, "not")
+#define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
+#define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
+#define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))
+#define gt(expr1, expr2) makeASTFunction("greater", (expr1), (expr2))
+#define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
+#define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
+#define NOT(expr) makeASTFunction("not", (expr1), (expr2))
 #define Max(expr) makeASTFunction("max", expr)
 } // namespace tests
 } // namespace DB

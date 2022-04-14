@@ -35,19 +35,6 @@ ASTPtr buildLiteral(const Field & field)
     return std::make_shared<ASTLiteral>(field);
 }
 
-// todo remove
-ASTPtr buildFunction(MockAsts exprs, const String & name)
-{
-    auto func = std::make_shared<ASTFunction>();
-    func->name = name;
-    auto expr_list = std::make_shared<ASTExpressionList>();
-    for (const auto & expr : exprs)
-        expr_list->children.push_back(expr);
-    func->arguments = expr_list;
-    func->children.push_back(func->arguments);
-    return func;
-}
-
 ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
 {
     std::vector<ASTPtr> vec;
