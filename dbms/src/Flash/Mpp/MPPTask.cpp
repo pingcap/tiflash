@@ -356,6 +356,8 @@ void MPPTask::runImpl()
     }
     else
     {
+        if (dag_context)
+            dag_context->cancelAllExchangeReceiver();
         writeErrToAllTunnels(err_msg);
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
