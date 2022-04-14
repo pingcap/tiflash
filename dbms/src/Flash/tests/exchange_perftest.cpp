@@ -159,7 +159,7 @@ struct MockWriter
         : queue(std::move(queue_))
     {}
 
-    bool Write(const Packet & packet)
+    bool write(const Packet & packet)
     {
         queue->push(std::make_shared<Packet>(packet));
         return true;
@@ -168,6 +168,13 @@ struct MockWriter
     void finish()
     {
         queue->finish();
+    }
+
+    void tryFlushOne() {}
+
+    void writeDone(const ::grpc::Status & /*status*/)
+    {
+        finish();
     }
 
     PacketQueuePtr queue;
