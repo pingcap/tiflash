@@ -108,12 +108,10 @@ public:
          size_t max_block_size = 0,
          const String & match_helper_name = "");
 
-    bool empty() { return type == Type::EMPTY; }
-
-    /** Set information about structure of right hand of JOIN (joined data).
+    /** call `setSampleBlock` and `setBuildConcurrencyAndInitMap`
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void setSampleBlock(const Block & block);
+    void init(const Block & sample_block, size_t build_concurrency_ = 1);
 
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
@@ -156,11 +154,6 @@ public:
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
     size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
 
-    /** Set Join build concurrency and init hash map.
-       * You must call this method before subsequent calls to insertFromBlock and setSampleBlock.
-       */
-    void setBuildConcurrencyAndInitMap(size_t build_concurrency_);
-
     enum BuildTableState
     {
         WAITING,
@@ -175,7 +168,7 @@ public:
         const Block * block;
         size_t row_num;
 
-        RowRef() {}
+        RowRef() = default;
         RowRef(const Block * block_, size_t row_num_)
             : block(block_)
             , row_num(row_num_)
@@ -187,7 +180,7 @@ public:
     {
         RowRefList * next = nullptr;
 
-        RowRefList() {}
+        RowRefList() = default;
         RowRefList(const Block * block_, size_t row_num_)
             : RowRef(block_, row_num_)
         {}
@@ -322,7 +315,6 @@ private:
 
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
 
-    ColumnRawPtrs sample_key_columns;
     Sizes key_sizes;
 
     /// Block with columns from the right-side table except key columns.
@@ -347,6 +339,8 @@ private:
       */
     mutable std::shared_mutex rwlock;
 
+    std::atomic<bool> initialized = false;
+
     void init(Type type_);
 
     /// Throw an exception if blocks have different types of key columns.
@@ -367,6 +361,15 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool has_null_map>
     void joinBlockImplCrossInternal(Block & block, ConstNullMapPtr null_map) const;
+
+    /** Set information about structure of right hand of JOIN (joined data).
+      * You must call this method before subsequent calls to insertFromBlock.
+      */
+    void setSampleBlock(const Block & block);
+    /** Set Join build concurrency and init hash map.
+      * You must call this method before subsequent calls to insertFromBlock.
+      */
+    void setBuildConcurrencyAndInitPool(size_t build_concurrency_);
 };
 
 using JoinPtr = std::shared_ptr<Join>;

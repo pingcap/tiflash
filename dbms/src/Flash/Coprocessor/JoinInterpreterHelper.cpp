@@ -25,7 +25,6 @@ namespace DB::JoinInterpreterHelper
 {
 std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::Join & join)
 {
-    // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
         {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
@@ -59,7 +58,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
     /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
     /// note that whatever the build side is, we can't support cross-right join now.
 
-    size_t build_side_index;
+    size_t build_side_index = 0;
     if (kind == ASTTableJoin::Kind::Cross_Right)
     {
         build_side_index = 0;
@@ -75,9 +74,17 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
         if (build_side_index == 0)
         {
             if (kind == ASTTableJoin::Kind::Left)
+            {
                 kind = ASTTableJoin::Kind::Right;
+            }
             else if (kind == ASTTableJoin::Kind::Right)
+            {
                 kind = ASTTableJoin::Kind::Left;
+            }
+            else
+            {
+                // just `else`, for other kinds, don't need to change kind.
+            }
         }
     }
 

@@ -473,19 +473,26 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     const bool is_left_semi_family = join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
 
     const bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin || is_left_semi_family;
-    ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
-    if (is_semi_join)
-        strictness = ASTTableJoin::Strictness::Any;
+    ASTTableJoin::Strictness strictness = is_semi_join ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 
     auto [kind, build_side_index] = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(join);
-    assert(build_side_index == 1 || build_side_index == 0);
-    bool swap_join_side = build_side_index == 0;
+    RUNTIME_ASSERT(
+        build_side_index == 1 || build_side_index == 0,
+        log,
+        "build_side_index must be 0 or 1, but the actual value is {}",
+        build_side_index);
 
     DAGPipeline probe_pipeline;
-    DAGPipeline build_pipeline;
-
     probe_pipeline.streams = input_streams_vec[1 - build_side_index];
+
+    DAGPipeline build_pipeline;
     build_pipeline.streams = input_streams_vec[build_side_index];
+
+    RUNTIME_ASSERT(!input_streams_vec[0].empty(), log, "left input streams cannot be empty");
+    const Block & left_input_header = input_streams_vec[0].back()->getHeader();
+
+    RUNTIME_ASSERT(!input_streams_vec[1].empty(), log, "right input streams cannot be empty");
+    const Block & right_input_header = input_streams_vec[1].back()->getHeader();
 
     NamesAndTypes join_output_columns;
     /// columns_for_other_join_filter is a vector of columns used
@@ -500,14 +507,14 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     NamesAndTypes columns_for_other_join_filter;
     std::unordered_set<String> column_set_for_other_join_filter;
     bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
-    for (auto const & p : input_streams_vec[0][0]->getHeader())
+    for (auto const & p : left_input_header)
     {
         join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         column_set_for_other_join_filter.emplace(p.name);
     }
     make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
-    for (auto const & p : input_streams_vec[1][0]->getHeader())
+    for (auto const & p : right_input_header)
     {
         if (!is_semi_join)
             /// for semi join, the columns from right table will be ignored
@@ -531,11 +538,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     String match_helper_name;
     if (is_left_semi_family)
     {
-        const auto & left_block = input_streams_vec[0][0]->getHeader();
-        const auto & right_block = input_streams_vec[1][0]->getHeader();
-
         match_helper_name = Join::match_helper_prefix;
-        for (int i = 1; left_block.has(match_helper_name) || right_block.has(match_helper_name); ++i)
+        for (int i = 1; left_input_header.has(match_helper_name) || right_input_header.has(match_helper_name); ++i)
         {
             match_helper_name = Join::match_helper_prefix + std::to_string(i);
         }
@@ -544,13 +548,15 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
     }
 
-    DataTypes join_key_types = JoinInterpreterHelper::getJoinKeyTypes(join);
-    TiDB::TiDBCollators collators = JoinInterpreterHelper::getJoinKeyCollators(join, join_key_types);
+    auto join_key_types = JoinInterpreterHelper::getJoinKeyTypes(join);
+    auto collators = JoinInterpreterHelper::getJoinKeyCollators(join, join_key_types);
 
     Names left_key_names, right_key_names;
     String left_filter_column_name, right_filter_column_name;
 
     /// generate necessary expression actions if the join key is an expression
+
+    bool swap_join_side = build_side_index == 0;
 
     auto probe_side_prepare_actions = prepareJoin(
         swap_join_side ? join.right_join_keys() : join.left_join_keys(),
@@ -561,6 +567,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         is_tiflash_right_join,
         swap_join_side ? join.right_conditions() : join.left_conditions(),
         left_filter_column_name);
+    RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
 
     auto build_side_prepare_actions = prepareJoin(
         swap_join_side ? join.left_join_keys() : join.right_join_keys(),
@@ -571,6 +578,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         is_tiflash_right_join,
         swap_join_side ? join.left_conditions() : join.right_conditions(),
         right_filter_column_name);
+    RUNTIME_ASSERT(probe_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
     String other_filter_column_name, other_eq_filter_from_in_column_name;
     for (auto const & p : probe_side_prepare_actions->getSampleBlock())
@@ -620,8 +628,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
-    right_query.join->setSampleBlock(right_query.source->getHeader());
-    right_query.join->setBuildConcurrencyAndInitMap(settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1);
+    right_query.join->init(right_query.source->getHeader(), settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1);
 
     /// probe side streams
     probe_pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, probe_side_prepare_actions, log->identifier()); });
