@@ -5,7 +5,6 @@
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
-#include <Common/LogWithPrefix.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/AggregationCommon.h>
@@ -19,6 +18,7 @@
 
 namespace DB
 {
+
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -78,21 +78,7 @@ namespace DB
 class Join
 {
 public:
-    Join(const Names & key_names_left_,
-         const Names & key_names_right_,
-         bool use_nulls_,
-         const SizeLimits & limits,
-         ASTTableJoin::Kind kind_,
-         ASTTableJoin::Strictness strictness_,
-         size_t build_concurrency = 1,
-         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
-         const String & left_filter_column = "",
-         const String & right_filter_column = "",
-         const String & other_filter_column = "",
-         const String & other_eq_filter_from_in_column = "",
-         ExpressionActionsPtr other_condition_ptr = nullptr,
-         size_t max_block_size = 0,
-         const LogWithPrefixPtr & log_ = nullptr);
+    Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_, const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency = 1, const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators, const String & left_filter_column = "", const String & right_filter_column = "", const String & other_filter_column = "", const String & other_eq_filter_from_in_column = "", ExpressionActionsPtr other_condition_ptr = nullptr, size_t max_block_size = 0);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -118,7 +104,7 @@ public:
     /** Keep "totals" (separate part of dataset, see WITH TOTALS) to use later.
       */
     void setTotals(const Block & block) { totals = block; }
-    bool hasTotals() const { return static_cast<bool>(totals); };
+    bool hasTotals() const { return totals; };
 
     void joinTotals(Block & block) const;
 
@@ -127,7 +113,11 @@ public:
       * Use only after all calls to joinBlock was done.
       * left_sample_block is passed without account of 'use_nulls' setting (columns will be converted to Nullable inside).
       */
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const;
+    BlockInputStreamPtr createStreamWithNonJoinedRows(
+        const Block & left_sample_block,
+        size_t index,
+        size_t step,
+        size_t max_block_size) const;
 
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const;
@@ -142,7 +132,13 @@ public:
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
     size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
 
-    void setFinishBuildTable(bool);
+    enum BuildTableState
+    {
+        WAITING,
+        FAILED,
+        SUCCEED
+    };
+    void setBuildTableState(BuildTableState state_);
 
     /// Reference to the row in block.
     struct RowRef
@@ -300,9 +296,9 @@ private:
 
     mutable std::mutex build_table_mutex;
     mutable std::condition_variable build_table_cv;
-    bool have_finish_build;
+    BuildTableState build_table_state;
 
-    const LogWithPrefixPtr log;
+    Poco::Logger * log;
 
     /// Limits for maximum map size.
     SizeLimits limits;
