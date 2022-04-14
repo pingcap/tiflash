@@ -30,8 +30,7 @@ class MockDAGRequestTest : public DB::tests::MockExecutorTest
 TEST_F(MockDAGRequestTest, MockTable)
 try
 {
-    size_t index = 0;
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder(index);
+    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
     MockTableName table_name("test_db", "test"); // db_name-->table_name
     std::vector<MockColumnInfo> table_columns;
     table_columns.emplace_back("t_l", TiDB::TP::TypeLong);
@@ -51,8 +50,7 @@ CATCH
 TEST_F(MockDAGRequestTest, Filter)
 try
 {
-    size_t index = 0;
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder(index);
+    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
     auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
                        .filter(eq(col("s1"), col("s2")))
                        .build(context);
@@ -70,8 +68,7 @@ CATCH
 TEST_F(MockDAGRequestTest, Projection)
 try
 {
-    size_t index = 0;
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder(index);
+    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
     auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
                        .project("s1")
                        .build(context);
@@ -96,8 +93,7 @@ CATCH
 TEST_F(MockDAGRequestTest, Limit)
 try
 {
-    size_t index = 0;
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder(index);
+    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
     auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
                        .limit(10)
                        .build(context);
@@ -115,8 +111,7 @@ CATCH
 TEST_F(MockDAGRequestTest, TopN)
 try
 {
-    size_t index = 0;
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder(index);
+    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
     auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
                        .topN({{"s1", false}}, 10)
                        .build(context);
@@ -134,8 +129,7 @@ CATCH
 TEST_F(MockDAGRequestTest, Aggregation)
 try
 {
-    size_t index = 0;
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder(index);
+    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
     auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
                        .aggregation(Max(col("s1")), col("s2"))
                        .build(context);
@@ -148,8 +142,8 @@ CATCH
 TEST_F(MockDAGRequestTest, Join)
 try
 {
-    size_t index = 0;
-    DAGRequestBuilder right_builder = DAGRequestBuilderFactory().createDAGRequestBuilder(index);
+    auto builder_factory = DAGRequestBuilderFactory();
+    DAGRequestBuilder right_builder = builder_factory.createDAGRequestBuilder();
     right_builder
         .mockTable({"r_db", "r_table"}, {{"r_a", TiDB::TP::TypeString}, {"r_b", TiDB::TP::TypeString}})
         .filter(eq(col("r_a"), col("r_b")))
@@ -157,7 +151,7 @@ try
         .aggregation(Max(col("r_a")), col("r_b"));
 
 
-    DAGRequestBuilder left_builder = DAGRequestBuilderFactory().createDAGRequestBuilder(index);
+    DAGRequestBuilder left_builder = builder_factory.createDAGRequestBuilder();
     left_builder
         .mockTable({"l_db", "l_table"}, {{"l_a", TiDB::TP::TypeString}, {"l_b", TiDB::TP::TypeString}})
         .topN({{"l_a", false}}, 10)

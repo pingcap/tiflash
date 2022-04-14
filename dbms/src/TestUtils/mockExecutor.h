@@ -88,9 +88,14 @@ private:
 class DAGRequestBuilderFactory
 {
 public:
-    static DAGRequestBuilder createDAGRequestBuilder(size_t & executor_id)
+    size_t index;
+    DAGRequestBuilderFactory()
     {
-        return DAGRequestBuilder(executor_id);
+        index = 0;
+    }
+    DAGRequestBuilder createDAGRequestBuilder()
+    {
+        return DAGRequestBuilder(index);
     }
 };
 
