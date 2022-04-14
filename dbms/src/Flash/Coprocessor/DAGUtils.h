@@ -67,5 +67,6 @@ public:
         return ret_name;
     }
 };
+void getDAGRequestFromStringWithRetry(tipb::DAGRequest & req, const String & s);
 
 } // namespace DB

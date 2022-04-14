@@ -1,4 +1,4 @@
-include (${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake)
+include (${TiFlash_SOURCE_DIR}/cmake/add_check.cmake)
 
 foreach (T longjmp siglongjmp)
     add_executable (${T} ${T}.c)

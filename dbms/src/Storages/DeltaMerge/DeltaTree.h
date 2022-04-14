@@ -480,7 +480,7 @@ class DTEntryIterator
 {
     using LeafPtr = DTLeaf<M, F, S> *;
 
-    LeafPtr leaf;
+    LeafPtr leaf = nullptr;
     size_t  pos;
     Int64   delta;
 
@@ -553,8 +553,8 @@ class DTEntriesCopy : Allocator
 
     const size_t       entry_count;
     const Int64        delta;
-    UInt64 * const     sids;
-    DTMutation * const mutations;
+    UInt64 * const     sids      = nullptr;
+    DTMutation * const mutations = nullptr;
 
 public:
     DTEntriesCopy(LeafPtr left_leaf, size_t entry_count_, Int64 delta_)
@@ -578,8 +578,10 @@ public:
 
     ~DTEntriesCopy()
     {
-        this->free(sids, sizeof(UInt64) * entry_count);
-        this->free(mutations, sizeof(DTMutation) * entry_count);
+        if (sids)
+            this->free(sids, sizeof(UInt64) * entry_count);
+        if (mutations)
+            this->free(mutations, sizeof(DTMutation) * entry_count);
     }
 
     class Iterator
@@ -728,18 +730,19 @@ public:
     static_assert(std::is_standard_layout_v<Intern>);
 
 private:
-    NodePtr root;
-    LeafPtr left_leaf, right_leaf;
-    size_t  height = 1;
+    NodePtr root       = nullptr;
+    LeafPtr left_leaf  = nullptr;
+    LeafPtr right_leaf = nullptr;
+    size_t  height     = 1;
 
     size_t num_inserts = 0;
     size_t num_deletes = 0;
     size_t num_entries = 0;
 
-    Allocator * allocator;
-    size_t      bytes = 0;
+    Allocator * allocator = nullptr;
+    size_t      bytes     = 0;
 
-    Logger * log;
+    Logger * log = nullptr;
 
 public:
     // For test cases only.
@@ -889,12 +892,16 @@ public:
 
     ~DeltaTree()
     {
-        if (isLeaf(root))
-            freeTree<Leaf>((LeafPtr)root);
-        else
-            freeTree<Intern>((InternPtr)root);
+        if (root)
+        {
+            if (isLeaf(root))
+                freeTree<Leaf>((LeafPtr)root);
+            else
+                freeTree<Intern>((InternPtr)root);
+        }
 
-        delete allocator;
+        if (allocator)
+            delete allocator;
 
         LOG_TRACE(log, "free");
     }
