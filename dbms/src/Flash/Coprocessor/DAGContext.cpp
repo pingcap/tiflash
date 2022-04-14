@@ -1,5 +1,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
 
 namespace DB
 {
@@ -197,6 +198,14 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
 void DAGContext::attachBlockIO(const BlockIO & io_)
 {
     io = io_;
+}
+
+void DAGContext::cancelAllExchangeReceiver()
+{
+    for (auto & it : mpp_exchange_receiver_map)
+    {
+        it.second->cancel();
+    }
 }
 
 } // namespace DB
