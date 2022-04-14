@@ -79,7 +79,6 @@ public:
 
     void cancel() { resp_iter.cancel(); }
 
-
     static DecodeDetail decodeChunks(
         const std::shared_ptr<tipb::SelectResponse> & resp,
         std::queue<Block> & block_queue,
@@ -155,29 +154,5 @@ public:
     }
 
     size_t getSourceNum() const { return 1; }
-<<<<<<< HEAD
-=======
-
-    int computeNewThreadCount() const { return concurrency_; }
-
-    void collectNewThreadCount(int & cnt)
-    {
-        if (!collected)
-        {
-            collected = true;
-            cnt += computeNewThreadCount();
-        }
-    }
-
-    void resetNewThreadCountCompute()
-    {
-        collected = false;
-    }
-
-    void close() {}
-
-    bool collected = false;
-    int concurrency_;
->>>>>>> a3f804ec6f (fix a bug that ExchangeReceiver can't be canceled (#4441))
 };
 } // namespace DB

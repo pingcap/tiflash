@@ -89,45 +89,13 @@ public:
 
     void cancel();
 
-    void close();
-
     const DAGSchema & getOutputSchema() const { return schema; }
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
         const Block & header);
 
-<<<<<<< HEAD
     void returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg);
-=======
-    size_t getSourceNum() const { return source_num; }
-
-    int computeNewThreadCount() const { return thread_count; }
-
-    void collectNewThreadCount(int & cnt)
-    {
-        if (!collected)
-        {
-            collected = true;
-            cnt += computeNewThreadCount();
-        }
-    }
-
-    void resetNewThreadCountCompute()
-    {
-        collected = false;
-    }
-
-private:
-    using Request = typename RPCContext::Request;
-
-    void setUpConnection();
-    void readLoop(const Request & req);
-    void reactor(const std::vector<Request> & async_requests);
-
-    bool setEndState(ExchangeReceiverState new_state);
-    ExchangeReceiverState getState();
->>>>>>> a3f804ec6f (fix a bug that ExchangeReceiver can't be canceled (#4441))
 
     DecodeDetail decodeChunks(
         const std::shared_ptr<ReceivedMessage> & recv_msg,

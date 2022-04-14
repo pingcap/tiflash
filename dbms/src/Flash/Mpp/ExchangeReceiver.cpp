@@ -38,7 +38,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-<<<<<<< HEAD
     {
         std::unique_lock<std::mutex> lk(mu);
         state = ExchangeReceiverState::CLOSED;
@@ -46,30 +45,14 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
     }
     if (thread_manager)
         thread_manager->wait();
-=======
-    close();
-    thread_manager->wait();
->>>>>>> a3f804ec6f (fix a bug that ExchangeReceiver can't be canceled (#4441))
 }
 
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
-<<<<<<< HEAD
     std::unique_lock<std::mutex> lk(mu);
     state = ExchangeReceiverState::CANCELED;
     cv.notify_all();
-=======
-    setEndState(ExchangeReceiverState::CANCELED);
-    msg_channel.finish();
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::close()
-{
-    setEndState(ExchangeReceiverState::CLOSED);
-    msg_channel.finish();
->>>>>>> a3f804ec6f (fix a bug that ExchangeReceiver can't be canceled (#4441))
 }
 
 template <typename RPCContext>
@@ -352,65 +335,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
     return result;
 }
 
-<<<<<<< HEAD
-=======
-template <typename RPCContext>
-bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
-{
-    assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
-    std::unique_lock lock(mu);
-    if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
-    {
-        return false;
-    }
-    state = new_state;
-    return true;
-}
-
-template <typename RPCContext>
-ExchangeReceiverState ExchangeReceiverBase<RPCContext>::getState()
-{
-    std::unique_lock lock(mu);
-    return state;
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::connectionDone(
-    bool meet_error,
-    const String & local_err_msg,
-    const LoggerPtr & log)
-{
-    Int32 copy_live_conn = -1;
-    {
-        std::unique_lock lock(mu);
-        if (meet_error)
-        {
-            if (state == ExchangeReceiverState::NORMAL)
-                state = ExchangeReceiverState::ERROR;
-            if (err_msg.empty())
-                err_msg = local_err_msg;
-        }
-        copy_live_conn = --live_connections;
-    }
-    LOG_FMT_DEBUG(
-        log,
-        "connection end. meet error: {}, err msg: {}, current alive connections: {}",
-        meet_error,
-        local_err_msg,
-        copy_live_conn);
-
-    if (copy_live_conn == 0)
-    {
-        LOG_FMT_DEBUG(log, "All threads end in ExchangeReceiver");
-    }
-    else if (copy_live_conn < 0)
-        throw Exception("live_connections should not be less than 0!");
-
-    if (meet_error || copy_live_conn == 0)
-        msg_channel.finish();
-}
-
->>>>>>> a3f804ec6f (fix a bug that ExchangeReceiver can't be canceled (#4441))
 /// Explicit template instantiations - to avoid code bloat in headers.
 template class ExchangeReceiverBase<GRPCReceiverContext>;
 
