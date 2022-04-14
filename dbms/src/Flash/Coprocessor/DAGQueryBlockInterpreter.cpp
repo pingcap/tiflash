@@ -34,6 +34,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
+#include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
@@ -265,11 +266,10 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
             conditions.push_back(&condition);
     }
 
-    DAGStorageInterpreter storage_interpreter(context, query_block, table_scan, conditions, max_streams);
+    DAGStorageInterpreter storage_interpreter(context, table_scan, query_block.selection_name, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);
-
 
     auto remote_requests = std::move(storage_interpreter.remote_requests);
     auto null_stream_if_empty = std::move(storage_interpreter.null_stream_if_empty);
@@ -1042,7 +1042,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.isTableScanSource())
     {
-        TiDBTableScan table_scan(query_block.source, dagContext());
+        TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
         handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
     }

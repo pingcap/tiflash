@@ -17,7 +17,7 @@
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/DAGStorageInterpreter.h>
+#include <Flash/Coprocessor/RemoteRequest.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
