@@ -505,8 +505,9 @@ public:
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(server);
         diagnostics_service = std::make_unique<DiagnosticsService>(server);
-        builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_ping_interval_without_data_ms", 10 * 1000));
-        builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_time_between_pings_ms", 10 * 1000));
+        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
+        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
+        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1));
         builder.RegisterService(flash_service.get());
         LOG_INFO(log, "Flash service registered");
         builder.RegisterService(diagnostics_service.get());
@@ -872,8 +873,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_http_request = HandleHttpRequest,
         .fn_check_http_uri_available = CheckHttpUriAvailable,
         .fn_gc_raw_cpp_ptr = GcRawCppPtr,
-        .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
-        .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
+        .fn_set_pb_msg_by_bytes = SetPBMsByBytes,
     };
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
