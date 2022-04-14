@@ -17,9 +17,8 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/DAGQueryBlock.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/StorageWithStructureLock.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
@@ -71,18 +70,13 @@ public:
     BlockInputStreamPtr null_stream_if_empty;
 
 private:
-    struct StorageWithStructureLock
-    {
-        ManageableStoragePtr storage;
-        TableStructureLockHolder lock;
-    };
     LearnerReadSnapshot doCopLearnerRead();
 
     LearnerReadSnapshot doBatchCopLearnerRead();
 
     void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
 
-    std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
+    IDsAndStorageWithStructureLocks getAndLockStorages(Int64 query_schema_version);
 
     std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
 
@@ -117,7 +111,7 @@ private:
     /// We need an immutable structure to build the TableScan operator and create snapshot input streams
     /// of storage. After the input streams created, the `alter_lock` can be released so that reading
     /// won't block DDL operations.
-    std::unordered_map<TableID, StorageWithStructureLock> storages_with_structure_lock;
+    IDsAndStorageWithStructureLocks storages_with_structure_lock;
     ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
     NamesAndTypes source_columns;
