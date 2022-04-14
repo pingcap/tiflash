@@ -28,7 +28,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , timeout(timeout_)
     , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
-    , send_loop_msg("")
     , input_streams_num(input_steams_num_)
     , thread_manager(newThreadManager())
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
@@ -155,7 +154,7 @@ void MPPTunnelBase<Writer>::sendLoop()
                 if (!writer->Write(*res))
                 {
                     finishWithLock();
-                    auto msg = " grpc writes failed.";
+                    const char * msg = " grpc writes failed.";
                     LOG_ERROR(log, msg);
                     throw Exception(tunnel_id + msg);
                 }
