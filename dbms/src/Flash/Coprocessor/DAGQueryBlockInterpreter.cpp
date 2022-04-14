@@ -469,12 +469,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
     }
 
-    /// (cartesian) (anti) left semi join.
-    const bool is_left_semi_family = join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
-
-    const bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin || is_left_semi_family;
-    ASTTableJoin::Strictness strictness = is_semi_join ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
-
     auto [kind, build_side_index] = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(join);
     RUNTIME_ASSERT(
         build_side_index == 1 || build_side_index == 0,
@@ -498,8 +492,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     /// columns_for_other_join_filter is a vector of columns used
     /// as the input columns when compiling other join filter.
     /// Note the order in the column vector is very important:
-    /// first the columns in input_streams_vec[0], then followed
-    /// by the columns in input_streams_vec[1], if there are other
+    /// first the columns in left_input_header, then followed
+    /// by the columns in right_input_header, if there are other
     /// columns generated before compile other join filter, then
     /// append the extra columns afterwards. In order to figure out
     /// whether a given column is already in the column vector or
@@ -514,6 +508,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         column_set_for_other_join_filter.emplace(p.name);
     }
     make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
+    const bool is_semi_join = JoinInterpreterHelper::isSemiJoin(join);
     for (auto const & p : right_input_header)
     {
         if (!is_semi_join)
@@ -536,13 +531,9 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     }
 
     String match_helper_name;
-    if (is_left_semi_family)
+    if (JoinInterpreterHelper::isLeftSemiFamily(join))
     {
-        match_helper_name = Join::match_helper_prefix;
-        for (int i = 1; left_input_header.has(match_helper_name) || right_input_header.has(match_helper_name); ++i)
-        {
-            match_helper_name = Join::match_helper_prefix + std::to_string(i);
-        }
+        match_helper_name = JoinInterpreterHelper::genMatchHelperNameForLeftSemiFamily(left_input_header, right_input_header);
 
         columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
         join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
@@ -551,33 +542,30 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     auto join_key_types = JoinInterpreterHelper::getJoinKeyTypes(join);
     auto collators = JoinInterpreterHelper::getJoinKeyCollators(join, join_key_types);
 
-    Names left_key_names, right_key_names;
-    String left_filter_column_name, right_filter_column_name;
-
     /// generate necessary expression actions if the join key is an expression
-
-    bool swap_join_side = build_side_index == 0;
+    Names probe_key_names, build_key_names;
+    String probe_filter_column_name, build_filter_column_name;
 
     auto probe_side_prepare_actions = prepareJoin(
-        swap_join_side ? join.right_join_keys() : join.left_join_keys(),
+        JoinInterpreterHelper::getProbeJoinKeys(join, build_side_index),
         join_key_types,
         probe_pipeline,
-        left_key_names,
+        probe_key_names,
         true,
         is_tiflash_right_join,
-        swap_join_side ? join.right_conditions() : join.left_conditions(),
-        left_filter_column_name);
+        JoinInterpreterHelper::getProbeConditions(join, build_side_index),
+        probe_filter_column_name);
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
 
     auto build_side_prepare_actions = prepareJoin(
-        swap_join_side ? join.left_join_keys() : join.right_join_keys(),
+        JoinInterpreterHelper::getBuildJoinKeys(join, build_side_index),
         join_key_types,
         build_pipeline,
-        right_key_names,
+        build_key_names,
         false,
         is_tiflash_right_join,
-        swap_join_side ? join.left_conditions() : join.right_conditions(),
-        right_filter_column_name);
+        JoinInterpreterHelper::getBuildConditions(join, build_side_index),
+        build_filter_column_name);
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
     String other_filter_column_name, other_eq_filter_from_in_column_name;
@@ -600,23 +588,23 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
     JoinPtr join_ptr = std::make_shared<Join>(
-        left_key_names,
-        right_key_names,
+        probe_key_names,
+        build_key_names,
         true,
         SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
         kind,
-        strictness,
+        JoinInterpreterHelper::getStrictness(join),
         log->identifier(),
         collators,
-        left_filter_column_name,
-        right_filter_column_name,
+        probe_filter_column_name,
+        build_filter_column_name,
         other_filter_column_name,
         other_eq_filter_from_in_column_name,
         other_condition_expr,
         max_block_size_for_cross_join,
         match_helper_name);
 
-    recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
+    recordJoinExecuteInfo(build_side_index, join_ptr);
 
     /// build side streams
     build_pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, build_side_prepare_actions, log->identifier()); });

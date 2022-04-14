@@ -17,7 +17,9 @@
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Interpreters/Join.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <fmt/format.h>
 
 #include <unordered_map>
 
@@ -132,5 +134,17 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const DataTypes
         }
     }
     return collators;
+}
+
+
+String genMatchHelperNameForLeftSemiFamily(const Block & header1, const Block & header2)
+{
+    size_t i = 0;
+    String match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, i);
+    while (header1.has(match_helper_name) || header2.has(match_helper_name))
+    {
+        match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, ++i);
+    }
+    return match_helper_name;
 }
 } // namespace DB::JoinInterpreterHelper
