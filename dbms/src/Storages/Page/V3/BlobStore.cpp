@@ -325,7 +325,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
     // Can't insert into this spacemap
     if (offset == INVALID_BLOBFILE_OFFSET)
     {
-        stat->smap->logStats();
+        stat->smap->logDebugString();
         throw Exception(fmt::format("Get postion from BlobStat failed, it may caused by `sm_max_caps` is no correct. [size={}] [old_max_caps={}] [max_caps={}] [blob_id={}]",
                                     size,
                                     old_max_cap,
@@ -1207,7 +1207,7 @@ bool BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, si
 {
     if (!smap->markFree(offset, buf_size))
     {
-        smap->logStats();
+        smap->logDebugString();
         throw Exception(fmt::format("Remove postion from BlobStat failed, [offset={} , buf_size={}, blob_id={}] is invalid.",
                                     offset,
                                     buf_size,
@@ -1224,7 +1224,7 @@ void BlobStore::BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size
 {
     if (!smap->markUsed(offset, buf_size))
     {
-        smap->logStats();
+        smap->logDebugString();
         throw Exception(fmt::format("Restore postion from BlobStat failed, [offset={}] [buf_size={}] [blob_id={}] is used or subspan is used",
                                     offset,
                                     buf_size,
