@@ -40,9 +40,7 @@ try
         using B = Decimal32;
         A a(500'000'000);
         B b(3);
-        auto func_call = [&] {
-            DecimalComparison<A, B, LessOp, true>::apply<true, true>(a, b, 1'000'000'000);
-        };
+        auto func_call = [&] { DecimalComparison<A, B, LessOp, true>::apply<true, true>(a, b, 1'000'000'000); };
         ASSERT_THROW(func_call(), DB::Exception);
     }
 
