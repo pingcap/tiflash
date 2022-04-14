@@ -61,7 +61,6 @@
  */
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -277,6 +276,10 @@ String DecodeJsonAsBinary(size_t & cursor, const String & raw_value) { return De
 
 UInt64 GetJsonLength(std::string_view raw_value)
 {
+    if (raw_value.empty())
+    {
+        return 0;
+    }
     switch (raw_value[0]) // JSON Root element type
     {
         case TYPE_CODE_OBJECT:
