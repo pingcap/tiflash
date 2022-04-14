@@ -51,7 +51,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         req->set_allocated_sender_meta(sender_task);
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
         ::grpc::Status status = ::grpc::Status::OK;
-        for (int i = 0; i < 10; i++)
+        static const Int32 MAX_RETRY_TIMES = 10;
+        for (int i = 0; i < MAX_RETRY_TIMES; i++)
         {
             pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
             grpc::ClientContext client_context;
@@ -93,8 +94,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             }
             else
             {
+                bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
                 LOG_WARNING(log,
-                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                    "EstablishMPPConnectionRequest meets rpc fail for req " << req_info << ". Err code = " << status.error_code()
+                                                                            << ", err msg = " << status.error_message()
+                                                                            << ", retriable = " << retriable);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
