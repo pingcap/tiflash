@@ -24,8 +24,8 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
@@ -790,31 +790,37 @@ struct TiDBConvertToDecimal
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
+    static U toTiDBDecimalInternal(T int_value, PrecType prec, ScaleType scale, const Context & context)
     {
+        // int_value is the value that exposes to user. Such as cast(val to decimal), val is the int_value which used by user.
+        // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
+        static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
-        auto maxValue = DecimalMaxValue::Get(prec);
-        if (value > maxValue || value < -maxValue)
+        UType scale_mul = getScaleMultiplier<U>(scale);
+
+        Int256 scaled_value = static_cast<Int256>(int_value) * static_cast<Int256>(scale_mul);
+        Int256 scaled_max_value = DecimalMaxValue::Get(prec);
+
+        if (scaled_value > scaled_max_value || scaled_value < -scaled_max_value)
         {
             context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
-            if (value > 0)
-                return static_cast<UType>(maxValue);
+            if (int_value > 0)
+                return static_cast<UType>(scaled_max_value);
             else
-                return static_cast<UType>(-maxValue);
+                return static_cast<UType>(-scaled_max_value);
         }
-        UType scale_mul = getScaleMultiplier<U>(scale);
-        U result = static_cast<UType>(value) * scale_mul;
-        return result;
+
+        return static_cast<UType>(scaled_value);
     }
 
     template <typename U>
     static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, int fsp, const Context & context)
     {
-        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
+        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000ULL
+            + date_time.hour * 10000ULL + date_time.minute * 100 + date_time.second;
         if (fsp > 0)
         {
-            Int128 value = value_without_fsp * 1000000 + date_time.micro_second;
+            Int128 value = static_cast<Int128>(value_without_fsp) * 1000000 + date_time.micro_second;
             Decimal128 decimal(value);
             return toTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, context);
         }
@@ -1162,8 +1168,20 @@ struct TiDBConvertToDecimal
             /// cast int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
-            for (size_t i = 0; i < size; ++i)
-                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+            if constexpr (std::is_integral_v<FromFieldType>)
+            {
+                /// cast enum/int as decimal
+                for (size_t i = 0; i < size; ++i)
+                    vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
+            }
+            else
+            {
+                /// cast real as decimal
+                static_assert(std::is_floating_point_v<FromFieldType>);
+                for (size_t i = 0; i < size; ++i)
+                    // Always use Float64 to avoid overflow for vec_from[i] * 10^scale.
+                    vec_to[i] = toTiDBDecimal<Float64, ToFieldType>(static_cast<Float64>(vec_from[i]), prec, scale, context);
+            }
         }
         else
         {
@@ -1751,7 +1769,8 @@ private:
         //  other type, its parameter should be the same
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
-        return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type) && !from_inner_type->isParametric() && !from_inner_type->isString();
+        return !(from_type->isNullable() ^ to_type->isNullable()) && from_inner_type->equals(*to_inner_type)
+            && !from_inner_type->isParametric() && !from_inner_type->isString();
     }
 
     WrapperType prepare(const DataTypePtr & from_type, const DataTypePtr & to_type) const
