@@ -628,9 +628,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-TEST_F(DatabaseTiFlash_test, ISSUE_1055)
-=======
 TEST_F(DatabaseTiFlashTest, ISSUE4596)
 try
 {
@@ -743,8 +740,7 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlashTest, ISSUE1055)
->>>>>>> 51dd32f4d9 (Fix create table error (#4630))
+TEST_F(DatabaseTiFlash_test, ISSUE_1055)
 try
 {
     CHECK_TESTS_WITH_DATA_ENABLED;
