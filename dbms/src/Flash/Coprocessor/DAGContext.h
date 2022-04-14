@@ -107,7 +107,7 @@ public:
     void appendWarning(const String & msg, int32_t code = 0);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
-    bool shouldClipToZero();
+    bool shouldClipToZero() const;
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
     {
