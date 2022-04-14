@@ -32,10 +32,10 @@ static auto loadConfigFromString(const String & s)
     return config;
 }
 
-class StorageConfig_test : public ::testing::Test
+class StorageConfigTest : public ::testing::Test
 {
 public:
-    StorageConfig_test() : log(&Poco::Logger::get("StorageConfig_test")) {}
+    StorageConfigTest() : log(&Poco::Logger::get("StorageConfigTest")) {}
 
     static void SetUpTestCase() {}
 
@@ -43,9 +43,6 @@ protected:
     Poco::Logger * log;
 };
 
-<<<<<<< HEAD
-TEST_F(StorageConfig_test, MultiSSDSettings)
-=======
 TEST_F(StorageConfigTest, SimpleSinglePath)
 try
 {
@@ -72,7 +69,7 @@ dir=["/data0/tiflash"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -91,7 +88,8 @@ dir=["/data0/tiflash"]
         EXPECT_EQ(all_paths[0], "/data0/tiflash/");
 
         // Ensure that creating PathCapacityMetrics is OK.
-        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota,
+            storage.latest_data_paths, storage.latest_capacity_quota);
     }
 }
 CATCH
@@ -131,7 +129,7 @@ dir=["/data222/kvstore"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -150,13 +148,13 @@ dir=["/data222/kvstore"]
         EXPECT_EQ(all_paths[0], "/data0/tiflash/");
 
         // Ensure that creating PathCapacityMetrics is OK.
-        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota,
+            storage.latest_data_paths, storage.latest_capacity_quota);
     }
 }
 CATCH
 
 TEST_F(StorageConfigTest, MultiSSDSettings)
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
 try
 {
     Strings tests = {
@@ -201,7 +199,8 @@ dir=["/data0/tiflash"]
         EXPECT_EQ(all_paths[0], "/data0/tiflash/");
 
         // Ensure that creating PathCapacityMetrics is OK.
-        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota, storage.latest_data_paths, storage.latest_capacity_quota);
+        PathCapacityMetrics path_capacity(global_capacity_quota, storage.main_data_paths, storage.main_capacity_quota,
+            storage.latest_data_paths, storage.latest_capacity_quota);
     }
 }
 CATCH
@@ -229,7 +228,7 @@ dir=["/data0/tiflash", "/data1/tiflash", "/data2/tiflash"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -260,7 +259,7 @@ dir=["/data0/tiflash", "/data1/tiflash", "/data2/tiflash"]
 }
 CATCH
 
-TEST_F(StorageConfig_test, SSD_HDD_Settings)
+TEST_F(StorageConfigTest, SSD_HDD_Settings)
 try
 {
     Strings tests = {
@@ -310,7 +309,7 @@ dir=["/ssd0/tiflash"]
 }
 CATCH
 
-TEST_F(StorageConfig_test, ParseMaybeBrokenCases)
+TEST_F(StorageConfigTest, ParseMaybeBrokenCases)
 try
 {
     Strings tests = {
@@ -349,15 +348,12 @@ path = "/data0/tiflash,/data1/tiflash"
 [storage.main]
 dir = [ "/data0/tiflash", "/data1/tiflash" ]
 capacity = [ 10737418240 ]
-<<<<<<< HEAD
 # [storage.latest]
 # dir = [ ]
 # capacity = [ 10737418240, 10737418240 ]
 # [storage.raft]
 # dir = [ ]
 )",
-=======
-        )",
         // case for the length of storage.latest.dir is not the same with storage.latest.capacity
         R"(
 path = "/data0/tiflash,/data1/tiflash"
@@ -409,7 +405,6 @@ dir = [["/data0/tiflash", "/data1/tiflash"], ["/data2/tiflash", ]]
 [storage.main]
 dir = [1,2,3]
         )",
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
@@ -426,7 +421,7 @@ dir = [1,2,3]
 }
 CATCH
 
-TEST(PathCapacityMetrics_test, Quota)
+TEST(PathCapacityMetricsTest, Quota)
 try
 {
     Strings tests = {
@@ -461,7 +456,7 @@ dir=["/data0/tiflash"]
 capacity=[ 1024 ]
 )",
     };
-    Poco::Logger * log = &Poco::Logger::get("PathCapacityMetrics_test");
+    Poco::Logger * log = &Poco::Logger::get("PathCapacityMetricsTest");
 
     for (size_t i = 0; i < tests.size(); ++i)
     {
@@ -493,23 +488,13 @@ capacity=[ 1024 ]
         ASSERT_NE(idx, PathCapacityMetrics::INVALID_INDEX);
         switch (i)
         {
-<<<<<<< HEAD
             case 0:
             case 1:
-                EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 0UL);
+                EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 0);
                 break;
             case 2:
-                EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 2048UL);
+                EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 2048);
                 break;
-=======
-        case 0:
-        case 1:
-            EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 0);
-            break;
-        case 2:
-            EXPECT_EQ(path_capacity.path_infos[idx].capacity_bytes, 2048);
-            break;
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
         }
         idx = path_capacity.locatePath("/data1/tiflash/");
         ASSERT_NE(idx, PathCapacityMetrics::INVALID_INDEX);
@@ -521,10 +506,10 @@ capacity=[ 1024 ]
 }
 CATCH
 
-class UsersConfigParser_test : public ::testing::Test
+class UsersConfigParserTest : public ::testing::Test
 {
 public:
-    UsersConfigParser_test() : log(&Poco::Logger::get("UsersConfigParser_test")) {}
+    UsersConfigParserTest() : log(&Poco::Logger::get("UsersConfigParserTest")) {}
 
     static void SetUpTestCase() {}
 
@@ -533,7 +518,7 @@ protected:
 };
 
 
-TEST_F(UsersConfigParser_test, ParseConfigs)
+TEST_F(UsersConfigParserTest, ParseConfigs)
 try
 {
     Strings tests = {
@@ -629,7 +614,7 @@ dt_enable_rough_set_filter = false
 }
 CATCH
 
-TEST_F(StorageConfig_test, CompatibilityWithIORateLimitConfig)
+TEST_F(StorageConfigTest, CompatibilityWithIORateLimitConfig)
 try
 {
     Strings tests = {
@@ -736,12 +721,7 @@ background_read_weight=2
 
     Poco::Logger * log = &Poco::Logger::get("StorageIORateLimitConfig_test");
 
-<<<<<<< HEAD
-    auto verifyDefault = [](const StorageIORateLimitConfig& io_config)
-    {
-=======
     auto verify_default = [](const StorageIORateLimitConfig & io_config) {
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
@@ -753,18 +733,13 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 50);
         ASSERT_EQ(io_config.writeWeight(), 50);
         ASSERT_EQ(io_config.totalWeight(), 100);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);        
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);        
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 0);
     };
 
-<<<<<<< HEAD
-    auto verifyCase0 = [](const StorageIORateLimitConfig& io_config)
-    {
-=======
     auto verify_case0 = [](const StorageIORateLimitConfig & io_config) {
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
@@ -776,18 +751,13 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 7);
         ASSERT_EQ(io_config.writeWeight(), 3);
         ASSERT_EQ(io_config.totalWeight(), 10);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);        
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);        
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 0);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 0);
     };
 
-<<<<<<< HEAD
-    auto verifyCase1 = [](const StorageIORateLimitConfig& io_config)
-    {
-=======
     auto verify_case1 = [](const StorageIORateLimitConfig & io_config) {
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
         ASSERT_EQ(io_config.max_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
@@ -801,16 +771,11 @@ background_read_weight=2
         ASSERT_EQ(io_config.totalWeight(), 10);
         ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 102400 * 2);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400 * 5);   
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 2);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400 * 5);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 2);
     };
 
-<<<<<<< HEAD
-    auto verifyCase2 = [](const StorageIORateLimitConfig& io_config)
-    {
-=======
     auto verify_case2 = [](const StorageIORateLimitConfig & io_config) {
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
@@ -822,18 +787,13 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 7);
         ASSERT_EQ(io_config.writeWeight(), 3);
         ASSERT_EQ(io_config.totalWeight(), 10);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 731428);        
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 341333);        
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 731428);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 341333);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 682666);
     };
 
-<<<<<<< HEAD
-    auto verifyCase3 = [](const StorageIORateLimitConfig& io_config)
-    {
-=======
     auto verify_case3 = [](const StorageIORateLimitConfig & io_config) {
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
         ASSERT_EQ(io_config.max_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
@@ -845,25 +805,17 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 7);
         ASSERT_EQ(io_config.writeWeight(), 3);
         ASSERT_EQ(io_config.totalWeight(), 10);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400);        
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400 * 2);        
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 5);      
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400);
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400 * 2);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 5);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 102400 * 2);
     };
 
-<<<<<<< HEAD
-    std::vector<std::function<void(const StorageIORateLimitConfig&)>> case_verifiers;
-    case_verifiers.push_back(verifyCase0);
-    case_verifiers.push_back(verifyCase1);
-    case_verifiers.push_back(verifyCase2);
-    case_verifiers.push_back(verifyCase3);
-=======
     std::vector<std::function<void(const StorageIORateLimitConfig &)>> case_verifiers;
     case_verifiers.push_back(verify_case0);
     case_verifiers.push_back(verify_case1);
     case_verifiers.push_back(verify_case2);
     case_verifiers.push_back(verify_case3);
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
 
     for (size_t i = 0; i < 2u /*tests.size()*/; ++i)
     {
@@ -872,7 +824,7 @@ background_read_weight=2
 
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
         ASSERT_TRUE(config->has("storage.io_rate_limit"));
-    
+
         StorageIORateLimitConfig io_config;
         verify_default(io_config);
         io_config.parse(config->getString("storage.io_rate_limit"), log);

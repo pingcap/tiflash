@@ -52,8 +52,9 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
 
     auto get_checked_qualified_array = [log](const std::shared_ptr<cpptoml::table> table, const char * key) -> cpptoml::option<Strings> {
         auto throw_invalid_value = [log, key]() {
-            String error_msg = fmt::format("The configuration \"storage.{}\" should be an array of strings. Please check your configuration file.", key);
-            LOG_FMT_ERROR(log, "{}", error_msg);
+            String error_msg
+                = fmt::format("The configuration \"storage.{}\" should be an array of strings. Please check your configuration file.", key);
+            LOG_ERROR(log, error_msg);
             throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         };
         // not exist key
@@ -86,25 +87,17 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     if (main_data_paths.empty())
     {
         String error_msg = "The configuration \"storage.main.dir\" is empty. Please check your configuration file.";
-        LOG_FMT_ERROR(log, "{}", error_msg);
+        LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
     {
-<<<<<<< HEAD
-        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(main_data_paths.size())
-            + "] is not equal to \"storage.main.capacity\"[size=" + toString(main_capacity_quota.size())
-            + "]. Please check your configuration file.";
-        LOG_ERROR(log, error_msg);
-=======
-        String error_msg = fmt::format(
-            "The array size of \"storage.main.dir\"[size={}] "
-            "is not equal to \"storage.main.capacity\"[size={}]. "
-            "Please check your configuration file.",
+        String error_msg = fmt::format("The array size of \"storage.main.dir\"[size={}] "
+                                       "is not equal to \"storage.main.capacity\"[size={}]. "
+                                       "Please check your configuration file.",
             main_data_paths.size(),
             main_capacity_quota.size());
-        LOG_FMT_ERROR(log, "{}", error_msg);
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
+        LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     for (size_t i = 0; i < main_data_paths.size(); ++i)
@@ -133,20 +126,12 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     }
     if (!latest_capacity_quota.empty() && latest_capacity_quota.size() != latest_data_paths.size())
     {
-<<<<<<< HEAD
-        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(latest_data_paths.size())
-            + "] is not euqal to \"storage.main.capacity\"[size=" + toString(latest_capacity_quota.size())
-            + "]. Please check your configuration file.";
-        LOG_ERROR(log, error_msg);
-=======
-        String error_msg = fmt::format(
-            "The array size of \"storage.latest.dir\"[size={}] "
-            "is not equal to \"storage.latest.capacity\"[size={}]. "
-            "Please check your configuration file.",
+        String error_msg = fmt::format("The array size of \"storage.latest.dir\"[size={}] "
+                                       "is not equal to \"storage.latest.capacity\"[size={}]. "
+                                       "Please check your configuration file.",
             latest_data_paths.size(),
             latest_capacity_quota.size());
-        LOG_FMT_ERROR(log, "{}", error_msg);
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
+        LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     for (size_t i = 0; i < latest_data_paths.size(); ++i)
@@ -317,17 +302,9 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
                 kvstore_paths.emplace_back(getNormalizedPath(deprecated_kvstore_path));
                 for (size_t i = 0; i < kvstore_paths.size(); ++i)
                 {
-<<<<<<< HEAD
                     LOG_WARNING(log,
                         "Raft data candidate path: "
                             << kvstore_paths[i] << ". The path is overwritten by deprecated configuration for backward compatibility.");
-=======
-                    LOG_FMT_WARNING(
-                        log,
-                        "Raft data candidate path: {}. "
-                        "The path is overwritten by deprecated configuration for backward compatibility.",
-                        kvstore_path);
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
                 }
             }
         }
@@ -362,7 +339,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         {
             // Can not parse from the deprecated configuration "path".
             String msg = "The configuration \"storage.main\" section is not defined. Please check your configuration file.";
-            LOG_FMT_ERROR(log, "{}", msg);
+            LOG_ERROR(log, msg);
             throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
     }
@@ -389,7 +366,7 @@ void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, Poco:
     readConfig("foreground_write_weight", fg_write_weight);
     readConfig("background_write_weight", bg_write_weight);
     readConfig("foreground_read_weight", fg_read_weight);
-    readConfig("background_read_weight", bg_read_weight);    
+    readConfig("background_read_weight", bg_read_weight);
     readConfig("emergency_pct", emergency_pct);
     readConfig("high_pct", high_pct);
     readConfig("medium_pct", medium_pct);

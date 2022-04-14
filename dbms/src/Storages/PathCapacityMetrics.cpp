@@ -102,16 +102,7 @@ FsStats PathCapacityMetrics::getFsStats() const
 
     // Now we assume the size of `path_infos` will not change, don't acquire heavy lock on `path_infos`.
     FsStats total_stat{};
-<<<<<<< HEAD
     for (size_t i = 0; i < path_infos.size(); ++i)
-=======
-
-    // Build the disk stats map
-    // which use to measure single disk capacity and available size
-    auto disk_stats_map = getDiskStats();
-
-    for (auto & fs_it : disk_stats_map)
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
     {
         FsStats path_stat = path_infos[i].getStats(log);
         if (!path_stat.ok)
@@ -120,17 +111,6 @@ FsStats PathCapacityMetrics::getFsStats() const
             return total_stat;
         }
 
-<<<<<<< HEAD
-=======
-        const uint64_t disk_capacity_size = vfs_info.f_blocks * vfs_info.f_frsize;
-        if (disk_stat.capacity_size == 0 || disk_capacity_size < disk_stat.capacity_size)
-            disk_stat.capacity_size = disk_capacity_size;
-
-        // Calculate single disk info
-        const uint64_t disk_free_bytes = vfs_info.f_bavail * vfs_info.f_frsize;
-        disk_stat.avail_size = std::min(disk_free_bytes, disk_stat.avail_size);
-
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
         // sum of all path's capacity and used_size
         total_stat.capacity_size += path_stat.capacity_size;
         total_stat.used_size += path_stat.used_size;
