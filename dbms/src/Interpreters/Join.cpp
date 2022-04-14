@@ -436,8 +436,6 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
 
 void Join::setSampleBlock(const Block & block)
 {
-    std::unique_lock lock(rwlock);
-
     sample_block_with_columns_to_add = materializeBlock(block);
 
     /// Move from `sample_block_with_columns_to_add` key columns to `sample_block_with_keys`, keeping the order.
@@ -474,6 +472,7 @@ void Join::setSampleBlock(const Block & block)
 
 void Join::init(const Block & sample_block, size_t build_concurrency_)
 {
+    std::unique_lock lock(rwlock);
     RUNTIME_ASSERT(!initialized, log, "Join has been initialized");
     initialized = true;
     /// Choose data structure to use for JOIN.
@@ -781,8 +780,8 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
 
 bool Join::insertFromBlock(const Block & block)
 {
-    RUNTIME_ASSERT(!initialized, log, "Logical error: Join was not initialized");
     std::unique_lock lock(rwlock);
+    RUNTIME_ASSERT(!initialized, log, "Logical error: Join was not initialized");
     blocks.push_back(block);
     Block * stored_block = &blocks.back();
     return insertFromBlockInternal(stored_block, 0);
@@ -791,8 +790,8 @@ bool Join::insertFromBlock(const Block & block)
 /// the block should be valid.
 void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
-    RUNTIME_ASSERT(!initialized, log, "Logical error: Join was not initialized");
     std::shared_lock lock(rwlock);
+    RUNTIME_ASSERT(!initialized, log, "Logical error: Join was not initialized");
     Block * stored_block = nullptr;
     {
         std::lock_guard lk(blocks_lock);

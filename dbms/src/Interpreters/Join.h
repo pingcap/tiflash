@@ -339,7 +339,7 @@ private:
       */
     mutable std::shared_mutex rwlock;
 
-    std::atomic<bool> initialized = false;
+    bool initialized = false;
 
     void init(Type type_);
 
