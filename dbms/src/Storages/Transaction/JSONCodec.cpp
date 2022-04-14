@@ -68,16 +68,16 @@ extern const int LOGICAL_ERROR;
 
 using JsonVar = Poco::Dynamic::Var;
 
-extern const UInt8 TYPE_CODE_OBJECT = 0x01; // TypeCodeObject indicates the JSON is an object.
-extern const UInt8 TYPE_CODE_ARRAY = 0x03; // TypeCodeArray indicates the JSON is an array.
+extern const UInt8 TYPE_CODE_OBJECT = 0x01;  // TypeCodeObject indicates the JSON is an object.
+extern const UInt8 TYPE_CODE_ARRAY = 0x03;   // TypeCodeArray indicates the JSON is an array.
 extern const UInt8 TYPE_CODE_LITERAL = 0x04; // TypeCodeLiteral indicates the JSON is a literal.
-extern const UInt8 TYPE_CODE_INT64 = 0x09; // TypeCodeInt64 indicates the JSON is a signed integer.
-extern const UInt8 TYPE_CODE_UINT64 = 0x0a; // TypeCodeUint64 indicates the JSON is a unsigned integer.
+extern const UInt8 TYPE_CODE_INT64 = 0x09;   // TypeCodeInt64 indicates the JSON is a signed integer.
+extern const UInt8 TYPE_CODE_UINT64 = 0x0a;  // TypeCodeUint64 indicates the JSON is a unsigned integer.
 extern const UInt8 TYPE_CODE_FLOAT64 = 0x0b; // TypeCodeFloat64 indicates the JSON is a double float number.
-extern const UInt8 TYPE_CODE_STRING = 0x0c; // TypeCodeString indicates the JSON is a string.
-extern const UInt8 LITERAL_NIL = 0x00; // LiteralNil represents JSON null.
-extern const UInt8 LITERAL_TRUE = 0x01; // LiteralTrue represents JSON true.
-extern const UInt8 LITERAL_FALSE = 0x02; // LiteralFalse represents JSON false.
+extern const UInt8 TYPE_CODE_STRING = 0x0c;  // TypeCodeString indicates the JSON is a string.
+extern const UInt8 LITERAL_NIL = 0x00;       // LiteralNil represents JSON null.
+extern const UInt8 LITERAL_TRUE = 0x01;      // LiteralTrue represents JSON true.
+extern const UInt8 LITERAL_FALSE = 0x02;     // LiteralFalse represents JSON false.
 
 constexpr size_t VALUE_ENTRY_SIZE = 5;
 constexpr size_t KEY_ENTRY_LENGTH = 6;
@@ -160,22 +160,22 @@ JsonVar decodeValue(UInt8 type, size_t & cursor, const String & raw_value)
 {
     switch (type) // JSON Root element type
     {
-    case TYPE_CODE_OBJECT:
-        return decodeObject(cursor, raw_value);
-    case TYPE_CODE_ARRAY:
-        return decodeArray(cursor, raw_value);
-    case TYPE_CODE_LITERAL:
-        return decodeLiteral(cursor, raw_value);
-    case TYPE_CODE_INT64:
-        return JsonVar(decodeNumeric<Int64>(cursor, raw_value));
-    case TYPE_CODE_UINT64:
-        return JsonVar(decodeNumeric<UInt64>(cursor, raw_value));
-    case TYPE_CODE_FLOAT64:
-        return JsonVar(decodeNumeric<Float64>(cursor, raw_value));
-    case TYPE_CODE_STRING:
-        return JsonVar(decodeString(cursor, raw_value));
-    default:
-        throw Exception("decodeValue: Unknown JSON Element Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+        case TYPE_CODE_OBJECT:
+            return decodeObject(cursor, raw_value);
+        case TYPE_CODE_ARRAY:
+            return decodeArray(cursor, raw_value);
+        case TYPE_CODE_LITERAL:
+            return decodeLiteral(cursor, raw_value);
+        case TYPE_CODE_INT64:
+            return JsonVar(decodeNumeric<Int64>(cursor, raw_value));
+        case TYPE_CODE_UINT64:
+            return JsonVar(decodeNumeric<UInt64>(cursor, raw_value));
+        case TYPE_CODE_FLOAT64:
+            return JsonVar(decodeNumeric<Float64>(cursor, raw_value));
+        case TYPE_CODE_STRING:
+            return JsonVar(decodeString(cursor, raw_value));
+        default:
+            throw Exception("decodeValue: Unknown JSON Element Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -184,21 +184,18 @@ inline JsonVar decodeLiteral(size_t & cursor, const String & raw_value)
     UInt8 type = raw_value[cursor++];
     switch (type)
     {
-    case LITERAL_FALSE:
-        return JsonVar(false);
-    case LITERAL_NIL:
-        return JsonVar();
-    case LITERAL_TRUE:
-        return JsonVar(true);
-    default:
-        throw Exception("decodeLiteral: Unknown JSON Literal Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+        case LITERAL_FALSE:
+            return JsonVar(false);
+        case LITERAL_NIL:
+            return JsonVar();
+        case LITERAL_TRUE:
+            return JsonVar(true);
+        default:
+            throw Exception("decodeLiteral: Unknown JSON Literal Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
-inline String decodeString(size_t base, const String & raw_value, size_t length)
-{
-    return String(raw_value, base, length);
-}
+inline String decodeString(size_t base, const String & raw_value, size_t length) { return String(raw_value, base, length); }
 
 inline String decodeString(size_t & cursor, const String & raw_value)
 {
@@ -241,28 +238,28 @@ typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & 
 
     switch (type) // JSON Root element type
     {
-    case TYPE_CODE_OBJECT:
-        cursor += 4;
-        size = decodeNumeric<UInt32>(cursor, raw_value);
-        break;
-    case TYPE_CODE_ARRAY:
-        cursor += 4;
-        size = decodeNumeric<UInt32>(cursor, raw_value);
-        break;
-    case TYPE_CODE_LITERAL:
-        size = 1;
-        break;
-    case TYPE_CODE_INT64:
-    case TYPE_CODE_UINT64:
-    case TYPE_CODE_FLOAT64:
-        size = 8;
-        break;
-    case TYPE_CODE_STRING:
-        size = DecodeVarUInt(cursor, raw_value);
-        size += (cursor - base - 1);
-        break;
-    default:
-        throw Exception("DecodeJsonBinary: Unknown JSON Element Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+        case TYPE_CODE_OBJECT:
+            cursor += 4;
+            size = decodeNumeric<UInt32>(cursor, raw_value);
+            break;
+        case TYPE_CODE_ARRAY:
+            cursor += 4;
+            size = decodeNumeric<UInt32>(cursor, raw_value);
+            break;
+        case TYPE_CODE_LITERAL:
+            size = 1;
+            break;
+        case TYPE_CODE_INT64:
+        case TYPE_CODE_UINT64:
+        case TYPE_CODE_FLOAT64:
+            size = 8;
+            break;
+        case TYPE_CODE_STRING:
+            size = DecodeVarUInt(cursor, raw_value);
+            size += (cursor - base - 1);
+            break;
+        default:
+            throw Exception("DecodeJsonBinary: Unknown JSON Element Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
     }
 
     size++;
@@ -273,15 +270,9 @@ typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & 
         return static_cast<typename need_decode<doDecode>::type>(raw_value.substr(base, size));
 }
 
-void SkipJson(size_t & cursor, const String & raw_value)
-{
-    DecodeJson<false>(cursor, raw_value);
-}
+void SkipJson(size_t & cursor, const String & raw_value) { DecodeJson<false>(cursor, raw_value); }
 
-String DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
-{
-    return DecodeJson<true>(cursor, raw_value);
-}
+String DecodeJsonAsBinary(size_t & cursor, const String & raw_value) { return DecodeJson<true>(cursor, raw_value); }
 
 UInt64 GetJsonLength(std::string_view raw_value)
 {
@@ -291,11 +282,11 @@ UInt64 GetJsonLength(std::string_view raw_value)
     }
     switch (raw_value[0]) // JSON Root element type
     {
-    case TYPE_CODE_OBJECT:
-    case TYPE_CODE_ARRAY:
-        return *(reinterpret_cast<const UInt32 *>(&raw_value[1]));
-    default:
-        return 1;
+        case TYPE_CODE_OBJECT:
+        case TYPE_CODE_ARRAY:
+            return *(reinterpret_cast<const UInt32 *>(&raw_value[1]));
+        default:
+            return 1;
     }
 }
 
