@@ -274,7 +274,7 @@ Int64 ColumnInfo::getTimeValue(const String & time_str) const   // NOLINT
     return negative ? -ret : ret;
 }
 
-Int64 ColumnInfo::getYearValue(const String & val) const
+Int64 ColumnInfo::getYearValue(const String & val) const    // NOLINT
 {
     // do not check validation of the val because TiDB will do it
     Int64 year = std::stol(val);
@@ -287,7 +287,7 @@ Int64 ColumnInfo::getYearValue(const String & val) const
     return year;
 }
 
-UInt64 ColumnInfo::getBitValue(const String & val) const
+UInt64 ColumnInfo::getBitValue(const String & val) const    // NOLINT
 {
     // The `default_bit` is a base64 encoded, big endian byte array.
     Poco::MemoryInputStream istr(val.data(), val.size());
