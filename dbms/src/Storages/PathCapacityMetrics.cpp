@@ -21,19 +21,17 @@ extern const Metric StoreSizeUsed;
 
 namespace DB
 {
-inline size_t safeGetQuota(const std::vector<size_t> & quotas, size_t idx)
-{
-    return idx < quotas.size() ? quotas[idx] : 0;
-}
+inline size_t safeGetQuota(const std::vector<size_t> & quotas, size_t idx) { return idx < quotas.size() ? quotas[idx] : 0; }
 
-PathCapacityMetrics::PathCapacityMetrics(
-    const size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
+PathCapacityMetrics::PathCapacityMetrics( //
+    const size_t capacity_quota_,         // will be ignored if `main_capacity_quota` is not empty
     const Strings & main_paths_,
-    const std::vector<size_t> main_capacity_quota_,
+    const std::vector<size_t>
+        main_capacity_quota_,
     const Strings & latest_paths_,
-    const std::vector<size_t> latest_capacity_quota_)
-    : capacity_quota(capacity_quota_)
-    , log(&Poco::Logger::get("PathCapacityMetrics"))
+    const std::vector<size_t>
+        latest_capacity_quota_)
+    : capacity_quota(capacity_quota_), log(&Poco::Logger::get("PathCapacityMetrics"))
 {
     if (!main_capacity_quota_.empty())
     {
@@ -135,10 +133,10 @@ FsStats PathCapacityMetrics::getFsStats() const
     // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
     if (avail_rate <= 0.2)
         LOG_WARNING(log,
-                    "Available space is only " << DB::toString(avail_rate * 100.0, 2)
-                                               << "% of capacity size. Avail size: " << formatReadableSizeWithBinarySuffix(total_stat.avail_size)
-                                               << ", used size: " << formatReadableSizeWithBinarySuffix(total_stat.used_size)
-                                               << ", capacity size: " << formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
+            "Available space is only " << DB::toString(avail_rate * 100.0, 2)
+                                       << "% of capacity size. Avail size: " << formatReadableSizeWithBinarySuffix(total_stat.avail_size)
+                                       << ", used size: " << formatReadableSizeWithBinarySuffix(total_stat.used_size)
+                                       << ", capacity size: " << formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
     total_stat.ok = 1;
 
     CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
@@ -224,8 +222,8 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
         avail = capacity - res.used_size;
     else if (log)
         LOG_WARNING(log,
-                    "No available space for path: " << path << ", capacity: " << formatReadableSizeWithBinarySuffix(capacity) //
-                                                    << ", used: " << formatReadableSizeWithBinarySuffix(used_bytes));
+            "No available space for path: " << path << ", capacity: " << formatReadableSizeWithBinarySuffix(capacity) //
+                                            << ", used: " << formatReadableSizeWithBinarySuffix(used_bytes));
 
     const uint64_t disk_free_bytes = vfs.f_bavail * vfs.f_frsize;
     if (avail > disk_free_bytes)

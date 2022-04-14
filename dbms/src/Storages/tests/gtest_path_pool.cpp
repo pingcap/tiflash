@@ -3,8 +3,8 @@
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>
-#include <common/logger_useful.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -13,9 +13,7 @@ namespace tests
 class PathPool_test : public ::testing::Test
 {
 public:
-    PathPool_test()
-        : log(&Poco::Logger::get("PathPool_test"))
-    {}
+    PathPool_test() : log(&Poco::Logger::get("PathPool_test")) {}
 
     static void SetUpTestCase() {}
 
@@ -336,7 +334,7 @@ try
 
     std::string latest_data_path = TiFlashTestEnv::getTemporaryPath() + "/lastest";
     createIfNotExist(latest_data_path);
-    
+
     size_t global_capacity_quota = 10;
     size_t capacity = 100;
     {
