@@ -442,9 +442,9 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
     }
 }
 
-std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAGStorageInterpreter::getAndLockStorages(Int64 query_schema_version)
+IDsAndStorageWithStructureLocks DAGStorageInterpreter::getAndLockStorages(Int64 query_schema_version)
 {
-    std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> storages_with_lock;
+    IDsAndStorageWithStructureLocks storages_with_lock;
     if (unlikely(query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION))
     {
         auto logical_table_storage = tmt.getStorages().get(logical_table_id);
