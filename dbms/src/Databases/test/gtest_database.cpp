@@ -628,7 +628,7 @@ try
 }
 CATCH
 
-TEST_F(DatabaseTiFlashTest, ISSUE4596)
+TEST_F(DatabaseTiFlash_test, ISSUE4596)
 try
 {
     const String db_name = "db_1";
