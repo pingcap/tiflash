@@ -127,12 +127,10 @@ AnalysisResult analyzeExpressions(
     {
         res.is_final_agg = AggregationInterpreterHelper::isFinalAgg(query_block.aggregation->aggregation());
 
-        bool group_by_collation_sensitive = AggregationInterpreterHelper::isGroupByCollationSensitive(context);
-
         std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
-            group_by_collation_sensitive);
+            AggregationInterpreterHelper::isGroupByCollationSensitive(context));
 
         // `res.before_aggregation` has called `finalize`, get column index in here is safe.
         AggregationInterpreterHelper::fillArgColumnNumbers(res.aggregate_descriptions, res.before_aggregation->getSampleBlock());

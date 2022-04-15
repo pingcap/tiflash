@@ -19,6 +19,18 @@
 
 namespace DB::AggregationInterpreterHelper
 {
+namespace
+{
+bool isFinalAgg(const tipb::Expr & expr)
+{
+    if (!expr.has_aggfuncmode())
+        /// set default value to true to make it compatible with old version of TiDB since before this
+        /// change, all the aggregation in TiFlash is treated as final aggregation
+        return true;
+    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
+}
+} // namespace
+
 Aggregator::Params buildAggregatorParams(
     const Context & context,
     const Block & before_agg_header,
@@ -43,7 +55,7 @@ Aggregator::Params buildAggregatorParams(
     bool allow_to_use_two_level_group_by = before_agg_streams_size > 1 || settings.max_bytes_before_external_group_by != 0;
     bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 
-    Aggregator::Params params(
+    return Aggregator::Params(
         before_agg_header,
         keys,
         aggregate_descriptions,
@@ -56,8 +68,6 @@ Aggregator::Params buildAggregatorParams(
         !is_final_agg,
         context.getTemporaryPath(),
         has_collator ? collators : TiDB::dummy_collators);
-
-    return params;
 }
 
 void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header)
@@ -76,22 +86,17 @@ void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const 
 
 bool isFinalAgg(const tipb::Aggregation & aggregation)
 {
-    auto is_final_agg_mode = [](const tipb::Expr & expr) {
-        if (!expr.has_aggfuncmode())
-            /// set default value to true to make it compatible with old version of TiDB since before this
-            /// change, all the aggregation in TiFlash is treated as final aggregation
-            return true;
-        return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
-    };
-
     /// set default value to true to make it compatible with old version of TiDB since before this
     /// change, all the aggregation in TiFlash is treated as final aggregation
     bool is_final_agg = true;
-    if (aggregation.agg_func_size() > 0 && !is_final_agg_mode(aggregation.agg_func(0)))
+    if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
+    {
         is_final_agg = false;
+    }
+
     for (int i = 1; i < aggregation.agg_func_size(); ++i)
     {
-        if (is_final_agg != is_final_agg_mode(aggregation.agg_func(i)))
+        if (is_final_agg != isFinalAgg(aggregation.agg_func(i)))
             throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
     }
     return is_final_agg;
