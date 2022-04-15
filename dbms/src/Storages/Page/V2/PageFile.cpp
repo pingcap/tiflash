@@ -478,14 +478,14 @@ PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(
     const bool background)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
-    reader->initialize(max_meta_offset, read_limiter);
+    reader->initialize(max_meta_offset, read_limiter, background);
     return reader;
 }
 
 PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter, const bool background)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
-    reader->initialize(std::nullopt, read_limiter);
+    reader->initialize(std::nullopt, read_limiter, background);
     return reader;
 }
 
