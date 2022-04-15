@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Poco/Event.h>
 #include <Poco/Timestamp.h>
+#include <absl/synchronization/blocking_counter.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -103,6 +104,7 @@ private:
     Threads threads;
     std::vector<pid_t> thread_ids; // Linux Thread ID
     std::mutex thread_ids_mtx;
+    absl::BlockingCounter thread_ids_counter;
 
     std::atomic<bool> shutdown{false};
     std::condition_variable wake_event;
