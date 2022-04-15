@@ -37,6 +37,7 @@ extern String createDatabaseStmt(Context & context, const TiDB::DBInfo & db_info
 
 namespace tests
 {
+
 class DatabaseTiFlash_test : public ::testing::Test
 {
 public:

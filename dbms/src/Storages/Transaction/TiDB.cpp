@@ -39,7 +39,7 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
 
 Field ColumnInfo::defaultValueToField() const
 {
-    auto & value = origin_default_value;
+    const auto & value = origin_default_value;
     if (value.isEmpty())
     {
         if (hasNotNullFlag())
@@ -61,7 +61,7 @@ Field ColumnInfo::defaultValueToField() const
         // TODO: We shall use something like `orig_default_bit`, which will never change once created,
         //  rather than `default_bit`, which could be altered.
         //  See https://github.com/pingcap/tidb/issues/17641 and https://github.com/pingcap/tidb/issues/17642
-        auto & bit_value = default_bit_value;
+        const auto & bit_value = default_bit_value;
         // TODO: There might be cases that `orig_default` is not null but `default_bit` is null,
         //  i.e. bit column added with an default value but later modified to another.
         //  For these cases, neither `orig_default` (may get corrupted) nor `default_bit` (modified) is correct.
@@ -206,9 +206,9 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": can't parse set type value.");
 }
 
-Int64 ColumnInfo::getTimeValue(const String & time_str) const
+Int64 ColumnInfo::getTimeValue(const String & time_str) const // NOLINT
 {
-    const static long fractional_seconds_multiplier[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
+    const static Int64 fractional_seconds_multiplier[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
     bool negative = time_str[0] == '-';
     Poco::StringTokenizer second_and_fsp(time_str, ".");
     Poco::StringTokenizer string_tokens(second_and_fsp[0], ":");
@@ -226,7 +226,7 @@ Int64 ColumnInfo::getTimeValue(const String & time_str) const
     return negative ? -ret : ret;
 }
 
-Int64 ColumnInfo::getYearValue(const String & val) const
+Int64 ColumnInfo::getYearValue(const String & val) const // NOLINT
 {
     // do not check validation of the val because TiDB will do it
     Int64 year = std::stol(val);
@@ -239,7 +239,7 @@ Int64 ColumnInfo::getYearValue(const String & val) const
     return year;
 }
 
-UInt64 ColumnInfo::getBitValue(const String & val) const
+UInt64 ColumnInfo::getBitValue(const String & val) const // NOLINT
 {
     // The `default_bit` is a base64 encoded, big endian byte array.
     Poco::MemoryInputStream istr(val.data(), val.size());
@@ -278,7 +278,7 @@ try
     if (!elems.empty())
     {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
-        for (auto & elem : elems)
+        for (const auto & elem : elems)
             elem_arr->add(elem.first);
         tp_json->set("Elems", elem_arr);
     }
@@ -414,7 +414,7 @@ try
 
     Poco::JSON::Array::Ptr def_arr = new Poco::JSON::Array();
 
-    for (auto & part_def : definitions)
+    for (const auto & part_def : definitions)
     {
         def_arr->add(part_def.getJSONObject());
     }
@@ -623,7 +623,7 @@ try
     json->set("tbl_name", tbl_name_json);
 
     Poco::JSON::Array::Ptr cols_array = new Poco::JSON::Array();
-    for (auto & col : idx_cols)
+    for (const auto & col : idx_cols)
     {
         auto col_obj = col.getJSONObject();
         cols_array->add(col_obj);
@@ -707,7 +707,7 @@ try
     json->set("name", name_json);
 
     Poco::JSON::Array::Ptr cols_arr = new Poco::JSON::Array();
-    for (auto & col_info : columns)
+    for (const auto & col_info : columns)
     {
         auto col_obj = col_info.getJSONObject();
         cols_arr->add(col_obj);
@@ -911,7 +911,7 @@ ColumnID TableInfo::getColumnID(const String & name) const
 
 String TableInfo::getColumnName(const ColumnID id) const
 {
-    for (auto & col : columns)
+    for (const auto & col : columns)
     {
         if (id == col.id)
         {
@@ -944,7 +944,7 @@ std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleCo
     if (!pk_is_handle)
         return std::nullopt;
 
-    for (auto & col : columns)
+    for (const auto & col : columns)
     {
         if (col.hasPriKeyFlag())
             return std::optional<std::reference_wrapper<const ColumnInfo>>(col);
