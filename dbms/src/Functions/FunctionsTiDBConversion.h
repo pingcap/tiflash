@@ -664,6 +664,8 @@ struct TiDBConvertToFloat
             context.getDAGContext()->handleTruncateError("Truncated incorrect DOUBLE value");
             return 0.0;
         }
+        if (float_string.size < trim_string.size())
+            trim_string[float_string.size] = '\0';
         Float64 f = strtod(float_string.data, nullptr);
         if (f == std::numeric_limits<Float64>::infinity())
         {
@@ -1011,9 +1013,9 @@ struct TiDBConvertToDecimal
         size_t pos = 0;
         if (decimal_parts.int_part.data[pos] == '+' || decimal_parts.int_part.data[pos] == '-')
         {
-            pos++;
             if (decimal_parts.int_part.data[pos] == '-')
                 is_negative = true;
+            pos++;
         }
         Int256 max_value = DecimalMaxValue::Get(prec);
 
