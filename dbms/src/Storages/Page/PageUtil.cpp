@@ -54,8 +54,12 @@ void syncFile(WritableFilePtr & file)
 }
 
 #ifndef NDEBUG
-void writeFile(
-    WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter, bool enable_failpoint)
+void writeFile(WritableFilePtr &      file,
+               UInt64                 offset,
+               char *                 data,
+               size_t                 to_write,
+               const RateLimiterPtr & rate_limiter,
+               [[maybe_unused]] bool  enable_failpoint)
 #else
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter)
 #endif
@@ -76,7 +80,6 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
         }
 
 #ifndef NDEBUG
-#ifdef FIU_ENABLE
         // Can inject failpoint under debug mode
         fiu_do_on(FailPoints::force_set_page_file_write_errno, {
             if (enable_failpoint)
@@ -85,9 +88,6 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
                 errno = ENOSPC;
             }
         });
-#else
-        (void)(enable_failpoint); // unused parameter
-#endif
 #endif
         if ((-1 == res || 0 == res) && errno != EINTR)
         {
