@@ -14,11 +14,14 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/types.h>
 #include <tipb/executor.pb.h>
 
 namespace DB::ExchangeSenderInterpreterHelper
 {
-std::pair<std::vector<Int64>, TiDB::TiDBCollators> genPartitionColIdsAndCollators(const tipb::ExchangeSender & exchange_sender);
+std::pair<std::vector<Int64>, TiDB::TiDBCollators> genPartitionColIdsAndCollators(
+    const tipb::ExchangeSender & exchange_sender,
+    const LoggerPtr & log);
 } // namespace DB::ExchangeSenderInterpreterHelper

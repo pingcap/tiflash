@@ -1107,7 +1107,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     // https://en.cppreference.com/w/cpp/language/structured_binding
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators partition_col_collators;
-    std::tie(partition_col_ids, partition_col_collators) = ExchangeSenderInterpreterHelper::genPartitionColIdsAndCollators(exchange_sender);
+    std::tie(partition_col_ids, partition_col_collators) = ExchangeSenderInterpreterHelper::genPartitionColIdsAndCollators(exchange_sender, log);
 
     int stream_id = 0;
     pipeline.transform([&](auto & stream) {

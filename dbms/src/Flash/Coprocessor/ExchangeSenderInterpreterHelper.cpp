@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <common/logger_useful.h>
 
 namespace DB::ExchangeSenderInterpreterHelper
 {
-std::pair<std::vector<Int64>, TiDB::TiDBCollators> genPartitionColIdsAndCollators(const tipb::ExchangeSender & exchange_sender)
+std::pair<std::vector<Int64>, TiDB::TiDBCollators> genPartitionColIdsAndCollators(
+    const tipb::ExchangeSender & exchange_sender,
+    const LoggerPtr & log)
 {
     /// get partition column ids
     const auto & part_keys = exchange_sender.partition_keys();
@@ -38,7 +42,7 @@ std::pair<std::vector<Int64>, TiDB::TiDBCollators> genPartitionColIdsAndCollator
     for (int i = 0; i < part_keys.size(); ++i)
     {
         const auto & expr = part_keys[i];
-        assert(isColumnExpr(expr));
+        RUNTIME_ASSERT(isColumnExpr(expr), log, "part_key of ExchangeSender must be column");
         auto column_index = decodeDAGInt64(expr.val());
         partition_col_ids.emplace_back(column_index);
         if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
