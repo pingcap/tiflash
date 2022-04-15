@@ -254,7 +254,7 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": can't parse set type value.");
 }
 
-Int64 ColumnInfo::getTimeValue(const String & time_str) const   // NOLINT
+Int64 ColumnInfo::getTimeValue(const String & time_str) const // NOLINT
 {
     const static Int64 fractional_seconds_multiplier[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
     bool negative = time_str[0] == '-';
@@ -274,7 +274,7 @@ Int64 ColumnInfo::getTimeValue(const String & time_str) const   // NOLINT
     return negative ? -ret : ret;
 }
 
-Int64 ColumnInfo::getYearValue(const String & val) const    // NOLINT
+Int64 ColumnInfo::getYearValue(const String & val) const // NOLINT
 {
     // do not check validation of the val because TiDB will do it
     Int64 year = std::stol(val);
@@ -287,7 +287,7 @@ Int64 ColumnInfo::getYearValue(const String & val) const    // NOLINT
     return year;
 }
 
-UInt64 ColumnInfo::getBitValue(const String & val) const    // NOLINT
+UInt64 ColumnInfo::getBitValue(const String & val) const // NOLINT
 {
     // The `default_bit` is a base64 encoded, big endian byte array.
     Poco::MemoryInputStream istr(val.data(), val.size());
