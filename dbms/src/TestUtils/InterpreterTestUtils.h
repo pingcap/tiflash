@@ -22,20 +22,15 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TestUtils/mockExecutor.h>
-
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
-String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request);
-String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
 void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 class MockExecutorTest : public ::testing::Test
 {
 protected:
     void SetUp() override
     {
-        initializeDAGContext();
+        initializeContext();
     }
 
 public:
@@ -55,10 +50,11 @@ public:
         }
     }
 
-    virtual void initializeDAGContext()
+    virtual void initializeContext()
     {
         dag_context_ptr = std::make_unique<DAGContext>(1024);
         context.setDAGContext(dag_context_ptr.get());
+        mock_dag_request_context = MockDAGRequestContext();
     }
 
     DAGContext & getDAGContext()
@@ -69,9 +65,9 @@ public:
 
 protected:
     Context context;
+    MockDAGRequestContext mock_dag_request_context;
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual(str, request);
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

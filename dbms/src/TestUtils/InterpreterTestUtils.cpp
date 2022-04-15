@@ -14,10 +14,10 @@
 
 #include <TestUtils/InterpreterTestUtils.h>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
+String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
+
 String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request)
 {
     assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
@@ -73,5 +73,4 @@ void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRe
     ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trimInPlace(actual_string));
 }
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

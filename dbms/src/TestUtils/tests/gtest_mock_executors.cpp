@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FmtUtils.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeQuery.h>
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -25,40 +22,41 @@ namespace tests
 {
 class MockDAGRequestTest : public DB::tests::MockExecutorTest
 {
+public:
+    void initializeContext() override
+    {
+        dag_context_ptr = std::make_unique<DAGContext>(1024);
+        context.setDAGContext(dag_context_ptr.get());
+        mock_dag_request_context = MockDAGRequestContext();
+        mock_dag_request_context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
+        mock_dag_request_context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
+        mock_dag_request_context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"r_c", TiDB::TP::TypeString}});
+        mock_dag_request_context.addMockTable({"test_db", "l_table"}, {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"l_c", TiDB::TP::TypeString}});
+    }
 };
 
 TEST_F(MockDAGRequestTest, MockTable)
 try
 {
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
-    MockTableName table_name("test_db", "test"); // db_name-->table_name
-    std::vector<MockColumnInfo> table_columns;
-    table_columns.emplace_back("t_l", TiDB::TP::TypeLong);
-    table_columns.emplace_back("t_s", TiDB::TP::TypeString);
-    builder.mockTable(table_name, table_columns);
-    auto dag_request_1 = builder.build(context);
+    auto request = mock_dag_request_context.scan("test_db", "test_table").build(context);
     String expected_string_1 = "table_scan_0\n";
-    ASSERT_DAGREQUEST_EQAUL(expected_string_1, dag_request_1);
+    ASSERT_DAGREQUEST_EQAUL(expected_string_1, request);
 
-    builder.mockTable({"test_db", "test_table"}, {{"t_l", TiDB::TP::TypeLong}, {"t_s", TiDB::TP::TypeString}});
-    auto dag_request_2 = builder.build(context);
+    request = mock_dag_request_context.scan("test_db", "test_table_1").build(context);
     String expected_string_2 = "table_scan_0\n";
-    ASSERT_DAGREQUEST_EQAUL(expected_string_2, dag_request_2);
+    ASSERT_DAGREQUEST_EQAUL(expected_string_2, request);
 }
 CATCH
 
 TEST_F(MockDAGRequestTest, Filter)
 try
 {
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
-    auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
-                       .filter(eq(col("s1"), col("s2")))
-                       .build(context);
+    auto request = mock_dag_request_context.scan("test_db", "test_table").filter(eq(col("s1"), col("s2"))).build(context);
     String expected_string = "selection_1\n"
                              " table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 
-    request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}})
+    request = mock_dag_request_context.scan("test_db", "test_table_1")
                   .filter(And(eq(col("s1"), col("s2")), lt(col("s2"), col("s3"))))
                   .build(context);
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
@@ -68,22 +66,21 @@ CATCH
 TEST_F(MockDAGRequestTest, Projection)
 try
 {
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
-    auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
+    auto request = mock_dag_request_context.scan("test_db", "test_table")
                        .project("s1")
                        .build(context);
     String expected_string = "project_1\n"
                              " table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 
-    request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}})
-                  .project({col("s3")})
+    request = mock_dag_request_context.scan("test_db", "test_table_1")
+                  .project({col("s3"), eq(col("s1"), col("s2"))})
                   .build(context);
     String expected_string_2 = "project_1\n"
                                " table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string_2, request);
 
-    request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}})
+    request = mock_dag_request_context.scan("test_db", "test_table_1")
                   .project({"s1", "s2"})
                   .build(context);
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
@@ -93,15 +90,14 @@ CATCH
 TEST_F(MockDAGRequestTest, Limit)
 try
 {
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
-    auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
+    auto request = mock_dag_request_context.scan("test_db", "test_table")
                        .limit(10)
                        .build(context);
     String expected_string = "limit_1\n"
                              " table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 
-    request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
+    request = mock_dag_request_context.scan("test_db", "test_table_1")
                   .limit(lit(Field(static_cast<UInt64>(10))))
                   .build(context);
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
@@ -111,15 +107,14 @@ CATCH
 TEST_F(MockDAGRequestTest, TopN)
 try
 {
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
-    auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
+    auto request = mock_dag_request_context.scan("test_db", "test_table")
                        .topN({{"s1", false}}, 10)
                        .build(context);
     String expected_string = "topn_1\n"
                              " table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 
-    request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
+    request = mock_dag_request_context.scan("test_db", "test_table")
                   .topN("s1", false, 10)
                   .build(context);
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
@@ -129,8 +124,7 @@ CATCH
 TEST_F(MockDAGRequestTest, Aggregation)
 try
 {
-    auto builder = DAGRequestBuilderFactory().createDAGRequestBuilder();
-    auto request = builder.mockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}})
+    auto request = mock_dag_request_context.scan("test_db", "test_table")
                        .aggregation(Max(col("s1")), col("s2"))
                        .build(context);
     String expected_string = "aggregation_1\n"
@@ -142,21 +136,16 @@ CATCH
 TEST_F(MockDAGRequestTest, Join)
 try
 {
-    auto builder_factory = DAGRequestBuilderFactory();
-    DAGRequestBuilder right_builder = builder_factory.createDAGRequestBuilder();
-    right_builder
-        .mockTable({"r_db", "r_table"}, {{"r_a", TiDB::TP::TypeString}, {"r_b", TiDB::TP::TypeString}})
-        .filter(eq(col("r_a"), col("r_b")))
-        .project({col("r_a"), col("r_b")})
-        .aggregation(Max(col("r_a")), col("r_b"));
+    DAGRequestBuilder right_builder = mock_dag_request_context.scan("test_db", "r_table")
+                                          .filter(eq(col("r_a"), col("r_b")))
+                                          .project({col("r_a"), col("r_b")})
+                                          .aggregation(Max(col("r_a")), col("r_b"));
 
 
-    DAGRequestBuilder left_builder = builder_factory.createDAGRequestBuilder();
-    left_builder
-        .mockTable({"l_db", "l_table"}, {{"l_a", TiDB::TP::TypeString}, {"l_b", TiDB::TP::TypeString}})
-        .topN({{"l_a", false}}, 10)
-        .join(right_builder, col("l_a"), ASTTableJoin::Kind::Left)
-        .limit(10);
+    DAGRequestBuilder left_builder = mock_dag_request_context.scan("test_db", "l_table")
+                                         .topN({{"l_a", false}}, 10)
+                                         .join(right_builder, col("l_a"), ASTTableJoin::Kind::Left)
+                                         .limit(10);
 
     auto request = left_builder.build(context);
     String expected_string = "limit_7\n"
@@ -169,7 +158,6 @@ try
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 }
 CATCH
-
 
 } // namespace tests
 } // namespace DB

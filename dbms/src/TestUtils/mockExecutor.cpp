@@ -18,12 +18,9 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
 {
@@ -169,10 +166,6 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockAsts exprs)
     auto exp_list = std::make_shared<ASTExpressionList>();
     for (const auto & expr : exprs)
     {
-        if (typeid_cast<const ASTFunction *>(expr.get()))
-        {
-            throw TiFlashTestException(fmt::format("Can't include Function in project."));
-        }
         exp_list->children.push_back(expr);
     }
     root = compileProject(root, getExecutorIndex(), exp_list);
@@ -237,5 +230,30 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
     return *this;
 }
 
-} // namespace tests
-} // namespace DB
+
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columns)
+{
+    std::vector<MockColumnInfo> v_column_info;
+    for (const auto & info : columns)
+    {
+        v_column_info.push_back(std::move(info));
+    }
+    mock_tables[name.first + "." + name.second] = v_column_info;
+}
+
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfos & columns)
+{
+    mock_tables[db + "." + table] = columns;
+}
+
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfos & columns)
+{
+    mock_tables[name.first + "." + name.second] = columns;
+}
+
+DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
+{
+    return DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
+}
+
+} // namespace DB::tests

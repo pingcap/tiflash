@@ -19,10 +19,9 @@
 #include <Parsers/ASTFunction.h>
 
 #include <initializer_list>
+#include <unordered_map>
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;
 using MockColumnInfos = std::vector<MockColumnInfo>;
@@ -92,18 +91,30 @@ private:
     DAGProperties properties;
 };
 
-class DAGRequestBuilderFactory
+class MockDAGRequestContext
 {
 public:
-    size_t index;
-    DAGRequestBuilderFactory()
+    MockDAGRequestContext()
     {
         index = 0;
     }
+
     DAGRequestBuilder createDAGRequestBuilder()
     {
         return DAGRequestBuilder(index);
     }
+
+    void addMockTable(const MockTableName & name, const MockColumnInfoList & columns);
+    void addMockTable(const String & db, const String & table, const MockColumnInfos & columns);
+    void addMockTable(const MockTableName & name, const MockColumnInfos & columns);
+
+    DAGRequestBuilder scan(String db_name, String table_name);
+
+    size_t size() { return mock_tables.size(); }
+
+private:
+    size_t index;
+    std::unordered_map<String, MockColumnInfos> mock_tables;
 };
 
 ASTPtr buildColumn(const String & column_name);
@@ -121,5 +132,5 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr1), (expr2))
 #define Max(expr) makeASTFunction("max", expr)
-} // namespace tests
-} // namespace DB
+
+} // namespace DB::tests
