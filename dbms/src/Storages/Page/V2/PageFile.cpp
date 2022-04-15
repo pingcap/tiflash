@@ -492,7 +492,7 @@ PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile 
 // Try to initiallize access to meta, read the whole metadata to memory.
 // Status -> Finished if metadata size is zero.
 //        -> Opened if metadata successfully load from disk.
-void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter, const bool background = false)
+void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter, const bool background)
 {
     if (status == Status::Opened)
         return;
