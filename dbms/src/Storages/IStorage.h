@@ -153,6 +153,11 @@ public:
         throw Exception("Method write is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    /** Clear the table data. Called before drop the metadata and data of this storage.
+      * The difference with `drop` is that after calling `clearData`, the storage must still be able to be restored.
+      */
+    virtual void clearData() {}
+
     /** Delete the table data. Called before deleting the directory with the data.
       * If you do not need any action other than deleting the directory with data, you can leave this method blank.
       */

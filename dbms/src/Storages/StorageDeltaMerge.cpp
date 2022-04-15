@@ -278,10 +278,18 @@ void StorageDeltaMerge::updateTableColumnInfo()
     rowkey_column_size = rowkey_column_defines.size();
 }
 
+void StorageDeltaMerge::clearData()
+{
+    shutdown();
+    // init the store so it can clear data
+    auto & store = getAndMaybeInitStore();
+    store->clearData();
+}
+
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    // init the store so it can it can delete data from shared PageStorage
+    // init the store so it can do the drop work
     auto & store = getAndMaybeInitStore();
     store->drop();
 }

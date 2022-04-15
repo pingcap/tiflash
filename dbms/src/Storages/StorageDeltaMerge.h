@@ -52,6 +52,8 @@ public:
     String getTableName() const override;
     String getDatabaseName() const override;
 
+    void clearData() override;
+
     void drop() override;
 
     BlockInputStreams read(

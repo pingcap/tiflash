@@ -368,12 +368,11 @@ void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_
     db_name.swap(new_database_name);
 }
 
-void DeltaMergeStore::drop()
+void DeltaMergeStore::clearData()
 {
     // Remove all background task first
     shutdown();
-
-    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data[{}.{}]", db_name, table_name);
     auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
     {
         std::unique_lock lock(read_write_mutex);
@@ -413,6 +412,15 @@ void DeltaMergeStore::drop()
             segment_to_drop->drop(global_context.getFileProvider(), wbs);
         }
     }
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data done [{}.{}]", db_name, table_name);
+}
+
+void DeltaMergeStore::drop()
+{
+    // Remove all background task first
+    shutdown();
+
+    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
     storage_pool->drop();
 
     // Drop data in storage path pool

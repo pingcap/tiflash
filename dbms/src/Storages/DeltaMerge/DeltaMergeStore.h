@@ -311,6 +311,8 @@ public:
 
     void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
 
+    void clearData();
+
     void drop();
 
     // Stop all background tasks.
