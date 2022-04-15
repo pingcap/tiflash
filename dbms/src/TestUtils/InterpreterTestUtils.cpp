@@ -16,6 +16,8 @@
 
 namespace DB::tests
 {
+namespace
+{
 String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
 
 String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request)
@@ -52,6 +54,8 @@ String toTreeString(const tipb::Executor & root_executor, size_t level)
     traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
         if (executor.has_join())
         {
+            append_str(executor);
+            ++level;
             for (const auto & child : executor.join().children())
                 buffer.append(toTreeString(child, level));
             return false;
@@ -66,6 +70,7 @@ String toTreeString(const tipb::Executor & root_executor, size_t level)
 
     return buffer.toString();
 }
+} // namespace
 
 void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
 {

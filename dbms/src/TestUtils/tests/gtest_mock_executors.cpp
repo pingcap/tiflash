@@ -149,12 +149,13 @@ try
 
     auto request = left_builder.build(context);
     String expected_string = "limit_7\n"
-                             " topn_5\n"
-                             "  table_scan_4\n"
-                             " aggregation_3\n"
-                             "  project_2\n"
-                             "   selection_1\n"
-                             "    table_scan_0\n";
+                             " Join_6\n"
+                             "  topn_5\n"
+                             "   table_scan_4\n"
+                             "  aggregation_3\n"
+                             "   project_2\n"
+                             "    selection_1\n"
+                             "     table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 }
 CATCH
