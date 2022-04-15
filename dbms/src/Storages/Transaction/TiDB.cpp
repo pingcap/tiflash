@@ -715,7 +715,7 @@ try
 
     json->set("cols", cols_arr);
     Poco::JSON::Array::Ptr index_arr = new Poco::JSON::Array();
-    for (auto & index_info : index_infos)
+    for (const auto & index_info : index_infos)
     {
         auto index_info_obj = index_info.getJSONObject();
         index_arr->add(index_info_obj);

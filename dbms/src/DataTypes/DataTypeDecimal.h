@@ -52,8 +52,7 @@ public:
     {
         if (precision > decimal_max_prec || scale > precision || scale > decimal_max_scale)
         {
-            String name = getName();
-            throw Exception(name + "is out of bound", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception(this->getName() + "is out of bound", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
     }
 
