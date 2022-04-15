@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/TiDBStorageTable.h>
 #include <Interpreters/Context.h>
