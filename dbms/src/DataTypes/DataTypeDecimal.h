@@ -52,7 +52,7 @@ public:
     {
         if (precision > decimal_max_prec || scale > precision || scale > decimal_max_scale)
         {
-            throw Exception(this->getName() + "is out of bound", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception(getName() + "is out of bound", ErrorCodes::ARGUMENT_OUT_OF_BOUND); // NOLINT
         }
     }
 
