@@ -238,7 +238,7 @@ NamesAndTypes TiDBStorageTable::getSchemaForTableScan(const TiDBTableScan & tabl
             Errors::BroadcastJoin::TooManyColumns);
     }
 
-    NamesAndTypes schema;
+    NamesAndTypes schema_columns;
     String handle_column_name = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage_for_logical_table->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
@@ -259,15 +259,15 @@ NamesAndTypes TiDBStorageTable::getSchemaForTableScan(const TiDBTableScan & tabl
         if (cid == ExtraTableIDColumnID)
         {
             NameAndTypePair extra_table_id_column_pair = {name, MutableSupport::extra_table_id_column_type};
-            schema.emplace_back(std::move(extra_table_id_column_pair));
+            schema_columns.emplace_back(std::move(extra_table_id_column_pair));
         }
         else
         {
             auto pair = storage_for_logical_table->getColumns().getPhysical(name);
-            schema.emplace_back(std::move(pair));
+            schema_columns.emplace_back(std::move(pair));
         }
     }
 
-    return schema;
+    return schema_columns;
 }
 } // namespace DB
