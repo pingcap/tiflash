@@ -664,6 +664,8 @@ struct TiDBConvertToFloat
             context.getDAGContext()->handleTruncateError("Truncated incorrect DOUBLE value");
             return 0.0;
         }
+        if (float_string.size < trim_string.size())
+            trim_string[float_string.size] = '\0';
         Float64 f = strtod(float_string.data, nullptr);
         if (f == std::numeric_limits<Float64>::infinity())
         {
