@@ -244,10 +244,10 @@ ExpressionActionsPtr generateProjectExpressionActions(
     return project;
 }
 
-void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
+void DAGQueryBlockInterpreter::handleTableScan(TiDBStorageTable & storage_table, DAGPipeline & pipeline)
 {
     bool has_region_to_read = false;
-    for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
+    for (const auto physical_table_id : storage_table.getTiDBTableScan().getPhysicalTableIDs())
     {
         const auto & table_regions_info = dagContext().getTableRegionsInfoByTableID(physical_table_id);
         if (!table_regions_info.local_regions.empty() || !table_regions_info.remote_regions.empty())
@@ -257,7 +257,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
         }
     }
     if (!has_region_to_read)
-        throw TiFlashException(fmt::format("Dag Request does not have region to read for table: {}", table_scan.getLogicalTableID()), Errors::Coprocessor::BadRequest);
+        throw TiFlashException(fmt::format("Dag Request does not have region to read for table: {}", storage_table.getTiDBTableScan().getLogicalTableID()), Errors::Coprocessor::BadRequest);
     // construct pushed down filter conditions.
     std::vector<const tipb::Expr *> conditions;
     if (query_block.selection)
@@ -266,8 +266,10 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
             conditions.push_back(&condition);
     }
 
-    DAGStorageInterpreter storage_interpreter(context, table_scan, query_block.selection_name, conditions, max_streams);
+    DAGStorageInterpreter storage_interpreter(context, storage_table, query_block.selection_name, conditions, max_streams);
     storage_interpreter.execute(pipeline);
+
+    storage_table.releaseAlterLock();
 
     analyzer = std::move(storage_interpreter.analyzer);
 
@@ -294,13 +296,10 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
         remote_read_streams_start_index = 1;
     }
 
-    /// Theoretically we could move addTableLock to DAGStorageInterpreter, but we don't wants to the table to be dropped
-    /// during the lifetime of this query, and sometimes if there is no local region, we will use the RemoteBlockInputStream
-    /// or even the null_stream to hold the lock, so I would like too keep the addTableLock in DAGQueryBlockInterpreter
     pipeline.transform([&](auto & stream) {
         // todo do not need to hold all locks in each stream, if the stream is reading from table a
         //  it only needs to hold the lock of table a
-        for (auto & lock : storage_interpreter.drop_locks)
+        for (const auto & lock : storage_table.getDropLocks())
             stream->addTableLock(lock);
     });
 
@@ -310,7 +309,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(
-        table_scan,
+        storage_table.getTiDBTableScan(),
         storage_interpreter.is_need_add_cast_column,
         remote_read_streams_start_index,
         pipeline);
@@ -1042,8 +1041,8 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.isTableScanSource())
     {
-        TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
-        handleTableScan(table_scan, pipeline);
+        TiDBStorageTable storage_table(query_block.source, query_block.source_name, context, log->identifier());
+        handleTableScan(storage_table, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
     }
     else

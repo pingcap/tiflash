@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/TiDBStorageTable.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -57,7 +58,7 @@ public:
 
 private:
     void executeImpl(DAGPipeline & pipeline);
-    void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
+    void handleTableScan(TiDBStorageTable & storage_table, DAGPipeline & pipeline);
     void executeCastAfterTableScan(
         const TiDBTableScan & table_scan,
         const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column,

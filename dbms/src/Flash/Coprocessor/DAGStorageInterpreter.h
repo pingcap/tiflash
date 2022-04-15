@@ -19,7 +19,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/StorageWithStructureLock.h>
-#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Flash/Coprocessor/TiDBStorageTable.h>
 #include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
@@ -49,7 +49,7 @@ class DAGStorageInterpreter
 public:
     DAGStorageInterpreter(
         Context & context_,
-        const TiDBTableScan & table_scan_,
+        const TiDBStorageTable & storage_table_,
         const String & pushed_down_filter_id_,
         const std::vector<const tipb::Expr *> & pushed_down_conditions_,
         size_t max_streams_);
@@ -65,7 +65,6 @@ public:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
     /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry_from_local_region;
-    TableLockHolders drop_locks;
     std::vector<RemoteRequest> remote_requests;
     BlockInputStreamPtr null_stream_if_empty;
 
@@ -76,20 +75,14 @@ private:
 
     void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
 
-    IDsAndStorageWithStructureLocks getAndLockStorages(Int64 query_schema_version);
-
-    std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
-
     void buildRemoteRequests();
-
-    void releaseAlterLocks();
 
     std::unordered_map<TableID, SelectQueryInfo> generateSelectQueryInfos();
 
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
     Context & context;
-    const TiDBTableScan & table_scan;
+    const TiDBStorageTable & storage_table;
     const String & pushed_down_filter_id;
     const std::vector<const tipb::Expr *> & pushed_down_conditions;
     size_t max_streams;
@@ -106,13 +99,6 @@ private:
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
-    /// Table from where to read data, if not subquery.
-    /// Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
-    /// We need an immutable structure to build the TableScan operator and create snapshot input streams
-    /// of storage. After the input streams created, the `alter_lock` can be released so that reading
-    /// won't block DDL operations.
-    IDsAndStorageWithStructureLocks storages_with_structure_lock;
-    ManageableStoragePtr storage_for_logical_table;
     Names required_columns;
     NamesAndTypes source_columns;
 };
