@@ -20,6 +20,7 @@ namespace
 {
 String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
 
+// serialize tipb::DAGRequest, print the executor name in a Tree format.
 String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request)
 {
     assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());

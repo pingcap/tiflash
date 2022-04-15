@@ -55,7 +55,6 @@ public:
 
     std::shared_ptr<tipb::DAGRequest> build(Context & context);
 
-    // ywq todo check arguments
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoList & columns);
@@ -91,6 +90,10 @@ private:
     DAGProperties properties;
 };
 
+/** Responsible for storing necessary arguments in order to Mock DAGRequest
+  * index: used in DAGRequestBuilder to identify executors
+  * mock_tables: DAGRequestBuilder uses it to mock TableScan executors
+  */
 class MockDAGRequestContext
 {
 public:
@@ -109,8 +112,6 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfos & columns);
 
     DAGRequestBuilder scan(String db_name, String table_name);
-
-    size_t size() { return mock_tables.size(); }
 
 private:
     size_t index;
