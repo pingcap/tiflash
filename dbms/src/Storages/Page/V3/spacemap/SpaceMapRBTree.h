@@ -56,7 +56,7 @@ protected:
 
     void freeSmap();
 
-    void smapStats() override;
+    String toDebugString() override;
 
     bool isMarkUnused(UInt64 offset, size_t length) override;
 

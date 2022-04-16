@@ -57,12 +57,10 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_,
     size_t max_streams_,
-    bool keep_session_timezone_info_,
     std::vector<SubqueriesForSets> & subqueries_for_sets_)
     : context(context_)
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
-    , keep_session_timezone_info(keep_session_timezone_info_)
     , max_streams(max_streams_)
     , subqueries_for_sets(subqueries_for_sets_)
     , log(Logger::get("DAGQueryBlockInterpreter", dagContext().log ? dagContext().log->identifier() : ""))
@@ -93,7 +91,7 @@ bool addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
     ExpressionActionsChain & chain,
-    const tipb::TableScan & table_scan)
+    const TiDBTableScan & table_scan)
 {
     bool has_need_cast_column = false;
     for (auto b : need_cast_column)
@@ -118,7 +116,6 @@ AnalysisResult analyzeExpressions(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
-    bool keep_session_timezone_info,
     NamesWithAliases & final_project)
 {
     AnalysisResult res;
@@ -174,14 +171,15 @@ AnalysisResult analyzeExpressions(
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
     }
 
+    const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,
-            query_block.output_field_types,
-            query_block.output_offsets,
+            dag_context.output_field_types,
+            dag_context.output_offsets,
             query_block.qb_column_prefix,
-            keep_session_timezone_info)
+            dag_context.keep_session_timezone_info)
         : analyzer.appendFinalProjectForNonRootQueryBlock(
             chain,
             query_block.qb_column_prefix);
@@ -309,7 +307,11 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
 
     /// handle timezone/duration cast for local and remote table scan.
-    executeCastAfterTableScan(storage_interpreter.is_need_add_cast_column, remote_read_streams_start_index, pipeline);
+    executeCastAfterTableScan(
+        table_scan,
+        storage_interpreter.is_need_add_cast_column,
+        remote_read_streams_start_index,
+        pipeline);
     recordProfileStreams(pipeline, query_block.source_name);
 
     /// handle pushed down filter for local and remote table scan.
@@ -356,6 +358,7 @@ void DAGQueryBlockInterpreter::executePushedDownFilter(
 }
 
 void DAGQueryBlockInterpreter::executeCastAfterTableScan(
+    const TiDBTableScan & table_scan,
     const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column,
     size_t remote_read_streams_start_index,
     DAGPipeline & pipeline)
@@ -366,7 +369,7 @@ void DAGQueryBlockInterpreter::executeCastAfterTableScan(
     analyzer->initChain(chain, original_source_columns);
 
     // execute timezone cast or duration cast if needed for local table scan
-    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, query_block.source->tbl_scan()))
+    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, table_scan))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
         chain.finalize();
@@ -1052,7 +1055,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         context,
         *analyzer,
         query_block,
-        keep_session_timezone_info,
         final_project);
 
     if (res.before_where)

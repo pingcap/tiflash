@@ -83,7 +83,7 @@ public:
         case DROPPED:
             return "DROPPED";
         default:
-            throw Exception("Unexpected status: " + DB::toString((int)status));
+            throw Exception("Unexpected status: " + DB::toString(static_cast<int>(status)));
         }
     }
 
@@ -98,7 +98,7 @@ public:
         size_t value;
 
     public:
-        ReadMetaMode(size_t value_)
+        explicit ReadMetaMode(size_t value_)
             : value(value_)
         {}
 
@@ -179,8 +179,7 @@ public:
         DMSingleFileFormatVersion file_format_version;
 
         Footer()
-            : meta_pack_info()
-            , sub_file_stat_offset(0)
+            : sub_file_stat_offset(0)
             , sub_file_num(0)
             , file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
         {}
@@ -227,7 +226,7 @@ public:
     size_t getRows() const
     {
         size_t rows = 0;
-        for (auto & s : pack_stats)
+        for (const auto & s : pack_stats)
             rows += s.rows;
         return rows;
     }
@@ -235,7 +234,7 @@ public:
     size_t getBytes() const
     {
         size_t bytes = 0;
-        for (auto & s : pack_stats)
+        for (const auto & s : pack_stats)
             bytes += s.bytes;
         return bytes;
     }
@@ -331,14 +330,14 @@ private:
 
     bool isColIndexExist(const ColId & col_id) const;
 
-    const String encryptionBasePath() const;
-    const EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionMetaPath() const;
-    const EncryptionPath encryptionPackStatPath() const;
-    const EncryptionPath encryptionPackPropertyPath() const;
-    const EncryptionPath encryptionConfigurationPath() const;
+    String encryptionBasePath() const;
+    EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionMetaPath() const;
+    EncryptionPath encryptionPackStatPath() const;
+    EncryptionPath encryptionPackPropertyPath() const;
+    EncryptionPath encryptionConfigurationPath() const;
 
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
     {

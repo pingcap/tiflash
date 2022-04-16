@@ -51,7 +51,6 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
         input_streams_vec,
         query_block,
         max_streams,
-        dagContext().keep_session_timezone_info || !query_block.isRootQueryBlock(),
         subqueries_for_sets);
     return query_block_interpreter.execute();
 }

@@ -382,7 +382,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
     BlockInputStreamPtr stream;
     if (dm_context.read_delta_only)
     {
-        throw Exception("Unsupported");
+        throw Exception("Unsupported for read_delta_only");
     }
     else if (dm_context.read_stable_only)
     {
@@ -430,10 +430,10 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
         columns_to_read,
         max_version,
         is_common_handle,
-        dm_context.query_id);
+        dm_context.tracing_id);
 
     LOG_FMT_TRACE(
-        log,
+        Logger::get(log, dm_context.tracing_id),
         "Segment [{}] is read by max_version: {}, {} ranges: {}",
         segment_id,
         max_version,
@@ -727,6 +727,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     auto stream = builder
                       .setColumnCache(stable_snap->getColumnCaches()[file_index])
                       .setReadPacks(read_pack)
+                      .setTracingID(fmt::format("{}-getSplitPointFast", dm_context.tracing_id))
                       .build(
                           read_file,
                           /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
@@ -1347,7 +1348,8 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
                                        const RowKeyRanges & read_ranges,
                                        UInt64 max_version) const
 {
-    LOG_FMT_DEBUG(log, "Segment[{}] getReadInfo start", segment_id);
+    auto tracing_logger = Logger::get(log, dm_context.tracing_id);
+    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] [epoch={}] getReadInfo start", segment_id, epoch);
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs
@@ -1362,14 +1364,14 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
     // Hold compacted_index reference, to prevent it from deallocated.
     delta_reader->setDeltaIndex(compacted_index);
 
-    LOG_FMT_DEBUG(log, "Segment[{}] getReadInfo end", segment_id);
+    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] [epoch={}] getReadInfo end", segment_id, epoch);
 
     if (fully_indexed)
     {
         // Try update shared index, if my_delta_index is more advanced.
         bool ok = segment_snap->delta->getSharedDeltaIndex()->updateIfAdvanced(*my_delta_index);
         if (ok)
-            LOG_FMT_DEBUG(log, "{} Updated delta index", simpleInfo());
+            LOG_FMT_DEBUG(tracing_logger, "{} Updated delta index", simpleInfo());
     }
 
     // Refresh the reference in DeltaIndexManager, so that the index can be properly managed.

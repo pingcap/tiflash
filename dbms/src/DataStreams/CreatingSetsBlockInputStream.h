@@ -41,14 +41,7 @@ public:
         const SizeLimits & network_transfer_limits,
         const String & req_id);
 
-    ~CreatingSetsBlockInputStream()
-    {
-        for (auto & worker : workers)
-        {
-            if (worker.joinable())
-                worker.join();
-        }
-    }
+    ~CreatingSetsBlockInputStream() = default;
 
     static constexpr auto name = "CreatingSets";
 
@@ -101,7 +94,6 @@ private:
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
 
-    std::vector<std::thread> workers;
     std::mutex exception_mutex;
     std::vector<std::exception_ptr> exception_from_workers;
 

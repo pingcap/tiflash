@@ -44,48 +44,18 @@ The following packages are needed for all platforms:
 - Ninja or GNU Make
 
 The following are platform-specific prerequisites. Click to expand details:
-
 <details>
-  <summary><b>Linux specific prerequisites</b></summary>
+<summary><b>Linux specific prerequisites</b></summary>
 
-TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
-> But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
-
+  TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
+  > But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
+  
 - LLVM 13.0.0+
 
-  TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default.
-  To quickly set up a LLVM environment, you can use TiFlash Development Environment (short as TiFlash Env, see `release-centos7-llvm/env`).
-  You may also use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
+  TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default. You can use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
 
   Click sections below to see detailed instructions:
 
-  <details>
-  <summary><b>Set up LLVM via TiFlash Env</b></summary>
-
-  TiFlash Env can be created with the following commands (`docker` and `tar xz` are needed):
-
-  ```shell
-  cd $WORKSPACE/tiflash/release-centos7-llvm/env
-  make tiflash-env-$(uname -m).tar.xz
-  ```
-
-  Then copy and uncompress `tiflash-env-$(uname -m).tar.xz` to a suitable place, assuming `$TIFLASH_ENV`.
-
-  To enter the env (before compiling TiFlash):
-
-  ```shell
-  cd $TIFLASH_ENV
-  ./loader
-  ```
-
-  Or you can dump the env settings and put them to the end of your `~/.bashrc` or `~/.zshrc`
-
-  ```shell
-  cd $TIFLASH_ENV
-  ./loader-env-dump
-  ```
-
-  </details>
 
   <details>
   <summary><b>Set up LLVM via package managers in Debian/Ubuntu</b></summary>
@@ -94,7 +64,7 @@ TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain
   # add LLVM repo key
   wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
 
-  # install LLVM packages
+  # install LLVM packages, and can find more detailed instructions in https://apt.llvm.org/ when failed
   apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev
 
   # install other dependencies
@@ -141,7 +111,7 @@ For Ninja:
 
 ```shell
 cd $BUILD
-cmake $WORKSPACE/tiflash -Gninja
+cmake $WORKSPACE/tiflash -GNinja
 ninja tiflash
 ```
 
@@ -217,21 +187,19 @@ cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
     - Built library is under directory `$TIFLASH_PROXY_REPO/target/release`
 
   </details>
-### IDE Support
-
-Normally a CMake-based IDE, e.g., Clion and VSCode, should be able to open TiFlash project with no pain as long as the toolchains are properly configured.
-
-If your toolchain is set up using [TiFlash Env](#tiflash-env), and you may not want to add those libs to your system loader config, you can pass the following CMake options to your IDE:
-
-```shell
--DCMAKE_PREFIX_PATH=$TIFLASH_ENV
-```
-
-Remember that `$TIFLASH_ENV` is a placeholder mentioned in [TiFlash Env](#tiflash-env).
 
 ## Run Unit Tests
 
-TBD.
+To run unit tests, you need to build with `-DCMAKE_BUILD_TYPE=DEBUG`:
+
+```shell
+cd $BUILD
+cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
+ninja gtests_dbms
+ninja gtests_libcommon
+ninja gtests_libdaemon
+```
+And the unit-test executables are at `$BUILD/dbms/gtests_dbms`, `$BUILD/libs/libcommon/src/tests/gtests_libcommon` and `$BUILD/libs/libdaemon/src/tests/gtests_libdaemon`.
 
 ## Run Integration Tests
 
@@ -239,33 +207,7 @@ TBD.
 
 ## Generate LLVM Coverage Report
 
-[//]: <> (TODO: This section is not proper for developers outside PingCAP, as it uses docker image only available on internal network.)
-[//]: <> (TODO: Should refine to use local commands rather than docker.)
-To get a coverage report of unit tests, we recommend using the docker image and our scripts.
-
-```shell
-docker run --rm -it -v /path/to/tiflash/src:/build/tiflash hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /bin/bash # or aarch64
-cd /build/tiflash/release-centos7-llvm
-sh scripts/build-tiflash-ut-coverage.sh
-sh scripts/run-ut.sh
-
-# after running complete
-
-llvm-profdata merge -sparse /tiflash/profile/*.profraw -o /tiflash/profile/merged.profdata
-llvm-cov export \
-    /tiflash/gtests_dbms /tiflash/gtests_libcommon /tiflash/gtests_libdaemon \
-    --format=lcov \
-    --instr-profile /tiflash/profile/merged.profdata \
-    --ignore-filename-regex "/usr/include/.*" \
-    --ignore-filename-regex "/usr/local/.*" \
-    --ignore-filename-regex "/usr/lib/.*" \
-    --ignore-filename-regex ".*/contrib/.*" \
-    --ignore-filename-regex ".*/dbms/src/Debug/.*" \
-    --ignore-filename-regex ".*/dbms/src/Client/.*" \
-    > /tiflash/profile/lcov.info
-mkdir -p /build/tiflash/report
-genhtml /tiflash/profile/lcov.info -o /build/tiflash/report
-```
+TBD.
 
 ## Contributing
 
@@ -281,3 +223,7 @@ Before submitting a pull request, please use [format-diff.py](format-diff.py) to
 cd $WORKSPACE/tiflash
 python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
 ```
+
+## License
+
+TiFlash is under the Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.
