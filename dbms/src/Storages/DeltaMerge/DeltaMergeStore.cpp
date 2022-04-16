@@ -368,11 +368,8 @@ void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_
     db_name.swap(new_database_name);
 }
 
-void DeltaMergeStore::clearData()
+void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
 {
-    // Remove all background task first
-    shutdown();
-    LOG_FMT_INFO(log, "Clear DeltaMerge segments data[{}.{}]", db_name, table_name);
     auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
     {
         std::unique_lock lock(read_write_mutex);
@@ -388,6 +385,14 @@ void DeltaMergeStore::clearData()
         while (!segment_ids.empty())
         {
             auto segment_id_to_drop = segment_ids.top();
+            if (keep_first_segment && (segment_id_to_drop == DELTA_MERGE_FIRST_SEGMENT_ID))
+            {
+                // This must be the last segment to drop
+                assert(segment_ids.size() == 1);
+
+
+                break;
+            }
             auto segment_to_drop = id_to_segment[segment_id_to_drop];
             segment_ids.pop();
             if (!segment_ids.empty())
@@ -397,8 +402,9 @@ void DeltaMergeStore::clearData()
                 auto previous_segment = id_to_segment[previous_segment_id];
                 assert(previous_segment->nextSegmentId() == segment_id_to_drop);
                 auto previous_lock = previous_segment->mustGetUpdateLock();
+                // No need to abandon previous_segment, because it's delta and stable is managed by the new_previous_segment.
+                // Abandon previous_segment will actually abandon new_previous_segment
                 auto new_previous_segment = previous_segment->dropNextSegment(wbs);
-                previous_segment->abandon(*dm_context);
                 segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
                 id_to_segment.emplace(previous_segment_id, new_previous_segment);
             }
@@ -412,6 +418,18 @@ void DeltaMergeStore::clearData()
             segment_to_drop->drop(global_context.getFileProvider(), wbs);
         }
     }
+}
+
+void DeltaMergeStore::clearData()
+{
+    // Remove all background task first
+    shutdown();
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data [{}.{}]", db_name, table_name);
+    // We don't drop the last segment in clearData, because if we drop it and tiflash crashes before drop it's metadata,
+    // when restart it will try to restore the first segment but failed to do it which cause tiflash crash again.
+    // The reason this happens is that even we delete all data in a PageStorage instance,
+    // the call to PageStorage::getMaxId is still not 0 and then tiflash will try to restore it's first segment.
+    dropAllSegments(true);
     LOG_FMT_INFO(log, "Clear DeltaMerge segments data done [{}.{}]", db_name, table_name);
 }
 
@@ -421,6 +439,7 @@ void DeltaMergeStore::drop()
     shutdown();
 
     LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
+    dropAllSegments(false);
     storage_pool->drop();
 
     // Drop data in storage path pool

@@ -449,8 +449,13 @@ private:
                                           size_t expected_tasks_count = 1,
                                           const SegmentIdSet & read_segments = {});
 
+private:
+    void dropAllSegments(bool keep_first_segment);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
 #endif
 
     Context & global_context;

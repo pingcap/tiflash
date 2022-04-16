@@ -699,6 +699,112 @@ try
 }
 CATCH
 
+TEST(StorageDeltaMergeTest, RestoreAfterClearData)
+try
+{
+    Context ctx = DMTestEnv::getContext();
+    auto & settings = ctx.getSettingsRef();
+    settings.dt_segment_limit_rows = 11;
+    settings.dt_segment_delta_limit_rows = 7;
+    settings.dt_segment_force_split_size = 100;
+    std::shared_ptr<StorageDeltaMerge> storage;
+    DataTypes data_types;
+    Names column_names;
+    // create table
+    auto create_table = [&]() {
+        NamesAndTypesList names_and_types_list{
+            {"col1", std::make_shared<DataTypeInt64>()},
+            {"col2", std::make_shared<DataTypeString>()},
+        };
+        for (const auto & name_type : names_and_types_list)
+        {
+            data_types.push_back(name_type.type);
+            column_names.push_back(name_type.name);
+        }
+
+        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_RestoreAfterClearData");
+        if (Poco::File path(path_name); path.exists())
+            path.remove(true);
+
+        // primary_expr_ast
+        const String table_name = "t_1233";
+        ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        astptr->children.emplace_back(new ASTIdentifier("col1"));
+
+        storage = StorageDeltaMerge::create("TiFlash",
+                                            /* db_name= */ "default",
+                                            table_name,
+                                            std::nullopt,
+                                            ColumnsDescription{names_and_types_list},
+                                            astptr,
+                                            0,
+                                            ctx);
+        storage->startup();
+    };
+    auto write_data = [&](Int64 start, Int64 limit) {
+        ASTPtr insertptr(new ASTInsertQuery());
+        BlockOutputStreamPtr output = storage->write(insertptr, ctx.getSettingsRef());
+        // prepare block data
+        Block sample;
+        sample.insert(DB::tests::createColumn<Int64>(
+            createNumbers<Int64>(start, start + limit),
+            "col1"));
+        sample.insert(DB::tests::createColumn<String>(
+            Strings(limit, "a"),
+            "col2"));
+
+        output->writePrefix();
+        output->write(sample);
+        output->writeSuffix();
+    };
+    auto read_data = [&]() {
+        QueryProcessingStage::Enum stage2;
+        SelectQueryInfo query_info;
+        query_info.query = std::make_shared<ASTSelectQuery>();
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
+        Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
+        BlockInputStreams ins = storage->read(read_columns, query_info, ctx, stage2, 8192, 1);
+        BlockInputStreamPtr in = ins[0];
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        return num_rows_read;
+    };
+    // create table
+    create_table();
+
+    size_t num_rows_write = 0;
+    // write until split and use a big enough finite for loop to make sure the test won't hang forever
+    for (size_t i = 0; i < 100000; i++)
+    {
+        write_data(num_rows_write, 1000);
+        num_rows_write += 1000;
+        if (storage->getStore()->getSegmentStats().size() > 1)
+            break;
+    }
+
+    {
+        ASSERT_GT(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_EQ(read_data(), num_rows_write);
+    }
+    storage->flushCache(ctx);
+    storage->clearData();
+    storage->removeFromTMTContext();
+
+    // restore the table and make sure some data has been dropped
+    create_table();
+    {
+        ASSERT_EQ(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_LT(read_data(), num_rows_write);
+    }
+    storage->drop();
+}
+CATCH
+
 } // namespace tests
 } // namespace DM
 } // namespace DB
