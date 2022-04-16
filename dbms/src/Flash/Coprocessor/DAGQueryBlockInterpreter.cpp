@@ -451,9 +451,10 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     String probe_filter_column_name, build_filter_column_name;
 
     auto probe_side_prepare_actions = JoinInterpreterHelper::prepareJoin(
+        context,
         JoinInterpreterHelper::getProbeJoinKeys(join, build_side_index),
         join_key_types,
-        probe_pipeline.firstStream().getHeader(),
+        probe_pipeline.firstStream()->getHeader(),
         probe_key_names,
         true,
         is_tiflash_right_join,
@@ -462,9 +463,10 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
 
     auto build_side_prepare_actions = JoinInterpreterHelper::prepareJoin(
+        context,
         JoinInterpreterHelper::getBuildJoinKeys(join, build_side_index),
         join_key_types,
-        build_pipeline.firstStream().getHeader(),
+        build_pipeline.firstStream()->getHeader(),
         build_key_names,
         false,
         is_tiflash_right_join,
