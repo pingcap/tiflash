@@ -390,8 +390,6 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
             {
                 // This must be the last segment to drop
                 assert(segment_ids.size() == 1);
-
-
                 break;
             }
             auto segment_to_drop = id_to_segment[segment_id_to_drop];
@@ -406,8 +404,8 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
                 // No need to abandon previous_segment, because it's delta and stable is managed by the new_previous_segment.
                 // Abandon previous_segment will actually abandon new_previous_segment
                 auto new_previous_segment = previous_segment->dropNextSegment(wbs);
-                segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
-                id_to_segment.emplace(previous_segment_id, new_previous_segment);
+                segments[new_previous_segment->getRowKeyRange().getEnd()] = new_previous_segment;
+                id_to_segment[previous_segment_id] = new_previous_segment;
             }
             // The order to drop the meta and data of this segment doesn't matter,
             // Because there is no segment pointing to this segment,
