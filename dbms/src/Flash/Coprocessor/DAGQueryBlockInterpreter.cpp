@@ -57,12 +57,10 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_,
     size_t max_streams_,
-    bool keep_session_timezone_info_,
     std::vector<SubqueriesForSets> & subqueries_for_sets_)
     : context(context_)
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
-    , keep_session_timezone_info(keep_session_timezone_info_)
     , max_streams(max_streams_)
     , subqueries_for_sets(subqueries_for_sets_)
     , log(Logger::get("DAGQueryBlockInterpreter", dagContext().log ? dagContext().log->identifier() : ""))
@@ -118,7 +116,6 @@ AnalysisResult analyzeExpressions(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
-    bool keep_session_timezone_info,
     NamesWithAliases & final_project)
 {
     AnalysisResult res;
@@ -174,14 +171,15 @@ AnalysisResult analyzeExpressions(
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
     }
 
+    const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,
-            query_block.output_field_types,
-            query_block.output_offsets,
+            dag_context.output_field_types,
+            dag_context.output_offsets,
             query_block.qb_column_prefix,
-            keep_session_timezone_info)
+            dag_context.keep_session_timezone_info)
         : analyzer.appendFinalProjectForNonRootQueryBlock(
             chain,
             query_block.qb_column_prefix);
@@ -971,7 +969,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         context,
         *analyzer,
         query_block,
-        keep_session_timezone_info,
         final_project);
 
     if (res.before_where)

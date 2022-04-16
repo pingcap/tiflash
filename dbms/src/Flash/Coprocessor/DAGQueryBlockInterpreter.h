@@ -48,7 +48,6 @@ public:
         const std::vector<BlockInputStreams> & input_streams_vec_,
         const DAGQueryBlock & query_block_,
         size_t max_streams_,
-        bool keep_session_timezone_info_,
         std::vector<SubqueriesForSets> & subqueries_for_sets_);
 
     ~DAGQueryBlockInterpreter() = default;
@@ -110,7 +109,6 @@ private:
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;
-    const bool keep_session_timezone_info;
 
     NamesWithAliases final_project;
 

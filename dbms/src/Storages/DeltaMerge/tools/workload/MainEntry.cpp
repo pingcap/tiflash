@@ -22,6 +22,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <signal.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include <fstream>
@@ -31,6 +32,18 @@ using namespace DB::tests;
 using namespace DB::DM::tests;
 
 std::ofstream log_ofs;
+
+void initWorkDirs(const std::vector<std::string> & dirs)
+{
+    for (const auto & dir : dirs)
+    {
+        int ret = ::mkdir(dir.c_str(), 0777);
+        if (ret != 0 && errno != EEXIST)
+        {
+            throw std::runtime_error(fmt::format("mkdir {} failed: {}", dir, strerror(errno)));
+        }
+    }
+}
 
 void init(WorkloadOptions & opts)
 {
@@ -248,6 +261,9 @@ int DTWorkload::mainEntry(int argc, char ** argv)
         return -1;
     }
 
+    // Log file is created in the first directory of `opts.work_dirs` by default.
+    // So create these work_dirs before logger initialization.
+    initWorkDirs(opts.work_dirs);
     // need to init logger before creating global context,
     // or the logging in global context won't be output to
     // the log file
