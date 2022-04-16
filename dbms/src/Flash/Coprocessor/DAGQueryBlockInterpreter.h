@@ -64,22 +64,8 @@ private:
         DAGPipeline & pipeline);
     void executePushedDownFilter(const std::vector<const tipb::Expr *> & conditions, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
-    ExpressionActionsPtr prepareJoin(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
-        DAGPipeline & pipeline,
-        Names & key_names,
-        bool left,
-        bool is_right_out_join,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-        String & filter_column_name);
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
-    ExpressionActionsPtr genJoinOtherConditionAction(
-        const tipb::Join & join,
-        std::vector<NameAndTypePair> & source_columns,
-        String & filter_column_for_other_condition,
-        String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);

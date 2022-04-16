@@ -410,62 +410,10 @@ void DAGQueryBlockInterpreter::executeCastAfterTableScan(
     }
 }
 
-ExpressionActionsPtr DAGQueryBlockInterpreter::prepareJoin(
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
-    DAGPipeline & pipeline,
-    Names & key_names,
-    bool left,
-    bool is_right_out_join,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    String & filter_column_name)
-{
-    std::vector<NameAndTypePair> source_columns;
-    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
-        source_columns.emplace_back(p.name, p.type);
-    DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
-    ExpressionActionsChain chain;
-    dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name);
-    return chain.getLastActions();
-}
-
-ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
-    const tipb::Join & join,
-    std::vector<NameAndTypePair> & source_columns,
-    String & filter_column_for_other_condition,
-    String & filter_column_for_other_eq_condition)
-{
-    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
-        return nullptr;
-    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
-    ExpressionActionsChain chain;
-    std::vector<const tipb::Expr *> condition_vector;
-    if (join.other_conditions_size() > 0)
-    {
-        for (const auto & c : join.other_conditions())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
-    }
-    if (join.other_eq_conditions_from_in_size() > 0)
-    {
-        condition_vector.clear();
-        for (const auto & c : join.other_eq_conditions_from_in())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
-    }
-    return chain.getLastActions();
-}
-
 void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
 {
     if (input_streams_vec.size() != 2)
-    {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
-    }
 
     auto [kind, build_side_index] = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(join);
     RUNTIME_ASSERT(
@@ -486,68 +434,26 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     RUNTIME_ASSERT(!input_streams_vec[1].empty(), log, "right input streams cannot be empty");
     const Block & right_input_header = input_streams_vec[1].back()->getHeader();
 
-    NamesAndTypes join_output_columns;
-    /// columns_for_other_join_filter is a vector of columns used
-    /// as the input columns when compiling other join filter.
-    /// Note the order in the column vector is very important:
-    /// first the columns in left_input_header, then followed
-    /// by the columns in right_input_header, if there are other
-    /// columns generated before compile other join filter, then
-    /// append the extra columns afterwards. In order to figure out
-    /// whether a given column is already in the column vector or
-    /// not quickly, we use another set to store the column names
-    NamesAndTypes columns_for_other_join_filter;
-    std::unordered_set<String> column_set_for_other_join_filter;
-    bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
-    for (auto const & p : left_input_header)
-    {
-        join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        column_set_for_other_join_filter.emplace(p.name);
-    }
-    make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
-    const bool is_semi_join = JoinInterpreterHelper::isSemiJoin(join);
-    for (auto const & p : right_input_header)
-    {
-        if (!is_semi_join)
-            /// for semi join, the columns from right table will be ignored
-            join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        /// however, when compiling join's other condition, we still need the columns from right table
-        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        column_set_for_other_join_filter.emplace(p.name);
-    }
+    String match_helper_name = JoinInterpreterHelper::genMatchHelperName(join, left_input_header, right_input_header);
 
-    bool is_tiflash_left_join = kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left;
-    /// Cross_Right join will be converted to Cross_Left join, so no need to check Cross_Right
-    bool is_tiflash_right_join = kind == ASTTableJoin::Kind::Right;
-    /// all the columns from right table should be added after join, even for the join key
-    NamesAndTypesList columns_added_by_join;
-    make_nullable = is_tiflash_left_join;
-    for (auto const & p : build_pipeline.firstStream()->getHeader())
-    {
-        columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-    }
+    NamesAndTypes join_output_columns = JoinInterpreterHelper::genJoinOutputColumns(join, left_input_header, right_input_header, match_helper_name);
 
-    String match_helper_name;
-    if (JoinInterpreterHelper::isLeftSemiFamily(join))
-    {
-        match_helper_name = JoinInterpreterHelper::genMatchHelperNameForLeftSemiFamily(left_input_header, right_input_header);
-
-        columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
-        join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
-    }
+    NamesAndTypesList columns_added_by_join = JoinInterpreterHelper::genColumnsAddedByJoin(kind, build_pipeline.firstStream()->getHeader(), match_helper_name);
 
     auto join_key_types = JoinInterpreterHelper::getJoinKeyTypes(join);
     auto collators = JoinInterpreterHelper::getJoinKeyCollators(join, join_key_types);
+
+    /// Cross_Right join will be converted to Cross_Left join, so no need to check Cross_Right
+    bool is_tiflash_right_join = JoinInterpreterHelper::isTiflashRightJoin(kind);
 
     /// generate necessary expression actions if the join key is an expression
     Names probe_key_names, build_key_names;
     String probe_filter_column_name, build_filter_column_name;
 
-    auto probe_side_prepare_actions = prepareJoin(
+    auto probe_side_prepare_actions = JoinInterpreterHelper::prepareJoin(
         JoinInterpreterHelper::getProbeJoinKeys(join, build_side_index),
         join_key_types,
-        probe_pipeline,
+        probe_pipeline.firstStream().getHeader(),
         probe_key_names,
         true,
         is_tiflash_right_join,
@@ -555,10 +461,10 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         probe_filter_column_name);
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
 
-    auto build_side_prepare_actions = prepareJoin(
+    auto build_side_prepare_actions = JoinInterpreterHelper::prepareJoin(
         JoinInterpreterHelper::getBuildJoinKeys(join, build_side_index),
         join_key_types,
-        build_pipeline,
+        build_pipeline.firstStream().getHeader(),
         build_key_names,
         false,
         is_tiflash_right_join,
@@ -566,20 +472,15 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         build_filter_column_name);
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
-    String other_filter_column_name, other_eq_filter_from_in_column_name;
-    for (auto const & p : probe_side_prepare_actions->getSampleBlock())
-    {
-        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
-            columns_for_other_join_filter.emplace_back(p.name, p.type);
-    }
-    for (auto const & p : build_side_prepare_actions->getSampleBlock())
-    {
-        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
-            columns_for_other_join_filter.emplace_back(p.name, p.type);
-    }
+    auto columns_for_other_join_filter = JoinInterpreterHelper::genColumnsForOtherJoinFilter(
+        join,
+        left_input_header,
+        right_input_header,
+        probe_side_prepare_actions,
+        build_side_prepare_actions);
 
-    ExpressionActionsPtr other_condition_expr
-        = genJoinOtherConditionAction(join, columns_for_other_join_filter, other_filter_column_name, other_eq_filter_from_in_column_name);
+    auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
+        = JoinInterpreterHelper::genJoinOtherConditionAction(context, join, columns_for_other_join_filter);
 
     const Settings & settings = context.getSettingsRef();
     size_t max_block_size_for_cross_join = settings.max_block_size;
