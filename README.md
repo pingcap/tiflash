@@ -64,7 +64,7 @@ The following are platform-specific prerequisites. Click to expand details:
   # add LLVM repo key
   wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
 
-  # install LLVM packages
+  # install LLVM packages, and can find more detailed instructions in https://apt.llvm.org/ when failed
   apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev
 
   # install other dependencies
@@ -111,7 +111,7 @@ For Ninja:
 
 ```shell
 cd $BUILD
-cmake $WORKSPACE/tiflash -Gninja
+cmake $WORKSPACE/tiflash -GNinja
 ninja tiflash
 ```
 
@@ -190,7 +190,16 @@ cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
 
 ## Run Unit Tests
 
-TBD.
+To run unit tests, you need to build with `-DCMAKE_BUILD_TYPE=DEBUG`:
+
+```shell
+cd $BUILD
+cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
+ninja gtests_dbms
+ninja gtests_libcommon
+ninja gtests_libdaemon
+```
+And the unit-test executables are at `$BUILD/dbms/gtests_dbms`, `$BUILD/libs/libcommon/src/tests/gtests_libcommon` and `$BUILD/libs/libdaemon/src/tests/gtests_libdaemon`.
 
 ## Run Integration Tests
 

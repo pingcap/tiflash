@@ -75,6 +75,7 @@ struct StressEnv
     size_t num_writers = 1;
     size_t num_readers = 4;
     bool init_pages = false;
+    bool just_init_pages = false;
     bool clean_before_run = false;
     size_t timeout_s = 0;
     size_t read_delay_ms = 0;
@@ -92,8 +93,8 @@ struct StressEnv
     {
         return fmt::format(
             "{{ "
-            "num_writers: {}, num_readers: {}, init_pages: {}, clean_before_run: {}"
-            ", timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
+            "num_writers: {}, num_readers: {}, init_pages: {}, just_init_pages: {}"
+            ", clean_before_run: {}, timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
             ", avg_page_size_mb: {}, paths: [{}], failpoints: [{}]"
             ", status_interval: {}, situation_mask: {}, verify: {}"
             ", running_pagestorage_version : {}."
@@ -101,6 +102,7 @@ struct StressEnv
             num_writers,
             num_readers,
             init_pages,
+            just_init_pages,
             clean_before_run,
             timeout_s,
             read_delay_ms,

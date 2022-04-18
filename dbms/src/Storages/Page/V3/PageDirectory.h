@@ -65,13 +65,8 @@ public:
         return diff.count();
     }
 
-    unsigned getTid() const
-    {
-        return create_thread;
-    }
-
 public:
-    UInt64 sequence;
+    const UInt64 sequence;
     const unsigned create_thread;
     const String tracing_id;
 
@@ -257,6 +252,7 @@ public:
             being_ref_count,
             entries.size());
     }
+    friend class PageStorageControl;
 
 private:
     mutable std::mutex m;
@@ -370,6 +366,7 @@ public:
     PageDirectory & operator=(PageDirectory && rhs) = delete;
 
     friend class PageDirectoryFactory;
+    friend class PageStorageControl;
 
 private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that

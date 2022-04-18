@@ -17,6 +17,7 @@
 #include <Core/Block.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SubqueryForSet.h>
 
 
 namespace DB
@@ -26,46 +27,13 @@ class Context;
 class ExpressionActions;
 struct ExpressionActionsChain;
 
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
-
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-
-class Set;
-using SetPtr = std::shared_ptr<Set>;
 using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
-class IBlockInputStream;
-using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
-
-class IStorage;
-using StoragePtr = std::shared_ptr<IStorage>;
 using Tables = std::map<String, StoragePtr>;
 
 class ASTFunction;
 class ASTExpressionList;
 class ASTSelectQuery;
-
-
-/** Information on what to do when executing a subquery in the [GLOBAL] IN/JOIN section.
-  */
-struct SubqueryForSet
-{
-    /// The source is obtained using the InterpreterSelectQuery subquery.
-    BlockInputStreamPtr source;
-
-    /// If set, build it from result.
-    SetPtr set;
-    JoinPtr join;
-
-    /// If set, put the result into the table.
-    /// This is a temporary table for transferring to remote servers for distributed query processing.
-    StoragePtr table;
-};
-
-/// ID of subquery -> what to do with it.
-using SubqueriesForSets = std::unordered_map<String, SubqueryForSet>;
 
 
 /** Transforms an expression from a syntax tree into a sequence of actions to execute it.
