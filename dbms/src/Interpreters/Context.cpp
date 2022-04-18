@@ -1547,7 +1547,7 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeRateLimiter(Poco::Util::AbstractConfiguration & config, BackgroundProcessingPool & bg_pool, BackgroundProcessingPool & blockable_bg_pool)
+void Context::initializeRateLimiter(Poco::Util::AbstractConfiguration & config, BackgroundProcessingPool & bg_pool, BackgroundProcessingPool & blockable_bg_pool) const
 {
     getIORateLimiter().init(config);
     auto tids = bg_pool.getThreadIds();
