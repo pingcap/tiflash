@@ -282,6 +282,11 @@ std::vector<pid_t> BackgroundProcessingPool::getThreadIds()
 {
     thread_ids_counter.Wait();
     std::lock_guard lock(thread_ids_mtx);
+    if (thread_ids.size() != size)
+    {
+        LOG_FMT_ERROR(&Poco::Logger::get("BackgroundProcessingPool"), "thread_ids.size is {}, but {} is required", thread_ids.size(), size);
+        throw Exception("Background threads' number not match");
+    }
     return thread_ids;
 }
 
