@@ -214,6 +214,8 @@ public:
                 str += "X" + DB::toString(w.page_id) + ",";
             else if (w.type == WriteType::UPSERT)
                 str += "U" + DB::toString(w.page_id) + ",";
+            else if (w.type == WriteType::PUT_EXTERNAL)
+                str += "E" + DB::toString(w.page_id) + ",";
         }
         if (!str.empty())
             str.erase(str.size() - 1);

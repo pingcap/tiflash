@@ -715,8 +715,8 @@ try
     const size_t buff_size = 1024;
     WriteBatch wb;
     {
-        char c_buff1[buff_size];
-        char c_buff2[buff_size];
+        char c_buff1[buff_size] = {0};
+        char c_buff2[buff_size] = {0};
 
         for (size_t i = 0; i < buff_size; ++i)
         {
@@ -846,8 +846,8 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
         WriteBatch wb;
-        char c_buff1[buf_size];
-        char c_buff2[buf_size];
+        char c_buff1[buf_size] = {0};
+        char c_buff2[buf_size] = {0};
 
         ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff1), buf_size);
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), buf_size);
