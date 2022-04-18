@@ -425,7 +425,7 @@ void DeltaMergeStore::clearData()
     shutdown();
     LOG_FMT_INFO(log, "Clear DeltaMerge segments data [{}.{}]", db_name, table_name);
     // We don't drop the first segment in clearData, because if we drop it and tiflash crashes before drop the table's metadata,
-    // when restart it will try to restore the first segment but failed to do it which cause tiflash crash again.
+    // when restart the table will try to restore the first segment but failed to do it which cause tiflash crash again.
     // The reason this happens is that even we delete all data in a PageStorage instance,
     // the call to PageStorage::getMaxId is still not 0 and then tiflash will try to restore it's first segment.
     dropAllSegments(true);
