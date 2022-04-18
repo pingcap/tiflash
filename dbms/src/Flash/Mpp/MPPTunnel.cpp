@@ -174,7 +174,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
 template <typename Writer>
 void MPPTunnelBase<Writer>::sendJob(bool need_lock)
 {
-    RUNTIME_ASSERT(!is_local, log, "should not reach sendJob for local tunnels");    
+    RUNTIME_ASSERT(!is_local, log, "should not reach sendJob for local tunnels");
     if (!is_async)
     {
         GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
