@@ -22,6 +22,8 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TestUtils/mockExecutor.h>
+#include <TestUtils/executorSerializer.h>
+#include <Common/FmtUtils.h>
 namespace DB::tests
 {
 void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
@@ -36,7 +38,8 @@ protected:
 public:
     MockExecutorTest()
         : context(TiFlashTestEnv::getContext())
-    {}
+    {
+    }
 
     static void SetUpTestCase()
     {
@@ -61,6 +64,13 @@ public:
     {
         assert(dag_context_ptr != nullptr);
         return *dag_context_ptr;
+    }
+
+    void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
+    {
+        FmtBuffer buf;
+        auto serializer = ExecutorSerializer(context, buf);
+        ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trim(serializer.serialize(actual.get())));
     }
 
 protected:

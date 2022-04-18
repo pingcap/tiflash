@@ -15,6 +15,7 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include "Common/FmtUtils.h"
 
 namespace DB
 {
@@ -45,6 +46,8 @@ try
     request = mock_dag_request_context.scan("test_db", "test_table_1").build(context);
     String expected_string_2 = "table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string_2, request);
+    FmtBuffer buf;
+    // std::cout << SerializeExecutor(context, buf).serialize(request.get()) << std::endl;
 }
 CATCH
 

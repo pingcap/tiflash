@@ -13,70 +13,66 @@
 // limitations under the License.
 
 #include <TestUtils/InterpreterTestUtils.h>
+#include <Common/FmtUtils.h>
+#include <TestUtils/executorSerializer.h>
 
 namespace DB::tests
 {
 namespace
 {
-String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
+// String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
 
-// serialize tipb::DAGRequest, print the executor name in a Tree format.
-String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request)
-{
-    assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-    if (dag_request->has_root_executor())
-    {
-        return toTreeString(dag_request->root_executor());
-    }
-    else
-    {
-        FmtBuffer buffer;
-        String prefix;
-        traverseExecutors(dag_request.get(), [&buffer, &prefix](const tipb::Executor & executor) {
-            assert(executor.has_executor_id());
-            buffer.fmtAppend("{}{}\n", prefix, executor.executor_id());
-            prefix.append(" ");
-            return true;
-        });
-        return buffer.toString();
-    }
-}
+// // serialize tipb::DAGRequest, print the executor name in a Tree format.
+// String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request)
+// {
+//     assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
+//     if (dag_request->has_root_executor())
+//     {
+//         return toTreeString(dag_request->root_executor());
+//     }
+//     else
+//     {
+//         FmtBuffer buffer;
+//         String prefix;
+//         traverseExecutors(dag_request.get(), [&buffer, &prefix](const tipb::Executor & executor) {
+//             assert(executor.has_executor_id());
+//             buffer.fmtAppend("{}{}\n", prefix, executor.executor_id());
+//             prefix.append(" ");
+//             return true;
+//         });
+//         return buffer.toString();
+//     }
+// }
 
-String toTreeString(const tipb::Executor & root_executor, size_t level)
-{
-    FmtBuffer buffer;
+// String toTreeString(const tipb::Executor & root_executor, size_t level)
+// {
+//     FmtBuffer buffer;
 
-    auto append_str = [&buffer, &level](const tipb::Executor & executor) {
-        assert(executor.has_executor_id());
-        buffer.append(String(level, ' '));
-        buffer.append(executor.executor_id()).append("\n");
-    };
+//     auto append_str = [&buffer, &level](const tipb::Executor & executor) {
+//         assert(executor.has_executor_id());
+//         buffer.append(String(level, ' '));
+//         buffer.append(executor.executor_id()).append("\n");
+//     };
 
-    traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
-        if (executor.has_join())
-        {
-            append_str(executor);
-            ++level;
-            for (const auto & child : executor.join().children())
-                buffer.append(toTreeString(child, level));
-            return false;
-        }
-        else
-        {
-            append_str(executor);
-            ++level;
-            return true;
-        }
-    });
+//     traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
+//         if (executor.has_join())
+//         {
+//             append_str(executor);
+//             ++level;
+//             for (const auto & child : executor.join().children())
+//                 buffer.append(toTreeString(child, level));
+//             return false;
+//         }
+//         else
+//         {
+//             append_str(executor);
+//             ++level;
+//             return true;
+//         }
+//     });
 
-    return buffer.toString();
-}
+//     return buffer.toString();
+// }
 } // namespace
-
-void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
-{
-    String actual_string = toTreeString(actual);
-    ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trimInPlace(actual_string));
-}
 
 } // namespace DB::tests
