@@ -29,6 +29,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Interpreters/SubqueryForSet.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -279,6 +280,10 @@ public:
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
+    void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
+    bool hasSubquery() const { return !subqueries.empty(); }
+    std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
+
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
@@ -337,6 +342,9 @@ private:
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
+    /// vector of SubqueriesForSets(such as join build subquery).
+    /// The order of the vector is also the order of the subquery.
+    std::vector<SubqueriesForSets> subqueries;
 };
 
 } // namespace DB
