@@ -22,21 +22,24 @@
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
 
-namespace DB::AggregationInterpreterHelper
+namespace DB
 {
-Aggregator::Params buildAggregatorParams(
-    const Context & context,
-    const Block & before_agg_header,
-    size_t before_agg_streams_size,
-    const Names & key_names,
-    const TiDB::TiDBCollators & collators,
-    const AggregateDescriptions & aggregate_descriptions,
-    bool is_final_agg);
+struct AggregationInterpreterHelper
+{
+    static Aggregator::Params buildAggregatorParams(
+        const Context & context,
+        const Block & before_agg_header,
+        size_t before_agg_streams_size,
+        const Names & key_names,
+        const TiDB::TiDBCollators & collators,
+        const AggregateDescriptions & aggregate_descriptions,
+        bool is_final_agg);
 
-// get and fill the column number of agg func's arguments to aggregate_descriptions.
-void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header);
+    // get and fill the column number of agg func's arguments to aggregate_descriptions.
+    static void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header);
 
-bool isFinalAgg(const tipb::Aggregation & aggregation);
+    static bool isFinalAgg(const tipb::Aggregation & aggregation);
 
-bool isGroupByCollationSensitive(const Context & context);
-} // namespace DB::AggregationInterpreterHelper
+    static bool isGroupByCollationSensitive(const Context & context);
+};
+} // namespace DB

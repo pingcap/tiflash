@@ -17,11 +17,11 @@
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGContext.h>
 
-namespace DB::AggregationInterpreterHelper
+namespace DB
 {
 namespace
 {
-bool isFinalAgg(const tipb::Expr & expr)
+bool isFinalAggMode(const tipb::Expr & expr)
 {
     if (!expr.has_aggfuncmode())
         /// set default value to true to make it compatible with old version of TiDB since before this
@@ -31,7 +31,7 @@ bool isFinalAgg(const tipb::Expr & expr)
 }
 } // namespace
 
-Aggregator::Params buildAggregatorParams(
+Aggregator::Params AggregationInterpreterHelper::buildAggregatorParams(
     const Context & context,
     const Block & before_agg_header,
     size_t before_agg_streams_size,
@@ -70,7 +70,7 @@ Aggregator::Params buildAggregatorParams(
         has_collator ? collators : TiDB::dummy_collators);
 }
 
-void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header)
+void AggregationInterpreterHelper::fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const Block & before_agg_header)
 {
     for (auto & descr : aggregate_descriptions)
     {
@@ -84,25 +84,25 @@ void fillArgColumnNumbers(AggregateDescriptions & aggregate_descriptions, const 
     }
 }
 
-bool isFinalAgg(const tipb::Aggregation & aggregation)
+bool AggregationInterpreterHelper::isFinalAgg(const tipb::Aggregation & aggregation)
 {
     /// set default value to true to make it compatible with old version of TiDB since before this
     /// change, all the aggregation in TiFlash is treated as final aggregation
     bool is_final_agg = true;
-    if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
+    if (aggregation.agg_func_size() > 0 && !isFinalAggMode(aggregation.agg_func(0)))
     {
         is_final_agg = false;
     }
 
     for (int i = 1; i < aggregation.agg_func_size(); ++i)
     {
-        if (is_final_agg != isFinalAgg(aggregation.agg_func(i)))
+        if (is_final_agg != isFinalAggMode(aggregation.agg_func(i)))
             throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
     }
     return is_final_agg;
 }
 
-bool isGroupByCollationSensitive(const Context & context)
+bool AggregationInterpreterHelper::isGroupByCollationSensitive(const Context & context)
 {
     // todo now we can tell if the aggregation is final stage or partial stage,
     // maybe we can do collation insensitive aggregation if the stage is partial.
@@ -110,4 +110,4 @@ bool isGroupByCollationSensitive(const Context & context)
     /// collation sensitive group by is slower than normal group by, use normal group by by default
     return context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
 }
-} // namespace DB::AggregationInterpreterHelper
+} // namespace DB
