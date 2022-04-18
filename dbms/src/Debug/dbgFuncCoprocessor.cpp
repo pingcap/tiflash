@@ -131,6 +131,7 @@ private:
 };
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
+bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 DAGSchema getSelectSchema(Context & context);
 bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg);
@@ -339,56 +340,99 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
     auto dag = NaturalDag(json_dag_path, &Poco::Logger::get("MockDAG"));
     dag.init();
     dag.build(context);
-    bool unequal_flag = false;
-    String unequal_msg;
+    std::vector<std::pair<int32_t, String>> failed_req_msg_vec;
     int req_idx = 0;
     for (const auto & it : dag.getReqAndRspVec())
     {
         auto && req = it.first;
         auto && res = it.second;
-        kvrpcpb::Context req_context = req.context();
-        RegionID region_id = req_context.region_id();
-        tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(req.data());
-        RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
-        if (!region)
-            throw Exception(fmt::format("No such region: {}", region_id), ErrorCodes::BAD_ARGUMENTS);
-
-        DAGProperties properties = getDAGProperties("");
-        std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
+        int32_t req_id = dag.getReqIDVec()[req_idx];
+        bool unequal_flag = false;
+        bool failed_flag = false;
+        String unequal_msg;
         static auto log = Logger::get("MockDAG");
-        LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
-        tipb::SelectResponse dag_response;
-        TablesRegionsInfo tables_regions_info(true);
-        auto & table_regions_info = tables_regions_info.getSingleTableRegions();
-        table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
-
-        DAGContext dag_context(dag_request);
-        dag_context.tables_regions_info = std::move(tables_regions_info);
-        dag_context.log = log;
-        context.setDAGContext(&dag_context);
-        DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
-        driver.execute();
-
-        auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(res.data()))
+        try
         {
-            throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
+            unequal_flag = runAndCompareDagReq(req, res, context, unequal_msg);
         }
-        else
+        catch (const Exception & e)
         {
-            unequal_flag |= (!dagRspEqual(context, *resp_ptr, dag_response, unequal_msg));
-            if (unequal_flag)
+            failed_flag = true;
+            unequal_msg = e.message();
+        }
+        catch (...)
+        {
+            failed_flag = true;
+            unequal_msg = "Unknown execution exception!";
+        }
+
+        if (unequal_flag || failed_flag)
+        {
+            failed_req_msg_vec.push_back(std::make_pair(req_id, unequal_msg));
+            if (!dag.continueWhenError())
                 break;
         }
         ++req_idx;
     }
-    // It is all right to throw exception above, dag.clean is only to make it better
     dag.clean(context);
-    if (unequal_flag)
+    if (!failed_req_msg_vec.empty())
     {
         output("Invalid");
-        throw Exception(fmt::format("{}th request results are not equal, msg: {}", req_idx, unequal_msg), ErrorCodes::LOGICAL_ERROR);
+        String merged_msg;
+        bool first = true;
+        for (auto & it : failed_req_msg_vec)
+        {
+            String msg = fmt::format("request {} failed, msg: {}", it.first, it.second);
+            if (first)
+            {
+                merged_msg = msg;
+                first = false;
+            }
+            else
+            {
+                merged_msg = fmt::format("{}\n{}", merged_msg, msg);
+            }
+        }
+        throw Exception(merged_msg, ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg)
+{
+    kvrpcpb::Context req_context = req.context();
+    RegionID region_id = req_context.region_id();
+    tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(req.data());
+    RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
+    if (!region)
+        throw Exception(fmt::format("No such region: {}", region_id), ErrorCodes::BAD_ARGUMENTS);
+
+    bool unequal_flag = false;
+    DAGProperties properties = getDAGProperties("");
+    std::__1::vector<std::__1::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
+    static auto log = Logger::get("MockDAG");
+    LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
+    tipb::SelectResponse dag_response;
+    TablesRegionsInfo tables_regions_info(true);
+    auto & table_regions_info = tables_regions_info.getSingleTableRegions();
+    table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
+
+    DAGContext dag_context(dag_request);
+    dag_context.tables_regions_info = std::move(tables_regions_info);
+    dag_context.log = log;
+    context.setDAGContext(&dag_context);
+    DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+    driver.execute();
+
+    auto resp_ptr = std::__1::make_shared<tipb::SelectResponse>();
+    if (!resp_ptr->ParseFromString(res.data()))
+    {
+        throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
+    }
+    else
+    {
+        unequal_flag |= (!dagRspEqual(context, *resp_ptr, dag_response, unequal_msg));
+    }
+    return unequal_flag;
 }
 
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
