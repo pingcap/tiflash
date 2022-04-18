@@ -17,7 +17,6 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <iostream>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -75,14 +74,10 @@ public:
 
 class MockFailedWriter : public PacketWriter
 {
-    bool write(const mpp::MPPDataPacket & packet) override
+    bool write(const mpp::MPPDataPacket &) override
     {
-        write_packet_vec.push_back(packet.data());
         return false;
     }
-
-public:
-    std::vector<String> write_packet_vec;
 };
 
 struct MockLocalReader
@@ -90,7 +85,7 @@ struct MockLocalReader
     MPPTunnelTestPtr tunnel;
     std::vector<String> write_packet_vec;
 
-    MockLocalReader(const MPPTunnelTestPtr & tunnel_)
+    explicit MockLocalReader(const MPPTunnelTestPtr & tunnel_)
         : tunnel(tunnel_)
     {}
 
@@ -125,9 +120,8 @@ using MockLocalReaderPtr = std::shared_ptr<MockLocalReader>;
 struct MockTerminateLocalReader
 {
     MPPTunnelTestPtr tunnel;
-    std::vector<String> write_packet_vec;
 
-    MockTerminateLocalReader(const MPPTunnelTestPtr & tunnel_)
+    explicit MockTerminateLocalReader(const MPPTunnelTestPtr & tunnel_)
         : tunnel(tunnel_)
     {}
 
@@ -140,7 +134,7 @@ struct MockTerminateLocalReader
         }
     }
 
-    void read()
+    void read() const
     {
         MPPDataPacketPtr tmp_packet = tunnel->readForLocal();
         tunnel->consumerFinish("Receiver closed");
@@ -152,7 +146,7 @@ using MockTerminateLocalReaderPtr = std::shared_ptr<MockTerminateLocalReader>;
 class MockAsyncWriter : public PacketWriter
 {
 public:
-    MockAsyncWriter(MPPTunnelTestPtr tunnel_)
+    explicit MockAsyncWriter(MPPTunnelTestPtr tunnel_)
         : tunnel(tunnel_)
     {}
     bool write(const mpp::MPPDataPacket & packet) override
@@ -182,7 +176,7 @@ public:
 class MockFailedAsyncWriter : public PacketWriter
 {
 public:
-    MockFailedAsyncWriter(MPPTunnelTestPtr tunnel_)
+    explicit MockFailedAsyncWriter(MPPTunnelTestPtr tunnel_)
         : tunnel(tunnel_)
     {}
     bool write(const mpp::MPPDataPacket & packet) override
@@ -212,25 +206,24 @@ public:
 class TestMPPTunnelBase : public testing::Test
 {
 protected:
-    virtual void SetUp() override {}
+    virtual void SetUp() override { timeout = std::chrono::seconds(10); }
     virtual void TearDown() override {}
+    std::chrono::seconds timeout;
 
 public:
     MPPTunnelTestPtr constructRemoteSyncTunnel()
     {
-        std::chrono::seconds timeout(10);
         auto tunnel = std::make_shared<MPPTunnelTest>(String("0000_0001"), timeout, 2, false, false, String("0"));
         return tunnel;
     }
 
     MPPTunnelTestPtr constructLocalSyncTunnel()
     {
-        std::chrono::seconds timeout(10);
         auto tunnel = std::make_shared<MPPTunnelTest>(String("0000_0001"), timeout, 2, true, false, String("0"));
         return tunnel;
     }
 
-    MockLocalReaderPtr connectLocalSyncTunnel(MPPTunnelTestPtr mpp_tunnel_ptr)
+    static MockLocalReaderPtr connectLocalSyncTunnel(MPPTunnelTestPtr mpp_tunnel_ptr)
     {
         mpp_tunnel_ptr->connect(nullptr);
         MockLocalReaderPtr local_reader_ptr = std::make_shared<MockLocalReader>(mpp_tunnel_ptr);
@@ -242,7 +235,6 @@ public:
 
     MPPTunnelTestPtr constructRemoteAsyncTunnel()
     {
-        std::chrono::seconds timeout(10);
         auto tunnel = std::make_shared<MPPTunnelTest>(String("0000_0001"), timeout, 2, false, true, String("0"));
         return tunnel;
     }
@@ -299,7 +291,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, ConnectWriteClose)
+TEST_F(TestMPPTunnelBase, ConnectWriteCancel)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
@@ -309,8 +301,7 @@ try
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait for sendJob thread to write data
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Cancel");
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec.size(), 2); //Second for err msg
     GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec[0], "First");
@@ -327,7 +318,6 @@ try
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr, true);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait for sendJob thread to write data
     mpp_tunnel_ptr->waitForFinish();
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec.size(), 1);
@@ -345,7 +335,6 @@ try
     auto data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait for sendJob thread to write data
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec.size(), 1);
@@ -363,7 +352,6 @@ try
     auto data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait for sendJob thread to write data
     mpp_tunnel_ptr->consumerFinish("");
     mpp_tunnel_ptr->getThreadManager()->wait();
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
@@ -464,7 +452,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, LocalConnectWriteClose)
+TEST_F(TestMPPTunnelBase, LocalConnectWriteCancel)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
@@ -474,8 +462,7 @@ try
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait for sendJob thread to write data
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Cancel");
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 2); //Second for err msg
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
@@ -492,7 +479,6 @@ try
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait for sendJob thread to write data
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 1);
@@ -510,7 +496,6 @@ try
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // wait for sendJob thread to write data
     mpp_tunnel_ptr->consumerFinish("");
     mpp_tunnel_ptr->getThreadManager()->wait();
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
@@ -549,7 +534,7 @@ TEST_F(TestMPPTunnelBase, LocalWriteAfterFinished)
         auto mpp_tunnel_ptr = constructLocalSyncTunnel();
         auto local_reader_ptr = connectLocalSyncTunnel(mpp_tunnel_ptr);
         GTEST_ASSERT_EQ(mpp_tunnel_ptr->getConnectFlag(), true);
-        mpp_tunnel_ptr->close("Canceled");
+        mpp_tunnel_ptr->close("");
         std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
         data_packet_ptr->set_data("First");
         mpp_tunnel_ptr->write(*data_packet_ptr);
@@ -563,7 +548,7 @@ TEST_F(TestMPPTunnelBase, LocalWriteAfterFinished)
 }
 
 /// Test Async MPPTunnel
-TEST_F(TestMPPTunnelBase, AsyncConnectWriteClose)
+TEST_F(TestMPPTunnelBase, AsyncConnectWriteCancel)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
@@ -576,7 +561,7 @@ try
     mpp_tunnel_ptr->write(*data_packet_ptr);
     data_packet_ptr->set_data("Second");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Cancel");
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec.size(), 3); //Third for err msg
     GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec[0], "First");
