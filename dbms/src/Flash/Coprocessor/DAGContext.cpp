@@ -63,6 +63,13 @@ bool DAGContext::allowInvalidDate() const
     return sql_mode & TiDBSQLMode::ALLOW_INVALID_DATES;
 }
 
+void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subquery)
+{
+    SubqueriesForSets subqueries_for_sets;
+    subqueries_for_sets[subquery_id] = std::move(subquery);
+    subqueries.push_back(std::move(subqueries_for_sets));
+}
+
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
