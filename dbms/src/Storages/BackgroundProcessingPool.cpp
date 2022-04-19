@@ -33,7 +33,7 @@ inline static pid_t getTid()
 {
     return syscall(SYS_gettid);
 }
-#elif
+#else
 inline static pid_t getTid()
 {
     return -1;
