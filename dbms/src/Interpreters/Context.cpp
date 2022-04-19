@@ -161,7 +161,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
-    DM::GlobalStoragePoolPtr global_storage_pool;
+    DM::StoragePoolRunMode storage_run_mode;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -1572,21 +1572,8 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
-static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
+static bool isPageStorageV2Existed(const PathPool & path_pool)
 {
-    // Check whether v3 is already enabled
-    for (const auto & path : path_pool.listGlobalPagePaths())
-    {
-        if (PS::V3::PageStorageImpl::isManifestsFileExists(path))
-        {
-            return true;
-        }
-    }
-
-    // Check whether v3 on new node is enabled in the config, if not, no need to check anymore
-    if (!enable_ps_v3)
-        return false;
-
     // Check whether there are any files in kvstore path, if exists, then this is not a new node.
     // If it's a new node, then we enable v3. Otherwise, we use v2.
     for (const auto & path : path_pool.listKVStorePaths())
@@ -1605,38 +1592,22 @@ static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
     return true;
 }
 
-bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3)
+void Context::initializeStoragePoolMode(const PathPool & path_pool, bool enable_ps_v3)
 {
     auto lock = getLock();
-    if (isUsingPageStorageV3(path_pool, enable_ps_v3))
-    {
-        try
-        {
-            // create manifests file before initialize GlobalStoragePool
-            for (const auto & path : path_pool.listGlobalPagePaths())
-                PS::V3::PageStorageImpl::createManifestsFileIfNeed(path);
 
-            shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
-            shared->global_storage_pool->restore();
-            return true;
-        }
-        catch (...)
-        {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
-            throw;
-        }
-    }
-    else
+    if (!enable_ps_v3)
     {
-        shared->global_storage_pool = nullptr;
-        return false;
+        shared->storage_run_mode = DM::StoragePoolRunMode::ONLY_V2;
     }
+
+    shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? DM::StoragePoolRunMode::MIX_MODE : DM::StoragePoolRunMode::ONLY_V3;
 }
 
-DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
+DM::StoragePoolRunMode Context::getStoragePoolRunMode() const
 {
     auto lock = getLock();
-    return shared->global_storage_pool;
+    return shared->storage_run_mode;
 }
 
 UInt16 Context::getTCPPort() const

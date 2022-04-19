@@ -214,14 +214,19 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
-    if (auto global_storage_pool = global_context.getGlobalStoragePool(); global_storage_pool)
+
+    const auto & storage_pool_run_mode = global_context.getStoragePoolRunMode();
+    if (storage_pool_run_mode == StoragePoolRunMode::ONLY_V3 || storage_pool_run_mode == StoragePoolRunMode::MIX_MODE)
     {
-        storage_pool = std::make_shared<StoragePool>(ns_id, *global_storage_pool, global_context);
+        GlobalStoragePool::init(global_context.getPathPool(), global_context, db_context.getSettingsRef());
     }
-    else
-    {
-        storage_pool = std::make_shared<StoragePool>(db_name_ + "." + table_name_, ns_id, path_pool, global_context, db_context.getSettingsRef());
-    }
+
+    storage_pool = std::make_shared<StoragePool>(storage_pool_run_mode,
+                                                 ns_id,
+                                                 GlobalStoragePool::getInstance(),
+                                                 path_pool,
+                                                 global_context,
+                                                 db_name_ + "." + table_name_);
 
     // Restore existing dm files and set capacity for path_pool.
     // Should be done before any background task setup.

@@ -20,6 +20,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
@@ -73,8 +74,8 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
     raft_config.disable_bg_flush = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
-    if (global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), enable_ps_v3))
-        LOG_FMT_INFO(&Poco::Logger::get("TiFlashTestEnv"), "PageStorage V3 enabled.");
+    global_context->initializeStoragePoolMode(global_context->getPathPool(), enable_ps_v3);
+    LOG_FMT_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getStoragePoolRunMode()));
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 
