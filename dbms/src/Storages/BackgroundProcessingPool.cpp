@@ -29,12 +29,12 @@
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>
-inline static pid_t gettid()
+inline static pid_t getTid()
 {
     return syscall(SYS_gettid);
 }
 #elif
-inline static pid_t gettid()
+inline static pid_t getTid()
 {
     return -1;
 }
@@ -150,7 +150,7 @@ void BackgroundProcessingPool::threadFunction()
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
         is_background_thread = true;
-        addThreadId(gettid());
+        addThreadId(getTid());
     }
 
     MemoryTracker memory_tracker;
