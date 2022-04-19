@@ -430,11 +430,17 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry.offset < b.entry.offset; });
 
     // allocate data_buf that can hold all pages with specify fields
+
     size_t buf_size = 0;
     for (auto & [page_id, entry, fields] : to_read)
     {
         (void)page_id;
-        buf_size += entry.size;
+        // Sort fields to get better read on disk
+        std::sort(fields.begin(), fields.end());
+        for (const auto field_index : fields)
+        {
+            buf_size += entry.getFieldSize(field_index);
+        }
     }
 
     if (buf_size == 0)
@@ -493,13 +499,13 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
 
         Page page;
         page.page_id = page_id_v3.low;
-        page.data = ByteBuffer(pos, pos + entry.size);
+        page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
         page_map.emplace(page_id_v3.low, std::move(page));
 
-        pos += entry.size;
+        pos = write_offset;
     }
 
     if (unlikely(pos != data_buf + buf_size))

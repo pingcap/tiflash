@@ -40,6 +40,19 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
+    size_t getFieldSize(size_t index) const
+    {
+        // todo fmt Exception
+        if (unlikely(index >= field_offsets.size()))
+            throw Exception("Try to getFieldData of PageEntry" + DB::toString(file_id) + " with invalid index: " + DB::toString(index)
+                                + ", fields size: " + DB::toString(field_offsets.size()),
+                            ErrorCodes::LOGICAL_ERROR);
+        else if (index == field_offsets.size() - 1)
+            return size - field_offsets.back().first;
+        else
+            return field_offsets[index + 1].first - field_offsets[index].first;
+    }
+
     // Return field{index} offsets: [begin, end) of page data.
     std::pair<size_t, size_t> getFieldOffsets(size_t index) const
     {

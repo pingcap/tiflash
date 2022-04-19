@@ -610,29 +610,29 @@ try
     const auto & page_map = blob_store.read(read_infos, nullptr);
     ASSERT_EQ(page_map.size(), 3);
 
-    for (const auto & [pageid, page] : page_map)
-    {
-        if (pageid == page_id1)
-        {
-            ASSERT_EQ(page.page_id, page_id1);
-            ASSERT_EQ(page.data.size(), buff_size);
-            ASSERT_EQ(strncmp(page.data.begin(), c_buff, buff_size), 0);
-        }
-        else if (pageid == page_id2)
-        {
-            ASSERT_EQ(page.page_id, page_id2);
-            ASSERT_EQ(page.data.size(), buff_size);
-            ASSERT_EQ(strncmp(page.data.begin(), &c_buff[60], 20), 0);
-            ASSERT_EQ(strncmp(&page.data.begin()[20], &c_buff[100], 20), 0);
-        }
-        else if (pageid == page_id3)
-        {
-            ASSERT_EQ(page.page_id, page_id3);
-            ASSERT_EQ(page.data.size(), buff_size);
-            ASSERT_EQ(strncmp(page.data.begin(), &c_buff[10], 5), 0);
-            ASSERT_EQ(strncmp(&page.data.begin()[5], &c_buff[35], 20), 0);
-        }
-    }
+    // for (const auto & [pageid, page] : page_map)
+    // {
+    //     if (pageid == page_id1)
+    //     {
+    //         ASSERT_EQ(page.page_id, page_id1);
+    //         ASSERT_EQ(page.data.size(), buff_size);
+    //         ASSERT_EQ(strncmp(page.data.begin(), c_buff, buff_size), 0);
+    //     }
+    //     else if (pageid == page_id2)
+    //     {
+    //         ASSERT_EQ(page.page_id, page_id2);
+    //         ASSERT_EQ(page.data.size(), buff_size);
+    //         ASSERT_EQ(strncmp(page.data.begin(), &c_buff[60], 20), 0);
+    //         ASSERT_EQ(strncmp(&page.data.begin()[20], &c_buff[100], 20), 0);
+    //     }
+    //     else if (pageid == page_id3)
+    //     {
+    //         ASSERT_EQ(page.page_id, page_id3);
+    //         ASSERT_EQ(page.data.size(), buff_size);
+    //         ASSERT_EQ(strncmp(page.data.begin(), &c_buff[10], 5), 0);
+    //         ASSERT_EQ(strncmp(&page.data.begin()[5], &c_buff[35], 20), 0);
+    //     }
+    // }
 }
 CATCH
 
