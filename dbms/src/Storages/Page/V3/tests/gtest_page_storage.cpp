@@ -109,7 +109,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorageTest, nullext)
+TEST_F(PageStorageTest, ReadNULL)
 try
 {
     {

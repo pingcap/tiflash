@@ -841,13 +841,13 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
     config.file_limit_size = buff_size;
 
     size_t buffer_sizes[] = {buff_size, buff_size - 1, buff_size / 2 + 1};
-    for (auto & buf_size : buffer_sizes)
+    for (const auto & buf_size : buffer_sizes)
     {
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
         WriteBatch wb;
-        char c_buff1[buf_size] = {0};
-        char c_buff2[buf_size] = {0};
+        char c_buff1[buf_size];
+        char c_buff2[buf_size];
 
         ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff1), buf_size);
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), buf_size);
