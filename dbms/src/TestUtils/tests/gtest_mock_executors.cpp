@@ -169,6 +169,15 @@ try
     String expected_string = "exchange_sender_1\n"
                              " table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
+
+    request = mock_dag_request_context.scan("test_db", "test_table")
+                  .topN("s1", false, 10)
+                  .exchangeSender()
+                  .build(context);
+    String expected_string_2 = "exchange_sender_2\n"
+                               " topn_1\n"
+                               "  table_scan_0\n";
+    ASSERT_DAGREQUEST_EQAUL(expected_string_2, request);
 }
 CATCH
 
@@ -179,6 +188,13 @@ try
                        .build(context);
     String expected_string = "exchange_receiver_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
+
+    request = mock_dag_request_context.receive("test_db", "test_table")
+                  .topN("s1", false, 10)
+                  .build(context);
+    String expected_string_2 = "topn_1\n"
+                               " exchange_receiver_0\n";
+    ASSERT_DAGREQUEST_EQAUL(expected_string_2, request);
 }
 CATCH
 
