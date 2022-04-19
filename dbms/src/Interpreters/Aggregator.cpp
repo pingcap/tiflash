@@ -510,7 +510,14 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     }
 }
 
-bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider, ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys)
+bool Aggregator::executeOnBlock(
+    const Block & block,
+    AggregatedDataVariants & result,
+    const FileProviderPtr & file_provider,
+    ColumnRawPtrs & key_columns,
+    AggregateColumns & aggregate_columns,
+    Int64 & local_delta_memory,
+    bool & no_more_keys)
 {
     if (isCancelled())
         return true;
@@ -588,7 +595,13 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
     size_t result_size = result.sizeWithoutOverflowRow();
     Int64 current_memory_usage = 0;
     if (current_memory_tracker)
+    {
         current_memory_usage = current_memory_tracker->get();
+        auto updated_local_delta_memory = CurrentMemoryTracker::getLocalDeltaMemory();
+        auto local_delta_memory_diff = updated_local_delta_memory - local_delta_memory;
+        current_memory_usage += (local_memory_usage.fetch_add(local_delta_memory_diff) + local_delta_memory_diff);
+        local_delta_memory = updated_local_delta_memory;
+    }
 
     auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation; /// Here all the results in the sum are taken into account, from different threads.
 
@@ -790,14 +803,14 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_rows += block.rows();
         src_bytes += block.bytes();
 
-        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, no_more_keys))
+        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, params.local_delta_memory, no_more_keys))
             break;
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
-        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, no_more_keys);
+        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, params.local_delta_memory, no_more_keys);
 
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = result.sizeWithoutOverflowRow();

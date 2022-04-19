@@ -184,6 +184,37 @@ void disableThreshold()
     MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
 }
 
+<<<<<<< HEAD
+=======
+void submitLocalDeltaMemory()
+{
+    if (current_memory_tracker)
+    {
+        try
+        {
+            if (local_delta > 0)
+            {
+                current_memory_tracker->alloc(local_delta, false);
+            }
+            else if (local_delta < 0)
+            {
+                current_memory_tracker->free(-local_delta);
+            }
+        }
+        catch (...)
+        {
+            DB::tryLogCurrentException("MemoryTracker", "Failed when try to submit local delta memory");
+        }
+    }
+    local_delta = 0;
+}
+
+Int64 getLocalDeltaMemory()
+{
+    return local_delta;
+}
+
+>>>>>>> feee96afe1 (Make performance of TPCH q15 stable  (#4570))
 void alloc(Int64 size)
 {
     checkSubmitAndUpdateLocalDelta(local_delta + size);
