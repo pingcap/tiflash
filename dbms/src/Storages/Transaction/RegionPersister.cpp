@@ -16,6 +16,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/V1/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
@@ -166,20 +167,11 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         auto provider = global_context.getFileProvider();
         // If the GlobalStoragePool is initialized, then use v3 format
-        bool use_v3_format = global_context.getGlobalStoragePool() != nullptr;
-        if (use_v3_format)
+        const auto & run_mode = global_context.getStoragePoolRunMode();
+        // todo
+        switch (run_mode)
         {
-            mergeConfigFromSettings(global_context.getSettingsRef(), config);
-
-            LOG_FMT_INFO(log, "RegionPersister running in v3 mode");
-            page_storage = std::make_unique<PS::V3::PageStorageImpl>( //
-                "RegionPersister",
-                delegator,
-                config,
-                provider);
-            page_storage->restore();
-        }
-        else
+        case DM::StoragePoolRunMode::ONLY_V2:
         {
             // If there is no PageFile with basic version binary format, use version 2 of PageStorage.
             auto detect_binary_version = DB::PS::V2::PageStorage::getMaxDataVersion(provider, delegator);
@@ -211,6 +203,26 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                     c,
                     provider);
             }
+            break;
+        }
+        case DM::StoragePoolRunMode::ONLY_V3:
+        {
+            mergeConfigFromSettings(global_context.getSettingsRef(), config);
+
+            LOG_FMT_INFO(log, "RegionPersister running in v3 mode");
+            page_storage = std::make_unique<PS::V3::PageStorageImpl>( //
+                "RegionPersister",
+                delegator,
+                config,
+                provider);
+            page_storage->restore();
+            break;
+        }
+        case DM::StoragePoolRunMode::MIX_MODE:
+        {
+            // TODO
+            break;
+        }
         }
     }
 

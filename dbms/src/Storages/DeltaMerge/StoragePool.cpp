@@ -17,7 +17,6 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
-#include <Storages/PathPool.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -87,6 +86,7 @@ static bool doStoragePoolGC(const Context & global_context, const Settings & set
     return done_anything;
 }
 
+std::shared_ptr<GlobalStoragePool> GlobalStoragePool::global_storage_pool = nullptr;
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
     : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
     log_storage(PageStorage::create("__global__.log",
@@ -148,59 +148,110 @@ bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_per
     return doStoragePoolGC(global_context, settings, *this);
 }
 
-
-StoragePool::StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, Context & global_ctx, const Settings & settings)
-    : owned_storage(true)
+StoragePool::StoragePool(StoragePoolRunMode mode, NamespaceId ns_id_, const GlobalStoragePoolPtr & global_storage_pool, StoragePathPool & storage_path_pool, Context & global_ctx, const String & name)
+    : run_mode(mode)
     , ns_id(ns_id_)
-    ,
-    // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-    log_storage(PageStorage::create(name + ".log",
-                                    path_pool.getPSDiskDelegatorMulti("log"),
-                                    extractConfig(settings, StorageType::Log),
-                                    global_ctx.getFileProvider()))
-    ,
-    // The iops in data_storage is low, only use the first disk for storing data
-    data_storage(PageStorage::create(name + ".data",
-                                     path_pool.getPSDiskDelegatorSingle("data"),
-                                     extractConfig(settings, StorageType::Data),
-                                     global_ctx.getFileProvider()))
-    ,
-    // The iops in meta_storage is relatively high, use multi-disks if possible
-    meta_storage(PageStorage::create(name + ".meta",
-                                     path_pool.getPSDiskDelegatorMulti("meta"),
-                                     extractConfig(settings, StorageType::Meta),
-                                     global_ctx.getFileProvider()))
-    , log_storage_reader(ns_id, log_storage, nullptr)
-    , data_storage_reader(ns_id, data_storage, nullptr)
-    , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
-{}
+{
+    switch (run_mode)
+    {
+    case StoragePoolRunMode::ONLY_V2:
+    {
+        log_storage_v2 = PageStorage::create(name + ".log",
+                                             storage_path_pool.getPSDiskDelegatorMulti("log"),
+                                             extractConfig(global_context.getSettingsRef(), StorageType::Log),
+                                             global_context.getFileProvider());
+        data_storage_v2 = PageStorage::create(name + ".data",
+                                              storage_path_pool.getPSDiskDelegatorSingle("data"),
+                                              extractConfig(global_context.getSettingsRef(), StorageType::Data),
+                                              global_ctx.getFileProvider());
+        meta_storage_v2 = PageStorage::create(name + ".meta",
+                                              storage_path_pool.getPSDiskDelegatorMulti("meta"),
+                                              extractConfig(global_context.getSettingsRef(), StorageType::Meta),
+                                              global_ctx.getFileProvider());
+        log_storage_reader = std::make_shared<PageReader>(ns_id, log_storage_v2, nullptr);
+        data_storage_reader = std::make_shared<PageReader>(ns_id, data_storage_v2, nullptr);
+        meta_storage_reader = std::make_shared<PageReader>(ns_id, meta_storage_v2, nullptr);
+        break;
+    }
+    case StoragePoolRunMode::ONLY_V3:
+    {
+        assert(global_storage_pool != nullptr);
+        log_storage_v3 = global_storage_pool->log();
+        data_storage_v3 = global_storage_pool->data();
+        meta_storage_v3 = global_storage_pool->meta();
 
-StoragePool::StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_storage_pool, Context & global_ctx)
-    : owned_storage(false)
-    , ns_id(ns_id_)
-    , log_storage(global_storage_pool.log())
-    , data_storage(global_storage_pool.data())
-    , meta_storage(global_storage_pool.meta())
-    , log_storage_reader(ns_id, log_storage, nullptr)
-    , data_storage_reader(ns_id, data_storage, nullptr)
-    , meta_storage_reader(ns_id, meta_storage, nullptr)
-    , global_context(global_ctx)
-{}
+        log_storage_reader = std::make_shared<PageReader>(ns_id, log_storage_v3, nullptr);
+        data_storage_reader = std::make_shared<PageReader>(ns_id, data_storage_v3, nullptr);
+        meta_storage_reader = std::make_shared<PageReader>(ns_id, meta_storage_v3, nullptr);
+
+        break;
+    }
+    case StoragePoolRunMode::MIX_MODE:
+    {
+        assert(global_storage_pool != nullptr);
+        log_storage_v3 = global_storage_pool->log();
+        data_storage_v3 = global_storage_pool->data();
+        meta_storage_v3 = global_storage_pool->meta();
+
+        log_storage_v2 = PageStorage::create(name + ".log",
+                                             storage_path_pool.getPSDiskDelegatorMulti("log"),
+                                             extractConfig(global_context.getSettingsRef(), StorageType::Log),
+                                             global_context.getFileProvider());
+        data_storage_v2 = PageStorage::create(name + ".data",
+                                              storage_path_pool.getPSDiskDelegatorSingle("data"),
+                                              extractConfig(global_context.getSettingsRef(), StorageType::Data),
+                                              global_ctx.getFileProvider());
+        data_storage_v2 = PageStorage::create(name + ".meta",
+                                              storage_path_pool.getPSDiskDelegatorMulti("meta"),
+                                              extractConfig(global_context.getSettingsRef(), StorageType::Meta),
+                                              global_ctx.getFileProvider());
+
+        // log_storage_reader = std::make_shared<PageReader>(ns_id, log_storage, nullptr);
+        // data_storage_reader = std::make_shared<PageReader>(ns_id, data_storage, nullptr);
+        // meta_storage_reader = std::make_shared<PageReader>(ns_id, meta_storage, nullptr);
+
+        break;
+    }
+    default:
+        throw Exception(fmt::format("Unknown StoragePoolRunMode {}", static_cast<UInt8>(run_mode)));
+    }
+}
 
 void StoragePool::restore()
 {
     // If the storage instances is not global, we need to initialize it by ourselves and add a gc task.
-    if (owned_storage)
+    if (run_mode == StoragePoolRunMode::ONLY_V2 || run_mode == StoragePoolRunMode::MIX_MODE)
     {
-        log_storage->restore();
-        data_storage->restore();
-        meta_storage->restore();
+        log_storage_v2->restore();
+        data_storage_v2->restore();
+        meta_storage_v2->restore();
     }
 
-    max_log_page_id = log_storage->getMaxId(ns_id);
-    max_data_page_id = data_storage->getMaxId(ns_id);
-    max_meta_page_id = meta_storage->getMaxId(ns_id);
+    switch (run_mode)
+    {
+    case StoragePoolRunMode::ONLY_V2:
+    {
+        max_log_page_id = log_storage_v2->getMaxId(ns_id);
+        max_data_page_id = data_storage_v2->getMaxId(ns_id);
+        max_meta_page_id = meta_storage_v2->getMaxId(ns_id);
+        break;
+    }
+    case StoragePoolRunMode::ONLY_V3:
+    {
+        max_log_page_id = log_storage_v3->getMaxId(ns_id);
+        max_data_page_id = data_storage_v3->getMaxId(ns_id);
+        max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
+        break;
+    }
+    case StoragePoolRunMode::MIX_MODE:
+    {
+        max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), log_storage_v3->getMaxId(ns_id));
+        max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), data_storage_v3->getMaxId(ns_id));
+        max_meta_page_id = std::max(meta_storage_v2->getMaxId(ns_id), meta_storage_v3->getMaxId(ns_id));
+        break;
+    }
+    }
 }
 
 StoragePool::~StoragePool()
@@ -210,13 +261,15 @@ StoragePool::~StoragePool()
 
 void StoragePool::enableGC()
 {
-    if (owned_storage)
+    if (run_mode == StoragePoolRunMode::ONLY_V2 || run_mode == StoragePoolRunMode::MIX_MODE)
+    {
         gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
+    }
 }
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
-    if (!owned_storage)
+    if (run_mode == StoragePoolRunMode::ONLY_V3)
         return false;
 
     {
@@ -246,11 +299,11 @@ void StoragePool::drop()
 {
     shutdown();
 
-    if (owned_storage)
+    if (run_mode == StoragePoolRunMode::ONLY_V2 || run_mode == StoragePoolRunMode::MIX_MODE)
     {
-        meta_storage->drop();
-        data_storage->drop();
-        log_storage->drop();
+        meta_storage_v2->drop();
+        data_storage_v2->drop();
+        log_storage_v2->drop();
     }
 }
 

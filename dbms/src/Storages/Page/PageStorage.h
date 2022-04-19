@@ -323,6 +323,7 @@ public:
         , storage(storage_)
         , read_limiter(read_limiter_)
     {}
+
     /// Snapshot read.
     PageReader(NamespaceId ns_id_, PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
         : ns_id(ns_id_)
@@ -384,6 +385,27 @@ private:
     PageStorage::SnapshotPtr snap;
     ReadLimiterPtr read_limiter;
 };
+using PageReaderPtr = std::shared_ptr<PageReader>;
+
+class PageWriter : private boost::noncopyable
+{
+public:
+    PageWriter(PageStoragePtr storage_, WriteLimiterPtr write_limiter_)
+        : storage(storage_)
+        , write_limiter(write_limiter_)
+    {
+    }
+
+    void write(WriteBatch && write_batch)
+    {
+        storage->write(std::move(write_batch), write_limiter);
+    }
+
+private:
+    PageStoragePtr storage;
+    WriteLimiterPtr write_limiter;
+};
+using PageWriterPtr = std::shared_ptr<PageWriter>;
 
 
 } // namespace DB

@@ -103,8 +103,7 @@ namespace DM
 {
 class MinMaxIndexCache;
 class DeltaIndexManager;
-class GlobalStoragePool;
-using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
+enum class StoragePoolRunMode : UInt8;
 } // namespace DM
 
 /// (database name, table name)
@@ -405,9 +404,8 @@ public:
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3);
-
-    DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
+    void initializeStoragePoolMode(const PathPool & path_pool, bool enable_ps_v3);
+    DM::StoragePoolRunMode getStoragePoolRunMode() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
