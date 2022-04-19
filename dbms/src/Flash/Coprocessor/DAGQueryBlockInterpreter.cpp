@@ -35,6 +35,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -1146,33 +1147,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     assert(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr);
     /// exchange sender should be at the top of operators
     const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
-    /// get partition column ids
-    const auto & part_keys = exchange_sender.partition_keys();
-    std::vector<Int64> partition_col_id;
-    TiDB::TiDBCollators collators;
-    /// in case TiDB is an old version, it has no collation info
-    bool has_collator_info = exchange_sender.types_size() != 0;
-    if (has_collator_info && part_keys.size() != exchange_sender.types_size())
-    {
-        throw TiFlashException(
-            std::string(__PRETTY_FUNCTION__) + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is enabled",
-            Errors::Coprocessor::BadRequest);
-    }
-    for (int i = 0; i < part_keys.size(); ++i)
-    {
-        const auto & expr = part_keys[i];
-        assert(isColumnExpr(expr));
-        auto column_index = decodeDAGInt64(expr.val());
-        partition_col_id.emplace_back(column_index);
-        if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
-        {
-            collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
-        }
-        else
-        {
-            collators.emplace_back(nullptr);
-        }
-    }
+    std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
+    TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionCollators(exchange_sender);
     int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer
