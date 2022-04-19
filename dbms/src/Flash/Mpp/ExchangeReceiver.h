@@ -158,7 +158,7 @@ private:
 
     MPMCQueue<std::shared_ptr<ReceivedMessage>> msg_channel;
 
-    std::mutex mu;
+    FiberTraits::Mutex mu;
     /// should lock `mu` when visit these members
     Int32 live_connections;
     ExchangeReceiverState state;

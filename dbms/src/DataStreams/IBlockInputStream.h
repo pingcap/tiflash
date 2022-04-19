@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FiberTraits.h>
 #include <Common/FmtUtils.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
@@ -178,14 +179,14 @@ public:
 
 protected:
     BlockInputStreams children;
-    mutable std::shared_mutex children_mutex;
+    mutable FiberTraits::SharedMutex children_mutex;
     bool collected = false; // a flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
 
 private:
     TableLockHolders table_locks;
 
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
-    mutable std::mutex tree_id_mutex;
+    mutable FiberTraits::Mutex tree_id_mutex;
     mutable String tree_id;
 
     /// Get text with names of this source and the entire subtree, this function should only be called after the

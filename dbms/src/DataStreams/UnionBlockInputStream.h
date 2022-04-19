@@ -279,7 +279,7 @@ private:
       *  otherwise ParallelInputsProcessor can be blocked during insertion into the queue.
       */
     OutputQueue output_queue;
-    std::mutex mu;
+    FiberTraits::Mutex mu;
     bool meet_exception = false;
 
     void handleException(const std::exception_ptr & exception)

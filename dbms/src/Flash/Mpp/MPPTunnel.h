@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FiberTraits.h>
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
@@ -142,12 +143,12 @@ private:
 
     void finishSendQueue();
 
-    void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
+    void waitUntilConnectedOrFinished(std::unique_lock<FiberTraits::Mutex> & lk);
 
     void waitForConsumerFinish(bool allow_throw);
 
-    std::mutex mu;
-    std::condition_variable cv_for_connected_or_finished;
+    FiberTraits::Mutex mu;
+    FiberTraits::ConditionVariable cv_for_connected_or_finished;
 
     bool connected; // if the exchange in has connected this tunnel.
 
@@ -199,8 +200,8 @@ private:
         }
 
     private:
-        std::promise<String> promise;
-        std::shared_future<String> future;
+        FiberTraits::Promise<String> promise;
+        FiberTraits::SharedFuture<String> future;
         std::atomic<bool> err_has_set{false};
     };
     ConsumerState consumer_state;

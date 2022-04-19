@@ -24,15 +24,15 @@
 
 namespace DB
 {
-/** This block input stream is used by SharedQuery.
+/** This block input stream is used by IOAdaptor.
   * It enable multiple threads read from one stream.
  */
-class SharedQueryBlockInputStream : public IProfilingBlockInputStream
+class IOAdaptorBlockInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "SharedQuery";
+    static constexpr auto NAME = "IOAdaptor";
 
 public:
-    SharedQueryBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
+    IOAdaptorBlockInputStream(size_t clients, const BlockInputStreamPtr & in_, const String & req_id)
         : queue(clients)
         , log(Logger::get(NAME, req_id))
         , in(in_)
@@ -40,7 +40,7 @@ public:
         children.push_back(in);
     }
 
-    ~SharedQueryBlockInputStream()
+    ~IOAdaptorBlockInputStream()
     {
         try
         {
@@ -65,8 +65,8 @@ public:
             return;
         read_prefixed = true;
         /// Start reading thread.
-        thread_manager = newThreadManager();
-        thread_manager->schedule(true, "SharedQuery", [this] { fetchBlocks(); });
+        thread_manager = newIOThreadManager();
+        thread_manager->schedule(true, "IOAdaptor", [this] { fetchBlocks(); });
     }
 
     void readSuffix() override

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/FiberPool.h>
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
@@ -25,9 +26,7 @@
 
 #include <atomic>
 #include <list>
-#include <mutex>
 #include <queue>
-#include <thread>
 
 
 /** Allows to process multiple block input streams (sources) in parallel, using specified number of threads.
@@ -257,7 +256,10 @@ private:
                 {
                     additional_input_at_end->readPrefix();
                     while (Block block = additional_input_at_end->read())
+                    {
                         publishPayload(additional_input_at_end, block, thread_num);
+                        adaptiveYield();
+                    }
                 }
                 catch (...)
                 {
@@ -322,6 +324,7 @@ private:
                 if (block)
                     publishPayload(input.in, block, thread_num);
             }
+            adaptiveYield();
         }
     }
 
@@ -361,10 +364,10 @@ private:
     UnpreparedInputs unprepared_inputs;
 
     /// For operations with available_inputs.
-    std::mutex available_inputs_mutex;
+    FiberTraits::Mutex available_inputs_mutex;
 
     /// For operations with unprepared_inputs.
-    std::mutex unprepared_inputs_mutex;
+    FiberTraits::Mutex unprepared_inputs_mutex;
 
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};

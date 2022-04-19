@@ -85,7 +85,7 @@ private:
 
     void responderFinish(const grpc::Status & status);
 
-    std::mutex mu;
+    FiberTraits::Mutex mu;
     // server instance
     AsyncFlashService * service;
 
