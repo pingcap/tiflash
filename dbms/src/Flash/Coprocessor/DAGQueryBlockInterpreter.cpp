@@ -31,7 +31,6 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
-#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -1154,8 +1153,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
             context.getDAGContext()->tunnel_set,
-            partition_col_id,
-            collators,
+            partition_col_ids,
+            partition_col_collators,
             exchange_sender.tp(),
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
