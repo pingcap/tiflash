@@ -211,16 +211,13 @@ private:
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
         auto load = [&]() {
-            auto index_file_size = dmfile->colIndexSize(file_name_base);
-            if (index_file_size == 0)
-                return std::make_shared<MinMaxIndex>(*type);
             if (!dmfile->configuration)
             {
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
                     dmfile->colIndexPath(file_name_base),
                     dmfile->encryptionIndexPath(file_name_base),
-                    std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
+                    std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)),
                     read_limiter);
                 index_buf.seek(dmfile->colIndexOffset(file_name_base));
                 return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
@@ -235,10 +232,11 @@ private:
                                                                             dmfile->configuration->getChecksumAlgorithm(),
                                                                             dmfile->configuration->getChecksumFrameLength());
                 index_buf->seek(dmfile->colIndexOffset(file_name_base));
+                auto file_size = dmfile->colIndexSize(file_name_base);
                 auto header_size = dmfile->configuration->getChecksumHeaderLength();
                 auto frame_total_size = dmfile->configuration->getChecksumFrameLength();
-                auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
-                return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
+                auto frame_count = file_size / frame_total_size + (file_size % frame_total_size != 0);
+                return MinMaxIndex::read(*type, *index_buf, file_size - header_size * frame_count);
             }
         };
         MinMaxIndexPtr minmax_index;

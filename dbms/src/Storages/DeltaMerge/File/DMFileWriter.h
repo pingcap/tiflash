@@ -235,9 +235,6 @@ private:
 
     FileProviderPtr file_provider;
     WriteLimiterPtr write_limiter;
-
-    // use to avoid write index data for empty file
-    bool is_empty_file = true;
 };
 
 } // namespace DM
