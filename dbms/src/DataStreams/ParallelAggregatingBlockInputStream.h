@@ -108,6 +108,7 @@ private:
     {
         size_t src_rows = 0;
         size_t src_bytes = 0;
+        Int64 local_delta_memory = 0;
 
         ColumnRawPtrs key_columns;
         Aggregator::AggregateColumns aggregate_columns;

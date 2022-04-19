@@ -154,6 +154,7 @@ void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t
         parent.file_provider,
         parent.threads_data[thread_num].key_columns,
         parent.threads_data[thread_num].aggregate_columns,
+        parent.threads_data[thread_num].local_delta_memory,
         parent.no_more_keys);
 
     parent.threads_data[thread_num].src_rows += block.rows();
@@ -261,6 +262,7 @@ void ParallelAggregatingBlockInputStream::execute()
             file_provider,
             threads_data[0].key_columns,
             threads_data[0].aggregate_columns,
+            threads_data[0].local_delta_memory,
             no_more_keys);
 }
 

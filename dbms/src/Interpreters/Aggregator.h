@@ -707,6 +707,7 @@ public:
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
+        Int64 local_delta_memory = 0;
 
         /// The settings of approximate calculation of GROUP BY.
         const bool overflow_row; /// Do we need to put into AggregatedDataVariants::without_key aggregates for keys that are not in max_rows_to_group_by.
@@ -800,8 +801,14 @@ public:
     using AggregateFunctionsPlainPtrs = std::vector<IAggregateFunction *>;
 
     /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
-    bool executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider, ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-                        bool & no_more_keys);
+    bool executeOnBlock(
+        const Block & block,
+        AggregatedDataVariants & result,
+        const FileProviderPtr & file_provider,
+        ColumnRawPtrs & key_columns,
+        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
+        Int64 & local_delta_memory,
+        bool & no_more_keys);
 
     /** Convert the aggregation data structure into a block.
       * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
@@ -906,6 +913,8 @@ protected:
 
     /// How many RAM were used to process the query before processing the first block.
     Int64 memory_usage_before_aggregation = 0;
+
+    std::atomic<Int64> local_memory_usage = 0;
 
     std::mutex mutex;
 

@@ -110,6 +110,11 @@ extern thread_local MemoryTracker * current_memory_tracker;
 namespace CurrentMemoryTracker
 {
 void disableThreshold();
+<<<<<<< HEAD
+=======
+void submitLocalDeltaMemory();
+Int64 getLocalDeltaMemory();
+>>>>>>> feee96afe1 (Make performance of TPCH q15 stable  (#4570))
 void alloc(Int64 size);
 void realloc(Int64 old_size, Int64 new_size);
 void free(Int64 size);
