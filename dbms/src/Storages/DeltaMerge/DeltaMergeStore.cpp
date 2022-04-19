@@ -95,6 +95,8 @@ extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
 extern const char random_exception_after_dt_write_done[];
 extern const char force_slow_page_storage_snapshot_release[];
+extern const char exception_before_drop_segment[];
+extern const char exception_after_drop_segment[];
 } // namespace FailPoints
 
 namespace DM
@@ -401,9 +403,13 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
                 auto previous_segment = id_to_segment[previous_segment_id];
                 assert(previous_segment->nextSegmentId() == segment_id_to_drop);
                 auto previous_lock = previous_segment->mustGetUpdateLock();
+
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_drop_segment);
                 // No need to abandon previous_segment, because it's delta and stable is managed by the new_previous_segment.
                 // Abandon previous_segment will actually abandon new_previous_segment
                 auto new_previous_segment = previous_segment->dropNextSegment(wbs);
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_drop_segment);
+
                 segments[new_previous_segment->getRowKeyRange().getEnd()] = new_previous_segment;
                 id_to_segment[previous_segment_id] = new_previous_segment;
             }

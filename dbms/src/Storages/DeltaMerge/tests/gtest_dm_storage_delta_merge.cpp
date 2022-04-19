@@ -44,6 +44,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_before_drop_segment[];
+extern const char exception_after_drop_segment[];
+} // namespace FailPoints
 namespace DM
 {
 namespace tests
@@ -774,9 +779,9 @@ try
         in->readSuffix();
         return num_rows_read;
     };
+
     // create table
     create_table();
-
     size_t num_rows_write = 0;
     // write until split and use a big enough finite for loop to make sure the test won't hang forever
     for (size_t i = 0; i < 100000; i++)
@@ -786,16 +791,48 @@ try
         if (storage->getStore()->getSegmentStats().size() > 1)
             break;
     }
-
     {
         ASSERT_GT(storage->getStore()->getSegmentStats().size(), 1);
         ASSERT_EQ(read_data(), num_rows_write);
     }
     storage->flushCache(ctx);
-    storage->clearData();
+    // throw exception before drop first segment
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::exception_before_drop_segment);
+    EXPECT_ANY_THROW(storage->clearData());
+    storage->removeFromTMTContext();
+
+    // restore the table and make sure no data has been dropped
+    create_table();
+    {
+        ASSERT_EQ(read_data(), num_rows_write);
+    }
+    // write more data make sure segments more than 1
+    for (size_t i = 0; i < 100000; i++)
+    {
+        if (storage->getStore()->getSegmentStats().size() > 1)
+            break;
+        write_data(num_rows_write, 1000);
+        num_rows_write += 1000;
+    }
+    {
+        ASSERT_GT(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_EQ(read_data(), num_rows_write);
+    }
+    storage->flushCache(ctx);
+    // throw exception after drop first segment
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::exception_after_drop_segment);
+    EXPECT_ANY_THROW(storage->clearData());
     storage->removeFromTMTContext();
 
     // restore the table and make sure some data has been dropped
+    create_table();
+    {
+        ASSERT_LT(read_data(), num_rows_write);
+    }
+    storage->clearData();
+    storage->removeFromTMTContext();
+
+    // restore the table and make sure there is just one segment left
     create_table();
     {
         ASSERT_EQ(storage->getStore()->getSegmentStats().size(), 1);
