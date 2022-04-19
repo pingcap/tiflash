@@ -378,28 +378,29 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
     if (!failed_req_msg_vec.empty())
     {
         output("Invalid");
-        String merged_msg;
+        FmtBuffer msg_buffer;
         bool first = true;
         for (auto & it : failed_req_msg_vec)
         {
             String msg = fmt::format("request {} failed, msg: {}", it.first, it.second);
             if (first)
             {
-                merged_msg = msg;
+                msg_buffer.append(msg);
                 first = false;
             }
             else
             {
-                merged_msg = fmt::format("{}\n{}", merged_msg, msg);
+                msg_buffer.append("\n");
+                msg_buffer.append(msg);
             }
         }
-        throw Exception(merged_msg, ErrorCodes::LOGICAL_ERROR);
+        throw Exception(msg_buffer.toString(), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
 bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg)
 {
-    kvrpcpb::Context req_context = req.context();
+    const kvrpcpb::Context & req_context = req.context();
     RegionID region_id = req_context.region_id();
     tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(req.data());
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
@@ -408,7 +409,7 @@ bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Re
 
     bool unequal_flag = false;
     DAGProperties properties = getDAGProperties("");
-    std::__1::vector<std::__1::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
     static auto log = Logger::get("MockDAG");
     LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
     tipb::SelectResponse dag_response;
@@ -423,7 +424,7 @@ bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Re
     DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
 
-    auto resp_ptr = std::__1::make_shared<tipb::SelectResponse>();
+    auto resp_ptr = std::make_shared<tipb::SelectResponse>();
     if (!resp_ptr->ParseFromString(res.data()))
     {
         throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
