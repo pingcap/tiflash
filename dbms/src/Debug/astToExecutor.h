@@ -27,7 +27,6 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
-#include <cstddef>
 
 namespace DB
 {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/astToExecutor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -20,8 +21,6 @@
 #include <Parsers/ASTOrderByElement.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
-#include <cassert>
-#include "Debug/astToExecutor.h"
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -71,13 +70,14 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 // traval the AST tree to build tipb::Executor recursively.
 std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(Context & context)
 {
-    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, {});
+    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
     root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, context);
     root.reset();
     executor_index = 0;
+    receiver_source_task_ids_map.clear();
     return dag_request_ptr;
 }
 
@@ -98,7 +98,7 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const std::vector<std::pair<String, TiDB::TP>> & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const MockColumnInfos & columns)
 {
     return mockTable(name.first, name.second, columns);
 }
@@ -106,6 +106,32 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, con
 DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const MockColumnInfoList & columns)
 {
     return mockTable(name.first, name.second, columns);
+}
+
+DAGRequestBuilder & DAGRequestBuilder::exchangeReceiver(const MockColumnInfos & columns)
+{
+    return buildExchangeReceiver(columns);
+}
+
+DAGRequestBuilder & DAGRequestBuilder::exchangeReceiver(const MockColumnInfoList & columns)
+{
+    return buildExchangeReceiver(columns);
+}
+
+DAGRequestBuilder & DAGRequestBuilder::buildExchangeReceiver(const MockColumnInfos & columns)
+{
+    DAGSchema schema;
+    for (const auto & column : columns)
+    {
+        TiDB::ColumnInfo info;
+        info.tp = column.second;
+        info.name = column.first;
+        schema.push_back({column.first, info});
+    }
+
+    root = compileExchangeReceiver(getExecutorIndex(), schema);
+    receiver_source_task_ids_map[root->name] = {};
+    return *this;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::filter(ASTPtr filter_expr)
@@ -187,7 +213,7 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNames col_names)
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::exchangeSender() 
+DAGRequestBuilder & DAGRequestBuilder::exchangeSender()
 {
     assert(root);
     root = compileExchangeSender(root, getExecutorIndex());
@@ -239,7 +265,6 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
     return *this;
 }
 
-
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columns)
 {
     std::vector<MockColumnInfo> v_column_info;
@@ -265,4 +290,8 @@ DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
     return DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
 }
 
+DAGRequestBuilder MockDAGRequestContext::receive(String db_name, String table_name)
+{
+    return DAGRequestBuilder(index).exchangeReceiver(mock_tables[db_name + "." + table_name]);
+}
 } // namespace DB::tests

@@ -51,14 +51,18 @@ public:
 
     explicit DAGRequestBuilder(size_t & index)
         : executor_index(index)
-    {}
+    {
+    }
 
     std::shared_ptr<tipb::DAGRequest> build(Context & context);
 
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoList & columns);
-    DAGRequestBuilder & exchangeReceiver();
+
+    DAGRequestBuilder & exchangeReceiver(const MockColumnInfos & columns);
+    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoList & columns);
+    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfos & columns);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -90,6 +94,7 @@ private:
 
     ExecutorPtr root;
     DAGProperties properties;
+    std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
 };
 
 /** Responsible for storing necessary arguments in order to Mock DAGRequest
@@ -114,6 +119,7 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfos & columns);
 
     DAGRequestBuilder scan(String db_name, String table_name);
+    DAGRequestBuilder receive(String db_name, String table_name);
 
 private:
     size_t index;
