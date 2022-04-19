@@ -160,5 +160,17 @@ try
 }
 CATCH
 
+TEST_F(MockDAGRequestTest, ExchangeSender)
+try
+{
+    auto request = mock_dag_request_context.scan("test_db", "test_table")
+                       .exchangeSender()
+                       .build(context);
+    String expected_string = "exchange_sender_1\n"
+                             " table_scan_0\n";
+    ASSERT_DAGREQUEST_EQAUL(expected_string, request);
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

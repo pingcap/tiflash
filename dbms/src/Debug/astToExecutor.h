@@ -27,6 +27,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
+#include <cstddef>
 
 namespace DB
 {
@@ -289,5 +290,9 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
 ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr select_list);
 
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
+
+ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index);
+
+ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
 
 } // namespace DB

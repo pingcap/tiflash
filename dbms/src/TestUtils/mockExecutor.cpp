@@ -20,6 +20,8 @@
 #include <Parsers/ASTOrderByElement.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
+#include <cassert>
+#include "Debug/astToExecutor.h"
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -182,6 +184,13 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNames col_names)
     }
 
     root = compileProject(root, getExecutorIndex(), exp_list);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::exchangeSender() 
+{
+    assert(root);
+    root = compileExchangeSender(root, getExecutorIndex());
     return *this;
 }
 

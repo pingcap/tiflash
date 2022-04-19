@@ -1525,4 +1525,21 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
     return join;
 }
 
+
+ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index)
+{
+    ExecutorPtr exchange_sender
+        = std::make_shared<mock::ExchangeSender>(executor_index, input->output_schema, tipb::PassThrough);
+    exchange_sender->children.push_back(input);
+    return exchange_sender;
+}
+
+// ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
+// {
+//     // ExecutorPtr exchange_receiver
+//     //     = std::make_shared<mock::ExchangeReceiver>(executor_index, );
+    
+//     return exchange_receiver;   
+// }
+
 } // namespace DB

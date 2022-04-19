@@ -58,6 +58,7 @@ public:
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoList & columns);
+    DAGRequestBuilder & exchangeReceiver();
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -73,6 +74,7 @@ public:
     DAGRequestBuilder & project(MockAsts expr);
     DAGRequestBuilder & project(MockColumnNames col_names);
 
+    DAGRequestBuilder & exchangeSender();
     // Currentlt only support inner join, left join and right join.
     // TODO support more types of join.
     DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list);
