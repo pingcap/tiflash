@@ -42,6 +42,12 @@
 
 namespace DB
 {
+namespace tests
+{
+class MPPTunnelTest;
+class TestMPPTunnelBase;
+} // namespace tests
+
 class EstablishCallData;
 
 /**
@@ -123,6 +129,17 @@ public:
     void sendJob(bool need_lock = true);
 
 private:
+    friend class tests::MPPTunnelTest;
+    friend class tests::TestMPPTunnelBase;
+    // For gtest usage
+    MPPTunnelBase(
+        const String & tunnel_id_,
+        std::chrono::seconds timeout_,
+        int input_steams_num_,
+        bool is_local_,
+        bool is_async_,
+        const String & req_id);
+
     void finishSendQueue();
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);

@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <common/defines.h>
+
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -115,8 +117,9 @@ private:
 #endif
 
     // unused except Linux
-    [[maybe_unused]] int query_cpu_percent;
-    [[maybe_unused]] int cpu_cores;
+    MAYBE_UNUSED_MEMBER int query_cpu_percent;
+    MAYBE_UNUSED_MEMBER int cpu_cores;
+
     std::vector<std::string> query_threads;
     Poco::Logger * log;
 
