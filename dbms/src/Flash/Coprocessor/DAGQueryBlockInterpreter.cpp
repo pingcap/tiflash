@@ -746,7 +746,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
 
-    before_agg_header::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
+    AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
     auto params = AggregationInterpreterHelper::buildParams(
         context,
         before_agg_header,
