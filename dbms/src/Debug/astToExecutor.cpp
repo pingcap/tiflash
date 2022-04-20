@@ -808,8 +808,12 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t col
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
-    auto * child_executor = exchange_sender->mutable_child();
-    return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
+    if (!children.empty())
+    {
+        auto * child_executor = exchange_sender->mutable_child();
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
+    }
+    return true;
 }
 
 bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &)
@@ -1526,12 +1530,19 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
 }
 
 
+ExecutorPtr compileExchangeSender(DAGSchema & schema, size_t & executor_index, tipb::ExchangeType exchange_type)
+{
+    ExecutorPtr exchange_sender = std::make_shared<mock::ExchangeSender>(executor_index, schema, exchange_type);
+    return exchange_sender;
+}
+
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type)
 {
     ExecutorPtr exchange_sender = std::make_shared<mock::ExchangeSender>(executor_index, input->output_schema, exchange_type);
     exchange_sender->children.push_back(input);
     return exchange_sender;
 }
+
 
 ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
 {

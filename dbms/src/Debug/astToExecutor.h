@@ -290,6 +290,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
 
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
 
+ExecutorPtr compileExchangeSender(DAGSchema & schema, size_t & executor_index, tipb::ExchangeType exchange_type);
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
 
 ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);

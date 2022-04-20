@@ -21,6 +21,7 @@
 #include <Parsers/ASTOrderByElement.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
+#include <tipb/executor.pb.h>
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -73,8 +74,8 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     MPPInfo mpp_info(properties.start_ts, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
-    initDAGRequest(dag_request);
     root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
+    initDAGRequest(dag_request);
     root.reset();
     executor_index = 0;
     return dag_request_ptr;
@@ -218,6 +219,19 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
+DAGRequestBuilder & DAGRequestBuilder::exchangeSender(const MockColumnInfos & columns, tipb::ExchangeType exchange_type)
+{
+    DAGSchema schema;
+    for (const auto & column_info : columns)
+    {
+        ColumnInfo ci;
+        ci.tp = column_info.second;
+        schema.emplace_back(std::make_pair(column_info.first, std::move(ci)));
+    }
+    root = compileExchangeSender(schema, getExecutorIndex(), exchange_type);
+    return *this;
+}
+
 DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, ASTPtr using_expr_list)
 {
     return join(right, using_expr_list, ASTTableJoin::Kind::Inner);
@@ -303,9 +317,15 @@ DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
     return DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
 }
 
-DAGRequestBuilder MockDAGRequestContext::receive(String sender_name)
+DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name)
 {
-    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[sender_name]);
+    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name]);
+    receiver_source_task_ids_map[builder.getRoot()->name] = {};
+    return builder;
+}
+DAGRequestBuilder MockDAGRequestContext::send(String exchange_name, tipb::ExchangeType exchange_type)
+{
+    auto builder = DAGRequestBuilder(index).exchangeSender(exchange_schemas[exchange_name], exchange_type);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
     return builder;
 }

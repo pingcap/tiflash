@@ -21,6 +21,8 @@
 #include <initializer_list>
 #include <unordered_map>
 
+#include "tipb/executor.pb.h"
+
 namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;
@@ -84,6 +86,8 @@ public:
     DAGRequestBuilder & project(MockColumnNames col_names);
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
+    DAGRequestBuilder & exchangeSender(const MockColumnInfos & columns, tipb::ExchangeType exchange_type);
+
 
     // Currentlt only support inner join, left join and right join.
     // TODO support more types of join.
@@ -127,24 +131,20 @@ public:
     void addExchangeRelationSchema(String name, const MockColumnInfos & columns);
     void addExchangeRelationSchema(String name, const MockColumnInfoList & columns);
     DAGRequestBuilder scan(String db_name, String table_name);
-
-    DAGRequestBuilder receive(String sender_name);
-    Context context;
+    DAGRequestBuilder receive(String exchange_name);
+    DAGRequestBuilder send(String exchange_name, tipb::ExchangeType exchange_type = tipb::PassThrough);
 
 private:
     size_t index;
     std::unordered_map<String, MockColumnInfos> mock_tables;
     std::unordered_map<String, MockColumnInfos> exchange_schemas;
-    // ExchangeSender can specify its ExchangeReceiver
-    std::unordered_map<String, std::vector<String>> sender_to_receivers_map;
-    std::unordered_map<String, String> receiver_to_sender_map;
 
 public:
     // Currently don't support task_id, so the following to structure is useless,
     // but we need it to contruct the TaskMeta.
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
-    std::vector<Int64> sender_target_task_ids; // not used
+    Context context;
 };
 
 ASTPtr buildColumn(const String & column_name);

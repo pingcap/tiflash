@@ -47,9 +47,11 @@ String toTreeString(const tipb::Executor & root_executor, size_t level)
     FmtBuffer buffer;
 
     auto append_str = [&buffer, &level](const tipb::Executor & executor) {
-        assert(executor.has_executor_id());
-        buffer.append(String(level, ' '));
-        buffer.append(executor.executor_id()).append("\n");
+        if (executor.has_executor_id())
+        {
+            buffer.append(String(level, ' '));
+            buffer.append(executor.executor_id()).append("\n");
+        }
     };
 
     traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
