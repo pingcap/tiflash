@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -184,7 +185,8 @@ void prepareJoin(
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    String & filter_column_name)
+    String & filter_column_name,
+    const String & req_id)
 {
     NamesAndTypes source_columns;
     for (auto const & p : pipeline.firstStream()->getHeader())
@@ -193,7 +195,7 @@ void prepareJoin(
     ExpressionActionsChain chain;
     if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
     {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log->identifier()); });
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), req_id); });
     }
 }
 } // namespace DB::JoinInterpreterHelper

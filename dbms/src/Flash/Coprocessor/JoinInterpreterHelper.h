@@ -91,6 +91,7 @@ void prepareJoin(
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    String & filter_column_name);
+    String & filter_column_name,
+    const String & req_id);
 } // namespace JoinInterpreterHelper
 } // namespace DB

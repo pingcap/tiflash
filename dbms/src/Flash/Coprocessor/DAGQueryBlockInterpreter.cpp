@@ -496,7 +496,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         true,
         is_tiflash_right_join,
         tiflash_join.getProbeConditions(),
-        probe_filter_column_name);
+        probe_filter_column_name,
+        log->identifier());
 
     // prepare build side
     JoinInterpreterHelper::prepareJoin(
@@ -508,7 +509,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         false,
         is_tiflash_right_join,
         tiflash_join.getBuildConditions(),
-        build_filter_column_name);
+        build_filter_column_name,
+        log->identifier());
 
     for (auto const & p : probe_pipeline.streams[0]->getHeader())
     {
