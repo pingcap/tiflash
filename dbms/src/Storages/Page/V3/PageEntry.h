@@ -43,7 +43,7 @@ public:
     size_t getFieldSize(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))
-            throw Exception(fmt::format("Try to getFieldData of PageEntry [blob id={}] with invalid [index={}] [fields size={}]",
+            throw Exception(fmt::format("Try to getFieldData of PageEntry [blob_id={}] with invalid [index={}] [fields size={}]",
                                         file_id,
                                         index,
                                         field_offsets.size()),
