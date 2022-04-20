@@ -523,7 +523,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
             columns_for_other_join_filter.emplace_back(p.name, p.type);
     }
 
-    auto(other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name)
+    auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
         = JoinInterpreterHelper::genJoinOtherConditionAction(context, join, columns_for_other_join_filter);
 
     const Settings & settings = context.getSettingsRef();
