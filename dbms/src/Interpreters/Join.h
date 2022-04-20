@@ -99,7 +99,6 @@ public:
          ASTTableJoin::Kind kind_,
          ASTTableJoin::Strictness strictness_,
          const String & req_id,
-         size_t build_concurrency = 1,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
          const String & right_filter_column = "",
@@ -109,12 +108,10 @@ public:
          size_t max_block_size = 0,
          const String & match_helper_name = "");
 
-    bool empty() { return type == Type::EMPTY; }
-
-    /** Set information about structure of right hand of JOIN (joined data).
+    /** Call `init`, `setSampleBlock` and `setBuildConcurrencyAndInitPool`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void setSampleBlock(const Block & block);
+    void init(const Block & sample_block, size_t build_concurrency_ = 1);
 
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
@@ -171,7 +168,7 @@ public:
         const Block * block;
         size_t row_num;
 
-        RowRef() {}
+        RowRef() = default;
         RowRef(const Block * block_, size_t row_num_)
             : block(block_)
             , row_num(row_num_)
@@ -183,7 +180,7 @@ public:
     {
         RowRefList * next = nullptr;
 
-        RowRefList() {}
+        RowRefList() = default;
         RowRefList(const Block * block_, size_t row_num_)
             : RowRef(block_, row_num_)
         {}
@@ -342,7 +339,19 @@ private:
       */
     mutable std::shared_mutex rwlock;
 
+    bool initialized = false;
+
     void init(Type type_);
+
+    /** Set information about structure of right hand of JOIN (joined data).
+     * You must call this method before subsequent calls to insertFromBlock.
+     */
+    void setSampleBlock(const Block & block);
+
+    /** Set Join build concurrency and init hash map.
+      * You must call this method before subsequent calls to insertFromBlock.
+      */
+    void setBuildConcurrencyAndInitPool(size_t build_concurrency_);
 
     /// Throw an exception if blocks have different types of key columns.
     void checkTypesOfKeys(const Block & block_left, const Block & block_right) const;

@@ -2435,7 +2435,7 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
 
         /// TODO You do not need to set this up when JOIN is only needed on remote servers.
         subquery_for_set.join = join;
-        subquery_for_set.join->setSampleBlock(subquery_for_set.source->getHeader());
+        subquery_for_set.join->init(subquery_for_set.source->getHeader());
     }
 
     addJoinAction(step.actions, false);

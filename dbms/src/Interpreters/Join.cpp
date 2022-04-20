@@ -42,39 +42,42 @@ extern const int TYPE_MISMATCH;
 extern const int ILLEGAL_COLUMN;
 } // namespace ErrorCodes
 
+namespace
+{
 /// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
-static bool getFullness(ASTTableJoin::Kind kind)
+bool getFullness(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Full;
 }
-static bool isLeftJoin(ASTTableJoin::Kind kind)
+bool isLeftJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left;
 }
-static bool isRightJoin(ASTTableJoin::Kind kind)
+bool isRightJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Cross_Right;
 }
-static bool isInnerJoin(ASTTableJoin::Kind kind)
+bool isInnerJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross;
 }
-static bool isAntiJoin(ASTTableJoin::Kind kind)
+bool isAntiJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Anti || kind == ASTTableJoin::Kind::Cross_Anti;
 }
-static bool isCrossJoin(ASTTableJoin::Kind kind)
+bool isCrossJoin(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::Cross || kind == ASTTableJoin::Kind::Cross_Left
         || kind == ASTTableJoin::Kind::Cross_Right || kind == ASTTableJoin::Kind::Cross_Anti
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
 /// (cartesian) (anti) left semi join.
-static bool isLeftSemiFamily(ASTTableJoin::Kind kind)
+bool isLeftSemiFamily(ASTTableJoin::Kind kind)
 {
     return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
+} // namespace
 
 const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
 const DataTypePtr Join::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
@@ -88,7 +91,6 @@ Join::Join(
     ASTTableJoin::Kind kind_,
     ASTTableJoin::Strictness strictness_,
     const String & req_id,
-    size_t build_concurrency_,
     const TiDB::TiDBCollators & collators_,
     const String & left_filter_column_,
     const String & right_filter_column_,
@@ -103,7 +105,7 @@ Join::Join(
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
     , use_nulls(use_nulls_)
-    , build_concurrency(std::max(1, build_concurrency_))
+    , build_concurrency(0)
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
@@ -117,8 +119,6 @@ Join::Join(
     , limits(limits)
 {
     build_set_exceeded.store(false);
-    for (size_t i = 0; i < build_concurrency; i++)
-        pools.emplace_back(std::make_shared<Arena>());
     if (other_condition_ptr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
@@ -126,11 +126,6 @@ Join::Join(
         {
             strictness = ASTTableJoin::Strictness::All;
         }
-    }
-    if (getFullness(kind))
-    {
-        for (size_t i = 0; i < build_concurrency; i++)
-            rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
     }
     if (!left_filter_column.empty() && !isLeftJoin(kind))
         throw Exception("Not supported: non left join with left conditions");
@@ -396,7 +391,8 @@ size_t Join::getTotalByteCount() const
     return res;
 }
 
-
+namespace
+{
 static void convertColumnToNullable(ColumnWithTypeAndName & column)
 {
     column.type = makeNullable(column.type);
@@ -404,14 +400,8 @@ static void convertColumnToNullable(ColumnWithTypeAndName & column)
         column.column = makeNullable(column.column);
 }
 
-
-void Join::setSampleBlock(const Block & block)
+ColumnRawPtrs getKeyColumns(const Names & key_names_right, const Block & block)
 {
-    std::unique_lock lock(rwlock);
-
-    if (!empty())
-        return;
-
     size_t keys_size = key_names_right.size();
     ColumnRawPtrs key_columns(keys_size);
 
@@ -424,9 +414,27 @@ void Join::setSampleBlock(const Block & block)
             key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
     }
 
-    /// Choose data structure to use for JOIN.
-    init(chooseMethod(key_columns, key_sizes));
+    return key_columns;
+}
+} // namespace
 
+void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
+{
+    RUNTIME_ASSERT(build_concurrency == 0 && pools.empty(), log, "`setBuildConcurrencyAndInitPool` shouldn't be called more than once");
+    build_concurrency = std::max(1, build_concurrency_);
+
+    for (size_t i = 0; i < getBuildConcurrency(); ++i)
+        pools.emplace_back(std::make_shared<Arena>());
+    // init for non-joined-streams.
+    if (getFullness(kind))
+    {
+        for (size_t i = 0; i < getNotJoinedStreamConcurrency(); ++i)
+            rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
+    }
+}
+
+void Join::setSampleBlock(const Block & block)
+{
     sample_block_with_columns_to_add = materializeBlock(block);
 
     /// Move from `sample_block_with_columns_to_add` key columns to `sample_block_with_keys`, keeping the order.
@@ -459,6 +467,17 @@ void Join::setSampleBlock(const Block & block)
 
     if (isLeftSemiFamily(kind))
         sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(Join::match_helper_type, match_helper_name));
+}
+
+void Join::init(const Block & sample_block, size_t build_concurrency_)
+{
+    std::unique_lock lock(rwlock);
+    RUNTIME_ASSERT(!initialized, log, "Join has been initialized");
+    initialized = true;
+    /// Choose data structure to use for JOIN.
+    init(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
+    setSampleBlock(sample_block);
+    setBuildConcurrencyAndInitPool(build_concurrency_);
 }
 
 
@@ -761,9 +780,8 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
 
 bool Join::insertFromBlock(const Block & block)
 {
-    if (empty())
-        throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     std::unique_lock lock(rwlock);
+    RUNTIME_ASSERT(initialized, log, "Logical error: Join was not initialized");
     blocks.push_back(block);
     Block * stored_block = &blocks.back();
     return insertFromBlockInternal(stored_block, 0);
@@ -772,9 +790,8 @@ bool Join::insertFromBlock(const Block & block)
 /// the block should be valid.
 void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
-    if (empty())
-        throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     std::shared_lock lock(rwlock);
+    RUNTIME_ASSERT(initialized, log, "Logical error: Join was not initialized");
     Block * stored_block = nullptr;
     {
         std::lock_guard lk(blocks_lock);
@@ -1956,7 +1973,7 @@ public:
         , max_block_size(max_block_size_)
         , add_not_mapped_rows(true)
     {
-        if (step > parent.build_concurrency || index >= parent.build_concurrency)
+        if (step > parent.getBuildConcurrency() || index >= parent.getBuildConcurrency())
             throw Exception("The concurrency of NonJoinedBlockInputStream should not be larger than join build concurrency");
 
         /** left_sample_block contains keys and "left" columns.

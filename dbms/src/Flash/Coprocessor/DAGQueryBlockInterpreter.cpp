@@ -30,7 +30,6 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
@@ -43,7 +42,6 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB
 {
@@ -425,6 +423,12 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     probe_pipeline.streams = input_streams_vec[1 - tiflash_join.build_side_index];
     build_pipeline.streams = input_streams_vec[tiflash_join.build_side_index];
 
+    RUNTIME_ASSERT(!input_streams_vec[0].empty(), log, "left input streams cannot be empty");
+    const Block & left_input_header = input_streams_vec[0].back()->getHeader();
+
+    RUNTIME_ASSERT(!input_streams_vec[1].empty(), log, "right input streams cannot be empty");
+    const Block & right_input_header = input_streams_vec[1].back()->getHeader();
+
     NamesAndTypes join_output_columns;
     /// columns_for_other_join_filter is a vector of columns used
     /// as the input columns when compiling other join filter.
@@ -438,7 +442,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     NamesAndTypes columns_for_other_join_filter;
     std::unordered_set<String> column_set_for_other_join_filter;
     bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
-    for (auto const & p : input_streams_vec[0][0]->getHeader())
+    for (auto const & p : left_input_header)
     {
         join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
@@ -446,7 +450,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     }
     make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
     bool is_semi_join = tiflash_join.isSemiJoin();
-    for (auto const & p : input_streams_vec[1][0]->getHeader())
+    for (auto const & p : right_input_header)
     {
         if (!is_semi_join)
             /// for semi join, the columns from right table will be ignored
@@ -460,7 +464,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
     make_nullable = tiflash_join.isTiflashLeftJoin();
-    for (auto const & p : build_pipeline.streams[0]->getHeader())
+    for (auto const & p : build_pipeline.firstStream()->getHeader())
     {
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
@@ -468,11 +472,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     String match_helper_name;
     if (tiflash_join.isLeftSemiFamily())
     {
-        const auto & left_block = input_streams_vec[0][0]->getHeader();
-        const auto & right_block = input_streams_vec[1][0]->getHeader();
-
         match_helper_name = Join::match_helper_prefix;
-        for (int i = 1; left_block.has(match_helper_name) || right_block.has(match_helper_name); ++i)
+        for (int i = 1; left_input_header.has(match_helper_name) || right_input_header.has(match_helper_name); ++i)
         {
             match_helper_name = Join::match_helper_prefix + std::to_string(i);
         }
@@ -512,12 +513,12 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         build_filter_column_name,
         log->identifier());
 
-    for (auto const & p : probe_pipeline.streams[0]->getHeader())
+    for (auto const & p : probe_pipeline.firstStream()->getHeader())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
             columns_for_other_join_filter.emplace_back(p.name, p.type);
     }
-    for (auto const & p : build_pipeline.streams[0]->getHeader())
+    for (auto const & p : build_pipeline.firstStream()->getHeader())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
             columns_for_other_join_filter.emplace_back(p.name, p.type);
@@ -527,7 +528,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         = JoinInterpreterHelper::genJoinOtherConditionAction(context, join, columns_for_other_join_filter);
 
     const Settings & settings = context.getSettingsRef();
-    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
@@ -539,7 +539,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
-        join_build_concurrency,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
@@ -559,10 +558,11 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
-    right_query.join->setSampleBlock(right_query.source->getHeader());
+    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
+    right_query.join->init(right_query.source->getHeader(), join_build_concurrency);
 
-    std::vector<NameAndTypePair> source_columns;
-    for (const auto & p : probe_pipeline.streams[0]->getHeader())
+    NamesAndTypes source_columns;
+    for (const auto & p : probe_pipeline.firstStream()->getHeader())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
@@ -572,12 +572,13 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     if (is_tiflash_right_join)
     {
         auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
-        for (size_t i = 0; i < join_build_concurrency; i++)
+        size_t not_joined_concurrency = join_ptr->getNotJoinedStreamConcurrency();
+        for (size_t i = 0; i < not_joined_concurrency; i++)
         {
-            auto non_joined_stream = chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
+            auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(
                 pipeline.firstStream()->getHeader(),
                 i,
-                join_build_concurrency,
+                not_joined_concurrency,
                 settings.max_block_size);
             pipeline.streams_with_non_joined_data.push_back(non_joined_stream);
             join_execute_info.non_joined_streams.push_back(non_joined_stream);
