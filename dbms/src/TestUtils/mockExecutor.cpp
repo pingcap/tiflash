@@ -283,32 +283,19 @@ void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockC
     mock_tables[name.first + "." + name.second] = columns;
 }
 
-void MockDAGRequestContext::addExchangeSender(String name, const MockColumnInfos & columns, std::vector<String> receivers)
+void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfos & columns)
 {
-    exchange_sender_schemas[name] = columns;
-    sender_to_receivers_map[name] = receivers;
-    for (const auto & receiver : receivers)
-    {
-        receiver_to_sender_map[receiver] = name;
-    }
-    receiver_source_task_ids_map[name] = {};
+    exchange_schemas[name] = columns;
 }
 
-void MockDAGRequestContext::addExchangeSender(String name, const MockColumnInfoList & columns, std::initializer_list<String> receivers)
+void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoList & columns)
 {
     std::vector<MockColumnInfo> v_column_info;
     for (const auto & info : columns)
     {
         v_column_info.push_back(std::move(info));
     }
-    exchange_sender_schemas[name] = v_column_info;
-
-    sender_to_receivers_map[name] = receivers;
-    for (const auto & receiver : receivers)
-    {
-        receiver_to_sender_map[receiver] = name;
-    }
-    receiver_source_task_ids_map[name] = {};
+    exchange_schemas[name] = v_column_info;
 }
 
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
@@ -318,7 +305,7 @@ DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 
 DAGRequestBuilder MockDAGRequestContext::receive(String sender_name)
 {
-    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_sender_schemas[sender_name]);
+    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[sender_name]);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
     return builder;
 }

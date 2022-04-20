@@ -124,8 +124,8 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfoList & columns);
     void addMockTable(const String & db, const String & table, const MockColumnInfos & columns);
     void addMockTable(const MockTableName & name, const MockColumnInfos & columns);
-    void addExchangeSender(String name, const MockColumnInfos & columns, std::vector<String> receivers);
-    void addExchangeSender(String name, const MockColumnInfoList & columns, std::initializer_list<String> receivers);
+    void addExchangeRelationSchema(String name, const MockColumnInfos & columns);
+    void addExchangeRelationSchema(String name, const MockColumnInfoList & columns);
     DAGRequestBuilder scan(String db_name, String table_name);
 
     DAGRequestBuilder receive(String sender_name);
@@ -134,7 +134,7 @@ public:
 private:
     size_t index;
     std::unordered_map<String, MockColumnInfos> mock_tables;
-    std::unordered_map<String, MockColumnInfos> exchange_sender_schemas;
+    std::unordered_map<String, MockColumnInfos> exchange_schemas;
     // ExchangeSender can specify its ExchangeReceiver
     std::unordered_map<String, std::vector<String>> sender_to_receivers_map;
     std::unordered_map<String, String> receiver_to_sender_map;
@@ -144,7 +144,7 @@ public:
     // but we need it to contruct the TaskMeta.
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
-    std::vector<Int64> sender_target_task_ids;
+    std::vector<Int64> sender_target_task_ids; // not used
 };
 
 ASTPtr buildColumn(const String & column_name);
