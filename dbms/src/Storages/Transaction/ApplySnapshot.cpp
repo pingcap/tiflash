@@ -164,11 +164,9 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                         old_region->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
                     if (old_key_range != new_key_range)
                     {
-                        LOG_FMT_INFO(log,
-                            "clear region {} old range {} before apply snapshot of new range {}",
-                            region_id,
-                            old_key_range.toDebugString(),
-                            new_key_range.toDebugString());
+                        LOG_INFO(log,
+                            "clear region " << region_id << " old range " << old_key_range.toDebugString()
+                                            << " before apply snapshot of new range " << new_key_range.toDebugString());
                         dm_storage->deleteRange(old_key_range, context.getSettingsRef());
                     }
                 }
