@@ -1215,8 +1215,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
-    /// Init Rate Limiter
-    global_context->initializeRateLimiter(config());
+    /// Initialize users config reloader.
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
+
+    /// Load global settings from default_profile and system_profile.
+    /// It internally depends on UserConfig::parseSettings.
+    global_context->setDefaultProfiles(config());
+    Settings & settings = global_context->getSettingsRef();
+
+    /// Initialize the background thread pool.
+    /// It internally depends on settings.background_pool_size,
+    /// so must be called after settings has been load.
+    auto & bg_pool = global_context->getBackgroundPool();
+    auto & blockable_bg_pool = global_context->getBlockableBackgroundPool();
+
+    /// Initialize RateLimiter.
+    global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
 
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
@@ -1229,9 +1243,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->reloadDeltaTreeConfig(*config);
         },
         /* already_loaded = */ true);
-
-    /// Initialize users config reloader.
-    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
@@ -1253,10 +1264,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     bool use_l0_opt = config().getBool("l0_optimize", false);
     global_context->setUseL0Opt(use_l0_opt);
-
-    /// Load global settings from default_profile and system_profile.
-    global_context->setDefaultProfiles(config());
-    Settings & settings = global_context->getSettingsRef();
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
