@@ -15,6 +15,7 @@
 #pragma once
 
 #include <common/defines.h>
+#include <thread>
 
 #define DBMS_NAME "ClickHouse"
 #define DBMS_VERSION_MAJOR 1
@@ -78,7 +79,6 @@
 /// too short a period can cause errors to disappear immediately after creation.
 #define DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_DECREASE_ERROR_PERIOD (2 * DBMS_DEFAULT_SEND_TIMEOUT_SEC)
 #define DEFAULT_QUERIES_QUEUE_WAIT_TIME_MS 5000 /// Maximum waiting time in the request queue.
-#define DBMS_DEFAULT_BACKGROUND_POOL_SIZE 16
 
 #define DBMS_MIN_REVISION_WITH_CLIENT_INFO 54032
 #define DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE 54058
@@ -106,6 +106,8 @@
 
 #define DEFAULT_HTTP_PORT 8123
 
+const auto PROCESSOR_COUNT = std::thread::hardware_concurrency();
+const auto DBMS_DEFAULT_BACKGROUND_POOL_SIZE = PROCESSOR_COUNT != 0 ? PROCESSOR_COUNT / 4 : 16;
 #if !defined(__x86_64__) && !defined(__aarch64__)
 //    #error PLATFORM_NOT_SUPPORTED
 #endif
