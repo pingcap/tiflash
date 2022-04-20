@@ -65,11 +65,6 @@ private:
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
-    ExpressionActionsPtr genJoinOtherConditionAction(
-        const tipb::Join & join,
-        std::vector<NameAndTypePair> & source_columns,
-        String & filter_column_for_other_condition,
-        String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
