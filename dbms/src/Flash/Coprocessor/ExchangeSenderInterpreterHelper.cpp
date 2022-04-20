@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGCodec.h>
