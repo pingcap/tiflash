@@ -25,7 +25,6 @@ namespace DB::ExchangeSenderInterpreterHelper
 {
 std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_sender)
 {
-    const auto & part_keys = exchange_sender.partition_keys();
     std::vector<Int64> partition_col_ids;
     for (const auto & part_key : exchange_sender.partition_keys())
     {
