@@ -360,10 +360,13 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                         dmfile->encryptionIndexPath(stream_name),
                         false,
                         write_limiter);
-                    if (!is_empty_file)
-                        stream->minmaxes->write(*type, buf);
+                    stream->minmaxes->write(*type, buf);
                     buf.sync();
-                    bytes_written += buf.getMaterializedBytes();
+                    // Ignore data written in index file when the dmfile is empty.
+                    // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
+                    // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
+                    // and we cannot change the index file format for empty dmfile because of backward compatibility.
+                    bytes_written += is_empty_file ? 0 : buf.getMaterializedBytes();
                 }
                 else
                 {
@@ -374,10 +377,13 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                                                                            write_limiter,
                                                                            dmfile->configuration->getChecksumAlgorithm(),
                                                                            dmfile->configuration->getChecksumFrameLength());
-                    if (!is_empty_file)
-                        stream->minmaxes->write(*type, *buf);
+                    stream->minmaxes->write(*type, *buf);
                     buf->sync();
-                    bytes_written += buf->getMaterializedBytes();
+                    // Ignore data written in index file when the dmfile is empty.
+                    // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
+                    // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
+                    // and we cannot change the index file format for empty dmfile because of backward compatibility.
+                    bytes_written += is_empty_file ? 0 : buf->getMaterializedBytes();
 #ifndef NDEBUG
                     examine_buffer_size(*buf, *this->file_provider);
 #endif
