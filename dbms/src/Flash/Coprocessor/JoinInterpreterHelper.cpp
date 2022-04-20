@@ -15,6 +15,8 @@
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/Context.h>
@@ -135,5 +137,63 @@ TiflashJoin::TiflashJoin(const tipb::Join & join_)
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
     strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
+}
+
+std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
+    const Context & context,
+    const tipb::Join & join,
+    NamesAndTypes & source_columns)
+{
+    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
+        return {nullptr, "", ""};
+
+    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
+    ExpressionActionsChain chain;
+
+    String filter_column_for_other_condition;
+    if (join.other_conditions_size() > 0)
+    {
+        std::vector<const tipb::Expr *> condition_vector;
+        for (const auto & c : join.other_conditions())
+        {
+            condition_vector.push_back(&c);
+        }
+        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
+    }
+
+    String filter_column_for_other_eq_condition;
+    if (join.other_eq_conditions_from_in_size() > 0)
+    {
+        std::vector<const tipb::Expr *> condition_vector;
+        for (const auto & c : join.other_eq_conditions_from_in())
+        {
+            condition_vector.push_back(&c);
+        }
+        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
+    }
+
+    return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition)};
+}
+
+void prepareJoin(
+    const Context & context,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const DataTypes & key_types,
+    DAGPipeline & pipeline,
+    Names & key_names,
+    bool left,
+    bool is_right_out_join,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+    String & filter_column_name)
+{
+    NamesAndTypes source_columns;
+    for (auto const & p : pipeline.firstStream()->getHeader())
+        source_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
+    ExpressionActionsChain chain;
+    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
+    {
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log->identifier()); });
+    }
 }
 } // namespace DB::JoinInterpreterHelper

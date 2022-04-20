@@ -409,76 +409,6 @@ void DAGQueryBlockInterpreter::executeCastAfterTableScan(
     }
 }
 
-void DAGQueryBlockInterpreter::prepareJoin(
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
-    DAGPipeline & pipeline,
-    Names & key_names,
-    bool left,
-    bool is_right_out_join,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    String & filter_column_name)
-{
-    std::vector<NameAndTypePair> source_columns;
-    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
-        source_columns.emplace_back(p.name, p.type);
-    DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
-    ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
-    {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log->identifier()); });
-    }
-}
-
-ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
-    const tipb::Join & join,
-    std::vector<NameAndTypePair> & source_columns,
-    String & filter_column_for_other_condition,
-    String & filter_column_for_other_eq_condition)
-{
-    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
-        return nullptr;
-    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
-    ExpressionActionsChain chain;
-    std::vector<const tipb::Expr *> condition_vector;
-    if (join.other_conditions_size() > 0)
-    {
-        for (const auto & c : join.other_conditions())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
-    }
-    if (join.other_eq_conditions_from_in_size() > 0)
-    {
-        condition_vector.clear();
-        for (const auto & c : join.other_eq_conditions_from_in())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
-    }
-    return chain.getLastActions();
-}
-
-/// ClickHouse require join key to be exactly the same type
-/// TiDB only require the join key to be the same category
-/// for example decimal(10,2) join decimal(20,0) is allowed in
-/// TiDB and will throw exception in ClickHouse
-void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
-{
-    for (int i = 0; i < join.left_join_keys().size(); i++)
-    {
-        if (!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i)))
-            throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
-        DataTypes types;
-        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.left_join_keys(i).field_type()));
-        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.right_join_keys(i).field_type()));
-        DataTypePtr common_type = getLeastSupertype(types);
-        key_types.emplace_back(common_type);
-    }
-}
-
 void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
 {
     if (unlikely(input_streams_vec.size() != 2))
@@ -495,7 +425,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     probe_pipeline.streams = input_streams_vec[1 - tiflash_join.build_side_index];
     build_pipeline.streams = input_streams_vec[tiflash_join.build_side_index];
 
-    std::vector<NameAndTypePair> join_output_columns;
+    NamesAndTypes join_output_columns;
     /// columns_for_other_join_filter is a vector of columns used
     /// as the input columns when compiling other join filter.
     /// Note the order in the column vector is very important:
@@ -505,10 +435,10 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     /// append the extra columns afterwards. In order to figure out
     /// whether a given column is already in the column vector or
     /// not quickly, we use another set to store the column names
-    std::vector<NameAndTypePair> columns_for_other_join_filter;
+    NamesAndTypes columns_for_other_join_filter;
     std::unordered_set<String> column_set_for_other_join_filter;
     bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
-    for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : input_streams_vec[0][0]->getHeader())
     {
         join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
@@ -516,7 +446,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     }
     make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
     bool is_semi_join = tiflash_join.isSemiJoin();
-    for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : input_streams_vec[1][0]->getHeader())
     {
         if (!is_semi_join)
             /// for semi join, the columns from right table will be ignored
@@ -557,7 +487,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     /// add necessary transformation if the join key is an expression
 
     // prepare probe side
-    prepareJoin(
+    JoinInterpreterHelper::prepareJoin(
+        context,
         tiflash_join.getProbeJoinKeys(),
         tiflash_join.join_key_types,
         probe_pipeline,
@@ -568,7 +499,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         probe_filter_column_name);
 
     // prepare build side
-    prepareJoin(
+    JoinInterpreterHelper::prepareJoin(
+        context,
         tiflash_join.getBuildJoinKeys(),
         tiflash_join.join_key_types,
         build_pipeline,
@@ -578,7 +510,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         tiflash_join.getBuildConditions(),
         build_filter_column_name);
 
-    String other_filter_column_name, other_eq_filter_from_in_column_name;
     for (auto const & p : probe_pipeline.streams[0]->getHeader())
     {
         if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
@@ -590,8 +521,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
             columns_for_other_join_filter.emplace_back(p.name, p.type);
     }
 
-    ExpressionActionsPtr other_condition_expr
-        = genJoinOtherConditionAction(join, columns_for_other_join_filter, other_filter_column_name, other_eq_filter_from_in_column_name);
+    auto(other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name)
+        = JoinInterpreterHelper::genJoinOtherConditionAction(context, join, columns_for_other_join_filter);
 
     const Settings & settings = context.getSettingsRef();
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
