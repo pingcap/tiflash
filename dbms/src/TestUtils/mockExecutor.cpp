@@ -68,16 +68,15 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 }
 
 // traval the AST tree to build tipb::Executor recursively.
-std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(Context & context)
+std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context)
 {
-    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, receiver_source_task_ids_map);
+    MPPInfo mpp_info(properties.start_ts, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     initDAGRequest(dag_request);
-    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, context);
+    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
     root.reset();
     executor_index = 0;
-    receiver_source_task_ids_map.clear();
     return dag_request_ptr;
 }
 
@@ -130,7 +129,6 @@ DAGRequestBuilder & DAGRequestBuilder::buildExchangeReceiver(const MockColumnInf
     }
 
     root = compileExchangeReceiver(getExecutorIndex(), schema);
-    receiver_source_task_ids_map[root->name] = {};
     return *this;
 }
 
@@ -213,10 +211,10 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNames col_names)
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::exchangeSender()
+DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type)
 {
     assert(root);
-    root = compileExchangeSender(root, getExecutorIndex());
+    root = compileExchangeSender(root, getExecutorIndex(), exchange_type);
     return *this;
 }
 
@@ -285,13 +283,43 @@ void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockC
     mock_tables[name.first + "." + name.second] = columns;
 }
 
+void MockDAGRequestContext::addExchangeSender(String name, const MockColumnInfos & columns, std::vector<String> receivers)
+{
+    exchange_sender_schemas[name] = columns;
+    sender_to_receivers_map[name] = receivers;
+    for (const auto & receiver : receivers)
+    {
+        receiver_to_sender_map[receiver] = name;
+    }
+    receiver_source_task_ids_map[name] = {};
+}
+
+void MockDAGRequestContext::addExchangeSender(String name, const MockColumnInfoList & columns, std::initializer_list<String> receivers)
+{
+    std::vector<MockColumnInfo> v_column_info;
+    for (const auto & info : columns)
+    {
+        v_column_info.push_back(std::move(info));
+    }
+    exchange_sender_schemas[name] = v_column_info;
+
+    sender_to_receivers_map[name] = receivers;
+    for (const auto & receiver : receivers)
+    {
+        receiver_to_sender_map[receiver] = name;
+    }
+    receiver_source_task_ids_map[name] = {};
+}
+
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
     return DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
 }
 
-DAGRequestBuilder MockDAGRequestContext::receive(String db_name, String table_name)
+DAGRequestBuilder MockDAGRequestContext::receive(String sender_name)
 {
-    return DAGRequestBuilder(index).exchangeReceiver(mock_tables[db_name + "." + table_name]);
+    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_sender_schemas[sender_name]);
+    receiver_source_task_ids_map[builder.getRoot()->name] = {};
+    return builder;
 }
 } // namespace DB::tests
