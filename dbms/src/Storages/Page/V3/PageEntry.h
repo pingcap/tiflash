@@ -42,10 +42,11 @@ public:
 public:
     size_t getFieldSize(size_t index) const
     {
-        // todo fmt Exception
         if (unlikely(index >= field_offsets.size()))
-            throw Exception("Try to getFieldData of PageEntry" + DB::toString(file_id) + " with invalid index: " + DB::toString(index)
-                                + ", fields size: " + DB::toString(field_offsets.size()),
+            throw Exception(fmt::format("Try to getFieldData of PageEntry [blob id={}] with invalid [index={}] [fields size={}]",
+                                        file_id,
+                                        index,
+                                        field_offsets.size()),
                             ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
             return size - field_offsets.back().first;
