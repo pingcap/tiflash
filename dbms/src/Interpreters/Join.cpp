@@ -127,9 +127,9 @@ Join::Join(
             strictness = ASTTableJoin::Strictness::All;
         }
     }
-    if (!left_filter_column.empty() && !isLeftJoin(kind))
+    if (unlikely(!left_filter_column.empty() && !isLeftJoin(kind)))
         throw Exception("Not supported: non left join with left conditions");
-    if (!right_filter_column.empty() && !isRightJoin(kind))
+    if (unlikely(!right_filter_column.empty() && !isRightJoin(kind)))
         throw Exception("Not supported: non right join with right conditions");
 }
 
@@ -393,7 +393,7 @@ size_t Join::getTotalByteCount() const
 
 namespace
 {
-static void convertColumnToNullable(ColumnWithTypeAndName & column)
+void convertColumnToNullable(ColumnWithTypeAndName & column)
 {
     column.type = makeNullable(column.type);
     if (column.column)

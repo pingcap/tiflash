@@ -416,8 +416,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     JoinInterpreterHelper::TiflashJoin tiflash_join{join};
 
-    bool swap_join_side = tiflash_join.build_side_index != 1;
-
     DAGPipeline probe_pipeline;
     DAGPipeline build_pipeline;
     probe_pipeline.streams = input_streams_vec[1 - tiflash_join.build_side_index];
@@ -548,7 +546,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         max_block_size_for_cross_join,
         match_helper_name);
 
-    recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
+    recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
@@ -573,7 +571,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     {
         auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
         size_t not_joined_concurrency = join_ptr->getNotJoinedStreamConcurrency();
-        for (size_t i = 0; i < not_joined_concurrency; i++)
+        for (size_t i = 0; i < not_joined_concurrency; ++i)
         {
             auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(
                 pipeline.firstStream()->getHeader(),

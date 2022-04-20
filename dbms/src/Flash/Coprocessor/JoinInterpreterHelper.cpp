@@ -137,6 +137,7 @@ TiflashJoin::TiflashJoin(const tipb::Join & join_)
     , join_key_collators(getJoinKeyCollators(join_, join_key_types))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
+    assert(build_side_index == 0 || build_side_index == 1);
     strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 }
 
