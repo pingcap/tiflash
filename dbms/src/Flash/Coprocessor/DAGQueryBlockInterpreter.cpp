@@ -295,7 +295,7 @@ void DAGQueryBlockInterpreter::handleTableScan(TiDBStorageTable & storage_table,
     // todo do not need to hold all locks in each stream, if the stream is reading from table a
     //  it only needs to hold the lock of table a
     storage_table.moveDropLocks([&pipeline](const auto & drop_lock) {
-        pipeline.transform([&drop_lock](auto & stream) {
+        pipeline.transform([&drop_lock](const auto & stream) {
             stream->addTableLock(drop_lock);
         });
     });

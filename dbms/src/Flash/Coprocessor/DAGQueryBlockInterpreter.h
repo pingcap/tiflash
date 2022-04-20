@@ -16,6 +16,7 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBStorageTable.h>
@@ -37,7 +38,6 @@ namespace DB
 {
 class DAGQueryBlock;
 class ExchangeReceiver;
-class DAGExpressionAnalyzer;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
