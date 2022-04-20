@@ -143,6 +143,7 @@ void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr o
         {
             switch (storage->engineType())
             {
+<<<<<<< HEAD
                 case TiDB::StorageEngine::DT:
                 {
                     try
@@ -163,6 +164,39 @@ void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr o
                             throw;
                     }
                     break;
+=======
+                auto & context = tmt.getContext();
+                // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
+                auto table_lock = storage->lockForShare(getThreadName());
+                auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                auto new_key_range = DM::RowKeyRange::fromRegionRange(
+                    new_region_wrap->getRange(),
+                    table_id,
+                    storage->isCommonHandle(),
+                    storage->getRowKeyColumnSize());
+                if (old_region)
+                {
+                    auto old_key_range = DM::RowKeyRange::fromRegionRange(
+                        old_region->getRange(),
+                        table_id,
+                        storage->isCommonHandle(),
+                        storage->getRowKeyColumnSize());
+                    if (old_key_range != new_key_range)
+                    {
+                        LOG_FMT_INFO(log, "clear region {} old range {} before apply snapshot of new range {}", region_id, old_key_range.toDebugString(), new_key_range.toDebugString());
+                        dm_storage->deleteRange(old_key_range, context.getSettingsRef());
+                    }
+                }
+                if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
+                {
+                    // Call `ingestFiles` to delete data for range and ingest external DTFiles.
+                    dm_storage->ingestFiles(new_key_range, new_region_wrap.ingest_ids, /*clear_data_in_range=*/true, context.getSettingsRef());
+                }
+                else
+                {
+                    // Call `deleteRange` to delete data for range
+                    dm_storage->deleteRange(new_key_range, context.getSettingsRef());
+>>>>>>> 7149736cb2 (clear old range before apply snapshot (#4668))
                 }
                 default:
                     break;
