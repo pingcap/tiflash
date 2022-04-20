@@ -269,7 +269,7 @@ void DAGQueryBlockInterpreter::handleTableScan(TiDBStorageTable & storage_table,
     DAGStorageInterpreter storage_interpreter(context, storage_table, query_block.selection_name, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
-    storage_table.releaseAlterLock();
+    storage_table.releaseAlterLocks();
 
     analyzer = std::move(storage_interpreter.analyzer);
 
@@ -296,11 +296,12 @@ void DAGQueryBlockInterpreter::handleTableScan(TiDBStorageTable & storage_table,
         remote_read_streams_start_index = 1;
     }
 
-    pipeline.transform([&](auto & stream) {
-        // todo do not need to hold all locks in each stream, if the stream is reading from table a
-        //  it only needs to hold the lock of table a
-        for (const auto & lock : storage_table.getDropLocks())
-            stream->addTableLock(lock);
+    // todo do not need to hold all locks in each stream, if the stream is reading from table a
+    //  it only needs to hold the lock of table a
+    storage_table.moveDropLocks([](const auto & drop_lock) {
+        pipeline.transform([&drop_lock](auto & stream) {
+            stream->addTableLock(drop_lock);
+        });
     });
 
     /// Set the limits and quota for reading data, the speed and time of the query.

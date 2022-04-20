@@ -33,11 +33,20 @@ TiDBStorageTable::TiDBStorageTable(
     , storages_with_structure_lock(getAndLockStorages(tidb_table_scan))
     , storage_for_logical_table(getStorage(tidb_table_scan.getLogicalTableID()))
     , schema(getSchemaForTableScan(tidb_table_scan))
-{}
-
-void TiDBStorageTable::releaseAlterLock()
 {
-    RUNTIME_ASSERT(!alter_locks_released, log, "alter locks has been released.");
+    assert(scan_required_columns.empty());
+    for (const auto & column : schema)
+        scan_required_columns.push_back(column.name);
+}
+
+Block TiDBStorageTable::getSampleBlock() const
+{
+    return storage_for_logical_table->getSampleBlockForColumns(scan_required_columns);
+}
+
+void TiDBStorageTable::releaseAlterLocks()
+{
+    RUNTIME_ASSERT(lock_status == TableLockStatus::alter, log, "lock_status must be alter status.");
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
@@ -45,13 +54,7 @@ void TiDBStorageTable::releaseAlterLock()
     {
         drop_locks.emplace_back(std::get<1>(std::move(storage_with_lock.second.lock).release()));
     }
-    alter_locks_released = true;
-}
-
-const TableLockHolders & TiDBStorageTable::getDropLocks() const
-{
-    RUNTIME_ASSERT(alter_locks_released, log, "alter locks has not been released.");
-    return drop_locks;
+    lock_status = TableLockStatus::drop;
 }
 
 const ManageableStoragePtr & TiDBStorageTable::getStorage(TableID table_id) const

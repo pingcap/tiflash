@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
-#include <Flash/Coprocessor/StorageWithStructureLock.h>
 #include <Flash/Coprocessor/TiDBStorageTable.h>
 #include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
@@ -99,7 +98,6 @@ private:
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
     // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
-    Names required_columns;
     NamesAndTypes source_columns;
 };
 

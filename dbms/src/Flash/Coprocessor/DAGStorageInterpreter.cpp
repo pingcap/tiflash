@@ -168,8 +168,6 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
     source_columns = storage_table.getSchema();
-    for (const auto & column : source_columns)
-        required_columns.push_back(column.name);
     is_need_add_cast_column = getExtraCastAfterTSModeFromTS(storage_table.getTiDBTableScan());
 }
 
@@ -188,7 +186,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     if (!mvcc_query_info->regions_query_info.empty())
         doLocalRead(pipeline, settings.max_block_size);
 
-    null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_table.getLogicalTableStorage()->getSampleBlockForColumns(required_columns));
+    null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_table.getSampleBlock());
 
     // Should build these vars under protect of `table_structure_lock`.
     buildRemoteRequests();
@@ -344,7 +342,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
         {
             try
             {
-                current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, current_max_streams);
+                current_pipeline.streams = storage->read(storage_table.getScanRequiredColumns(), query_info, context, from_stage, max_block_size, current_max_streams);
 
                 // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
                 // In case the versions of regions have changed, those `streams` may contain different data other than expected.
