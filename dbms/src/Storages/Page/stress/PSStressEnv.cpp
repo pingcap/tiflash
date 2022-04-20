@@ -49,6 +49,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
         ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads") //
         ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running") //
         ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running") //
+        ("just_init_pages,J", value<bool>()->default_value(false), "Only init pages 0 - 1000.Then quit") //
         ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds). 0 means run infinitely") //
         ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots") //
         ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay") //
@@ -75,6 +76,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
     opt.num_writers = options["write_concurrency"].as<UInt32>();
     opt.num_readers = options["read_concurrency"].as<UInt32>();
     opt.init_pages = options["init_pages"].as<bool>();
+    opt.just_init_pages = options["just_init_pages"].as<bool>();
     opt.clean_before_run = options["clean_before_run"].as<bool>();
     opt.timeout_s = options["timeout"].as<UInt32>();
     opt.read_delay_ms = options["read_delay_ms"].as<UInt32>();

@@ -57,15 +57,11 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     Context & context_,
     const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_,
-    size_t max_streams_,
-    bool keep_session_timezone_info_,
-    std::vector<SubqueriesForSets> & subqueries_for_sets_)
+    size_t max_streams_)
     : context(context_)
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
-    , keep_session_timezone_info(keep_session_timezone_info_)
     , max_streams(max_streams_)
-    , subqueries_for_sets(subqueries_for_sets_)
     , log(Logger::get("DAGQueryBlockInterpreter", dagContext().log ? dagContext().log->identifier() : ""))
 {}
 
@@ -119,7 +115,6 @@ AnalysisResult analyzeExpressions(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
-    bool keep_session_timezone_info,
     NamesWithAliases & final_project)
 {
     AnalysisResult res;
@@ -175,14 +170,15 @@ AnalysisResult analyzeExpressions(
         res.order_columns = analyzer.appendOrderBy(chain, query_block.limit_or_topn->topn());
     }
 
+    const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,
-            query_block.output_field_types,
-            query_block.output_offsets,
+            dag_context.output_field_types,
+            dag_context.output_offsets,
             query_block.qb_column_prefix,
-            keep_session_timezone_info)
+            dag_context.keep_session_timezone_info)
         : analyzer.appendFinalProjectForNonRootQueryBlock(
             chain,
             query_block.qb_column_prefix);
@@ -1025,10 +1021,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         SubqueryForSet right_query;
         handleJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
-
-        SubqueriesForSets subquries;
-        subquries[query_block.source_name] = right_query;
-        subqueries_for_sets.emplace_back(subquries);
+        dagContext().addSubquery(query_block.source_name, std::move(right_query));
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
@@ -1057,7 +1050,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         context,
         *analyzer,
         query_block,
-        keep_session_timezone_info,
         final_project);
 
     if (res.before_where)
