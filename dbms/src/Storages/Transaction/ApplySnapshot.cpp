@@ -167,27 +167,26 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                 auto table_lock = storage->lockForShare(getThreadName());
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 auto new_key_range = DM::RowKeyRange::fromRegionRange(
-                    new_region_wrap->getRange(),
-                    table_id,
-                    storage->isCommonHandle(),
-                    storage->getRowKeyColumnSize());
+                    new_region_wrap->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
                 if (old_region)
                 {
                     auto old_key_range = DM::RowKeyRange::fromRegionRange(
-                        old_region->getRange(),
-                        table_id,
-                        storage->isCommonHandle(),
-                        storage->getRowKeyColumnSize());
+                        old_region->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
                     if (old_key_range != new_key_range)
                     {
-                        LOG_FMT_INFO(log, "clear region {} old range {} before apply snapshot of new range {}", region_id, old_key_range.toDebugString(), new_key_range.toDebugString());
+                        LOG_FMT_INFO(log,
+                            "clear region {} old range {} before apply snapshot of new range {}",
+                            region_id,
+                            old_key_range.toDebugString(),
+                            new_key_range.toDebugString());
                         dm_storage->deleteRange(old_key_range, context.getSettingsRef());
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
                 {
                     // Call `ingestFiles` to delete data for range and ingest external DTFiles.
-                    dm_storage->ingestFiles(new_key_range, new_region_wrap.ingest_ids, /*clear_data_in_range=*/true, context.getSettingsRef());
+                    dm_storage->ingestFiles(
+                        new_key_range, new_region_wrap.ingest_ids, /*clear_data_in_range=*/true, context.getSettingsRef());
                 }
                 else
                 {
