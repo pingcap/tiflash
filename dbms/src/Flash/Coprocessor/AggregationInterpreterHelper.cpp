@@ -30,6 +30,15 @@ bool isFinalAggMode(const tipb::Expr & expr)
         return true;
     return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
+
+bool isAllowToUseTwoLevelGroupBy(size_t before_agg_streams_size, const Settings & settings)
+{
+    /** Two-level aggregation is useful in two cases:
+      * 1. Parallel aggregation is done, and the results should be merged in parallel.
+      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
+      */
+    return before_agg_streams_size > 1 || settings.max_bytes_before_external_group_by != 0;
+}
 } // namespace
 
 bool isFinalAgg(const tipb::Aggregation & aggregation)
@@ -39,7 +48,7 @@ bool isFinalAgg(const tipb::Aggregation & aggregation)
     bool is_final_agg = true;
     if (aggregation.agg_func_size() > 0 && !isFinalAggMode(aggregation.agg_func(0)))
         is_final_agg = false;
-    for (int i = 1; i < aggregation.agg_func_size(); i++)
+    for (int i = 1; i < aggregation.agg_func_size(); ++i)
     {
         if (unlikely(is_final_agg != isFinalAggMode(aggregation.agg_func(i))))
             throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
@@ -73,11 +82,8 @@ Aggregator::Params buildParams(
 
     const Settings & settings = context.getSettingsRef();
 
-    /** Two-level aggregation is useful in two cases:
-      * 1. Parallel aggregation is done, and the results should be merged in parallel.
-      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
-      */
-    bool allow_to_use_two_level_group_by = before_agg_streams_size > 1 || settings.max_bytes_before_external_group_by != 0;
+    bool allow_to_use_two_level_group_by = isAllowToUseTwoLevelGroupBy(before_agg_streams_size, settings);
+
     bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
 
     return Aggregator::Params(
