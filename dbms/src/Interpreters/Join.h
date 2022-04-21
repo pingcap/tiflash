@@ -150,9 +150,19 @@ public:
 
     bool useNulls() const { return use_nulls; }
     const Names & getLeftJoinKeys() const { return key_names_left; }
-    size_t getBuildConcurrency() const { return build_concurrency; }
+
+    size_t getBuildConcurrency() const
+    {
+        std::shared_lock lock(rwlock);
+        return getBuildConcurrencyInternal();
+    }
+    size_t getNotJoinedStreamConcurrency() const
+    {
+        std::shared_lock lock(rwlock);
+        return getNotJoinedStreamConcurrencyInternal();
+    }
+
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
-    size_t getNotJoinedStreamConcurrency() const { return build_concurrency; };
 
     enum BuildTableState
     {
@@ -340,6 +350,17 @@ private:
     mutable std::shared_mutex rwlock;
 
     bool initialized = false;
+
+    size_t getBuildConcurrencyInternal() const
+    {
+        if (unlikely(build_concurrency == 0))
+            throw Exception("Logical error: `setBuildConcurrencyAndInitPool` has not been called", ErrorCodes::LOGICAL_ERROR);
+        return build_concurrency;
+    }
+    size_t getNotJoinedStreamConcurrencyInternal() const
+    {
+        return getBuildConcurrencyInternal();
+    }
 
     void init(Type type_);
 

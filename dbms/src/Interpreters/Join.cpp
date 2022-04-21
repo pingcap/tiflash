@@ -333,16 +333,16 @@ void Join::init(Type type_)
     if (!getFullness(kind))
     {
         if (strictness == ASTTableJoin::Strictness::Any)
-            initImpl(maps_any, type, build_concurrency);
+            initImpl(maps_any, type, getBuildConcurrencyInternal());
         else
-            initImpl(maps_all, type, build_concurrency);
+            initImpl(maps_all, type, getBuildConcurrencyInternal());
     }
     else
     {
         if (strictness == ASTTableJoin::Strictness::Any)
-            initImpl(maps_any_full, type, build_concurrency);
+            initImpl(maps_any_full, type, getBuildConcurrencyInternal());
         else
-            initImpl(maps_all_full, type, build_concurrency);
+            initImpl(maps_all_full, type, getBuildConcurrencyInternal());
     }
 }
 
@@ -420,15 +420,16 @@ ColumnRawPtrs getKeyColumns(const Names & key_names_right, const Block & block)
 
 void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
 {
-    RUNTIME_ASSERT(build_concurrency == 0 && pools.empty(), log, "`setBuildConcurrencyAndInitPool` shouldn't be called more than once");
+    if (unlikely(build_concurrency > 0))
+        throw Exception("Logical error: `setBuildConcurrencyAndInitPool` shouldn't be called more than once", ErrorCodes::LOGICAL_ERROR);
     build_concurrency = std::max(1, build_concurrency_);
 
-    for (size_t i = 0; i < getBuildConcurrency(); ++i)
+    for (size_t i = 0; i < getBuildConcurrencyInternal(); ++i)
         pools.emplace_back(std::make_shared<Arena>());
     // init for non-joined-streams.
     if (getFullness(kind))
     {
-        for (size_t i = 0; i < getNotJoinedStreamConcurrency(); ++i)
+        for (size_t i = 0; i < getNotJoinedStreamConcurrencyInternal(); ++i)
             rows_not_inserted_to_map.push_back(std::make_unique<RowRefList>());
     }
 }
@@ -472,7 +473,8 @@ void Join::setSampleBlock(const Block & block)
 void Join::init(const Block & sample_block, size_t build_concurrency_)
 {
     std::unique_lock lock(rwlock);
-    RUNTIME_ASSERT(!initialized, log, "Join has been initialized");
+    if (unlikely(initialized))
+        throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
     setBuildConcurrencyAndInitPool(build_concurrency_);
     /// Choose data structure to use for JOIN.
@@ -781,7 +783,8 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
 bool Join::insertFromBlock(const Block & block)
 {
     std::unique_lock lock(rwlock);
-    RUNTIME_ASSERT(initialized, log, "Logical error: Join was not initialized");
+    if (unlikely(!initialized))
+        throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     blocks.push_back(block);
     Block * stored_block = &blocks.back();
     return insertFromBlockInternal(stored_block, 0);
@@ -791,7 +794,8 @@ bool Join::insertFromBlock(const Block & block)
 void Join::insertFromBlock(const Block & block, size_t stream_index)
 {
     std::shared_lock lock(rwlock);
-    RUNTIME_ASSERT(initialized, log, "Logical error: Join was not initialized");
+    if (unlikely(!initialized))
+        throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
     Block * stored_block = nullptr;
     {
         std::lock_guard lk(blocks_lock);
@@ -887,16 +891,16 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         if (!getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, build_concurrency, *pools[stream_index]);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrencyInternal(), *pools[stream_index]);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, build_concurrency, *pools[stream_index]);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, key_sizes, collators, stored_block, null_map, nullptr, stream_index, getBuildConcurrencyInternal(), *pools[stream_index]);
         }
         else
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, build_concurrency, *pools[stream_index]);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *pools[stream_index]);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, build_concurrency, *pools[stream_index]);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *pools[stream_index]);
         }
     }
 
