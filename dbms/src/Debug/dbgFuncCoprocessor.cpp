@@ -380,10 +380,10 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
         output("Invalid");
         FmtBuffer fmt_buf;
         fmt_buf.joinStr(
-                failed_req_msg_vec.begin(),
-                failed_req_msg_vec.end(),
-                [](const auto & pair, FmtBuffer & fb) { fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second); },
-                "\n");
+            failed_req_msg_vec.begin(),
+            failed_req_msg_vec.end(),
+            [](const auto & pair, FmtBuffer & fb) { fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second); },
+            "\n");
         throw Exception(fmt_buf.toString(), ErrorCodes::LOGICAL_ERROR);
     }
 }
