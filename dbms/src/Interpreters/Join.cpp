@@ -26,7 +26,6 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
-#include <common/logger_useful.h>
 
 #include "executeQuery.h"
 
@@ -83,6 +82,23 @@ void convertColumnToNullable(ColumnWithTypeAndName & column)
     column.type = makeNullable(column.type);
     if (column.column)
         column.column = makeNullable(column.column);
+}
+
+ColumnRawPtrs getKeyColumns(const Names & key_names_right, const Block & block)
+{
+    size_t keys_size = key_names_right.size();
+    ColumnRawPtrs key_columns(keys_size);
+
+    for (size_t i = 0; i < keys_size; ++i)
+    {
+        key_columns[i] = block.getByName(key_names_right[i]).column.get();
+
+        /// We will join only keys, where all components are not NULL.
+        if (key_columns[i]->isColumnNullable())
+            key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
+    }
+
+    return key_columns;
 }
 } // namespace
 
@@ -416,21 +432,6 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
 
 void Join::setSampleBlock(const Block & block)
 {
-    size_t keys_size = key_names_right.size();
-    ColumnRawPtrs key_columns(keys_size);
-
-    for (size_t i = 0; i < keys_size; ++i)
-    {
-        key_columns[i] = block.getByName(key_names_right[i]).column.get();
-
-        /// We will join only keys, where all components are not NULL.
-        if (key_columns[i]->isColumnNullable())
-            key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
-    }
-
-    /// Choose data structure to use for JOIN.
-    init(chooseMethod(key_columns, key_sizes));
-
     sample_block_with_columns_to_add = materializeBlock(block);
 
     /// Move from `sample_block_with_columns_to_add` key columns to `sample_block_with_keys`, keeping the order.
@@ -472,6 +473,8 @@ void Join::init(const Block & sample_block, size_t build_concurrency_)
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
     setBuildConcurrencyAndInitPool(build_concurrency_);
+    /// Choose data structure to use for JOIN.
+    init(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
     setSampleBlock(sample_block);
 }
 
