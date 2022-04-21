@@ -593,11 +593,11 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     return page;
 }
 
-BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
+BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
     assert(buffers != nullptr);
     auto blob_file = getBlobFile(blob_id);
-    blob_file->read(buffers, offset, size, read_limiter);
+    blob_file->read(buffers, offset, size, read_limiter, background);
     return blob_file;
 }
 
@@ -790,7 +790,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 file_offset,
                 data_size,
                 total_page_size);
-            blob_file->write(data_beg, file_offset, data_size, write_limiter);
+            blob_file->write(data_beg, file_offset, data_size, write_limiter, /*background*/ true);
         }
         catch (DB::Exception & e)
         {
@@ -845,7 +845,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 
             PageEntryV3 new_entry;
 
-            read(file_id, entry.offset, data_pos, entry.size, read_limiter);
+            read(file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
 
             // No need do crc again, crc won't be changed.
             new_entry.checksum = entry.checksum;
