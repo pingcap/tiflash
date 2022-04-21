@@ -284,18 +284,18 @@ NamesAndTypes TiflashJoin::genJoinOutputColumns(
     return join_output_columns;
 }
 
-std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
+std::tuple<ExpressionActionsPtr, String, String> TiflashJoin::genJoinOtherConditionAction(
     const Context & context,
     const Block & left_input_header,
     const Block & right_input_header,
     const ExpressionActionsPtr & prepare_join_actions1,
     const ExpressionActionsPtr & prepare_join_actions2)
 {
-    auto columns_for_other_join_filter = tiflash_join.genColumnsForOtherJoinFilter(
+    auto columns_for_other_join_filter = genColumnsForOtherJoinFilter(
         left_input_header,
         right_input_header,
-        probe_side_prepare_actions,
-        build_side_prepare_actions);
+        prepare_join_actions1,
+        prepare_join_actions2);
 
     return doGenJoinOtherConditionAction(context, join, columns_for_other_join_filter);
 }
