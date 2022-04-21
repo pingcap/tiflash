@@ -113,11 +113,6 @@ public:
       */
     void init(const Block & sample_block, size_t build_concurrency_ = 1);
 
-    /** Add block of data from right hand of JOIN to the map.
-      * Returns false, if some limit was exceeded and you should not insert more data.
-      */
-    bool insertFromBlockInternal(Block * stored_block, size_t stream_index);
-
     bool insertFromBlock(const Block & block);
 
     void insertFromBlock(const Block & block, size_t stream_index);
@@ -376,6 +371,11 @@ private:
 
     /// Throw an exception if blocks have different types of key columns.
     void checkTypesOfKeys(const Block & block_left, const Block & block_right) const;
+
+    /** Add block of data from right hand of JOIN to the map.
+      * Returns false, if some limit was exceeded and you should not insert more data.
+      */
+    bool insertFromBlockInternal(Block * stored_block, size_t stream_index);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(Block & block, const Maps & maps) const;

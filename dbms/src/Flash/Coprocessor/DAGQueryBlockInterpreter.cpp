@@ -548,6 +548,9 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 
+    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
+    join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
+
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
     build_pipeline.transform(
@@ -556,8 +559,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
-    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
-    right_query.join->init(right_query.source->getHeader(), join_build_concurrency);
 
     NamesAndTypes source_columns;
     for (const auto & p : probe_pipeline.firstStream()->getHeader())
