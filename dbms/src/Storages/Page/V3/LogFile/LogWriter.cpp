@@ -67,9 +67,9 @@ size_t LogWriter::writtenBytes() const
     return written_bytes;
 }
 
-void LogWriter::flush(const WriteLimiterPtr & write_limiter)
+void LogWriter::flush(const WriteLimiterPtr & write_limiter, const bool background)
 {
-    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), write_limiter, false);
+    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), write_limiter, /*background*/ background, /*enable_failpoint*/ false);
     log_file->fsync();
     written_bytes += write_buffer.offset();
 
@@ -140,7 +140,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
 
     if (!manual_flush)
     {
-        flush(write_limiter);
+        flush(write_limiter, /* background */ false);
     }
 }
 
