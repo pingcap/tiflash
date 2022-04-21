@@ -161,7 +161,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
-    DM::StoragePoolRunMode storage_run_mode;
+    PageStorageRunMode storage_run_mode;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -1567,19 +1567,19 @@ static bool isPageStorageV2Existed(const PathPool & path_pool)
     return true;
 }
 
-void Context::initializeStoragePoolMode(const PathPool & path_pool, bool enable_ps_v3)
+void Context::initializePageStorageMode(const PathPool & path_pool, bool enable_ps_v3)
 {
     auto lock = getLock();
 
     if (!enable_ps_v3)
     {
-        shared->storage_run_mode = DM::StoragePoolRunMode::ONLY_V2;
+        shared->storage_run_mode = PageStorageRunMode::ONLY_V2;
     }
 
-    shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? DM::StoragePoolRunMode::MIX_MODE : DM::StoragePoolRunMode::ONLY_V3;
+    shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
 }
 
-DM::StoragePoolRunMode Context::getStoragePoolRunMode() const
+PageStorageRunMode Context::getPageStorageRunMode() const
 {
     auto lock = getLock();
     return shared->storage_run_mode;

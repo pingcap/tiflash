@@ -363,12 +363,12 @@ dt_page_gc_low_write_prob = 0.2
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
     std::unique_ptr<StoragePathPool> path_pool = std::make_unique<StoragePathPool>(global_ctx.getPathPool().withTable("test", "t1", false));
-    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>(DM::StoragePoolRunMode::ONLY_V2, /*ns_id*/ 100, nullptr, *path_pool, global_ctx, "test.t1");
+    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>(PageStorageRunMode::ONLY_V2, /*ns_id*/ 100, nullptr, *path_pool, global_ctx, "test.t1");
 
     auto verify_storage_pool_reload_config = [&global_ctx](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        auto cfg = storage_pool->data()->getSettings();
+        auto cfg = storage_pool->data_storage_v2->getSettings();
         EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
@@ -379,7 +379,7 @@ dt_page_gc_low_write_prob = 0.2
 
         storage_pool->gc(settings, DM::StoragePool::Seconds(0));
 
-        cfg = storage_pool->data()->getSettings();
+        cfg = storage_pool->data_storage_v2->getSettings();
         EXPECT_EQ(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_EQ(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_EQ(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
