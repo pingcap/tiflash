@@ -36,14 +36,15 @@ ASTPtr buildLiteral(const Field & field)
 
 ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
 {
-    std::vector<ASTPtr> vec;
+    std::vector<ASTPtr> vec(order_by_items.size());
+    size_t i = 0;
     for (auto item : order_by_items)
     {
-        int direction = item.second ? 1 : -1;
+        int direction = item.second ? 1 : -1; // todo
         ASTPtr locale_node;
         auto order_by_item = std::make_shared<ASTOrderByElement>(direction, direction, false, locale_node);
         order_by_item->children.push_back(std::make_shared<ASTIdentifier>(item.first));
-        vec.push_back(order_by_item);
+        vec[i++] = order_by_item;
     }
     auto exp_list = std::make_shared<ASTExpressionList>();
     exp_list->children.insert(exp_list->children.end(), vec.begin(), vec.end());
@@ -74,8 +75,8 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     MPPInfo mpp_info(properties.start_ts, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
-    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
     initDAGRequest(dag_request);
+    root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
     root.reset();
     executor_index = 0;
     return dag_request_ptr;
@@ -266,10 +267,11 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columns)
 {
-    std::vector<MockColumnInfo> v_column_info;
+    std::vector<MockColumnInfo> v_column_info(columns.size());
+    size_t i = 0;
     for (const auto & info : columns)
     {
-        v_column_info.push_back(std::move(info));
+        v_column_info[i++] = std::move(info);
     }
     mock_tables[name.first + "." + name.second] = v_column_info;
 }
@@ -291,10 +293,11 @@ void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockCol
 
 void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoList & columns)
 {
-    std::vector<MockColumnInfo> v_column_info;
+    std::vector<MockColumnInfo> v_column_info(columns.size());
+    size_t i = 0;
     for (const auto & info : columns)
     {
-        v_column_info.push_back(std::move(info));
+        v_column_info[i++] = std::move(info);
     }
     exchange_schemas[name] = v_column_info;
 }
