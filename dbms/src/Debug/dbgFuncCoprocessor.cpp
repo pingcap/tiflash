@@ -378,23 +378,13 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
     if (!failed_req_msg_vec.empty())
     {
         output("Invalid");
-        FmtBuffer msg_buffer;
-        bool first = true;
-        for (auto & it : failed_req_msg_vec)
-        {
-            String msg = fmt::format("request {} failed, msg: {}", it.first, it.second);
-            if (first)
-            {
-                msg_buffer.append(msg);
-                first = false;
-            }
-            else
-            {
-                msg_buffer.append("\n");
-                msg_buffer.append(msg);
-            }
-        }
-        throw Exception(msg_buffer.toString(), ErrorCodes::LOGICAL_ERROR);
+        FmtBuffer fmt_buf;
+        fmt_buf.joinStr(
+                failed_req_msg_vec.begin(),
+                failed_req_msg_vec.end(),
+                [](const auto & pair, FmtBuffer & fb) { fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second); },
+                "\n");
+        throw Exception(fmt_buf.toString(), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
