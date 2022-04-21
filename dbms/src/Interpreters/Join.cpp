@@ -77,6 +77,13 @@ bool isLeftSemiFamily(ASTTableJoin::Kind kind)
     return kind == ASTTableJoin::Kind::LeftSemi || kind == ASTTableJoin::Kind::LeftAnti
         || kind == ASTTableJoin::Kind::Cross_LeftSemi || kind == ASTTableJoin::Kind::Cross_LeftAnti;
 }
+
+void convertColumnToNullable(ColumnWithTypeAndName & column)
+{
+    column.type = makeNullable(column.type);
+    if (column.column)
+        column.column = makeNullable(column.column);
+}
 } // namespace
 
 const std::string Join::match_helper_prefix = "__left-semi-join-match-helper";
@@ -391,33 +398,6 @@ size_t Join::getTotalByteCount() const
     return res;
 }
 
-namespace
-{
-void convertColumnToNullable(ColumnWithTypeAndName & column)
-{
-    column.type = makeNullable(column.type);
-    if (column.column)
-        column.column = makeNullable(column.column);
-}
-
-ColumnRawPtrs getKeyColumns(const Names & key_names_right, const Block & block)
-{
-    size_t keys_size = key_names_right.size();
-    ColumnRawPtrs key_columns(keys_size);
-
-    for (size_t i = 0; i < keys_size; ++i)
-    {
-        key_columns[i] = block.getByName(key_names_right[i]).column.get();
-
-        /// We will join only keys, where all components are not NULL.
-        if (key_columns[i]->isColumnNullable())
-            key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
-    }
-
-    return key_columns;
-}
-} // namespace
-
 void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
 {
     if (unlikely(build_concurrency > 0))
@@ -436,6 +416,21 @@ void Join::setBuildConcurrencyAndInitPool(size_t build_concurrency_)
 
 void Join::setSampleBlock(const Block & block)
 {
+    size_t keys_size = key_names_right.size();
+    ColumnRawPtrs key_columns(keys_size);
+
+    for (size_t i = 0; i < keys_size; ++i)
+    {
+        key_columns[i] = block.getByName(key_names_right[i]).column.get();
+
+        /// We will join only keys, where all components are not NULL.
+        if (key_columns[i]->isColumnNullable())
+            key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
+    }
+
+    /// Choose data structure to use for JOIN.
+    init(chooseMethod(key_columns, key_sizes));
+
     sample_block_with_columns_to_add = materializeBlock(block);
 
     /// Move from `sample_block_with_columns_to_add` key columns to `sample_block_with_keys`, keeping the order.
@@ -1977,7 +1972,8 @@ public:
         , max_block_size(max_block_size_)
         , add_not_mapped_rows(true)
     {
-        if (step > parent.getBuildConcurrency() || index >= parent.getBuildConcurrency())
+        size_t build_concurrency = parent.getBuildConcurrency();
+        if (unlikely(step > build_concurrency || index >= build_concurrency))
             throw Exception("The concurrency of NonJoinedBlockInputStream should not be larger than join build concurrency");
 
         /** left_sample_block contains keys and "left" columns.

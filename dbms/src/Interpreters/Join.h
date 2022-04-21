@@ -287,7 +287,7 @@ private:
     /// Substitute NULLs for non-JOINed rows.
     bool use_nulls;
 
-    size_t build_concurrency;
+    std::atomic<size_t> build_concurrency;
     std::atomic_bool build_set_exceeded;
     /// collators for the join key
     const TiDB::TiDBCollators collators;
