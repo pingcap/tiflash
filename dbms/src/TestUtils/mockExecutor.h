@@ -85,8 +85,6 @@ public:
     DAGRequestBuilder & project(MockColumnNames col_names);
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
-    DAGRequestBuilder & exchangeSender(const MockColumnInfos & columns, tipb::ExchangeType exchange_type);
-
 
     // Currentlt only support inner join, left join and right join.
     // TODO support more types of join.

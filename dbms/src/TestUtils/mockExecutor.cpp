@@ -219,19 +219,6 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::exchangeSender(const MockColumnInfos & columns, tipb::ExchangeType exchange_type)
-{
-    DAGSchema schema;
-    for (const auto & column_info : columns)
-    {
-        ColumnInfo ci;
-        ci.tp = column_info.second;
-        schema.emplace_back(std::make_pair(column_info.first, std::move(ci)));
-    }
-    root = compileExchangeSender(schema, getExecutorIndex(), exchange_type);
-    return *this;
-}
-
 DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, ASTPtr using_expr_list)
 {
     return join(right, using_expr_list, ASTTableJoin::Kind::Inner);

@@ -1525,13 +1525,6 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
     return join;
 }
 
-
-ExecutorPtr compileExchangeSender(DAGSchema & schema, size_t & executor_index, tipb::ExchangeType exchange_type)
-{
-    ExecutorPtr exchange_sender = std::make_shared<mock::ExchangeSender>(executor_index, schema, exchange_type);
-    return exchange_sender;
-}
-
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type)
 {
     ExecutorPtr exchange_sender = std::make_shared<mock::ExchangeSender>(executor_index, input->output_schema, exchange_type);
