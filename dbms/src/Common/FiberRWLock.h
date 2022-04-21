@@ -20,8 +20,12 @@ namespace DB
 {
 /// FiberRWLock has the same interface with `std::shared_mutex` and is intended to
 /// work with `std::shared_lock` or `std::unique_lock`.
-/// FiberRWLock could work well both on OS thread and boost::fiber, though the
+/// FiberRWLock is designed to work well with both OS thread and boost::fiber, though the
 /// latter performs better.
+///
+/// It is designed as writer-first in that waiting writer will block following readers.
+/// TODO: if there's a new coming writer after some blocking readers, current implementation
+/// will let this writer go before readers. This simplifies the code but hurts the fairness.
 class FiberRWLock
 {
 public:
