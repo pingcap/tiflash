@@ -621,6 +621,8 @@ try
         else if (pageid == page_id2)
         {
             ASSERT_EQ(page.page_id, page_id2);
+            // the buffer size read is equal to the fields size we read
+            // field {2, 4}
             ASSERT_EQ(page.data.size(), 40);
             ASSERT_EQ(strncmp(page.data.begin(), &c_buff[60], 20), 0);
             ASSERT_EQ(strncmp(&page.data.begin()[20], &c_buff[100], 20), 0);
@@ -628,6 +630,8 @@ try
         else if (pageid == page_id3)
         {
             ASSERT_EQ(page.page_id, page_id3);
+            // the buffer size read is equal to the fields size we read
+            // field {1, 3}
             ASSERT_EQ(page.data.size(), 25);
             ASSERT_EQ(strncmp(page.data.begin(), &c_buff[10], 5), 0);
             ASSERT_EQ(strncmp(&page.data.begin()[5], &c_buff[35], 20), 0);
