@@ -180,7 +180,7 @@ TiflashJoin::TiflashJoin(const tipb::Join & join_)
     strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 }
 
-String TiflashJoin::genMatchHelperName(const Block & header1, const Block & header2)
+String TiflashJoin::genMatchHelperName(const Block & header1, const Block & header2) const
 {
     if (!isLeftSemiFamily())
     {
@@ -200,7 +200,7 @@ NamesAndTypes TiflashJoin::genColumnsForOtherJoinFilter(
     const Block & left_input_header,
     const Block & right_input_header,
     const ExpressionActionsPtr & prepare_join_actions1,
-    const ExpressionActionsPtr & prepare_join_actions2)
+    const ExpressionActionsPtr & prepare_join_actions2) const
 {
     /// columns_for_other_join_filter is a vector of columns used
     /// as the input columns when compiling other join filter.
@@ -241,7 +241,7 @@ NamesAndTypes TiflashJoin::genColumnsForOtherJoinFilter(
 /// all the columns from build side streams should be added after join, even for the join key.
 NamesAndTypesList TiflashJoin::genColumnsAddedByJoin(
     const Block & build_side_header,
-    const String & match_helper_name)
+    const String & match_helper_name) const
 {
     NamesAndTypesList columns_added_by_join;
     bool make_nullable = isTiflashLeftJoin();
@@ -259,7 +259,7 @@ NamesAndTypesList TiflashJoin::genColumnsAddedByJoin(
 NamesAndTypes TiflashJoin::genJoinOutputColumns(
     const Block & left_input_header,
     const Block & right_input_header,
-    const String & match_helper_name)
+    const String & match_helper_name) const
 {
     NamesAndTypes join_output_columns;
     auto append_output_columns = [&join_output_columns](const Block & header, bool make_nullable) {
@@ -289,7 +289,7 @@ std::tuple<ExpressionActionsPtr, String, String> TiflashJoin::genJoinOtherCondit
     const Block & left_input_header,
     const Block & right_input_header,
     const ExpressionActionsPtr & prepare_join_actions1,
-    const ExpressionActionsPtr & prepare_join_actions2)
+    const ExpressionActionsPtr & prepare_join_actions2) const
 {
     auto columns_for_other_join_filter = genColumnsForOtherJoinFilter(
         left_input_header,
