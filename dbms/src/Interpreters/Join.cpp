@@ -474,10 +474,10 @@ void Join::init(const Block & sample_block, size_t build_concurrency_)
     std::unique_lock lock(rwlock);
     RUNTIME_ASSERT(!initialized, log, "Join has been initialized");
     initialized = true;
+    setBuildConcurrencyAndInitPool(build_concurrency_);
     /// Choose data structure to use for JOIN.
     init(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
     setSampleBlock(sample_block);
-    setBuildConcurrencyAndInitPool(build_concurrency_);
 }
 
 
