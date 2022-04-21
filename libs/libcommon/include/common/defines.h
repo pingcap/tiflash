@@ -199,3 +199,9 @@ static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
 #define TIFLASH_DUMMY_FUNCTION_DEFINITION
 #define tiflash_compiler_builtin_memcpy __builtin_memcpy
 #endif
+
+#ifdef __clang__
+#define MAYBE_UNUSED_MEMBER [[maybe_unused]]
+#else
+#define MAYBE_UNUSED_MEMBER
+#endif
