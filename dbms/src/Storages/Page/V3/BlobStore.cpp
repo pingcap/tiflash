@@ -372,6 +372,21 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
     for (const auto & p : entries)
         buf_size = std::max(buf_size, p.second.size);
 
+    // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
+    // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
+    if (buf_size == 0)
+    {
+        for (const auto & [page_id_v3, entry] : entries)
+        {
+            (void)entry;
+            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            Page page;
+            page.page_id = page_id_v3.low;
+            handler(page_id_v3.low, page);
+        }
+        return;
+    }
+
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
@@ -418,11 +433,23 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry.offset < b.entry.offset; });
 
     // allocate data_buf that can hold all pages with specify fields
+
     size_t buf_size = 0;
     for (auto & [page_id, entry, fields] : to_read)
     {
         (void)page_id;
-        buf_size += entry.size;
+        // Sort fields to get better read on disk
+        std::sort(fields.begin(), fields.end());
+        for (const auto field_index : fields)
+        {
+            buf_size += entry.getFieldSize(field_index);
+        }
+    }
+
+    // Read with `FieldReadInfos`, buf_size must not be 0.
+    if (buf_size == 0)
+    {
+        throw Exception("Reading with fields but entry size is 0.", ErrorCodes::LOGICAL_ERROR);
     }
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
@@ -476,13 +503,13 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
 
         Page page;
         page.page_id = page_id_v3.low;
-        page.data = ByteBuffer(pos, pos + entry.size);
+        page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
         page_map.emplace(page_id_v3.low, std::move(page));
 
-        pos += entry.size;
+        pos = write_offset;
     }
 
     if (unlikely(pos != data_buf + buf_size))
@@ -507,6 +534,22 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     for (const auto & p : entries)
     {
         buf_size += p.second.size;
+    }
+
+    // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
+    // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
+    if (buf_size == 0)
+    {
+        PageMap page_map;
+        for (const auto & [page_id_v3, entry] : entries)
+        {
+            (void)entry;
+            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            Page page;
+            page.page_id = page_id_v3.low;
+            page_map.emplace(page_id_v3.low, page);
+        }
+        return page_map;
     }
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
@@ -560,6 +603,16 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
 {
     const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
+
+    // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
+    // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
+    if (buf_size == 0)
+    {
+        LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+        Page page;
+        page.page_id = page_id_v3.low;
+        return page;
+    }
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
