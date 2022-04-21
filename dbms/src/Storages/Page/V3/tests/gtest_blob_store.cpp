@@ -572,6 +572,74 @@ TEST_F(BlobStoreTest, testWriteRead)
     ASSERT_EQ(index, buff_nums);
 }
 
+TEST_F(BlobStoreTest, testWriteReadWithFiled)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+
+    PageId page_id1 = 50;
+    PageId page_id2 = 51;
+    PageId page_id3 = 53;
+
+    size_t buff_size = 120;
+    WriteBatch wb;
+
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    char c_buff[buff_size];
+
+    for (size_t j = 0; j < buff_size; ++j)
+    {
+        c_buff[j] = static_cast<char>(j & 0xff);
+    }
+
+    ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
+    ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
+    ReadBufferPtr buff3 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
+    wb.putPage(page_id1, /* tag */ 0, buff1, buff_size, {20, 40, 40, 20});
+    wb.putPage(page_id2, /* tag */ 0, buff2, buff_size, {10, 50, 20, 20, 20});
+    wb.putPage(page_id3, /* tag */ 0, buff3, buff_size, {10, 5, 20, 20, 15, 5, 15, 30});
+    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    ASSERT_EQ(edit.size(), 3);
+
+    BlobStore::FieldReadInfo read_info1(buildV3Id(TEST_NAMESPACE_ID, page_id1), edit.getRecords()[0].entry, {0, 1, 2, 3});
+    BlobStore::FieldReadInfo read_info2(buildV3Id(TEST_NAMESPACE_ID, page_id2), edit.getRecords()[1].entry, {2, 4});
+    BlobStore::FieldReadInfo read_info3(buildV3Id(TEST_NAMESPACE_ID, page_id3), edit.getRecords()[2].entry, {1, 3});
+
+    BlobStore::FieldReadInfos read_infos = {read_info1, read_info2, read_info3};
+
+    const auto & page_map = blob_store.read(read_infos, nullptr);
+    ASSERT_EQ(page_map.size(), 3);
+
+    for (const auto & [pageid, page] : page_map)
+    {
+        if (pageid == page_id1)
+        {
+            ASSERT_EQ(page.page_id, page_id1);
+            ASSERT_EQ(page.data.size(), buff_size);
+            ASSERT_EQ(strncmp(page.data.begin(), c_buff, buff_size), 0);
+        }
+        else if (pageid == page_id2)
+        {
+            ASSERT_EQ(page.page_id, page_id2);
+            // the buffer size read is equal to the fields size we read
+            // field {2, 4}
+            ASSERT_EQ(page.data.size(), 40);
+            ASSERT_EQ(strncmp(page.data.begin(), &c_buff[60], 20), 0);
+            ASSERT_EQ(strncmp(&page.data.begin()[20], &c_buff[100], 20), 0);
+        }
+        else if (pageid == page_id3)
+        {
+            ASSERT_EQ(page.page_id, page_id3);
+            // the buffer size read is equal to the fields size we read
+            // field {1, 3}
+            ASSERT_EQ(page.data.size(), 25);
+            ASSERT_EQ(strncmp(page.data.begin(), &c_buff[10], 5), 0);
+            ASSERT_EQ(strncmp(&page.data.begin()[5], &c_buff[35], 20), 0);
+        }
+    }
+}
+CATCH
+
 TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
@@ -651,8 +719,8 @@ try
     const size_t buff_size = 1024;
     WriteBatch wb;
     {
-        char c_buff1[buff_size];
-        char c_buff2[buff_size];
+        char c_buff1[buff_size] = {0};
+        char c_buff2[buff_size] = {0};
 
         for (size_t i = 0; i < buff_size; ++i)
         {
@@ -777,7 +845,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
     config.file_limit_size = buff_size;
 
     size_t buffer_sizes[] = {buff_size, buff_size - 1, buff_size / 2 + 1};
-    for (auto & buf_size : buffer_sizes)
+    for (const auto & buf_size : buffer_sizes)
     {
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 

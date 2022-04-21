@@ -17,6 +17,7 @@
 #include <Debug/astToExecutor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
+#include <tipb/executor.pb.h>
 
 #include <initializer_list>
 #include <unordered_map>
@@ -32,6 +33,7 @@ using MockOrderByItems = std::initializer_list<MockOrderByItem>;
 using MockColumnNames = std::initializer_list<String>;
 using MockAsts = std::initializer_list<ASTPtr>;
 
+class MockDAGRequestContext;
 
 /** Responsible for Hand write tipb::DAGRequest
   * Use this class to mock DAGRequest, then feed the DAGRequest into 
@@ -51,13 +53,22 @@ public:
 
     explicit DAGRequestBuilder(size_t & index)
         : executor_index(index)
-    {}
+    {
+    }
 
-    std::shared_ptr<tipb::DAGRequest> build(Context & context);
+    ExecutorPtr getRoot()
+    {
+        return root;
+    }
+
+    std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
 
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoList & columns);
+
+    DAGRequestBuilder & exchangeReceiver(const MockColumnInfos & columns);
+    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoList & columns);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -73,6 +84,8 @@ public:
     DAGRequestBuilder & project(MockAsts expr);
     DAGRequestBuilder & project(MockColumnNames col_names);
 
+    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
+
     // Currentlt only support inner join, left join and right join.
     // TODO support more types of join.
     DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list);
@@ -85,6 +98,7 @@ public:
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
+    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfos & columns);
 
     ExecutorPtr root;
     DAGProperties properties;
@@ -97,7 +111,8 @@ private:
 class MockDAGRequestContext
 {
 public:
-    MockDAGRequestContext()
+    explicit MockDAGRequestContext(Context context_)
+        : context(context_)
     {
         index = 0;
     }
@@ -110,12 +125,22 @@ public:
     void addMockTable(const MockTableName & name, const MockColumnInfoList & columns);
     void addMockTable(const String & db, const String & table, const MockColumnInfos & columns);
     void addMockTable(const MockTableName & name, const MockColumnInfos & columns);
-
+    void addExchangeRelationSchema(String name, const MockColumnInfos & columns);
+    void addExchangeRelationSchema(String name, const MockColumnInfoList & columns);
     DAGRequestBuilder scan(String db_name, String table_name);
+    DAGRequestBuilder receive(String exchange_name);
 
 private:
     size_t index;
     std::unordered_map<String, MockColumnInfos> mock_tables;
+    std::unordered_map<String, MockColumnInfos> exchange_schemas;
+
+public:
+    // Currently don't support task_id, so the following to structure is useless,
+    // but we need it to contruct the TaskMeta.
+    // In TiFlash, we use task_id to identify an Mpp Task.
+    std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    Context context;
 };
 
 ASTPtr buildColumn(const String & column_name);
