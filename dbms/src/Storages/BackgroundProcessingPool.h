@@ -3,7 +3,6 @@
 #include <Core/Types.h>
 #include <Poco/Event.h>
 #include <Poco/Timestamp.h>
-#include <absl/synchronization/blocking_counter.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -15,6 +14,30 @@
 #include <shared_mutex>
 #include <thread>
 
+namespace absl
+{
+// BlockingCounter is ported from https://github.com/abseil/abseil-cpp/blob/215105818dfde3174fe799600bb0f3cae233d0bf/absl/synchronization/blocking_counter.h
+// for the reason that v5.4 doesn't include abseil-cpp.
+// And use std::mutex and std::condition_variable to replace absl::Mutex.
+class BlockingCounter
+{
+public:
+    explicit BlockingCounter(int initial_count);
+
+    BlockingCounter(const BlockingCounter &) = delete;
+    BlockingCounter & operator=(const BlockingCounter &) = delete;
+
+    bool DecrementCount();
+    void Wait();
+
+private:
+    std::mutex lock;
+    std::condition_variable cv;
+    std::atomic<int> count;
+    int num_waiting;
+    bool done;
+};
+} // namespace absl
 namespace DB
 {
 class Context;

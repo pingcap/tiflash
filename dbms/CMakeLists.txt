@@ -196,7 +196,6 @@ target_link_libraries (dbms
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
-    absl::synchronization
 )
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)

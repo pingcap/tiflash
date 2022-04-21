@@ -32,6 +32,56 @@ extern const Metric BackgroundPoolTask;
 extern const Metric MemoryTrackingInBackgroundProcessingPool;
 } // namespace CurrentMetrics
 
+namespace absl
+{
+BlockingCounter::BlockingCounter(int initial_count)
+    : count(initial_count)
+    , num_waiting(0)
+    , done{initial_count == 0 ? true : false}
+{
+    if (initial_count < 0)
+    {
+        throw std::logic_error("BlockingCounter initial_count negative");
+    }
+}
+
+bool BlockingCounter::DecrementCount()
+{
+    int c = count.fetch_sub(1, std::memory_order_acq_rel) - 1;
+    if (c < 0)
+    {
+        throw std::logic_error("BlockingCounter::DecrementCount() called too many times");
+    }
+    if (count == 0)
+    {
+        {
+            std::lock_guard l(lock);
+            done = true;
+        }
+        cv.notify_one();
+        return true;
+    }
+    return false;
+}
+
+void BlockingCounter::Wait()
+{
+    std::unique_lock l(lock);
+    // only one thread may call Wait(). To support more than one thread,
+    // implement a counter num_to_exit, like in the Barrier class.
+    if (num_waiting != 0)
+    {
+        std::logic_error("multiple threads called Wait()");
+    }
+    num_waiting++;
+    cv.wait(l, [&] { return done; });
+
+    // At this point, we know that all threads executing DecrementCount
+    // will not touch this object again.
+    // Therefore, the thread calling this method is free to delete the object
+    // after we return from this method.
+}
+} // namespace absl
 namespace DB
 {
 constexpr double BackgroundProcessingPool::sleep_seconds;
