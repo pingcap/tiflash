@@ -215,8 +215,8 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
 
-    const auto & storage_pool_run_mode = global_context.getStoragePoolRunMode();
-    if (storage_pool_run_mode == StoragePoolRunMode::ONLY_V3 || storage_pool_run_mode == StoragePoolRunMode::MIX_MODE)
+    const auto & storage_pool_run_mode = global_context.getPageStorageRunMode();
+    if (storage_pool_run_mode == PageStorageRunMode::ONLY_V3 || storage_pool_run_mode == PageStorageRunMode::MIX_MODE)
     {
         GlobalStoragePool::init(global_context.getPathPool(), global_context, db_context.getSettingsRef());
     }
@@ -335,7 +335,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     };
     callbacks.ns_id = storage_pool->getNamespaceId();
     // remember to unregister it when shutdown
-    storage_pool->data()->registerExternalPagesCallbacks(callbacks);
+    storage_pool->dataRegisterExternalPagesCallbacks(callbacks);
     storage_pool->enableGC();
 
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });
@@ -439,7 +439,7 @@ void DeltaMergeStore::shutdown()
     // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
     // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
     storage_pool->shutdown();
-    storage_pool->data()->unregisterExternalPagesCallbacks(storage_pool->getNamespaceId());
+    storage_pool->dataUnregisterExternalPagesCallbacks(storage_pool->getNamespaceId());
 
     background_pool.removeTask(background_task_handle);
     blockable_background_pool.removeTask(blockable_background_pool_handle);
@@ -2345,12 +2345,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
     static const String useless_tracing_id("DeltaMergeStore::getStat");
     {
-        auto snaps_stat = storage_pool->data()->getSnapshotsStat();
+        auto snaps_stat = storage_pool->dataReader()->getSnapshotsStat();
         stat.storage_stable_num_snapshots = snaps_stat.num_snapshots;
         stat.storage_stable_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_stable_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_stable_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr stable_snapshot = storage_pool->data()->getSnapshot(useless_tracing_id);
+        PageStorage::SnapshotPtr stable_snapshot = storage_pool->dataReader()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
         if (concrete_snap)
         {
@@ -2367,12 +2367,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
     }
     {
-        auto snaps_stat = storage_pool->log()->getSnapshotsStat();
+        auto snaps_stat = storage_pool->logReader()->getSnapshotsStat();
         stat.storage_delta_num_snapshots = snaps_stat.num_snapshots;
         stat.storage_delta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_delta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_delta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr log_snapshot = storage_pool->log()->getSnapshot(useless_tracing_id);
+        PageStorage::SnapshotPtr log_snapshot = storage_pool->logReader()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
         if (concrete_snap)
         {
@@ -2389,12 +2389,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
     }
     {
-        auto snaps_stat = storage_pool->meta()->getSnapshotsStat();
+        auto snaps_stat = storage_pool->metaReader()->getSnapshotsStat();
         stat.storage_meta_num_snapshots = snaps_stat.num_snapshots;
         stat.storage_meta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
         stat.storage_meta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_meta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr meta_snapshot = storage_pool->meta()->getSnapshot(useless_tracing_id);
+        PageStorage::SnapshotPtr meta_snapshot = storage_pool->metaReader()->getSnapshot(useless_tracing_id);
         const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
         if (concrete_snap)
         {

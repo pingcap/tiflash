@@ -72,7 +72,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             properties.push_back(property);
         }
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_unique<DB::DM::StoragePool>(StoragePoolRunMode::ONLY_V2, /*ns_id*/ 1, nullptr, *path_pool, *db_context, "test.t1");
+        auto storage_pool = std::make_unique<DB::DM::StoragePool>(PageStorageRunMode::ONLY_V2, /*ns_id*/ 1, nullptr, *path_pool, *db_context, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,

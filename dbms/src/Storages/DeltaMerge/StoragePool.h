@@ -35,13 +35,6 @@ using StoragePoolPtr = std::shared_ptr<StoragePool>;
 
 static const std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
 
-enum class StoragePoolRunMode : UInt8
-{
-    ONLY_V2 = 1,
-    ONLY_V3 = 2,
-    MIX_MODE = 3,
-};
-
 class GlobalStoragePool : private boost::noncopyable
 {
 public:
@@ -80,9 +73,7 @@ public:
 
     void restore();
 
-    PageStoragePtr log() const { return log_storage; }
-    PageStoragePtr data() const { return data_storage; }
-    PageStoragePtr meta() const { return meta_storage; }
+    friend class StoragePool;
 
 private:
     // TODO: maybe more frequent gc for GlobalStoragePool?
@@ -110,7 +101,7 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-    StoragePool(StoragePoolRunMode mode, NamespaceId ns_id_, const GlobalStoragePoolPtr & global_storage_pool, StoragePathPool & path_pool, Context & global_ctx, const String & name = "");
+    StoragePool(PageStorageRunMode mode, NamespaceId ns_id_, const GlobalStoragePoolPtr & global_storage_pool, StoragePathPool & path_pool, Context & global_ctx, const String & name = "");
 
     void restore();
 
@@ -118,30 +109,83 @@ public:
 
     NamespaceId getNamespaceId() const { return ns_id; }
 
-    // TODO remove
-    PageStoragePtr log() const { return log_storage_v2; }
-    PageStoragePtr data() const { return data_storage_v2; }
-    PageStoragePtr meta() const { return meta_storage_v2; }
+    PageReaderPtr & logReader()
+    {
+        assert(log_storage_reader != nullptr);
+        return log_storage_reader;
+    }
 
-    PageReaderPtr & logReader() { return log_storage_reader; }
-    PageReaderPtr & dataReader() { return data_storage_reader; }
-    PageReaderPtr & metaReader() { return meta_storage_reader; }
+    PageReaderPtr & dataReader()
+    {
+        assert(data_storage_reader != nullptr);
+        return data_storage_reader;
+    }
 
-    // TODO change to two snapshot from both of v2 and v3
+    PageReaderPtr & metaReader()
+    {
+        assert(meta_storage_reader != nullptr);
+        return meta_storage_reader;
+    }
+
+    PageWriterPtr & logWriter()
+    {
+        assert(log_storage_writer != nullptr);
+        return log_storage_writer;
+    }
+
+    PageWriterPtr & dataWriter()
+    {
+        assert(data_storage_writer != nullptr);
+        return data_storage_writer;
+    }
+
+    PageWriterPtr & metaWriter()
+    {
+        assert(meta_storage_writer != nullptr);
+        return meta_storage_writer;
+    }
+
     PageReader newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
     {
-        return PageReader(ns_id, log_storage_v2, snapshot_read ? log_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
+        return PageReader(run_mode, ns_id, log_storage_v2, log_storage_v3, snapshot_read ? log_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
     }
+
+    PageReader newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
+    {
+        return PageReader(run_mode, ns_id, log_storage_v2, log_storage_v3, snapshot, read_limiter);
+    }
+
     PageReader newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
     {
-        return PageReader(ns_id, data_storage_v2, snapshot_read ? data_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
+        return PageReader(run_mode, ns_id, data_storage_v2, data_storage_v3, snapshot_read ? data_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
     }
+
+    PageReader newDataReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
+    {
+        return PageReader(run_mode, ns_id, data_storage_v2, data_storage_v3, snapshot, read_limiter);
+    }
+
     PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
     {
-        return PageReader(ns_id, meta_storage_v2, snapshot_read ? meta_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
+        return PageReader(run_mode, ns_id, meta_storage_v2, meta_storage_v3, snapshot_read ? meta_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
+    }
+
+    PageReader newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
+    {
+        return PageReader(run_mode, ns_id, meta_storage_v2, meta_storage_v3, snapshot, read_limiter);
     }
 
     void enableGC();
+
+    void dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
+    {
+        data_storage_v2->registerExternalPagesCallbacks(callbacks);
+    }
+
+    void dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
+    {
+        data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
+    }
 
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
@@ -153,12 +197,12 @@ public:
     PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
 
     PageId maxMetaPageId() { return max_meta_page_id; }
-
     PageId newLogPageId() { return ++max_log_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
-
+#ifndef DBMS_PUBLIC_GTEST
 private:
-    StoragePoolRunMode run_mode = StoragePoolRunMode::ONLY_V2;
+#endif
+    const PageStorageRunMode run_mode;
 
     // whether the three storage instance is owned by this StoragePool
     const NamespaceId ns_id;
@@ -174,6 +218,10 @@ private:
     PageReaderPtr log_storage_reader;
     PageReaderPtr data_storage_reader;
     PageReaderPtr meta_storage_reader;
+
+    PageWriterPtr log_storage_writer;
+    PageWriterPtr data_storage_writer;
+    PageWriterPtr meta_storage_writer;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 

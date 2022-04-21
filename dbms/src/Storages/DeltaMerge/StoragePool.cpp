@@ -65,26 +65,6 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     return config;
 }
 
-template <class T>
-static bool doStoragePoolGC(const Context & global_context, const Settings & settings, const T & storage_pool)
-{
-    bool done_anything = false;
-    auto write_limiter = global_context.getWriteLimiter();
-    auto read_limiter = global_context.getReadLimiter();
-    auto config = extractConfig(settings, StorageType::Meta);
-    storage_pool.meta()->reloadSettings(config);
-    done_anything |= storage_pool.meta()->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Data);
-    storage_pool.data()->reloadSettings(config);
-    done_anything |= storage_pool.data()->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Log);
-    storage_pool.log()->reloadSettings(config);
-    done_anything |= storage_pool.log()->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    return done_anything;
-}
 
 std::shared_ptr<GlobalStoragePool> GlobalStoragePool::global_storage_pool = nullptr;
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
@@ -145,17 +125,32 @@ bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_per
         last_try_gc_time = now;
     }
 
-    return doStoragePoolGC(global_context, settings, *this);
+    bool done_anything = false;
+    auto write_limiter = global_context.getWriteLimiter();
+    auto read_limiter = global_context.getReadLimiter();
+    auto config = extractConfig(settings, StorageType::Meta);
+    meta_storage->reloadSettings(config);
+    done_anything |= meta_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Data);
+    data_storage->reloadSettings(config);
+    done_anything |= data_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Log);
+    log_storage->reloadSettings(config);
+    done_anything |= log_storage->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    return done_anything;
 }
 
-StoragePool::StoragePool(StoragePoolRunMode mode, NamespaceId ns_id_, const GlobalStoragePoolPtr & global_storage_pool, StoragePathPool & storage_path_pool, Context & global_ctx, const String & name)
+StoragePool::StoragePool(PageStorageRunMode mode, NamespaceId ns_id_, const GlobalStoragePoolPtr & global_storage_pool, StoragePathPool & storage_path_pool, Context & global_ctx, const String & name)
     : run_mode(mode)
     , ns_id(ns_id_)
     , global_context(global_ctx)
 {
     switch (run_mode)
     {
-    case StoragePoolRunMode::ONLY_V2:
+    case PageStorageRunMode::ONLY_V2:
     {
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
@@ -169,30 +164,38 @@ StoragePool::StoragePool(StoragePoolRunMode mode, NamespaceId ns_id_, const Glob
                                               storage_path_pool.getPSDiskDelegatorMulti("meta"),
                                               extractConfig(global_context.getSettingsRef(), StorageType::Meta),
                                               global_ctx.getFileProvider());
-        log_storage_reader = std::make_shared<PageReader>(ns_id, log_storage_v2, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(ns_id, data_storage_v2, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(ns_id, meta_storage_v2, nullptr);
+        log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, /*storage_v3_*/ nullptr, nullptr);
+        data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, /*storage_v3_*/ nullptr, nullptr);
+        meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, /*storage_v3_*/ nullptr, nullptr);
+
+        log_storage_writer = std::make_shared<PageWriter>(run_mode, log_storage_v2, /*storage_v3_*/ nullptr);
+        data_storage_writer = std::make_shared<PageWriter>(run_mode, data_storage_v2, /*storage_v3_*/ nullptr);
+        meta_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, /*storage_v3_*/ nullptr);
         break;
     }
-    case StoragePoolRunMode::ONLY_V3:
+    case PageStorageRunMode::ONLY_V3:
     {
         assert(global_storage_pool != nullptr);
-        log_storage_v3 = global_storage_pool->log();
-        data_storage_v3 = global_storage_pool->data();
-        meta_storage_v3 = global_storage_pool->meta();
+        log_storage_v3 = global_storage_pool->log_storage;
+        data_storage_v3 = global_storage_pool->data_storage;
+        meta_storage_v3 = global_storage_pool->meta_storage;
 
-        log_storage_reader = std::make_shared<PageReader>(ns_id, log_storage_v3, nullptr);
-        data_storage_reader = std::make_shared<PageReader>(ns_id, data_storage_v3, nullptr);
-        meta_storage_reader = std::make_shared<PageReader>(ns_id, meta_storage_v3, nullptr);
+        log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
+        data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
+        meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
+
+        log_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, log_storage_v3);
+        data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
+        meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
 
         break;
     }
-    case StoragePoolRunMode::MIX_MODE:
+    case PageStorageRunMode::MIX_MODE:
     {
         assert(global_storage_pool != nullptr);
-        log_storage_v3 = global_storage_pool->log();
-        data_storage_v3 = global_storage_pool->data();
-        meta_storage_v3 = global_storage_pool->meta();
+        log_storage_v3 = global_storage_pool->log_storage;
+        data_storage_v3 = global_storage_pool->data_storage;
+        meta_storage_v3 = global_storage_pool->meta_storage;
 
         log_storage_v2 = PageStorage::create(name + ".log",
                                              storage_path_pool.getPSDiskDelegatorMulti("log"),
@@ -207,21 +210,24 @@ StoragePool::StoragePool(StoragePoolRunMode mode, NamespaceId ns_id_, const Glob
                                               extractConfig(global_context.getSettingsRef(), StorageType::Meta),
                                               global_ctx.getFileProvider());
 
-        // log_storage_reader = std::make_shared<PageReader>(ns_id, log_storage, nullptr);
-        // data_storage_reader = std::make_shared<PageReader>(ns_id, data_storage, nullptr);
-        // meta_storage_reader = std::make_shared<PageReader>(ns_id, meta_storage, nullptr);
+        log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, log_storage_v3, nullptr);
+        data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, data_storage_v3, nullptr);
+        meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, meta_storage_v3, nullptr);
 
+        log_storage_writer = std::make_shared<PageWriter>(run_mode, log_storage_v2, log_storage_v3);
+        data_storage_writer = std::make_shared<PageWriter>(run_mode, data_storage_v2, data_storage_v3);
+        meta_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, meta_storage_v3);
         break;
     }
     default:
-        throw Exception(fmt::format("Unknown StoragePoolRunMode {}", static_cast<UInt8>(run_mode)));
+        throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)));
     }
 }
 
 void StoragePool::restore()
 {
     // If the storage instances is not global, we need to initialize it by ourselves and add a gc task.
-    if (run_mode == StoragePoolRunMode::ONLY_V2 || run_mode == StoragePoolRunMode::MIX_MODE)
+    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
     {
         log_storage_v2->restore();
         data_storage_v2->restore();
@@ -230,21 +236,21 @@ void StoragePool::restore()
 
     switch (run_mode)
     {
-    case StoragePoolRunMode::ONLY_V2:
+    case PageStorageRunMode::ONLY_V2:
     {
         max_log_page_id = log_storage_v2->getMaxId(ns_id);
         max_data_page_id = data_storage_v2->getMaxId(ns_id);
         max_meta_page_id = meta_storage_v2->getMaxId(ns_id);
         break;
     }
-    case StoragePoolRunMode::ONLY_V3:
+    case PageStorageRunMode::ONLY_V3:
     {
         max_log_page_id = log_storage_v3->getMaxId(ns_id);
         max_data_page_id = data_storage_v3->getMaxId(ns_id);
         max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
         break;
     }
-    case StoragePoolRunMode::MIX_MODE:
+    case PageStorageRunMode::MIX_MODE:
     {
         max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), log_storage_v3->getMaxId(ns_id));
         max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), data_storage_v3->getMaxId(ns_id));
@@ -261,7 +267,7 @@ StoragePool::~StoragePool()
 
 void StoragePool::enableGC()
 {
-    if (run_mode == StoragePoolRunMode::ONLY_V2 || run_mode == StoragePoolRunMode::MIX_MODE)
+    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
     {
         gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
     }
@@ -269,7 +275,7 @@ void StoragePool::enableGC()
 
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
-    if (run_mode == StoragePoolRunMode::ONLY_V3)
+    if (run_mode == PageStorageRunMode::ONLY_V3)
         return false;
 
     {
@@ -283,7 +289,22 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
         last_try_gc_time = now;
     }
 
-    return doStoragePoolGC(global_context, settings, *this);
+    // Only do the v2 GC
+    bool done_anything = false;
+    auto write_limiter = global_context.getWriteLimiter();
+    auto read_limiter = global_context.getReadLimiter();
+    auto config = extractConfig(settings, StorageType::Meta);
+    meta_storage_v2->reloadSettings(config);
+    done_anything |= meta_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Data);
+    data_storage_v2->reloadSettings(config);
+    done_anything |= data_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Log);
+    log_storage_v2->reloadSettings(config);
+    done_anything |= log_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
+    return done_anything;
 }
 
 void StoragePool::shutdown()
@@ -299,7 +320,7 @@ void StoragePool::drop()
 {
     shutdown();
 
-    if (run_mode == StoragePoolRunMode::ONLY_V2 || run_mode == StoragePoolRunMode::MIX_MODE)
+    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
     {
         meta_storage_v2->drop();
         data_storage_v2->drop();

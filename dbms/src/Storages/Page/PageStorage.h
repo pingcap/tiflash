@@ -46,6 +46,14 @@ class Context;
 class PageStorage;
 using PageStoragePtr = std::shared_ptr<PageStorage>;
 
+
+enum class PageStorageRunMode : UInt8
+{
+    ONLY_V2 = 1,
+    ONLY_V3 = 2,
+    MIX_MODE = 3,
+};
+
 struct ExternalPageCallbacks
 {
     // `scanner` for scanning avaliable external page ids on disks.
@@ -279,70 +287,149 @@ class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(NamespaceId ns_id_, PageStoragePtr storage_, ReadLimiterPtr read_limiter_)
-        : ns_id(ns_id_)
-        , storage(storage_)
+    explicit PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_)
+        : run_mode(run_mode_)
+        , ns_id(ns_id_)
+        , storage_v2(storage_v2_)
+        , storage_v3(storage_v3_)
         , read_limiter(read_limiter_)
-    {}
+    {
+        (void)run_mode;
+        (void)storage_v3;
+    }
 
     /// Snapshot read.
-    PageReader(NamespaceId ns_id_, PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
-        : ns_id(ns_id_)
-        , storage(storage_)
+    PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
+        : run_mode(run_mode_)
+        , ns_id(ns_id_)
+        , storage_v2(storage_v2_)
+        , storage_v3(storage_v3_)
         , snap(snap_)
         , read_limiter(read_limiter_)
-    {}
-    PageReader(NamespaceId ns_id_, PageStoragePtr storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
-        : ns_id(ns_id_)
-        , storage(storage_)
+    {
+        (void)run_mode;
+        (void)storage_v3;
+    }
+
+    PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
+        : run_mode(run_mode_)
+        , ns_id(ns_id_)
+        , storage_v2(storage_v2_)
+        , storage_v3(storage_v3_)
         , snap(std::move(snap_))
         , read_limiter(read_limiter_)
-    {}
+    {
+        (void)run_mode;
+        (void)storage_v3;
+    }
 
     DB::Page read(PageId page_id) const
     {
-        return storage->read(ns_id, page_id, read_limiter, snap);
+        return selectPageStorage()->read(ns_id, page_id, read_limiter, snap);
     }
 
     PageMap read(const std::vector<PageId> & page_ids) const
     {
-        return storage->read(ns_id, page_ids, read_limiter, snap);
+        return selectPageStorage()->read(ns_id, page_ids, read_limiter, snap);
     }
 
     void read(const std::vector<PageId> & page_ids, PageHandler & handler) const
     {
-        storage->read(ns_id, page_ids, handler, read_limiter, snap);
+        selectPageStorage()->read(ns_id, page_ids, handler, read_limiter, snap);
     }
 
     using PageReadFields = PageStorage::PageReadFields;
     PageMap read(const std::vector<PageReadFields> & page_fields) const
     {
-        return storage->read(ns_id, page_fields, read_limiter, snap);
+        return selectPageStorage()->read(ns_id, page_fields, read_limiter, snap);
     }
 
-    PageId getMaxId() const
-    {
-        return storage->getMaxId(ns_id);
-    }
+    // PageId getMaxId() const
+    // {
+    //     return storage_v2->getMaxId(ns_id);
+    // }
 
     PageId getNormalPageId(PageId page_id) const
     {
-        return storage->getNormalPageId(ns_id, page_id, snap);
+        return storage_v2->getNormalPageId(ns_id, page_id, snap);
     }
 
     UInt64 getPageChecksum(PageId page_id) const
     {
-        return storage->getEntry(ns_id, page_id, snap).checksum;
+        return storage_v2->getEntry(ns_id, page_id, snap).checksum;
     }
 
     PageEntry getPageEntry(PageId page_id) const
     {
-        return storage->getEntry(ns_id, page_id, snap);
+        return storage_v2->getEntry(ns_id, page_id, snap);
+    }
+
+    PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const
+    {
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            return storage_v2->getSnapshot(tracing_id);
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            return storage_v3->getSnapshot(tracing_id);
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            PageStorageSnapshotMixed a(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), //
+                                       storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)));
+            (void)a;
+
+            return storage_v2->getSnapshot(tracing_id);
+            // return std::shared_ptr<PageStorageSnapshotMixed>(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), //
+            //     storage_v3->getSnapshot(fmt::format("{}-v3",tracing_id)));
+        }
+        }
+        return storage_v2->getSnapshot(tracing_id);
+    }
+
+    // Get some statistics of all living snapshots and the oldest living snapshot.
+    SnapshotsStatistics getSnapshotsStat() const
+    {
+        return storage_v2->getSnapshotsStat();
     }
 
 private:
+    PageStoragePtr selectPageStorage() const
+    {
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            assert(storage_v2);
+            return storage_v2;
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            assert(storage_v3);
+            return storage_v3;
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            assert(storage_v2);
+            assert(storage_v3);
+
+            // todo
+            return storage_v3;
+        }
+        default:
+            //todo
+            return storage_v3;
+        }
+    }
+
+private:
+    const PageStorageRunMode run_mode;
     NamespaceId ns_id;
-    PageStoragePtr storage;
+    PageStoragePtr storage_v2;
+    PageStoragePtr storage_v3;
     PageStorage::SnapshotPtr snap;
     ReadLimiterPtr read_limiter;
 };
@@ -351,20 +438,49 @@ using PageReaderPtr = std::shared_ptr<PageReader>;
 class PageWriter : private boost::noncopyable
 {
 public:
-    PageWriter(PageStoragePtr storage_, WriteLimiterPtr write_limiter_)
-        : storage(storage_)
-        , write_limiter(write_limiter_)
+    PageWriter(PageStorageRunMode run_mode_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_)
+        : run_mode(run_mode_)
+        , storage_v2(storage_v2_)
+        , storage_v3(storage_v3_)
     {
+        (void)run_mode;
+        (void)storage_v3;
     }
 
-    void write(WriteBatch && write_batch)
+    void write(WriteBatch && write_batch, WriteLimiterPtr write_limiter)
     {
-        storage->write(std::move(write_batch), write_limiter);
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            assert(storage_v2);
+            storage_v2->write(std::move(write_batch), write_limiter);
+            break;
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            assert(storage_v3);
+            storage_v3->write(std::move(write_batch), write_limiter);
+            break;
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            assert(storage_v2);
+            assert(storage_v3);
+
+            for (const auto & write : write_batch.getWrites())
+            {
+                (void)write;
+            }
+            break;
+        }
+        }
     }
 
 private:
-    PageStoragePtr storage;
-    WriteLimiterPtr write_limiter;
+    PageStorageRunMode run_mode;
+    PageStoragePtr storage_v2;
+    PageStoragePtr storage_v3;
 };
 using PageWriterPtr = std::shared_ptr<PageWriter>;
 

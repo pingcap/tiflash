@@ -33,4 +33,20 @@ public:
 };
 using PageStorageSnapshotPtr = std::shared_ptr<PageStorageSnapshot>;
 
+class PageStorageSnapshotMixed : public PageStorageSnapshot
+{
+public:
+    // TODO: add/sub CurrentMetrics::PSMVCCNumSnapshots in here
+    PageStorageSnapshotMixed(PageStorageSnapshotPtr snapshot_v2_, PageStorageSnapshotPtr snapshot_v3_)
+        : snapshot_v2(snapshot_v2_)
+        , snapshot_v3(snapshot_v3_)
+    {}
+
+    ~PageStorageSnapshotMixed(){};
+
+private:
+    PageStorageSnapshotPtr snapshot_v2;
+    PageStorageSnapshotPtr snapshot_v3;
+};
+
 } // namespace DB

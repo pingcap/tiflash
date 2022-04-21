@@ -53,7 +53,7 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_unique<StoragePool>(StoragePoolRunMode::ONLY_V2, /*table_id*/ 100, nullptr, *path_pool, *db_context, "test.t1");
+        storage_pool = std::make_unique<StoragePool>(PageStorageRunMode::ONLY_V2, /*table_id*/ 100, nullptr, *path_pool, *db_context, "test.t1");
         storage_pool->restore();
         if (!cols)
             cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);

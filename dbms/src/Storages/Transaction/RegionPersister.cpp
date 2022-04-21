@@ -167,11 +167,11 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         auto provider = global_context.getFileProvider();
         // If the GlobalStoragePool is initialized, then use v3 format
-        const auto & run_mode = global_context.getStoragePoolRunMode();
+        const auto & run_mode = global_context.getPageStorageRunMode();
         // todo
         switch (run_mode)
         {
-        case DM::StoragePoolRunMode::ONLY_V2:
+        case PageStorageRunMode::ONLY_V2:
         {
             // If there is no PageFile with basic version binary format, use version 2 of PageStorage.
             auto detect_binary_version = DB::PS::V2::PageStorage::getMaxDataVersion(provider, delegator);
@@ -205,7 +205,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             }
             break;
         }
-        case DM::StoragePoolRunMode::ONLY_V3:
+        case PageStorageRunMode::ONLY_V3:
         {
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
 
@@ -218,7 +218,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             page_storage->restore();
             break;
         }
-        case DM::StoragePoolRunMode::MIX_MODE:
+        case PageStorageRunMode::MIX_MODE:
         {
             // TODO
             break;

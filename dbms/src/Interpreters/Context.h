@@ -99,11 +99,11 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
+enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
 class DeltaIndexManager;
-enum class StoragePoolRunMode : UInt8;
 } // namespace DM
 
 /// (database name, table name)
@@ -408,8 +408,8 @@ public:
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    void initializeStoragePoolMode(const PathPool & path_pool, bool enable_ps_v3);
-    DM::StoragePoolRunMode getStoragePoolRunMode() const;
+    void initializePageStorageMode(const PathPool & path_pool, bool enable_ps_v3);
+    PageStorageRunMode getPageStorageRunMode() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
