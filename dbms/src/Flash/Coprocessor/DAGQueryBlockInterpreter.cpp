@@ -549,7 +549,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
-    join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
+    join_ptr->init(build_pipeline.firstStream()->getHeader(), join_build_concurrency);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
