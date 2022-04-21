@@ -213,7 +213,7 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
     else
     {
         // default open enable_ps_v3
-        enable_ps_v3 = 1;
+        enable_ps_v3 = true;
     }
 
 
