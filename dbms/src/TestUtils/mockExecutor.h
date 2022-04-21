@@ -17,11 +17,10 @@
 #include <Debug/astToExecutor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
+#include <tipb/executor.pb.h>
 
 #include <initializer_list>
 #include <unordered_map>
-
-#include "tipb/executor.pb.h"
 
 namespace DB::tests
 {
@@ -132,7 +131,6 @@ public:
     void addExchangeRelationSchema(String name, const MockColumnInfoList & columns);
     DAGRequestBuilder scan(String db_name, String table_name);
     DAGRequestBuilder receive(String exchange_name);
-    DAGRequestBuilder send(String exchange_name, tipb::ExchangeType exchange_type = tipb::PassThrough);
 
 private:
     size_t index;

@@ -189,11 +189,6 @@ try
                                " project_1\n"
                                "  table_scan_0\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string_3, request);
-
-    request = context.send("sender_1")
-                  .build(context);
-    String expected_string_4 = "exchange_sender_0\n";
-    ASSERT_DAGREQUEST_EQAUL(expected_string_4, request);
 }
 CATCH
 

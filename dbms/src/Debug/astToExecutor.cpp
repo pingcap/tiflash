@@ -808,12 +808,8 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t col
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
-    if (!children.empty())
-    {
-        auto * child_executor = exchange_sender->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
-    }
-    return true;
+    auto * child_executor = exchange_sender->mutable_child();
+    return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
 bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &)

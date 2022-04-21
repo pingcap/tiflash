@@ -323,10 +323,4 @@ DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name)
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
     return builder;
 }
-DAGRequestBuilder MockDAGRequestContext::send(String exchange_name, tipb::ExchangeType exchange_type)
-{
-    auto builder = DAGRequestBuilder(index).exchangeSender(exchange_schemas[exchange_name], exchange_type);
-    receiver_source_task_ids_map[builder.getRoot()->name] = {};
-    return builder;
-}
 } // namespace DB::tests
