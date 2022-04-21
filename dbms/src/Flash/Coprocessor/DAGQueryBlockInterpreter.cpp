@@ -1095,7 +1095,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     /// exchange sender should be at the top of operators
     const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
     std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
-    TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionCollators(exchange_sender);
+    TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
     int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer

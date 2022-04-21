@@ -22,5 +22,5 @@ namespace DB::ExchangeSenderInterpreterHelper
 {
 std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_sender);
 
-TiDB::TiDBCollators genPartitionCollators(const tipb::ExchangeSender & exchange_sender);
+TiDB::TiDBCollators genPartitionColCollators(const tipb::ExchangeSender & exchange_sender);
 } // namespace DB::ExchangeSenderInterpreterHelper

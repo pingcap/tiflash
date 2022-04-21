@@ -39,7 +39,7 @@ std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_send
     return partition_col_ids;
 }
 
-TiDB::TiDBCollators genPartitionCollators(const tipb::ExchangeSender & exchange_sender)
+TiDB::TiDBCollators genPartitionColCollators(const tipb::ExchangeSender & exchange_sender)
 {
     TiDB::TiDBCollators partition_col_collators;
     const auto & part_keys = exchange_sender.partition_keys();
