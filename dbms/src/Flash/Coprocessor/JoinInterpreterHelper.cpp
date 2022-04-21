@@ -17,11 +17,14 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Join.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <fmt/format.h>
+
+#include <unordered_map>
 
 namespace DB::JoinInterpreterHelper
 {
@@ -129,19 +132,8 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const DataTypes
         }
     return collators;
 }
-} // namespace
 
-TiflashJoin::TiflashJoin(const tipb::Join & join_)
-    : join(join_)
-    , join_key_types(getJoinKeyTypes(join_))
-    , join_key_collators(getJoinKeyCollators(join_, join_key_types))
-{
-    std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
-    assert(build_side_index == 0 || build_side_index == 1);
-    strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
-}
-
-std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
+std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
     const Context & context,
     const tipb::Join & join,
     NamesAndTypes & source_columns)
@@ -176,27 +168,155 @@ std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
 
     return {chain.getLastActions(), std::move(filter_column_for_other_condition), std::move(filter_column_for_other_eq_condition)};
 }
+} // namespace
 
-void prepareJoin(
+TiflashJoin::TiflashJoin(const tipb::Join & join_)
+    : join(join_)
+    , join_key_types(getJoinKeyTypes(join_))
+    , join_key_collators(getJoinKeyCollators(join_, join_key_types))
+{
+    std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
+    assert(build_side_index == 0 || build_side_index == 1);
+    strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
+}
+
+String TiflashJoin::genMatchHelperName(const Block & header1, const Block & header2)
+{
+    if (!isLeftSemiFamily())
+    {
+        return "";
+    }
+
+    size_t i = 0;
+    String match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, i);
+    while (header1.has(match_helper_name) || header2.has(match_helper_name))
+    {
+        match_helper_name = fmt::format("{}{}", Join::match_helper_prefix, ++i);
+    }
+    return match_helper_name;
+}
+
+NamesAndTypes TiflashJoin::genColumnsForOtherJoinFilter(
+    const Block & left_input_header,
+    const Block & right_input_header,
+    const ExpressionActionsPtr & prepare_join_actions1,
+    const ExpressionActionsPtr & prepare_join_actions2)
+{
+    /// columns_for_other_join_filter is a vector of columns used
+    /// as the input columns when compiling other join filter.
+    /// Note the order in the column vector is very important:
+    /// first the columns in left_input_header, then followed
+    /// by the columns in right_input_header, if there are other
+    /// columns generated before compile other join filter, then
+    /// append the extra columns afterwards. In order to figure out
+    /// whether a given column is already in the column vector or
+    /// not quickly, we use another set to store the column names
+
+    NamesAndTypes columns_for_other_join_filter;
+    std::unordered_set<String> column_set_for_other_join_filter;
+
+    auto append_columns = [&columns_for_other_join_filter, &column_set_for_other_join_filter](const Block & header, bool make_nullable) {
+        for (auto const & p : header)
+        {
+            columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+            column_set_for_other_join_filter.emplace(p.name);
+        }
+    };
+    append_columns(left_input_header, join.join_type() == tipb::JoinType::TypeRightOuterJoin);
+    append_columns(right_input_header, join.join_type() == tipb::JoinType::TypeLeftOuterJoin);
+
+    auto append_unique_columns = [&columns_for_other_join_filter, &column_set_for_other_join_filter](const Block & header) {
+        for (auto const & p : header)
+        {
+            if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
+                columns_for_other_join_filter.emplace_back(p.name, p.type);
+        }
+    };
+    append_unique_columns(prepare_join_actions1->getSampleBlock());
+    append_unique_columns(prepare_join_actions2->getSampleBlock());
+
+    return columns_for_other_join_filter;
+}
+
+/// all the columns from build side streams should be added after join, even for the join key.
+NamesAndTypesList TiflashJoin::genColumnsAddedByJoin(
+    const Block & build_side_header,
+    const String & match_helper_name)
+{
+    NamesAndTypesList columns_added_by_join;
+    bool make_nullable = isTiflashLeftJoin();
+    for (auto const & p : build_side_header)
+    {
+        columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+    }
+    if (!match_helper_name.empty())
+    {
+        columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
+    }
+    return columns_added_by_join;
+}
+
+NamesAndTypes TiflashJoin::genJoinOutputColumns(
+    const Block & left_input_header,
+    const Block & right_input_header,
+    const String & match_helper_name)
+{
+    NamesAndTypes join_output_columns;
+    auto append_output_columns = [&join_output_columns](const Block & header, bool make_nullable) {
+        for (auto const & p : header)
+        {
+            join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        }
+    };
+
+    append_output_columns(left_input_header, join.join_type() == tipb::JoinType::TypeRightOuterJoin);
+    if (!isSemiJoin())
+    {
+        /// for semi join, the columns from right table will be ignored
+        append_output_columns(right_input_header, join.join_type() == tipb::JoinType::TypeLeftOuterJoin);
+    }
+
+    if (!match_helper_name.empty())
+    {
+        join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
+    }
+
+    return join_output_columns;
+}
+
+std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
     const Context & context,
+    const Block & left_input_header,
+    const Block & right_input_header,
+    const ExpressionActionsPtr & prepare_join_actions1,
+    const ExpressionActionsPtr & prepare_join_actions2)
+{
+    auto columns_for_other_join_filter = tiflash_join.genColumnsForOtherJoinFilter(
+        left_input_header,
+        right_input_header,
+        probe_side_prepare_actions,
+        build_side_prepare_actions);
+
+    return doGenJoinOtherConditionAction(context, join, columns_for_other_join_filter);
+}
+
+std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
+    const Context & context,
+    const Block & input_header,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const DataTypes & key_types,
-    DAGPipeline & pipeline,
-    Names & key_names,
     bool left,
     bool is_right_out_join,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    String & filter_column_name,
-    const String & req_id)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters)
 {
     NamesAndTypes source_columns;
-    for (auto const & p : pipeline.firstStream()->getHeader())
+    for (auto const & p : input_header)
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
-    {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), req_id); });
-    }
+    Names key_names;
+    String filter_column_name;
+    dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name);
+    return {chain.getLastActions(), std::move(key_names), std::move(filter_column_name)};
 }
 } // namespace DB::JoinInterpreterHelper

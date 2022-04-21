@@ -27,7 +27,6 @@
 namespace DB
 {
 class Context;
-struct DAGPipeline;
 
 namespace JoinInterpreterHelper
 {
@@ -74,24 +73,45 @@ struct TiflashJoin
 
     /// Cross_Right join will be converted to Cross_Left join, so no need to check Cross_Right
     bool isTiflashRightJoin() const { return kind == ASTTableJoin::Kind::Right; }
+
+    /// return a name that is unique in header1 and header2 for left semi family join,
+    /// return "" for everything else.
+    String genMatchHelperName(const Block & header1, const Block & header2);
+
+    NamesAndTypes genColumnsForOtherJoinFilter(
+        const Block & left_input_header,
+        const Block & right_input_header,
+        const ExpressionActionsPtr & prepare_join_actions1,
+        const ExpressionActionsPtr & prepare_join_actions2);
+
+    /// build_side_columns, match_helper_name
+    NamesAndTypesList genColumnsAddedByJoin(
+        const Block & build_side_header,
+        const String & match_helper_name);
+
+    /// left_columns, right_columns, match_helper_name
+    NamesAndTypes genJoinOutputColumns(
+        const Block & left_input_header,
+        const Block & right_input_header,
+        const String & match_helper_name);
+
+    /// other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name
+    std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
+        const Context & context,
+        const Block & left_input_header,
+        const Block & right_input_header,
+        const ExpressionActionsPtr & prepare_join_actions1,
+        const ExpressionActionsPtr & prepare_join_actions2);
 };
 
-/// other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name
-std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
+/// join_prepare_expr_actions, key_names, filter_column_name
+std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     const Context & context,
-    const tipb::Join & join,
-    NamesAndTypes & source_columns);
-
-void prepareJoin(
-    const Context & context,
+    const Block & input_header,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const DataTypes & key_types,
-    DAGPipeline & pipeline,
-    Names & key_names,
     bool left,
     bool is_right_out_join,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    String & filter_column_name,
-    const String & req_id);
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
 } // namespace JoinInterpreterHelper
 } // namespace DB

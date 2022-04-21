@@ -427,103 +427,36 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     RUNTIME_ASSERT(!input_streams_vec[1].empty(), log, "right input streams cannot be empty");
     const Block & right_input_header = input_streams_vec[1].back()->getHeader();
 
-    NamesAndTypes join_output_columns;
-    /// columns_for_other_join_filter is a vector of columns used
-    /// as the input columns when compiling other join filter.
-    /// Note the order in the column vector is very important:
-    /// first the columns in input_streams_vec[0], then followed
-    /// by the columns in input_streams_vec[1], if there are other
-    /// columns generated before compile other join filter, then
-    /// append the extra columns afterwards. In order to figure out
-    /// whether a given column is already in the column vector or
-    /// not quickly, we use another set to store the column names
-    NamesAndTypes columns_for_other_join_filter;
-    std::unordered_set<String> column_set_for_other_join_filter;
-    bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
-    for (auto const & p : left_input_header)
-    {
-        join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        column_set_for_other_join_filter.emplace(p.name);
-    }
-    make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
-    bool is_semi_join = tiflash_join.isSemiJoin();
-    for (auto const & p : right_input_header)
-    {
-        if (!is_semi_join)
-            /// for semi join, the columns from right table will be ignored
-            join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        /// however, when compiling join's other condition, we still need the columns from right table
-        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        column_set_for_other_join_filter.emplace(p.name);
-    }
-
-    bool is_tiflash_right_join = tiflash_join.isTiflashRightJoin();
-    /// all the columns from right table should be added after join, even for the join key
-    NamesAndTypesList columns_added_by_join;
-    make_nullable = tiflash_join.isTiflashLeftJoin();
-    for (auto const & p : build_pipeline.firstStream()->getHeader())
-    {
-        columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-    }
-
-    String match_helper_name;
-    if (tiflash_join.isLeftSemiFamily())
-    {
-        match_helper_name = Join::match_helper_prefix;
-        for (int i = 1; left_input_header.has(match_helper_name) || right_input_header.has(match_helper_name); ++i)
-        {
-            match_helper_name = Join::match_helper_prefix + std::to_string(i);
-        }
-
-        columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
-        join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
-    }
-
-    Names probe_key_names, build_key_names;
-    String probe_filter_column_name, build_filter_column_name;
+    String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
+    NamesAndTypesList columns_added_by_join = tiflash_join.genColumnsAddedByJoin(build_pipeline.firstStream()->getHeader(), match_helper_name);
+    NamesAndTypes join_output_columns = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
 
     /// add necessary transformation if the join key is an expression
 
+    bool is_tiflash_right_join = tiflash_join.isTiflashRightJoin();
+
     // prepare probe side
-    JoinInterpreterHelper::prepareJoin(
+    auto [probe_side_prepare_actions, probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
+        probe_pipeline.firstStream()->getHeader(),
         tiflash_join.getProbeJoinKeys(),
         tiflash_join.join_key_types,
-        probe_pipeline,
-        probe_key_names,
         true,
         is_tiflash_right_join,
-        tiflash_join.getProbeConditions(),
-        probe_filter_column_name,
-        log->identifier());
+        tiflash_join.getProbeConditions());
 
     // prepare build side
-    JoinInterpreterHelper::prepareJoin(
+    auto [build_side_prepare_actions, build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
         context,
+        build_pipeline.firstStream()->getHeader(),
         tiflash_join.getBuildJoinKeys(),
         tiflash_join.join_key_types,
-        build_pipeline,
-        build_key_names,
         false,
         is_tiflash_right_join,
-        tiflash_join.getBuildConditions(),
-        build_filter_column_name,
-        log->identifier());
-
-    for (auto const & p : probe_pipeline.firstStream()->getHeader())
-    {
-        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
-            columns_for_other_join_filter.emplace_back(p.name, p.type);
-    }
-    for (auto const & p : build_pipeline.firstStream()->getHeader())
-    {
-        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
-            columns_for_other_join_filter.emplace_back(p.name, p.type);
-    }
+        tiflash_join.getBuildConditions());
 
     auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
-        = JoinInterpreterHelper::genJoinOtherConditionAction(context, join, columns_for_other_join_filter);
+        = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions, build_side_prepare_actions);
 
     const Settings & settings = context.getSettingsRef();
     size_t max_block_size_for_cross_join = settings.max_block_size;
@@ -549,8 +482,9 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
-    join_ptr->init(build_pipeline.firstStream()->getHeader(), join_build_concurrency);
 
+    /// build side streams
+    executeExpression(build_pipeline, build_side_prepare_actions);
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     size_t stream_index = 0;
     build_pipeline.transform(
@@ -559,7 +493,10 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
+    join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
 
+    /// probe side streams
+    executeExpression(probe_pipeline, probe_side_prepare_actions);
     NamesAndTypes source_columns;
     for (const auto & p : probe_pipeline.firstStream()->getHeader())
         source_columns.emplace_back(p.name, p.type);
