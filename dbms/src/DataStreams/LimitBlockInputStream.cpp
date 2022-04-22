@@ -14,7 +14,7 @@ LimitBlockInputStream::LimitBlockInputStream(
     : limit(limit_)
     , offset(offset_)
     , always_read_till_end(always_read_till_end_)
-    , log(getMPPTaskLog(log_, getName()))
+    , log(getMPPTaskLog(log_, NAME))
 {
     children.push_back(input);
 }

@@ -21,7 +21,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
     const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, getName()))
+    : log(getMPPTaskLog(log_, NAME))
     , params(params_)
     , aggregator(params, log)
     , file_provider(file_provider_)
@@ -157,7 +157,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
         if (data.isConvertibleToTwoLevel())
             data.convertToTwoLevel();
 
-        if (data.size())
+        if (!data.empty())
             parent.aggregator.writeToTemporaryFile(data, parent.file_provider);
     }
 }
@@ -173,7 +173,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
             if (data->isConvertibleToTwoLevel())
                 data->convertToTwoLevel();
 
-            if (data->size())
+            if (!data->empty())
                 parent.aggregator.writeToTemporaryFile(*data, parent.file_provider);
         }
     }
