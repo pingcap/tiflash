@@ -3,6 +3,8 @@
 
 namespace DB::tests
 {
+namespace
+{
 class DynamicThreadPoolTest : public ::testing::Test
 {
 };
@@ -158,4 +160,45 @@ try
 }
 CATCH
 
+struct X
+{
+    std::mutex * mu;
+    std::condition_variable * cv;
+    bool * destructed;
+
+    X(std::mutex * mu_, std::condition_variable * cv_, bool * destructed_)
+        : mu(mu_)
+        , cv(cv_)
+        , destructed(destructed_)
+    {}
+
+    ~X()
+    {
+        std::unique_lock lock(*mu);
+        *destructed = true;
+        cv->notify_all();
+    }
+};
+
+TEST_F(DynamicThreadPoolTest, testTaskDestruct)
+try
+{
+    std::mutex mu;
+    std::condition_variable cv;
+    bool destructed = false;
+
+    DynamicThreadPool pool(0, std::chrono::minutes(1));
+    auto tmp = std::make_shared<X>(&mu, &cv, &destructed);
+    pool.schedule(true, [x = tmp] {});
+    tmp.reset();
+
+    {
+        std::unique_lock lock(mu);
+        auto ret = cv.wait_for(lock, std::chrono::seconds(1), [&] { return destructed; });
+        ASSERT_TRUE(ret);
+    }
+}
+CATCH
+
+} // namespace
 } // namespace DB::tests
