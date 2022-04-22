@@ -3201,7 +3201,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, DisableSmallColumnCache)
+TEST_P(DeltaMergeStore_test, DisableSmallColumnCache)
 try
 {
     auto settings = db_context->getSettings();
