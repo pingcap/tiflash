@@ -191,7 +191,7 @@ struct ContextShared
 
     Context::ConfigReloadCallback config_reload_callback;
 
-    ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
+    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
     {
         /// TODO: make it singleton (?)
@@ -308,7 +308,7 @@ const ProcessList & Context::getProcessList() const
 }
 
 
-const Databases Context::getDatabases() const
+Databases Context::getDatabases() const
 {
     auto lock = getLock();
     return shared->databases;
@@ -323,7 +323,7 @@ Databases Context::getDatabases()
 
 Context::SessionKey Context::getSessionKey(const String & session_id) const
 {
-    auto & user_name = client_info.current_user;
+    const auto & user_name = client_info.current_user;
 
     if (user_name.empty())
         throw Exception("Empty user name.", ErrorCodes::LOGICAL_ERROR);
@@ -438,7 +438,7 @@ static String resolveDatabase(const String & database_name, const String & curre
 }
 
 
-const DatabasePtr Context::getDatabase(const String & database_name) const
+DatabasePtr Context::getDatabase(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -454,7 +454,7 @@ DatabasePtr Context::getDatabase(const String & database_name)
     return shared->databases[db];
 }
 
-const DatabasePtr Context::tryGetDatabase(const String & database_name) const
+DatabasePtr Context::tryGetDatabase(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -818,7 +818,7 @@ Tables Context::getExternalTables() const
     auto lock = getLock();
 
     Tables res;
-    for (auto & table : external_tables)
+    for (const auto & table : external_tables)
         res[table.first] = table.second.first;
 
     if (session_context && session_context != this)
@@ -850,7 +850,7 @@ StoragePtr Context::getTable(const String & database_name, const String & table_
     Exception exc;
     auto res = getTableImpl(database_name, table_name, &exc);
     if (!res)
-        throw exc;
+        throw Exception(exc);
     return res;
 }
 
@@ -1516,7 +1516,7 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
     return shared->schema_sync_service;
 }
 
-void Context::initializeTiFlashMetrics()
+void Context::initializeTiFlashMetrics() const
 {
     auto lock = getLock();
     (void)TiFlashMetrics::instance();
