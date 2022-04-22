@@ -62,16 +62,10 @@ public:
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
-    /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
-    RegionRetryList region_retry_from_local_region;
     std::vector<RemoteRequest> remote_requests;
     BlockInputStreamPtr null_stream_if_empty;
 
 private:
-    LearnerReadSnapshot doCopLearnerRead();
-
-    LearnerReadSnapshot doBatchCopLearnerRead();
-
     void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
 
     void buildRemoteRequests();
@@ -96,8 +90,8 @@ private:
     /// Intermediate variables shared by multiple member functions
 
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
-    // We need to validate regions snapshot after getting streams from storage.
-    LearnerReadSnapshot learner_read_snapshot;
+    /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
+    RegionRetryList region_retry_from_local_region;
     NamesAndTypes source_columns;
 };
 

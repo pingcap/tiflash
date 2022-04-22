@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Coprocessor/TiDBReadSnapshot.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/TableLockHolder.h>
@@ -66,17 +67,38 @@ public:
 
     Block getSampleBlock() const;
 
+    const TiDBReadSnapshot & getTiDBReadSnapshot() const { return tidb_read_snapshot; }
+
+    ~TiDBStorageTable()
+    {
+        RUNTIME_ASSERT(init_status == InitStatus::finish, log, "init_status must be finish status.");
+        RUNTIME_ASSERT(lock_status == TableLockStatus::moved, log, "lock_status must be moved status.");
+    }
+
 private:
+    static inline TiDBReadSnapshot readSnapshot(InitStatus::init & init_status, Context & context, const TiDBTableScan & tidb_table_scan, const String & req_id)
+    {
+        RUNTIME_ASSERT(init_status == TiDBStorageTable::InitStatus::init, log, "init_status must be init status.");
+        init_status = TiDBStorageTable::InitStatus::read_snapshot;
+        return TiDBReadSnapshot{context, tidb_table_scan, req_id};
+    }
+
+    void getMetadataAndStorageLock();
+
     IDsAndStorageWithStructureLocks getAndLockStorages(const TiDBTableScan & table_scan);
     NamesAndTypes getSchemaForTableScan(const TiDBTableScan & table_scan);
 
 private:
-    enum TableLockStatus
+    // https://github.com/pingcap/tiflash/issues/815
+    // `read learner snapshot` must before `get storage locks`
+    enum InitStatus
     {
-        alter,
-        drop,
-        moved,
+        init,
+        read_snapshot,
+        get_metadata_and_storage_lock,
+        finish,
     };
+    InitStatus init_status = InitStatus::init;
 
     Context & context;
     TMTContext & tmt;
@@ -84,11 +106,19 @@ private:
 
     TiDBTableScan tidb_table_scan;
 
+    TiDBReadSnapshot tidb_read_snapshot;
+
+    enum TableLockStatus
+    {
+        alter,
+        drop,
+        moved,
+    };
     // after `releaseAlterLocks`, all struct lock will call release and move to drop_locks,
     // and then lock_status will change to `alter`.
     // after `moveDropLocks`, drop_locks will be cleared,
     // and then lock_status will change to `moved`.
-    TableLockStatus lock_status = alter;
+    TableLockStatus lock_status = TableLockStatus::alter;
     /// Table from where to read data, if not subquery.
     /// Hold read lock on both `alter_lock` and `drop_lock` until the local input streams are created.
     /// We need an immutable structure to build the TableScan operator and create snapshot input streams

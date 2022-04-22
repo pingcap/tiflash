@@ -18,7 +18,6 @@
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
-#include <Flash/Coprocessor/TiDBStorageTable.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -165,20 +164,15 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , logical_table_id(storage_table.getTiDBTableScan().getLogicalTableID())
     , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())
-    , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
+    , mvcc_query_info(std::move(storage_table_.moveMvccQueryInfo()))
+    , region_retry_from_local_region(std::move(storage_table.getTiDBReadSnapshot().moveRegionRetryFromLocalRegion()))
+    , source_columns(storage_table.getSchema())
 {
-    source_columns = storage_table.getSchema();
     is_need_add_cast_column = getExtraCastAfterTSModeFromTS(storage_table.getTiDBTableScan());
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
-    const DAGContext & dag_context = *context.getDAGContext();
-    if (dag_context.isBatchCop() || dag_context.isMPPTask())
-        learner_read_snapshot = doBatchCopLearnerRead();
-    else
-        learner_read_snapshot = doCopLearnerRead();
-
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
@@ -190,87 +184,6 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
     // Should build these vars under protect of `table_structure_lock`.
     buildRemoteRequests();
-}
-
-LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
-{
-    if (storage_table.getTiDBTableScan().isPartitionTableScan())
-    {
-        throw Exception("Cop request does not support partition table scan");
-    }
-    TablesRegionInfoMap regions_for_local_read;
-    for (const auto physical_table_id : storage_table.getTiDBTableScan().getPhysicalTableIDs())
-    {
-        regions_for_local_read.emplace(physical_table_id, std::cref(context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id).local_regions));
-    }
-    auto [info_retry, status] = MakeRegionQueryInfos(
-        regions_for_local_read,
-        {},
-        tmt,
-        *mvcc_query_info,
-        false);
-
-    if (info_retry)
-        throw RegionException({info_retry->begin()->get().region_id}, status);
-
-    return doLearnerRead(logical_table_id, *mvcc_query_info, max_streams, false, context, log);
-}
-
-/// Will assign region_retry_from_local_region
-LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
-{
-    TablesRegionInfoMap regions_for_local_read;
-    for (const auto physical_table_id : storage_table.getTiDBTableScan().getPhysicalTableIDs())
-    {
-        const auto & local_regions = context.getDAGContext()->getTableRegionsInfoByTableID(physical_table_id).local_regions;
-        regions_for_local_read.emplace(physical_table_id, std::cref(local_regions));
-    }
-    if (regions_for_local_read.empty())
-        return {};
-    std::unordered_set<RegionID> force_retry;
-    for (;;)
-    {
-        try
-        {
-            region_retry_from_local_region.clear();
-            auto [retry, status] = MakeRegionQueryInfos(
-                regions_for_local_read,
-                force_retry,
-                tmt,
-                *mvcc_query_info,
-                true);
-            UNUSED(status);
-
-            if (retry)
-            {
-                region_retry_from_local_region = std::move(*retry);
-                for (const auto & r : region_retry_from_local_region)
-                    force_retry.emplace(r.get().region_id);
-            }
-            if (mvcc_query_info->regions_query_info.empty())
-                return {};
-            return doLearnerRead(logical_table_id, *mvcc_query_info, max_streams, true, context, log);
-        }
-        catch (const LockException & e)
-        {
-            // We can also use current thread to resolve lock, but it will block next process.
-            // So, force this region retry in another thread in CoprocessorBlockInputStream.
-            force_retry.emplace(e.region_id);
-        }
-        catch (const RegionException & e)
-        {
-            if (tmt.checkShuttingDown())
-                throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
-            // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
-            // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
-            force_retry.insert(e.unavailable_region.begin(), e.unavailable_region.end());
-        }
-        catch (DB::Exception & e)
-        {
-            e.addMessage("(while doing learner read for table, logical table_id: " + DB::toString(logical_table_id) + ")");
-            throw;
-        }
-    }
 }
 
 std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSelectQueryInfos()
@@ -366,7 +279,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                         region_ids.insert(info.region_id);
                     throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
                 });
-                validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+                storage_table.getTiDBReadSnapshot(*query_info.mvcc_query_info);
                 break;
             }
             catch (RegionException & e)

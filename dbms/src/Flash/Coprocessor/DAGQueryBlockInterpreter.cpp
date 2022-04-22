@@ -265,6 +265,7 @@ void DAGQueryBlockInterpreter::handleTableScan(TiDBStorageTable & storage_table,
     DAGStorageInterpreter storage_interpreter(context, storage_table, query_block.selection_name, conditions, max_streams);
     storage_interpreter.execute(pipeline);
 
+    storage_table.getTiDBReadSnapshot().releaseLearnerReadSnapshot();
     storage_table.releaseAlterLocks();
 
     analyzer = std::move(storage_interpreter.analyzer);

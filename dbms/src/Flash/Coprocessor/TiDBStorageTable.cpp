@@ -30,13 +30,26 @@ TiDBStorageTable::TiDBStorageTable(
     , tmt(context.getTMTContext())
     , log(Logger::get("TiDBStorageTable", req_id))
     , tidb_table_scan(table_scan_, executor_id_, *context.getDAGContext())
-    , storages_with_structure_lock(getAndLockStorages(tidb_table_scan))
-    , storage_for_logical_table(getStorage(tidb_table_scan.getLogicalTableID()))
-    , schema(getSchemaForTableScan(tidb_table_scan))
+    , tidb_read_snapshot(readSnapshot(init_status, context_, tidb_table_scan, req_id))
 {
+    getMetadataAndStorageLock();
+
+    RUNTIME_ASSERT(init_status == InitStatus::get_metadata_and_storage_lock, log, "init_status must be get_metadata_and_storage_lock status.");
+    init_status = InitStatus::finish;
+}
+
+void TiDBStorageTable::getMetadataAndStorageLock()
+{
+    RUNTIME_ASSERT(init_status == InitStatus::read_snapshot, log, "init_status must be read_snapshot status.");
+
+    storages_with_structure_lock = getAndLockStorages(tidb_table_scan);
+    storage_for_logical_table = getStorage(tidb_table_scan.getLogicalTableID());
+    schema = getSchemaForTableScan(tidb_table_scan);
     assert(scan_required_columns.empty());
     for (const auto & column : schema)
         scan_required_columns.push_back(column.name);
+
+    init_status = InitStatus::get_metadata_and_storage_lock;
 }
 
 Block TiDBStorageTable::getSampleBlock() const
