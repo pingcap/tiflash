@@ -37,7 +37,7 @@ namespace absl
 BlockingCounter::BlockingCounter(int initial_count)
     : count(initial_count)
     , num_waiting(0)
-    , done{initial_count == 0 ? true : false}
+    , done{initial_count == 0}
 {
     if (initial_count < 0)
     {
@@ -71,7 +71,7 @@ void BlockingCounter::Wait()
     // implement a counter num_to_exit, like in the Barrier class.
     if (num_waiting != 0)
     {
-        std::logic_error("multiple threads called Wait()");
+        throw std::logic_error("multiple threads called Wait()");
     }
     num_waiting++;
     cv.wait(l, [&] { return done; });
