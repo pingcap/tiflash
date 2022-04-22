@@ -290,4 +290,8 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
 
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
 
+ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
+
+ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
+
 } // namespace DB
