@@ -67,7 +67,7 @@ public:
 
     Block getSampleBlock() const;
 
-    const TiDBReadSnapshot & getTiDBReadSnapshot() const { return tidb_read_snapshot; }
+    TiDBReadSnapshot & getTiDBReadSnapshot() const { return tidb_read_snapshot; }
 
     ~TiDBStorageTable()
     {

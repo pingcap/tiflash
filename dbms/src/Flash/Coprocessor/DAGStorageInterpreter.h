@@ -48,7 +48,7 @@ class DAGStorageInterpreter
 public:
     DAGStorageInterpreter(
         Context & context_,
-        const TiDBStorageTable & storage_table_,
+        TiDBStorageTable & storage_table_,
         const String & pushed_down_filter_id_,
         const std::vector<const tipb::Expr *> & pushed_down_conditions_,
         size_t max_streams_);

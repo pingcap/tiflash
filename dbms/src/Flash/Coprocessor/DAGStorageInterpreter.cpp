@@ -151,7 +151,7 @@ std::vector<ExtraCastAfterTSMode> getExtraCastAfterTSModeFromTS(const TiDBTableS
 
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
-    const TiDBStorageTable & storage_table_,
+    TiDBStorageTable & storage_table_,
     const String & pushed_down_filter_id_,
     const std::vector<const tipb::Expr *> & pushed_down_conditions_,
     size_t max_streams_)
@@ -164,7 +164,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , logical_table_id(storage_table.getTiDBTableScan().getLogicalTableID())
     , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())
-    , mvcc_query_info(std::move(storage_table_.moveMvccQueryInfo()))
+    , mvcc_query_info(std::move(storage_table_.getTiDBReadSnapshot().moveMvccQueryInfo()))
     , region_retry_from_local_region(std::move(storage_table.getTiDBReadSnapshot().moveRegionRetryFromLocalRegion()))
     , source_columns(storage_table.getSchema())
 {
@@ -279,7 +279,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                         region_ids.insert(info.region_id);
                     throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
                 });
-                storage_table.getTiDBReadSnapshot(*query_info.mvcc_query_info);
+                storage_table.getTiDBReadSnapshot().validateQueryInfo(*query_info.mvcc_query_info);
                 break;
             }
             catch (RegionException & e)
