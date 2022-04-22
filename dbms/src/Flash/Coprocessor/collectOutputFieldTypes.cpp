@@ -144,6 +144,11 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
         return collectForAgg(output_field_types, executor.aggregation());
+    case tipb::ExecType::TypeWindow:
+        // Window will only be pushed down in mpp mode.
+        // In mpp mode, ExchangeSender or Sender will return output_field_types directly.
+        // If not in mpp mode, window executor type is invalid.
+        throw TiFlashException("Window executor type is invalid in non-mpp mode, should not reach here.", Errors::Coprocessor::Internal);
     case tipb::ExecType::TypeExchangeReceiver:
         return collectForReceiver(output_field_types, executor.exchange_receiver());
     case tipb::ExecType::TypeTableScan:
