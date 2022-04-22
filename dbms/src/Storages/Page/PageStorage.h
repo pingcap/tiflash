@@ -46,6 +46,11 @@ class Context;
 class PageStorage;
 using PageStoragePtr = std::shared_ptr<PageStorage>;
 
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
 
 enum class PageStorageRunMode : UInt8
 {
@@ -282,7 +287,6 @@ protected:
     FileProviderPtr file_provider;
 };
 
-
 class PageReader : private boost::noncopyable
 {
 public:
@@ -294,8 +298,6 @@ public:
         , storage_v3(storage_v3_)
         , read_limiter(read_limiter_)
     {
-        (void)run_mode;
-        (void)storage_v3;
     }
 
     /// Snapshot read.
@@ -307,8 +309,6 @@ public:
         , snap(snap_)
         , read_limiter(read_limiter_)
     {
-        (void)run_mode;
-        (void)storage_v3;
     }
 
     PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
@@ -319,49 +319,173 @@ public:
         , snap(std::move(snap_))
         , read_limiter(read_limiter_)
     {
-        (void)run_mode;
-        (void)storage_v3;
     }
 
     DB::Page read(PageId page_id) const
     {
-        return selectPageStorage()->read(ns_id, page_id, read_limiter, snap);
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            storage_v2->read(ns_id, page_id, read_limiter, snap);
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            storage_v3->read(ns_id, page_id, read_limiter, snap);
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            const auto & page_from_v3 = storage_v3->read(ns_id, page_id, read_limiter, toConcreteMixedSnapshot(snap)->getV3Snasphot(), false);
+            if (page_from_v3.page_id == INVALID_PAGE_ID)
+            {
+                return storage_v2->read(ns_id, page_id, read_limiter, toConcreteMixedSnapshot(snap)->getV2Snasphot());
+            }
+        }
+        default:
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     PageMap read(const std::vector<PageId> & page_ids) const
     {
-        return selectPageStorage()->read(ns_id, page_ids, read_limiter, snap);
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            return storage_v2->read(ns_id, page_ids, read_limiter, snap);
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            return storage_v3->read(ns_id, page_ids, read_limiter, snap);
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            auto page_maps = storage_v3->read(ns_id, page_ids, read_limiter, toConcreteMixedSnapshot(snap)->getV3Snasphot(), false);
+            auto it = page_maps.begin();
+            while (it != page_maps.end())
+            {
+                if (it->second.page_id == INVALID_PAGE_ID)
+                {
+                    it->second = storage_v2->read(ns_id, it->first, read_limiter, toConcreteMixedSnapshot(snap)->getV2Snasphot());
+                }
+                it++;
+            }
+            return page_maps;
+        }
+        default:
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     void read(const std::vector<PageId> & page_ids, PageHandler & handler) const
     {
-        selectPageStorage()->read(ns_id, page_ids, handler, read_limiter, snap);
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            storage_v2->read(ns_id, page_ids, handler, read_limiter, snap);
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            storage_v3->read(ns_id, page_ids, handler, read_limiter, snap);
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            const auto & page_ids_not_found = storage_v3->read(ns_id, page_ids, handler, read_limiter, toConcreteMixedSnapshot(snap)->getV3Snasphot(), false);
+            storage_v2->read(ns_id, page_ids_not_found, handler, read_limiter, toConcreteMixedSnapshot(snap)->getV2Snasphot());
+        }
+        default:
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     using PageReadFields = PageStorage::PageReadFields;
     PageMap read(const std::vector<PageReadFields> & page_fields) const
     {
-        return selectPageStorage()->read(ns_id, page_fields, read_limiter, snap);
-    }
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            return storage_v2->read(ns_id, page_fields, read_limiter, snap);
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            return storage_v3->read(ns_id, page_fields, read_limiter, snap);
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            auto page_maps = storage_v3->read(ns_id, page_fields, read_limiter, toConcreteMixedSnapshot(snap)->getV3Snasphot(), false);
 
-    // PageId getMaxId() const
-    // {
-    //     return storage_v2->getMaxId(ns_id);
-    // }
+            for (auto page_field : page_fields)
+            {
+                if (page_maps[page_field.first].page_id == INVALID_PAGE_ID)
+                {
+                    page_maps[page_field.first] = storage_v2->read(ns_id, page_field, read_limiter, toConcreteMixedSnapshot(snap)->getV2Snasphot());
+                }
+            }
+
+            return page_maps;
+        }
+        default:
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+        }
+    }
 
     PageId getNormalPageId(PageId page_id) const
     {
-        return storage_v2->getNormalPageId(ns_id, page_id, snap);
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            return storage_v2->getNormalPageId(ns_id, page_id, snap);
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            return storage_v3->getNormalPageId(ns_id, page_id, snap);
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            PageId resolved_page_id = storage_v3->getNormalPageId(ns_id, page_id, toConcreteMixedSnapshot(snap)->getV3Snasphot(), false);
+            if (resolved_page_id != INVALID_PAGE_ID)
+            {
+                return resolved_page_id;
+            }
+            return storage_v2->getNormalPageId(ns_id, page_id, toConcreteMixedSnapshot(snap)->getV2Snasphot());
+        }
+        default:
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     UInt64 getPageChecksum(PageId page_id) const
     {
-        return storage_v2->getEntry(ns_id, page_id, snap).checksum;
+        return getPageEntry(page_id).checksum;
     }
 
     PageEntry getPageEntry(PageId page_id) const
     {
-        return storage_v2->getEntry(ns_id, page_id, snap);
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            return storage_v2->getEntry(ns_id, page_id, snap);
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            return storage_v3->getEntry(ns_id, page_id, snap);
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            PageEntry page_entry = storage_v3->getEntry(ns_id, page_id, toConcreteMixedSnapshot(snap)->getV3Snasphot());
+            if (page_entry.file_id != INVALID_BLOBFILE_ID)
+            {
+                return page_entry;
+            }
+            return storage_v2->getEntry(ns_id, page_id, toConcreteMixedSnapshot(snap)->getV2Snasphot());
+        }
+        default:
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const
@@ -378,50 +502,51 @@ public:
         }
         case PageStorageRunMode::MIX_MODE:
         {
-            PageStorageSnapshotMixed a(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), //
-                                       storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)));
-            (void)a;
-
-            return storage_v2->getSnapshot(tracing_id);
-            // return std::shared_ptr<PageStorageSnapshotMixed>(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), //
-            //     storage_v3->getSnapshot(fmt::format("{}-v3",tracing_id)));
+            return std::make_shared<PageStorageSnapshotMixed>(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), //
+                                                              storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)));
         }
+        default:
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
         }
-        return storage_v2->getSnapshot(tracing_id);
     }
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const
     {
-        return storage_v2->getSnapshotsStat();
-    }
-
-private:
-    PageStoragePtr selectPageStorage() const
-    {
         switch (run_mode)
         {
         case PageStorageRunMode::ONLY_V2:
         {
-            assert(storage_v2);
-            return storage_v2;
+            return storage_v2->getSnapshotsStat();
         }
         case PageStorageRunMode::ONLY_V3:
         {
-            assert(storage_v3);
-            return storage_v3;
+            return storage_v3->getSnapshotsStat();
         }
         case PageStorageRunMode::MIX_MODE:
         {
-            assert(storage_v2);
-            assert(storage_v3);
+            SnapshotsStatistics statistics_total;
+            const auto & statistics_from_v2 = storage_v2->getSnapshotsStat();
+            const auto & statistics_from_v3 = storage_v3->getSnapshotsStat();
 
-            // todo
-            return storage_v3;
+            statistics_total.num_snapshots = statistics_from_v2.num_snapshots + statistics_from_v3.num_snapshots;
+            if (statistics_from_v2.longest_living_seconds > statistics_from_v3.longest_living_seconds)
+            {
+                statistics_total.longest_living_seconds = statistics_from_v2.longest_living_seconds;
+                statistics_total.longest_living_from_thread_id = statistics_from_v2.longest_living_from_thread_id;
+                statistics_total.longest_living_from_tracing_id = statistics_from_v2.longest_living_from_tracing_id;
+            }
+            else
+            {
+                statistics_total.longest_living_seconds = statistics_from_v3.longest_living_seconds;
+                statistics_total.longest_living_from_thread_id = statistics_from_v3.longest_living_from_thread_id;
+                statistics_total.longest_living_from_tracing_id = statistics_from_v3.longest_living_from_tracing_id;
+            }
+
+            return statistics_total;
         }
         default:
-            //todo
-            return storage_v3;
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
         }
     }
 
@@ -443,8 +568,6 @@ public:
         , storage_v2(storage_v2_)
         , storage_v3(storage_v3_)
     {
-        (void)run_mode;
-        (void)storage_v3;
     }
 
     void write(WriteBatch && write_batch, WriteLimiterPtr write_limiter)
@@ -453,24 +576,94 @@ public:
         {
         case PageStorageRunMode::ONLY_V2:
         {
-            assert(storage_v2);
             storage_v2->write(std::move(write_batch), write_limiter);
             break;
         }
         case PageStorageRunMode::ONLY_V3:
         {
-            assert(storage_v3);
             storage_v3->write(std::move(write_batch), write_limiter);
             break;
         }
         case PageStorageRunMode::MIX_MODE:
         {
-            assert(storage_v2);
-            assert(storage_v3);
-
+            const auto & ns_id = write_batch.getNamespaceId();
+            WriteBatch wb_for_v2{write_batch.getNamespaceId()};
             for (const auto & write : write_batch.getWrites())
             {
-                (void)write;
+                switch (write.type)
+                {
+                // PUT/PUT_EXTERNAL only for V3
+                case WriteBatch::WriteType::PUT:
+                case WriteBatch::WriteType::PUT_EXTERNAL:
+                {
+                    break;
+                }
+                // Both need del in v2 and v3
+                // TODO: make sure we can del not existed pageid
+                case WriteBatch::WriteType::DEL:
+                {
+                    wb_for_v2.copyWrite(write);
+                    break;
+                }
+                case WriteBatch::WriteType::REF:
+                {
+                    PageId resolved_page_id = storage_v3->getNormalPageId(ns_id,
+                                                                          write.ori_page_id,
+                                                                          /*snapshot*/ nullptr,
+                                                                          false);
+
+                    // if normal id is not ok, read from v2 and create a new put + ref
+                    if (resolved_page_id == INVALID_PAGE_ID)
+                    {
+                        const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
+                        if (entry_for_put.file_id != 0)
+                        {
+                            WriteBatch wb_for_put{ns_id};
+                            auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
+
+                            // Page with fields
+                            if (entry_for_put.field_offsets.size() != 0)
+                            {
+                                wb_for_put.putPage(write.ori_page_id, //
+                                                   0,
+                                                   std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
+                                                   page_for_put.data.size(),
+                                                   Page::fieldOffsetsToSizes(page_for_put.field_offsets,
+                                                                             page_for_put.data.size()));
+                            }
+                            else
+                            { // Normal page with fields
+                                wb_for_put.putPage(write.ori_page_id, //
+                                                   0,
+                                                   std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(),
+                                                                                          page_for_put.data.size()),
+                                                   page_for_put.data.size());
+                            }
+                            storage_v2->write(std::move(wb_for_put), write_limiter);
+                        }
+                        else
+                        {
+                            throw Exception(fmt::format("Can't find origin entry in V2 and V3, [ns_id={}, ori_page_id={}]",
+                                                        ns_id,
+                                                        write.ori_page_id),
+                                            ErrorCodes::LOGICAL_ERROR);
+                        }
+                    }
+                    // else V3 found the origin one.
+                    // Then do nothing.
+                    break;
+                }
+                default:
+                {
+                    throw Exception(fmt::format("Unknown write type: {}", write.type));
+                }
+                }
+            }
+
+            storage_v3->write(std::move(write_batch), write_limiter);
+            if (!wb_for_v2.empty())
+            {
+                storage_v2->write(std::move(wb_for_v2), write_limiter);
             }
             break;
         }

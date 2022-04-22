@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/assert_cast.h>
 #include <common/types.h>
 
 #include <memory>
@@ -37,16 +38,33 @@ class PageStorageSnapshotMixed : public PageStorageSnapshot
 {
 public:
     // TODO: add/sub CurrentMetrics::PSMVCCNumSnapshots in here
-    PageStorageSnapshotMixed(PageStorageSnapshotPtr snapshot_v2_, PageStorageSnapshotPtr snapshot_v3_)
+    PageStorageSnapshotMixed(const PageStorageSnapshotPtr & snapshot_v2_, const PageStorageSnapshotPtr & snapshot_v3_)
         : snapshot_v2(snapshot_v2_)
         , snapshot_v3(snapshot_v3_)
     {}
 
     ~PageStorageSnapshotMixed(){};
 
+    PageStorageSnapshotPtr getV2Snasphot()
+    {
+        return snapshot_v2;
+    }
+
+    PageStorageSnapshotPtr getV3Snasphot()
+    {
+        return snapshot_v3;
+    }
+
 private:
     PageStorageSnapshotPtr snapshot_v2;
     PageStorageSnapshotPtr snapshot_v3;
 };
+using PageStorageSnapshotMixedPtr = std::shared_ptr<PageStorageSnapshotMixed>;
+
+static inline PageStorageSnapshotMixedPtr
+toConcreteMixedSnapshot(const PageStorageSnapshotPtr & ptr)
+{
+    return std::static_pointer_cast<PageStorageSnapshotMixed>(ptr);
+}
 
 } // namespace DB
