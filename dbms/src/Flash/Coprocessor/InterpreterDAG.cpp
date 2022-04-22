@@ -14,6 +14,7 @@ namespace DB
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_)
     , dag(dag_)
+    , mpp_exchange_receiver_maps(dagContext().getMPPExchangeReceiverMapRef())
 {
     const Settings & settings = context.getSettingsRef();
     if (dagContext().isBatchCop() || dagContext().isMPPTask())
