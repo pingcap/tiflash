@@ -694,12 +694,13 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
-    size_t stream_index = 0;
-    auto get_stream_index = [&stream_index, &join_build_concurrency]() {
-        return (stream_index++) % join_build_concurrency;
+    size_t concurrency_build_index = 0;
+    auto get_concurrency_build_index = [&concurrency_build_index, &join_build_concurrency]() {
+        return (concurrency_build_index++) % join_build_concurrency;
     };
-    right_pipeline.transform(
-        [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_stream_index(), log->identifier()); });
+    right_pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
+    });
     executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/true);
 
     right_query.source = right_pipeline.firstStream();
