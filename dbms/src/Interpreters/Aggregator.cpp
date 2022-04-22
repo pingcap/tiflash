@@ -2021,10 +2021,12 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
 
             auto task = [&merge_bucket, bucket, aggregates_pool] {
                 return merge_bucket(bucket, aggregates_pool);
-            }
+            };
 
-                        if (thread_pool) thread_pool->schedule(wrapInvocable(true, task));
-            else task();
+            if (thread_pool)
+                thread_pool->schedule(wrapInvocable(true, task));
+            else
+                task();
         }
 
         if (thread_pool)
