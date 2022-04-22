@@ -154,5 +154,7 @@ public:
     }
 
     size_t getSourceNum() const { return 1; }
+
+    void close() {}
 };
 } // namespace DB

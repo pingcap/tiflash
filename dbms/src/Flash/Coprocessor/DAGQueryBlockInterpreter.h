@@ -10,9 +10,13 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/TiDB.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #include <kvproto/coprocessor.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <tipb/select.pb.h>
+#pragma GCC diagnostic pop
 
 namespace DB
 {
