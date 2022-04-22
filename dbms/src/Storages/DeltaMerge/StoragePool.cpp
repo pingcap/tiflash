@@ -21,6 +21,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
 namespace FailPoints
 {
 extern const char force_set_dtfile_exist_when_acquire_id[];
@@ -58,7 +63,7 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
         SET_CONFIG(meta);
         break;
     default:
-        throw Exception("Unknown subtype in extractConfig: " + DB::toString(static_cast<Int32>(subtype)));
+        throw Exception(fmt::format("Unknown subtype in extractConfig: {} ", static_cast<Int32>(subtype)), ErrorCodes::LOGICAL_ERROR);
     }
 #undef SET_CONFIG
 
@@ -220,7 +225,7 @@ StoragePool::StoragePool(PageStorageRunMode mode, NamespaceId ns_id_, const Glob
         break;
     }
     default:
-        throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)));
+        throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
