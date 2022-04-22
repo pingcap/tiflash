@@ -614,7 +614,7 @@ DB::Page PageStorage::readImpl(NamespaceId /*ns_id*/, PageId page_id, const Read
     return file_reader->read(to_read, read_limiter)[page_id];
 }
 
-PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
@@ -662,7 +662,7 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> &
     return page_map;
 }
 
-void PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+PageIds PageStorage::readImpl(NamespaceId /*ns_id*/, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
@@ -705,6 +705,8 @@ void PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & pa
 
         reader->read(page_id_and_entries, handler, read_limiter);
     }
+
+    return {};
 }
 
 PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)

@@ -302,12 +302,12 @@ public:
         return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
-    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
+    std::pair<PageIDAndEntriesV3, PageIds> get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
     PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true);
+        return std::get<0>(get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true));
     }
-    PageIDAndEntriesV3 getOrNull(PageIdV3Internals page_ids, const DB::PageStorageSnapshotPtr & snap) const
+    std::pair<PageIDAndEntriesV3, PageIds> getOrNull(PageIdV3Internals page_ids, const DB::PageStorageSnapshotPtr & snap) const
     {
         return get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }

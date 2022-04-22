@@ -746,9 +746,11 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
     throw Exception(fmt::format("Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]", page_id, snap->sequence, id_to_resolve, ver_to_resolve), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
 }
 
-PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
+std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
+    PageIds page_not_found = {};
+
     const PageVersionType init_ver_to_resolve(snap->sequence, 0);
     auto get_one = [&entry_got, init_ver_to_resolve, throw_on_not_exist, this](PageIdV3Internal page_id, PageVersionType ver_to_resolve, size_t idx) {
         PageIdV3Internal id_to_resolve = page_id;
@@ -800,9 +802,13 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const 
         {
             id_entries.emplace_back(page_ids[idx], entry_got);
         }
+        else
+        {
+            page_not_found.emplace_back(page_ids[idx]);
+        }
     }
 
-    return id_entries;
+    return std::make_pair(id_entries, page_not_found);
 }
 
 PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const
