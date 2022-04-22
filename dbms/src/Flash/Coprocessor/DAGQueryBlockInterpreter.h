@@ -53,7 +53,9 @@ public:
 
     BlockInputStreams execute();
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     void executeImpl(DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void executeCastAfterTableScan(
@@ -65,10 +67,17 @@ private:
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
+    void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
+    void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
+    void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
+    void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
     void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
+    void executeWindow(
+        DAGPipeline & pipeline,
+        WindowDescription & window_description);
     void executeAggregation(
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expression_actions_ptr,

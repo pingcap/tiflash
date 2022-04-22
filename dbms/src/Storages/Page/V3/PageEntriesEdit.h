@@ -104,6 +104,8 @@ inline const char * typeToString(EditRecordType t)
         return "VAR_EXT";
     case EditRecordType::VAR_DELETE:
         return "VAR_DEL";
+    default:
+        return "INVALID";
     }
 }
 
@@ -220,6 +222,7 @@ public:
         EditRecord()
             : page_id(0)
             , ori_page_id(0)
+            , version(0, 0)
             , being_ref_count(1)
         {}
     };
