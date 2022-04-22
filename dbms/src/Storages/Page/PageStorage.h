@@ -189,27 +189,27 @@ public:
         return getEntryImpl(ns_id, page_id, snapshot);
     }
 
-    Page read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    Page read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        return readImpl(ns_id, page_id, read_limiter, snapshot);
+        return readImpl(ns_id, page_id, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    PageMap read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    PageMap read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        return readImpl(ns_id, page_ids, read_limiter, snapshot);
+        return readImpl(ns_id, page_ids, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    void read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    void read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        readImpl(ns_id, page_ids, handler, read_limiter, snapshot);
+        readImpl(ns_id, page_ids, handler, read_limiter, snapshot, throw_on_not_exist);
     }
 
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
 
-    PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        return readImpl(ns_id, page_fields, read_limiter, snapshot);
+        return readImpl(ns_id, page_fields, read_limiter, snapshot, throw_on_not_exist);
     }
 
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {})
@@ -239,13 +239,13 @@ protected:
 
     virtual PageEntry getEntryImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) = 0;
 
-    virtual Page readImpl(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+    virtual Page readImpl(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual void readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+    virtual void readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
 

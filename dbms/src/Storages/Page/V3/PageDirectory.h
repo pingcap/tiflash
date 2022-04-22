@@ -295,17 +295,21 @@ public:
     PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
     PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return get(page_id, toConcreteSnapshot(snap));
+        return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true);
     }
     PageIDAndEntryV3 getOrNull(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
         return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
-    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
     PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return get(page_ids, toConcreteSnapshot(snap));
+        return get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true);
+    }
+    PageIDAndEntriesV3 getOrNull(PageIdV3Internals page_ids, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
     PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;

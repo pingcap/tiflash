@@ -51,6 +51,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
 namespace FailPoints
@@ -592,27 +593,37 @@ SnapshotsStatistics PageStorage::getSnapshotsStat() const
     return versioned_page_entries.getSnapshotsStat();
 }
 
-DB::Page PageStorage::readImpl(NamespaceId /*ns_id*/, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+DB::Page PageStorage::readImpl(NamespaceId /*ns_id*/, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
     }
 
+    if (!throw_on_not_exist)
+    {
+        throw Exception("Not support throw_on_not_exist on V2", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     const auto page_entry = toConcreteSnapshot(snapshot)->version()->find(page_id);
     if (!page_entry)
-        throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Page {} not found", page_id), ErrorCodes::LOGICAL_ERROR);
     const auto file_id_level = page_entry->fileIdLevel();
     PageIdAndEntries to_read = {{page_id, *page_entry}};
     auto file_reader = getReader(file_id_level);
     return file_reader->read(to_read, read_limiter)[page_id];
 }
 
-PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
+    }
+
+    if (!throw_on_not_exist)
+    {
+        throw Exception("Not support throw_on_not_exist on V2", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
@@ -620,7 +631,7 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> &
     {
         const auto page_entry = toConcreteSnapshot(snapshot)->version()->find(page_id);
         if (!page_entry)
-            throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Page {} not found", page_id), ErrorCodes::LOGICAL_ERROR);
         auto file_id_level = page_entry->fileIdLevel();
         auto & [page_id_and_entries, file_reader] = file_read_infos[file_id_level];
         page_id_and_entries.emplace_back(page_id, *page_entry);
@@ -632,7 +643,7 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> &
             }
             catch (DB::Exception & e)
             {
-                e.addMessage("(while reading Page[" + DB::toString(page_id) + "] of " + storage_name + ")");
+                e.addMessage(fmt::format("(while reading Page[{}] of {})", page_id, storage_name));
                 throw;
             }
         }
@@ -651,11 +662,16 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> &
     return page_map;
 }
 
-void PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+void PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
+    }
+
+    if (!throw_on_not_exist)
+    {
+        throw Exception("Not support throw_on_not_exist on V2", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
@@ -663,7 +679,7 @@ void PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & pa
     {
         const auto page_entry = toConcreteSnapshot(snapshot)->version()->find(page_id);
         if (!page_entry)
-            throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Page {} not found", page_id), ErrorCodes::LOGICAL_ERROR);
         auto file_id_level = page_entry->fileIdLevel();
         auto & [page_id_and_entries, file_reader] = file_read_infos[file_id_level];
         page_id_and_entries.emplace_back(page_id, *page_entry);
@@ -675,7 +691,7 @@ void PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & pa
             }
             catch (DB::Exception & e)
             {
-                e.addMessage("(while reading Page[" + DB::toString(page_id) + "] of " + storage_name + ")");
+                e.addMessage(fmt::format("(while reading Page[{}] of {})", page_id, storage_name));
                 throw;
             }
         }
@@ -691,11 +707,16 @@ void PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageId> & pa
     }
 }
 
-PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
+    }
+
+    if (!throw_on_not_exist)
+    {
+        throw Exception("Not support throw_on_not_exist on V2", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     std::map<PageFileIdAndLevel, std::pair<ReaderPtr, PageFile::Reader::FieldReadInfos>> file_read_infos;
@@ -703,7 +724,7 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadF
     {
         const auto page_entry = toConcreteSnapshot(snapshot)->version()->find(page_id);
         if (!page_entry)
-            throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Page {} not found", page_id), ErrorCodes::LOGICAL_ERROR);
         const auto file_id_level = page_entry->fileIdLevel();
         auto & [file_reader, field_infos] = file_read_infos[file_id_level];
         field_infos.emplace_back(page_id, *page_entry, field_indices);
@@ -715,7 +736,7 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadF
             }
             catch (DB::Exception & e)
             {
-                e.addMessage("(while reading Page[" + DB::toString(page_id) + "] of " + storage_name + ")");
+                e.addMessage(fmt::format("(while reading Page[{}] of {})", page_id, storage_name));
                 throw;
             }
         }
@@ -749,7 +770,7 @@ void PageStorage::traverseImpl(const std::function<void(const DB::Page & page)> 
         {
             const auto page_entry = concrete_snapshot->version()->find(page_id);
             if (unlikely(!page_entry))
-                throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(fmt::format("Page[{}] not found when traversing PageStorage", page_id), ErrorCodes::LOGICAL_ERROR);
             file_and_pages[page_entry->fileIdLevel()].emplace_back(page_id);
         }
     }
@@ -757,7 +778,7 @@ void PageStorage::traverseImpl(const std::function<void(const DB::Page & page)> 
     for (const auto & p : file_and_pages)
     {
         // namespace id is not used in V2, so it's value is not important here
-        auto pages = readImpl(MAX_NAMESPACE_ID, p.second, nullptr, snapshot);
+        auto pages = readImpl(MAX_NAMESPACE_ID, p.second, nullptr, snapshot, true);
         for (const auto & id_page : pages)
         {
             acceptor(id_page.second);

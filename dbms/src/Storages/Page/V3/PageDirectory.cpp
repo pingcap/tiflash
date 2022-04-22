@@ -746,11 +746,11 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
     throw Exception(fmt::format("Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]", page_id, snap->sequence, id_to_resolve, ver_to_resolve), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
 }
 
-PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const
+PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
     const PageVersionType init_ver_to_resolve(snap->sequence, 0);
-    auto get_one = [&entry_got, init_ver_to_resolve, this](PageIdV3Internal page_id, PageVersionType ver_to_resolve, size_t idx) {
+    auto get_one = [&entry_got, init_ver_to_resolve, throw_on_not_exist, this](PageIdV3Internal page_id, PageVersionType ver_to_resolve, size_t idx) {
         PageIdV3Internal id_to_resolve = page_id;
         bool ok = true;
         while (ok)
@@ -761,7 +761,14 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const 
                 iter = mvcc_table_directory.find(id_to_resolve);
                 if (iter == mvcc_table_directory.end())
                 {
-                    throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                    if (throw_on_not_exist)
+                    {
+                        throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                    }
+                    else
+                    {
+                        return false;
+                    }
                 }
             }
             auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, &entry_got);
