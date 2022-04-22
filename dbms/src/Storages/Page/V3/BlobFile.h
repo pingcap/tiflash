@@ -49,9 +49,9 @@ public:
         return EncryptionPath(getPath(), "");
     }
 
-    void read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter);
+    void read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter, bool background = false);
 
-    void write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter);
+    void write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter, bool background = false);
 
     void truncate(size_t size);
 

@@ -1548,11 +1548,11 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeRateLimiter(Poco::Util::AbstractConfiguration & config)
+void Context::initializeRateLimiter(Poco::Util::AbstractConfiguration & config, BackgroundProcessingPool & bg_pool, BackgroundProcessingPool & blockable_bg_pool) const
 {
     getIORateLimiter().init(config);
-    auto tids = getBackgroundPool().getThreadIds();
-    auto blockable_tids = getBlockableBackgroundPool().getThreadIds();
+    auto tids = bg_pool.getThreadIds();
+    auto blockable_tids = blockable_bg_pool.getThreadIds();
     tids.insert(tids.end(), blockable_tids.begin(), blockable_tids.end());
     getIORateLimiter().setBackgroundThreadIds(tids);
 }
