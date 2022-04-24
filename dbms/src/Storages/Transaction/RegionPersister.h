@@ -67,7 +67,9 @@ private:
 #endif
 
     Context & global_context;
-    PageStoragePtr page_storage;
+    PageWriterPtr page_writer;
+    PageReaderPtr page_reader;
+
     std::shared_ptr<PS::V1::PageStorage> stable_page_storage;
 
     // RegionPersister stores it's data individually, so the `ns_id` value doesn't matter
