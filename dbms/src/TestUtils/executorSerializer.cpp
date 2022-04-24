@@ -210,7 +210,7 @@ void serializeSelection(const String & executor_id, const tipb::Selection & sel,
 
 void serializeLimit(const String & executor_id, const tipb::Limit & limit, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}| {}\n", executor_id, limit.limit());
+    context.buf.fmtAppend("{}|{}\n", executor_id, limit.limit());
 }
 
 void serializeProjection(const String & executor_id, const tipb::Projection & proj, ExecutorSerializerContext & context)
@@ -236,8 +236,7 @@ void serializeAggregation(const String & executor_id, const tipb::Aggregation & 
             serializeExpression(by_item, context);
         },
         ", ");
-    context.buf.append("}, ");
-    context.buf.append("agg_func:{");
+    context.buf.append("}, agg_func:{");
     context.buf.joinStr(
         agg.agg_func().begin(),
         agg.agg_func().end(),

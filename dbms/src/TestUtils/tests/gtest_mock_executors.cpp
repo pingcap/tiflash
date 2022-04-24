@@ -99,7 +99,7 @@ try
     auto request = context.scan("test_db", "test_table")
                        .limit(10)
                        .build(context);
-    String expected_string = "limit_1| 10\n"
+    String expected_string = "limit_1|10\n"
                              " table_scan_0|columns:{columnType: String, columnType: String}\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 
@@ -107,7 +107,7 @@ try
                   .limit(lit(Field(static_cast<UInt64>(10))))
                   .build(context);
 
-    String expected_string_1 = "limit_1| 10\n"
+    String expected_string_1 = "limit_1|10\n"
                                " table_scan_0|columns:{columnType: Long, columnType: String, columnType: String}\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string_1, request);
 }
@@ -158,7 +158,7 @@ try
                                          .limit(10);
 
     auto request = left_builder.build(context);
-    String expected_string = "limit_8| 10\n"
+    String expected_string = "limit_8|10\n"
                              " Join_7|LeftOuterJoin,HashJoin. left_join_keys: {type: String}, right_join_keys: {type: String}\n"
                              "  topn_6|order_by: columns{columnType: Long, desc: true}, limit: 10\n"
                              "   table_scan_5|columns:{columnType: Long, columnType: String, columnType: String}\n"

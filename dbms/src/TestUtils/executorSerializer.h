@@ -101,7 +101,7 @@ private:
                 serializeExchangeSender(executor.executor_id(), executor.exchange_sender(), context);
                 break;
             default:
-                throw TiFlashException("Should not reach here111", Errors::Coprocessor::Internal);
+                throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
             }
             ++level;
         };
