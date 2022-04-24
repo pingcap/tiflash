@@ -293,7 +293,7 @@ dt_page_gc_low_write_prob = 0.2
     auto verify_persister_reload_config = [&global_ctx](RegionPersister & persister) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        auto cfg = persister.page_storage->getSettings();
+        auto cfg = persister.getPageStorageSettings();
         EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
@@ -303,8 +303,7 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
         persister.gc();
 
-        cfg = persister.page_storage->getSettings();
-
+        cfg = persister.getPageStorageSettings();
         EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);

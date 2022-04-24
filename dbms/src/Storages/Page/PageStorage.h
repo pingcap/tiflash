@@ -367,19 +367,20 @@ public:
         {
         case PageStorageRunMode::ONLY_V2:
         {
-            storage_v2->read(ns_id, page_id, read_limiter, snap);
+            return storage_v2->read(ns_id, page_id, read_limiter, snap);
         }
         case PageStorageRunMode::ONLY_V3:
         {
-            storage_v3->read(ns_id, page_id, read_limiter, snap);
+            return storage_v3->read(ns_id, page_id, read_limiter, snap);
         }
         case PageStorageRunMode::MIX_MODE:
         {
             const auto & page_from_v3 = storage_v3->read(ns_id, page_id, read_limiter, toConcreteV3Snapshot(), false);
-            if (page_from_v3.page_id == INVALID_PAGE_ID)
+            if (page_from_v3.page_id != INVALID_PAGE_ID)
             {
-                return storage_v2->read(ns_id, page_id, read_limiter, toConcreteV2Snapshot());
+                return page_from_v3;
             }
+            return storage_v2->read(ns_id, page_id, read_limiter, toConcreteV2Snapshot());
         }
         default:
             throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
@@ -424,15 +425,18 @@ public:
         case PageStorageRunMode::ONLY_V2:
         {
             storage_v2->read(ns_id, page_ids, handler, read_limiter, snap);
+            break;
         }
         case PageStorageRunMode::ONLY_V3:
         {
             storage_v3->read(ns_id, page_ids, handler, read_limiter, snap);
+            break;
         }
         case PageStorageRunMode::MIX_MODE:
         {
             const auto & page_ids_not_found = storage_v3->read(ns_id, page_ids, handler, read_limiter, toConcreteV3Snapshot(), false);
             storage_v2->read(ns_id, page_ids_not_found, handler, read_limiter, toConcreteV2Snapshot());
+            break;
         }
         default:
             throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
@@ -597,15 +601,18 @@ public:
         case PageStorageRunMode::ONLY_V2:
         {
             storage_v2->traverse(acceptor, snap);
+            break;
         }
         case PageStorageRunMode::ONLY_V3:
         {
             storage_v3->traverse(acceptor, snap);
+            break;
         }
         case PageStorageRunMode::MIX_MODE:
         {
             storage_v2->traverse(acceptor, toConcreteV3Snapshot());
             storage_v3->traverse(acceptor, toConcreteV2Snapshot());
+            break;
         }
         default:
             throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
@@ -672,7 +679,6 @@ public:
                     break;
                 }
                 // Both need del in v2 and v3
-                // TODO: make sure we can del not existed pageid
                 case WriteBatch::WriteType::DEL:
                 {
                     wb_for_v2.copyWrite(write);
@@ -746,6 +752,27 @@ public:
     friend class RegionPersister;
 
 private:
+    PageStorage::Config getSettings() const
+    {
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
+        {
+            return storage_v2->getSettings();
+        }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            return storage_v3->getSettings();
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            throw Exception("Not support.", ErrorCodes::NOT_IMPLEMENTED);
+        }
+        default:
+            throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
     void reloadSettings(const PageStorage::Config & new_config) const
     {
         switch (run_mode)
@@ -753,15 +780,18 @@ private:
         case PageStorageRunMode::ONLY_V2:
         {
             storage_v2->reloadSettings(new_config);
+            break;
         }
         case PageStorageRunMode::ONLY_V3:
         {
             storage_v3->reloadSettings(new_config);
+            break;
         }
         case PageStorageRunMode::MIX_MODE:
         {
             storage_v2->reloadSettings(new_config);
             storage_v3->reloadSettings(new_config);
+            break;
         }
         default:
             throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);

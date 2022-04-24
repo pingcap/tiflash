@@ -1585,6 +1585,12 @@ PageStorageRunMode Context::getPageStorageRunMode() const
     return shared->storage_run_mode;
 }
 
+void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
+{
+    auto lock = getLock();
+    shared->storage_run_mode = run_mode;
+}
+
 UInt16 Context::getTCPPort() const
 {
     auto lock = getLock();

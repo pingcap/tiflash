@@ -405,6 +405,7 @@ public:
     IORateLimiter & getIORateLimiter() const;
 
     void initializePageStorageMode(const PathPool & path_pool, bool enable_ps_v3);
+    void setPageStorageRunMode(PageStorageRunMode run_mode) const;
     PageStorageRunMode getPageStorageRunMode() const;
 
     /// Call after initialization before using system logs. Call for global context.

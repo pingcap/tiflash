@@ -28,7 +28,7 @@ namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
 
-void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_ps_v3)
+void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path)
 {
     // set itself as global context
     global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
@@ -74,9 +74,7 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
     raft_config.disable_bg_flush = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
-    global_context->initializePageStorageMode(global_context->getPathPool(), enable_ps_v3);
-    LOG_FMT_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
-
+    global_context->setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 
     global_context->getTMTContext().restore();

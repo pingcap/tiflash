@@ -66,7 +66,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
         LOG_FMT_WARNING(
-            &Poco::Logger::get("RegionPersister"),
+            Logger::get("RegionPersister"),
             "Persisting big region: {} with data info: {}, serialized size {}",
             region.toString(),
             region.dataInfo(),
@@ -139,8 +139,18 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
     : global_context(global_context_)
     , region_manager(region_manager_)
-    , log(&Poco::Logger::get("RegionPersister"))
+    , log(Logger::get("RegionPersister"))
 {}
+
+PageStorage::Config RegionPersister::getPageStorageSettings() const
+{
+    if (!page_writer)
+    {
+        throw Exception("Not support for PS v1", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return page_writer->getSettings();
+}
 
 PS::V1::PageStorage::Config getV1PSConfig(const PS::V2::PageStorage::Config & config)
 {
@@ -167,8 +177,8 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         auto provider = global_context.getFileProvider();
         // If the GlobalStoragePool is initialized, then use v3 format
-        const auto & run_mode = global_context.getPageStorageRunMode();
-        // todo
+        auto run_mode = global_context.getPageStorageRunMode();
+
         switch (run_mode)
         {
         case PageStorageRunMode::ONLY_V2:
@@ -185,7 +195,6 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                 mergeConfigFromSettings(global_context.getSettingsRef(), config);
                 config.num_write_slots = 4; // extend write slots to 4 at least
 
-                LOG_FMT_INFO(log, "RegionPersister running in v2 mode");
                 auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
                     "RegionPersister",
                     delegator,
@@ -211,7 +220,6 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         {
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
 
-            LOG_FMT_INFO(log, "RegionPersister running in v3 mode");
             auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //
                 "RegionPersister",
                 delegator,
@@ -224,7 +232,6 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         }
         case PageStorageRunMode::MIX_MODE:
         {
-            LOG_FMT_INFO(log, "RegionPersister running in mix mode");
             auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
                 "RegionPersister",
                 delegator,
@@ -238,11 +245,24 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
             page_storage_v2->restore();
             page_storage_v3->restore();
-            page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
-            page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
+
+            if (page_storage_v2->getNumberOfPages() == 0)
+            {
+                page_storage_v2 = nullptr;
+                run_mode = PageStorageRunMode::ONLY_V3;
+                page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
+                page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
+            }
+            else
+            {
+                page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
+                page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
+            }
             break;
         }
         }
+
+        LOG_FMT_INFO(log, "RegionPersister running. Current Run Mode is {}", static_cast<UInt8>(run_mode));
     }
 
     RegionMap regions;
