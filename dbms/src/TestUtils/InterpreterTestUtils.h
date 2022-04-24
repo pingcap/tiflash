@@ -26,7 +26,6 @@
 #include <TestUtils/mockExecutor.h>
 namespace DB::tests
 {
-void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 class MockExecutorTest : public ::testing::Test
 {
 protected:
@@ -39,37 +38,13 @@ public:
     MockExecutorTest()
         : context(TiFlashTestEnv::getContext())
     {}
-    static void SetUpTestCase()
-    {
-        try
-        {
-            DB::registerFunctions();
-            DB::registerAggregateFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registered, ignore exception here.
-        }
-    }
+    static void SetUpTestCase();
 
-    virtual void initializeContext()
-    {
-        dag_context_ptr = std::make_unique<DAGContext>(1024);
-        context = MockDAGRequestContext(TiFlashTestEnv::getContext());
-    }
+    virtual void initializeContext();
 
-    DAGContext & getDAGContext()
-    {
-        assert(dag_context_ptr != nullptr);
-        return *dag_context_ptr;
-    }
+    DAGContext & getDAGContext();
 
-    void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
-    {
-        FmtBuffer buf;
-        auto serializer = ExecutorSerializer(context.context, buf);
-        ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trim(serializer.serialize(actual.get())));
-    }
+    void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
 protected:
     MockDAGRequestContext context;

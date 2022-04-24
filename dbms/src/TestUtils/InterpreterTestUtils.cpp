@@ -18,62 +18,35 @@
 
 namespace DB::tests
 {
-namespace
+DAGContext & MockExecutorTest::getDAGContext()
 {
-// String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
+    assert(dag_context_ptr != nullptr);
+    return *dag_context_ptr;
+}
 
-// // serialize tipb::DAGRequest, print the executor name in a Tree format.
-// String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request)
-// {
-//     assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-//     if (dag_request->has_root_executor())
-//     {
-//         return toTreeString(dag_request->root_executor());
-//     }
-//     else
-//     {
-//         FmtBuffer buffer;
-//         String prefix;
-//         traverseExecutors(dag_request.get(), [&buffer, &prefix](const tipb::Executor & executor) {
-//             assert(executor.has_executor_id());
-//             buffer.fmtAppend("{}{}\n", prefix, executor.executor_id());
-//             prefix.append(" ");
-//             return true;
-//         });
-//         return buffer.toString();
-//     }
-// }
+void MockExecutorTest::initializeContext()
+{
+    dag_context_ptr = std::make_unique<DAGContext>(1024);
+    context = MockDAGRequestContext(TiFlashTestEnv::getContext());
+}
 
-// String toTreeString(const tipb::Executor & root_executor, size_t level)
-// {
-//     FmtBuffer buffer;
+void MockExecutorTest::SetUpTestCase()
+{
+    try
+    {
+        DB::registerFunctions();
+        DB::registerAggregateFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
+}
 
-// auto append_str = [&buffer, &level](const tipb::Executor & executor) {
-//     assert(executor.has_executor_id());
-
-//     buffer.append(String(level, ' '));
-//     buffer.append(executor.executor_id()).append("\n");
-// };
-
-//     traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
-//         if (executor.has_join())
-//         {
-//             append_str(executor);
-//             ++level;
-//             for (const auto & child : executor.join().children())
-//                 buffer.append(toTreeString(child, level));
-//             return false;
-//         }
-//         else
-//         {
-//             append_str(executor);
-//             ++level;
-//             return true;
-//         }
-//     });
-
-//     return buffer.toString();
-// }
-} // namespace
-
+void MockExecutorTest::dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
+{
+    FmtBuffer buf;
+    auto serializer = ExecutorSerializer(context.context, buf);
+    ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trim(serializer.serialize(actual.get())));
+}
 } // namespace DB::tests

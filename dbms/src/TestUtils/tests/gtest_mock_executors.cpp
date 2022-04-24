@@ -163,8 +163,8 @@ try
                              "  topn_6|order_by: columns{columnType: Long, desc: true}, limit: 10\n"
                              "   table_scan_5|columns:{columnType: Long, columnType: String, columnType: String}\n"
                              "  topn_4|order_by: columns{columnType: String, desc: true}, limit: 10\n"
-                             "   aggregation_3|group_by: columns:{columnType: String}, agg_func:{max(columnType: Long)}\n"
-                             "    project_2|columns:{columnType: Long, columnType: String}\n"
+                             "   aggregation_3|group_by: columns:{columnType: String, columnType: String}, agg_func:{max(columnType: Long)}\n"
+                             "    project_2|columns:{columnType: Long, columnType: String, columnType: String}\n"
                              "     selection_1|equals(columnType: Long, columnType: String) and equals(columnType: Long, columnType: String)}\n"
                              "      table_scan_0|columns:{columnType: Long, columnType: String, columnType: String}\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
@@ -206,7 +206,7 @@ try
 {
     auto request = context.receive("sender_1")
                        .build(context);
-    String expected_string = "exchange_receiver_0\n";
+    String expected_string = "exchange_receiver_0|type:PassThrough\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 
     request = context.receive("sender_1")
