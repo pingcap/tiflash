@@ -41,7 +41,7 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
     size_t i = 0;
     for (auto item : order_by_items)
     {
-        int direction = item.second ? 1 : -1; // todo
+        int direction = item.second ? 1 : -1;
         ASTPtr locale_node;
         auto order_by_item = std::make_shared<ASTOrderByElement>(direction, direction, false, locale_node);
         order_by_item->children.push_back(std::make_shared<ASTIdentifier>(item.first));
@@ -88,13 +88,11 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
     assert(!columns.empty());
     TableInfo table_info;
     table_info.name = db + "." + table;
-    size_t id = 0;
     for (const auto & column : columns)
     {
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
         ret.name = column.first;
-        ret.id = id++;
         table_info.columns.push_back(std::move(ret));
     }
     String empty_alias;

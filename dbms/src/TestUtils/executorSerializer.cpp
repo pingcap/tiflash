@@ -44,18 +44,6 @@ String ExecutorSerializer::serialize(const tipb::DAGRequest * dag_request)
     }
 }
 
-// todo support more types of scalar function
-std::unordered_map<tipb::ScalarFuncSig, String> sig_to_scalar_func_name({{tipb::ScalarFuncSig::EQInt, "equals"},
-                                                                         {tipb::ScalarFuncSig::NEInt, "notEquals"},
-                                                                         {tipb::ScalarFuncSig::LogicalAnd, "and"},
-                                                                         {tipb::ScalarFuncSig::LogicalOr, "or"},
-                                                                         {tipb::ScalarFuncSig::UnaryNotInt, "not"},
-                                                                         {tipb::ScalarFuncSig::GTInt, "greater"},
-                                                                         {tipb::ScalarFuncSig::LTInt, "less"}});
-
-// todo support more types of aggregate function
-std::unordered_map<tipb::ExprType, String> sig_to_agg_func_name({{tipb::ExprType::Max, "max"}});
-
 String getJoinTypeName(tipb::JoinType tp)
 {
     switch (tp)
@@ -75,7 +63,7 @@ String getJoinTypeName(tipb::JoinType tp)
     case tipb::JoinType::TypeSemiJoin:
         return "SemiJoin";
     default:
-        throw TiFlashException(fmt::format("Not supported Join type {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -86,7 +74,7 @@ String getJoinExecTypeName(tipb::JoinExecType tp)
     case tipb::JoinExecType::TypeHashJoin:
         return "HashJoin";
     default:
-        throw TiFlashException(fmt::format("Not supported Join exectution type {}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(fmt::format("Not supported Join exectution type: {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -101,7 +89,7 @@ String getExchangeTypeName(tipb::ExchangeType tp)
     case tipb::ExchangeType::Hash:
         return "Hash";
     default:
-        throw TiFlashException(fmt::format("Not supported Exchange type :{}", tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -110,15 +98,15 @@ String getFieldTypeName(Int32 tp)
     switch (tp)
     {
     case TiDB::TypeTiny:
-        return "tiny";
+        return "Tiny";
     case TiDB::TypeShort:
-        return "short";
+        return "Short";
     case TiDB::TypeInt24:
         return "Int24";
     case TiDB::TypeLong:
         return "Long";
     case TiDB::TypeLongLong:
-        return "Long long";
+        return "Longlong";
     case TiDB::TypeYear:
         return "Year";
     case TiDB::TypeDouble:
@@ -126,11 +114,11 @@ String getFieldTypeName(Int32 tp)
     case TiDB::TypeTime:
         return "Time";
     case TiDB::TypeDate:
-        return "Data";
+        return "Date";
     case TiDB::TypeDatetime:
-        return "Datatime";
+        return "Datetime";
     case TiDB::TypeNewDate:
-        return "NewData";
+        return "NewDate";
     case TiDB::TypeTimestamp:
         return "Timestamp";
     case TiDB::TypeFloat:
@@ -144,7 +132,7 @@ String getFieldTypeName(Int32 tp)
     case TiDB::TypeString:
         return "String";
     default:
-        throw TiFlashException("not supported field type in arrow encode: " + std::to_string(tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -156,34 +144,20 @@ void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, 
         throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
     context.buf.fmtAppend("{} | columns:{{", executor_id);
-
-    context.buf.joinStr(
-        ts.columns().begin(),
-        ts.columns().end(),
-        [](const auto & ci, FmtBuffer & fb) {
-            fb.fmtAppend("index: {}, type: {}", ci.column_id(), getFieldTypeName(ci.tp()));
-        },
-        ", ");
+    for (int i = 0; i < ts.columns_size(); i++)
+    {
+        context.buf.fmtAppend("index: {}, type: {}", i, getFieldTypeName(ts.columns().at(i).tp()));
+        if (i != ts.columns_size() - 1)
+            context.buf.append(", ");
+    }
     context.buf.append("}\n");
 }
 
 void serializeExpression(const tipb::Expr & expr, ExecutorSerializerContext & context)
 {
-    if (sig_to_scalar_func_name.find(expr.sig()) != sig_to_scalar_func_name.end())
+    if (isFunctionExpr(expr))
     {
-        context.buf.fmtAppend("{}(", sig_to_scalar_func_name[expr.sig()]);
-        context.buf.joinStr(
-            expr.children().begin(),
-            expr.children().end(),
-            [&](const auto & co, FmtBuffer &) {
-                serializeExpression(co, context);
-            },
-            ", ");
-        context.buf.append(")");
-    }
-    else if (sig_to_agg_func_name.find(expr.tp()) != sig_to_agg_func_name.end())
-    {
-        context.buf.fmtAppend("{}(", sig_to_agg_func_name[expr.tp()]);
+        context.buf.fmtAppend("{}(", getFunctionName(expr));
         context.buf.joinStr(
             expr.children().begin(),
             expr.children().end(),
@@ -367,18 +341,14 @@ void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t 
     };
 
     traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
+        append_str(executor);
         if (executor.has_join())
         {
-            append_str(executor);
             for (const auto & child : executor.join().children())
                 serialize(child, level);
             return false;
         }
-        else
-        {
-            append_str(executor);
-            return true;
-        }
+        return true;
     });
 }
 
