@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <WindowFunctions/WindowFunctionFactory.h>
 
-#include <DataStreams/HashJoinBuildBlockInputStream.h>
 namespace DB
 {
-Block HashJoinBuildBlockInputStream::readImpl()
+void registerWindowFunctions(WindowFunctionFactory & factory);
+
+void registerWindowFunctions()
 {
-    Block block = children.back()->read();
-    if (!block)
-        return block;
-    join->insertFromBlock(block, concurrency_build_index);
-    return block;
+    auto & window_factory = WindowFunctionFactory::instance();
+    registerWindowFunctions(window_factory);
 }
 
 } // namespace DB

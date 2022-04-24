@@ -12,17 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
 
-#include <DataStreams/HashJoinBuildBlockInputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
+
 namespace DB
 {
-Block HashJoinBuildBlockInputStream::readImpl()
+class MockTableScanBlockInputStream : public IProfilingBlockInputStream
 {
-    Block block = children.back()->read();
-    if (!block)
-        return block;
-    join->insertFromBlock(block, concurrency_build_index);
-    return block;
-}
+public:
+    MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size);
+    Block getHeader() const override
+    {
+        return Block(columns);
+    }
+    String getName() const override { return "MockTableScan"; }
+    ColumnsWithTypeAndName columns;
+    size_t output_index;
+    size_t max_block_size;
+    size_t rows;
+
+protected:
+    Block readImpl() override;
+    ColumnPtr makeColumn(ColumnWithTypeAndName elem);
+};
 
 } // namespace DB
