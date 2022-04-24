@@ -28,7 +28,6 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -44,7 +43,6 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
 {
@@ -447,6 +445,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         true,
         is_tiflash_right_join,
         tiflash_join.getProbeConditions());
+    RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
 
     // prepare build side
     auto [build_side_prepare_actions, build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
@@ -457,6 +456,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         false,
         is_tiflash_right_join,
         tiflash_join.getBuildConditions());
+    RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
     auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
         = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions, build_side_prepare_actions);
@@ -489,14 +489,11 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     /// build side streams
     executeExpression(build_pipeline, build_side_prepare_actions);
     // add a HashJoinBuildBlockInputStream to build a shared hash table
-    size_t concurrency_build_index = 0;
-    auto get_concurrency_build_index = [&concurrency_build_index, &join_build_concurrency]() {
-        return (concurrency_build_index++) % join_build_concurrency;
-    };
+    auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
     build_pipeline.transform([&](auto & stream) {
         stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
     });
-    executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/true);
+    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/true);
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
