@@ -161,7 +161,7 @@ void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, 
         ts.columns().begin(),
         ts.columns().end(),
         [](const auto & ci, FmtBuffer & fb) {
-            fb.fmtAppend("column_index: {}, column_type: {}", ci.column_id(), getFieldTypeName(ci.tp()));
+            fb.fmtAppend("index: {}, type: {}", ci.column_id(), getFieldTypeName(ci.tp()));
         },
         ", ");
     context.buf.append("}\n");
@@ -195,7 +195,7 @@ void serializeExpression(const tipb::Expr & expr, ExecutorSerializerContext & co
     }
     else
     {
-        context.buf.fmtAppend("column_index: {}, column_type: {}", decodeDAGInt64(expr.val()), getFieldTypeName(expr.field_type().tp()));
+        context.buf.fmtAppend("index: {}, type: {}", decodeDAGInt64(expr.val()), getFieldTypeName(expr.field_type().tp()));
     }
 }
 
@@ -294,7 +294,7 @@ void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSen
         sender.all_field_types().begin(),
         sender.all_field_types().end(),
         [](const auto & field, FmtBuffer & fb) {
-            fb.fmtAppend("column_type: {}", getFieldTypeName(field.tp()));
+            fb.fmtAppend("type: {}", getFieldTypeName(field.tp()));
         },
         ", ");
     context.buf.append("}\n");
@@ -307,7 +307,7 @@ void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeR
         receiver.field_types().begin(),
         receiver.field_types().end(),
         [](const auto & field, FmtBuffer & fb) {
-            fb.fmtAppend("column_type: {}", getFieldTypeName(field.tp()));
+            fb.fmtAppend("type: {}", getFieldTypeName(field.tp()));
         },
         ", ");
     context.buf.append("}\n");
