@@ -590,39 +590,6 @@ try
 }
 CATCH
 
-TEST_F(MPMCQueueTest, isNextOpNonBlocking)
-try
-{
-    MPMCQueue<int> q(2);
-    ASSERT_TRUE(q.isNextPushNonBlocking());
-    ASSERT_FALSE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
-    ASSERT_TRUE(q.isNextPushNonBlocking());
-    ASSERT_TRUE(q.isNextPopNonBlocking());
-    int val;
-    ASSERT_TRUE(q.pop(val));
-    ASSERT_TRUE(q.isNextPushNonBlocking());
-    ASSERT_FALSE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
-    ASSERT_TRUE(q.isNextPushNonBlocking());
-    ASSERT_TRUE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
-    ASSERT_FALSE(q.isNextPushNonBlocking());
-    ASSERT_TRUE(q.isNextPopNonBlocking());
-
-    ASSERT_TRUE(q.finish());
-    ASSERT_FALSE(q.finish());
-
-    //check isNextPush/PopNonBlocking after finish
-    ASSERT_TRUE(q.pop(val));
-    ASSERT_TRUE(q.isNextPushNonBlocking());
-    ASSERT_TRUE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.pop(val));
-    ASSERT_TRUE(q.isNextPushNonBlocking());
-    ASSERT_TRUE(q.isNextPopNonBlocking());
-}
-CATCH
-
 struct Counter
 {
     static int count;
