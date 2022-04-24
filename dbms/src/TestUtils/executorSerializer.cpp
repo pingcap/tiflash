@@ -166,7 +166,6 @@ void serializeExpression(const tipb::Expr & expr, ExecutorSerializerContext & co
     if (sig_to_scalar_func_name.find(expr.sig()) != sig_to_scalar_func_name.end())
     {
         context.buf.fmtAppend("{}(", sig_to_scalar_func_name[expr.sig()]);
-        // todo refactor.
         context.buf.joinStr(
             expr.children().begin(),
             expr.children().end(),
@@ -263,7 +262,7 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, Executo
     context.buf.fmtAppend("}}, limit: {}\n", top_n.limit());
 }
 
-void serializeJoin(const String & executor_id, const tipb::Join & join [[maybe_unused]], ExecutorSerializerContext & context)
+void serializeJoin(const String & executor_id, const tipb::Join & join, ExecutorSerializerContext & context)
 {
     context.buf.fmtAppend("{}|{},{}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
     context.buf.joinStr(
@@ -284,12 +283,12 @@ void serializeJoin(const String & executor_id, const tipb::Join & join [[maybe_u
     context.buf.append("}\n");
 }
 
-void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSender & sender [[maybe_unused]], ExecutorSerializerContext & context)
+void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSender & sender, ExecutorSerializerContext & context)
 {
     context.buf.fmtAppend("{}|type:{}\n", executor_id, getExchangeTypeName(sender.tp()));
 }
 
-void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeReceiver & receiver [[maybe_unused]], ExecutorSerializerContext & context)
+void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeReceiver & receiver, ExecutorSerializerContext & context)
 {
     context.buf.fmtAppend("{}|type:{}\n", executor_id, getExchangeTypeName(receiver.tp()));
 }
