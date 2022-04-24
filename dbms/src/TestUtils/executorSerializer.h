@@ -17,10 +17,10 @@
 #include <Common/FmtUtils.h>
 #include <Core/NamesAndTypes.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Interpreters/Context.h>
+#include <TestUtils/TiFlashTestException.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
-
-#include "Interpreters/Context.h"
 
 namespace DB
 {
@@ -39,14 +39,15 @@ struct ExecutorSerializerContext
     {}
 };
 
-void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, ExecutorSerializerContext & serialize_executor_context);
-void serializeSelection(const String & executor_id, const tipb::Selection & sel, ExecutorSerializerContext & serialize_executor_context);
-void serializeLimit(const String & executor_id, const tipb::Limit & limit, ExecutorSerializerContext & serialize_executor_context);
-void serializeProjection(const String & executor_id, const tipb::Projection & proj, ExecutorSerializerContext & serialize_executor_context);
-void serializeAggregation(const String & executor_id, const tipb::Aggregation & agg, ExecutorSerializerContext & serialize_executor_context);
-void serializeTopN(const String & executor_id, const tipb::TopN & top_n, ExecutorSerializerContext & serialize_executor_context);
-void serializeJoin(const String & executor_id, const tipb::Join & join, ExecutorSerializerContext & serialize_executor_context);
-
+void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, ExecutorSerializerContext & context);
+void serializeSelection(const String & executor_id, const tipb::Selection & sel, ExecutorSerializerContext & context);
+void serializeLimit(const String & executor_id, const tipb::Limit & limit, ExecutorSerializerContext & context);
+void serializeProjection(const String & executor_id, const tipb::Projection & proj, ExecutorSerializerContext & context);
+void serializeAggregation(const String & executor_id, const tipb::Aggregation & agg, ExecutorSerializerContext & context);
+void serializeTopN(const String & executor_id, const tipb::TopN & top_n, ExecutorSerializerContext & context);
+void serializeJoin(const String & executor_id, const tipb::Join & join, ExecutorSerializerContext & context);
+void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSender & sender, ExecutorSerializerContext & context);
+void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeReceiver & receiver, ExecutorSerializerContext & context);
 class ExecutorSerializer
 {
 public:
@@ -93,8 +94,14 @@ private:
                 break;
             case tipb::ExecType::TypeKill:
                 throw TiFlashException("Kill executor is not supported", Errors::Coprocessor::Unimplemented);
+            case tipb::ExecType::TypeExchangeReceiver:
+                serializeExchangeReceiver(executor.executor_id(), executor.exchange_receiver(), context);
+                break;
+            case tipb::ExecType::TypeExchangeSender:
+                serializeExchangeSender(executor.executor_id(), executor.exchange_sender(), context);
+                break;
             default:
-                throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
+                throw TiFlashException("Should not reach here111", Errors::Coprocessor::Internal);
             }
             ++level;
         };

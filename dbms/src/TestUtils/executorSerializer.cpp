@@ -4,10 +4,11 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <TestUtils/executorSerializer.h>
 #include <common/StringRef.h>
+#include <tipb/executor.pb.h>
+#include <tipb/expression.pb.h>
 
 namespace DB::tests
 {
-
 String ExecutorSerializer::serialize(const tipb::DAGRequest * dag_request)
 {
     assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
@@ -27,6 +28,61 @@ String ExecutorSerializer::serialize(const tipb::DAGRequest * dag_request)
             return true;
         });
         return buffer.toString();
+    }
+}
+
+// todo support more types of scalar function
+std::unordered_map<tipb::ScalarFuncSig, String> sig_to_scalar_func_name({{tipb::ScalarFuncSig::EQInt, "equals"},
+                                                                         {tipb::ScalarFuncSig::NEInt, "notEquals"},
+                                                                         {tipb::ScalarFuncSig::LogicalAnd, "and"},
+                                                                         {tipb::ScalarFuncSig::LogicalOr, "or"},
+                                                                         {tipb::ScalarFuncSig::UnaryNotInt, "not"},
+                                                                         {tipb::ScalarFuncSig::GTInt, "greater"},
+                                                                         {tipb::ScalarFuncSig::LTInt, "less"}});
+
+// todo support more types of aggregate function
+std::unordered_map<tipb::ExprType, String> sig_to_agg_func_name({{tipb::ExprType::Max, "max"}});
+
+String getJoinTypeName(tipb::JoinType tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinType::TypeAntiLeftOuterSemiJoin:
+        return "AntiLeftOuterSemiJoin";
+    case tipb::JoinType::TypeLeftOuterJoin:
+        return "LeftOuterJoin";
+    case tipb::JoinType::TypeRightOuterJoin:
+        return "RightOuterJoin";
+    case tipb::JoinType::TypeLeftOuterSemiJoin:
+        return "LeftOuterSemiJoin";
+    case tipb::JoinType::TypeAntiSemiJoin:
+        return "AntiSemiJoin";
+    case tipb::JoinType::TypeInnerJoin:
+        return "InnerJoin";
+    case tipb::JoinType::TypeSemiJoin:
+        return "SemiJoin";
+    }
+}
+
+String getJoinExecTypeName(tipb::JoinExecType tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinExecType::TypeHashJoin:
+        return "HashJoin";
+    }
+}
+
+String getExchangeTypeName(tipb::ExchangeType tp)
+{
+    switch (tp)
+    {
+    case tipb::ExchangeType::Broadcast:
+        return "Broadcast";
+    case tipb::ExchangeType::PassThrough:
+        return "PassThrough";
+    case tipb::ExchangeType::Hash:
+        return "Hash";
     }
 }
 
@@ -73,59 +129,157 @@ String getFieldTypeName(Int32 tp)
     }
 }
 
-void serializeTableScan(const String & executor_id [[maybe_unused]], const tipb::TableScan & ts [[maybe_unused]], ExecutorSerializerContext & serialize_executor_context)
+void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, ExecutorSerializerContext & context)
 {
-    if (!ts.has_table_id())
-    {
-        // do not have table id
-        throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
-    }
-    // TableID table_id = ts.table_id();
     if (ts.columns_size() == 0)
     {
         // no column selected, must be something wrong
         throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
-    serialize_executor_context.buf.fmtAppend("{} columns: {{ ", executor_id);
-    serialize_executor_context.buf.joinStr(
+    context.buf.fmtAppend("{}|columns:{{", executor_id);
+    context.buf.joinStr(
         ts.columns().begin(),
         ts.columns().end(),
         [](const auto & ci, FmtBuffer & fb) {
-            fb.fmtAppend("type: {}", ci.column_id(), getFieldTypeName(ci.tp()));
+            fb.fmtAppend("columnType: {}", getFieldTypeName(ci.tp()));
         },
         ", ");
-    serialize_executor_context.buf.append("}\n");
+    context.buf.append("}\n");
+}
+
+void serializeExpression(const tipb::Expr & expr, ExecutorSerializerContext & context)
+{
+    if (sig_to_scalar_func_name.find(expr.sig()) != sig_to_scalar_func_name.end())
+    {
+        context.buf.fmtAppend("{}(", sig_to_scalar_func_name[expr.sig()]);
+        // todo refactor.
+        context.buf.joinStr(
+            expr.children().begin(),
+            expr.children().end(),
+            [&](const auto & co, FmtBuffer &) {
+                serializeExpression(co, context);
+            },
+            ", ");
+        context.buf.append(")");
+    }
+    else if (sig_to_agg_func_name.find(expr.tp()) != sig_to_agg_func_name.end())
+    {
+        context.buf.fmtAppend("{}(", sig_to_agg_func_name[expr.tp()]);
+        context.buf.joinStr(
+            expr.children().begin(),
+            expr.children().end(),
+            [&](const auto & co, FmtBuffer &) {
+                serializeExpression(co, context);
+            },
+            ", ");
+        context.buf.append(")");
+    }
+    else
+    {
+        context.buf.fmtAppend("columnType: {}", getFieldTypeName(expr.field_type().tp()));
+    }
+}
+
+void serializeSelection(const String & executor_id, const tipb::Selection & sel, ExecutorSerializerContext & context)
+{
+    context.buf.fmtAppend("{}|", executor_id);
+    // currently only support "and" function in selection executor.
+    context.buf.joinStr(
+        sel.conditions().begin(),
+        sel.conditions().end(),
+        [&](const auto & expr, FmtBuffer &) {
+            serializeExpression(expr, context);
+        },
+        " and ");
+    context.buf.append("}\n");
 }
 
 
-void serializeSelection(const String & executor_id, const tipb::Selection & sel [[maybe_unused]], ExecutorSerializerContext & serialize_executor_context)
+void serializeLimit(const String & executor_id, const tipb::Limit & limit, ExecutorSerializerContext & context)
 {
-    serialize_executor_context.buf.append(executor_id).append("\n");
+    context.buf.fmtAppend("{}| {}\n", executor_id, limit.limit());
 }
 
-void serializeLimit(const String & executor_id, const tipb::Limit & limit [[maybe_unused]], ExecutorSerializerContext & serialize_executor_context)
+void serializeProjection(const String & executor_id, const tipb::Projection & proj, ExecutorSerializerContext & context)
 {
-    serialize_executor_context.buf.append(executor_id).append("\n");
+    context.buf.fmtAppend("{}|columns:{{", executor_id);
+    context.buf.joinStr(
+        proj.exprs().begin(),
+        proj.exprs().end(),
+        [&](const auto & expr, FmtBuffer &) {
+            serializeExpression(expr, context);
+        },
+        ", ");
+    context.buf.append("}\n");
 }
 
-void serializeProjection(const String & executor_id, const tipb::Projection & proj [[maybe_unused]], ExecutorSerializerContext & serialize_executor_context)
+void serializeAggregation(const String & executor_id, const tipb::Aggregation & agg, ExecutorSerializerContext & context)
 {
-    serialize_executor_context.buf.append(executor_id).append("\n");
+    context.buf.fmtAppend("{}|group_by: columns:{{", executor_id);
+    context.buf.joinStr(
+        agg.group_by().begin(),
+        agg.group_by().end(),
+        [&](const auto & by_item, FmtBuffer &) {
+            serializeExpression(by_item, context);
+        },
+        ", ");
+    context.buf.append("}, ");
+    context.buf.append("agg_func:{");
+    context.buf.joinStr(
+        agg.agg_func().begin(),
+        agg.agg_func().end(),
+        [&](const auto & by_item, FmtBuffer &) {
+            serializeExpression(by_item, context);
+        },
+        ", ");
+    context.buf.append("}\n");
 }
 
-void serializeAggregation(const String & executor_id, const tipb::Aggregation & agg [[maybe_unused]], ExecutorSerializerContext & serialize_executor_context)
+void serializeTopN(const String & executor_id, const tipb::TopN & top_n, ExecutorSerializerContext & context)
 {
-    serialize_executor_context.buf.append(executor_id).append("\n");
+    context.buf.fmtAppend("{}|order_by: columns{{", executor_id);
+    context.buf.joinStr(
+        top_n.order_by().begin(),
+        top_n.order_by().end(),
+        [&](const auto & by_item, FmtBuffer & fb) {
+            serializeExpression(by_item.expr(), context);
+            fb.fmtAppend(", desc: {}", by_item.desc());
+        },
+        ", ");
+    context.buf.fmtAppend("}}, limit: {}\n", top_n.limit());
 }
 
-void serializeTopN(const String & executor_id, const tipb::TopN & top_n [[maybe_unused]], ExecutorSerializerContext & serialize_executor_context)
+void serializeJoin(const String & executor_id, const tipb::Join & join [[maybe_unused]], ExecutorSerializerContext & context)
 {
-    serialize_executor_context.buf.append(executor_id).append("\n");
+    context.buf.fmtAppend("{}|{},{}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
+    context.buf.joinStr(
+        join.left_join_keys().begin(),
+        join.left_join_keys().end(),
+        [&](const auto & key, FmtBuffer & fb) {
+            fb.fmtAppend("type: {}", getFieldTypeName(key.field_type().tp()));
+        },
+        ", ");
+    context.buf.append("}, right_join_keys: {");
+    context.buf.joinStr(
+        join.left_join_keys().begin(),
+        join.left_join_keys().end(),
+        [&](const auto & key, FmtBuffer & fb) {
+            fb.fmtAppend("type: {}", getFieldTypeName(key.field_type().tp()));
+        },
+        ", ");
+    context.buf.append("}\n");
 }
 
-void serializeJoin(const String & executor_id, const tipb::Join & join [[maybe_unused]], ExecutorSerializerContext & serialize_executor_context)
+void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSender & sender [[maybe_unused]], ExecutorSerializerContext & context)
 {
-    serialize_executor_context.buf.append(executor_id).append("\n");
+    sender.PrintDebugString();
+    context.buf.fmtAppend("{}|type:{}\n", executor_id, getExchangeTypeName(sender.tp()));
+    context.buf.append(executor_id).append("\n");
+}
+
+void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeReceiver & receiver [[maybe_unused]], ExecutorSerializerContext & context)
+{
+    context.buf.fmtAppend("{}|type:{}\n", executor_id, getExchangeTypeName(receiver.tp()));
 }
 
 } // namespace DB::tests

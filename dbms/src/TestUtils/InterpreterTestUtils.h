@@ -15,15 +15,15 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
-#include <TestUtils/mockExecutor.h>
 #include <TestUtils/executorSerializer.h>
-#include <Common/FmtUtils.h>
+#include <TestUtils/mockExecutor.h>
 namespace DB::tests
 {
 void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
@@ -44,6 +44,7 @@ public:
         try
         {
             DB::registerFunctions();
+            DB::registerAggregateFunctions();
         }
         catch (DB::Exception &)
         {
