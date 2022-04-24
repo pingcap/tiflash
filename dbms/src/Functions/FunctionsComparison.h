@@ -1683,6 +1683,7 @@ public:
     {
         const IColumn * col_left_untyped = block.getByPosition(arguments[0]).column.get();
         const IColumn * col_right_untyped = block.getByPosition(arguments[1]).column.get();
+
         bool success = executeString<ColumnInt8>(block, result, col_left_untyped, col_right_untyped);
         if (!success)
         {

@@ -72,7 +72,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    newThreadManager()->scheduleThenDetach(true, "MPPTask", [this] { this->shared_from_this()->runImpl(); });
+    newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] { self->runImpl(); });
 }
 
 void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
@@ -333,6 +333,11 @@ void MPPTask::runImpl()
         err_msg = e.displayText();
         LOG_FMT_ERROR(log, "task running meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
     }
+    catch (pingcap::Exception & e)
+    {
+        err_msg = e.message();
+        LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
+    }
     catch (std::exception & e)
     {
         err_msg = e.what();
@@ -356,6 +361,9 @@ void MPPTask::runImpl()
     }
     else
     {
+        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
+        if (dag_context)
+            dag_context->cancelAllExchangeReceiver();
         writeErrToAllTunnels(err_msg);
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
