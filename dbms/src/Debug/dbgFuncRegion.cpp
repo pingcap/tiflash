@@ -270,6 +270,21 @@ void dbgFuncFindRegionByRange(Context & context, const ASTs & args, DBGInvoker::
             fmt_buf.fmtAppend("{} ", region.second->id());
         output(fmt_buf.toString());
     }
+    else
+    {
+        if (!regions.empty())
+        {
+            for (const auto & region : regions)
+            {
+                auto str = fmt::format(
+                    "{}, local state: {}, proxy internal state: {}",
+                    region.second->toString(),
+                    region.second->getMetaRegion().ShortDebugString(),
+                    kvstore->getProxyHelper()->getRegionLocalState(region.first).ShortDebugString());
+                output(str);
+            }
+        }
+    }
 }
 
 } // namespace DB
