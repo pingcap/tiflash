@@ -1,4 +1,4 @@
-# planner refactory
+# planner refactor
 
 - Author(s): [SeaRise](http://github.com/SeaRise)
 
