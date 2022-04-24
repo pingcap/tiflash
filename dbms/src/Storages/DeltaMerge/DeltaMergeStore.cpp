@@ -210,8 +210,8 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , hash_salt(++DELTA_MERGE_STORE_HASH_SALT)
     , log(Logger::get("DeltaMergeStore", fmt::format("{}.{}", db_name, table_name)))
 {
-    const auto & page_storage_run_mode = global_context.getPageStorageRunMode();
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}] [ps_run_mode={}]", db_name, table_name, static_cast<UInt8>(page_storage_run_mode));
+    auto page_storage_run_mode = global_context.getPageStorageRunMode();
+    LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}]", db_name, table_name);
 
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
@@ -245,10 +245,9 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     store_columns = generateStoreColumns(original_table_columns, is_common_handle);
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
-
     try
     {
-        storage_pool->restore(); // restore from disk
+        page_storage_run_mode = storage_pool->restore(); // restore from disk
         if (!storage_pool->maxMetaPageId())
         {
             // Create the first segment.
@@ -281,7 +280,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     setUpBackgroundTask(dm_context);
 
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store end [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Restore DeltaMerge Store end [{}.{}], [ps_run_mode={}]", db_name, table_name, static_cast<UInt8>(page_storage_run_mode));
 }
 
 DeltaMergeStore::~DeltaMergeStore()

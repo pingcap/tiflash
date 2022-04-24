@@ -103,11 +103,16 @@ public:
 
     StoragePool(PageStorageRunMode mode, NamespaceId ns_id_, const GlobalStoragePoolPtr & global_storage_pool, StoragePathPool & path_pool, Context & global_ctx, const String & name = "");
 
-    void restore();
+    PageStorageRunMode restore();
 
     ~StoragePool();
 
     NamespaceId getNamespaceId() const { return ns_id; }
+
+    PageStorageRunMode getPageStorageRunMode()
+    {
+        return run_mode;
+    }
 
     PageReaderPtr & logReader()
     {
@@ -199,10 +204,11 @@ public:
     PageId maxMetaPageId() { return max_meta_page_id; }
     PageId newLogPageId() { return ++max_log_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    const PageStorageRunMode run_mode;
+    PageStorageRunMode run_mode;
 
     // whether the three storage instance is owned by this StoragePool
     const NamespaceId ns_id;
