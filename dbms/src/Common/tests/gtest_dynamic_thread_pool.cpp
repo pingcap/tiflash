@@ -13,8 +13,6 @@ TEST_F(DynamicThreadPoolTest, testAutoExpanding)
 try
 {
     DynamicThreadPool pool(1, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     std::atomic<int> a = 0;
 
@@ -53,8 +51,6 @@ TEST_F(DynamicThreadPoolTest, testDynamicShrink)
 try
 {
     DynamicThreadPool pool(0, std::chrono::milliseconds(50));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto f0 = pool.schedule(true, [] {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -86,8 +82,6 @@ TEST_F(DynamicThreadPoolTest, testFixedAlwaysWorking)
 try
 {
     DynamicThreadPool pool(4, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto cnt = pool.threadCount();
     ASSERT_EQ(cnt.fixed, 4);
@@ -104,8 +98,6 @@ TEST_F(DynamicThreadPoolTest, testExceptionSafe)
 try
 {
     DynamicThreadPool pool(1, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto f0 = pool.schedule(true, [] { throw Exception("test"); });
     ASSERT_THROW(f0.get(), Exception);
@@ -135,8 +127,6 @@ try
     };
 
     DynamicThreadPool pool(1, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto f = pool.schedule(false, getter);
     ASSERT_EQ(f.get(), nullptr);
