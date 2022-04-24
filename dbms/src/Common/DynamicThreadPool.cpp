@@ -77,6 +77,12 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 
+void DynamicThreadPool::executeTask(TaskPtr & task)
+{
+    task->execute();
+    task.reset();
+}
+
 void DynamicThreadPool::fixedWork(size_t index)
 {
     Queue * queue = fixed_queues[index].get();
@@ -87,13 +93,13 @@ void DynamicThreadPool::fixedWork(size_t index)
         queue->pop(task);
         if (!task)
             break;
-        task->execute();
+        executeTask(task);
     }
 }
 
 void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
-    initial_task->execute();
+    executeTask(initial_task);
 
     DynamicNode node;
     while (true)
@@ -110,8 +116,7 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 
         if (!node.task) // may be timeout or cancelled
             break;
-        node.task->execute();
-        node.task.reset();
+        executeTask(node.task);
     }
     alive_dynamic_threads.fetch_sub(1);
 }
