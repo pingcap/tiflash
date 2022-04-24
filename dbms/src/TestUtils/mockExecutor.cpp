@@ -22,6 +22,7 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
+
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -87,11 +88,13 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
     assert(!columns.empty());
     TableInfo table_info;
     table_info.name = db + "." + table;
+    size_t id = 0;
     for (const auto & column : columns)
     {
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
         ret.name = column.first;
+        ret.id = id++;
         table_info.columns.push_back(std::move(ret));
     }
     String empty_alias;

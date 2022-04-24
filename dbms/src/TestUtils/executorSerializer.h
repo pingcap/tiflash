@@ -20,7 +20,6 @@
 #include <Interpreters/Context.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <tipb/executor.pb.h>
-#include <tipb/select.pb.h>
 
 namespace DB
 {
@@ -69,12 +68,14 @@ private:
             case tipb::ExecType::TypeTableScan:
                 serializeTableScan(executor.executor_id(), executor.tbl_scan(), context);
                 break;
+            case tipb::ExecType::TypePartitionTableScan:
+                throw TiFlashException("Partition table scan executor is not supported", Errors::Coprocessor::Unimplemented); // todo support partition table scan executor.
             case tipb::ExecType::TypeJoin:
                 serializeJoin(executor.executor_id(), executor.join(), context);
                 break;
             case tipb::ExecType::TypeIndexScan:
                 // index scan not supported
-                throw TiFlashException("IndexScan is not supported", Errors::Coprocessor::Unimplemented);
+                throw TiFlashException("IndexScan executor is not supported", Errors::Coprocessor::Unimplemented);
             case tipb::ExecType::TypeSelection:
                 serializeSelection(executor.executor_id(), executor.selection(), context);
                 break;
@@ -100,6 +101,10 @@ private:
             case tipb::ExecType::TypeExchangeSender:
                 serializeExchangeSender(executor.executor_id(), executor.exchange_sender(), context);
                 break;
+            case tipb::ExecType::TypeSort:
+                throw TiFlashException("Sort executor is not supported", Errors::Coprocessor::Unimplemented); // todo support sort executor.
+            case tipb::ExecType::TypeWindow:
+                throw TiFlashException("Window executor is not supported", Errors::Coprocessor::Unimplemented); // todo support window executor.
             default:
                 throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
             }

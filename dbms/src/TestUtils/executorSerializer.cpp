@@ -14,6 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <TestUtils/executorSerializer.h>
@@ -75,6 +76,8 @@ String getJoinTypeName(tipb::JoinType tp)
         return "InnerJoin";
     case tipb::JoinType::TypeSemiJoin:
         return "SemiJoin";
+    default:
+        throw TiFlashException("not supported Join type " + std::to_string(tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -84,6 +87,8 @@ String getJoinExecTypeName(tipb::JoinExecType tp)
     {
     case tipb::JoinExecType::TypeHashJoin:
         return "HashJoin";
+    default:
+        throw TiFlashException("not supported Join exectution type " + std::to_string(tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -97,6 +102,8 @@ String getExchangeTypeName(tipb::ExchangeType tp)
         return "PassThrough";
     case tipb::ExchangeType::Hash:
         return "Hash";
+    default:
+        throw TiFlashException("not supported Exchange type " + std::to_string(tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -150,12 +157,13 @@ void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, 
         // no column selected, must be something wrong
         throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
-    context.buf.fmtAppend("{}|columns:{{", executor_id);
+    context.buf.fmtAppend("{} | columns:{{", executor_id);
+
     context.buf.joinStr(
         ts.columns().begin(),
         ts.columns().end(),
         [](const auto & ci, FmtBuffer & fb) {
-            fb.fmtAppend("columnType: {}", getFieldTypeName(ci.tp()));
+            fb.fmtAppend("column_index: {}, column_type: {}", ci.column_id(), getFieldTypeName(ci.tp()));
         },
         ", ");
     context.buf.append("}\n");
@@ -189,13 +197,13 @@ void serializeExpression(const tipb::Expr & expr, ExecutorSerializerContext & co
     }
     else
     {
-        context.buf.fmtAppend("columnType: {}", getFieldTypeName(expr.field_type().tp()));
+        context.buf.fmtAppend("column_index: {}, column_type: {}", decodeDAGInt64(expr.val()), getFieldTypeName(expr.field_type().tp()));
     }
 }
 
 void serializeSelection(const String & executor_id, const tipb::Selection & sel, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}|", executor_id);
+    context.buf.fmtAppend("{} | ", executor_id);
     // currently only support "and" function in selection executor.
     context.buf.joinStr(
         sel.conditions().begin(),
@@ -210,12 +218,12 @@ void serializeSelection(const String & executor_id, const tipb::Selection & sel,
 
 void serializeLimit(const String & executor_id, const tipb::Limit & limit, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}|{}\n", executor_id, limit.limit());
+    context.buf.fmtAppend("{} | {}\n", executor_id, limit.limit());
 }
 
 void serializeProjection(const String & executor_id, const tipb::Projection & proj, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}|columns:{{", executor_id);
+    context.buf.fmtAppend("{} | columns:{{", executor_id);
     context.buf.joinStr(
         proj.exprs().begin(),
         proj.exprs().end(),
@@ -228,7 +236,7 @@ void serializeProjection(const String & executor_id, const tipb::Projection & pr
 
 void serializeAggregation(const String & executor_id, const tipb::Aggregation & agg, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}|group_by: columns:{{", executor_id);
+    context.buf.fmtAppend("{} | group_by: columns:{{", executor_id);
     context.buf.joinStr(
         agg.group_by().begin(),
         agg.group_by().end(),
@@ -249,7 +257,7 @@ void serializeAggregation(const String & executor_id, const tipb::Aggregation & 
 
 void serializeTopN(const String & executor_id, const tipb::TopN & top_n, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}|order_by: columns{{", executor_id);
+    context.buf.fmtAppend("{} | order_by: columns{{", executor_id);
     context.buf.joinStr(
         top_n.order_by().begin(),
         top_n.order_by().end(),
@@ -263,7 +271,7 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, Executo
 
 void serializeJoin(const String & executor_id, const tipb::Join & join, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}|{},{}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
+    context.buf.fmtAppend("{} | {},{}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
     context.buf.joinStr(
         join.left_join_keys().begin(),
         join.left_join_keys().end(),
@@ -284,12 +292,20 @@ void serializeJoin(const String & executor_id, const tipb::Join & join, Executor
 
 void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSender & sender, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}|type:{}\n", executor_id, getExchangeTypeName(sender.tp()));
+    context.buf.fmtAppend("{} | type:{}\n", executor_id, getExchangeTypeName(sender.tp()));
 }
 
 void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeReceiver & receiver, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{}|type:{}\n", executor_id, getExchangeTypeName(receiver.tp()));
+    context.buf.fmtAppend("{} | type:{}, fields:{{", executor_id, getExchangeTypeName(receiver.tp()));
+    context.buf.joinStr(
+        receiver.field_types().begin(),
+        receiver.field_types().end(),
+        [](const auto & field, FmtBuffer & fb) {
+            fb.fmtAppend("column_type: {}", getFieldTypeName(field.tp()));
+        },
+        ", ");
+    context.buf.append("}\n");
 }
 
 } // namespace DB::tests
