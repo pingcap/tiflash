@@ -22,6 +22,7 @@
 #include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
 
+#include <functional>
 #include <tuple>
 
 namespace DB
@@ -114,12 +115,6 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
 
-std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurrency)
-{
-    size_t init_value = 0;
-    return [init_value, join_build_concurrency]() mutable {
-        return (init_value++) % join_build_concurrency;
-    };
-}
+std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurrency);
 } // namespace JoinInterpreterHelper
 } // namespace DB
