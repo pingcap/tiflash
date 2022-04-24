@@ -213,7 +213,6 @@ void serializeSelection(const String & executor_id, const tipb::Selection & sel,
     context.buf.append("}\n");
 }
 
-
 void serializeLimit(const String & executor_id, const tipb::Limit & limit, ExecutorSerializerContext & context)
 {
     context.buf.fmtAppend("{} | {}\n", executor_id, limit.limit());
@@ -290,7 +289,15 @@ void serializeJoin(const String & executor_id, const tipb::Join & join, Executor
 
 void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSender & sender, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{} | type:{}\n", executor_id, getExchangeTypeName(sender.tp()));
+    context.buf.fmtAppend("{} | type:{}, fields:{{", executor_id, getExchangeTypeName(sender.tp()));
+    context.buf.joinStr(
+        sender.all_field_types().begin(),
+        sender.all_field_types().end(),
+        [](const auto & field, FmtBuffer & fb) {
+            fb.fmtAppend("column_type: {}", getFieldTypeName(field.tp()));
+        },
+        ", ");
+    context.buf.append("}\n");
 }
 
 void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeReceiver & receiver, ExecutorSerializerContext & context)
@@ -305,7 +312,6 @@ void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeR
         ", ");
     context.buf.append("}\n");
 }
-
 
 void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t level)
 {

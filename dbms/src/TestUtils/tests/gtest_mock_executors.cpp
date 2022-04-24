@@ -177,7 +177,7 @@ try
     auto request = context.scan("test_db", "test_table")
                        .exchangeSender(tipb::PassThrough)
                        .build(context);
-    String expected_string = "exchange_sender_1 | type:PassThrough\n"
+    String expected_string = "exchange_sender_1 | type:PassThrough, fields:{column_type: String, column_type: String}\n"
                              " table_scan_0 | columns:{column_index: 0, column_type: String, column_index: 1, column_type: String}\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string, request);
 
@@ -185,7 +185,7 @@ try
                   .topN("s1", false, 10)
                   .exchangeSender(tipb::Broadcast)
                   .build(context);
-    String expected_string_1 = "exchange_sender_2 | type:Broadcast\n"
+    String expected_string_1 = "exchange_sender_2 | type:Broadcast, fields:{column_type: String, column_type: String}\n"
                                " topn_1 | order_by: columns{column_index: 0, column_type: String, desc: true}, limit: 10\n"
                                "  table_scan_0 | columns:{column_index: 0, column_type: String, column_index: 1, column_type: String}\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string_1, request);
@@ -194,7 +194,7 @@ try
                   .project({col("s1"), col("s2")})
                   .exchangeSender(tipb::Hash)
                   .build(context);
-    String expected_string_2 = "exchange_sender_2 | type:Hash\n"
+    String expected_string_2 = "exchange_sender_2 | type:Hash, fields:{column_type: String, column_type: String}\n"
                                " project_1 | columns:{column_index: 0, column_type: String, column_index: 1, column_type: String}\n"
                                "  table_scan_0 | columns:{column_index: 0, column_type: String, column_index: 1, column_type: String}\n";
     ASSERT_DAGREQUEST_EQAUL(expected_string_2, request);
