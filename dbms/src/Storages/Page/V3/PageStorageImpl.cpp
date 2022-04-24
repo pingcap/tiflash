@@ -86,6 +86,11 @@ SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
     return page_directory->getSnapshotsStat();
 }
 
+size_t PageStorageImpl::getNumberOfPages()
+{
+    return page_directory->numPages();
+}
+
 void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
 {
     if (unlikely(write_batch.empty()))

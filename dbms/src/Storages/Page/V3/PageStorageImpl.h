@@ -47,6 +47,8 @@ public:
 
     SnapshotsStatistics getSnapshotsStat() const override;
 
+    size_t getNumberOfPages() override;
+
     void writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) override;
 
     DB::PageEntry getEntryImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;

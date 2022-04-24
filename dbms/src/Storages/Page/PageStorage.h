@@ -179,6 +179,8 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
+    virtual size_t getNumberOfPages() = 0;
+
     void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
     {
         writeImpl(std::move(write_batch), write_limiter);
