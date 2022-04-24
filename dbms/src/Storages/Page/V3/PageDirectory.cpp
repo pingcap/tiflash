@@ -811,12 +811,12 @@ std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internal
     return std::make_pair(id_entries, page_not_found);
 }
 
-PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const
+PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageIdV3Internal id_to_resolve = page_id;
     PageVersionType ver_to_resolve(snap->sequence, 0);
-    bool ok = true;
-    while (ok)
+    bool keep_resolve = true;
+    while (keep_resolve)
     {
         MVCCMapType::const_iterator iter;
         {
@@ -824,7 +824,14 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
             iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
-                throw Exception(fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                if (throw_on_not_exist)
+                {
+                    throw Exception(fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                }
+                else
+                {
+                    return PageIdV3Internal(0, INVALID_PAGE_ID);
+                }
             }
         }
         auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, nullptr);
@@ -833,12 +840,14 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
         case VersionedPageEntries::RESOLVE_TO_NORMAL:
             return id_to_resolve;
         case VersionedPageEntries::RESOLVE_FAIL:
-            ok = false;
+            // resolve failed
+            keep_resolve = false;
             break;
         case VersionedPageEntries::RESOLVE_TO_REF:
             if (id_to_resolve == next_id_to_resolve)
             {
-                ok = false;
+                // dead-loop, so break the `while(keep_resolve)`
+                keep_resolve = false;
                 break;
             }
             id_to_resolve = next_id_to_resolve;
@@ -846,12 +855,20 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
             break; // continue the resolving
         }
     }
-    throw Exception(fmt::format(
-        "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
-        page_id,
-        snap->sequence,
-        id_to_resolve,
-        ver_to_resolve));
+
+    if (throw_on_not_exist)
+    {
+        throw Exception(fmt::format(
+            "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
+            page_id,
+            snap->sequence,
+            id_to_resolve,
+            ver_to_resolve));
+    }
+    else
+    {
+        return PageIdV3Internal(0, INVALID_PAGE_ID);
+    }
 }
 
 PageId PageDirectory::getMaxId(NamespaceId ns_id) const

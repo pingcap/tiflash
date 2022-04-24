@@ -184,6 +184,8 @@ public:
         writeImpl(std::move(write_batch), write_limiter);
     }
 
+    // If we can't get the entry.
+    // Then the null entry will be return
     PageEntry getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {})
     {
         return getEntryImpl(ns_id, page_id, snapshot);
@@ -216,14 +218,19 @@ public:
         return readImpl(ns_id, page_fields, read_limiter, snapshot, throw_on_not_exist);
     }
 
+    Page read(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
+    {
+        return readImpl(ns_id, page_field, read_limiter, snapshot, throw_on_not_exist);
+    }
+
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {})
     {
         traverseImpl(acceptor, snapshot);
     }
 
-    PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {})
+    PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        return getNormalPageIdImpl(ns_id, page_id, snapshot);
+        return getNormalPageIdImpl(ns_id, page_id, snapshot, throw_on_not_exist);
     }
 
     // We may skip the GC to reduce useless reading by default.
@@ -251,9 +258,11 @@ protected:
 
     virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
+    virtual Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
+
     virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
 
-    virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) = 0;
+    virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) = 0;
 

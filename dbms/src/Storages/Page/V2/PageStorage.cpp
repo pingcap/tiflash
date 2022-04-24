@@ -362,11 +362,16 @@ PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
     return versioned_page_entries.getSnapshot("")->version()->maxId();
 }
 
-PageId PageStorage::getNormalPageIdImpl(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot)
+PageId PageStorage::getNormalPageIdImpl(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
+    }
+
+    if (!throw_on_not_exist)
+    {
+        throw Exception("Not support throw_on_not_exist on V2", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     auto [is_ref_id, normal_page_id] = toConcreteSnapshot(snapshot)->version()->isRefId(page_id);
@@ -755,6 +760,40 @@ PageMap PageStorage::readImpl(NamespaceId /*ns_id*/, const std::vector<PageReadF
             page_map.emplace(page_id, std::move(page));
     }
     return page_map;
+}
+
+Page PageStorage::readImpl(NamespaceId /*ns_id*/, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot("");
+    }
+
+    if (!throw_on_not_exist)
+    {
+        throw Exception("Not support throw_on_not_exist on V2", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    const PageId & page_id = page_field.first;
+    const auto page_entry = toConcreteSnapshot(snapshot)->version()->find(page_id);
+
+    if (!page_entry)
+        throw Exception(fmt::format("Page {} not found", page_id), ErrorCodes::LOGICAL_ERROR);
+    const auto file_id_level = page_entry->fileIdLevel();
+
+    ReaderPtr file_reader;
+    try
+    {
+        file_reader = getReader(file_id_level);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format("(while reading Page[{}] of {})", page_id, storage_name));
+        throw;
+    }
+
+    PageFile::Reader::FieldReadInfo field_info(page_id, *page_entry, page_field.second);
+    return file_reader->read(field_info, read_limiter);
 }
 
 void PageStorage::traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)

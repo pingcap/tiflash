@@ -66,14 +66,14 @@ PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
     return page_directory->getMaxId(ns_id);
 }
 
-PageId PageStorageImpl::getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
+PageId PageStorageImpl::getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)
     {
         snapshot = this->getSnapshot("");
     }
 
-    return page_directory->getNormalPageId(buildV3Id(ns_id, page_id), snapshot).low;
+    return page_directory->getNormalPageId(buildV3Id(ns_id, page_id), snapshot, throw_on_not_exist).low;
 }
 
 DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing_id)
@@ -230,6 +230,11 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
         page_map[page_id_not_found] = page_not_found;
     }
     return page_map;
+}
+
+Page PageStorageImpl::readImpl(NamespaceId /*ns_id*/, const PageReadFields & /*page_field*/, const ReadLimiterPtr & /*read_limiter*/, SnapshotPtr /*snapshot*/, bool /*throw_on_not_exist*/)
+{
+    throw Exception("Not support read single filed on V3", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
