@@ -16,9 +16,7 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Mpp/ExchangeReceiver.h>
 #include <TestUtils/executorSerializer.h>
-#include <common/StringRef.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 
@@ -77,7 +75,7 @@ String getJoinTypeName(tipb::JoinType tp)
     case tipb::JoinType::TypeSemiJoin:
         return "SemiJoin";
     default:
-        throw TiFlashException("not supported Join type " + std::to_string(tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(fmt::format("Not supported Join type {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -88,7 +86,7 @@ String getJoinExecTypeName(tipb::JoinExecType tp)
     case tipb::JoinExecType::TypeHashJoin:
         return "HashJoin";
     default:
-        throw TiFlashException("not supported Join exectution type " + std::to_string(tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(fmt::format("Not supported Join exectution type {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -103,7 +101,7 @@ String getExchangeTypeName(tipb::ExchangeType tp)
     case tipb::ExchangeType::Hash:
         return "Hash";
     default:
-        throw TiFlashException("not supported Exchange type " + std::to_string(tp), Errors::Coprocessor::Internal);
+        throw TiFlashException(fmt::format("Not supported Exchange type :{}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -306,6 +304,76 @@ void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeR
         },
         ", ");
     context.buf.append("}\n");
+}
+
+
+void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t level)
+{
+    auto append_str = [&level, this](const tipb::Executor & executor) {
+        assert(executor.has_executor_id());
+        addPrefix(level);
+        switch (executor.tp())
+        {
+        case tipb::ExecType::TypeTableScan:
+            serializeTableScan(executor.executor_id(), executor.tbl_scan(), context);
+            break;
+        case tipb::ExecType::TypePartitionTableScan:
+            throw TiFlashException("Partition table scan executor is not supported", Errors::Coprocessor::Unimplemented); // todo support partition table scan executor.
+        case tipb::ExecType::TypeJoin:
+            serializeJoin(executor.executor_id(), executor.join(), context);
+            break;
+        case tipb::ExecType::TypeIndexScan:
+            // index scan not supported
+            throw TiFlashException("IndexScan executor is not supported", Errors::Coprocessor::Unimplemented);
+        case tipb::ExecType::TypeSelection:
+            serializeSelection(executor.executor_id(), executor.selection(), context);
+            break;
+        case tipb::ExecType::TypeAggregation:
+        // stream agg is not supported, treated as normal agg
+        case tipb::ExecType::TypeStreamAgg:
+            serializeAggregation(executor.executor_id(), executor.aggregation(), context);
+            break;
+        case tipb::ExecType::TypeTopN:
+            serializeTopN(executor.executor_id(), executor.topn(), context);
+            break;
+        case tipb::ExecType::TypeLimit:
+            serializeLimit(executor.executor_id(), executor.limit(), context);
+            break;
+        case tipb::ExecType::TypeProjection:
+            serializeProjection(executor.executor_id(), executor.projection(), context);
+            break;
+        case tipb::ExecType::TypeKill:
+            throw TiFlashException("Kill executor is not supported", Errors::Coprocessor::Unimplemented);
+        case tipb::ExecType::TypeExchangeReceiver:
+            serializeExchangeReceiver(executor.executor_id(), executor.exchange_receiver(), context);
+            break;
+        case tipb::ExecType::TypeExchangeSender:
+            serializeExchangeSender(executor.executor_id(), executor.exchange_sender(), context);
+            break;
+        case tipb::ExecType::TypeSort:
+            throw TiFlashException("Sort executor is not supported", Errors::Coprocessor::Unimplemented); // todo support sort executor.
+        case tipb::ExecType::TypeWindow:
+            throw TiFlashException("Window executor is not supported", Errors::Coprocessor::Unimplemented); // todo support window executor.
+        default:
+            throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
+        }
+        ++level;
+    };
+
+    traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
+        if (executor.has_join())
+        {
+            append_str(executor);
+            for (const auto & child : executor.join().children())
+                serialize(child, level);
+            return false;
+        }
+        else
+        {
+            append_str(executor);
+            return true;
+        }
+    });
 }
 
 } // namespace DB::tests
