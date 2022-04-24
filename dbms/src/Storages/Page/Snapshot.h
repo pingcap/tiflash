@@ -43,7 +43,7 @@ public:
         , snapshot_v3(snapshot_v3_)
     {}
 
-    ~PageStorageSnapshotMixed(){};
+    ~PageStorageSnapshotMixed() = default;
 
     PageStorageSnapshotPtr getV2Snasphot()
     {

@@ -43,11 +43,11 @@ extern const char force_disable_region_persister_compatible_mode[];
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
-    if (page_storage)
+    if (page_writer)
     {
         DB::WriteBatch wb_v2{ns_id};
         wb_v2.delPage(region_id);
-        page_storage->write(std::move(wb_v2), global_context.getWriteLimiter());
+        page_writer->write(std::move(wb_v2), global_context.getWriteLimiter());
     }
     else
     {
@@ -102,9 +102,9 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
     std::lock_guard lock(mutex);
 
-    if (page_storage)
+    if (page_reader)
     {
-        auto entry = page_storage->getEntry(ns_id, region_id, nullptr);
+        auto entry = page_reader->getPageEntry(region_id);
         if (entry.isValid() && entry.tag > applied_index)
             return;
     }
@@ -122,11 +122,11 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     }
 
     auto read_buf = buffer.tryGetReadBuffer();
-    if (page_storage)
+    if (page_writer)
     {
         DB::WriteBatch wb{ns_id};
         wb.putPage(region_id, applied_index, read_buf, region_size);
-        page_storage->write(std::move(wb), global_context.getWriteLimiter());
+        page_writer->write(std::move(wb), global_context.getWriteLimiter());
     }
     else
     {
@@ -186,12 +186,14 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                 config.num_write_slots = 4; // extend write slots to 4 at least
 
                 LOG_FMT_INFO(log, "RegionPersister running in v2 mode");
-                page_storage = std::make_unique<PS::V2::PageStorage>(
+                auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
                     "RegionPersister",
                     delegator,
                     config,
                     provider);
-                page_storage->restore();
+                page_storage_v2->restore();
+                page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, /*storage_v3_*/ nullptr);
+                page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, /*storage_v3_*/ nullptr, /*readlimiter*/ global_context.getReadLimiter());
             }
             else
             {
@@ -210,24 +212,41 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             mergeConfigFromSettings(global_context.getSettingsRef(), config);
 
             LOG_FMT_INFO(log, "RegionPersister running in v3 mode");
-            page_storage = std::make_unique<PS::V3::PageStorageImpl>( //
+            auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //
                 "RegionPersister",
                 delegator,
                 config,
                 provider);
-            page_storage->restore();
+            page_storage_v3->restore();
+            page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
+            page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
             break;
         }
         case PageStorageRunMode::MIX_MODE:
         {
-            // TODO
+            LOG_FMT_INFO(log, "RegionPersister running in mix mode");
+            auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
+                "RegionPersister",
+                delegator,
+                config,
+                provider);
+            auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //
+                "RegionPersister",
+                delegator,
+                config,
+                provider);
+
+            page_storage_v2->restore();
+            page_storage_v3->restore();
+            page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
+            page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
             break;
         }
         }
     }
 
     RegionMap regions;
-    if (page_storage)
+    if (page_reader)
     {
         auto acceptor = [&](const DB::Page & page) {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -236,7 +255,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                 throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
             regions.emplace(page.page_id, region);
         };
-        page_storage->traverse(acceptor, nullptr);
+        page_reader->traverse(acceptor);
     }
     else
     {
@@ -255,11 +274,11 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
 bool RegionPersister::gc()
 {
-    if (page_storage)
+    if (page_writer)
     {
         PageStorage::Config config = getConfigFromSettings(global_context.getSettingsRef());
-        page_storage->reloadSettings(config);
-        return page_storage->gc(false, nullptr, nullptr);
+        page_writer->reloadSettings(config);
+        return page_writer->gc(false, nullptr, nullptr);
     }
     else
         return stable_page_storage->gc();
