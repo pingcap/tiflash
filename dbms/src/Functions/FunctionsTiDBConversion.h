@@ -1200,8 +1200,8 @@ struct TiDBConvertToDecimal
             }
             else
             {
-                static_assert(std::is_floating_point_v<FromFieldType>);
                 /// cast real as decimal
+                static_assert(std::is_floating_point_v<FromFieldType>);
                 for (size_t i = 0; i < size; ++i)
                     // Always use Float64 to avoid overflow for vec_from[i] * 10^scale.
                     vec_to[i] = toTiDBDecimal<Float64, ToFieldType>(static_cast<Float64>(vec_from[i]), prec, scale, context);
