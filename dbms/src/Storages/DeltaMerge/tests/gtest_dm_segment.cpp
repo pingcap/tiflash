@@ -86,7 +86,7 @@ protected:
     void setColumns(const ColumnDefinesPtr & columns)
     {
         *table_columns_ = *columns;
-
+        //        db_context->getSettingsRef().dt_enable_skippable_place = false;
         dm_context_ = std::make_unique<DMContext>(*db_context,
                                                   *storage_path_pool,
                                                   *storage_pool,
@@ -208,6 +208,43 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
         }
+    }
+}
+CATCH
+
+TEST_F(Segment_test, WriteRead2)
+try
+{
+    const size_t num_rows_write = dmContext().stable_pack_rows;
+    {
+        // write a block with rows all deleted
+        Block block = DMTestEnv::prepareBlockWithTso(2, 100, 100 + num_rows_write, false, true);
+        segment->write(dmContext(), block);
+        // write not deleted rows with larger pk
+        Block block2 = DMTestEnv::prepareBlockWithTso(3, 100, 100 + num_rows_write, false, false);
+        segment->write(dmContext(), block2);
+
+        // flush segment and make sure there is two packs in stable
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+    }
+
+    {
+        Block block = DMTestEnv::prepareBlockWithTso(1, 100, 100 + num_rows_write, false, false);
+        segment->write(dmContext(), block);
+    }
+
+    {
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        // only write two visible pks
+        ASSERT_EQ(num_rows_read, 2);
     }
 }
 CATCH
