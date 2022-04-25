@@ -203,12 +203,14 @@ public:
      * @param ts_beg    `timestamp`'s value begin
      * @param ts_end    `timestamp`'s value end (not included)
      * @param reversed  increasing/decreasing insert `timestamp`'s value
+     * @param deleted   if deleted is false, set `tag` to 0; otherwise set `tag` to 1
      * @return
      */
-    static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false)
+    static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false, bool deleted = false)
     {
         Block        block;
         const size_t num_rows = (ts_end - ts_beg);
+<<<<<<< HEAD
         {
             ColumnWithTypeAndName col1(nullptr, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID);
             {
@@ -248,6 +250,23 @@ public:
             }
             block.insert(tag_col);
         }
+=======
+        // int64 pk_col
+        block.insert(DB::tests::createColumn<Int64>(
+            std::vector<Int64>(num_rows, pk),
+            pk_name,
+            EXTRA_HANDLE_COLUMN_ID));
+        // version_col
+        block.insert(DB::tests::createColumn<UInt64>(
+            createNumbers<UInt64>(ts_beg, ts_end, reversed),
+            VERSION_COLUMN_NAME,
+            VERSION_COLUMN_ID));
+        // tag_col
+        block.insert(DB::tests::createColumn<UInt8>(
+            std::vector<UInt64>(num_rows, deleted ? 1 : 0),
+            TAG_COLUMN_NAME,
+            TAG_COLUMN_ID));
+>>>>>>> b725d346e3 (ignore delmark when add minmax for pk column (#4746))
         return block;
     }
 
