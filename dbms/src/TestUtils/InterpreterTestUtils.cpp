@@ -45,8 +45,6 @@ void MockExecutorTest::SetUpTestCase()
 
 void MockExecutorTest::dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
 {
-    FmtBuffer buf;
-    auto serializer = ExecutorSerializer();
-    ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trim(serializer.serialize(actual.get())));
+    ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
 }
 } // namespace DB::tests
