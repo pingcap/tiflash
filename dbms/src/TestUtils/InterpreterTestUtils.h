@@ -44,7 +44,7 @@ public:
 
     DAGContext & getDAGContext();
 
-    void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
+    static void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
 protected:
     MockDAGRequestContext context;

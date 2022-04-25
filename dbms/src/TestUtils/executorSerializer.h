@@ -24,33 +24,17 @@ class Context;
 
 namespace tests
 {
-struct ExecutorSerializerContext
-{
-    Context & context;
-    FmtBuffer & buf;
-
-    explicit ExecutorSerializerContext(Context & context_, FmtBuffer & fmt_buf)
-        : context(context_)
-        , buf(fmt_buf)
-    {}
-};
-
 class ExecutorSerializer
 {
 public:
-    ExecutorSerializer(Context & context_, FmtBuffer & fmt_buf)
-        : context(ExecutorSerializerContext(context_, fmt_buf))
-    {
-    }
-
     String serialize(const tipb::DAGRequest * dag_request);
 
 private:
     void serialize(const tipb::Executor & root_executor, size_t level);
-    void addPrefix(size_t level) { context.buf.append(String(level, ' ')); }
+    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
 
 private:
-    ExecutorSerializerContext context;
+    FmtBuffer buf;
 };
 } // namespace tests
 
