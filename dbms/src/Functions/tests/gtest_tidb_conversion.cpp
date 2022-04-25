@@ -692,41 +692,6 @@ try
             {DecimalField32(static_cast<Int32>(-9990), 1)}),
         executeFunction(func_name,
                         {createColumn<Nullable<Int32>>({-999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}));
-
-    DAGContext * dag_context = context.getDAGContext();
-    UInt64 ori_flags = dag_context->getFlags();
-    dag_context->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
-    dag_context->clearWarnings();
-
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Decimal32>>(
-            std::make_tuple(4, 1),
-            {DecimalField32(static_cast<Int32>(9999), 1)}),
-        executeFunction(func_name,
-                        {createColumn<Nullable<Int32>>({9999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}));
-
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Decimal32>>(
-            std::make_tuple(4, 1),
-            {DecimalField32(static_cast<Int32>(-9999), 1)}),
-        executeFunction(func_name,
-                        {createColumn<Nullable<Int32>>({-9999}), createCastTypeConstColumn("Nullable(Decimal(4, 1))")}));
-
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Decimal32>>(
-            std::make_tuple(2, 2),
-            {DecimalField32(static_cast<Int32>(99), 2)}),
-        executeFunction(func_name,
-                        {createColumn<Nullable<Int32>>({9999}), createCastTypeConstColumn("Nullable(Decimal(2, 2))")}));
-
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Decimal32>>(
-            std::make_tuple(2, 2),
-            {DecimalField32(static_cast<Int32>(-99), 2)}),
-        executeFunction(func_name,
-                        {createColumn<Nullable<Int32>>({-9999}), createCastTypeConstColumn("Nullable(Decimal(2, 2))")}));
-
-    dag_context->setFlags(ori_flags);
 }
 CATCH
 
