@@ -192,7 +192,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             auto & minmax_indexs = single_file_stream->minmax_indexs;
             if (auto iter = minmax_indexs.find(stream_name); iter != minmax_indexs.end())
             {
-                iter->second->addPack(column, del_mark);
+                // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
+                // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
+                iter->second->addPack(column, col_id == EXTRA_HANDLE_COLUMN_ID ? nullptr : del_mark);
             }
 
             auto offset_in_compressed_block = single_file_stream->original_layer.offset();
@@ -254,7 +256,11 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 const auto name = DMFile::getFileNameBase(col_id, substream);
                 auto & stream = column_streams.at(name);
                 if (stream->minmaxes)
-                    stream->minmaxes->addPack(column, del_mark);
+                {
+                    // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
+                    // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
+                    stream->minmaxes->addPack(column, col_id == EXTRA_HANDLE_COLUMN_ID ? nullptr : del_mark);
+                }
 
                 /// There could already be enough data to compress into the new block.
                 if (stream->compressed_buf->offset() >= options.min_compress_block_size)
