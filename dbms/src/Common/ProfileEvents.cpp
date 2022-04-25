@@ -111,7 +111,9 @@
     M(PSMWritePages)                            \
     M(PSMWriteIOCalls)                          \
     M(PSMWriteBytes)                            \
+    M(PSMBackgroundWriteBytes)                  \
     M(PSMReadPages)                             \
+    M(PSMBackgroundReadBytes)                   \
                                                 \
     M(PSMReadIOCalls)                           \
     M(PSMReadBytes)                             \

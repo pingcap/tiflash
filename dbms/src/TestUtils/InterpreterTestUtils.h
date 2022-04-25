@@ -37,7 +37,6 @@ public:
     MockExecutorTest()
         : context(TiFlashTestEnv::getContext())
     {}
-
     static void SetUpTestCase()
     {
         try
@@ -53,8 +52,7 @@ public:
     virtual void initializeContext()
     {
         dag_context_ptr = std::make_unique<DAGContext>(1024);
-        context.setDAGContext(dag_context_ptr.get());
-        mock_dag_request_context = MockDAGRequestContext();
+        context = MockDAGRequestContext(TiFlashTestEnv::getContext());
     }
 
     DAGContext & getDAGContext()
@@ -64,8 +62,7 @@ public:
     }
 
 protected:
-    Context context;
-    MockDAGRequestContext mock_dag_request_context;
+    MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
