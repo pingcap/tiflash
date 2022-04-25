@@ -116,81 +116,55 @@ public:
 
     PageReaderPtr & logReader()
     {
-        assert(log_storage_reader != nullptr);
+        assert(log_storage_reader);
         return log_storage_reader;
     }
 
     PageReaderPtr & dataReader()
     {
-        assert(data_storage_reader != nullptr);
+        assert(data_storage_reader);
         return data_storage_reader;
     }
 
     PageReaderPtr & metaReader()
     {
-        assert(meta_storage_reader != nullptr);
+        assert(meta_storage_reader);
         return meta_storage_reader;
     }
 
     PageWriterPtr & logWriter()
     {
-        assert(log_storage_writer != nullptr);
+        assert(log_storage_writer);
         return log_storage_writer;
     }
 
     PageWriterPtr & dataWriter()
     {
-        assert(data_storage_writer != nullptr);
+        assert(data_storage_writer);
         return data_storage_writer;
     }
 
     PageWriterPtr & metaWriter()
     {
-        assert(meta_storage_writer != nullptr);
+        assert(meta_storage_writer);
         return meta_storage_writer;
     }
 
-    PageReader newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
-    {
-        return PageReader(run_mode, ns_id, log_storage_v2, log_storage_v3, snapshot_read ? log_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
-    }
 
-    PageReader newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-    {
-        return PageReader(run_mode, ns_id, log_storage_v2, log_storage_v3, snapshot, read_limiter);
-    }
+    PageReader newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
+    PageReader newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot);
 
-    PageReader newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
-    {
-        return PageReader(run_mode, ns_id, data_storage_v2, data_storage_v3, snapshot_read ? data_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
-    }
+    PageReader newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
+    PageReader newDataReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot);
 
-    PageReader newDataReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-    {
-        return PageReader(run_mode, ns_id, data_storage_v2, data_storage_v3, snapshot, read_limiter);
-    }
-
-    PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
-    {
-        return PageReader(run_mode, ns_id, meta_storage_v2, meta_storage_v3, snapshot_read ? meta_storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
-    }
-
-    PageReader newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-    {
-        return PageReader(run_mode, ns_id, meta_storage_v2, meta_storage_v3, snapshot, read_limiter);
-    }
+    PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
+    PageReader newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot);
 
     void enableGC();
 
-    void dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
-    {
-        data_storage_v2->registerExternalPagesCallbacks(callbacks);
-    }
+    void dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks);
 
-    void dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
-    {
-        data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
-    }
+    void dataUnregisterExternalPagesCallbacks(NamespaceId ns_id);
 
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 

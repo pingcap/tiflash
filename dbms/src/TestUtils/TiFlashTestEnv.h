@@ -88,7 +88,7 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
-    static void initializeGlobalContext(Strings testdata_path = {});
+    static void initializeGlobalContext(Strings testdata_path = {}, bool enable_ps_v3 = false);
     static Context & getGlobalContext() { return *global_context; }
     static void shutdown();
 
