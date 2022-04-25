@@ -41,7 +41,7 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
     size_t i = 0;
     for (auto item : order_by_items)
     {
-        int direction = item.second ? 1 : -1;
+        int direction = item.second ? -1 : 1;
         ASTPtr locale_node;
         auto order_by_item = std::make_shared<ASTOrderByElement>(direction, direction, false, locale_node);
         order_by_item->children.push_back(std::make_shared<ASTIdentifier>(item.first));
@@ -212,7 +212,6 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNames col_names)
     {
         exp_list->children.push_back(col(name));
     }
-
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }
@@ -263,7 +262,6 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAsts agg_funcs, MockAsts 
         agg_func_list->children.push_back(func);
     for (const auto & group_by : group_by_exprs)
         group_by_expr_list->children.push_back(group_by);
-
     return buildAggregation(agg_func_list, group_by_expr_list);
 }
 

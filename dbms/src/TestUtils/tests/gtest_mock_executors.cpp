@@ -42,12 +42,12 @@ try
 {
     auto request = context.scan("test_db", "test_table").build(context);
     {
-        String expected_string = "table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.scan("test_db", "test_table_1").build(context);
     {
-        String expected_string = "table_scan_0 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n";
+        String expected_string = "table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }
@@ -58,16 +58,16 @@ try
 {
     auto request = context.scan("test_db", "test_table").filter(eq(col("s1"), col("s2"))).build(context);
     {
-        String expected_string = "selection_1 | equals(index: 0, type: String, index: 1, type: String)}\n"
-                                 " table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "selection_1 | equals(<0, String>, <1, String>)}\n"
+                                 " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.scan("test_db", "test_table_1")
                   .filter(And(eq(col("s1"), col("s2")), lt(col("s2"), lt(col("s1"), col("s2")))))
                   .build(context);
     {
-        String expected_string = "selection_1 | equals(index: 0, type: Long, index: 1, type: String) and less(index: 1, type: String, less(index: 0, type: Long, index: 1, type: String))}\n"
-                                 " table_scan_0 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n";
+        String expected_string = "selection_1 | equals(<0, Long>, <1, String>) and less(<1, String>, less(<0, Long>, <1, String>))}\n"
+                                 " table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }
@@ -80,24 +80,24 @@ try
                        .project("s1")
                        .build(context);
     {
-        String expected_string = "project_1 | columns:{index: 0, type: String}\n"
-                                 " table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "project_1 | {<0, String>}\n"
+                                 " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.scan("test_db", "test_table_1")
                   .project({col("s3"), eq(col("s1"), col("s2"))})
                   .build(context);
     {
-        String expected_string = "project_1 | columns:{index: 2, type: String, equals(index: 0, type: Long, index: 1, type: String)}\n"
-                                 " table_scan_0 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n";
+        String expected_string = "project_1 | {<2, String>, equals(<0, Long>, <1, String>)}\n"
+                                 " table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.scan("test_db", "test_table_1")
                   .project({"s1", "s2"})
                   .build(context);
     {
-        String expected_string = "project_1 | columns:{index: 0, type: Long, index: 1, type: String}\n"
-                                 " table_scan_0 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n";
+        String expected_string = "project_1 | {<0, Long>, <1, String>}\n"
+                                 " table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }
@@ -111,7 +111,7 @@ try
                        .build(context);
     {
         String expected_string = "limit_1 | 10\n"
-                                 " table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+                                 " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.scan("test_db", "test_table_1")
@@ -119,7 +119,7 @@ try
                   .build(context);
     {
         String expected_string = "limit_1 | 10\n"
-                                 " table_scan_0 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n";
+                                 " table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }
@@ -129,19 +129,19 @@ TEST_F(MockDAGRequestTest, TopN)
 try
 {
     auto request = context.scan("test_db", "test_table")
-                       .topN({{"s1", false}}, 10)
+                       .topN({{"s1", false}, {"s2", true}}, 10)
                        .build(context);
     {
-        String expected_string = "topn_1 | order_by: columns{index: 0, type: String, desc: true}, limit: 10\n"
-                                 " table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "topn_1 | order_by: {(<0, String>, desc: false), (<1, String>, desc: true)}, limit: 10\n"
+                                 " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.scan("test_db", "test_table")
                   .topN("s1", false, 10)
                   .build(context);
     {
-        String expected_string = "topn_1 | order_by: columns{index: 0, type: String, desc: true}, limit: 10\n"
-                                 " table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "topn_1 | order_by: {(<0, String>, desc: false)}, limit: 10\n"
+                                 " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }
@@ -154,8 +154,17 @@ try
                        .aggregation(Max(col("s1")), col("s2"))
                        .build(context);
     {
-        String expected_string = "aggregation_1 | group_by: columns:{index: 1, type: String}, agg_func:{max(index: 0, type: String)}\n"
-                                 " table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "aggregation_1 | group_by: {<1, String>}, agg_func: {max(<0, String>)}\n"
+                                 " table_scan_0 | {<0, String>, <1, String>}\n";
+        ASSERT_DAGREQUEST_EQAUL(expected_string, request);
+    }
+
+    request = context.scan("test_db", "test_table")
+                  .aggregation({Max(col("s1"))}, {col("s2"), lt(col("s1"), col("s2"))})
+                  .build(context);
+    {
+        String expected_string = "aggregation_1 | group_by: {<1, String>, less(<0, String>, <1, String>)}, agg_func: {max(<0, String>)}\n"
+                                 " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }
@@ -177,14 +186,14 @@ try
     auto request = left_builder.build(context);
     {
         String expected_string = "limit_8 | 10\n"
-                                 " Join_7 | LeftOuterJoin, HashJoin. left_join_keys: {index: 0, type: String}, right_join_keys: {index: 0, type: String}\n"
-                                 "  topn_6 | order_by: columns{index: 0, type: Long, desc: true}, limit: 10\n"
-                                 "   table_scan_5 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n"
-                                 "  topn_4 | order_by: columns{index: 2, type: String, desc: true}, limit: 10\n"
-                                 "   aggregation_3 | group_by: columns:{index: 2, type: String, index: 1, type: String}, agg_func:{max(index: 0, type: Long)}\n"
-                                 "    project_2 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n"
-                                 "     selection_1 | equals(index: 0, type: Long, index: 1, type: String) and equals(index: 0, type: Long, index: 1, type: String)}\n"
-                                 "      table_scan_0 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n";
+                                 " Join_7 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                                 "  topn_6 | order_by: {(<0, Long>, desc: false)}, limit: 10\n"
+                                 "   table_scan_5 | {<0, Long>, <1, String>, <2, String>}\n"
+                                 "  topn_4 | order_by: {(<2, String>, desc: false)}, limit: 10\n"
+                                 "   aggregation_3 | group_by: {<2, String>, <1, String>}, agg_func: {max(<0, Long>)}\n"
+                                 "    project_2 | {<0, Long>, <1, String>, <2, String>}\n"
+                                 "     selection_1 | equals(<0, Long>, <1, String>) and equals(<0, Long>, <1, String>)}\n"
+                                 "      table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }
@@ -197,8 +206,8 @@ try
                        .exchangeSender(tipb::PassThrough)
                        .build(context);
     {
-        String expected_string = "exchange_sender_1 | type:PassThrough, fields:{index: 0, type: String, index: 1, type: String}\n"
-                                 " table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "exchange_sender_1 | type:PassThrough, {<0, String>, <1, String>}\n"
+                                 " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.scan("test_db", "test_table")
@@ -206,9 +215,9 @@ try
                   .exchangeSender(tipb::Broadcast)
                   .build(context);
     {
-        String expected_string = "exchange_sender_2 | type:Broadcast, fields:{index: 0, type: String, index: 1, type: String}\n"
-                                 " topn_1 | order_by: columns{index: 0, type: String, desc: true}, limit: 10\n"
-                                 "  table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "exchange_sender_2 | type:Broadcast, {<0, String>, <1, String>}\n"
+                                 " topn_1 | order_by: {(<0, String>, desc: false)}, limit: 10\n"
+                                 "  table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.scan("test_db", "test_table")
@@ -216,9 +225,9 @@ try
                   .exchangeSender(tipb::Hash)
                   .build(context);
     {
-        String expected_string = "exchange_sender_2 | type:Hash, fields:{index: 0, type: String, index: 1, type: String}\n"
-                                 " project_1 | columns:{index: 0, type: String, index: 1, type: String}\n"
-                                 "  table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
+        String expected_string = "exchange_sender_2 | type:Hash, {<0, String>, <1, String>}\n"
+                                 " project_1 | {<0, String>, <1, String>}\n"
+                                 "  table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }
@@ -230,15 +239,15 @@ try
     auto request = context.receive("sender_1")
                        .build(context);
     {
-        String expected_string = "exchange_receiver_0 | type:PassThrough, fields:{index: 0, type: String, index: 1, type: String, index: 2, type: String}\n";
+        String expected_string = "exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.receive("sender_1")
                   .topN("s1", false, 10)
                   .build(context);
     {
-        String expected_string = "topn_1 | order_by: columns{index: 0, type: String, desc: true}, limit: 10\n"
-                                 " exchange_receiver_0 | type:PassThrough, fields:{index: 0, type: String, index: 1, type: String, index: 2, type: String}\n";
+        String expected_string = "topn_1 | order_by: {(<0, String>, desc: false)}, limit: 10\n"
+                                 " exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }

@@ -51,13 +51,13 @@ void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, 
         // no column selected, must be something wrong
         throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
-    context.buf.fmtAppend("{} | columns:{{", executor_id);
+    context.buf.fmtAppend("{} | {{", executor_id);
     int bound = ts.columns_size() - 1;
     for (int i = 0; i < bound; ++i)
     {
-        context.buf.fmtAppend("index: {}, type: {}, ", i, getFieldTypeName(ts.columns(i).tp()));
+        context.buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(ts.columns(i).tp()));
     }
-    context.buf.fmtAppend("index: {}, type: {}", bound, getFieldTypeName(ts.columns(bound).tp()));
+    context.buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(ts.columns(bound).tp()));
     context.buf.append("}\n");
 }
 
@@ -77,7 +77,7 @@ void serializeExpression(const tipb::Expr & expr, ExecutorSerializerContext & co
     }
     else
     {
-        context.buf.fmtAppend("index: {}, type: {}", decodeDAGInt64(expr.val()), getFieldTypeName(expr.field_type().tp()));
+        context.buf.fmtAppend("<{}, {}>", decodeDAGInt64(expr.val()), getFieldTypeName(expr.field_type().tp()));
     }
 }
 
@@ -102,7 +102,7 @@ void serializeLimit(const String & executor_id, const tipb::Limit & limit, Execu
 
 void serializeProjection(const String & executor_id, const tipb::Projection & proj, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{} | columns:{{", executor_id);
+    context.buf.fmtAppend("{} | {{", executor_id);
     context.buf.joinStr(
         proj.exprs().begin(),
         proj.exprs().end(),
@@ -115,7 +115,7 @@ void serializeProjection(const String & executor_id, const tipb::Projection & pr
 
 void serializeAggregation(const String & executor_id, const tipb::Aggregation & agg, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{} | group_by: columns:{{", executor_id);
+    context.buf.fmtAppend("{} | group_by: {{", executor_id);
     context.buf.joinStr(
         agg.group_by().begin(),
         agg.group_by().end(),
@@ -123,7 +123,7 @@ void serializeAggregation(const String & executor_id, const tipb::Aggregation & 
             serializeExpression(group_by, context);
         },
         ", ");
-    context.buf.append("}, agg_func:{");
+    context.buf.append("}, agg_func: {");
     context.buf.joinStr(
         agg.agg_func().begin(),
         agg.agg_func().end(),
@@ -136,13 +136,14 @@ void serializeAggregation(const String & executor_id, const tipb::Aggregation & 
 
 void serializeTopN(const String & executor_id, const tipb::TopN & top_n, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{} | order_by: columns{{", executor_id);
+    context.buf.fmtAppend("{} | order_by: {{", executor_id);
     context.buf.joinStr(
         top_n.order_by().begin(),
         top_n.order_by().end(),
         [&](const auto & order_by, FmtBuffer & fb) {
+            fb.append("(");
             serializeExpression(order_by.expr(), context);
-            fb.fmtAppend(", desc: {}", order_by.desc());
+            fb.fmtAppend(", desc: {})", order_by.desc());
         },
         ", ");
     context.buf.fmtAppend("}}, limit: {}\n", top_n.limit());
@@ -150,46 +151,49 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, Executo
 
 void serializeJoin(const String & executor_id, const tipb::Join & join, ExecutorSerializerContext & context)
 {
+    assert(join.left_join_keys_size() > 0);
+    assert(join.right_join_keys_size() > 0);
     context.buf.fmtAppend("{} | {}, {}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
     int bound = join.left_join_keys_size() - 1;
     for (int i = 0; i < bound; ++i)
     {
-        context.buf.fmtAppend("index: {}, type: {}, ", i, getFieldTypeName(join.left_join_keys(i).field_type().tp()));
+        context.buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(join.left_join_keys(i).field_type().tp()));
     }
-    context.buf.fmtAppend("index: {}, type: {}", bound, getFieldTypeName(join.left_join_keys(bound).field_type().tp()));
-
+    context.buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(join.left_join_keys(bound).field_type().tp()));
     context.buf.append("}, right_join_keys: {");
     bound = join.right_join_keys_size() - 1;
     for (int i = 0; i < bound; ++i)
     {
-        context.buf.fmtAppend("index: {}, type: {}, ", i, getFieldTypeName(join.right_join_keys(i).field_type().tp()));
+        context.buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(join.right_join_keys(i).field_type().tp()));
     }
-    context.buf.fmtAppend("index: {}, type: {}", bound, getFieldTypeName(join.right_join_keys(bound).field_type().tp()));
+    context.buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(join.right_join_keys(bound).field_type().tp()));
 
     context.buf.append("}\n");
 }
 
 void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSender & sender, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{} | type:{}, fields:{{", executor_id, getExchangeTypeName(sender.tp()));
+    assert(sender.all_field_types_size() > 0);
+    context.buf.fmtAppend("{} | type:{}, {{", executor_id, getExchangeTypeName(sender.tp()));
     int bound = sender.all_field_types_size() - 1;
     for (int i = 0; i < bound; ++i)
     {
-        context.buf.fmtAppend("index: {}, type: {}, ", i, getFieldTypeName(sender.all_field_types(i).tp()));
+        context.buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(sender.all_field_types(i).tp()));
     }
-    context.buf.fmtAppend("index: {}, type: {}", bound, getFieldTypeName(sender.all_field_types(bound).tp()));
+    context.buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(sender.all_field_types(bound).tp()));
     context.buf.append("}\n");
 }
 
 void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeReceiver & receiver, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{} | type:{}, fields:{{", executor_id, getExchangeTypeName(receiver.tp()));
+    assert(receiver.field_types_size() > 0);
+    context.buf.fmtAppend("{} | type:{}, {{", executor_id, getExchangeTypeName(receiver.tp()));
     int bound = receiver.field_types_size() - 1;
     for (int i = 0; i < bound; ++i)
     {
-        context.buf.fmtAppend("index: {}, type: {}, ", i, getFieldTypeName(receiver.field_types(i).tp()));
+        context.buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(receiver.field_types(i).tp()));
     }
-    context.buf.fmtAppend("index: {}, type: {}", bound, getFieldTypeName(receiver.field_types(bound).tp()));
+    context.buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(receiver.field_types(bound).tp()));
     context.buf.append("}\n");
 }
 
