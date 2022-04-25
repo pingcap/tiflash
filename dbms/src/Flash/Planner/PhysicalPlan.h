@@ -38,7 +38,7 @@ public:
         : executor_id(executor_id_)
         , type(type_)
         , schema(schema_)
-        , log(DB::toString(type_), req_id)
+        , log(Logger::get(DB::toString(type_), req_id))
     {}
 
     virtual ~PhysicalPlan() = default;
@@ -79,6 +79,6 @@ protected:
     NamesAndTypes schema;
     bool is_record_profile_streams = true;
 
-    Logger log;
+    LoggerPtr log;
 };
 } // namespace DB

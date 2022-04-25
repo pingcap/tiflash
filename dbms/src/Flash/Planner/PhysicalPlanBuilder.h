@@ -26,7 +26,7 @@ class PhysicalPlanBuilder
 public:
     explicit PhysicalPlanBuilder(Context & context_, const String & req_id)
         : context(context_)
-        , log("PhysicalPlanBuilder", req_id)
+        , log(Logger::get("PhysicalPlanBuilder", req_id))
     {}
 
     void buildSource(const Block & sample_block);
@@ -42,6 +42,6 @@ private:
 
     Context & context;
 
-    Logger log;
+    LoggerPtr log;
 };
 } // namespace DB

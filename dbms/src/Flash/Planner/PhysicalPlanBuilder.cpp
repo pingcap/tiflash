@@ -14,17 +14,6 @@
 
 namespace DB
 {
-namespace
-{
-PhysicalPlanPtr popBack(std::vector<PhysicalPlanPtr> vec)
-{
-    assert(!vec.empty());
-    PhysicalPlanPtr back = vec.back();
-    vec.pop_back();
-    return back;
-}
-} // namespace
-
 void PhysicalPlanBuilder::buildSource(const Block & sample_block)
 {
     cur_plans.push_back(PhysicalSource::build(source_sample_block, log.identifier()));
