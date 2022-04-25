@@ -102,20 +102,12 @@ void GlobalStoragePool::restore()
     data_storage->restore();
     meta_storage->restore();
 
+    // We don't need remove `GC task` in getBackgroundPool.
     gc_handle = global_context.getBackgroundPool().addTask(
         [this] {
             return this->gc(global_context.getSettingsRef());
         },
         false);
-}
-
-GlobalStoragePool::~GlobalStoragePool()
-{
-    if (gc_handle)
-    {
-        global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = nullptr;
-    }
 }
 
 bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
