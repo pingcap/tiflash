@@ -62,19 +62,5 @@ TEST(FmtUtilsTest, TestJoinStr)
     v.push_back(("b"));
     buffer.joinStr(v.cbegin(), v.cend(), "+").joinStr(v.cbegin(), v.cend(), "-");
     ASSERT_EQ(buffer.toString(), "a+ba-b");
-
-    buffer.clear();
-    v.clear();
-    v.push_back("a");
-    v.push_back("b");
-    buffer.joinStr(
-        0,
-        v.size(),
-        [&](const auto index, FmtBuffer & fb) {
-            fb.fmtAppend("{}{}", index, v[index]);
-        },
-        ", ");
-
-    ASSERT_EQ(buffer.toString(), "0a, 1b");
 }
 } // namespace DB::tests
