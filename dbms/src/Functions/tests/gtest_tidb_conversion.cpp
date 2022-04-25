@@ -997,5 +997,36 @@ try
 }
 CATCH
 
+// for https://github.com/pingcap/tics/issues/4036
+TEST_F(TestTidbConversion, castStringAsDateTime)
+try
+{
+    auto input = std::vector<String>{"2012-12-12 12:12:12", "2012-12-12\t12:12:12", "2012-12-12\n12:12:12", "2012-12-12\v12:12:12", "2012-12-12\f12:12:12", "2012-12-12\r12:12:12"};
+    auto to_column = createConstColumn<String>(1, "MyDateTime(6)");
+
+    // vector
+    auto from_column = createColumn<String>(input);
+    UInt64 except_packed = MyDateTime(2012, 12, 12, 12, 12, 12, 0).toPackedUInt();
+    auto vector_result = executeFunction("tidb_cast", {from_column, to_column});
+    for (size_t i = 0; i < input.size(); i++)
+    {
+        ASSERT_EQ(except_packed, vector_result.column.get()->get64(i));
+    }
+
+    // const
+    auto const_from_column = createConstColumn<String>(1, "2012-12-12\n12:12:12");
+    auto const_result = executeFunction("tidb_cast", {from_column, to_column});
+    ASSERT_EQ(except_packed, const_result.column.get()->get64(0));
+
+    // nullable
+    auto nullable_from_column = createColumn<Nullable<String>>({"2012-12-12 12:12:12", "2012-12-12\t12:12:12", "2012-12-12\n12:12:12", "2012-12-12\v12:12:12", "2012-12-12\f12:12:12", "2012-12-12\r12:12:12"});
+    auto nullable_result = executeFunction("tidb_cast", {from_column, to_column});
+    for (size_t i = 0; i < input.size(); i++)
+    {
+        ASSERT_EQ(except_packed, nullable_result.column.get()->get64(i));
+    }
+}
+CATCH
+
 } // namespace
 } // namespace DB::tests

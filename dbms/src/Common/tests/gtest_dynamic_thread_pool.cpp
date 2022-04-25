@@ -3,6 +3,8 @@
 
 namespace DB::tests
 {
+namespace
+{
 class DynamicThreadPoolTest : public ::testing::Test
 {
 };
@@ -11,8 +13,6 @@ TEST_F(DynamicThreadPoolTest, testAutoExpanding)
 try
 {
     DynamicThreadPool pool(1, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     std::atomic<int> a = 0;
 
@@ -51,8 +51,6 @@ TEST_F(DynamicThreadPoolTest, testDynamicShrink)
 try
 {
     DynamicThreadPool pool(0, std::chrono::milliseconds(50));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto f0 = pool.schedule(true, [] {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -84,8 +82,6 @@ TEST_F(DynamicThreadPoolTest, testFixedAlwaysWorking)
 try
 {
     DynamicThreadPool pool(4, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto cnt = pool.threadCount();
     ASSERT_EQ(cnt.fixed, 4);
@@ -102,8 +98,6 @@ TEST_F(DynamicThreadPoolTest, testExceptionSafe)
 try
 {
     DynamicThreadPool pool(1, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto f0 = pool.schedule(true, [] { throw Exception("test"); });
     ASSERT_THROW(f0.get(), Exception);
@@ -133,8 +127,6 @@ try
     };
 
     DynamicThreadPool pool(1, std::chrono::milliseconds(10));
-    // wait for thread pool ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     auto f = pool.schedule(false, getter);
     ASSERT_EQ(f.get(), nullptr);
@@ -158,4 +150,45 @@ try
 }
 CATCH
 
+struct X
+{
+    std::mutex * mu;
+    std::condition_variable * cv;
+    bool * destructed;
+
+    X(std::mutex * mu_, std::condition_variable * cv_, bool * destructed_)
+        : mu(mu_)
+        , cv(cv_)
+        , destructed(destructed_)
+    {}
+
+    ~X()
+    {
+        std::unique_lock lock(*mu);
+        *destructed = true;
+        cv->notify_all();
+    }
+};
+
+TEST_F(DynamicThreadPoolTest, testTaskDestruct)
+try
+{
+    std::mutex mu;
+    std::condition_variable cv;
+    bool destructed = false;
+
+    DynamicThreadPool pool(0, std::chrono::minutes(1));
+    auto tmp = std::make_shared<X>(&mu, &cv, &destructed);
+    pool.schedule(true, [x = tmp] {});
+    tmp.reset();
+
+    {
+        std::unique_lock lock(mu);
+        auto ret = cv.wait_for(lock, std::chrono::seconds(1), [&] { return destructed; });
+        ASSERT_TRUE(ret);
+    }
+}
+CATCH
+
+} // namespace
 } // namespace DB::tests

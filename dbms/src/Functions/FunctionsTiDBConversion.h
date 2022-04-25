@@ -842,11 +842,11 @@ struct TiDBConvertToDecimal
     template <typename U>
     static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, int fsp, const Context & context)
     {
-        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
-            + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
+        UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 1000000ULL
+            + date_time.hour * 10000ULL + date_time.minute * 100 + date_time.second;
         if (fsp > 0)
         {
-            Int128 value = value_without_fsp * 1000000 + date_time.micro_second;
+            Int128 value = static_cast<Int128>(value_without_fsp) * 1000000 + date_time.micro_second;
             Decimal128 decimal(value);
             return toTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, context);
         }
