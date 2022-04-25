@@ -296,6 +296,18 @@ void StoragePool::enableGC()
     }
 }
 
+void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
+{
+    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
+        data_storage_v2->registerExternalPagesCallbacks(callbacks);
+}
+
+void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
+{
+    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
+        data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
+}
+
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
     if (run_mode == PageStorageRunMode::ONLY_V3)
@@ -381,6 +393,55 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
                         dtfile_id);
     } while (true);
     return dtfile_id;
+}
+
+template <typename T>
+inline static PageReader newReader(const PageStorageRunMode run_mode, const NamespaceId ns_id, T & storage_v2, T & storage_v3, ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+{
+    switch (run_mode)
+    {
+    case PageStorageRunMode::ONLY_V2:
+        return PageReader(run_mode, ns_id, storage_v2, nullptr, snapshot_read ? storage_v2->getSnapshot(tracing_id) : nullptr, read_limiter);
+    case PageStorageRunMode::ONLY_V3:
+        return PageReader(run_mode, ns_id, nullptr, storage_v3, snapshot_read ? storage_v3->getSnapshot(tracing_id) : nullptr, read_limiter);
+    case PageStorageRunMode::MIX_MODE:
+        return PageReader(run_mode, ns_id, storage_v2, storage_v3, snapshot_read ? std::make_shared<PageStorageSnapshotMixed>(storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)), //
+                                                                                                                              storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)))
+                                                                                 : nullptr,
+                          read_limiter);
+    default:
+        throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+PageReader StoragePool::newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+{
+    return newReader(run_mode, ns_id, log_storage_v2, log_storage_v3, read_limiter, snapshot_read, tracing_id);
+}
+
+PageReader StoragePool::newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
+{
+    return PageReader(run_mode, ns_id, log_storage_v2, log_storage_v3, snapshot, read_limiter);
+}
+
+PageReader StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+{
+    return newReader(run_mode, ns_id, data_storage_v2, data_storage_v3, read_limiter, snapshot_read, tracing_id);
+}
+
+PageReader StoragePool::newDataReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
+{
+    return PageReader(run_mode, ns_id, data_storage_v2, data_storage_v3, snapshot, read_limiter);
+}
+
+PageReader StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+{
+    return newReader(run_mode, ns_id, meta_storage_v2, meta_storage_v3, read_limiter, snapshot_read, tracing_id);
+}
+
+PageReader StoragePool::newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
+{
+    return PageReader(run_mode, ns_id, meta_storage_v2, meta_storage_v3, snapshot, read_limiter);
 }
 
 } // namespace DM
