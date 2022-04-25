@@ -51,7 +51,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
 
     const auto & join_type_map = join.left_join_keys_size() == 0 ? cartesian_join_type_map : equal_join_type_map;
     auto join_type_it = join_type_map.find(join.join_type());
-    if (join_type_it == join_type_map.end())
+    if (unlikely(join_type_it == join_type_map.end()))
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
 
     ASTTableJoin::Kind kind = join_type_it->second;
@@ -77,6 +77,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
     default:
         build_side_index = join.inner_idx();
     }
+    assert(build_side_index == 0 || build_side_index == 1);
 
     // should swap join side.
     if (build_side_index != 1)
@@ -100,10 +101,12 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
 
 DataTypes getJoinKeyTypes(const tipb::Join & join)
 {
+    if (unlikely(join.left_join_keys_size() == join.right_join_keys_size()))
+        throw TiFlashException("size of join.left_join_keys != size of join.right_join_keys", Errors::Coprocessor::BadRequest);
     DataTypes key_types;
-    for (int i = 0; i < join.left_join_keys().size(); ++i)
+    for (int i = 0; i < join.left_join_keys_size(); ++i)
     {
-        if (!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i)))
+        if (unlikely(!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i))))
             throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
         DataTypes types;
         types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.left_join_keys(i).field_type()));
@@ -123,7 +126,7 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const DataTypes
         {
             if (removeNullable(join_key_types[i])->isString())
             {
-                if (join.probe_types(i).collate() != join.build_types(i).collate())
+                if (unlikely(join.probe_types(i).collate() != join.build_types(i).collate()))
                     throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);
                 collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
             }
@@ -136,7 +139,7 @@ TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const DataTypes
 std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
     const Context & context,
     const tipb::Join & join,
-    NamesAndTypes & source_columns)
+    const NamesAndTypes & source_columns)
 {
     if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
         return {nullptr, "", ""};
@@ -176,7 +179,6 @@ TiflashJoin::TiflashJoin(const tipb::Join & join_)
     , join_key_collators(getJoinKeyCollators(join_, join_key_types))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
-    assert(build_side_index == 0 || build_side_index == 1);
     strictness = isSemiJoin() ? ASTTableJoin::Strictness::Any : ASTTableJoin::Strictness::All;
 }
 

@@ -85,18 +85,23 @@ struct TiflashJoin
         const ExpressionActionsPtr & prepare_join_actions1,
         const ExpressionActionsPtr & prepare_join_actions2) const;
 
-    /// build_side_columns, match_helper_name
+    /// columns_added_by_join
+    /// = join_output_columns - probe_side_columns
+    /// = build_side_columns + match_helper_name
     NamesAndTypesList genColumnsAddedByJoin(
         const Block & build_side_header,
         const String & match_helper_name) const;
 
-    /// left_columns, right_columns, match_helper_name
+    /// The columns output by join will be:
+    /// {columns of left_input, columns of right_input, match_helper_name}
     NamesAndTypes genJoinOutputColumns(
         const Block & left_input_header,
         const Block & right_input_header,
         const String & match_helper_name) const;
 
-    /// other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name
+    /// @other_condition_expr: generates other_filter_column and other_eq_filter_from_in_column
+    /// @other_filter_column_name: column name of `and(other_cond1, other_cond2, ...)`
+    /// @other_eq_filter_from_in_column_name: column name of `and(other_eq_cond1, other_eq_cond2, ...)`
     std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
         const Context & context,
         const Block & left_input_header,
@@ -105,7 +110,9 @@ struct TiflashJoin
         const ExpressionActionsPtr & prepare_join_actions2) const;
 };
 
-/// join_prepare_expr_actions, key_names, filter_column_name
+/// @join_prepare_expr_actions: generates join key columns and join filter column
+/// @key_names: column names of keys.
+/// @filter_column_name: column name of `and(filters)`
 std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     const Context & context,
     const Block & input_header,
