@@ -14,8 +14,8 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/Planner.h>
 #include <Interpreters/Context.h>
 
@@ -45,7 +45,7 @@ BlockInputStreams Planner::execute()
     return pipeline.streams;
 }
 
-bool Planner::isSupported(const DAGQueryBlock & query_block)
+bool Planner::isSupported(const DAGQueryBlock &)
 {
     return false;
 }
@@ -63,5 +63,15 @@ void Planner::restorePipelineConcurrency(DAGPipeline & pipeline)
 
 void Planner::executeImpl(DAGPipeline & pipeline)
 {
+    PhysicalPlanBuilder builder{context, log->identifier()};
+    for (const auto & input_streams : input_streams_vec)
+    {
+        assert(!input_streams.empty());
+        builder.buildSource(input_streams.back()->getHeader());
+    }
+
+    auto physical_plan = builder.getResult();
+    physical_plan->finalize();
+    physical_plan->transform(pipeline, context, max_streams);
 }
 } // namespace DB

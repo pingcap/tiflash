@@ -20,13 +20,7 @@ namespace DB
 {
 enum PlanType
 {
-    Aggregation,
-    ExchangeSender,
-    Limit,
-    Projection,
-    Selection,
     Source,
-    TopN,
 };
 
 String toString(const PlanType & plan_type);

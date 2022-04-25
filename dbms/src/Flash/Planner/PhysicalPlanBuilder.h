@@ -12,19 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Common/Exception.h>
-#include <Flash/Planner/PlanType.h>
+#include <Common/Logger.h>
+#include <Flash/Planner/PhysicalPlan.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
-String toString(const PlanType & plan_type)
+class PhysicalPlanBuilder
 {
-    switch (plan_type)
+public:
+    explicit PhysicalPlanBuilder(Context & context_, const String & req_id)
+        : context(context_)
+        , log("PhysicalPlanBuilder", req_id)
+    {}
+
+    void buildSource(const Block & sample_block);
+
+    PhysicalPlanPtr getResult() const
     {
-    case Source:
-        return "Source";
-    default:
-        throw Exception("Unknown PlanType");
+        RUNTIME_ASSERT(cur_plans.size() == 1, log, "There can only be one plan output, but here are {}", cur_plans.size());
+        return cur_plans.back();
     }
-}
+
+private:
+    std::vector<PhysicalPlanPtr> cur_plans;
+
+    Context & context;
+
+    Logger log;
+};
 } // namespace DB
