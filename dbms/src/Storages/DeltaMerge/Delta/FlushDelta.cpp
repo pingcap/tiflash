@@ -19,7 +19,7 @@ namespace DB::DM
 {
 struct FlushPackTask
 {
-    FlushPackTask(const DeltaPackPtr & pack_)
+    explicit FlushPackTask(const DeltaPackPtr & pack_)
         : pack(pack_)
     {}
 
@@ -76,7 +76,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             {
                 auto & task = tasks.emplace_back(pack);
 
-                if (auto dpb = pack->tryToBlock(); dpb)
+                if (auto * dpb = pack->tryToBlock(); dpb)
                 {
                     // Stop other threads appending to this pack.
                     dpb->disableAppend();
@@ -194,7 +194,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         {
             // Use a new pack instance to do the serializing.
             DeltaPackPtr new_pack;
-            if (auto dp_block = task.pack->tryToBlock(); dp_block)
+            if (auto * dp_block = task.pack->tryToBlock(); dp_block)
             {
                 auto new_dpb = std::make_shared<DeltaPackBlock>(*dp_block);
                 // If it's data have been updated, use the new pages info.
@@ -205,11 +205,11 @@ bool DeltaValueSpace::flush(DMContext & context)
 
                 new_pack = new_dpb;
             }
-            else if (auto dp_file = task.pack->tryToFile(); dp_file)
+            else if (auto * dp_file = task.pack->tryToFile(); dp_file)
             {
                 new_pack = std::make_shared<DeltaPackFile>(*dp_file);
             }
-            else if (auto dp_delete = task.pack->tryToDeleteRange(); dp_delete)
+            else if (auto * dp_delete = task.pack->tryToDeleteRange(); dp_delete)
             {
                 new_pack = std::make_shared<DeltaPackDeleteRange>(*dp_delete);
             }
@@ -264,10 +264,8 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         for (auto & pack : packs)
         {
-            if (auto dp_block = pack->tryToBlock(); dp_block && dp_block->getCache() && dp_block->getDataPageId() != 0
-                && (pack->getRows() >= context.delta_small_pack_rows || pack->getBytes() >= context.delta_small_pack_bytes))
+            if (auto * dp_block = pack->tryToBlock(); dp_block && dp_block->getCache() && dp_block->getDataPageId() != 0)
             {
-                // This pack is too large to use cache.
                 dp_block->clearCache();
             }
         }
@@ -290,7 +288,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
         + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
     GET_METRIC(tiflash_storage_write_amplification)
-        .Set((double)(actual_write / 1024 / 1024) / (total_write / 1024 / 1024));
+        .Set((static_cast<double>(actual_write) / 1024 / 1024) / (static_cast<double>(total_write) / 1024 / 1024));
 
     return true;
 }
