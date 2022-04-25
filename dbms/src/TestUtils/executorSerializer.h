@@ -20,8 +20,6 @@
 #include <TestUtils/TiFlashTestException.h>
 namespace DB
 {
-class Context;
-
 namespace tests
 {
 class ExecutorSerializer
