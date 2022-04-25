@@ -44,98 +44,6 @@ String ExecutorSerializer::serialize(const tipb::DAGRequest * dag_request)
     }
 }
 
-String getJoinTypeName(tipb::JoinType tp)
-{
-    switch (tp)
-    {
-    case tipb::JoinType::TypeAntiLeftOuterSemiJoin:
-        return "AntiLeftOuterSemiJoin";
-    case tipb::JoinType::TypeLeftOuterJoin:
-        return "LeftOuterJoin";
-    case tipb::JoinType::TypeRightOuterJoin:
-        return "RightOuterJoin";
-    case tipb::JoinType::TypeLeftOuterSemiJoin:
-        return "LeftOuterSemiJoin";
-    case tipb::JoinType::TypeAntiSemiJoin:
-        return "AntiSemiJoin";
-    case tipb::JoinType::TypeInnerJoin:
-        return "InnerJoin";
-    case tipb::JoinType::TypeSemiJoin:
-        return "SemiJoin";
-    default:
-        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
-    }
-}
-
-String getJoinExecTypeName(tipb::JoinExecType tp)
-{
-    switch (tp)
-    {
-    case tipb::JoinExecType::TypeHashJoin:
-        return "HashJoin";
-    default:
-        throw TiFlashException(fmt::format("Not supported Join exectution type: {}", tp), Errors::Coprocessor::Internal);
-    }
-}
-
-String getExchangeTypeName(tipb::ExchangeType tp)
-{
-    switch (tp)
-    {
-    case tipb::ExchangeType::Broadcast:
-        return "Broadcast";
-    case tipb::ExchangeType::PassThrough:
-        return "PassThrough";
-    case tipb::ExchangeType::Hash:
-        return "Hash";
-    default:
-        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
-    }
-}
-
-String getFieldTypeName(Int32 tp)
-{
-    switch (tp)
-    {
-    case TiDB::TypeTiny:
-        return "Tiny";
-    case TiDB::TypeShort:
-        return "Short";
-    case TiDB::TypeInt24:
-        return "Int24";
-    case TiDB::TypeLong:
-        return "Long";
-    case TiDB::TypeLongLong:
-        return "Longlong";
-    case TiDB::TypeYear:
-        return "Year";
-    case TiDB::TypeDouble:
-        return "Double";
-    case TiDB::TypeTime:
-        return "Time";
-    case TiDB::TypeDate:
-        return "Date";
-    case TiDB::TypeDatetime:
-        return "Datetime";
-    case TiDB::TypeNewDate:
-        return "NewDate";
-    case TiDB::TypeTimestamp:
-        return "Timestamp";
-    case TiDB::TypeFloat:
-        return "Float";
-    case TiDB::TypeDecimal:
-        return "Decimal";
-    case TiDB::TypeNewDecimal:
-        return "NewDecimal";
-    case TiDB::TypeVarchar:
-        return "Varchar";
-    case TiDB::TypeString:
-        return "String";
-    default:
-        throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
-    }
-}
-
 void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, ExecutorSerializerContext & context)
 {
     if (ts.columns_size() == 0)
@@ -144,12 +52,13 @@ void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, 
         throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
     context.buf.fmtAppend("{} | columns:{{", executor_id);
-    for (int i = 0; i < ts.columns_size(); i++)
-    {
-        context.buf.fmtAppend("index: {}, type: {}", i, getFieldTypeName(ts.columns().at(i).tp()));
-        if (i != ts.columns_size() - 1)
-            context.buf.append(", ");
-    }
+    context.buf.joinStr(
+        0,
+        ts.columns_size(),
+        [&](const auto & index, FmtBuffer &) {
+            context.buf.fmtAppend("index: {}, type: {}", index, getFieldTypeName(ts.columns().at(index).tp()));
+        },
+        ", ");
     context.buf.append("}\n");
 }
 
@@ -211,16 +120,16 @@ void serializeAggregation(const String & executor_id, const tipb::Aggregation & 
     context.buf.joinStr(
         agg.group_by().begin(),
         agg.group_by().end(),
-        [&](const auto & by_item, FmtBuffer &) {
-            serializeExpression(by_item, context);
+        [&](const auto & group_by, FmtBuffer &) {
+            serializeExpression(group_by, context);
         },
         ", ");
     context.buf.append("}, agg_func:{");
     context.buf.joinStr(
         agg.agg_func().begin(),
         agg.agg_func().end(),
-        [&](const auto & by_item, FmtBuffer &) {
-            serializeExpression(by_item, context);
+        [&](const auto & func, FmtBuffer &) {
+            serializeExpression(func, context);
         },
         ", ");
     context.buf.append("}\n");
@@ -232,9 +141,9 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, Executo
     context.buf.joinStr(
         top_n.order_by().begin(),
         top_n.order_by().end(),
-        [&](const auto & by_item, FmtBuffer & fb) {
-            serializeExpression(by_item.expr(), context);
-            fb.fmtAppend(", desc: {}", by_item.desc());
+        [&](const auto & order_by, FmtBuffer & fb) {
+            serializeExpression(order_by.expr(), context);
+            fb.fmtAppend(", desc: {}", order_by.desc());
         },
         ", ");
     context.buf.fmtAppend("}}, limit: {}\n", top_n.limit());
@@ -242,20 +151,20 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, Executo
 
 void serializeJoin(const String & executor_id, const tipb::Join & join, ExecutorSerializerContext & context)
 {
-    context.buf.fmtAppend("{} | {},{}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
+    context.buf.fmtAppend("{} | {}, {}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
     context.buf.joinStr(
-        join.left_join_keys().begin(),
-        join.left_join_keys().end(),
-        [&](const auto & key, FmtBuffer & fb) {
-            fb.fmtAppend("type: {}", getFieldTypeName(key.field_type().tp()));
+        0,
+        join.left_join_keys_size(),
+        [&](const auto & index, FmtBuffer & fb) {
+            fb.fmtAppend("index: {}, type: {}", index, getFieldTypeName(join.left_join_keys().at(index).field_type().tp()));
         },
         ", ");
     context.buf.append("}, right_join_keys: {");
     context.buf.joinStr(
-        join.left_join_keys().begin(),
-        join.left_join_keys().end(),
-        [&](const auto & key, FmtBuffer & fb) {
-            fb.fmtAppend("type: {}", getFieldTypeName(key.field_type().tp()));
+        0,
+        join.right_join_keys_size(),
+        [&](const auto & index, FmtBuffer & fb) {
+            fb.fmtAppend("index: {}, type: {}", index, getFieldTypeName(join.right_join_keys().at(index).field_type().tp()));
         },
         ", ");
     context.buf.append("}\n");
@@ -265,10 +174,10 @@ void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSen
 {
     context.buf.fmtAppend("{} | type:{}, fields:{{", executor_id, getExchangeTypeName(sender.tp()));
     context.buf.joinStr(
-        sender.all_field_types().begin(),
-        sender.all_field_types().end(),
-        [](const auto & field, FmtBuffer & fb) {
-            fb.fmtAppend("type: {}", getFieldTypeName(field.tp()));
+        0,
+        sender.all_field_types_size(),
+        [&](const auto & index, FmtBuffer & fb) {
+            fb.fmtAppend("index: {}, type: {}", index, getFieldTypeName(sender.all_field_types().at(index).tp()));
         },
         ", ");
     context.buf.append("}\n");
@@ -278,10 +187,10 @@ void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeR
 {
     context.buf.fmtAppend("{} | type:{}, fields:{{", executor_id, getExchangeTypeName(receiver.tp()));
     context.buf.joinStr(
-        receiver.field_types().begin(),
-        receiver.field_types().end(),
-        [](const auto & field, FmtBuffer & fb) {
-            fb.fmtAppend("type: {}", getFieldTypeName(field.tp()));
+        0,
+        receiver.field_types_size(),
+        [&](const auto & index, FmtBuffer & fb) {
+            fb.fmtAppend("index: {}, type: {}", index, getFieldTypeName(receiver.field_types().at(index).tp()));
         },
         ", ");
     context.buf.append("}\n");

@@ -177,7 +177,7 @@ try
     auto request = left_builder.build(context);
     {
         String expected_string = "limit_8 | 10\n"
-                                 " Join_7 | LeftOuterJoin,HashJoin. left_join_keys: {type: String}, right_join_keys: {type: String}\n"
+                                 " Join_7 | LeftOuterJoin, HashJoin. left_join_keys: {index: 0, type: String}, right_join_keys: {index: 0, type: String}\n"
                                  "  topn_6 | order_by: columns{index: 0, type: Long, desc: true}, limit: 10\n"
                                  "   table_scan_5 | columns:{index: 0, type: Long, index: 1, type: String, index: 2, type: String}\n"
                                  "  topn_4 | order_by: columns{index: 2, type: String, desc: true}, limit: 10\n"
@@ -197,7 +197,7 @@ try
                        .exchangeSender(tipb::PassThrough)
                        .build(context);
     {
-        String expected_string = "exchange_sender_1 | type:PassThrough, fields:{type: String, type: String}\n"
+        String expected_string = "exchange_sender_1 | type:PassThrough, fields:{index: 0, type: String, index: 1, type: String}\n"
                                  " table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
@@ -206,7 +206,7 @@ try
                   .exchangeSender(tipb::Broadcast)
                   .build(context);
     {
-        String expected_string = "exchange_sender_2 | type:Broadcast, fields:{type: String, type: String}\n"
+        String expected_string = "exchange_sender_2 | type:Broadcast, fields:{index: 0, type: String, index: 1, type: String}\n"
                                  " topn_1 | order_by: columns{index: 0, type: String, desc: true}, limit: 10\n"
                                  "  table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
@@ -216,7 +216,7 @@ try
                   .exchangeSender(tipb::Hash)
                   .build(context);
     {
-        String expected_string = "exchange_sender_2 | type:Hash, fields:{type: String, type: String}\n"
+        String expected_string = "exchange_sender_2 | type:Hash, fields:{index: 0, type: String, index: 1, type: String}\n"
                                  " project_1 | columns:{index: 0, type: String, index: 1, type: String}\n"
                                  "  table_scan_0 | columns:{index: 0, type: String, index: 1, type: String}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
@@ -230,7 +230,7 @@ try
     auto request = context.receive("sender_1")
                        .build(context);
     {
-        String expected_string = "exchange_receiver_0 | type:PassThrough, fields:{type: String, type: String, type: String}\n";
+        String expected_string = "exchange_receiver_0 | type:PassThrough, fields:{index: 0, type: String, index: 1, type: String, index: 2, type: String}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
     request = context.receive("sender_1")
@@ -238,7 +238,7 @@ try
                   .build(context);
     {
         String expected_string = "topn_1 | order_by: columns{index: 0, type: String, desc: true}, limit: 10\n"
-                                 " exchange_receiver_0 | type:PassThrough, fields:{type: String, type: String, type: String}\n";
+                                 " exchange_receiver_0 | type:PassThrough, fields:{index: 0, type: String, index: 1, type: String, index: 2, type: String}\n";
         ASSERT_DAGREQUEST_EQAUL(expected_string, request);
     }
 }

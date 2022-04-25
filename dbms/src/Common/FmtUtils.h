@@ -82,6 +82,25 @@ public:
         return *this;
     }
 
+    template <typename FF>
+    FmtBuffer & joinStr(
+        int first,
+        int end,
+        FF && toStringFunc, // void (const auto &, FmtBuffer &)
+        StringRef delimiter)
+    {
+        if (first == end)
+            return *this;
+        toStringFunc(first, *this);
+        ++first;
+        for (; first != end; ++first)
+        {
+            append(delimiter);
+            toStringFunc(first, *this);
+        }
+        return *this;
+    }
+
     void resize(size_t count) { buffer.resize(count); }
     void reserve(size_t capacity) { buffer.reserve(capacity); }
     void clear() { buffer.clear(); }
