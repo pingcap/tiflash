@@ -86,7 +86,7 @@ protected:
     void setColumns(const ColumnDefinesPtr & columns)
     {
         *table_columns_ = *columns;
-        //        db_context->getSettingsRef().dt_enable_skippable_place = false;
+
         dm_context_ = std::make_unique<DMContext>(*db_context,
                                                   *storage_path_pool,
                                                   *storage_pool,
