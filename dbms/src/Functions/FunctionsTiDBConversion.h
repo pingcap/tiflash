@@ -1195,8 +1195,6 @@ struct TiDBConvertToDecimal
             if constexpr (std::is_integral_v<FromFieldType>)
             {
                 /// cast enum/int as decimal
-                const CastInternalType max_value = getMaxValueIfNecessary(prec);
-                const CastInternalType scale_mul = getScaleMultiplier<CastInternalType>(scale);
                 for (size_t i = 0; i < size; ++i)
                     vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
             }
