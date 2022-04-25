@@ -348,7 +348,7 @@ public:
         }
     }
 
-    PageMap read(const std::vector<PageId> & page_ids) const
+    PageMap read(const PageIds & page_ids) const
     {
         switch (run_mode)
         {
@@ -379,7 +379,7 @@ public:
         }
     }
 
-    void read(const std::vector<PageId> & page_ids, PageHandler & handler) const
+    void read(const PageIds & page_ids, PageHandler & handler) const
     {
         switch (run_mode)
         {
@@ -628,7 +628,7 @@ public:
         case PageStorageRunMode::MIX_MODE:
         {
             const auto & ns_id = write_batch.getNamespaceId();
-            WriteBatch wb_for_v2{write_batch.getNamespaceId()};
+            WriteBatch wb_for_v2{ns_id};
             for (const auto & write : write_batch.getWrites())
             {
                 switch (write.type)
@@ -651,7 +651,6 @@ public:
                                                                           write.ori_page_id,
                                                                           /*snapshot*/ nullptr,
                                                                           false);
-
                     // if normal id is not ok, read from v2 and create a new put + ref
                     if (resolved_page_id == INVALID_PAGE_ID)
                     {
@@ -660,6 +659,7 @@ public:
                         {
                             WriteBatch wb_for_put{ns_id};
                             auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
+                            assert(entry_for_put.size == page_for_put.data.size());
 
                             // Page with fields
                             if (!entry_for_put.field_offsets.empty())
@@ -668,8 +668,7 @@ public:
                                                    0,
                                                    std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
                                                    page_for_put.data.size(),
-                                                   Page::fieldOffsetsToSizes(page_for_put.field_offsets,
-                                                                             page_for_put.data.size()));
+                                                   Page::fieldOffsetsToSizes(entry_for_put.field_offsets, entry_for_put.size));
                             }
                             else
                             { // Normal page with fields
@@ -679,7 +678,7 @@ public:
                                                                                           page_for_put.data.size()),
                                                    page_for_put.data.size());
                             }
-                            storage_v2->write(std::move(wb_for_put), write_limiter);
+                            storage_v3->write(std::move(wb_for_put), write_limiter);
                         }
                         else
                         {

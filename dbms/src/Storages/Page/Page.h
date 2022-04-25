@@ -74,16 +74,16 @@ public:
         return ByteBuffer(data.begin() + beg, data.begin() + end);
     }
 
-    inline static PageFieldSizes fieldOffsetsToSizes(std::set<FieldOffset> & field_offsets, size_t data_size)
+    inline static PageFieldSizes fieldOffsetsToSizes(const PageFieldOffsetChecksums & field_offsets, size_t data_size)
     {
         PageFieldSizes field_size = {};
 
         auto it = field_offsets.begin();
         while (it != field_offsets.end())
         {
-            PageFieldOffset beg = it->offset;
+            PageFieldOffset beg = it->first;
             ++it;
-            field_size.emplace_back(it == field_offsets.end() ? data_size - beg : it->offset - beg);
+            field_size.emplace_back(it == field_offsets.end() ? data_size - beg : it->first - beg);
         }
         return field_size;
     }
