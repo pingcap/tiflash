@@ -26,7 +26,6 @@
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
-#include <openssl/base64.h>
 
 #include <memory>
 #include <mutex>
