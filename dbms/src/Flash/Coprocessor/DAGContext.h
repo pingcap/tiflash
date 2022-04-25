@@ -21,80 +21,6 @@ struct ProfileStreamsInfo
     BlockInputStreams input_streams;
 };
 
-<<<<<<< HEAD
-=======
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
-struct JoinExecuteInfo
-{
-    String build_side_root_executor_id;
-    JoinPtr join_ptr;
-    BlockInputStreams non_joined_streams;
-};
-
-using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
-
-UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
-{
-    /// todo max_error_count is a system variable in mysql, TiDB should put it into dag request, now use the default value instead
-    return 1024;
-}
-
-namespace TiDBSQLFlags
-{
-constexpr UInt64 IGNORE_TRUNCATE = 1;
-constexpr UInt64 TRUNCATE_AS_WARNING = 1u << 1u;
-constexpr UInt64 PAD_CHAR_TO_FULL_LENGTH = 1u << 2u;
-constexpr UInt64 IN_INSERT_STMT = 1u << 3u;
-constexpr UInt64 IN_UPDATE_OR_DELETE_STMT = 1u << 4u;
-constexpr UInt64 IN_SELECT_STMT = 1u << 5u;
-constexpr UInt64 OVERFLOW_AS_WARNING = 1u << 6u;
-constexpr UInt64 IGNORE_ZERO_IN_DATE = 1u << 7u;
-constexpr UInt64 DIVIDED_BY_ZERO_AS_WARNING = 1u << 8u;
-constexpr UInt64 IN_LOAD_DATA_STMT = 1u << 10u;
-} // namespace TiDBSQLFlags
-
-namespace TiDBSQLMode
-{
-constexpr UInt64 REAL_AS_FLOAT = 1ul;
-constexpr UInt64 PIPES_AS_CONCAT = 1ul << 1ul;
-constexpr UInt64 ANSI_QUOTES = 1ul << 2ul;
-constexpr UInt64 IGNORE_SPACE = 1ul << 3ul;
-constexpr UInt64 NOT_USED = 1ul << 4ul;
-constexpr UInt64 ONLY_FULL_GROUP_BY = 1ul << 5ul;
-constexpr UInt64 NO_UNSIGNED_SUBTRACTION = 1ul << 6ul;
-constexpr UInt64 NO_DIR_IN_CREATE = 1ul << 7ul;
-constexpr UInt64 POSTGRESQL = 1ul << 8ul;
-constexpr UInt64 ORACLE = 1ul << 9ul;
-constexpr UInt64 MSSQL = 1ul << 10ul;
-constexpr UInt64 DB2 = 1ul << 11ul;
-constexpr UInt64 MAXDB = 1ul << 12ul;
-constexpr UInt64 NO_KEY_OPTIONS = 1ul << 13ul;
-constexpr UInt64 NO_TABLE_OPTIONS = 1ul << 14ul;
-constexpr UInt64 NO_FIELD_OPTIONS = 1ul << 15ul;
-constexpr UInt64 MYSQL323 = 1ul << 16ul;
-constexpr UInt64 MYSQL40 = 1ul << 17ul;
-constexpr UInt64 ANSI = 1ul << 18ul;
-constexpr UInt64 NO_AUTO_VALUE_ON_ZERO = 1ul << 19ul;
-constexpr UInt64 NO_BACK_SLASH_ESCAPES = 1ul << 20ul;
-constexpr UInt64 STRICT_TRANS_TABLES = 1ul << 21ul;
-constexpr UInt64 STRICT_ALL_TABLES = 1ul << 22ul;
-constexpr UInt64 NO_ZERO_IN_DATE = 1ul << 23ul;
-constexpr UInt64 NO_ZERO_DATE = 1ul << 24ul;
-constexpr UInt64 INVALID_DATES = 1ul << 25ul;
-constexpr UInt64 ERROR_FOR_DIVISION_BY_ZERO = 1ul << 26ul;
-constexpr UInt64 TRADITIONAL = 1ul << 27ul;
-constexpr UInt64 NO_AUTO_CREATE_USER = 1ul << 28ul;
-constexpr UInt64 HIGH_NOT_PRECEDENCE = 1ul << 29ul;
-constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
-
-// Duplicated with Flag::PAD_CHAR_TO_FULL_LENGTH
-// PAD_CHAR_TO_FULL_LENGTH = 1ul << 31ul;
-
-constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
-} // namespace TiDBSQLMode
-
->>>>>>> 6ea6c80198 (Fix cast to decimal overflow bug (#3922))
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -141,33 +67,7 @@ public:
         return 0;
     }
 
-<<<<<<< HEAD
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
-=======
-    UInt64 getFlags() const
-    {
-        return flags;
-    }
-    void setFlags(UInt64 f)
-    {
-        flags = f;
-    }
-    void addFlag(UInt64 f)
-    {
-        flags |= f;
-    }
-    void delFlag(UInt64 f)
-    {
-        flags &= (~f);
-    }
-    bool hasFlag(UInt64 f) const
-    {
-        return (flags & f);
-    }
-
-    void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
->>>>>>> 6ea6c80198 (Fix cast to decimal overflow bug (#3922))
 
     size_t final_concurrency;
     Int64 compile_time_ns;

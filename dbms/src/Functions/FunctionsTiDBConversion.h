@@ -795,16 +795,6 @@ struct TiDBConvertToDecimal
         // And val * scale_mul is the scaled_value, which is stored in ColumnDecimal internally.
         static_assert(std::is_integral_v<T>);
         using UType = typename U::NativeType;
-<<<<<<< HEAD
-        auto maxValue = DecimalMaxValue::Get(prec);
-        if (value > maxValue || value < -maxValue)
-        {
-            context.getDAGContext()->handleOverflowError("cast to decimal");
-            if (value > 0)
-                return static_cast<UType>(maxValue);
-            else
-                return static_cast<UType>(-maxValue);
-=======
         UType scale_mul = getScaleMultiplier<U>(scale);
 
         Int256 scaled_value = static_cast<Int256>(int_value) * static_cast<Int256>(scale_mul);
@@ -817,7 +807,6 @@ struct TiDBConvertToDecimal
                 return static_cast<UType>(scaled_max_value);
             else
                 return static_cast<UType>(-scaled_max_value);
->>>>>>> 6ea6c80198 (Fix cast to decimal overflow bug (#3922))
         }
 
         return static_cast<UType>(scaled_value);
