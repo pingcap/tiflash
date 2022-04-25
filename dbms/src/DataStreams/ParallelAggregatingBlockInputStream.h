@@ -17,6 +17,8 @@ namespace DB
   */
 class ParallelAggregatingBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "ParallelAggregating";
+
 public:
     /** Columns from key_names and arguments of aggregate functions must already be computed.
       */
@@ -30,7 +32,7 @@ public:
         size_t temporary_data_merge_threads_,
         const LogWithPrefixPtr & log_);
 
-    String getName() const override { return "ParallelAggregating"; }
+    String getName() const override { return NAME; }
 
     void cancel(bool kill) override;
 
@@ -86,6 +88,7 @@ private:
     {
         size_t src_rows = 0;
         size_t src_bytes = 0;
+        Int64 local_delta_memory = 0;
 
         ColumnRawPtrs key_columns;
         Aggregator::AggregateColumns aggregate_columns;
