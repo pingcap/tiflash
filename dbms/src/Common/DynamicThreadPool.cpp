@@ -33,11 +33,14 @@ DynamicThreadPool::ThreadCount DynamicThreadPool::threadCount() const
 
 void DynamicThreadPool::init(size_t initial_size)
 {
+    fixed_queues.reserve(initial_size);
+    fixed_threads.reserve(initial_size);
     for (size_t i = 0; i < initial_size; ++i)
+    {
         fixed_queues.emplace_back(std::make_unique<Queue>(1)); // each Queue will only contain at most 1 task.
-
-    for (size_t i = 0; i < initial_size; ++i)
+        idle_fixed_queues.push(fixed_queues.back().get());
         fixed_threads.emplace_back(ThreadFactory::newThread(false, "FixedThread", &DynamicThreadPool::fixedWork, this, i));
+    }
 }
 
 void DynamicThreadPool::scheduleTask(TaskPtr task)
@@ -77,23 +80,30 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 
+void DynamicThreadPool::executeTask(TaskPtr & task)
+{
+    task->execute();
+    task.reset();
+}
+
 void DynamicThreadPool::fixedWork(size_t index)
 {
     Queue * queue = fixed_queues[index].get();
     while (true)
     {
-        idle_fixed_queues.push(queue);
         TaskPtr task;
         queue->pop(task);
         if (!task)
             break;
-        task->execute();
+        executeTask(task);
+
+        idle_fixed_queues.push(queue);
     }
 }
 
 void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
-    initial_task->execute();
+    executeTask(initial_task);
 
     DynamicNode node;
     while (true)
@@ -110,8 +120,7 @@ void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 
         if (!node.task) // may be timeout or cancelled
             break;
-        node.task->execute();
-        node.task.reset();
+        executeTask(node.task);
     }
     alive_dynamic_threads.fetch_sub(1);
 }
