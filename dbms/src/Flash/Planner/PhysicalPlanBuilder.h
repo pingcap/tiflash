@@ -40,7 +40,7 @@ public:
 private:
     std::vector<PhysicalPlanPtr> cur_plans;
 
-    Context & context;
+    [[maybe_unused]] Context & context;
 
     LoggerPtr log;
 };
