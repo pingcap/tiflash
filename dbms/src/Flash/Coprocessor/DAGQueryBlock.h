@@ -67,6 +67,7 @@ public:
     const tipb::Executor * root;
     String qb_column_prefix;
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
+    bool can_restore_pipeline_concurrency = true;
 
     bool isRootQueryBlock() const { return id == 1; };
     bool isTableScanSource() const { return source->tp() == tipb::ExecType::TypeTableScan || source->tp() == tipb::ExecType::TypePartitionTableScan; }

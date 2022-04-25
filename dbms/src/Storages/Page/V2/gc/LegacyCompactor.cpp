@@ -138,11 +138,11 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         if (auto iter = writing_files.find(page_file.fileIdLevel()); iter != writing_files.end())
         {
             // create reader with max meta reading offset
-            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), iter->second.meta_offset, read_limiter);
+            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), iter->second.meta_offset, read_limiter, /*background*/ true);
         }
         else
         {
-            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), read_limiter);
+            reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), read_limiter, /*background*/ true);
         }
         if (reader->hasNext())
         {
@@ -290,7 +290,7 @@ size_t LegacyCompactor::writeToCheckpoint(const String & storage_path,
         auto checkpoint_writer = checkpoint_file.createWriter(false, true);
 
         PageEntriesEdit edit;
-        bytes_written += checkpoint_writer->write(wb, edit, write_limiter);
+        bytes_written += checkpoint_writer->write(wb, edit, write_limiter, /*background*/ true);
     }
     // drop "data" part for checkpoint file.
     bytes_written -= checkpoint_file.setCheckpoint();
