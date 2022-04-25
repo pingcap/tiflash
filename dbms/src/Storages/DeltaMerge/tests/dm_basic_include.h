@@ -208,7 +208,6 @@ public:
     {
         Block        block;
         const size_t num_rows = (ts_end - ts_beg);
-<<<<<<< HEAD
         {
             ColumnWithTypeAndName col1(nullptr, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID);
             {
@@ -242,29 +241,12 @@ public:
                 column_data.resize(num_rows);
                 for (size_t i = 0; i < num_rows; ++i)
                 {
-                    column_data[i] = 0;
+                    column_data[i] = deleted ? 1 : 0;
                 }
                 tag_col.column = std::move(m_col);
             }
             block.insert(tag_col);
         }
-=======
-        // int64 pk_col
-        block.insert(DB::tests::createColumn<Int64>(
-            std::vector<Int64>(num_rows, pk),
-            pk_name,
-            EXTRA_HANDLE_COLUMN_ID));
-        // version_col
-        block.insert(DB::tests::createColumn<UInt64>(
-            createNumbers<UInt64>(ts_beg, ts_end, reversed),
-            VERSION_COLUMN_NAME,
-            VERSION_COLUMN_ID));
-        // tag_col
-        block.insert(DB::tests::createColumn<UInt8>(
-            std::vector<UInt64>(num_rows, deleted ? 1 : 0),
-            TAG_COLUMN_NAME,
-            TAG_COLUMN_ID));
->>>>>>> b725d346e3 (ignore delmark when add minmax for pk column (#4746))
         return block;
     }
 
