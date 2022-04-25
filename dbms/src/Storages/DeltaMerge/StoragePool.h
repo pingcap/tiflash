@@ -69,8 +69,6 @@ public:
 
     GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings);
 
-    ~GlobalStoragePool();
-
     void restore();
 
     friend class StoragePool;
