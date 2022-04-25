@@ -28,13 +28,16 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
-#include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -43,6 +46,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
 {
@@ -76,7 +80,7 @@ struct AnalysisResult
 
     String filter_column_name;
     String having_column_name;
-    std::vector<NameAndTypePair> order_columns;
+    NamesAndTypes order_columns;
 
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
@@ -101,15 +105,6 @@ bool addExtraCastsAfterTs(
     return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
 }
 
-bool isFinalAgg(const tipb::Expr & expr)
-{
-    if (!expr.has_aggfuncmode())
-        /// set default value to true to make it compatible with old version of TiDB since before this
-        /// change, all the aggregation in TiFlash is treated as final aggregation
-        return true;
-    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
-}
-
 AnalysisResult analyzeExpressions(
     Context & context,
     DAGExpressionAnalyzer & analyzer,
@@ -131,27 +126,12 @@ AnalysisResult analyzeExpressions(
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        /// set default value to true to make it compatible with old version of TiDB since before this
-        /// change, all the aggregation in TiFlash is treated as final aggregation
-        res.is_final_agg = true;
-        const auto & aggregation = query_block.aggregation->aggregation();
-        if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
-            res.is_final_agg = false;
-        for (int i = 1; i < aggregation.agg_func_size(); i++)
-        {
-            if (res.is_final_agg != isFinalAgg(aggregation.agg_func(i)))
-                throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
-        }
-        // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive
-        //  aggregation if the stage is partial
-        bool group_by_collation_sensitive =
-            /// collation sensitive group by is slower than normal group by, use normal group by by default
-            context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
+        res.is_final_agg = AggregationInterpreterHelper::isFinalAgg(query_block.aggregation->aggregation());
 
         std::tie(res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.before_aggregation) = analyzer.appendAggregation(
             chain,
             query_block.aggregation->aggregation(),
-            group_by_collation_sensitive);
+            AggregationInterpreterHelper::isGroupByCollationSensitive(context));
 
         if (query_block.having != nullptr)
         {
@@ -694,9 +674,13 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
 
     // add a HashJoinBuildBlockInputStream to build a shared hash table
-    size_t stream_index = 0;
-    right_pipeline.transform(
-        [&](auto & stream) { stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, stream_index++, log->identifier()); });
+    size_t concurrency_build_index = 0;
+    auto get_concurrency_build_index = [&concurrency_build_index, &join_build_concurrency]() {
+        return (concurrency_build_index++) % join_build_concurrency;
+    };
+    right_pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
+    });
     executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/true);
 
     right_query.source = right_pipeline.firstStream();
@@ -755,59 +739,44 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log->identifier()); });
 }
 
+void DAGQueryBlockInterpreter::executeWindow(
+    DAGPipeline & pipeline,
+    WindowDescription & window_description)
+{
+    executeExpression(pipeline, window_description.before_window);
+
+    /// If there are several streams, we merge them into one
+    executeUnion(pipeline, max_streams, log);
+    assert(pipeline.streams.size() == 1);
+    pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+}
+
 void DAGQueryBlockInterpreter::executeAggregation(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expression_actions_ptr,
-    Names & key_names,
-    TiDB::TiDBCollators & collators,
+    const Names & key_names,
+    const TiDB::TiDBCollators & collators,
     AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log->identifier()); });
 
-    Block header = pipeline.firstStream()->getHeader();
-    ColumnNumbers keys;
-    for (const auto & name : key_names)
-    {
-        keys.push_back(header.getPositionByName(name));
-    }
-    for (auto & descr : aggregate_descriptions)
-    {
-        if (descr.arguments.empty())
-        {
-            for (const auto & name : descr.argument_names)
-            {
-                descr.arguments.push_back(header.getPositionByName(name));
-            }
-        }
-    }
+    Block before_agg_header = pipeline.firstStream()->getHeader();
 
-    const Settings & settings = context.getSettingsRef();
-
-    /** Two-level aggregation is useful in two cases:
-      * 1. Parallel aggregation is done, and the results should be merged in parallel.
-      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
-      */
-    bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
-    bool has_collator = std::any_of(begin(collators), end(collators), [](const auto & p) { return p != nullptr; });
-
-    Aggregator::Params params(
-        header,
-        keys,
+    AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
+    auto params = AggregationInterpreterHelper::buildParams(
+        context,
+        before_agg_header,
+        pipeline.streams.size(),
+        key_names,
+        collators,
         aggregate_descriptions,
-        false,
-        settings.max_rows_to_group_by,
-        settings.group_by_overflow_mode,
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
-        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by,
-        !is_final_agg,
-        context.getTemporaryPath(),
-        has_collator ? collators : TiDB::dummy_collators);
+        is_final_agg);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
+        const Settings & settings = context.getSettingsRef();
         BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
@@ -841,7 +810,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
             log->identifier());
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
-    // add cast
 }
 
 void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
@@ -852,11 +820,20 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
     }
 }
 
+void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc)
+{
+    orderStreams(pipeline, sort_desc, 0);
+}
+
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
 {
-    SortDescription order_descr = getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by());
-    const Settings & settings = context.getSettingsRef();
     Int64 limit = query_block.limit_or_topn->topn().limit();
+    orderStreams(pipeline, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit);
+}
+
+void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit)
+{
+    const Settings & settings = context.getSettingsRef();
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
@@ -1004,6 +981,35 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
+void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::Window & window)
+{
+    NamesAndTypes input_columns;
+    assert(input_streams_vec.size() == 1);
+    pipeline.streams = input_streams_vec.back();
+    for (auto const & p : pipeline.firstStream()->getHeader())
+        input_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(input_columns, context);
+    WindowDescription window_description = dag_analyzer.buildWindowDescription(window);
+    executeWindow(pipeline, window_description);
+    executeExpression(pipeline, window_description.after_window);
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
+}
+
+void DAGQueryBlockInterpreter::handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort)
+{
+    NamesAndTypes input_columns;
+    assert(input_streams_vec.size() == 1);
+    pipeline.streams = input_streams_vec.back();
+    for (auto const & p : pipeline.firstStream()->getHeader())
+        input_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(input_columns, context);
+    auto order_columns = dag_analyzer.buildWindowOrderColumns(window_sort);
+    executeWindowOrder(pipeline, getSortDescription(order_columns, window_sort.byitems()));
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(input_columns), context);
+}
+
 // To execute a query block, you have to:
 // 1. generate the date stream and push it to pipeline.
 // 2. assign the analyzer
@@ -1038,6 +1044,17 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         TiDBTableScan table_scan(query_block.source, dagContext());
         handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
+    }
+    else if (query_block.source->tp() == tipb::ExecType::TypeWindow)
+    {
+        handleWindow(pipeline, query_block.source->window());
+        recordProfileStreams(pipeline, query_block.source_name);
+        restorePipelineConcurrency(pipeline);
+    }
+    else if (query_block.source->tp() == tipb::ExecType::TypeSort)
+    {
+        handleWindowOrder(pipeline, query_block.source->sort());
+        recordProfileStreams(pipeline, query_block.source_name);
     }
     else
     {
@@ -1137,44 +1154,18 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
 
 void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
 {
-    /// only run in MPP
-    assert(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr);
+    RUNTIME_ASSERT(dagContext().isMPPTask() && dagContext().tunnel_set != nullptr, log, "exchange_sender only run in MPP");
     /// exchange sender should be at the top of operators
     const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
-    /// get partition column ids
-    const auto & part_keys = exchange_sender.partition_keys();
-    std::vector<Int64> partition_col_id;
-    TiDB::TiDBCollators collators;
-    /// in case TiDB is an old version, it has no collation info
-    bool has_collator_info = exchange_sender.types_size() != 0;
-    if (has_collator_info && part_keys.size() != exchange_sender.types_size())
-    {
-        throw TiFlashException(
-            std::string(__PRETTY_FUNCTION__) + ": Invalid plan, in ExchangeSender, the length of partition_keys and types is not the same when TiDB new collation is enabled",
-            Errors::Coprocessor::BadRequest);
-    }
-    for (int i = 0; i < part_keys.size(); ++i)
-    {
-        const auto & expr = part_keys[i];
-        assert(isColumnExpr(expr));
-        auto column_index = decodeDAGInt64(expr.val());
-        partition_col_id.emplace_back(column_index);
-        if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
-        {
-            collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
-        }
-        else
-        {
-            collators.emplace_back(nullptr);
-        }
-    }
+    std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
+    TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
     int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
             context.getDAGContext()->tunnel_set,
-            partition_col_id,
-            collators,
+            partition_col_ids,
+            partition_col_collators,
             exchange_sender.tp(),
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
@@ -1186,7 +1177,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
 
 void DAGQueryBlockInterpreter::restorePipelineConcurrency(DAGPipeline & pipeline)
 {
-    restoreConcurrency(pipeline, dagContext().final_concurrency, log);
+    if (query_block.can_restore_pipeline_concurrency)
+        restoreConcurrency(pipeline, dagContext().final_concurrency, log);
 }
 
 BlockInputStreams DAGQueryBlockInterpreter::execute()

@@ -109,6 +109,19 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, ReadNULL)
+try
+{
+    {
+        WriteBatch batch;
+        batch.putExternal(0, 0);
+        page_storage->write(std::move(batch));
+    }
+    const auto & page = page_storage->read(0);
+    ASSERT_EQ(page.data.begin(), nullptr);
+}
+CATCH
+
 TEST_F(PageStorageTest, WriteMultipleBatchRead1)
 try
 {

@@ -189,7 +189,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     ReadBufferFromString payload(serialized);
 
     compact_log->addRecord(payload, serialized.size());
-    compact_log->flush(write_limiter);
+    compact_log->flush(write_limiter, /*background*/ true);
     compact_log.reset(); // close fd explicitly before renaming file.
 
     // Rename it to be a normal log file.

@@ -26,7 +26,6 @@
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
-#include <openssl/base64.h>
 
 #include <memory>
 #include <mutex>
@@ -322,7 +321,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
         // We may add reference to an external id even if it is logically deleted.
-        bool ok = check_prev ? true : (!is_deleted || (is_deleted && seq < delete_ver.sequence));
+        bool ok = check_prev ? true : (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
             return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersionType(0)};
@@ -330,7 +329,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     }
     else if (type == EditRecordType::VAR_REF)
     {
-        if (create_ver.sequence <= seq && (!is_deleted || (is_deleted && seq < delete_ver.sequence)))
+        if (create_ver.sequence <= seq && (!is_deleted || seq < delete_ver.sequence))
         {
             return {RESOLVE_TO_REF, ori_page_id, create_ver};
         }
