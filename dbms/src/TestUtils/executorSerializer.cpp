@@ -69,8 +69,8 @@ void serializeExpression(const tipb::Expr & expr, FmtBuffer & buf)
         buf.joinStr(
             expr.children().begin(),
             expr.children().end(),
-            [&](const auto & co, FmtBuffer &) {
-                serializeExpression(co, buf);
+            [&](const auto & ex, FmtBuffer &) {
+                serializeExpression(ex, buf);
             },
             ", ");
         buf.append(")");
