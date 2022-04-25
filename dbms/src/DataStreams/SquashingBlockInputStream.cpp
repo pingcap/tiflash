@@ -9,7 +9,7 @@ SquashingBlockInputStream::SquashingBlockInputStream(
     size_t min_block_size_rows,
     size_t min_block_size_bytes,
     const LogWithPrefixPtr & log_)
-    : log(getMPPTaskLog(log_, getName()))
+    : log(getMPPTaskLog(log_, NAME))
     , transform(min_block_size_rows, min_block_size_bytes, log)
 {
     children.emplace_back(src);

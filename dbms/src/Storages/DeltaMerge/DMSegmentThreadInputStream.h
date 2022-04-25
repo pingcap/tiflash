@@ -4,6 +4,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -21,6 +22,8 @@ using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "DeltaMergeSegmentThread";
+
 public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
     DMSegmentThreadInputStream(
@@ -44,18 +47,18 @@ public:
         , expected_block_size(expected_block_size_)
         , is_raw(is_raw_)
         , do_range_filter_for_raw(do_range_filter_for_raw_)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, NAME))
     {
     }
 
-    String getName() const override { return "DeltaMergeSegmentThread"; }
+    String getName() const override { return NAME; }
     Block getHeader() const override { return header; }
 
 protected:
     Block readImpl() override
     {
-        FilterPtr filter_;
-        return readImpl(filter_, false);
+        FilterPtr filter_ignored;
+        return readImpl(filter_ignored, false);
     }
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override
@@ -88,7 +91,7 @@ protected:
                         task->ranges,
                         filter,
                         max_version,
-                        std::max(expected_block_size, (size_t)(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
+                        std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
                 }
                 LOG_FMT_TRACE(log, "Start to read segment [{}]", cur_segment->segmentId());
             }
