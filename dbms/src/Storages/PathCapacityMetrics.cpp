@@ -101,12 +101,12 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
 std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
 {
     std::map<FSID, DiskCapacity> disk_stats_map;
-    for (size_t i = 0; i < path_infos.size(); ++i)
+    for (auto & path_info : path_infos)
     {
         struct statvfs vfs;
         FsStats path_stat;
 
-        std::tie(path_stat, vfs) = path_infos[i].getStats(log);
+        std::tie(path_stat, vfs) = path_info.getStats(log);
         if (!path_stat.ok)
         {
             // Disk may be hot remove, Ignore this disk.
@@ -135,11 +135,11 @@ FsStats PathCapacityMetrics::getFsStats()
     // which use to measure single disk capacity and available size
     auto disk_stats_map = getDiskStats();
 
-    for (auto fs_it = disk_stats_map.begin(); fs_it != disk_stats_map.end(); ++fs_it)
+    for (auto & fs_it : disk_stats_map)
     {
         FsStats disk_stat{};
 
-        auto & disk_stat_vec = fs_it->second;
+        auto & disk_stat_vec = fs_it.second;
         auto & vfs_info = disk_stat_vec.vfs_info;
 
         for (const auto & single_path_stats : disk_stat_vec.path_stats)
