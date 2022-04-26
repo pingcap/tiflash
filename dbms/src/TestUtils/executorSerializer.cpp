@@ -183,8 +183,6 @@ void serializeTopN(const String & executor_id, const tipb::TopN & top_n, FmtBuff
 
 void serializeJoin(const String & executor_id, const tipb::Join & join, FmtBuffer & buf)
 {
-    assert(join.left_join_keys_size() > 0);
-    assert(join.right_join_keys_size() > 0);
     buf.fmtAppend("{} | {}, {}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
     toString(join.left_join_keys(), buf);
     buf.append("}, right_join_keys: {");
@@ -194,7 +192,6 @@ void serializeJoin(const String & executor_id, const tipb::Join & join, FmtBuffe
 
 void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSender & sender, FmtBuffer & buf)
 {
-    assert(sender.all_field_types_size() > 0);
     buf.fmtAppend("{} | type:{}, {{", executor_id, getExchangeTypeName(sender.tp()));
     toString(sender.all_field_types(), buf);
     buf.append("}\n");
@@ -202,7 +199,6 @@ void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSen
 
 void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeReceiver & receiver, FmtBuffer & buf)
 {
-    assert(receiver.field_types_size() > 0);
     buf.fmtAppend("{} | type:{}, {{", executor_id, getExchangeTypeName(receiver.tp()));
     toString(receiver.field_types(), buf);
     buf.append("}\n");
