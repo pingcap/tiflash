@@ -69,6 +69,11 @@ public:
 
     GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings);
 
+    static void destory()
+    {
+        global_storage_pool = nullptr;
+    }
+
     void restore();
 
     friend class StoragePool;

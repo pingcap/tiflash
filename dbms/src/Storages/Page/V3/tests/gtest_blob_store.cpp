@@ -326,6 +326,7 @@ try
     {
         for (const auto & [path, stats] : blob_store.blob_stats.getStats())
         {
+            (void)path;
             for (const auto & stat : stats)
             {
                 if (stat->id == file_id1)
