@@ -743,7 +743,7 @@ void DAGQueryBlockInterpreter::executeWindow(
     DAGPipeline & pipeline,
     WindowDescription & window_description)
 {
-    executeExpression(pipeline, window_description.before_window);
+    executeExpression(pipeline, window_description.before_window, log);
 
     /// If there are several streams, we merge them into one
     executeUnion(pipeline, max_streams, log);
@@ -809,14 +809,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
             true,
             log->identifier());
         recordProfileStreams(pipeline, query_block.aggregation_name);
-    }
-}
-
-void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
-{
-    if (!expressionActionsPtr->getActions().empty())
-    {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, log->identifier()); });
     }
 }
 
@@ -991,7 +983,7 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
     WindowDescription window_description = dag_analyzer.buildWindowDescription(window);
     executeWindow(pipeline, window_description);
-    executeExpression(pipeline, window_description.after_window);
+    executeExpression(pipeline, window_description.after_window, log);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
 }
@@ -1099,7 +1091,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     if (res.before_order_and_select)
     {
-        executeExpression(pipeline, res.before_order_and_select);
+        executeExpression(pipeline, res.before_order_and_select, log);
     }
 
     if (!res.order_columns.empty())
