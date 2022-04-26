@@ -43,7 +43,7 @@ struct PlanType
         return *this;
     }
 
-    operator int() const
+    operator int() const // NOLINT(google-explicit-constructor)
     {
         return this->enum_value;
     }
