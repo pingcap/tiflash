@@ -27,9 +27,6 @@
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
 
-#include "executeQuery.h"
-
-
 namespace DB
 {
 namespace ErrorCodes
@@ -84,14 +81,14 @@ void convertColumnToNullable(ColumnWithTypeAndName & column)
         column.column = makeNullable(column.column);
 }
 
-ColumnRawPtrs getKeyColumns(const Names & key_names_right, const Block & block)
+ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
 {
-    size_t keys_size = key_names_right.size();
+    size_t keys_size = key_names.size();
     ColumnRawPtrs key_columns(keys_size);
 
     for (size_t i = 0; i < keys_size; ++i)
     {
-        key_columns[i] = block.getByName(key_names_right[i]).column.get();
+        key_columns[i] = block.getByName(key_names[i]).column.get();
 
         /// We will join only keys, where all components are not NULL.
         if (key_columns[i]->isColumnNullable())
