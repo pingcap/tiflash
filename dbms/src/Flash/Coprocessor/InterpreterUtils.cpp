@@ -15,6 +15,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 
 namespace DB
@@ -90,5 +91,13 @@ void executeExpression(
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, log->identifier()); });
     }
+}
+
+void updateFinalConcurrency(
+    DAGContext & dag_context,
+    size_t cur_streams_size,
+    size_t max_streams)
+{
+    dag_context.final_concurrency = std::min(std::max(dag_context.final_concurrency, cur_streams_size), max_streams);
 }
 } // namespace DB

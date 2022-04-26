@@ -34,8 +34,7 @@ public:
 
     void buildSource(const Block & sample_block);
 
-    void buildNonRootFinalProjection(const String & column_prefix);
-    void buildRootFinalProjection(const String & column_prefix);
+    void buildFinalProjection(const String & column_prefix, bool is_root);
 
     PhysicalPlanPtr getResult() const
     {

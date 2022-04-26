@@ -20,6 +20,8 @@
 
 namespace DB
 {
+class DAGContext;
+
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
@@ -41,4 +43,9 @@ void executeExpression(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expressionActionsPtr,
     const LoggerPtr & log);
+
+void updateFinalConcurrency(
+    DAGContext & dag_context,
+    size_t cur_streams_size,
+    size_t max_streams);
 } // namespace DB

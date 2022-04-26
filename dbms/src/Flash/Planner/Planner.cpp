@@ -16,11 +16,51 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
+#include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Planner.h>
 #include <Interpreters/Context.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
+namespace
+{
+void analyzePhysicalPlan(PhysicalPlanBuilder & builder, const DAGQueryBlock & query_block)
+{
+    assert(query_block.source);
+    builder.build(query_block.source_name, query_block.source);
+
+    // selection on table scan had been executed in table scan.
+    if (query_block.selection && !query_block.isTableScanSource())
+    {
+        builder.build(query_block.selection_name, query_block.selection);
+    }
+
+    if (query_block.aggregation)
+    {
+        builder.build(query_block.aggregation_name, query_block.aggregation);
+
+        if (query_block.having)
+        {
+            builder.build(query_block.having_name, query_block.having);
+        }
+    }
+
+    // TopN/Limit
+    if (query_block.limit_or_topn)
+    {
+        builder.build(query_block.limit_or_topn_name, query_block.limit_or_topn);
+    }
+
+    builder.buildFinalProjection(query_block.qb_column_prefix, query_block.isRootQueryBlock());
+
+    if (query_block.exchange_sender)
+    {
+        builder.build(query_block.exchange_sender_name, query_block.exchange_sender);
+    }
+}
+} // namespace
+
 Planner::Planner(
     Context & context_,
     const std::vector<BlockInputStreams> & input_streams_vec_,
@@ -72,46 +112,15 @@ void Planner::executeImpl(DAGPipeline & pipeline)
         builder.buildSource(input_streams.back()->getHeader());
     }
 
-    assert(query_block.source);
-    builder.build(query_block.source_name, query_block.source);
-
-    // selection on table scan had been executed in table scan.
-    if (query_block.selection && !query_block.isTableScanSource())
-    {
-        builder.build(query_block.selection_name, query_block.selection);
-    }
-
-    if (query_block.aggregation)
-    {
-        builder.build(query_block.aggregation_name, query_block.aggregation);
-
-        if (query_block.having)
-        {
-            builder.build(query_block.having_name, query_block.having);
-        }
-    }
-
-    // TopN/Limit
-    if (query_block.limit_or_topn)
-    {
-        builder.build(query_block.limit_or_topn_name, query_block.limit_or_topn);
-    }
-
-    if (query_block.isRootQueryBlock())
-    {
-        builder.buildRootFinalProjection(query_block.qb_column_prefix);
-    }
-    else
-    {
-        builder.buildNonRootFinalProjection(query_block.qb_column_prefix);
-    }
-
-    if (query_block.exchange_sender)
-    {
-        builder.build(query_block.exchange_sender_name, query_block.exchange_sender);
-    }
+    analyzePhysicalPlan(builder, query_block);
 
     auto physical_plan = builder.getResult();
+
+    LOG_FMT_DEBUG(
+        log,
+        "build physical plan tree: \n{}",
+        PhysicalPlanVisitor::visitToString(physical_plan));
+
     physical_plan->finalize();
     physical_plan->transform(pipeline, context, max_streams);
 }

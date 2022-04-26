@@ -44,26 +44,28 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     }
 }
 
-void PhysicalPlanBuilder::buildNonRootFinalProjection(const String & column_prefix)
+void PhysicalPlanBuilder::buildFinalProjection(const String & column_prefix, bool is_root)
 {
-    cur_plans.push_back(PhysicalProjection::buildNonRootFinal(context, log->identifier(), column_prefix, popBack()));
+    const auto & final_projection = is_root
+        ? PhysicalProjection::buildRootFinal(
+            context,
+            log->identifier(),
+            dagContext().output_field_types,
+            dagContext().output_offsets,
+            column_prefix,
+            dagContext().keep_session_timezone_info,
+            popBack())
+        : PhysicalProjection::buildNonRootFinal(
+            context,
+            log->identifier(),
+            column_prefix,
+            popBack());
+    cur_plans.push_back(final_projection);
 }
 
 DAGContext & PhysicalPlanBuilder::dagContext() const
 {
     return *context.getDAGContext();
-}
-
-void PhysicalPlanBuilder::buildRootFinalProjection(const String & column_prefix)
-{
-    cur_plans.push_back(PhysicalProjection::buildRootFinal(
-        context,
-        log->identifier(),
-        dagContext().output_field_types,
-        dagContext().output_offsets,
-        column_prefix,
-        dagContext().keep_session_timezone_info,
-        popBack()));
 }
 
 PhysicalPlanPtr PhysicalPlanBuilder::popBack()
