@@ -19,11 +19,11 @@ namespace DB
 {
 namespace tests
 {
-class StorageConfig_test : public ::testing::Test
+class StorageConfigTest : public ::testing::Test
 {
 public:
-    StorageConfig_test()
-        : log(&Poco::Logger::get("StorageConfig_test"))
+    StorageConfigTest()
+        : log(&Poco::Logger::get("StorageConfigTest"))
     {}
 
     static void SetUpTestCase() {}
@@ -32,9 +32,6 @@ protected:
     Poco::Logger * log;
 };
 
-<<<<<<< HEAD
-TEST_F(StorageConfig_test, MultiSSDSettings)
-=======
 TEST_F(StorageConfigTest, SimpleSinglePath)
 try
 {
@@ -145,7 +142,6 @@ dir=["/data222/kvstore"]
 CATCH
 
 TEST_F(StorageConfigTest, MultiSSDSettings)
->>>>>>> e50c06c46d (Fix invalid storage dir configurations lead to unexpected behavior (#4105))
 try
 {
     Strings tests = {
@@ -248,7 +244,7 @@ dir=["/data0/tiflash", "/data1/tiflash", "/data2/tiflash"]
 }
 CATCH
 
-TEST_F(StorageConfig_test, SSD_HDD_Settings)
+TEST_F(StorageConfigTest, SSDHDDSettings)
 try
 {
     Strings tests = {
@@ -297,7 +293,7 @@ dir=["/ssd0/tiflash"]
 }
 CATCH
 
-TEST_F(StorageConfig_test, ParseMaybeBrokenCases)
+TEST_F(StorageConfigTest, ParseMaybeBrokenCases)
 try
 {
     Strings tests = {
@@ -404,7 +400,7 @@ dir = [1,2,3]
 }
 CATCH
 
-TEST(PathCapacityMetrics_test, Quota)
+TEST(PathCapacityMetricsTest, Quota)
 try
 {
     Strings tests = {
@@ -488,7 +484,7 @@ capacity=[ 1024 ]
 }
 CATCH
 
-TEST_F(StorageConfig_test, CompatibilityWithIORateLimitConfig)
+TEST_F(StorageConfigTest, CompatibilityWithIORateLimitConfig)
 try
 {
     Strings tests = {
@@ -543,7 +539,7 @@ max_bytes_per_sec=1024000
 }
 CATCH
 
-TEST(StorageIORateLimitConfig_test, StorageIORateLimitConfig)
+TEST(StorageIORateLimitConfigTest, StorageIORateLimitConfig)
 try
 {
     Strings tests = {
