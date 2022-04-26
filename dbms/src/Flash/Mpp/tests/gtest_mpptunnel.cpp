@@ -94,7 +94,7 @@ struct MockLocalReader
         if (tunnel)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            //tunnel->consumerFinish("Receiver closed");
+            tunnel->consumerFinish("Receiver closed");
         }
     }
 
@@ -482,7 +482,7 @@ try
     mpp_tunnel_ptr->writeDone();
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 1);
-    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
+    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "Firsts");
 }
 CATCH
 
