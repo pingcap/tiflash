@@ -6,7 +6,6 @@
 
 namespace DB::tests
 {
-
 TEST(CPPTomlTest, ContainsQualifiedArray)
 {
     auto * log = &Poco::Logger::get("CPPTomlTest");
