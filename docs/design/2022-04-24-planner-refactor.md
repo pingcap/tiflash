@@ -13,7 +13,7 @@ We need to refactor the interpreter code in a plan visit way.
 
 ### Overview
 
-we introduce a new abstraction layer PhysicalPlan to replace `DAGQueryBlock`.
+We introduce a new abstraction layer called `PhysicalPlan` to replace `DAGQueryBlock`.
 It will be responsible for the processing of `ExpressionAction` and the generation of `BlockInputStream`.
 We call this organization of code the `planner`.
 
