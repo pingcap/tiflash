@@ -235,7 +235,6 @@ protected:
             t1_entered_future.get();
             std::unique_lock lock(rw_lock);
             t2_entered.set_value();
-            
         });
 
         std::atomic_bool t3_entered = false;
