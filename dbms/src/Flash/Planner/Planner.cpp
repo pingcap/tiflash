@@ -97,7 +97,7 @@ void Planner::executeImpl(DAGPipeline & pipeline)
 
     if (query_block.isRootQueryBlock())
     {
-        builder.buildRootFinalProjection(query_block.qb_column_prefix)
+        builder.buildRootFinalProjection(query_block.qb_column_prefix);
     }
     else
     {

@@ -6,6 +6,7 @@
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
 
 namespace DB
