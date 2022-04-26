@@ -230,9 +230,15 @@ private:
                 index_buf->seek(dmfile->colIndexOffset(file_name_base));
                 auto file_size = dmfile->colIndexSize(file_name_base);
                 auto header_size = dmfile->configuration->getChecksumHeaderLength();
+<<<<<<< HEAD
                 auto frame_total_size = dmfile->configuration->getChecksumFrameLength();
                 auto frame_count = file_size / frame_total_size + (file_size % frame_total_size != 0);
                 return MinMaxIndex::read(*type, *index_buf, file_size - header_size * frame_count);
+=======
+                auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
+                auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+                return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
+>>>>>>> 0e1a37387e (fix: frame total size include header for indices (#4754))
             }
         };
         MinMaxIndexPtr minmax_index;
