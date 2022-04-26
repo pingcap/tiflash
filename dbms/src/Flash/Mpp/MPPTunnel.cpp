@@ -89,12 +89,14 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             waitUntilConnectedOrFinished(lock);
             finishSendQueue();
         }
+        std::cerr << "main thread waiting consumer finish" << std::endl;
         waitForConsumerFinish(/*allow_throw=*/false);
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
+    std::cerr << "main thread waiting child thread finished" << std::endl;
     thread_manager->wait();
 }
 

@@ -91,11 +91,13 @@ struct MockLocalReader
 
     ~MockLocalReader()
     {
+        std::cerr << "Destroying mock local reader!" << std::endl;
         if (tunnel)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
             tunnel->consumerFinish("Receiver closed");
         }
+        std::cerr << "Destroying mock local reader finished!" << std::endl;
     }
 
     void read()
@@ -480,9 +482,11 @@ try
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
     mpp_tunnel_ptr->writeDone();
+    std::cerr << "After write Done in main thread!" << std::endl;
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 1);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
+    std::cerr << "Check passed in main thread!" << std::endl;
 }
 CATCH
 
