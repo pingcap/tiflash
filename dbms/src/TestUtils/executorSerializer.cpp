@@ -19,9 +19,46 @@
 #include <TestUtils/executorSerializer.h>
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
-
 namespace DB::tests
 {
+namespace
+{
+template <typename T>
+struct IsExpr
+{
+    static constexpr bool value = false;
+};
+
+template <>
+struct IsExpr<::tipb::Expr>
+{
+    static constexpr bool value = true;
+};
+
+template <typename Column>
+String getColumnTypeName(const Column column)
+{
+    String name;
+    if constexpr (IsExpr<Column>::value == true)
+        name = getFieldTypeName(column.field_type().tp());
+    else
+        name = getFieldTypeName(column.tp());
+    return name;
+}
+
+template <typename Columns>
+void toString(const Columns & columns, FmtBuffer & buf)
+{
+    assert(columns.size() > 0);
+    int bound = columns.size() - 1;
+    for (int i = 0; i < bound; ++i)
+    {
+        buf.fmtAppend("<{}, {}>, ", i, getColumnTypeName(columns.at(i)));
+    }
+    buf.fmtAppend("<{}, {}>", bound, getColumnTypeName(columns.at(bound)));
+}
+} // namespace
+
 String ExecutorSerializer::serialize(const tipb::DAGRequest * dag_request)
 {
     assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
@@ -52,12 +89,7 @@ void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, 
         throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
     buf.fmtAppend("{} | {{", executor_id);
-    int bound = ts.columns_size() - 1;
-    for (int i = 0; i < bound; ++i)
-    {
-        buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(ts.columns(i).tp()));
-    }
-    buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(ts.columns(bound).tp()));
+    toString(ts.columns(), buf);
     buf.append("}\n");
 }
 
@@ -154,20 +186,9 @@ void serializeJoin(const String & executor_id, const tipb::Join & join, FmtBuffe
     assert(join.left_join_keys_size() > 0);
     assert(join.right_join_keys_size() > 0);
     buf.fmtAppend("{} | {}, {}. left_join_keys: {{", executor_id, getJoinTypeName(join.join_type()), getJoinExecTypeName(join.join_exec_type()));
-    int bound = join.left_join_keys_size() - 1;
-    for (int i = 0; i < bound; ++i)
-    {
-        buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(join.left_join_keys(i).field_type().tp()));
-    }
-    buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(join.left_join_keys(bound).field_type().tp()));
+    toString(join.left_join_keys(), buf);
     buf.append("}, right_join_keys: {");
-    bound = join.right_join_keys_size() - 1;
-    for (int i = 0; i < bound; ++i)
-    {
-        buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(join.right_join_keys(i).field_type().tp()));
-    }
-    buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(join.right_join_keys(bound).field_type().tp()));
-
+    toString(join.right_join_keys(), buf);
     buf.append("}\n");
 }
 
@@ -175,12 +196,7 @@ void serializeExchangeSender(const String & executor_id, const tipb::ExchangeSen
 {
     assert(sender.all_field_types_size() > 0);
     buf.fmtAppend("{} | type:{}, {{", executor_id, getExchangeTypeName(sender.tp()));
-    int bound = sender.all_field_types_size() - 1;
-    for (int i = 0; i < bound; ++i)
-    {
-        buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(sender.all_field_types(i).tp()));
-    }
-    buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(sender.all_field_types(bound).tp()));
+    toString(sender.all_field_types(), buf);
     buf.append("}\n");
 }
 
@@ -188,12 +204,7 @@ void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeR
 {
     assert(receiver.field_types_size() > 0);
     buf.fmtAppend("{} | type:{}, {{", executor_id, getExchangeTypeName(receiver.tp()));
-    int bound = receiver.field_types_size() - 1;
-    for (int i = 0; i < bound; ++i)
-    {
-        buf.fmtAppend("<{}, {}>, ", i, getFieldTypeName(receiver.field_types(i).tp()));
-    }
-    buf.fmtAppend("<{}, {}>", bound, getFieldTypeName(receiver.field_types(bound).tp()));
+    toString(receiver.field_types(), buf);
     buf.append("}\n");
 }
 
