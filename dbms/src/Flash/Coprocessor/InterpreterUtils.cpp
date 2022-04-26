@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
