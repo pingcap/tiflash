@@ -1124,6 +1124,30 @@ std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequiredForRootFinalProjec
     return std::make_pair(need_append_type_cast, std::move(need_append_type_cast_vec));
 }
 
+NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
+    const ExpressionActionsPtr & actions,
+    const std::vector<tipb::FieldType> & schema,
+    const std::vector<Int32> & output_offsets,
+    const String & column_prefix,
+    bool keep_session_timezone_info)
+{
+    if (unlikely(output_offsets.empty()))
+        throw Exception("output_offsets is empty", ErrorCodes::LOGICAL_ERROR);
+
+    bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
+    auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequiredForRootFinalProjection(schema, output_offsets);
+    assert(need_append_type_cast_vec.size() == output_offsets.size());
+
+    if (need_append_timezone_cast || need_append_type_cast)
+    {
+        // after appendCastForRootFinalProjection, source_columns has been modified.
+        appendCastForRootFinalProjection(actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
+    }
+
+    // generate project aliases from source_columns.
+    return genRootFinalProjectAliases(column_prefix, output_offsets);
+}
+
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     ExpressionActionsChain & chain,
     const std::vector<tipb::FieldType> & schema,

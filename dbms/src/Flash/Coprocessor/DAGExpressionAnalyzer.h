@@ -56,6 +56,12 @@ public:
 
     const Context & getContext() const { return context; }
 
+    void reset(const std::vector<NameAndTypePair> & source_columns_)
+    {
+        source_columns = source_columns_;
+        prepared_sets.clear();
+    }
+
     const std::vector<NameAndTypePair> & getCurrentInputColumns() const;
 
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
@@ -111,6 +117,15 @@ public:
         const String & column_prefix,
         bool keep_session_timezone_info);
 
+    NamesWithAliases buildFinalProjection(
+        const ExpressionActionsPtr & actions,
+        const std::vector<tipb::FieldType> & schema,
+        const std::vector<Int32> & output_offsets,
+        const String & column_prefix,
+        bool keep_session_timezone_info);
+
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
+
     String getActions(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions,
@@ -153,16 +168,32 @@ public:
         const tipb::Window & window,
         const size_t window_columns_start_index);
 
+    void appendCastAfterAgg(
+        const ExpressionActionsPtr & actions,
+        const tipb::Aggregation & agg);
+
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
+    void buildAggGroupBy(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
     NamesAndTypes buildOrderColumns(
         const ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
-
-    void appendCastAfterAgg(
-        const ExpressionActionsPtr & actions,
-        const tipb::Aggregation & agg);
 
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
@@ -186,22 +217,6 @@ private:
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
-
-    void buildAggFuncs(
-        const tipb::Aggregation & aggregation,
-        const ExpressionActionsPtr & actions,
-        AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns);
-
-    void buildAggGroupBy(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
-        const ExpressionActionsPtr & actions,
-        AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns,
-        Names & aggregation_keys,
-        std::unordered_set<String> & agg_key_set,
-        bool group_by_collation_sensitive,
-        TiDB::TiDBCollators & collators);
 
     void fillArgumentDetail(
         const ExpressionActionsPtr & actions,
@@ -282,8 +297,6 @@ private:
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
-
-    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
     NamesWithAliases genRootFinalProjectAliases(
         const String & column_prefix,

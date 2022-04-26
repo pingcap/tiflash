@@ -45,9 +45,9 @@ BlockInputStreams Planner::execute()
     return pipeline.streams;
 }
 
-bool Planner::isSupported(const DAGQueryBlock &)
+bool Planner::isSupported(const DAGQueryBlock & query_block)
 {
-    return false;
+    return query_block.source && query_block.source->tp() == tipb::ExecType::TypeProjection;
 }
 
 DAGContext & Planner::dagContext() const
@@ -68,6 +68,40 @@ void Planner::executeImpl(DAGPipeline & pipeline)
     {
         assert(!input_streams.empty());
         builder.buildSource(input_streams.back()->getHeader());
+    }
+
+    assert(query_block.source);
+    builder.build(query_block.source_name, query_block.source);
+
+    // selection on table scan had been executed in table scan.
+    if (query_block.selection && !query_block.isTableScanSource())
+    {
+        builder.build(query_block.selection_name, query_block.selection);
+    }
+
+    if (query_block.aggregation)
+    {
+        builder.build(query_block.aggregation_name, query_block.aggregation);
+
+        if (query_block.having)
+        {
+            builder.build(query_block.having_name, query_block.having);
+        }
+    }
+
+    // TopN/Limit
+    if (query_block.limit_or_topn)
+    {
+        builder.build(query_block.limit_or_topn_name, query_block.limit_or_topn);
+    }
+
+    if (query_block.isRootQueryBlock())
+    {
+        builder.buildRootFinalProjection(query_block.qb_column_prefix)
+    }
+    else
+    {
+        builder.buildNonRootFinalProjection(query_block.qb_column_prefix);
     }
 
     auto physical_plan = builder.getResult();

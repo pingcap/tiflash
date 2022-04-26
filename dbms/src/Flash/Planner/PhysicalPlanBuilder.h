@@ -18,6 +18,7 @@
 #include <Common/Logger.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <common/logger_useful.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -29,7 +30,12 @@ public:
         , log(Logger::get("PhysicalPlanBuilder", req_id))
     {}
 
+    void build(const String & executor_id, const tipb::Executor * executor);
+
     void buildSource(const Block & sample_block);
+
+    void buildNonRootFinalProjection(const String & column_prefix);
+    void buildRootFinalProjection(const String & column_prefix);
 
     PhysicalPlanPtr getResult() const
     {
@@ -38,9 +44,14 @@ public:
     }
 
 private:
+    PhysicalPlanPtr popBack();
+
+    DAGContext & dagContext() const;
+
+private:
     std::vector<PhysicalPlanPtr> cur_plans;
 
-    [[maybe_unused]] Context & context;
+    Context & context;
 
     LoggerPtr log;
 };
