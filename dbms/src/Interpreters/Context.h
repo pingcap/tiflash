@@ -104,6 +104,8 @@ namespace DM
 {
 class MinMaxIndexCache;
 class DeltaIndexManager;
+class GlobalStoragePool;
+using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 } // namespace DM
 
 /// (database name, table name)
@@ -407,6 +409,8 @@ public:
     void initializePageStorageMode(const PathPool & path_pool, bool enable_ps_v3);
     void setPageStorageRunMode(PageStorageRunMode run_mode) const;
     PageStorageRunMode getPageStorageRunMode() const;
+    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
+    DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();

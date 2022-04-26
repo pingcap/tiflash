@@ -42,37 +42,9 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-    // not thread safe
-    static void init(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
-    {
-        if (global_storage_pool != nullptr)
-        {
-            return;
-        }
-
-        try
-        {
-            global_storage_pool = std::make_shared<GlobalStoragePool>(path_pool, global_ctx, settings);
-            global_storage_pool->restore();
-        }
-        catch (...)
-        {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
-            throw;
-        }
-    }
-
-    static std::shared_ptr<GlobalStoragePool> getInstance()
-    {
-        return global_storage_pool;
-    }
-
     GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings);
 
-    static void destory()
-    {
-        global_storage_pool = nullptr;
-    }
+    ~GlobalStoragePool();
 
     void restore();
 
@@ -104,7 +76,7 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-    StoragePool(PageStorageRunMode mode, NamespaceId ns_id_, const GlobalStoragePoolPtr & global_storage_pool, StoragePathPool & path_pool, Context & global_ctx, const String & name = "");
+    StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & path_pool, const String & name = "");
 
     PageStorageRunMode restore();
 

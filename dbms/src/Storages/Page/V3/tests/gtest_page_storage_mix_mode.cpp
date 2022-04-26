@@ -43,28 +43,24 @@ public:
 
         cap_metrics = std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps);
         storage_path_pool_v2 = std::make_unique<StoragePathPool>(Strings{path}, Strings{path}, "test", "t1", true, cap_metrics, file_provider);
-        storage_pool_v2 = std::make_unique<StoragePool>(PageStorageRunMode::ONLY_V2, TEST_NAMESPACE_ID, nullptr, *storage_path_pool_v2, global_context, "test.t1");
+        global_context.setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
+        storage_pool_v2 = std::make_unique<StoragePool>(global_context, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
 
         storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, cap_metrics, file_provider, true);
-        GlobalStoragePool::init(*storage_path_pool_v3, global_context, global_context.getSettingsRef());
-        storage_pool_mix = std::make_unique<StoragePool>(PageStorageRunMode::MIX_MODE,
+        global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
+        global_context.initializeGlobalStoragePoolIfNeed(*storage_path_pool_v3);
+        storage_pool_mix = std::make_unique<StoragePool>(global_context,
                                                          TEST_NAMESPACE_ID,
-                                                         GlobalStoragePool::getInstance(),
                                                          *storage_path_pool_v2,
-                                                         global_context,
                                                          "test.t1");
 
         reloadV2StoragePool();
     }
 
-    void TearDown() override
-    {
-        GlobalStoragePool::destory();
-    }
-
 
     PageStorageRunMode reloadMixedStoragePool()
     {
+        DB::tests::TiFlashTestEnv::getContext().setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
         PageStorageRunMode run_mode = storage_pool_mix->restore();
         page_writer_mix = storage_pool_mix->logWriter();
         page_reader_mix = storage_pool_mix->logReader();
@@ -73,6 +69,7 @@ public:
 
     void reloadV2StoragePool()
     {
+        DB::tests::TiFlashTestEnv::getContext().setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
         storage_pool_v2->restore();
         page_writer_v2 = storage_pool_v2->logWriter();
         page_reader_v2 = storage_pool_v2->logReader();

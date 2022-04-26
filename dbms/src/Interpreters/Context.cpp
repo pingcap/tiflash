@@ -162,6 +162,7 @@ struct ContextShared
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
     PageStorageRunMode storage_run_mode;
+    DM::GlobalStoragePoolPtr global_storage_pool;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -1589,6 +1590,36 @@ void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
 {
     auto lock = getLock();
     shared->storage_run_mode = run_mode;
+}
+
+bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
+{
+    auto lock = getLock();
+    if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
+    {
+        try
+        {
+            shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
+            shared->global_storage_pool->restore();
+            return true;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
+        }
+    }
+    else
+    {
+        shared->global_storage_pool = nullptr;
+        return false;
+    }
+}
+
+DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
+{
+    auto lock = getLock();
+    return shared->global_storage_pool;
 }
 
 UInt16 Context::getTCPPort() const

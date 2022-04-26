@@ -96,6 +96,15 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
     , global_context(global_ctx)
 {}
 
+GlobalStoragePool::~GlobalStoragePool()
+{
+    if (gc_handle)
+    {
+        global_context.getBackgroundPool().removeTask(gc_handle);
+        gc_handle = nullptr;
+    }
+}
+
 void GlobalStoragePool::restore()
 {
     log_storage->restore();
@@ -140,11 +149,12 @@ bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_per
     return done_anything;
 }
 
-StoragePool::StoragePool(PageStorageRunMode mode, NamespaceId ns_id_, const GlobalStoragePoolPtr & global_storage_pool, StoragePathPool & storage_path_pool, Context & global_ctx, const String & name)
-    : run_mode(mode)
+StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool, const String & name)
+    : run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , global_context(global_ctx)
 {
+    const auto & global_storage_pool = global_context.getGlobalStoragePool();
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
