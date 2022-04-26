@@ -31,7 +31,7 @@ struct PlanType
         Source = 0x7,
         TopN = 0x8,
     };
-    PlanTypeEnum enum_value; // 枚举值
+    PlanTypeEnum enum_value;
 
     PlanType(int value = 0) // NOLINT(google-explicit-constructor)
         : enum_value(static_cast<PlanTypeEnum>(value))
