@@ -57,8 +57,8 @@ public:
         Iter end,
         StringRef delimiter)
     {
-        auto func = [](const auto & s, FmtBuffer & fb) {
-            fb.append(s);
+        auto func = [this](const auto & s) {
+            this->append(s);
         };
         return joinStr(first, end, func, delimiter);
     }
@@ -72,12 +72,12 @@ public:
     {
         if (first == end)
             return *this;
-        toStringFunc(*first, *this);
+        toStringFunc(*first);
         ++first;
         for (; first != end; ++first)
         {
             append(delimiter);
-            toStringFunc(*first, *this);
+            toStringFunc(*first);
         }
         return *this;
     }

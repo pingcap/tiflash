@@ -707,8 +707,8 @@ private:
             fmt_buf.joinStr(
                 blob_gc_info[index].begin(),
                 blob_gc_info[index].end(),
-                [](const auto arg, FmtBuffer & fb) {
-                    fb.fmtAppend("{}/{:.2f}", arg.first, arg.second);
+                [&fmt_buf](const auto arg) {
+                    fmt_buf.fmtAppend("{}/{:.2f}", arg.first, arg.second);
                 },
                 ", ");
             fmt_buf.append("]");

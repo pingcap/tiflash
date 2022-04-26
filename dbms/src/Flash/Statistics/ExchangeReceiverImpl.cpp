@@ -35,7 +35,7 @@ void ExchangeReceiverStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
     fmt_buffer.joinStr(
         exchange_receive_details.cbegin(),
         exchange_receive_details.cend(),
-        [](const auto & p, FmtBuffer & bf) { bf.append(p.toJson()); },
+        [&fmt_buffer](const auto & p) { fmt_buffer.append(p.toJson()); },
         ",");
     fmt_buffer.append("]");
 }

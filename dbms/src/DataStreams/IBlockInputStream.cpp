@@ -42,7 +42,7 @@ String IBlockInputStream::getTreeID() const
             buffer.joinStr(
                 children.cbegin(),
                 children.cend(),
-                [](const auto & r, FmtBuffer & fb) { fb.append(r->getTreeID()); },
+                [&buffer](const auto & r) { buffer.append(r->getTreeID()); },
                 ", ");
             buffer.append(")");
         }

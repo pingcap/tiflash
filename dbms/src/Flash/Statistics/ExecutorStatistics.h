@@ -59,7 +59,7 @@ public:
         fmt_buffer.joinStr(
             children.cbegin(),
             children.cend(),
-            [](const String & child, FmtBuffer & bf) { bf.fmtAppend(R"("{}")", child); },
+            [&fmt_buffer](const String & child) { fmt_buffer.fmtAppend(R"("{}")", child); },
             ",");
         fmt_buffer.fmtAppend(
             R"(],"outbound_rows":{},"outbound_blocks":{},"outbound_bytes":{},"execution_time_ns":{})",

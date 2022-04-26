@@ -37,8 +37,8 @@ String ExecutorStatisticsCollector::resToJson() const
     buffer.joinStr(
         res.cbegin(),
         res.cend(),
-        [](const auto & s, FmtBuffer & fb) {
-            fb.append(s.second->toJson());
+        [&buffer](const auto & s) {
+            buffer.append(s.second->toJson());
         },
         ",");
     buffer.append("]");

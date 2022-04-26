@@ -49,8 +49,8 @@ std::string DataTypeAggregateFunction::getName() const
         fmt_buf.joinStr(
             parameters.cbegin(),
             parameters.cend(),
-            [](const auto & arg, FmtBuffer & fb) {
-                fb.append(applyVisitor(DB::FieldVisitorToString(), arg));
+            [&fmt_buf](const auto & arg) {
+                fmt_buf.append(applyVisitor(DB::FieldVisitorToString(), arg));
             },
             ", ");
         fmt_buf.append(")");

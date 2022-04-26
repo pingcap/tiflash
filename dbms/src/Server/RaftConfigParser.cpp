@@ -61,10 +61,10 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         fmt_buf.joinStr(
             string_tokens.begin(),
             string_tokens.end(),
-            [&res](auto arg, FmtBuffer & fb) {
+            [&res, &fmt_buf](auto arg) {
                 arg = Poco::trimInPlace(arg);
                 res.ignore_databases.emplace(arg);
-                fb.append(arg);
+                fmt_buf.append(arg);
             },
             ", ");
         LOG_FMT_INFO(log, "Found ignore databases: {}", fmt_buf.toString());

@@ -45,7 +45,7 @@ TEST(FmtUtilsTest, TestJoinStr)
         .joinStr(
             v.cbegin(),
             v.cend(),
-            [](const auto & s, FmtBuffer & fb) { fb.append(s); fb.append("t"); },
+            [&buffer](const auto & s) { buffer.append(s); buffer.append("t"); },
             ", ");
     ASSERT_EQ(buffer.toString(), "aat");
 

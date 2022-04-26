@@ -207,26 +207,26 @@ public:
         fmt_buffer.joinStr(
             writes.begin(),
             writes.end(),
-            [this](const auto w, FmtBuffer & fb) {
+            [this, &fmt_buffer](const auto w) {
                 switch (w.type)
                 {
                 case WriteType::PUT:
-                    fb.fmtAppend("{}.{}", namespace_id, w.page_id);
+                    fmt_buffer.fmtAppend("{}.{}", namespace_id, w.page_id);
                     break;
                 case WriteType::REF:
-                    fb.fmtAppend("{}.{} > {}.{}", namespace_id, w.page_id, namespace_id, w.ori_page_id);
+                    fmt_buffer.fmtAppend("{}.{} > {}.{}", namespace_id, w.page_id, namespace_id, w.ori_page_id);
                     break;
                 case WriteType::DEL:
-                    fb.fmtAppend("X{}.{}", namespace_id, w.page_id);
+                    fmt_buffer.fmtAppend("X{}.{}", namespace_id, w.page_id);
                     break;
                 case WriteType::UPSERT:
-                    fb.fmtAppend("U{}.{}", namespace_id, w.page_id);
+                    fmt_buffer.fmtAppend("U{}.{}", namespace_id, w.page_id);
                     break;
                 case WriteType::PUT_EXTERNAL:
-                    fb.fmtAppend("E{}.{}", namespace_id, w.page_id);
+                    fmt_buffer.fmtAppend("E{}.{}", namespace_id, w.page_id);
                     break;
                 default:
-                    fb.fmtAppend("Unknow {}.{}", namespace_id, w.page_id);
+                    fmt_buffer.fmtAppend("Unknow {}.{}", namespace_id, w.page_id);
                     break;
                 };
             },

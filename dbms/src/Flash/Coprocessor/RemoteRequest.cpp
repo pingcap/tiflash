@@ -26,7 +26,7 @@ RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGCon
         buffer.joinStr(
             retry_regions.cbegin(),
             retry_regions.cend(),
-            [](const auto & r, FmtBuffer & fb) { fb.fmtAppend("{}", r.get().region_id); },
+            [&buffer](const auto & r) { buffer.fmtAppend("{}", r.get().region_id); },
             ",");
         buffer.fmtAppend(") for table {}", table_info.id);
         return buffer.toString();

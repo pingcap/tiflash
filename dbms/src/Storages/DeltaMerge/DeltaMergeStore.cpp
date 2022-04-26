@@ -832,14 +832,14 @@ void DeltaMergeStore::ingestFiles(
             fmt_buf.joinStr(
                 file_ids.begin(),
                 file_ids.end(),
-                [](const PageId id, FmtBuffer & fb) { fb.fmtAppend("{}", id); },
+                [&fmt_buf](const PageId id) { fmt_buf.fmtAppend("{}", id); },
                 ",");
         }
         fmt_buf.append(" into segment [");
         fmt_buf.joinStr(
             updated_segments.begin(),
             updated_segments.end(),
-            [](const auto & segment, FmtBuffer & fb) { fb.fmtAppend("{}", segment->segmentId()); },
+            [&fmt_buf](const auto & segment) { fmt_buf.fmtAppend("{}", segment->segmentId()); },
             ",");
         fmt_buf.append("]");
         LOG_FMT_INFO(
@@ -2150,7 +2150,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
             fmt_buf.joinStr(
                 segments.begin(),
                 segments.end(),
-                [](const auto & id_seg, FmtBuffer & fb) { fb.append(id_seg.second->info()); },
+                [&fmt_buf](const auto & id_seg) { fmt_buf.append(id_seg.second->info()); },
                 ",");
             LOG_ERROR(log, fmt_buf.toString());
 

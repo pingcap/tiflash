@@ -227,8 +227,8 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     fmt_buf.joinStr(
         files_snap.persisted_log_files.begin(),
         files_snap.persisted_log_files.end(),
-        [](const auto & arg, FmtBuffer & fb) {
-            fb.fmtAppend("{}", arg.filename(arg.stage));
+        [&fmt_buf](const auto & arg) {
+            fmt_buf.fmtAppend("{}", arg.filename(arg.stage));
         },
         ", ");
     fmt_buf.fmtAppend("] [num of records={}] [file={}] [size={}].",

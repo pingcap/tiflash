@@ -42,7 +42,7 @@ inline String toString(const PageIDAndEntriesV3 & entries)
     buf.joinStr(
         entries.begin(),
         entries.end(),
-        [](const PageIDAndEntryV3 & id_entry, FmtBuffer & buf) {
+        [&buf](const PageIDAndEntryV3 & id_entry) {
             buf.fmtAppend("<{}.{},{}>", id_entry.first.high, id_entry.first.low, toDebugString(id_entry.second));
         },
         ", ");

@@ -181,9 +181,9 @@ BlockInputStreamPtr DBGInvoker::invokeSchemaless(
     fmt_buf.joinStr(
         args.cbegin(),
         args.cend(),
-        [](const auto & arg, FmtBuffer & fb) {
+        [&fmt_buf](const auto & arg) {
             std::string column_name = arg->getColumnName();
-            fb.append(normalizeArg(column_name));
+            fmt_buf.append(normalizeArg(column_name));
         },
         ", ");
     fmt_buf.append(")");

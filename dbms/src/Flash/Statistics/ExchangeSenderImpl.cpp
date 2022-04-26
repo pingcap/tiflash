@@ -58,7 +58,7 @@ void ExchangeSenderStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
     fmt_buffer.joinStr(
         mpp_tunnel_details.cbegin(),
         mpp_tunnel_details.cend(),
-        [](const auto & p, FmtBuffer & bf) { bf.append(p.toJson()); },
+        [&fmt_buffer](const auto & p) { fmt_buffer.append(p.toJson()); },
         ",");
     fmt_buffer.append("]");
 }

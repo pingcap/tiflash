@@ -664,7 +664,7 @@ void WaitCheckRegionReady(
         buffer.joinStr(
             remain_regions.begin(),
             remain_regions.end(),
-            [&](const auto & e, FmtBuffer & b) { b.fmtAppend("{}", e); },
+            [&](const auto & e) { buffer.fmtAppend("{}", e); },
             " ");
         LOG_FMT_WARNING(
             log,
@@ -712,14 +712,14 @@ void WaitCheckRegionReady(
         buffer.joinStr(
             regions_to_check.begin(),
             regions_to_check.end(),
-            [&](const auto & e, FmtBuffer & b) {
+            [&](const auto & e) {
                 if (auto r = tmt.getKVStore()->getRegion(e.first); r)
                 {
-                    b.fmtAppend("{},{},{}", e.first, e.second, r->appliedIndex());
+                    buffer.fmtAppend("{},{},{}", e.first, e.second, r->appliedIndex());
                 }
                 else
                 {
-                    b.fmtAppend("{},{},none", e.first, e.second);
+                    buffer.fmtAppend("{},{},none", e.first, e.second);
                 }
             },
             " ");

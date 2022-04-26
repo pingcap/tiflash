@@ -260,8 +260,8 @@ void StorageDeltaMerge::updateTableColumnInfo()
         fmt_buf.joinStr(
             all_columns.begin(),
             all_columns.end(),
-            [](const auto & col, FmtBuffer & fb) {
-                fb.append(col.name);
+            [&fmt_buf](const auto & col) {
+                fmt_buf.append(col.name);
             },
             ",");
         throw Exception(
@@ -660,14 +660,14 @@ BlockInputStreams StorageDeltaMerge::read(
         fmt_buf.joinStr(
             mvcc_query_info.regions_query_info.begin(),
             mvcc_query_info.regions_query_info.end(),
-            [](const auto & region, FmtBuffer & fb) {
+            [&fmt_buf](const auto & region) {
                 if (!region.required_handle_ranges.empty())
                 {
-                    fb.joinStr(
+                    fmt_buf.joinStr(
                         region.required_handle_ranges.begin(),
                         region.required_handle_ranges.end(),
-                        [region_id = region.region_id](const auto & range, FmtBuffer & fb) {
-                            fb.fmtAppend("{}{}", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                        [region_id = region.region_id, &fmt_buf](const auto & range) {
+                            fmt_buf.fmtAppend("{}{}", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
                         },
                         ",");
                 }
@@ -675,7 +675,7 @@ BlockInputStreams StorageDeltaMerge::read(
                 {
                     /// only used for test cases
                     const auto & range = region.range_in_table;
-                    fb.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                    fmt_buf.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
                 }
             },
             ",");
@@ -695,8 +695,8 @@ BlockInputStreams StorageDeltaMerge::read(
         fmt_buf.joinStr(
             ranges.begin(),
             ranges.end(),
-            [](const auto & range, FmtBuffer & fb) {
-                fb.append(range.toDebugString());
+            [&fmt_buf](const auto & range) {
+                fmt_buf.append(range.toDebugString());
             },
             ",");
         LOG_FMT_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());

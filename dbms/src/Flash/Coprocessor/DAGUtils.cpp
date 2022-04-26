@@ -861,8 +861,8 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         fmt_buf.joinStr(
             expr.children().begin() + 1,
             expr.children().end(),
-            [input_col](const auto & arg, FmtBuffer & fb) {
-                fb.append(exprToString(arg, input_col));
+            [input_col, &fmt_buf](const auto & arg) {
+                fmt_buf.append(exprToString(arg, input_col));
             },
             ", ");
         fmt_buf.append(")");
@@ -873,8 +873,8 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         fmt_buf.joinStr(
             expr.children().begin(),
             expr.children().end(),
-            [input_col](const auto & arg, FmtBuffer & fb) {
-                fb.append(exprToString(arg, input_col));
+            [input_col, &fmt_buf](const auto & arg) {
+                fmt_buf.append(exprToString(arg, input_col));
             },
             ", ");
         fmt_buf.append(")");

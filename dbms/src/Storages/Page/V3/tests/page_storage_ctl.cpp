@@ -314,10 +314,10 @@ private:
         dir_summary_info.joinStr(
             blob_stats.begin(),
             blob_stats.end(),
-            [](const auto arg, FmtBuffer & fb) {
+            [&dir_summary_info](const auto arg) {
                 for (const auto & stat : arg.second)
                 {
-                    fb.fmtAppend("   stat id: {}\n"
+                    dir_summary_info.fmtAppend("   stat id: {}\n"
                                  "     path: {}\n"
                                  "     total size: {}\n"
                                  "     valid size: {}\n"

@@ -382,7 +382,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
         fmt_buf.joinStr(
             failed_req_msg_vec.begin(),
             failed_req_msg_vec.end(),
-            [](const auto & pair, FmtBuffer & fb) { fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second); },
+            [&fmt_buf](const auto & pair) { fmt_buf.fmtAppend("request {} failed, msg: {}", pair.first, pair.second); },
             "\n");
         throw Exception(fmt_buf.toString(), ErrorCodes::LOGICAL_ERROR);
     }

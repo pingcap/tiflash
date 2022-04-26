@@ -43,8 +43,8 @@ void CollapsingSortedBlockInputStream::reportIncorrectData()
     fmt_buf.joinStr(
         std::begin(*current_key.columns),
         std::end(*current_key.columns),
-        [this](const auto arg, FmtBuffer & fb) {
-            fb.append(applyVisitor(FieldVisitorToString(), (*arg)[current_key.row_num]));
+        [&](const auto arg) {
+            fmt_buf.append(applyVisitor(FieldVisitorToString(), (*arg)[current_key.row_num]));
         },
         ", ");
     fmt_buf.append(").");
