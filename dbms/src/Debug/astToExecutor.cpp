@@ -808,6 +808,15 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t col
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
+
+    for (auto & field : output_schema)
+    {
+        auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+        tipb_type.set_collate(collator_id);
+        auto * field_type = exchange_sender->add_all_field_types();
+        *field_type = tipb_type;
+    }
+
     auto * child_executor = exchange_sender->mutable_child();
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
