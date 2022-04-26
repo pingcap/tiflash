@@ -113,13 +113,7 @@ inline bool mulOverflow(__int128 x, __int128 y, __int128 & res)
     if (!x || !y)
         return false;
 
-    unsigned __int128 a = (x > 0) ? x : -x;
-    unsigned __int128 b = (y > 0) ? y : -y;
-    if((a * b) / b == a) /// not overflow uint128
-    {
-        return res/x != y; /// whether overflow int128
-    }
-    return true;
+    return res/x != y; /// whether overflow int128
 }
 
 template <>
