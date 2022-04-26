@@ -68,8 +68,6 @@ PhysicalPlanPtr PhysicalAggregation::build(
     auto cast_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns, context);
     analyzer.reset(aggregated_columns);
     analyzer.appendCastAfterAgg(cast_after_agg_actions, aggregation);
-    // to remove tmp columns from before_agg_actions.
-    cast_after_agg_actions->add(ExpressionAction::project(PhysicalPlanHelper::schemaToNames(analyzer.getCurrentInputColumns())));
 
     const NamesAndTypes & schema = analyzer.getCurrentInputColumns();
     auto physical_agg = std::make_shared<PhysicalAggregation>(
@@ -90,7 +88,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
 {
     child->transform(pipeline, context, max_streams);
 
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, before_agg_actions, log->identifier()); });
+    executeExpression(pipeline, before_agg_actions, log);
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
@@ -138,7 +136,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
             log->identifier());
     }
 
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, cast_after_agg, log->identifier()); });
+    executeExpression(pipeline, cast_after_agg, log);
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)

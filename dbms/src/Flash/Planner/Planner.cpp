@@ -104,6 +104,11 @@ void Planner::executeImpl(DAGPipeline & pipeline)
         builder.buildNonRootFinalProjection(query_block.qb_column_prefix);
     }
 
+    if (query_block.exchange_sender)
+    {
+        builder.build(query_block.exchange_sender_name, query_block.exchange_sender);
+    }
+
     auto physical_plan = builder.getResult();
     physical_plan->finalize();
     physical_plan->transform(pipeline, context, max_streams);

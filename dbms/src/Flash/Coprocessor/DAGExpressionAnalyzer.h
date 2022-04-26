@@ -188,13 +188,17 @@ public:
         bool group_by_collation_sensitive,
         TiDB::TiDBCollators & collators);
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
+    String buildFilterColumn(
+        const ExpressionActionsPtr & actions,
+        const std::vector<const tipb::Expr *> & conditions);
+
     NamesAndTypes buildOrderColumns(
         const ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
 
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
         SortDescription & sort_desc,
@@ -293,10 +297,6 @@ private:
     String buildFunction(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
-
-    String buildFilterColumn(
-        const ExpressionActionsPtr & actions,
-        const std::vector<const tipb::Expr *> & conditions);
 
     NamesWithAliases genRootFinalProjectAliases(
         const String & column_prefix,

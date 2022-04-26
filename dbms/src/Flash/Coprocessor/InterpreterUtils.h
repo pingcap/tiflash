@@ -35,4 +35,9 @@ void executeUnion(
     size_t max_streams,
     const LoggerPtr & log,
     bool ignore_block = false);
+
+void executeExpression(
+    DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expressionActionsPtr,
+    const LoggerPtr & log);
 } // namespace DB

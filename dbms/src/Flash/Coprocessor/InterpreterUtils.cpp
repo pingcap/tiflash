@@ -79,4 +79,15 @@ void executeUnion(
         pipeline.streams.push_back(non_joined_data_stream);
     }
 }
+
+void executeExpression(
+    DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expressionActionsPtr,
+    const LoggerPtr & log)
+{
+    if (!expressionActionsPtr->getActions().empty())
+    {
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, log->identifier()); });
+    }
+}
 } // namespace DB

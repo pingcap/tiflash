@@ -21,8 +21,20 @@ String toString(const PlanType & plan_type)
 {
     switch (plan_type)
     {
+    case Aggregation:
+        return "Aggregation";
+    case ExchangeSender:
+        return "ExchangeSender";
+    case Limit:
+        return "Limit";
+    case Projection:
+        return "Projection";
+    case Selection:
+        return "Selection";
     case Source:
         return "Source";
+    case TopN:
+        return "TopN";
     default:
         throw Exception("Unknown PlanType");
     }
