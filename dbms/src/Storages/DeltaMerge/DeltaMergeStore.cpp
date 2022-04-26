@@ -210,22 +210,14 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , hash_salt(++DELTA_MERGE_STORE_HASH_SALT)
     , log(Logger::get("DeltaMergeStore", fmt::format("{}.{}", db_name, table_name)))
 {
-    auto page_storage_run_mode = global_context.getPageStorageRunMode();
     LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}]", db_name, table_name);
 
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
 
-    if (page_storage_run_mode == PageStorageRunMode::ONLY_V3 || page_storage_run_mode == PageStorageRunMode::MIX_MODE)
-    {
-        GlobalStoragePool::init(global_context.getPathPool(), global_context, db_context.getSettingsRef());
-    }
-
-    storage_pool = std::make_shared<StoragePool>(page_storage_run_mode,
+    storage_pool = std::make_shared<StoragePool>(global_context,
                                                  ns_id,
-                                                 GlobalStoragePool::getInstance(),
                                                  path_pool,
-                                                 global_context,
                                                  db_name_ + "." + table_name_);
 
     // Restore existing dm files and set capacity for path_pool.
@@ -245,6 +237,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     store_columns = generateStoreColumns(original_table_columns, is_common_handle);
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
+    PageStorageRunMode page_storage_run_mode;
     try
     {
         page_storage_run_mode = storage_pool->restore(); // restore from disk
