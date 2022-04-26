@@ -67,7 +67,7 @@ public:
 
     void disableRecordProfileStreams() { is_record_profile_streams = false; }
 
-    String toString();
+    String toString() const;
 
 protected:
     virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};

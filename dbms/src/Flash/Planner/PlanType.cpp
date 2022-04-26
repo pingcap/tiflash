@@ -17,12 +17,14 @@
 
 namespace DB
 {
-String toString(const PlanType & plan_type)
+String PlanType::toString() const
 {
-    switch (plan_type)
+    switch (_value)
     {
     case Aggregation:
         return "Aggregation";
+    case ExchangeReceiver:
+        return "ExchangeReceiver";
     case ExchangeSender:
         return "ExchangeSender";
     case Limit:

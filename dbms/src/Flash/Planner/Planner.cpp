@@ -47,7 +47,9 @@ BlockInputStreams Planner::execute()
 
 bool Planner::isSupported(const DAGQueryBlock & query_block)
 {
-    return query_block.source && query_block.source->tp() == tipb::ExecType::TypeProjection;
+    return query_block.source
+        && (query_block.source->tp() == tipb::ExecType::TypeProjection
+            || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver);
 }
 
 DAGContext & Planner::dagContext() const

@@ -29,6 +29,9 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     case tipb::ExecType::TypeExchangeSender:
         cur_plans.push_back(PhysicalExchangeSender::build(executor_id, log->identifier(), executor->exchange_sender(), popBack()));
         break;
+    case tipb::ExecType::TypeExchangeReceiver:
+        cur_plans.push_back(PhysicalExchangeReceiver::build(context, executor_id, log->identifier()));
+        break;
     case tipb::ExecType::TypeLimit:
         cur_plans.push_back(PhysicalLimit::build(executor_id, log->identifier(), executor->limit(), popBack()));
         break;

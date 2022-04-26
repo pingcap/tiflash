@@ -18,16 +18,36 @@
 
 namespace DB
 {
-enum PlanType
+struct PlanType
 {
-    Aggregation,
-    ExchangeSender,
-    Limit,
-    Projection,
-    Selection,
-    Source,
-    TopN,
-};
+    enum __Enum
+    {
+        Aggregation = 0x1,
+        ExchangeReceiver = 0x2,
+        ExchangeSender = 0x3,
+        Limit = 0x4,
+        Projection = 0x5,
+        Selection = 0x6,
+        Source = 0x7,
+        TopN = 0x8,
+    };
+    __Enum _value; // 枚举值
 
-String toString(const PlanType & plan_type);
+    PlanType(int value = 0)
+        : _value((__Enum)value)
+    {}
+
+    PlanType & operator=(int value)
+    {
+        this->_value = (__Enum)value;
+        return *this;
+    }
+
+    operator int() const
+    {
+        return this->_value;
+    }
+
+    String toString() const;
+};
 } // namespace DB

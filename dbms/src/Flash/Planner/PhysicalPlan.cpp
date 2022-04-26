@@ -21,7 +21,7 @@
 
 namespace DB
 {
-String PhysicalPlan::toString()
+String PhysicalPlan::toString() const
 {
     auto schema_to_string = [&]() {
         FmtBuffer buffer;
@@ -34,7 +34,7 @@ String PhysicalPlan::toString()
     };
     return fmt::format(
         "type: {}, executor_id: {}, is_record_profile_streams: {}, schema: {}",
-        DB::toString(type),
+        type.toString(),
         executor_id,
         is_record_profile_streams,
         schema_to_string());
