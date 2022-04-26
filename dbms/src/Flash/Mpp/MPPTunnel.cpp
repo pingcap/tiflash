@@ -84,7 +84,11 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         {
             std::unique_lock lock(mu);
             if (finished)
+            {
+                LOG_FMT_TRACE(log, "already finished!");
                 return;
+            }
+
             /// make sure to finish the tunnel after it is connected
             waitUntilConnectedOrFinished(lock);
             finishSendQueue();
@@ -335,8 +339,8 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_lock)
 {
     // must finish send_queue outside of the critical area to avoid deadlock with write.
+    LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue.finish();
-
     auto rest_work = [this, &err_msg] {
         // it's safe to call it multiple times
         if (finished && consumer_state.errHasSet())
