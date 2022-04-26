@@ -96,10 +96,8 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
-    std::cerr << "main thread waiting child thread finished" << std::endl;
     LOG_FMT_TRACE(log, "waiting child thread finished!");
     thread_manager->wait();
-    std::cerr << "main thread destruct tunnel obj" << std::endl;
     LOG_FMT_TRACE(log, "destruct tunnel obj!");
 }
 
