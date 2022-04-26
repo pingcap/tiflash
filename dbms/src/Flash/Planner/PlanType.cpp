@@ -19,7 +19,7 @@ namespace DB
 {
 String PlanType::toString() const
 {
-    switch (_value)
+    switch (enum_value)
     {
     case Aggregation:
         return "Aggregation";

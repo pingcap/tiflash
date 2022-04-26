@@ -20,7 +20,7 @@ namespace DB
 {
 struct PlanType
 {
-    enum __Enum
+    enum PlanTypeEnum
     {
         Aggregation = 0x1,
         ExchangeReceiver = 0x2,
@@ -31,21 +31,21 @@ struct PlanType
         Source = 0x7,
         TopN = 0x8,
     };
-    __Enum _value; // 枚举值
+    PlanTypeEnum enum_value; // 枚举值
 
-    PlanType(int value = 0)
-        : _value((__Enum)value)
+    PlanType(int value = 0) // NOLINT(google-explicit-constructor)
+        : enum_value(static_cast<PlanTypeEnum>(value))
     {}
 
     PlanType & operator=(int value)
     {
-        this->_value = (__Enum)value;
+        this->enum_value = static_cast<PlanTypeEnum>(value);
         return *this;
     }
 
     operator int() const
     {
-        return this->_value;
+        return this->enum_value;
     }
 
     String toString() const;
