@@ -249,7 +249,7 @@ std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
     MPPDataPacketPtr res;
     if (send_queue.pop(res))
         return res;
-    consumerFinish("");
+    //consumerFinish("");
     return nullptr;
 }
 

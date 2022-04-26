@@ -94,7 +94,7 @@ struct MockLocalReader
         if (tunnel)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            tunnel->consumerFinish("Receiver closed");
+            //tunnel->consumerFinish("Receiver closed");
         }
     }
 
