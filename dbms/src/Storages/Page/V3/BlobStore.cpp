@@ -1150,38 +1150,21 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     auto stats_iter = stats_map.begin();
     std::advance(stats_iter, stats_map_path_index);
 
-    size_t path_iter_idx = 0;
-    for (path_iter_idx = 0; path_iter_idx < stats_map.size(); ++path_iter_idx)
+    // Try to find a suitable stat under current path (path=`stats_iter->first`)
+    for (const auto & stat : stats_iter->second)
     {
-        // Try to find a suitable stat under current path (path=`stats_iter->first`)
-        for (const auto & stat : stats_iter->second)
+        auto lock = stat->lock(); // TODO: will it bring performance regression?
+        if (!stat->isReadOnly()
+            && stat->sm_max_caps >= buf_size
+            && stat->sm_valid_rate < smallest_valid_rate)
         {
-            auto lock = stat->lock(); // TODO: will it bring performance regression?
-            if (!stat->isReadOnly()
-                && stat->sm_max_caps >= buf_size
-                && stat->sm_valid_rate < smallest_valid_rate)
-            {
-                smallest_valid_rate = stat->sm_valid_rate;
-                stat_ptr = stat;
-            }
-        }
-
-        // Already find the available stat under current path.
-        if (stat_ptr != nullptr)
-        {
-            break;
-        }
-
-        // Try to find stat in the next path.
-        stats_iter++;
-        if (stats_iter == stats_map.end())
-        {
-            stats_iter = stats_map.begin();
+            smallest_valid_rate = stat->sm_valid_rate;
+            stat_ptr = stat;
         }
     }
 
     // advance the `stats_map_path_idx` without size checking
-    stats_map_path_index += path_iter_idx + 1;
+    stats_map_path_index++;
 
     // Can not find a suitable stat under all paths
     if (stat_ptr == nullptr)
