@@ -38,7 +38,7 @@ public:
         : executor_id(executor_id_)
         , type(type_)
         , schema(schema_)
-        , log(Logger::get(DB::toString(type_), req_id))
+        , log(Logger::get(type_.toString(), req_id))
     {}
 
     virtual ~PhysicalPlan() = default;

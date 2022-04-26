@@ -1,6 +1,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
+#include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
