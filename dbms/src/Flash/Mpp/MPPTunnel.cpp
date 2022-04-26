@@ -97,7 +97,10 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
     std::cerr << "main thread waiting child thread finished" << std::endl;
+    LOG_FMT_TRACE(log, "waiting child thread finished!");
     thread_manager->wait();
+    std::cerr << "main thread destruct tunnel obj" << std::endl;
+    LOG_FMT_TRACE(log, "destruct tunnel obj!");
 }
 
 template <typename Writer>
@@ -298,9 +301,11 @@ void MPPTunnelBase<Writer>::waitForConsumerFinish(bool allow_throw)
         assert(connected);
     }
 #endif
+    LOG_FMT_TRACE(log, "start wait for consumer finish!");
     String err_msg = consumer_state.getError(); // may blocking
     if (allow_throw && !err_msg.empty())
         throw Exception("Consumer exits unexpected, " + err_msg);
+    LOG_FMT_TRACE(log, "end wait for consumer finish!");
 }
 
 template <typename Writer>
