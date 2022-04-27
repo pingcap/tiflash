@@ -80,7 +80,7 @@ MakeRegionQueryInfos(
             if (r.key_ranges.empty())
             {
                 throw TiFlashException(
-                    "Income key ranges is empty for region: " + std::to_string(r.region_id),
+                    fmt::format("Income key ranges is empty for region: {}", r.region_id),
                     Errors::Coprocessor::BadRequest);
             }
             if (region_force_retry.count(id))
@@ -110,14 +110,16 @@ MakeRegionQueryInfos(
                     if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != physical_table_id)
                     {
                         throw TiFlashException(
-                            "Income key ranges is illegal for region: " + std::to_string(r.region_id)
-                                + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
-                                + std::to_string(physical_table_id),
+                            fmt::format(
+                                "Income key ranges is illegal for region: {}, table id in key range is {}, table id in region is {}",
+                                r.region_id,
+                                table_id_in_range,
+                                physical_table_id),
                             Errors::Coprocessor::BadRequest);
                     }
                     if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                         throw TiFlashException(
-                            "Income key ranges is illegal for region: " + std::to_string(r.region_id),
+                            fmt::format("Income key ranges is illegal for region: {}", r.region_id),
                             Errors::Coprocessor::BadRequest);
                 }
                 info.required_handle_ranges = r.key_ranges;
@@ -546,7 +548,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (DB::Exception & e)
         {
-            e.addMessage("(while doing learner read for table, logical table_id: " + DB::toString(logical_table_id) + ")");
+            e.addMessage(fmt::format("(while doing learner read for table, logical table_id: {})", logical_table_id));
             throw;
         }
     }
@@ -712,11 +714,18 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                 {
                     // Throw an exception for TiDB / TiSpark to retry
                     if (table_id == logical_table_id)
-                        e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                                     + "`, table_id: " + DB::toString(table_id) + ")");
+                        e.addMessage(fmt::format(
+                            "(while creating InputStreams from storage `{}`.`{}`, table_id: {})",
+                            storage->getDatabaseName(),
+                            storage->getTableName(),
+                            table_id));
                     else
-                        e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                                     + "`, table_id: " + DB::toString(table_id) + ", logical_table_id: " + DB::toString(logical_table_id) + ")");
+                        e.addMessage(fmt::format(
+                            "(while creating InputStreams from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
+                            storage->getDatabaseName(),
+                            storage->getTableName(),
+                            table_id,
+                            logical_table_id));
                     throw;
                 }
             }
@@ -724,11 +733,18 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
             {
                 /// Other unknown exceptions
                 if (table_id == logical_table_id)
-                    e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                                 + "`, table_id: " + DB::toString(table_id) + ")");
+                    e.addMessage(fmt::format(
+                        "(while creating InputStreams from storage `{}`.`{}`, table_id: {})",
+                        storage->getDatabaseName(),
+                        storage->getTableName(),
+                        table_id));
                 else
-                    e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                                 + "`, table_id: " + DB::toString(table_id) + ", logical_table_id: " + DB::toString(logical_table_id) + ")");
+                    e.addMessage(fmt::format(
+                        "(while creating InputStreams from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
+                        storage->getDatabaseName(),
+                        storage->getTableName(),
+                        table_id,
+                        logical_table_id));
                 throw;
             }
         }
@@ -744,7 +760,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         auto logical_table_storage = tmt.getStorages().get(logical_table_id);
         if (!logical_table_storage)
         {
-            throw TiFlashException("Table " + std::to_string(logical_table_id) + " doesn't exist.", Errors::Table::NotExists);
+            throw TiFlashException(fmt::format("Table {} doesn't exist.", logical_table_id), Errors::Table::NotExists);
         }
         storages_with_lock[logical_table_id] = {logical_table_storage, logical_table_storage->lockStructureForShare(context.getCurrentQueryId())};
         if (table_scan.isPartitionTableScan())
@@ -754,7 +770,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
                 auto physical_table_storage = tmt.getStorages().get(physical_table_id);
                 if (!physical_table_storage)
                 {
-                    throw TiFlashException("Table " + std::to_string(physical_table_id) + " doesn't exist.", Errors::Table::NotExists);
+                    throw TiFlashException(fmt::format("Table {} doesn't exist.", physical_table_id), Errors::Table::NotExists);
                 }
                 storages_with_lock[physical_table_id] = {physical_table_storage, physical_table_storage->lockStructureForShare(context.getCurrentQueryId())};
             }
@@ -773,16 +789,20 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         if (!table_store)
         {
             if (schema_synced)
-                throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
+                throw TiFlashException(fmt::format("Table {} doesn't exist.", table_id), Errors::Table::NotExists);
             else
                 return {{}, {}, {}, false};
         }
 
         if (table_store->engineType() != ::TiDB::StorageEngine::TMT && table_store->engineType() != ::TiDB::StorageEngine::DT)
         {
-            throw TiFlashException("Specifying schema_version for non-managed storage: " + table_store->getName()
-                                       + ", table: " + table_store->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
-                                   Errors::Coprocessor::Internal);
+            throw TiFlashException(
+                fmt::format(
+                    "Specifying schema_version for non-managed storage: {}, table: {}, id: {} is not allowed",
+                    table_store->getName(),
+                    table_store->getTableName(),
+                    table_id),
+                Errors::Coprocessor::Internal);
         }
 
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
@@ -796,9 +816,9 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         auto storage_schema_version = table_store->getTableInfo().schema_version;
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
-            throw TiFlashException("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
-                                       + " newer than query schema version " + std::to_string(query_schema_version),
-                                   Errors::Table::SchemaVersionError);
+            throw TiFlashException(
+                fmt::format("Table {} schema version {} newer than query schema version {}", table_id, storage_schema_version, query_schema_version),
+                Errors::Table::SchemaVersionError);
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
@@ -899,10 +919,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     // todo handle alias column
     if (max_columns_to_read && table_scan.getColumnSize() > max_columns_to_read)
     {
-        throw TiFlashException("Limit for number of columns to read exceeded. "
-                               "Requested: "
-                                   + toString(table_scan.getColumnSize()) + ", maximum: " + toString(max_columns_to_read),
-                               Errors::BroadcastJoin::TooManyColumns);
+        throw TiFlashException(
+            fmt::format("Limit for number of columns to read exceeded. Requested: {}, maximum: {}", table_scan.getColumnSize(), max_columns_to_read),
+            Errors::BroadcastJoin::TooManyColumns);
     }
 
     Names required_columns_tmp;

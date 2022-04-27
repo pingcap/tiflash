@@ -15,6 +15,7 @@
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {

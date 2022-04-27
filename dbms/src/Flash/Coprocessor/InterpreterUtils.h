@@ -16,9 +16,12 @@
 
 #include <Common/Logger.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
+class Context;
+
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
