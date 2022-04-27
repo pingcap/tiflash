@@ -311,8 +311,15 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     }
     catch (...)
     {
-        cancel();
-        thread_manager->wait();
+        try
+        {
+            cancel();
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        }
         throw;
     }
 }
