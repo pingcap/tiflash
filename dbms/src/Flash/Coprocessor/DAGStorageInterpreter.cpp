@@ -203,12 +203,12 @@ bool addExtraCastsAfterTs(
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
     const TiDBTableScan & table_scan_,
-    const String & pushed_down_filter_id_,
+    const String & pushed_down_filter_executor_id_,
     const std::vector<const tipb::Expr *> & pushed_down_conditions_,
     size_t max_streams_)
     : context(context_)
     , table_scan(table_scan_)
-    , pushed_down_filter_id(pushed_down_filter_id_)
+    , pushed_down_filter_executor_id(pushed_down_filter_executor_id_)
     , pushed_down_conditions(pushed_down_conditions_)
     , max_streams(max_streams_)
     , log(Logger::get("DAGStorageInterpreter", context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
@@ -217,17 +217,19 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , tmt(context.getTMTContext())
     , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
-    if (!hasRegionToRead(dagContext(), table_scan))
+    if (unlikely(!hasRegionToRead(dagContext(), table_scan)))
     {
         throw TiFlashException(
             fmt::format("Dag Request does not have region to read for table: {}", logical_table_id),
             Errors::Coprocessor::BadRequest);
     }
 
-    RUNTIME_ASSERT(
-        pushed_down_conditions.empty() == pushed_down_filter_id.empty(),
-        log,
-        "sel_conditions and sel_executor_id should both be empty or neither should be empty");
+    if (unlikely(pushed_down_conditions.empty() != pushed_down_filter_executor_id.empty()))
+    {
+        throw TiFlashException(
+            "pushed_down_conditions and pushed_down_filter_executor_id should both be empty or neither should be empty",
+            Errors::Coprocessor::BadRequest);
+    }
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
@@ -291,7 +293,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     if (!pushed_down_conditions.empty())
     {
         executePushedDownFilter(remote_read_streams_start_index, pipeline);
-        recordProfileStreams(pipeline, pushed_down_filter_id);
+        recordProfileStreams(pipeline, pushed_down_filter_executor_id);
     }
 }
 
@@ -440,7 +442,7 @@ void DAGStorageInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;
     size_t rest_task = all_tasks.size() % concurrent_num;
-    for (size_t i = 0, task_start = 0; i < concurrent_num; i++)
+    for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
     {
         size_t task_end = task_start + task_per_thread;
         if (i < rest_task)
@@ -993,7 +995,7 @@ void DAGStorageInterpreter::buildRemoteRequests()
             *context.getDAGContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
-            pushed_down_filter_id,
+            pushed_down_filter_executor_id,
             pushed_down_conditions,
             log));
     }

@@ -49,7 +49,7 @@ public:
     DAGStorageInterpreter(
         Context & context_,
         const TiDBTableScan & table_scan,
-        const String & pushed_down_filter_id_,
+        const String & pushed_down_filter_executor_id_,
         const std::vector<const tipb::Expr *> & pushed_down_conditions_,
         size_t max_streams_);
 
@@ -114,7 +114,7 @@ private:
 
     Context & context;
     const TiDBTableScan & table_scan;
-    const String & pushed_down_filter_id;
+    const String & pushed_down_filter_executor_id;
     const std::vector<const tipb::Expr *> & pushed_down_conditions;
     size_t max_streams;
     LoggerPtr log;
