@@ -36,7 +36,7 @@ extern const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
 
 const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
-TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
+TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config, TiDB::NodeRole role_)
     : context(context_)
     , kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
     , region_table(context)
@@ -53,6 +53,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
               context.getSettingsRef().task_scheduler_thread_soft_limit,
               context.getSettingsRef().task_scheduler_thread_hard_limit)))
     , engine(raft_config.engine)
+    , role(role_)
     , disable_bg_flush(raft_config.disable_bg_flush)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)

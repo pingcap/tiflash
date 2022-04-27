@@ -34,6 +34,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -51,6 +52,7 @@ extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_with_alter_locks_acquired[];
 extern const char force_remote_read_for_batch_cop[];
 extern const char pause_after_copr_streams_acquired[];
+extern const char force_role_read_node[];
 } // namespace FailPoints
 
 namespace
@@ -232,6 +234,8 @@ DAGStorageInterpreter::DAGStorageInterpreter(
             fmt::format("Dag Request does not have region to read for table: {}", logical_table_id),
             Errors::Coprocessor::BadRequest);
     }
+    is_read_node = tmt.getRole() == TiDB::NodeRole::ReadNode;
+    fiu_do_on(FailPoints::force_role_read_node, { is_read_node = true; });
 }
 
 // Apply learner read to ensure we can get strong consistent with TiKV Region
@@ -247,7 +251,9 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
+    {
         buildLocalStreams(pipeline, settings.max_block_size);
+    }
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
@@ -310,27 +316,56 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 void DAGStorageInterpreter::prepare()
 {
-    // About why we do learner read before acquiring structure lock on Storage(s).
-    // Assume that:
-    // 1. Read threads do learner read and wait for the Raft applied index with holding a read lock
-    // on "alter lock" of an IStorage X
-    // 2. Raft threads try to decode data for Region in the same IStorage X, and find it need to
-    // apply DDL operations which acquire write lock on "alter locks"
-    // Under this situation, all Raft threads will be stuck by the read threads, but read threads
-    // wait for Raft threads to push forward the applied index. Deadlocks happens!!
-    // So we must do learner read without structure lock on IStorage. After learner read, acquire the
-    // structure lock of IStorage(s) (to avoid concurrent issues between read threads and DDL
-    // operations) and build the requested inputstreams. Once the inputstreams build, we should release
-    // the alter lock to avoid blocking DDL operations.
-    // TODO: If we can acquire a read-only view on the IStorage structure (both `ITableDeclaration`
-    // and `TiDB::TableInfo`) we may get this process more simplified. (tiflash/issues/1853)
-
-    // Do learner read
-    const DAGContext & dag_context = *context.getDAGContext();
-    if (dag_context.isBatchCop() || dag_context.isMPPTask())
-        learner_read_snapshot = doBatchCopLearnerRead();
+    if (is_read_node)
+    {
+        const DAGContext & dag_context = *context.getDAGContext();
+        // For read node, there is no local Region. It build requested to write node for all requested Regions.
+        // (We don't need to apply learner read on read node, it is done by write node when building inputstreams.)
+        size_t num_read_tasks = 0;
+        TablesRegionInfoMap regions_to_read;
+        for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
+        {
+            for (const auto & [id, r] : dag_context.getTableRegionsInfoByTableID(physical_table_id).local_regions)
+            {
+                if (r.key_ranges.empty())
+                {
+                    throw TiFlashException(
+                        fmt::format("Income key ranges is empty for region: {}", r.region_id),
+                        Errors::Coprocessor::BadRequest);
+                }
+                region_retry_from_local_region.emplace_back(r);
+                num_read_tasks += 1;
+            }
+        }
+        LOG_FMT_INFO(log, "read role build {} tasks", num_read_tasks);
+    }
     else
-        learner_read_snapshot = doCopLearnerRead();
+    {
+        // For write node, apply learner read to ensure we can get strong consistent with TiKV Region
+        // leaders. If the local regions do not match the requested regions, then
+
+        // About why we do learner read before acquiring structure lock on Storage(s).
+        // Assume that:
+        // 1. Read threads do learner read and wait for the Raft applied index with holding a read lock
+        // on "alter lock" of an IStorage X
+        // 2. Raft threads try to decode data for Region in the same IStorage X, and find it need to
+        // apply DDL operations which acquire write lock on "alter locks"
+        // Under this situation, all Raft threads will be stuck by the read threads, but read threads
+        // wait for Raft threads to push forward the applied index. Deadlocks happens!!
+        // So we must do learner read without structure lock on IStorage. After learner read, acquire the
+        // structure lock of IStorage(s) (to avoid concurrent issues between read threads and DDL
+        // operations) and build the requested inputstreams. Once the inputstreams build, we should release
+        // the alter lock to avoid blocking DDL operations.
+        // TODO: If we can acquire a read-only view on the IStorage structure (both `ITableDeclaration`
+        // and `TiDB::TableInfo`) we may get this process more simplified. (tiflash/issues/1853)
+
+        // Do learner read
+        const DAGContext & dag_context = *context.getDAGContext();
+        if (dag_context.isBatchCop() || dag_context.isMPPTask())
+            learner_read_snapshot = doBatchCopLearnerRead();
+        else
+            learner_read_snapshot = doCopLearnerRead();
+    }
 
     // Acquire read lock on `alter lock` and build the requested inputstreams
     storages_with_structure_lock = getAndLockStorages(settings.schema_version);
@@ -1016,10 +1051,14 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         if (retry_regions.empty())
             continue;
 
-        // Append the region into DAGContext to return them to the upper layer.
-        // The upper layer should refresh its cache about these regions.
-        for (const auto & r : retry_regions)
-            context.getDAGContext()->retry_regions.push_back(r.get());
+        if (!is_read_node)
+        {
+            // For write node, append the region into DAGContext to return them to the upper layer.
+            // The upper layer should refresh its cache about these regions.
+            for (const auto & r : retry_regions)
+                context.getDAGContext()->retry_regions.push_back(r.get());
+        }
+        // else for read node, we don't need to return region error to the upper layer now.
 
         remote_requests.push_back(RemoteRequest::build(
             retry_regions,

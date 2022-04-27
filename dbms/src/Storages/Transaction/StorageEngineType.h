@@ -39,7 +39,7 @@ enum class SnapshotApplyMethod : std::int32_t
     DTFile_Single,
 };
 
-inline const std::string applyMethodToString(SnapshotApplyMethod method)
+inline std::string applyMethodToString(SnapshotApplyMethod method)
 {
     switch (method)
     {
@@ -54,5 +54,11 @@ inline const std::string applyMethodToString(SnapshotApplyMethod method)
     }
     return "unknown";
 }
+
+enum class NodeRole
+{
+    WriteNode,
+    ReadNode,
+};
 
 } // namespace TiDB

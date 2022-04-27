@@ -1455,12 +1455,12 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     return *shared->blockable_background_pool;
 }
 
-void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
+void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config, TiDB::NodeRole role)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config, role);
 }
 
 void Context::initializePathCapacityMetric( //

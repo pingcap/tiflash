@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
@@ -151,6 +152,56 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     LOG_FMT_INFO(log, "Default storage engine [type={}] [snapshot.method={}]", static_cast<Int64>(res.engine), applyMethodToString(res.snapshot_apply_method));
 
     return res;
+}
+
+TiFlashProxyConfig::TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
+{
+    if (!config.has(config_prefix))
+        return;
+
+    Poco::Util::AbstractConfiguration::Keys keys;
+    config.keys(config_prefix, keys);
+    {
+        std::unordered_map<std::string, std::string> args_map;
+        for (const auto & key : keys)
+        {
+            const auto k = config_prefix + "." + key;
+            args_map[key] = config.getString(k);
+        }
+        args_map[pd_endpoints] = config.getString("raft.pd_addr");
+        args_map[engine_store_version] = TiFlashBuildInfo::getReleaseVersion();
+        args_map[engine_store_git_hash] = TiFlashBuildInfo::getGitHash();
+        if (args_map.count(engine_store_address) == 0)
+            args_map[engine_store_address] = config.getString("flash.service_addr");
+        else
+            args_map[engine_store_advertise_address] = args_map[engine_store_address];
+        if (args_map.count(engine_label) == 0)
+        {
+            role = TiDB::NodeRole::WriteNode;
+            args_map[engine_label] = default_engine_label_value;
+        }
+        else
+        {
+            // TODO: validate the value of engine label
+            if (args_map[engine_label] == default_engine_label_value)
+                role = TiDB::NodeRole::WriteNode;
+            else
+                role = TiDB::NodeRole::ReadNode;
+        }
+
+        for (auto && [k, v] : args_map)
+        {
+            val_map.emplace("--" + k, std::move(v));
+        }
+    }
+
+    args.push_back("TiFlash Proxy");
+    for (const auto & v : val_map)
+    {
+        args.push_back(v.first.data());
+        args.push_back(v.second.data());
+    }
+    is_proxy_runnable = true;
 }
 
 } // namespace DB

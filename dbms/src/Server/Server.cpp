@@ -224,71 +224,11 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
-struct TiFlashProxyConfig
-{
-    static const std::string config_prefix;
-    std::vector<const char *> args;
-    std::unordered_map<std::string, std::string> val_map;
-    bool is_proxy_runnable = false;
-
-    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
-    const String engine_store_version = "engine-version";
-    const String engine_store_git_hash = "engine-git-hash";
-    const String engine_store_address = "engine-addr";
-    const String engine_store_advertise_address = "advertise-engine-addr";
-    const String pd_endpoints = "pd-endpoints";
-    const String engine_label = "engine-label";
-    const String default_engine_label_value = "tiflash";
-
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
-    {
-        if (!config.has(config_prefix))
-            return;
-
-        Poco::Util::AbstractConfiguration::Keys keys;
-        config.keys(config_prefix, keys);
-        {
-            std::unordered_map<std::string, std::string> args_map;
-            for (const auto & key : keys)
-            {
-                const auto k = config_prefix + "." + key;
-                args_map[key] = config.getString(k);
-            }
-            args_map[pd_endpoints] = config.getString("raft.pd_addr");
-            args_map[engine_store_version] = TiFlashBuildInfo::getReleaseVersion();
-            args_map[engine_store_git_hash] = TiFlashBuildInfo::getGitHash();
-            if (!args_map.count(engine_store_address))
-                args_map[engine_store_address] = config.getString("flash.service_addr");
-            else
-                args_map[engine_store_advertise_address] = args_map[engine_store_address];
-            if (args_map.find(engine_label) == args_map.end())
-            {
-                args_map[engine_label] = default_engine_label_value;
-            }
-
-            for (auto && [k, v] : args_map)
-            {
-                val_map.emplace("--" + k, std::move(v));
-            }
-        }
-
-        args.push_back("TiFlash Proxy");
-        for (const auto & v : val_map)
-        {
-            args.push_back(v.first.data());
-            args.push_back(v.second.data());
-        }
-        is_proxy_runnable = true;
-    }
-};
-
-const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
-
 pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
 {
     pingcap::ClusterConfig config;
     config.tiflash_engine_key = raft_config.engine_key;
-    config.tiflash_engine_value = raft_config.engine_value;
+    config.tiflash_engine_value = raft_config.engine_value; // TODO: figure out what does it use for?
     config.ca_path = security_config.ca_path;
     config.cert_path = security_config.cert_path;
     config.key_path = security_config.key_path;
@@ -1307,8 +1247,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
+        const auto role = proxy_conf.role;
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(raft_config, std::move(cluster_config));
+        global_context->createTMTContext(raft_config, std::move(cluster_config), role);
         global_context->getTMTContext().reloadConfig(config());
     }
 

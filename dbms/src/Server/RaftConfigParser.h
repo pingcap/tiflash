@@ -16,6 +16,7 @@
 #include <Core/Types.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
+#include <unordered_map>
 #include <unordered_set>
 
 namespace Poco
@@ -48,6 +49,27 @@ public:
     TiFlashRaftConfig() = default;
 
     static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+};
+
+
+struct TiFlashProxyConfig
+{
+    std::vector<const char *> args;
+    std::unordered_map<std::string, std::string> val_map;
+    bool is_proxy_runnable = false;
+    TiDB::NodeRole role = TiDB::NodeRole::WriteNode;
+
+    const String config_prefix = "flash.proxy";
+    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
+    const String engine_store_version = "engine-version";
+    const String engine_store_git_hash = "engine-git-hash";
+    const String engine_store_address = "engine-addr";
+    const String engine_store_advertise_address = "advertise-engine-addr";
+    const String pd_endpoints = "pd-endpoints";
+    const String engine_label = "engine-label";
+    const String default_engine_label_value = "tiflash";
+
+    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config);
 };
 
 } // namespace DB

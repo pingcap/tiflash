@@ -71,7 +71,7 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
     raft_config.ignore_databases = {"default", "system"};
     raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.disable_bg_flush = true;
-    global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
+    global_context->createTMTContext(raft_config, pingcap::ClusterConfig(), TiDB::NodeRole::WriteNode);
 
     if (global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), enable_ps_v3))
         LOG_FMT_INFO(&Poco::Logger::get("TiFlashTestEnv"), "PageStorage V3 enabled.");
