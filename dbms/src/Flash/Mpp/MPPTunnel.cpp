@@ -95,14 +95,14 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         }
         LOG_FMT_TRACE(log, "waiting consumer finish!");
         waitForConsumerFinish(/*allow_throw=*/false);
+        LOG_FMT_TRACE(log, "waiting child thread finished!");
+        thread_manager->wait();
+        LOG_FMT_TRACE(log, "destructed tunnel obj!");
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
-    LOG_FMT_TRACE(log, "waiting child thread finished!");
-    thread_manager->wait();
-    LOG_FMT_TRACE(log, "destructed tunnel obj!");
 }
 
 template <typename Writer>
