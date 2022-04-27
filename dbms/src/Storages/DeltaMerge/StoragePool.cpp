@@ -112,15 +112,12 @@ void GlobalStoragePool::restore()
 
 bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
-    {
-        std::lock_guard lock(mutex);
+    // No need lock
+    Timepoint now = Clock::now();
+    if (now < (last_try_gc_time.load() + try_gc_period))
+        return false;
 
-        Timepoint now = Clock::now();
-        if (now < (last_try_gc_time.load() + try_gc_period))
-            return false;
-
-        last_try_gc_time = now;
-    }
+    last_try_gc_time = now;
 
     bool done_anything = false;
     auto write_limiter = global_context.getWriteLimiter();

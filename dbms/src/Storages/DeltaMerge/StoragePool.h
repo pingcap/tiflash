@@ -60,8 +60,6 @@ private:
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
-    std::mutex mutex;
-
     Context & global_context;
     BackgroundProcessingPool::TaskHandle gc_handle;
 };
