@@ -15,9 +15,15 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/FilterBlockInputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
+#include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -33,6 +39,7 @@ extern const char region_exception_after_read_from_storage_some_error[];
 extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_after_learner_read[];
 extern const char force_remote_read_for_batch_cop[];
+extern const char pause_after_copr_streams_acquired[];
 } // namespace FailPoints
 
 namespace
@@ -127,18 +134,96 @@ MakeRegionQueryInfos(
         return std::make_tuple(std::move(region_need_retry), status_res);
 }
 
+bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table_scan)
+{
+    bool has_region_to_read = false;
+    for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
+    {
+        const auto & table_regions_info = dag_context.getTableRegionsInfoByTableID(physical_table_id);
+        if (!table_regions_info.local_regions.empty() || !table_regions_info.remote_regions.empty())
+        {
+            has_region_to_read = true;
+            break;
+        }
+    }
+    return has_region_to_read;
+}
+
+bool schemaMatch(const DAGSchema & left, const DAGSchema & right)
+{
+    if (left.size() != right.size())
+        return false;
+    for (size_t i = 0; i < left.size(); i++)
+    {
+        const auto & left_ci = left[i];
+        const auto & right_ci = right[i];
+        if (left_ci.second.tp != right_ci.second.tp)
+            return false;
+        if (left_ci.second.flag != right_ci.second.flag)
+            return false;
+    }
+    return true;
+}
+
+void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
+{
+    const Settings & settings = context.getSettingsRef();
+
+    IProfilingBlockInputStream::LocalLimits limits;
+    limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
+    limits.size_limits = SizeLimits(settings.max_rows_to_read, settings.max_bytes_to_read, settings.read_overflow_mode);
+    limits.max_execution_time = settings.max_execution_time;
+    limits.timeout_overflow_mode = settings.timeout_overflow_mode;
+
+    /** Quota and minimal speed restrictions are checked on the initiating server of the request, and not on remote servers,
+          *  because the initiating server has a summary of the execution of the request on all servers.
+          *
+          * But limits on data size to read and maximum execution time are reasonable to check both on initiator and
+          *  additionally on each remote server, because these limits are checked per block of data processed,
+          *  and remote servers may process way more blocks of data than are received by initiator.
+          */
+    limits.min_execution_speed = settings.min_execution_speed;
+    limits.timeout_before_checking_execution_speed = settings.timeout_before_checking_execution_speed;
+
+    QuotaForIntervals & quota = context.getQuota();
+
+    pipeline.transform([&](auto & stream) {
+        if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        {
+            p_stream->setLimits(limits);
+            p_stream->setQuota(quota);
+        }
+    });
+}
+
+// add timezone cast for timestamp type, this is used to support session level timezone
+bool addExtraCastsAfterTs(
+    DAGExpressionAnalyzer & analyzer,
+    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
+    ExpressionActionsChain & chain,
+    const TiDBTableScan & table_scan)
+{
+    bool has_need_cast_column = false;
+    for (auto b : need_cast_column)
+    {
+        has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
+    }
+    if (!has_need_cast_column)
+        return false;
+    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
+}
 } // namespace
 
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
-    const DAGQueryBlock & query_block_,
     const TiDBTableScan & table_scan_,
-    const std::vector<const tipb::Expr *> & conditions_,
+    const String & pushed_down_filter_id_,
+    const std::vector<const tipb::Expr *> & pushed_down_conditions_,
     size_t max_streams_)
     : context(context_)
-    , query_block(query_block_)
     , table_scan(table_scan_)
-    , conditions(conditions_)
+    , pushed_down_filter_id(pushed_down_filter_id_)
+    , pushed_down_conditions(pushed_down_conditions_)
     , max_streams(max_streams_)
     , log(Logger::get("DAGStorageInterpreter", context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
@@ -146,9 +231,85 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , tmt(context.getTMTContext())
     , mvcc_query_info(new MvccQueryInfo(true, settings.read_tso))
 {
+    if (!hasRegionToRead(dagContext(), table_scan))
+    {
+        throw TiFlashException(
+            fmt::format("Dag Request does not have region to read for table: {}", logical_table_id),
+            Errors::Coprocessor::BadRequest);
+    }
+
+    RUNTIME_ASSERT(
+        pushed_down_conditions.empty() == pushed_down_filter_id.empty(),
+        log,
+        "sel_conditions and sel_executor_id should both be empty or neither should be empty");
 }
 
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
+{
+    prepare();
+
+    executeImpl(pipeline);
+}
+
+void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
+{
+    if (!mvcc_query_info->regions_query_info.empty())
+        doLocalRead(pipeline, settings.max_block_size);
+
+    null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
+
+    // Should build these vars under protect of `table_structure_lock`.
+    buildRemoteRequests();
+
+    releaseAlterLocks();
+
+    // It is impossible to have no joined stream.
+    assert(pipeline.streams_with_non_joined_data.empty());
+    // after executeRemoteQuery, remote read stream will be appended in pipeline.streams.
+    size_t remote_read_streams_start_index = pipeline.streams.size();
+
+    // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
+    if (!remote_requests.empty())
+        executeRemoteQuery(pipeline);
+
+    /// record local and remote io input stream
+    auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
+    pipeline.transform([&](auto & stream) { table_scan_io_input_streams.push_back(stream); });
+
+    if (pipeline.streams.empty())
+    {
+        pipeline.streams.emplace_back(null_stream_if_empty);
+        // reset remote_read_streams_start_index for null_stream_if_empty.
+        remote_read_streams_start_index = 1;
+    }
+
+    /// We don't wants to the table to be dropped during the lifetime of this query,
+    /// and sometimes if there is no local region, we will use the RemoteBlockInputStream
+    /// or even the null_stream to hold the lock.
+    pipeline.transform([&](auto & stream) {
+        // todo do not need to hold all locks in each stream, if the stream is reading from table a
+        //  it only needs to hold the lock of table a
+        for (auto & lock : drop_locks)
+            stream->addTableLock(lock);
+    });
+
+    /// Set the limits and quota for reading data, the speed and time of the query.
+    setQuotaAndLimitsOnTableScan(context, pipeline);
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+
+    /// handle timezone/duration cast for local and remote table scan.
+    executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
+    recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
+
+    /// handle pushed down filter for local and remote table scan.
+    if (!pushed_down_conditions.empty())
+    {
+        executePushedDownFilter(remote_read_streams_start_index, pipeline);
+        recordProfileStreams(pipeline, pushed_down_filter_id);
+    }
+}
+
+void DAGStorageInterpreter::prepare()
 {
     const DAGContext & dag_context = *context.getDAGContext();
     if (dag_context.isBatchCop() || dag_context.isMPPTask())
@@ -165,16 +326,149 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
+}
 
-    if (!mvcc_query_info->regions_query_info.empty())
-        doLocalRead(pipeline, settings.max_block_size);
+void DAGStorageInterpreter::executePushedDownFilter(
+    size_t remote_read_streams_start_index,
+    DAGPipeline & pipeline)
+{
+    ExpressionActionsChain chain;
+    analyzer->initChain(chain, analyzer->getCurrentInputColumns());
+    String filter_column_name = analyzer->appendWhere(chain, pushed_down_conditions);
+    ExpressionActionsPtr before_where = chain.getLastActions();
+    chain.addStep();
 
-    null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
+    // remove useless tmp column and keep the schema of local streams and remote streams the same.
+    NamesWithAliases project_cols;
+    for (const auto & col : analyzer->getCurrentInputColumns())
+    {
+        chain.getLastStep().required_output.push_back(col.name);
+        project_cols.emplace_back(col.name, col.name);
+    }
+    chain.getLastActions()->add(ExpressionAction::project(project_cols));
+    ExpressionActionsPtr project_after_where = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
 
-    // Should build these vars under protect of `table_structure_lock`.
-    buildRemoteRequests();
+    assert(pipeline.streams_with_non_joined_data.empty());
+    assert(remote_read_streams_start_index <= pipeline.streams.size());
+    // for remote read, filter had been pushed down, don't need to execute again.
+    for (size_t i = 0; i < remote_read_streams_start_index; ++i)
+    {
+        auto & stream = pipeline.streams[i];
+        stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
+        // after filter, do project action to keep the schema of local streams and remote streams the same.
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
+    }
+}
 
-    releaseAlterLocks();
+void DAGStorageInterpreter::executeCastAfterTableScan(
+    size_t remote_read_streams_start_index,
+    DAGPipeline & pipeline)
+{
+    auto original_source_columns = analyzer->getCurrentInputColumns();
+
+    ExpressionActionsChain chain;
+    analyzer->initChain(chain, original_source_columns);
+
+    // execute timezone cast or duration cast if needed for local table scan
+    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, table_scan))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        chain.finalize();
+        chain.clear();
+
+        // After `addExtraCastsAfterTs`, analyzer->getCurrentInputColumns() has been modified.
+        // For remote read, `timezone cast and duration cast` had been pushed down, don't need to execute cast expressions.
+        // To keep the schema of local read streams and remote read streams the same, do project action for remote read streams.
+        NamesWithAliases project_for_remote_read;
+        const auto & after_cast_source_columns = analyzer->getCurrentInputColumns();
+        for (size_t i = 0; i < after_cast_source_columns.size(); ++i)
+        {
+            project_for_remote_read.emplace_back(original_source_columns[i].name, after_cast_source_columns[i].name);
+        }
+        assert(!project_for_remote_read.empty());
+        assert(pipeline.streams_with_non_joined_data.empty());
+        assert(remote_read_streams_start_index <= pipeline.streams.size());
+        size_t i = 0;
+        // local streams
+        while (i < remote_read_streams_start_index)
+        {
+            auto & stream = pipeline.streams[i++];
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+        }
+        // remote streams
+        if (i < pipeline.streams.size())
+        {
+            ExpressionActionsPtr project_for_cop_read = generateProjectExpressionActions(
+                pipeline.streams[i],
+                context,
+                project_for_remote_read);
+            while (i < pipeline.streams.size())
+            {
+                auto & stream = pipeline.streams[i++];
+                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
+            }
+        }
+    }
+}
+
+void DAGStorageInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
+{
+    assert(!remote_requests.empty());
+    DAGSchema & schema = remote_requests[0].schema;
+#ifndef NDEBUG
+    for (size_t i = 1; i < remote_requests.size(); ++i)
+    {
+        if (!schemaMatch(schema, remote_requests[i].schema))
+            throw Exception("Schema mismatch between different partitions for partition table");
+    }
+#endif
+    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
+    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+    std::vector<pingcap::coprocessor::copTask> all_tasks;
+    for (const auto & remote_request : remote_requests)
+    {
+        pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
+        remote_request.dag_request.SerializeToString(&(req->data));
+        req->tp = pingcap::coprocessor::ReqType::DAG;
+        req->start_ts = context.getSettingsRef().read_tso;
+        req->schema_version = context.getSettingsRef().schema_version;
+
+        pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+        pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
+        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+        all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
+    }
+
+    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
+    size_t task_per_thread = all_tasks.size() / concurrent_num;
+    size_t rest_task = all_tasks.size() % concurrent_num;
+    for (size_t i = 0, task_start = 0; i < concurrent_num; i++)
+    {
+        size_t task_end = task_start + task_per_thread;
+        if (i < rest_task)
+            task_end++;
+        if (task_end == task_start)
+            continue;
+        std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+
+        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID());
+        pipeline.streams.push_back(input);
+        task_start = task_end;
+    }
+}
+
+DAGContext & DAGStorageInterpreter::dagContext() const
+{
+    return *context.getDAGContext();
+}
+
+void DAGStorageInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
+{
+    auto & profile_streams = dagContext().getProfileStreamsMap()[key];
+    pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
 }
 
 LearnerReadSnapshot DAGStorageInterpreter::doCopLearnerRead()
@@ -266,7 +560,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         /// to avoid null point exception
         query_info.query = makeDummyQuery();
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            conditions,
+            pushed_down_conditions,
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
@@ -672,7 +966,6 @@ void DAGStorageInterpreter::buildRemoteRequests()
         retry_regions_map[region_id_to_table_id_map[r.get().region_id]].emplace_back(r);
     }
 
-
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & retry_regions = retry_regions_map[physical_table_id];
@@ -687,7 +980,8 @@ void DAGStorageInterpreter::buildRemoteRequests()
             *context.getDAGContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
-            query_block.selection,
+            pushed_down_filter_id,
+            pushed_down_conditions,
             log));
     }
 }

@@ -79,4 +79,17 @@ void executeUnion(
         pipeline.streams.push_back(non_joined_data_stream);
     }
 }
+
+ExpressionActionsPtr generateProjectExpressionActions(
+    const BlockInputStreamPtr & stream,
+    const Context & context,
+    const NamesWithAliases & project_cols)
+{
+    NamesAndTypesList input_column;
+    for (const auto & column : stream->getHeader())
+        input_column.emplace_back(column.name, column.type);
+    ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
+    project->add(ExpressionAction::project(project_cols));
+    return project;
+}
 } // namespace DB

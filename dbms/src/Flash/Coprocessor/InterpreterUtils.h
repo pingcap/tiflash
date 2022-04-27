@@ -35,4 +35,9 @@ void executeUnion(
     size_t max_streams,
     const LoggerPtr & log,
     bool ignore_block = false);
+
+ExpressionActionsPtr generateProjectExpressionActions(
+    const BlockInputStreamPtr & stream,
+    const Context & context,
+    const NamesWithAliases & project_cols);
 } // namespace DB
