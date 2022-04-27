@@ -338,7 +338,8 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
 
     auto columns = getColumnsForTableScan(table_scan);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(columns.second), context);
-    for (size_t i = 0; i < context.getDAGContext()->mockTableScanStreams(); ++i)
+    auto mock_table_scan_streams = context.getDAGContext()->mockTableScanStreams();
+    for (size_t i = 0; i < mock_table_scan_streams; ++i)
     {
         auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(std::get<0>(columns), context.getSettingsRef().max_block_size);
         pipeline.streams.emplace_back(mock_table_scan_stream);
@@ -348,12 +349,12 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
     /// handle timezone/duration cast for local and remote table scan. ywq todo check..
     DAGStorageInterpreter storage_interpreter(context, query_block, table_scan, conditions, max_streams);
-    executeCastAfterTableScan(table_scan, storage_interpreter.is_need_add_cast_column, context.getDAGContext()->mockTableScanStreams(), pipeline);
+    executeCastAfterTableScan(table_scan, storage_interpreter.is_need_add_cast_column, mock_table_scan_streams, pipeline);
     recordProfileStreams(pipeline, query_block.source_name);
     /// handle pushed down filter for local and remote table scan.
     if (query_block.selection)
     {
-        executePushedDownFilter(conditions, 1, pipeline);
+        executePushedDownFilter(conditions, mock_table_scan_streams, pipeline);
         recordProfileStreams(pipeline, query_block.selection_name);
     }
 }

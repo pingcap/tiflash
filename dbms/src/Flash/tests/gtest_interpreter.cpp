@@ -50,12 +50,10 @@ try
                           "   Expression\n"
                           "    Filter\n"
                           "     ParallelAggregating\n"
-                          "      Expression\n"
+                          "      Expression x 10\n"
                           "       Expression\n"
                           "        Filter\n"
-                          "         MockTableScan\n"
-                          "      Expression x 9\n"
-                          "       MockTableScan\n";
+                          "         MockTableScan\n";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
 }
