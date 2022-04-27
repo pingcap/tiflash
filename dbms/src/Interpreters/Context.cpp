@@ -1620,7 +1620,6 @@ void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
 {
     auto lock = getLock();
-    std::cout << "path_pool_v3 addr2 : " << &path_pool << std::endl;
     if (shared->global_storage_pool)
     {
         // Can't init GlobalStoragePool twice.
