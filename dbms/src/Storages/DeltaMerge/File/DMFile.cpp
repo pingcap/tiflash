@@ -579,8 +579,9 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
         auto recheck = [&](size_t size) {
             if (this->configuration)
             {
-                auto frame_count = size / this->configuration->getChecksumFrameLength()
-                    + (0 != size % this->configuration->getChecksumFrameLength());
+                auto total_size = this->configuration->getChecksumFrameLength() + this->configuration->getChecksumHeaderLength();
+                auto frame_count = size / total_size
+                    + (0 != size % total_size);
                 size -= frame_count * this->configuration->getChecksumHeaderLength();
             }
             return size;
