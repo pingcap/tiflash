@@ -13,24 +13,42 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Interpreters/executeQuery.h>
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/executorSerializer.h>
-
 namespace DB::tests
 {
-DAGContext & MockExecutorTest::getDAGContext()
+// not necessary...
+// void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context)
+// {
+//     DAGContext dag_context(*request);
+//     dag_context.log = Logger::get("interpreterTest");
+//     dag_context.setIsInterpreterTest(true);
+//     dag_context.setMockTableScanStreams(10);
+//     context.setDAGContext(&dag_context);
+//     // Currently, don't care about regions information in interpreter tests.
+//     DAGQuerySource dag(context);
+//     auto res = executeQuery(dag, context, false, QueryProcessingStage::Complete);
+//     FmtBuffer fb;
+//     res.in->dumpTree(fb);
+//     std::cout << fb.toString() << std::endl;
+// }
+
+DAGContext & InterpreterTest::getDAGContext()
 {
     assert(dag_context_ptr != nullptr);
     return *dag_context_ptr;
 }
 
-void MockExecutorTest::initializeContext()
+void InterpreterTest::initializeContext()
 {
     dag_context_ptr = std::make_unique<DAGContext>(1024);
     context = MockDAGRequestContext(TiFlashTestEnv::getContext());
+    dag_context_ptr->log = Logger::get("interpreterTest");
 }
 
-void MockExecutorTest::SetUpTestCase()
+void InterpreterTest::SetUpTestCase()
 {
     try
     {
@@ -43,8 +61,34 @@ void MockExecutorTest::SetUpTestCase()
     }
 }
 
-void MockExecutorTest::dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
+void InterpreterTest::initializeClientInfo()
 {
-    ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
+    context.context.setCurrentQueryId("test");
+    ClientInfo & client_info = context.context.getClientInfo();
+    client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+    client_info.interface = ClientInfo::Interface::GRPC;
 }
+
+void InterpreterTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request)
+{
+    DAGContext dag_context(*request);
+    dag_context.log = Logger::get("interpreterTest");
+    dag_context.setIsInterpreterTest(true);
+    dag_context.setMockTableScanStreams(10);
+    // todo change the code here.
+    context.context.setDAGContext(&dag_context);
+    // Currently, don't care about regions information in interpreter tests.
+    DAGQuerySource dag(context.context);
+    auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
+    FmtBuffer fb;
+    res.in->dumpTree(fb);
+    std::cout << fb.toString() << std::endl;
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
+}
+
+void InterpreterTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
+{
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
+}
+
 } // namespace DB::tests

@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -57,6 +58,7 @@ public:
 private:
 #endif
     void executeImpl(DAGPipeline & pipeline);
+    void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void executeCastAfterTableScan(
         const TiDBTableScan & table_scan,

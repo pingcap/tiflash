@@ -46,6 +46,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <TestUtils/MockTableScanBlockInputStream.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
@@ -296,6 +297,63 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     if (query_block.selection)
     {
         executePushedDownFilter(conditions, remote_read_streams_start_index, pipeline);
+        recordProfileStreams(pipeline, query_block.selection_name);
+    }
+}
+
+std::pair<std::vector<ColumnWithTypeAndName>, std::vector<NameAndTypePair>> getColumnsForTableScan(
+    const TiDBTableScan & table_scan)
+{
+    std::vector<ColumnWithTypeAndName> columms;
+    std::vector<NameAndTypePair> names_and_types;
+    TiDB::TableInfo table_info;
+    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
+    {
+        auto const & ci = table_scan.getColumns()[i];
+        TiDB::ColumnInfo column_info;
+        column_info.id = ci.column_id();
+        column_info.tp = TiDB::TypeString;
+        table_info.columns.push_back(column_info);
+    }
+    for (const auto & column : table_info.columns)
+    {
+        auto type = getDataTypeByColumnInfoForComputingLayer(column);
+        names_and_types.push_back({"test", type});
+        columms.push_back(ColumnWithTypeAndName(type, "test"));
+    }
+    return {columms, names_and_types};
+}
+
+// ywq todo
+void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
+{
+    // has table to read
+    // construct pushed down filter conditions.
+    std::vector<const tipb::Expr *> conditions;
+    if (query_block.selection)
+    {
+        for (const auto & condition : query_block.selection->selection().conditions())
+            conditions.push_back(&condition);
+    }
+
+    auto columns = getColumnsForTableScan(table_scan);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(columns.second), context);
+    for (size_t i = 0; i < context.getDAGContext()->mockTableScanStreams(); ++i)
+    {
+        auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(std::get<0>(columns), context.getSettingsRef().max_block_size);
+        pipeline.streams.emplace_back(mock_table_scan_stream);
+    }
+    /// Set the limits and quota for reading data, the speed and time of the query.
+    setQuotaAndLimitsOnTableScan(context, pipeline);
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+    /// handle timezone/duration cast for local and remote table scan. ywq todo check..
+    DAGStorageInterpreter storage_interpreter(context, query_block, table_scan, conditions, max_streams);
+    executeCastAfterTableScan(table_scan, storage_interpreter.is_need_add_cast_column, context.getDAGContext()->mockTableScanStreams(), pipeline);
+    recordProfileStreams(pipeline, query_block.source_name);
+    /// handle pushed down filter for local and remote table scan.
+    if (query_block.selection)
+    {
+        executePushedDownFilter(conditions, 1, pipeline);
         recordProfileStreams(pipeline, query_block.selection_name);
     }
 }
@@ -1042,7 +1100,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.isTableScanSource())
     {
         TiDBTableScan table_scan(query_block.source, dagContext());
-        handleTableScan(table_scan, pipeline);
+        if (context.getDAGContext()->isInterpreterTest())
+            handleMockTableScan(table_scan, pipeline);
+        else
+            handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeWindow)
@@ -1083,20 +1144,17 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block.qb_column_prefix,
         pipeline.streams.size());
     dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
-
     if (res.before_aggregation)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
     }
-
     if (res.before_having)
     {
         // execute having
         executeWhere(pipeline, res.before_having, res.having_column_name);
         recordProfileStreams(pipeline, query_block.having_name);
     }
-
     if (res.before_order_and_select)
     {
         executeExpression(pipeline, res.before_order_and_select);
@@ -1111,14 +1169,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // execute final project action
     executeProject(pipeline, final_project);
-
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
-
     restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender

@@ -26,30 +26,39 @@
 #include <TestUtils/mockExecutor.h>
 namespace DB::tests
 {
-class MockExecutorTest : public ::testing::Test
+void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
+class InterpreterTest : public ::testing::Test
 {
 protected:
     void SetUp() override
     {
         initializeContext();
+        initializeClientInfo();
     }
 
 public:
-    MockExecutorTest()
+    InterpreterTest()
         : context(TiFlashTestEnv::getContext())
     {}
     static void SetUpTestCase();
 
     virtual void initializeContext();
 
+    void initializeClientInfo();
+
     DAGContext & getDAGContext();
 
-    static void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
+    static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
+
+    void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request);
 
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
-#define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual(str, request);
+#define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
+#define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request) executeInterpreter((str), (request))
+
+// #define xxxx
 } // namespace DB::tests

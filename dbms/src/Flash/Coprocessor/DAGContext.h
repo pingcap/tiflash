@@ -275,6 +275,14 @@ public:
         return sql_mode & f;
     }
 
+    void setIsInterpreterTest(bool is_interpreter_test_) { is_interpreter_test = is_interpreter_test_; }
+
+    bool isInterpreterTest() const { return is_interpreter_test; }
+
+    void setMockTableScanStreams(UInt32 streams) { mock_table_scan_streams = streams; }
+
+    UInt32 mockTableScanStreams() const { return mock_table_scan_streams; }
+
     void cancelAllExchangeReceiver();
 
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
@@ -345,6 +353,9 @@ private:
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
+
+    bool is_interpreter_test = false; /// switch for interpreter unit test, do not use it in production.
+    UInt32 mock_table_scan_streams = 0; /// Used in interpreter unit test. Determine how many MockTableScanBlockInpustreams to generate.
 };
 
 } // namespace DB
