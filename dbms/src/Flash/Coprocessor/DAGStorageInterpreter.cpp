@@ -151,22 +151,6 @@ bool hasRegionToRead(const DAGContext & dag_context, const TiDBTableScan & table
     return has_region_to_read;
 }
 
-bool schemaMatch(const DAGSchema & left, const DAGSchema & right)
-{
-    if (left.size() != right.size())
-        return false;
-    for (size_t i = 0; i < left.size(); i++)
-    {
-        const auto & left_ci = left[i];
-        const auto & right_ci = right[i];
-        if (left_ci.second.tp != right_ci.second.tp)
-            return false;
-        if (left_ci.second.flag != right_ci.second.flag)
-            return false;
-    }
-    return true;
-}
-
 void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
 {
     const Settings & settings = context.getSettingsRef();
@@ -420,11 +404,21 @@ void DAGStorageInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
     assert(!remote_requests.empty());
     DAGSchema & schema = remote_requests[0].schema;
 #ifndef NDEBUG
-    for (size_t i = 1; i < remote_requests.size(); ++i)
-    {
-        if (!schemaMatch(schema, remote_requests[i].schema))
-            throw Exception("Schema mismatch between different partitions for partition table");
-    }
+    auto schema_match = [](const DAGSchema & left, const DAGSchema & right) {
+        if (left.size() != right.size())
+            return false;
+        for (size_t i = 0; i < left.size(); ++i)
+        {
+            const auto & left_ci = left[i];
+            const auto & right_ci = right[i];
+            if (left_ci.second.tp != right_ci.second.tp || left_ci.second.flag != right_ci.second.flag)
+                return false;
+        }
+        return true;
+    };
+
+    if (std::any_of(remote_requests.begin(), remote_requests.end(), [&schema, &schema_match](const auto & r) { return !schema_match(schema, r); }))
+        throw Exception("Schema mismatch between different partitions for partition table");
 #endif
     bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
