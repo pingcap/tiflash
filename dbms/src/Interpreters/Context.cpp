@@ -1600,6 +1600,7 @@ void Context::initializePageStorageMode(const PathPool & path_pool, bool enable_
     if (!enable_ps_v3)
     {
         shared->storage_run_mode = PageStorageRunMode::ONLY_V2;
+        return;
     }
 
     shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
