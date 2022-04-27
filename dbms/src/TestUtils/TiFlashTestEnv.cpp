@@ -68,16 +68,17 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
         true,
         global_context->getPathCapacity(),
         global_context->getFileProvider());
+
+    global_context->setPageStorageRunMode(enable_ps_v3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);
+    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    LOG_FMT_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
+
     TiFlashRaftConfig raft_config;
 
     raft_config.ignore_databases = {"default", "system"};
     raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.disable_bg_flush = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
-
-
-    global_context->setPageStorageRunMode(enable_ps_v3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);
-    LOG_FMT_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 

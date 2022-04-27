@@ -23,12 +23,30 @@
 namespace DB
 {
 using namespace DM;
-
+using namespace tests;
 namespace PS::V3::tests
 {
 class PageStorageMixedTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
+    static void SetUpTestCase()
+    {
+        auto path = TiFlashTestEnv::getTemporaryPath("PageStorageMixedTestV3Path");
+        dropDataOnDisk(path);
+        createIfNotExist(path);
+
+        std::vector<size_t> caps = {};
+        Strings paths = {path};
+
+        auto global_context = TiFlashTestEnv::getContext();
+
+        storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps), global_context.getFileProvider(), true);
+
+        global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
+        if (!global_context.getGlobalStoragePool())
+            global_context.initializeGlobalStoragePoolIfNeed(*storage_path_pool_v3);
+    }
+
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
@@ -36,19 +54,17 @@ public:
         createIfNotExist(path);
 
         auto global_context = DB::tests::TiFlashTestEnv::getContext();
-        file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
 
         std::vector<size_t> caps = {};
         Strings paths = {path};
 
-        cap_metrics = std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps);
-        storage_path_pool_v2 = std::make_unique<StoragePathPool>(Strings{path}, Strings{path}, "test", "t1", true, cap_metrics, file_provider);
+        PathCapacityMetricsPtr cap_metrics = std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps);
+        storage_path_pool_v2 = std::make_unique<StoragePathPool>(Strings{path}, Strings{path}, "test", "t1", true, cap_metrics, global_context.getFileProvider());
+
         global_context.setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
         storage_pool_v2 = std::make_unique<StoragePool>(global_context, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
 
-        storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, cap_metrics, file_provider, true);
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
-        global_context.initializeGlobalStoragePoolIfNeed(*storage_path_pool_v3);
         storage_pool_mix = std::make_unique<StoragePool>(global_context,
                                                          TEST_NAMESPACE_ID,
                                                          *storage_path_pool_v2,
@@ -56,7 +72,6 @@ public:
 
         reloadV2StoragePool();
     }
-
 
     PageStorageRunMode reloadMixedStoragePool()
     {
@@ -76,12 +91,8 @@ public:
     }
 
 protected:
-    FileProviderPtr file_provider;
-    PageStorage::Config config;
-    PathCapacityMetricsPtr cap_metrics;
-
     std::unique_ptr<StoragePathPool> storage_path_pool_v2;
-    std::unique_ptr<PathPool> storage_path_pool_v3;
+    static std::unique_ptr<PathPool> storage_path_pool_v3;
     std::unique_ptr<StoragePool> storage_pool_v2;
     std::unique_ptr<StoragePool> storage_pool_mix;
 
@@ -91,6 +102,8 @@ protected:
     PageReaderPtr page_reader_v2;
     PageReaderPtr page_reader_mix;
 };
+
+std::unique_ptr<PathPool> PageStorageMixedTest::storage_path_pool_v3 = nullptr;
 
 inline ::testing::AssertionResult getPageCompare(
     const char * /*buff_cmp_expr*/,
@@ -179,6 +192,13 @@ try
         reloadV2StoragePool();
         ASSERT_THROW(page_reader_v2->read(3), DB::Exception);
     }
+
+    {
+        // Revert v3
+        WriteBatch batch;
+        batch.delPage(3);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
 }
 CATCH
 
@@ -253,6 +273,14 @@ try
         ASSERT_EQ(page_maps[4].page_id, 4);
         ASSERT_EQ(page_maps[4].field_offsets.size(), 5);
     }
+
+    {
+        // Revert v3
+        WriteBatch batch;
+        batch.delPage(3);
+        batch.delPage(4);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
 }
 CATCH
 
@@ -319,6 +347,14 @@ try
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix);
         ASSERT_THROW(page_reader_mix_with_snap.read(4), DB::Exception);
     }
+
+    {
+        // Revert v3
+        WriteBatch batch;
+        batch.delPage(3);
+        batch.delPage(4);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
 }
 CATCH
 
@@ -374,45 +410,46 @@ try
     {
         WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
+        batch.putPage(7, 0, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(2, 0, buff, buf_sz, {20, 120, 400, 200, 15, 75, 170, 24});
+        batch.putPage(8, 0, buff, buf_sz, {20, 120, 400, 200, 15, 75, 170, 24});
         page_writer_v2->write(std::move(batch), nullptr);
     }
 
     {
         ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
-        const auto & entry = page_reader_mix->getPageEntry(2);
+        const auto & entry = page_reader_mix->getPageEntry(8);
         ASSERT_EQ(entry.field_offsets.size(), 8);
     }
 
     {
         WriteBatch batch;
-        batch.putRefPage(3, 1);
-        ASSERT_NO_THROW(page_writer_mix->write(std::move(batch), nullptr));
-        ASSERT_EQ(page_reader_mix->getNormalPageId(3), 1);
+        batch.putRefPage(9, 7);
+        // ASSERT_NO_THROW(page_writer_mix->write(std::move(batch), nullptr));
+        page_writer_mix->write(std::move(batch), nullptr);
+        ASSERT_EQ(page_reader_mix->getNormalPageId(9), 7);
     }
 
     reloadV2StoragePool();
-    ASSERT_THROW(page_reader_v2->read(3), DB::Exception);
+    ASSERT_THROW(page_reader_v2->read(9), DB::Exception);
 
     {
         WriteBatch batch;
-        batch.putRefPage(4, 2);
+        batch.putRefPage(10, 8);
 
         ASSERT_NO_THROW(page_writer_mix->write(std::move(batch), nullptr));
-        ASSERT_EQ(page_reader_mix->getNormalPageId(4), 2);
+        ASSERT_EQ(page_reader_mix->getNormalPageId(10), 8);
 
         std::vector<PageStorage::PageReadFields> read_fields;
-        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(4, {0, 1, 2, 6}));
+        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(10, {0, 1, 2, 6}));
 
         PageMap page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 1);
-        ASSERT_EQ(page_maps[4].page_id, 4);
-        ASSERT_EQ(page_maps[4].field_offsets.size(), 4);
-        ASSERT_EQ(page_maps[4].data.size(), 710);
+        ASSERT_EQ(page_maps[10].page_id, 10);
+        ASSERT_EQ(page_maps[10].field_offsets.size(), 4);
+        ASSERT_EQ(page_maps[10].data.size(), 710);
 
-        auto field_offset = page_maps[4].field_offsets;
+        auto field_offset = page_maps[10].field_offsets;
         auto it = field_offset.begin();
         ASSERT_EQ(it->offset, 0);
         ++it;
@@ -421,6 +458,14 @@ try
         ASSERT_EQ(it->offset, 140);
         ++it;
         ASSERT_EQ(it->offset, 540);
+    }
+
+    {
+        // Revert v3
+        WriteBatch batch;
+        batch.delPage(9);
+        batch.delPage(10);
+        page_writer_mix->write(std::move(batch), nullptr);
     }
 }
 CATCH

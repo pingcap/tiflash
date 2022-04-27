@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/FormatVersion.h>
@@ -23,6 +24,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WriteBatch.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <condition_variable>
@@ -33,6 +35,7 @@
 #include <shared_mutex>
 #include <type_traits>
 #include <unordered_map>
+
 
 namespace DB
 {
@@ -679,6 +682,7 @@ public:
                                                    page_for_put.data.size());
                             }
                             storage_v3->write(std::move(wb_for_put), write_limiter);
+                            LOG_FMT_INFO(Logger::get("PageWriter"), "Can't find [origin_id={}] in v3. Created a new page with [field_offsets={}] into V3", write.ori_page_id, entry_for_put.field_offsets.size());
                         }
                         else
                         {

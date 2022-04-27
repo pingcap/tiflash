@@ -1105,6 +1105,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getFileProvider());
 
     global_context->initializePageStorageMode(global_context->getPathPool(), storage_config.enable_ps_v3);
+    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.

@@ -1620,6 +1620,15 @@ void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
 bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
 {
     auto lock = getLock();
+    std::cout << "path_pool_v3 addr2 : " << &path_pool << std::endl;
+    if (shared->global_storage_pool)
+    {
+        // Can't init GlobalStoragePool twice.
+        // Because we won't remove the gc task in BackGroundPool
+        // Also won't remove it from ~GlobalStoragePool()
+        throw Exception("Can't initializeGlobalStoragePool twice", ErrorCodes::LOGICAL_ERROR);
+    }
+
     if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
     {
         try
