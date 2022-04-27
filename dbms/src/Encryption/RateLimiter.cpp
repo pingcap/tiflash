@@ -509,6 +509,7 @@ void IORateLimiter::setBackgroundThreadIds(std::vector<pid_t> thread_ids)
 {
     std::lock_guard lock(bg_thread_ids_mtx);
     bg_thread_ids.swap(thread_ids);
+    LOG_FMT_INFO(log, "bg_thread_ids {} => {}", bg_thread_ids.size(), bg_thread_ids);
 }
 
 std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fname [[maybe_unused]])
