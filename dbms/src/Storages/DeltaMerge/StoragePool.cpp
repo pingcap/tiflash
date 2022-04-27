@@ -94,15 +94,7 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
                                      global_ctx.getFileProvider(),
                                      true))
     , global_context(global_ctx)
-{}
-
-GlobalStoragePool::~GlobalStoragePool()
 {
-    if (gc_handle)
-    {
-        global_context.getBackgroundPool().removeTask(gc_handle);
-        gc_handle = nullptr;
-    }
 }
 
 void GlobalStoragePool::restore()
@@ -111,7 +103,6 @@ void GlobalStoragePool::restore()
     data_storage->restore();
     meta_storage->restore();
 
-    // We don't need remove `GC task` in getBackgroundPool.
     gc_handle = global_context.getBackgroundPool().addTask(
         [this] {
             return this->gc(global_context.getSettingsRef());
