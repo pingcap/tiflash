@@ -238,7 +238,7 @@ struct TiFlashProxyConfig
     const String engine_store_advertise_address = "advertise-engine-addr";
     const String pd_endpoints = "pd-endpoints";
     const String engine_label = "engine-label";
-    const String engine_label_value = "tiflash";
+    // const String engine_label_value = "tiflash";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -261,7 +261,7 @@ struct TiFlashProxyConfig
                 args_map[engine_store_address] = config.getString("flash.service_addr");
             else
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
-            args_map[engine_label] = engine_label_value;
+            // args_map[engine_label] = engine_label_value;
 
             for (auto && [k, v] : args_map)
             {
