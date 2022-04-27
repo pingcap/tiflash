@@ -118,6 +118,7 @@
 # status-addr = "0.0.0.0:20292"
 # advertise-status-addr = "tiflash0:20292"
 # engine-addr = "tiflash0:3930"
+# engine-label = "tiflash_mpp"
 
 [logger]
 # log = "/tmp/tiflash/log/server.log"
