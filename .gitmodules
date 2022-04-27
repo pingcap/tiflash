@@ -35,7 +35,7 @@
 [submodule "contrib/tiflash-proxy"]
 	path = contrib/tiflash-proxy
 	url = https://github.com/guo-shaoge/tikv.git
-    branch = cloud_test
+	branch = cloud_test
 [submodule "contrib/prometheus-cpp"]
 	path = contrib/prometheus-cpp
 	url = https://github.com/jupp0r/prometheus-cpp.git
