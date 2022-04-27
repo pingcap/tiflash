@@ -421,7 +421,7 @@ void DAGStorageInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
 {
     assert(!remote_requests.empty());
     DAGSchema & schema = remote_requests[0].schema;
-    assert(std::any_of(remote_requests.begin(), remote_requests.end(), [&schema](const RemoteRequest & r) { return !schemaMatch(schema, r.schema); }));
+    assert(std::all_of(remote_requests.begin(), remote_requests.end(), [&schema](const RemoteRequest & r) { return schemaMatch(schema, r.schema); }));
     bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
     std::vector<pingcap::coprocessor::copTask> all_tasks;
