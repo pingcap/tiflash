@@ -58,7 +58,7 @@ public:
 
     void execute(DAGPipeline & pipeline);
 
-    /// Members will be transfered to DAGQueryBlockInterpreter after execute
+    /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
@@ -72,7 +72,7 @@ private:
 
     LearnerReadSnapshot doBatchCopLearnerRead();
 
-    void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
+    void buildLocalRead(DAGPipeline & pipeline, size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 

@@ -83,7 +83,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_slow_page_storage_snapshot_release)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
-    M(pause_after_learner_read)                   \
+    M(pause_with_alter_locks_acquired)            \
     M(hang_in_execution)                          \
     M(pause_before_dt_background_delta_merge)     \
     M(pause_until_dt_background_delta_merge)      \
