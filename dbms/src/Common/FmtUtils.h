@@ -81,6 +81,20 @@ public:
         }
         return *this;
     }
+    
+    template <typename Iter, typename FF>
+    FmtBuffer & joinStrv2(
+      Iter first,
+      Iter end,
+      FF && toStringFunc, // String (const auto &)
+      StringRef delimiter)
+  {
+      for (auto it = first; it != end; ++it)
+      {
+          fmtAppend(&"%s %s"[2 * (it==first)], delimiter, toStringFunc(*it));
+      }
+      return *this;
+  }
 
     void resize(size_t count) { buffer.resize(count); }
     void reserve(size_t capacity) { buffer.reserve(capacity); }
