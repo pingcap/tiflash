@@ -248,7 +248,8 @@ TEST_F(DTToolTest, BlockwiseInvariant)
             0,
             getTemporaryPath(),
             DB::DM::DMFile::ReadMetaMode::all());
-        if (version == 2) {
+        if (version == 2)
+        {
             EXPECT_EQ(refreshed_file->getConfiguration()->getChecksumFrameLength(), frame_size);
         }
         auto stream = DB::DM::createSimpleBlockInputStream(*db_context, refreshed_file);
