@@ -97,6 +97,16 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
 {
 }
 
+
+GlobalStoragePool::~GlobalStoragePool()
+{
+    if (gc_handle)
+    {
+        global_context.getBackgroundPool().removeTask(gc_handle);
+        gc_handle = nullptr;
+    }
+}
+
 void GlobalStoragePool::restore()
 {
     log_storage->restore();

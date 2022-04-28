@@ -38,7 +38,7 @@ public:
         std::vector<size_t> caps = {};
         Strings paths = {path};
 
-        auto global_context = TiFlashTestEnv::getContext();
+        auto & global_context = TiFlashTestEnv::getGlobalContext();
 
         storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps), global_context.getFileProvider(), true);
 
@@ -53,7 +53,7 @@ public:
         const auto & path = getTemporaryPath();
         createIfNotExist(path);
 
-        auto global_context = DB::tests::TiFlashTestEnv::getContext();
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
 
         std::vector<size_t> caps = {};
         Strings paths = {path};
@@ -219,6 +219,8 @@ try
         batch.putPage(1, tag, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(2, tag, buff, buf_sz, {20, 120, 400, 200, 15, 75, 170, 24});
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(7, tag, buff, buf_sz, {500, 500, 24});
         page_writer_v2->write(std::move(batch), nullptr);
     }
 
@@ -266,12 +268,15 @@ try
         std::vector<PageStorage::PageReadFields> read_fields;
         read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
         read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(4, {1, 3, 4, 8, 10}));
+        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(7, {0, 1, 2}));
         PageMap page_maps = page_reader_mix->read(read_fields);
-        ASSERT_EQ(page_maps.size(), 2);
+        ASSERT_EQ(page_maps.size(), 3);
         ASSERT_EQ(page_maps[2].page_id, 2);
         ASSERT_EQ(page_maps[2].field_offsets.size(), 3);
         ASSERT_EQ(page_maps[4].page_id, 4);
         ASSERT_EQ(page_maps[4].field_offsets.size(), 5);
+        ASSERT_EQ(page_maps[7].page_id, 7);
+        ASSERT_EQ(page_maps[7].field_offsets.size(), 3);
     }
 
     {

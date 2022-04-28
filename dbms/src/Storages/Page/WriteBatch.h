@@ -189,6 +189,14 @@ public:
         writes.emplace_back(write);
     }
 
+    void copyWrites(const Writes & writes_)
+    {
+        for (const auto & write_ : writes_)
+        {
+            copyWrite(write_);
+        }
+    }
+
     void clear()
     {
         Writes tmp;
