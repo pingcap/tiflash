@@ -366,15 +366,25 @@ public:
         case PageStorageRunMode::MIX_MODE:
         {
             auto page_maps = storage_v3->read(ns_id, page_ids, read_limiter, toConcreteV3Snapshot(), false);
-            auto it = page_maps.begin();
-            while (it != page_maps.end())
+            PageIds invalid_page_ids;
+            for (const auto & [query_page_id, page] : page_maps)
             {
-                if (it->second.page_id == INVALID_PAGE_ID)
+                // TODO : change to isvalid(), after pre pr merged.
+                if (page.page_id == INVALID_PAGE_ID)
                 {
-                    it->second = storage_v2->read(ns_id, it->first, read_limiter, toConcreteV2Snapshot());
+                    invalid_page_ids.emplace_back(query_page_id);
                 }
-                it++;
             }
+
+            if (!invalid_page_ids.empty())
+            {
+                const auto & page_maps_from_v2 = storage_v2->read(ns_id, invalid_page_ids, read_limiter, toConcreteV2Snapshot());
+                for (const auto & [page_id_, page_] : page_maps_from_v2)
+                {
+                    page_maps[page_id_] = page_;
+                }
+            }
+
             return page_maps;
         }
         default:
@@ -424,11 +434,23 @@ public:
         {
             auto page_maps = storage_v3->read(ns_id, page_fields, read_limiter, toConcreteV3Snapshot(), false);
 
+            std::vector<PageReadFields> invalid_page_fields;
+
             for (const auto & page_field : page_fields)
             {
+                // TODO : change to isvalid(), after pre pr merged.
                 if (page_maps[page_field.first].page_id == INVALID_PAGE_ID)
                 {
-                    page_maps[page_field.first] = storage_v2->read(ns_id, page_field, read_limiter, toConcreteV2Snapshot());
+                    invalid_page_fields.emplace_back(page_field);
+                }
+            }
+
+            if (!invalid_page_fields.empty())
+            {
+                auto page_maps_from_v2 = storage_v2->read(ns_id, invalid_page_fields, read_limiter, toConcreteV2Snapshot());
+                for (const auto & page_field_ : invalid_page_fields)
+                {
+                    page_maps[page_field_.first] = page_maps_from_v2[page_field_.first];
                 }
             }
 
@@ -632,6 +654,8 @@ public:
         {
             const auto & ns_id = write_batch.getNamespaceId();
             WriteBatch wb_for_v2{ns_id};
+            WriteBatch wb_for_put_v3{ns_id};
+
             for (const auto & write : write_batch.getWrites())
             {
                 switch (write.type)
@@ -660,28 +684,27 @@ public:
                         const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
                         if (entry_for_put.file_id != 0)
                         {
-                            WriteBatch wb_for_put{ns_id};
                             auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
                             assert(entry_for_put.size == page_for_put.data.size());
 
                             // Page with fields
                             if (!entry_for_put.field_offsets.empty())
                             {
-                                wb_for_put.putPage(write.ori_page_id, //
-                                                   0,
-                                                   std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
-                                                   page_for_put.data.size(),
-                                                   Page::fieldOffsetsToSizes(entry_for_put.field_offsets, entry_for_put.size));
+                                wb_for_put_v3.putPage(write.ori_page_id, //
+                                                      0,
+                                                      std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
+                                                      page_for_put.data.size(),
+                                                      Page::fieldOffsetsToSizes(entry_for_put.field_offsets, entry_for_put.size));
                             }
                             else
                             { // Normal page with fields
-                                wb_for_put.putPage(write.ori_page_id, //
-                                                   0,
-                                                   std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(),
-                                                                                          page_for_put.data.size()),
-                                                   page_for_put.data.size());
+                                wb_for_put_v3.putPage(write.ori_page_id, //
+                                                      0,
+                                                      std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(),
+                                                                                             page_for_put.data.size()),
+                                                      page_for_put.data.size());
                             }
-                            storage_v3->write(std::move(wb_for_put), write_limiter);
+
                             LOG_FMT_INFO(Logger::get("PageWriter"), "Can't find [origin_id={}] in v3. Created a new page with [field_offsets={}] into V3", write.ori_page_id, entry_for_put.field_offsets.size());
                         }
                         else
@@ -703,7 +726,18 @@ public:
                 }
             }
 
-            storage_v3->write(std::move(write_batch), write_limiter);
+            if (!wb_for_put_v3.empty())
+            {
+                // The `writes` in wb_for_put_v3 must come before the `writes` in write_batch
+                wb_for_put_v3.copyWrites(write_batch.getWrites());
+                storage_v3->write(std::move(wb_for_put_v3), write_limiter);
+            }
+            else
+            {
+                storage_v3->write(std::move(write_batch), write_limiter);
+            }
+
+
             if (!wb_for_v2.empty())
             {
                 storage_v2->write(std::move(wb_for_v2), write_limiter);
