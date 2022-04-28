@@ -22,6 +22,7 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
+
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -40,7 +41,7 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
     size_t i = 0;
     for (auto item : order_by_items)
     {
-        int direction = item.second ? 1 : -1; // todo
+        int direction = item.second ? -1 : 1;
         ASTPtr locale_node;
         auto order_by_item = std::make_shared<ASTOrderByElement>(direction, direction, false, locale_node);
         order_by_item->children.push_back(std::make_shared<ASTIdentifier>(item.first));
@@ -184,7 +185,10 @@ DAGRequestBuilder & DAGRequestBuilder::topN(MockOrderByItems order_by_items, AST
 DAGRequestBuilder & DAGRequestBuilder::project(const String & col_name)
 {
     assert(root);
-    root = compileProject(root, getExecutorIndex(), buildColumn(col_name));
+    auto exp_list = std::make_shared<ASTExpressionList>();
+    exp_list->children.push_back(buildColumn(col_name));
+
+    root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }
 
@@ -208,7 +212,6 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNames col_names)
     {
         exp_list->children.push_back(col(name));
     }
-
     root = compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }
@@ -220,17 +223,22 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, ASTPtr using_expr_list)
+DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAsts exprs)
 {
-    return join(right, using_expr_list, ASTTableJoin::Kind::Inner);
+    return join(right, exprs, ASTTableJoin::Kind::Inner);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, ASTPtr using_expr_list, ASTTableJoin::Kind kind)
+DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAsts exprs, ASTTableJoin::Kind kind)
 {
     assert(root);
     assert(right.root);
     auto join_ast = std::make_shared<ASTTableJoin>();
-    join_ast->using_expression_list = using_expr_list;
+    auto exp_list = std::make_shared<ASTExpressionList>();
+    for (const auto & expr : exprs)
+    {
+        exp_list->children.push_back(expr);
+    }
+    join_ast->using_expression_list = exp_list;
     join_ast->strictness = ASTTableJoin::Strictness::All;
     join_ast->kind = kind;
     root = compileJoin(getExecutorIndex(), root, right.root, join_ast);
@@ -254,7 +262,6 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(MockAsts agg_funcs, MockAsts 
         agg_func_list->children.push_back(func);
     for (const auto & group_by : group_by_exprs)
         group_by_expr_list->children.push_back(group_by);
-
     return buildAggregation(agg_func_list, group_by_expr_list);
 }
 

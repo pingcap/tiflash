@@ -15,16 +15,17 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
 namespace DB::tests
 {
-void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 class MockExecutorTest : public ::testing::Test
 {
 protected:
@@ -37,29 +38,13 @@ public:
     MockExecutorTest()
         : context(TiFlashTestEnv::getContext())
     {}
-    static void SetUpTestCase()
-    {
-        try
-        {
-            DB::registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registered, ignore exception here.
-        }
-    }
+    static void SetUpTestCase();
 
-    virtual void initializeContext()
-    {
-        dag_context_ptr = std::make_unique<DAGContext>(1024);
-        context = MockDAGRequestContext(TiFlashTestEnv::getContext());
-    }
+    virtual void initializeContext();
 
-    DAGContext & getDAGContext()
-    {
-        assert(dag_context_ptr != nullptr);
-        return *dag_context_ptr;
-    }
+    DAGContext & getDAGContext();
+
+    static void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
 protected:
     MockDAGRequestContext context;
