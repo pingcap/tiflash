@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/MockTableScanBlockInputStream.h>
+#include <DataStreams/MockTableScanBlockInputStream.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <google/protobuf/util/json_util.h>
 

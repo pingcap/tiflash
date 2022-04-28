@@ -46,7 +46,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <TestUtils/MockTableScanBlockInputStream.h>
+#include <DataStreams/MockTableScanBlockInputStream.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
