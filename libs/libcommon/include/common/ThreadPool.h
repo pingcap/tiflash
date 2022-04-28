@@ -22,7 +22,8 @@ public:
     /// Size is constant, all threads are created immediately.
     /// Every threads will execute pre_worker firstly when they are created.
     explicit ThreadPool(
-        size_t m_size, Job pre_worker = [] {});
+        size_t m_size,
+        Job pre_worker = [] {});
 
     /// Add new job. Locks until free thread in pool become available or exception in one of threads was thrown.
     /// If an exception in some thread was thrown, method silently returns, and exception will be rethrown only on call to 'wait' function.
@@ -58,4 +59,5 @@ private:
 
 
     void worker();
+    void finalize();
 };

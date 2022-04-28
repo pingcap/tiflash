@@ -31,13 +31,36 @@ MPPTunnel::~MPPTunnel()
 {
     try
     {
+<<<<<<< HEAD
         if (!finished)
             writeDone();
+=======
+        {
+            std::unique_lock lock(mu);
+            if (finished)
+            {
+                LOG_FMT_TRACE(log, "already finished!");
+                return;
+            }
+
+            /// make sure to finish the tunnel after it is connected
+            waitUntilConnectedOrFinished(lock);
+            finishSendQueue();
+        }
+        LOG_FMT_TRACE(log, "waiting consumer finish!");
+        waitForConsumerFinish(/*allow_throw=*/false);
+        LOG_FMT_TRACE(log, "waiting child thread finished!");
+        thread_manager->wait();
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
+<<<<<<< HEAD
+=======
+    LOG_FMT_TRACE(log, "destructed tunnel obj!");
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 }
 
 void MPPTunnel::close(const String & reason)
