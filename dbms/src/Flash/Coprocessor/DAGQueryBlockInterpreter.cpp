@@ -23,6 +23,7 @@
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/MockTableScanBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
@@ -46,7 +47,6 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <DataStreams/MockTableScanBlockInputStream.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
