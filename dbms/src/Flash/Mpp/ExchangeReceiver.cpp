@@ -303,15 +303,38 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , exc_log(getMPPTaskLog(log_, "ExchangeReceiver"))
     , collected(false)
 {
-    rpc_context->fillSchema(schema);
-    setUpConnection();
+    try
+    {
+        rpc_context->fillSchema(schema);
+        setUpConnection();
+    }
+    catch (...)
+    {
+        try
+        {
+            cancel();
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        }
+        throw;
+    }
 }
 
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    close();
-    thread_manager->wait();
+    try
+    {
+        close();
+        thread_manager->wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+    }
 }
 
 template <typename RPCContext>

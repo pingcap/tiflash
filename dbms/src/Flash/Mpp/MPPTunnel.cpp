@@ -69,12 +69,18 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
             finishSendQueue();
         }
         waitForConsumerFinish(/*allow_throw=*/false);
+        LOG_FMT_TRACE(log, "waiting child thread finished!");
+        thread_manager->wait();
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
+<<<<<<< HEAD
     thread_manager->wait();
+=======
+    LOG_FMT_TRACE(log, "destructed tunnel obj!");
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 }
 
 template <typename Writer>
