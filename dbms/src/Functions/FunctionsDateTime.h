@@ -3249,12 +3249,13 @@ struct TiDBWeekOfYearTransformerImpl
                         typename ColumnVector<ToFieldType>::Container & vec_to,
                         typename ColumnVector<UInt8>::Container & vec_null_map)
     {
+        bool is_null = false;
         for (size_t i = 0; i < vec_from.size(); ++i)
         {
-            bool is_null = false;
             MyTimeBase val(vec_from[i]);
             vec_to[i] = execute(context, val, is_null);
             vec_null_map[i] = is_null;
+            is_null = false;
         }
     }
 
