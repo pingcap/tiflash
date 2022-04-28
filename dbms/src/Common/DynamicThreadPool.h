@@ -64,6 +64,8 @@ private:
     void fixedWork(size_t index);
     void dynamicWork(TaskPtr initial_task);
 
+    static void executeTask(TaskPtr & task);
+
     const std::chrono::nanoseconds dynamic_auto_shrink_cooldown;
 
     std::vector<std::thread> fixed_threads;

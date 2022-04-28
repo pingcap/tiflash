@@ -1,7 +1,10 @@
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
+#pragma GCC diagnostic pop
 
 #include <functional>
 

@@ -208,7 +208,7 @@ DMFileReader::DMFileReader(
     , read_columns(read_columns_)
     , enable_clean_read(enable_clean_read_)
     , max_read_version(max_read_version_)
-    , pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_ranges_, filter_, read_packs_, file_provider_, read_limiter)
+    , pack_filter(dmfile_, index_cache_, hash_salt_, /*set_cache_if_miss*/ true, rowkey_ranges_, filter_, read_packs_, file_provider_, read_limiter)
     , handle_res(pack_filter.getHandleRes())
     , use_packs(pack_filter.getUsePacks())
     , skip_packs_by_column(read_columns.size(), 0)
@@ -301,7 +301,7 @@ Block DMFileReader::read()
     // 0 means no limit
     size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
 
-    auto & pack_stats = dmfile->getPackStats();
+    const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
     size_t not_clean_rows = 0;
 
@@ -368,7 +368,7 @@ Block DMFileReader::read()
                 }
                 else if (cd.id == TAG_COLUMN_ID)
                 {
-                    column = cd.type->createColumnConst(read_rows, Field((UInt64)(pack_stats[start_pack_id].first_tag)));
+                    column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
                 }
 
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
