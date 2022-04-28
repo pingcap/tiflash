@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Storages/Page/V3/spacemap/RBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
@@ -40,7 +54,7 @@ TEST_P(SpaceMapTest, InitAndDestory)
 {
     SpaceMapPtr smap = SpaceMap::createSpaceMap(test_type, 0, 100);
 
-    smap->logStats();
+    smap->logDebugString();
 }
 
 
@@ -242,11 +256,11 @@ TEST_P(SpaceMapTest, TestMargins2)
     // Right margin in marked used space
     // Left margin contain freed space
     ASSERT_FALSE(smap->markFree(49, 10));
-    smap->logStats();
+    smap->logDebugString();
     // Left margin align with marked used space left margin
     // But right margin contain freed space
     ASSERT_FALSE(smap->markFree(51, 20));
-    smap->logStats();
+    smap->logDebugString();
     // Right margin align with marked used space right margin
     // But left margin contain freed space
     ASSERT_FALSE(smap->markUsed(40, 19));
@@ -353,6 +367,25 @@ TEST_P(SpaceMapTest, TestGetSizes)
         const auto & [total_size, valid_data_size] = smap->getSizes();
         ASSERT_EQ(total_size, 0);
         ASSERT_EQ(valid_data_size, 0);
+    }
+}
+
+
+TEST_P(SpaceMapTest, TestGetMaxCap)
+{
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(50, 10));
+        ASSERT_TRUE(smap->markUsed(80, 10));
+
+        ASSERT_EQ(smap->updateAccurateMaxCapacity(), 50);
+    }
+
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(0, 100));
+
+        ASSERT_EQ(smap->updateAccurateMaxCapacity(), 0);
     }
 }
 

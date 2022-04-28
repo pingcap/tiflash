@@ -1,0 +1,132 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+=> DBGInvoke __enable_schema_sync_service('false')
+
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+=> drop table if exists default.test_9997
+=> drop table if exists default.test_9998
+=> drop table if exists default.test_9999
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+# Data.
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64, col_3 MyDatetime')
+=> DBGInvoke __mock_tidb_partition(default, test, 9997)
+=> DBGInvoke __mock_tidb_partition(default, test, 9998)
+=> DBGInvoke __mock_tidb_partition(default, test, 9999)
+=> DBGInvoke __refresh_schemas()
+
+=> DBGInvoke __put_region(1, 0, 100, default, test, 9997)
+
+=> DBGInvoke __put_region(4, 0, 100, default, test, 9998)
+
+=> DBGInvoke __put_region(7, 0, 100, default, test, 9999)
+
+# query on empty table
+=> DBGInvoke tidb_query('select count(col_1) from default.test group by col_2', 4,'mpp_query:true,mpp_partition_num:3')
+=> DBGInvoke tidb_query('select count(col_1) from default.test group by col_3', 4,'mpp_query:true,mpp_partition_num:3')
+
+=> DBGInvoke __raft_insert_row(default, test, 1, 50, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 1, 51, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 1, 52, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 1, 53, 'test4', 888, '2022-03-31 11:33:33')
+
+=> DBGInvoke __raft_insert_row(default, test, 4, 50, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 4, 51, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 4, 52, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 4, 53, 'test4', 888, '2022-03-31 11:33:33')
+
+=> DBGInvoke __raft_insert_row(default, test, 7, 50, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 7, 51, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 7, 52, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 7, 53, 'test4', 888, '2022-03-31 11:33:33')
+
+# query on table that some partition does not contains region
+=> DBGInvoke tidb_query('select count(col_1), col_2 from default.test group by col_2', 4,'mpp_query:true,mpp_partition_num:3')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│                   6 │                 666 │
+│                   3 │                 777 │
+│                   3 │                 888 │
+└─────────────────────┴─────────────────────┘
+
+=> DBGInvoke tidb_query('select count(col_1), col_3 from default.test group by col_3', 4,'mpp_query:true,mpp_partition_num:3')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│                   6 │ 2022-03-31 11:11:11 │
+│                   3 │ 2022-03-31 11:22:22 │
+│                   3 │ 2022-03-31 11:33:33 │
+└─────────────────────┴─────────────────────┘
+
+# add more regions
+=> DBGInvoke __put_region(2, 100, 200, default, test, 9997)
+=> DBGInvoke __put_region(3, 200, 300, default, test, 9997)
+
+=> DBGInvoke __put_region(5, 100, 200, default, test, 9998)
+=> DBGInvoke __put_region(6, 200, 300, default, test, 9998)
+
+=> DBGInvoke __put_region(8, 100, 200, default, test, 9999)
+=> DBGInvoke __put_region(9, 200, 300, default, test, 9999)
+
+=> DBGInvoke __raft_insert_row(default, test, 2, 150, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 2, 151, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 2, 152, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 2, 153, 'test4', 888, '2022-03-31 11:33:33')
+=> DBGInvoke __raft_insert_row(default, test, 3, 250, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 3, 251, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 3, 252, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 3, 253, 'test4', 888, '2022-03-31 11:33:33')
+
+=> DBGInvoke __raft_insert_row(default, test, 5, 150, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 5, 151, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 5, 152, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 5, 153, 'test4', 888, '2022-03-31 11:33:33')
+=> DBGInvoke __raft_insert_row(default, test, 6, 250, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 6, 251, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 6, 252, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 6, 253, 'test4', 888, '2022-03-31 11:33:33')
+
+=> DBGInvoke __raft_insert_row(default, test, 8, 150, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 8, 151, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 8, 152, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 8, 153, 'test4', 888, '2022-03-31 11:33:33')
+=> DBGInvoke __raft_insert_row(default, test, 9, 250, 'test1', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 9, 251, 'test2', 666, '2022-03-31 11:11:11')
+=> DBGInvoke __raft_insert_row(default, test, 9, 252, 'test3', 777, '2022-03-31 11:22:22')
+=> DBGInvoke __raft_insert_row(default, test, 9, 253, 'test4', 888, '2022-03-31 11:33:33')
+
+# query on table that every partition contains region
+=> DBGInvoke tidb_query('select count(col_1), col_2 from default.test group by col_2', 4,'mpp_query:true,mpp_partition_num:3')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│                  18 │                 666 │
+│                   9 │                 777 │
+│                   9 │                 888 │
+└─────────────────────┴─────────────────────┘
+
+=> DBGInvoke tidb_query('select count(col_1), col_3 from default.test group by col_3', 4,'mpp_query:true,mpp_partition_num:3')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┐
+│                  18 │ 2022-03-31 11:11:11 │
+│                   9 │ 2022-03-31 11:22:22 │
+│                   9 │ 2022-03-31 11:33:33 │
+└─────────────────────┴─────────────────────┘
+
+# Clean up.
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+=> drop table if exists default.test_9997
+=> drop table if exists default.test_9998
+=> drop table if exists default.test_9999
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __enable_schema_sync_service('true')

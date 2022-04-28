@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/Page/Page.h>
@@ -68,6 +82,33 @@ enum class EditRecordType
     VAR_DELETE,
 };
 
+inline const char * typeToString(EditRecordType t)
+{
+    switch (t)
+    {
+    case EditRecordType::PUT:
+        return "PUT    ";
+    case EditRecordType::PUT_EXTERNAL:
+        return "EXT    ";
+    case EditRecordType::REF:
+        return "REF    ";
+    case EditRecordType::DEL:
+        return "DEL    ";
+    case EditRecordType::UPSERT:
+        return "UPSERT ";
+    case EditRecordType::VAR_ENTRY:
+        return "VAR_ENT";
+    case EditRecordType::VAR_REF:
+        return "VAR_REF";
+    case EditRecordType::VAR_EXTERNAL:
+        return "VAR_EXT";
+    case EditRecordType::VAR_DELETE:
+        return "VAR_DEL";
+    default:
+        return "INVALID";
+    }
+}
+
 /// Page entries change to apply to PageDirectory
 class PageEntriesEdit
 {
@@ -79,7 +120,7 @@ public:
         records.reserve(capacity);
     }
 
-    void put(PageId page_id, const PageEntryV3 & entry)
+    void put(PageIdV3Internal page_id, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = EditRecordType::PUT;
@@ -88,7 +129,7 @@ public:
         records.emplace_back(record);
     }
 
-    void putExternal(PageId page_id)
+    void putExternal(PageIdV3Internal page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::PUT_EXTERNAL;
@@ -96,7 +137,7 @@ public:
         records.emplace_back(record);
     }
 
-    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
+    void upsertPage(PageIdV3Internal page_id, const PageVersionType & ver, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = EditRecordType::UPSERT;
@@ -106,7 +147,7 @@ public:
         records.emplace_back(record);
     }
 
-    void del(PageId page_id)
+    void del(PageIdV3Internal page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::DEL;
@@ -114,7 +155,7 @@ public:
         records.emplace_back(record);
     }
 
-    void ref(PageId ref_id, PageId page_id)
+    void ref(PageIdV3Internal ref_id, PageIdV3Internal page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::REF;
@@ -123,7 +164,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varRef(PageId ref_id, const PageVersionType & ver, PageId ori_page_id)
+    void varRef(PageIdV3Internal ref_id, const PageVersionType & ver, PageIdV3Internal ori_page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_REF;
@@ -133,7 +174,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varExternal(PageId page_id, const PageVersionType & create_ver, Int64 being_ref_count)
+    void varExternal(PageIdV3Internal page_id, const PageVersionType & create_ver, Int64 being_ref_count)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_EXTERNAL;
@@ -143,7 +184,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varEntry(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count)
+    void varEntry(PageIdV3Internal page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_ENTRY;
@@ -154,7 +195,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varDel(PageId page_id, const PageVersionType & delete_ver)
+    void varDel(PageIdV3Internal page_id, const PageVersionType & delete_ver)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_DELETE;
@@ -172,13 +213,32 @@ public:
     struct EditRecord
     {
         EditRecordType type;
-        PageId page_id;
-        PageId ori_page_id;
+        PageIdV3Internal page_id;
+        PageIdV3Internal ori_page_id;
         PageVersionType version;
         PageEntryV3 entry;
-        Int64 being_ref_count = 1;
+        Int64 being_ref_count;
+
+        EditRecord()
+            : page_id(0)
+            , ori_page_id(0)
+            , version(0, 0)
+            , being_ref_count(1)
+        {}
     };
     using EditRecords = std::vector<EditRecord>;
+
+    static String toDebugString(const EditRecord & rec)
+    {
+        return fmt::format(
+            "{{type:{}, page_id:{}, ori_id:{}, version:{}, entry:{}, being_ref_count:{}}}",
+            typeToString(rec.type),
+            rec.page_id,
+            rec.ori_page_id,
+            rec.version,
+            DB::PS::V3::toDebugString(rec.entry),
+            rec.being_ref_count);
+    }
 
     void appendRecord(const EditRecord & rec)
     {
@@ -187,6 +247,19 @@ public:
 
     EditRecords & getMutRecords() { return records; }
     const EditRecords & getRecords() const { return records; }
+
+#ifndef NDEBUG
+    // Just for tests, refactor them out later
+    void put(PageId page_id, const PageEntryV3 & entry) { put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry); }
+    void putExternal(PageId page_id) { putExternal(buildV3Id(TEST_NAMESPACE_ID, page_id)); }
+    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry) { upsertPage(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry); }
+    void del(PageId page_id) { del(buildV3Id(TEST_NAMESPACE_ID, page_id)); }
+    void ref(PageId ref_id, PageId page_id) { ref(buildV3Id(TEST_NAMESPACE_ID, ref_id), buildV3Id(TEST_NAMESPACE_ID, page_id)); }
+    void varRef(PageId ref_id, const PageVersionType & ver, PageId ori_page_id) { varRef(buildV3Id(TEST_NAMESPACE_ID, ref_id), ver, buildV3Id(TEST_NAMESPACE_ID, ori_page_id)); }
+    void varExternal(PageId page_id, const PageVersionType & create_ver, Int64 being_ref_count) { varExternal(buildV3Id(TEST_NAMESPACE_ID, page_id), create_ver, being_ref_count); }
+    void varEntry(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count) { varEntry(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry, being_ref_count); }
+    void varDel(PageId page_id, const PageVersionType & delete_ver) { varDel(buildV3Id(TEST_NAMESPACE_ID, page_id), delete_ver); }
+#endif
 
 private:
     EditRecords records;

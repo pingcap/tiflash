@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnVector.h>
@@ -227,9 +241,10 @@ public:
      * @param ts_beg    `timestamp`'s value begin
      * @param ts_end    `timestamp`'s value end (not included)
      * @param reversed  increasing/decreasing insert `timestamp`'s value
+     * @param deleted   if deleted is false, set `tag` to 0; otherwise set `tag` to 1
      * @return
      */
-    static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false)
+    static Block prepareBlockWithTso(Int64 pk, size_t ts_beg, size_t ts_end, bool reversed = false, bool deleted = false)
     {
         Block block;
         const size_t num_rows = (ts_end - ts_beg);
@@ -245,7 +260,7 @@ public:
             VERSION_COLUMN_ID));
         // tag_col
         block.insert(DB::tests::createColumn<UInt8>(
-            std::vector<UInt64>(num_rows, 0),
+            std::vector<UInt64>(num_rows, deleted ? 1 : 0),
             TAG_COLUMN_NAME,
             TAG_COLUMN_ID));
         return block;

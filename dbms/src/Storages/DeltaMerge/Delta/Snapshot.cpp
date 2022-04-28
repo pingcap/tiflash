@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
@@ -24,11 +38,12 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     snap->is_update = for_update;
     snap->_delta = this->shared_from_this();
 
-    snap->persisted_files_snap = persisted_file_set->createSnapshot(context);
+    auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
+    snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_snap);
     snap->shared_delta_index = delta_index;
 
     if (!for_update)
-        snap->mem_table_snap = mem_table_set->createSnapshot();
+        snap->mem_table_snap = mem_table_set->createSnapshot(storage_snap);
 
     return snap;
 }
@@ -109,8 +124,7 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
 
 BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end)
 {
-    /// Note that we merge the consecutive DeltaPackBlock together, which are seperated in groups by DeltaPackDelete and DeltePackFile.
-
+    /// Note that we merge the consecutive ColumnFileInMemory or ColumnFileTiny together, which are seperated in groups by ColumnFileDeleteRange and ColumnFileBig.
     BlockOrDeletes res;
     auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
     auto mem_table_deletes_offset = delta_snap->getMemTableSetDeletesOffset();

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -11,6 +25,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -91,6 +106,19 @@ try
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
+}
+CATCH
+
+TEST_F(PageStorageTest, ReadNULL)
+try
+{
+    {
+        WriteBatch batch;
+        batch.putExternal(0, 0);
+        page_storage->write(std::move(batch));
+    }
+    const auto & page = page_storage->read(0);
+    ASSERT_EQ(page.data.begin(), nullptr);
 }
 CATCH
 
@@ -356,9 +384,9 @@ TEST_F(PageStorageTest, IngestFile)
 
     auto snapshot = page_storage->getSnapshot();
 
-    EXPECT_ANY_THROW(page_storage->getNormalPageId(100, snapshot));
-    EXPECT_EQ(100, page_storage->getNormalPageId(101, snapshot));
-    EXPECT_EQ(100, page_storage->getNormalPageId(102, snapshot));
+    EXPECT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 100, snapshot));
+    EXPECT_EQ(100, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 101, snapshot));
+    EXPECT_EQ(100, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 102, snapshot));
 
     size_t times_remover_called = 0;
     ExternalPageCallbacks callbacks;
@@ -370,9 +398,15 @@ TEST_F(PageStorageTest, IngestFile)
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(100), 0);
     };
+    callbacks.ns_id = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
     page_storage->gc();
     ASSERT_EQ(times_remover_called, 1);
+    page_storage->gc();
+    ASSERT_EQ(times_remover_called, 2);
+    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
+    page_storage->gc();
+    ASSERT_EQ(times_remover_called, 2);
 }
 
 // TBD : enable after wal apply and restore
@@ -788,6 +822,7 @@ try
         EXPECT_GT(living_page_ids.count(0), 0);
         EXPECT_GT(living_page_ids.count(1024), 0);
     };
+    callbacks.ns_id = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("fist gc");
@@ -815,14 +850,14 @@ try
     }
 
     {
-        auto ori_id_0 = page_storage->getNormalPageId(0, nullptr);
+        auto ori_id_0 = page_storage->getNormalPageId(TEST_NAMESPACE_ID, 0, nullptr);
         ASSERT_EQ(ori_id_0, 0);
-        auto ori_id_2 = page_storage->getNormalPageId(2, nullptr);
+        auto ori_id_2 = page_storage->getNormalPageId(TEST_NAMESPACE_ID, 2, nullptr);
         ASSERT_EQ(ori_id_2, 0);
-        ASSERT_EQ(1024, page_storage->getNormalPageId(1024, snapshot));
-        ASSERT_EQ(0, page_storage->getNormalPageId(1, snapshot));
-        ASSERT_ANY_THROW(page_storage->getNormalPageId(1024, nullptr));
-        ASSERT_ANY_THROW(page_storage->getNormalPageId(1, nullptr));
+        ASSERT_EQ(1024, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1024, snapshot));
+        ASSERT_EQ(0, page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1, snapshot));
+        ASSERT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1024, nullptr));
+        ASSERT_ANY_THROW(page_storage->getNormalPageId(TEST_NAMESPACE_ID, 1, nullptr));
     }
 
     /// After `snapshot` released, 1024 should be removed from `living`
@@ -832,6 +867,7 @@ try
         EXPECT_EQ(living_page_ids.size(), 1);
         EXPECT_GT(living_page_ids.count(0), 0);
     };
+    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
     page_storage->registerExternalPagesCallbacks(callbacks);
     {
         SCOPED_TRACE("gc with snapshot released");
@@ -841,6 +877,86 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, GcReuseSpaceThenRestore)
+try
+{
+    DB::UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        SCOPED_TRACE("fist gc");
+        page_storage->gc();
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage.reset();
+    page_storage = reopenWithConfig(config);
+}
+CATCH
+
+
+TEST_F(PageStorageTest, readRefAfterRestore)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, PageFieldSizes{{32, 64, 79, 128, 196, 256, 269}});
+        batch.putRefPage(3, 1);
+        batch.delPage(1);
+        batch.putPage(4, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    {
+        WriteBatch batch;
+        memset(c_buff, 0, buf_sz);
+        batch.putPage(5, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    std::vector<PageStorage::PageReadFields> fields;
+    PageStorage::PageReadFields field;
+    field.first = 3;
+    field.second = {0, 1, 2, 3, 4, 5, 6};
+    fields.emplace_back(field);
+
+    ASSERT_NO_THROW(page_storage->read(fields));
+}
+CATCH
 
 } // namespace PS::V3::tests
 } // namespace DB

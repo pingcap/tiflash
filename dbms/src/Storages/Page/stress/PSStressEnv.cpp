@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
@@ -35,6 +49,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
         ("read_concurrency,R", value<UInt32>()->default_value(16), "number of read threads") //
         ("clean_before_run,C", value<bool>()->default_value(false), "drop data before running") //
         ("init_pages,I", value<bool>()->default_value(false), "init pages if not exist before running") //
+        ("just_init_pages,J", value<bool>()->default_value(false), "Only init pages 0 - 1000.Then quit") //
         ("timeout,T", value<UInt32>()->default_value(600), "maximum run time (seconds). 0 means run infinitely") //
         ("writer_slots", value<UInt32>()->default_value(4), "number of PageStorage writer slots") //
         ("read_delay_ms", value<UInt32>()->default_value(0), "millionseconds of read delay") //
@@ -61,6 +76,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
     opt.num_writers = options["write_concurrency"].as<UInt32>();
     opt.num_readers = options["read_concurrency"].as<UInt32>();
     opt.init_pages = options["init_pages"].as<bool>();
+    opt.just_init_pages = options["just_init_pages"].as<bool>();
     opt.clean_before_run = options["clean_before_run"].as<bool>();
     opt.timeout_s = options["timeout"].as<UInt32>();
     opt.read_delay_ms = options["read_delay_ms"].as<UInt32>();

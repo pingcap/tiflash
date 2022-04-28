@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/ChecksumBuffer.h>
 #include <IO/IOSWrapper.h>
@@ -176,6 +190,8 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         LOG_FMT_INFO(logger, "source version: {}", (src_file->getConfiguration() ? 2 : 1));
         LOG_FMT_INFO(logger, "source bytes: {}", src_file->getBytesOnDisk());
         LOG_FMT_INFO(logger, "migration temporary directory: {}", keeper.migration_temp_dir.path().c_str());
+        LOG_FMT_INFO(logger, "target version: {}", args.version);
+        LOG_FMT_INFO(logger, "target frame size: {}", args.frame);
         DB::DM::DMConfigurationOpt option{};
 
         // if new format is the target, we construct a config file.

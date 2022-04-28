@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <Common/Exception.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -26,7 +40,7 @@ public:
     bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override
     {
         size_t idx = 0;
-        for (const auto [offset, length] : free_map)
+        for (const auto & [offset, length] : free_map)
         {
             if (!checker(idx, offset, offset + length))
                 return false;
@@ -43,16 +57,21 @@ protected:
         free_map.insert({start, end});
     }
 
-    void smapStats() override
+    String toDebugString() override
     {
         UInt64 count = 0;
 
-        LOG_DEBUG(log, "STD-Map entries status: ");
+        FmtBuffer fmt_buffer;
+        fmt_buffer.append("    STD-Map entries status: \n");
+
+        // Need use `count`,so can't use `joinStr` here.
         for (auto it = free_map.begin(); it != free_map.end(); it++)
         {
-            LOG_DEBUG(log, "  Space: " << count << " start:" << it->first << " size : " << it->second);
+            fmt_buffer.fmtAppend("      Space: {} start: {} size : {}\n", count, it->first, it->second);
             count++;
         }
+
+        return fmt_buffer.toString();
     }
 
     std::pair<UInt64, UInt64> getSizes() const override
@@ -64,17 +83,32 @@ protected:
         }
 
         const auto & last_free_block = free_map.rbegin();
-        UInt64 total_size = last_free_block->first - start;
-        UInt64 last_free_block_size = last_free_block->second;
 
-        UInt64 valid_size = 0;
-        for (const auto & free_block : free_map)
+        if (last_free_block->first + last_free_block->second != end)
         {
-            valid_size += free_block.second;
-        }
-        valid_size = total_size - (valid_size - last_free_block_size);
+            UInt64 total_size = end - start;
+            UInt64 valid_size = total_size;
+            for (const auto & free_block : free_map)
+            {
+                valid_size -= free_block.second;
+            }
 
-        return std::make_pair(total_size, valid_size);
+            return std::make_pair(total_size, valid_size);
+        }
+        else
+        {
+            UInt64 total_size = last_free_block->first - start;
+            UInt64 last_free_block_size = last_free_block->second;
+
+            UInt64 valid_size = 0;
+            for (const auto & free_block : free_map)
+            {
+                valid_size += free_block.second;
+            }
+            valid_size = total_size - (valid_size - last_free_block_size);
+
+            return std::make_pair(total_size, valid_size);
+        }
     }
 
     UInt64 getRightMargin() override
@@ -110,7 +144,7 @@ protected:
 
         if (length > it->second || it->first + it->second < offset + length)
         {
-            LOG_WARNING(log, "Marked space used failed. [offset=" << offset << ", size=" << length << "] is bigger than space [offset=" << it->first << ",size=" << it->second << "]");
+            LOG_FMT_WARNING(log, "Marked space used failed. [offset={}, size={}] is bigger than space [offset={},size={}]", offset, length, it->first, it->second);
             return false;
         }
 
@@ -157,7 +191,7 @@ protected:
 
         if (free_map.empty())
         {
-            LOG_ERROR(log, "Current space map is full");
+            LOG_FMT_ERROR(log, "Current space map is full");
             hint_biggest_cap = 0;
             return std::make_pair(offset, hint_biggest_cap);
         }
@@ -180,7 +214,7 @@ protected:
         // No enough space for insert
         if (it == free_map.end())
         {
-            LOG_ERROR(log, "Not sure why can't found any place to insert. [size=" << size << "] [old biggest_offset=" << hint_biggest_offset << "] [old biggest_cap=" << hint_biggest_cap << "] [new biggest_offset=" << scan_biggest_offset << "] [new biggest_cap=" << scan_biggest_cap << "]");
+            LOG_FMT_ERROR(log, "Not sure why can't found any place to insert. [size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", size, hint_biggest_offset, hint_biggest_cap, scan_biggest_offset, scan_biggest_cap);
             hint_biggest_offset = scan_biggest_offset;
             hint_biggest_cap = scan_biggest_cap;
 
@@ -243,6 +277,25 @@ protected:
         return std::make_pair(offset, hint_biggest_cap);
     }
 
+    UInt64 updateAccurateMaxCapacity() override
+    {
+        UInt64 max_offset = 0;
+        UInt64 max_cap = 0;
+
+        for (const auto & [start, size] : free_map)
+        {
+            if (size > max_cap)
+            {
+                max_cap = size;
+                max_offset = start;
+            }
+        }
+        hint_biggest_offset = max_offset;
+        hint_biggest_cap = max_cap;
+
+        return max_cap;
+    }
+
     bool markFreeImpl(UInt64 offset, size_t length) override
     {
         auto it = free_map.find(offset);
@@ -274,7 +327,7 @@ protected:
             it_prev--;
             if (it_prev->first + it_prev->second > it->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset=" << it->first << ", size=" << it->second << "], prev node is [offset=" << it_prev->first << ",size=" << it_prev->second << "]");
+                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], prev node is [offset={},size={}]", it->first, it->second, it_prev->first, it_prev->second);
                 free_map.erase(it);
                 return false;
             }
@@ -285,7 +338,7 @@ protected:
         {
             if (it->first + it->second > it_next->first)
             {
-                LOG_WARNING(log, "Marked space free failed. [offset=" << it->first << ", size=" << it->second << "], next node is [offset=" << it_next->first << ",size=" << it_next->second << "]");
+                LOG_FMT_WARNING(log, "Marked space free failed. [offset={}, size={}], next node is [offset={},size={}]", it->first, it->second, it_next->first, it_next->second);
                 free_map.erase(it);
                 return false;
             }

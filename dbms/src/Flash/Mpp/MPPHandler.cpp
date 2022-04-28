@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -35,12 +49,15 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
         task = MPPTask::newTask(task_request.meta(), context);
 
         task->prepare(task_request);
-        for (const auto & region : context->getDAGContext()->getRegionsForRemoteRead())
+        for (const auto & table_region_info : context->getDAGContext()->tables_regions_info.getTableRegionsInfoMap())
         {
-            auto * retry_region = response->add_retry_regions();
-            retry_region->set_id(region.region_id);
-            retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
-            retry_region->mutable_region_epoch()->set_version(region.region_version);
+            for (const auto & region : table_region_info.second.remote_regions)
+            {
+                auto * retry_region = response->add_retry_regions();
+                retry_region->set_id(region.region_id);
+                retry_region->mutable_region_epoch()->set_conf_ver(region.region_conf_version);
+                retry_region->mutable_region_epoch()->set_version(region.region_version);
+            }
         }
         if (task->isRootMPPTask())
         {

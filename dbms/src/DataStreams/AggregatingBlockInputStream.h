@@ -1,12 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <IO/CompressedReadBuffer.h>
 #include <Interpreters/Aggregator.h>
-
 
 namespace DB
 {
@@ -29,10 +41,10 @@ public:
         const Aggregator::Params & params_,
         const FileProviderPtr & file_provider_,
         bool final_,
-        const LogWithPrefixPtr & log_)
-        : log(getMPPTaskLog(log_, NAME))
+        const String & req_id)
+        : log(Logger::get(NAME, req_id))
         , params(params_)
-        , aggregator(params, log)
+        , aggregator(params, req_id)
         , file_provider{file_provider_}
         , final(final_)
     {
@@ -46,7 +58,7 @@ public:
 protected:
     Block readImpl() override;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
 
     Aggregator::Params params;
     Aggregator aggregator;

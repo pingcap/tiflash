@@ -1,9 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
-#include <Poco/Logger.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
@@ -54,9 +67,9 @@ size_t LogWriter::writtenBytes() const
     return written_bytes;
 }
 
-void LogWriter::flush(const WriteLimiterPtr & write_limiter)
+void LogWriter::flush(const WriteLimiterPtr & write_limiter, const bool background)
 {
-    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), write_limiter, false);
+    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), write_limiter, /*background*/ background, /*enable_failpoint*/ false);
     log_file->fsync();
     written_bytes += write_buffer.offset();
 
@@ -127,7 +140,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
 
     if (!manual_flush)
     {
-        flush(write_limiter);
+        flush(write_limiter, /* background */ false);
     }
 }
 
@@ -139,7 +152,7 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::CHECKSUM_FIELD_SIZE, "Header size must be greater than the checksum size");
     static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::HEADER_SIZE, "Ensure the min buffer size for physical record");
     constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - Format::CHECKSUM_FIELD_SIZE;
-    char buf[HEADER_BUFF_SIZE];
+    char buf[HEADER_BUFF_SIZE] = {0};
     WriteBuffer header_buff(buf, HEADER_BUFF_SIZE);
 
     // Format the header

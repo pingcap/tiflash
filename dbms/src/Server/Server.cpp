@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "Server.h"
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
@@ -9,9 +23,11 @@
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/assert_cast.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -25,6 +41,7 @@
 #include <Encryption/RateLimiter.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
@@ -52,6 +69,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
+#include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/getMemoryAmount.h>
@@ -489,11 +507,70 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
+void handleRpcs(grpc::ServerCompletionQueue * curcq, Poco::Logger * log)
+{
+    GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Decrement();
+    });
+    void * tag = nullptr; // uniquely identifies a request.
+    bool ok = false;
+    while (true)
+    {
+        String err_msg;
+        try
+        {
+            // Block waiting to read the next event from the completion queue. The
+            // event is uniquely identified by its tag, which in this case is the
+            // memory address of a EstablishCallData instance.
+            // The return value of Next should always be checked. This return value
+            // tells us whether there is any kind of event or cq is shutting down.
+            if (!curcq->Next(&tag, &ok))
+            {
+                LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");
+                break;
+            }
+            GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
+            SCOPE_EXIT({
+                GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Decrement();
+            });
+            // If ok is false, it means server is shutdown.
+            // We need not log all not ok events, since the volumn is large which will pollute the content of log.
+            if (ok)
+                static_cast<EstablishCallData *>(tag)->proceed();
+            else
+                static_cast<EstablishCallData *>(tag)->cancel();
+        }
+        catch (Exception & e)
+        {
+            err_msg = e.displayText();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
+        }
+        catch (pingcap::Exception & e)
+        {
+            err_msg = e.message();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+        }
+        catch (std::exception & e)
+        {
+            err_msg = e.what();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+        }
+        catch (...)
+        {
+            err_msg = "unrecovered error";
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+            throw;
+        }
+    }
+}
+
 class Server::FlashGrpcServerHolder
 {
 public:
     FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
         : log(log_)
+        , is_shutdown(std::make_shared<std::atomic<bool>>(false))
     {
         grpc::ServerBuilder builder;
         if (server.security_config.has_tls_config)
@@ -511,7 +588,11 @@ public:
         }
 
         /// Init and register flash service.
-        flash_service = std::make_unique<FlashService>(server);
+        bool enable_async_server = server.context().getSettingsRef().enable_async_server;
+        if (enable_async_server)
+            flash_service = std::make_unique<AsyncFlashService>(server);
+        else
+            flash_service = std::make_unique<FlashService>(server);
         diagnostics_service = std::make_unique<DiagnosticsService>(server);
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
@@ -529,18 +610,56 @@ public:
         // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
+        thread_manager = DB::newThreadManager();
+        int async_cq_num = server.context().getSettingsRef().async_cqs;
+        if (enable_async_server)
+        {
+            for (int i = 0; i < async_cq_num; ++i)
+            {
+                cqs.emplace_back(builder.AddCompletionQueue());
+                notify_cqs.emplace_back(builder.AddCompletionQueue());
+            }
+        }
         flash_grpc_server = builder.BuildAndStart();
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
+        if (enable_async_server)
+        {
+            int preallocated_request_count_per_poller = server.context().getSettingsRef().preallocated_request_count_per_poller;
+            int pollers_per_cq = server.context().getSettingsRef().async_pollers_per_cq;
+            for (int i = 0; i < async_cq_num * pollers_per_cq; ++i)
+            {
+                auto * cq = cqs[i / pollers_per_cq].get();
+                auto * notify_cq = notify_cqs[i / pollers_per_cq].get();
+                for (int j = 0; j < preallocated_request_count_per_poller; ++j)
+                {
+                    // EstablishCallData will handle its lifecycle by itself.
+                    EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq, is_shutdown);
+                }
+                thread_manager->schedule(false, "async_poller", [cq, this] { handleRpcs(cq, log); });
+                thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
+            }
+        }
     }
 
     ~FlashGrpcServerHolder()
     {
         /// Shut down grpc server.
-        // wait 5 seconds for pending rpcs to gracefully stop
-        gpr_timespec deadline{5, 0, GPR_TIMESPAN};
         LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown(deadline);
+        flash_grpc_server->Shutdown();
+        *is_shutdown = true;
+        // Wait all existed MPPTunnels done to prevent crash.
+        // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
+        const int max_wait_cnt = 300;
+        int wait_cnt = 0;
+        while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        for (auto & cq : cqs)
+            cq->Shutdown();
+        for (auto & cq : notify_cqs)
+            cq->Shutdown();
+        thread_manager->wait();
         flash_grpc_server->Wait();
         flash_grpc_server.reset();
         LOG_FMT_INFO(log, "Shut down flash grpc server");
@@ -553,9 +672,14 @@ public:
 
 private:
     Poco::Logger * log;
+    std::shared_ptr<std::atomic<bool>> is_shutdown;
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
+    // cqs and notify_cqs are used for processing async grpc events (currently only EstablishMPPConnection).
+    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
+    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
+    std::shared_ptr<ThreadManager> thread_manager;
 };
 
 class Server::TcpHttpServersHolder
@@ -866,6 +990,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     registerFunctions();
     registerAggregateFunctions();
+    registerWindowFunctions();
     registerTableFunctions();
     registerStorages();
 
@@ -978,6 +1103,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
+    // must initialize before the following operation:
+    //   1. load data from disk(because this process may depend on the initialization of global StoragePool)
+    //   2. initialize KVStore service
+    //     1) because we need to check whether this is the first startup of this node, and we judge it based on whether there are any files in kvstore directory
+    //     2) KVStore service also choose its data format based on whether the GlobalStoragePool is initialized
+    if (global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), storage_config.enable_ps_v3))
+        LOG_FMT_INFO(log, "PageStorage V3 enabled.");
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
@@ -1085,8 +1217,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
-    /// Init Rate Limiter
-    global_context->initializeRateLimiter(config());
+    /// Initialize users config reloader.
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
+
+    /// Load global settings from default_profile and system_profile.
+    /// It internally depends on UserConfig::parseSettings.
+    global_context->setDefaultProfiles(config());
+    Settings & settings = global_context->getSettingsRef();
+
+    /// Initialize the background thread pool.
+    /// It internally depends on settings.background_pool_size,
+    /// so must be called after settings has been load.
+    auto & bg_pool = global_context->getBackgroundPool();
+    auto & blockable_bg_pool = global_context->getBlockableBackgroundPool();
+
+    /// Initialize RateLimiter.
+    global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
 
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
@@ -1099,9 +1245,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->reloadDeltaTreeConfig(*config);
         },
         /* already_loaded = */ true);
-
-    /// Initialize users config reloader.
-    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
@@ -1123,10 +1266,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     bool use_l0_opt = config().getBool("l0_optimize", false);
     global_context->setUseL0Opt(use_l0_opt);
-
-    /// Load global settings from default_profile and system_profile.
-    global_context->setDefaultProfiles(config());
-    Settings & settings = global_context->getSettingsRef();
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
@@ -1237,6 +1376,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,
             std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
+
+    if (settings.enable_async_grpc_client)
+    {
+        auto size = settings.grpc_completion_queue_pool_size;
+        if (size == 0)
+            size = std::thread::hardware_concurrency();
+        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+    }
 
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);

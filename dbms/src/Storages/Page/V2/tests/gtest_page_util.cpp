@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Poco/Logger.h>
@@ -27,7 +41,7 @@ TEST(PageUtils_test, ReadWriteFile)
         buff_write[i] = i % 0xFF;
     }
     WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
-    PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, true);
+    PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, /*write_limiter*/ nullptr, /*background*/ false, /*enable_failpoint*/ true);
     PageUtil::syncFile(file_for_write);
     file_for_write->close();
 
@@ -64,7 +78,7 @@ TEST(PageUtils_test, BigReadWriteFile)
             buff_write[i] = i % 0xFF;
         }
 
-        PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, false);
+        PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, /*background*/ false, /*enable_failpoint*/ false);
         PageUtil::syncFile(file_for_write);
         file_for_write->close();
 

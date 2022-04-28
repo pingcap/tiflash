@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/TiFlashMetrics.h>
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
@@ -102,7 +116,7 @@ try
         if (!dag_context.retry_regions.empty())
         {
             coprocessor::BatchResponse response;
-            for (auto region : dag_context.retry_regions)
+            for (const auto & region : dag_context.retry_regions)
             {
                 auto * retry_region = response.add_retry_regions();
                 retry_region->set_id(region.region_id);
@@ -150,8 +164,7 @@ try
     {
         LOG_FMT_DEBUG(
             log,
-            "{}: dag request without encode cost: {} seconds, produce {} rows, {} bytes.",
-            __PRETTY_FUNCTION__,
+            "dag request without encode cost: {} seconds, produce {} rows, {} bytes.",
             p_stream->getProfileInfo().execution_time / (double)1000000000,
             p_stream->getProfileInfo().rows,
             p_stream->getProfileInfo().bytes);
@@ -176,27 +189,27 @@ catch (const LockException & e)
 }
 catch (const TiFlashException & e)
 {
-    LOG_FMT_ERROR(log, "{}: {}\n{}", __PRETTY_FUNCTION__, e.standardText(), e.getStackTrace().toString());
+    LOG_FMT_ERROR(log, "{}\n{}", e.standardText(), e.getStackTrace().toString());
     recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
 {
-    LOG_FMT_ERROR(log, "{}: DB Exception: {}\n{}", __PRETTY_FUNCTION__, e.message(), e.getStackTrace().toString());
+    LOG_FMT_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
     recordError(e.code(), e.message());
 }
 catch (const pingcap::Exception & e)
 {
-    LOG_FMT_ERROR(log, "{}: KV Client Exception: {}", __PRETTY_FUNCTION__, e.message());
+    LOG_FMT_ERROR(log, "KV Client Exception: {}", e.message());
     recordError(e.code(), e.message());
 }
 catch (const std::exception & e)
 {
-    LOG_FMT_ERROR(log, "{}: std exception: {}", __PRETTY_FUNCTION__, e.what());
+    LOG_FMT_ERROR(log, "std exception: {}", e.what());
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
 }
 catch (...)
 {
-    LOG_FMT_ERROR(log, "{}: other exception", __PRETTY_FUNCTION__);
+    LOG_FMT_ERROR(log, "other exception");
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 

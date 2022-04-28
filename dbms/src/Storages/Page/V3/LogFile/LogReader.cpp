@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
@@ -23,8 +37,7 @@ LogReader::LogReader(
     Reporter * reporter_,
     bool verify_checksum_,
     Format::LogNumberType log_num_,
-    WALRecoveryMode recovery_mode_,
-    Poco::Logger * log_)
+    WALRecoveryMode recovery_mode_)
     : verify_checksum(verify_checksum_)
     , recycled(false)
     , is_last_block(false)
@@ -37,7 +50,6 @@ LogReader::LogReader(
     , reporter(reporter_)
     , end_of_buffer_offset(0)
     , log_number(log_num_)
-    , log(log_)
 {
     // Must be `BLOCK_SIZE`, or we can not ensure the correctness of reading.
     assert(file->internalBuffer().size() == Format::BLOCK_SIZE);
@@ -383,7 +395,7 @@ UInt8 LogReader::readPhysicalRecord(std::string_view * result, size_t * drop_siz
         }
         else if (err != 0)
             return err;
-        // else parse header successe.
+        // else parse header success.
 
         if (verify_checksum)
         {

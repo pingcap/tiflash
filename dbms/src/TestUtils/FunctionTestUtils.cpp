@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Core/ColumnNumbers.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <Functions/FunctionFactory.h>
@@ -83,6 +97,24 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 
     return columnEqual(expected.column, actual.column);
 }
+
+void blockEqual(
+    const Block & expected,
+    const Block & actual)
+{
+    size_t columns = actual.columns();
+
+    ASSERT_TRUE(expected.columns() == columns);
+
+    for (size_t i = 0; i < columns; ++i)
+    {
+        const auto & expected_col = expected.getByPosition(i);
+        const auto & actual_col = actual.getByPosition(i);
+        ASSERT_TRUE(actual_col.type->getName() == expected_col.type->getName());
+        ASSERT_COLUMN_EQ(expected_col.column, actual_col.column);
+    }
+}
+
 
 ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator)
 {

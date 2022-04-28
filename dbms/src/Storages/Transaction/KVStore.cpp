@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -162,7 +176,7 @@ void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
 {
     {
         decltype(bg_gc_region_data) tmp;
-        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+        std::lock_guard lock(bg_gc_region_data_mutex);
         tmp.swap(bg_gc_region_data);
     }
     Timepoint now = Clock::now();
@@ -283,7 +297,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_FMT_INFO(log, "{}: [region {}] is not found, might be removed already", __PRETTY_FUNCTION__, region_id);
+        LOG_FMT_INFO(log, "[region {}] is not found, might be removed already", region_id);
         return;
     }
     LOG_FMT_INFO(log, "Handle destroy {}", region->toString());
@@ -409,8 +423,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         if (curr_region_ptr == nullptr)
         {
             LOG_FMT_WARNING(log,
-                            "{}: [region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
-                            __PRETTY_FUNCTION__,
+                            "[region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
                             curr_region_id,
                             term,
                             index,
