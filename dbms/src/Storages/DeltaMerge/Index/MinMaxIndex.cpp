@@ -48,19 +48,9 @@ inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVect
     {
         if (!del_mark_data || !(*del_mark_data)[i])
         {
-            bool is_null = false;
-            if (column.isColumnNullable())
-            {
-                const auto & nullable_column = static_cast<const ColumnNullable &>(column);
-                const auto & null_mark_data = nullable_column.getNullMapColumn().getData();
-                if (null_mark_data[i])
-                {
-                    is_null = true;
-                }
-            }
-            if (!is_null && (batch_min_idx == NONE_EXIST || column.compareAt(i, batch_min_idx, column, -1) < 0))
+            if (batch_min_idx == NONE_EXIST || column.compareAt(i, batch_min_idx, column, -1) < 0)
                 batch_min_idx = i;
-            if (!is_null && (batch_max_idx == NONE_EXIST || column.compareAt(batch_max_idx, i, column, -1) < 0))
+            if (batch_max_idx == NONE_EXIST || column.compareAt(batch_max_idx, i, column, -1) < 0)
                 batch_max_idx = i;
         }
     }
@@ -90,14 +80,13 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
         }
     }
 
-    const IColumn & updated_column = column;
-    auto [min_index, max_index] = details::minmax(updated_column, del_mark, 0, updated_column.size());
+    auto [min_index, max_index] = details::minmax(column, del_mark, 0, column.size());
     if (min_index != NONE_EXIST)
     {
         has_null_marks->push_back(has_null);
         has_value_marks->push_back(1);
-        minmaxes->insertFrom(updated_column, min_index);
-        minmaxes->insertFrom(updated_column, max_index);
+        minmaxes->insertFrom(column, min_index);
+        minmaxes->insertFrom(column, max_index);
     }
     else
     {
@@ -183,14 +172,14 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -199,16 +188,16 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -223,7 +212,7 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
 
 RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type)
 {
-    if (value.isNull())
+    if ((*has_null_marks)[pack_index] || value.isNull())
         return RSResult::Some;
     if (!(*has_value_marks)[pack_index])
         return RSResult::None;
@@ -231,7 +220,7 @@ RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const D
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
     {
-        return checkNullableEqual(pack_index, value, type->getNestedDataType());
+        return checkNullableEqual(pack_index, value, removeNullable(type));
     }
 #define DISPATCH(TYPE)                                              \
     if (typeid_cast<const DataType##TYPE *>(raw_type))              \
@@ -245,14 +234,14 @@ RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const D
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -261,16 +250,16 @@ RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const D
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -300,14 +289,14 @@ RSResult MinMaxIndex::checkNullableGreater(size_t pack_index, const Field & valu
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -316,16 +305,16 @@ RSResult MinMaxIndex::checkNullableGreater(size_t pack_index, const Field & valu
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -340,7 +329,7 @@ RSResult MinMaxIndex::checkNullableGreater(size_t pack_index, const Field & valu
 
 RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
-    if (value.isNull())
+    if ((*has_null_marks)[pack_index] || value.isNull())
         return RSResult::Some;
     if (!(*has_value_marks)[pack_index])
         return RSResult::None;
@@ -348,7 +337,7 @@ RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
     {
-        return checkNullableGreater(pack_index, value, type->getNestedDataType());
+        return checkNullableGreater(pack_index, value, removeNullable(type));
     }
 #define DISPATCH(TYPE)                                                \
     if (typeid_cast<const DataType##TYPE *>(raw_type))                \
@@ -362,14 +351,14 @@ RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -378,16 +367,16 @@ RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -417,14 +406,14 @@ RSResult MinMaxIndex::checkNullableGreaterEqual(size_t pack_index, const Field &
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -433,16 +422,16 @@ RSResult MinMaxIndex::checkNullableGreaterEqual(size_t pack_index, const Field &
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -457,7 +446,7 @@ RSResult MinMaxIndex::checkNullableGreaterEqual(size_t pack_index, const Field &
 
 RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
-    if (value.isNull())
+    if ((*has_null_marks)[pack_index] || value.isNull())
         return RSResult::Some;
     if (!(*has_value_marks)[pack_index])
         return RSResult::None;
@@ -465,7 +454,7 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
     {
-        return checkNullableGreaterEqual(pack_index, value, type->getNestedDataType());
+        return checkNullableGreaterEqual(pack_index, value, removeNullable(type));
     }
 #define DISPATCH(TYPE)                                                     \
     if (typeid_cast<const DataType##TYPE *>(raw_type))                     \
@@ -479,14 +468,14 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -495,16 +484,16 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -517,7 +506,7 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
     return RSResult::Some;
 }
 
-String MinMaxIndex::toString() const
+String MinMaxIndex::toString()
 {
     return "";
 }

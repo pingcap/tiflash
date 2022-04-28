@@ -471,7 +471,6 @@ public:
     virtual bool isEnum() const { return false; };
 
     virtual bool isNullable() const { return false; }
-    virtual DataTypePtr getNestedDataType() const { return nullptr; }
     /** Is this type can represent only NULL value? (It also implies isNullable)
       */
     virtual bool onlyNull() const { return false; }
