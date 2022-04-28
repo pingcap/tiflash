@@ -62,12 +62,12 @@ try
     }
 
     request = context.scan("test_db", "test_table_1")
-                       .filter(eq(col("s2"), col("s3")))
-                       .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                       .filter(eq(col("s2"), col("s3")))
-                       .limit(10)
-                       .build(context);
-    
+                  .filter(eq(col("s2"), col("s3")))
+                  .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                  .filter(eq(col("s2"), col("s3")))
+                  .limit(10)
+                  .build(context);
+
     {
         String expected = "Union\n"
                           " SharedQuery x 10\n"
@@ -113,10 +113,10 @@ try
     }
 
     request = context.scan("test_db", "test_table_1")
-                     .project({"s1", "s2", "s3"})
-                     .topN({{"s1", true}, {"s2", false}}, 10)
-                     .project({"s1", "s2"})
-                     .build(context);
+                  .project({"s1", "s2", "s3"})
+                  .topN({{"s1", true}, {"s2", false}}, 10)
+                  .project({"s1", "s2"})
+                  .build(context);
     {
         String expected = "Expression\n"
                           " Expression\n"

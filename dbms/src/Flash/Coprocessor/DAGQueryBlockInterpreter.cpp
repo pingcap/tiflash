@@ -832,7 +832,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         collators,
         aggregate_descriptions,
         is_final_agg);
-    
+
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
