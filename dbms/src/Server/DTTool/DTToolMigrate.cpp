@@ -343,30 +343,30 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         if (args.version == 2)
         {
             args.frame = vm["frame"].as<size_t>();
-            auto algorithm_ = vm["algorithm"].as<std::string>();
-            if (algorithm_ == "xxh3")
+            auto raw_algorithm = vm["algorithm"].as<std::string>();
+            if (raw_algorithm == "xxh3")
             {
                 args.algorithm = DB::ChecksumAlgo::XXH3;
             }
-            else if (algorithm_ == "crc32")
+            else if (raw_algorithm == "crc32")
             {
                 args.algorithm = DB::ChecksumAlgo::CRC32;
             }
-            else if (algorithm_ == "crc64")
+            else if (raw_algorithm == "crc64")
             {
                 args.algorithm = DB::ChecksumAlgo::CRC64;
             }
-            else if (algorithm_ == "city128")
+            else if (raw_algorithm == "city128")
             {
                 args.algorithm = DB::ChecksumAlgo::City128;
             }
-            else if (algorithm_ == "none")
+            else if (raw_algorithm == "none")
             {
                 args.algorithm = DB::ChecksumAlgo::None;
             }
             else
             {
-                std::cerr << "invalid algorithm: " << algorithm_ << std::endl;
+                std::cerr << "invalid algorithm: " << raw_algorithm << std::endl;
                 return -EINVAL;
             }
         }
