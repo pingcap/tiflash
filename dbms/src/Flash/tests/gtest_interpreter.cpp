@@ -60,6 +60,77 @@ try
                           "             MockTableScan\n";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
+
+    request = context.scan("test_db", "test_table_1")
+                       .filter(eq(col("s2"), col("s3")))
+                       .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                       .filter(eq(col("s2"), col("s3")))
+                       .limit(10)
+                       .build(context);
+    
+    {
+        String expected = "Union\n"
+                          " SharedQuery x 10\n"
+                          "  Limit\n"
+                          "   Union\n"
+                          "    Limit x 10\n"
+                          "     Expression\n"
+                          "      Expression\n"
+                          "       Filter\n"
+                          "        SharedQuery\n"
+                          "         ParallelAggregating\n"
+                          "          Expression x 10\n"
+                          "           Expression\n"
+                          "            Filter\n"
+                          "             MockTableScan\n";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+    }
+}
+CATCH
+
+TEST_F(InterpreterExecuteTest, MultipleQueryBlockWithSource)
+try
+{
+    auto request = context.scan("test_db", "test_table_1")
+                       .project({"s1", "s2", "s3"})
+                       .project({"s1", "s2"})
+                       .project("s1")
+                       .build(context);
+    {
+        String expected = "Union\n"
+                          " Expression x 10\n"
+                          "  Expression\n"
+                          "   Expression\n"
+                          "    Expression\n"
+                          "     Expression\n"
+                          "      Expression\n"
+                          "       Expression\n"
+                          "        Expression\n"
+                          "         Expression\n"
+                          "          Expression\n"
+                          "           MockTableScan\n";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+                     .project({"s1", "s2", "s3"})
+                     .topN({{"s1", true}, {"s2", false}}, 10)
+                     .project({"s1", "s2"})
+                     .build(context);
+    {
+        String expected = "Expression\n"
+                          " Expression\n"
+                          "  Expression\n"
+                          "   Expression\n"
+                          "    MergeSorting\n"
+                          "     Union\n"
+                          "      PartialSorting x 10\n"
+                          "       Expression\n"
+                          "        Expression\n"
+                          "         Expression\n"
+                          "          MockTableScan\n";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+    }
 }
 CATCH
 
