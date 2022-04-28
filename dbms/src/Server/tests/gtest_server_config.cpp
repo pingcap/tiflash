@@ -165,16 +165,11 @@ max_rows_in_set = 455
 dt_segment_limit_rows = 1000005
 dt_enable_rough_set_filter = 0
 max_memory_usage = 102000
+dt_storage_blob_heavy_gc_valid_rate = 0.2
 dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
 dt_storage_pool_data_gc_min_bytes = 256
 dt_storage_pool_data_gc_max_valid_rate = 0.5
-dt_storage_pool_data_blob_file_limit_size = 512
-dt_storage_pool_data_blob_cached_fd_size = 100
-dt_storage_pool_data_blob_heavy_gc_valid_rate = 0.2
-dt_storage_pool_data_wal_roll_size = 2
-dt_storage_pool_data_wal_recover_mode = 1
-dt_storage_pool_data_wal_max_persisted_log_files = 5
 dt_compression_method = "zstd"
 dt_compression_level = -1
         )",
@@ -227,12 +222,7 @@ dt_compression_level = 1
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_file_num, 8);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_file_limit_size, 512);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_cached_fd_size, 100);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_heavy_gc_valid_rate, 0.2);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_roll_size, 2);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_recover_mode, 1);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_max_persisted_log_files, 5);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_blob_heavy_gc_valid_rate, 0.2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_column_file_size, 8388608);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_column_file_rows, 2048);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_size, 536870912);
@@ -286,17 +276,12 @@ try
 max_rows_in_set = 455
 dt_segment_limit_rows = 1000005
 dt_enable_rough_set_filter = 0
+dt_storage_blob_heavy_gc_valid_rate = 0.3
 max_memory_usage = 102000
 dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
 dt_storage_pool_data_gc_min_bytes = 256
 dt_storage_pool_data_gc_max_valid_rate = 0.5
-dt_storage_pool_data_blob_file_limit_size = 512
-dt_storage_pool_data_blob_cached_fd_size = 10
-dt_storage_pool_data_blob_heavy_gc_valid_rate = 0.3
-dt_storage_pool_data_wal_roll_size = 2
-dt_storage_pool_data_wal_recover_mode = 1
-dt_storage_pool_data_wal_max_persisted_log_files = 5
 dt_open_file_max_idle_seconds = 20
 dt_page_gc_low_write_prob = 0.2
         )"};
@@ -313,28 +298,18 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(cfg.blob_file_limit_size, settings.dt_storage_pool_data_blob_file_limit_size);
-        EXPECT_NE(cfg.blob_cached_fd_size, settings.dt_storage_pool_data_blob_cached_fd_size);
-        EXPECT_NE(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_pool_data_blob_heavy_gc_valid_rate);
-        EXPECT_NE(cfg.wal_roll_size, settings.dt_storage_pool_data_wal_roll_size);
-        EXPECT_NE(cfg.wal_recover_mode, settings.dt_storage_pool_data_wal_recover_mode);
-        EXPECT_NE(cfg.wal_max_persisted_log_files, settings.dt_storage_pool_data_wal_max_persisted_log_files);
+        EXPECT_NE(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_blob_heavy_gc_valid_rate);
         EXPECT_NE(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
-
         persister.gc();
 
         cfg = persister.page_storage->getSettings();
+
         EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(cfg.blob_file_limit_size, settings.dt_storage_pool_data_blob_file_limit_size);
-        EXPECT_NE(cfg.blob_cached_fd_size, settings.dt_storage_pool_data_blob_cached_fd_size);
-        EXPECT_NE(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_pool_data_blob_heavy_gc_valid_rate);
-        EXPECT_NE(cfg.wal_roll_size, settings.dt_storage_pool_data_wal_roll_size);
-        EXPECT_NE(cfg.wal_max_persisted_log_files, settings.dt_storage_pool_data_wal_max_persisted_log_files);
-        EXPECT_NE(cfg.wal_recover_mode, settings.dt_storage_pool_data_wal_recover_mode);
+        EXPECT_EQ(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_blob_heavy_gc_valid_rate);
         EXPECT_EQ(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_EQ(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
@@ -357,12 +332,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_file_limit_size, 512);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_cached_fd_size, 10);
-        ASSERT_DOUBLE_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_heavy_gc_valid_rate, 0.3);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_roll_size, 2);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_recover_mode, 1);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_max_persisted_log_files, 5);
+        ASSERT_DOUBLE_EQ(global_ctx.getSettingsRef().dt_storage_blob_heavy_gc_valid_rate, 0.3);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_open_file_max_idle_seconds, 20);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_page_gc_low_write_prob, 0.2);
         verify_persister_reload_config(persister);
@@ -382,16 +352,11 @@ max_rows_in_set = 455
 dt_segment_limit_rows = 1000005
 dt_enable_rough_set_filter = 0
 max_memory_usage = 102000
+dt_storage_blob_heavy_gc_valid_rate = 0.3
 dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
 dt_storage_pool_data_gc_min_bytes = 256
 dt_storage_pool_data_gc_max_valid_rate = 0.5
-dt_storage_pool_data_blob_file_limit_size = 512
-dt_storage_pool_data_blob_cached_fd_size = 10
-dt_storage_pool_data_blob_heavy_gc_valid_rate = 0.3
-dt_storage_pool_data_wal_roll_size = 2
-dt_storage_pool_data_wal_recover_mode = 1
-dt_storage_pool_data_wal_max_persisted_log_files = 5
 dt_open_file_max_idle_seconds = 20
 dt_page_gc_low_write_prob = 0.2
         )"};
@@ -408,12 +373,7 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_NE(cfg.blob_file_limit_size, settings.dt_storage_pool_data_blob_file_limit_size);
-        EXPECT_NE(cfg.blob_cached_fd_size, settings.dt_storage_pool_data_blob_cached_fd_size);
-        EXPECT_NE(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_pool_data_blob_heavy_gc_valid_rate);
-        EXPECT_NE(cfg.wal_roll_size, settings.dt_storage_pool_data_wal_roll_size);
-        EXPECT_NE(cfg.wal_recover_mode, settings.dt_storage_pool_data_wal_recover_mode);
-        EXPECT_NE(cfg.wal_max_persisted_log_files, settings.dt_storage_pool_data_wal_max_persisted_log_files);
+        EXPECT_NE(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_blob_heavy_gc_valid_rate);
         EXPECT_NE(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
@@ -424,12 +384,7 @@ dt_page_gc_low_write_prob = 0.2
         EXPECT_EQ(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_EQ(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_DOUBLE_EQ(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
-        EXPECT_EQ(cfg.blob_file_limit_size, settings.dt_storage_pool_data_blob_file_limit_size);
-        EXPECT_EQ(cfg.blob_cached_fd_size, settings.dt_storage_pool_data_blob_cached_fd_size);
-        EXPECT_DOUBLE_EQ(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_pool_data_blob_heavy_gc_valid_rate);
-        EXPECT_EQ(cfg.wal_roll_size, settings.dt_storage_pool_data_wal_roll_size);
-        EXPECT_EQ(cfg.wal_recover_mode, settings.dt_storage_pool_data_wal_recover_mode);
-        EXPECT_EQ(cfg.wal_max_persisted_log_files, settings.dt_storage_pool_data_wal_max_persisted_log_files);
+        EXPECT_DOUBLE_EQ(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_blob_heavy_gc_valid_rate);
         EXPECT_EQ(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_EQ(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
@@ -452,12 +407,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_file_limit_size, 512);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_cached_fd_size, 10);
-        ASSERT_DOUBLE_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_blob_heavy_gc_valid_rate, 0.3);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_roll_size, 2);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_recover_mode, 1);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_wal_max_persisted_log_files, 5);
+        ASSERT_DOUBLE_EQ(global_ctx.getSettingsRef().dt_storage_blob_heavy_gc_valid_rate, 0.3);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_open_file_max_idle_seconds, 20);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_page_gc_low_write_prob, 0.2);
         verify_storage_pool_reload_config(storage_pool);
