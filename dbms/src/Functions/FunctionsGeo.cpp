@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
 #include <Common/ProfileEvents.h>
