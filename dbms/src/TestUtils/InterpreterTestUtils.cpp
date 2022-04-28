@@ -19,22 +19,6 @@
 #include <TestUtils/executorSerializer.h>
 namespace DB::tests
 {
-// not necessary...
-// void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context)
-// {
-//     DAGContext dag_context(*request);
-//     dag_context.log = Logger::get("interpreterTest");
-//     dag_context.setIsInterpreterTest(true);
-//     dag_context.setMockTableScanStreams(10);
-//     context.setDAGContext(&dag_context);
-//     // Currently, don't care about regions information in interpreter tests.
-//     DAGQuerySource dag(context);
-//     auto res = executeQuery(dag, context, false, QueryProcessingStage::Complete);
-//     FmtBuffer fb;
-//     res.in->dumpTree(fb);
-//     std::cout << fb.toString() << std::endl;
-// }
-
 DAGContext & InterpreterTest::getDAGContext()
 {
     assert(dag_context_ptr != nullptr);

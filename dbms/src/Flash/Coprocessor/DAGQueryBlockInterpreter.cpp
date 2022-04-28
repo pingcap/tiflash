@@ -850,7 +850,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
         pipeline.streams.resize(1);
         // should record for agg before restore concurrency. See #3804.
         recordProfileStreams(pipeline, query_block.aggregation_name);
-        std::cout << "can restore: " << query_block.can_restore_pipeline_concurrency << std::endl;
         restorePipelineConcurrency(pipeline);
     }
     else
