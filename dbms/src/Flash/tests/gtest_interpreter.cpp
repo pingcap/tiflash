@@ -44,16 +44,20 @@ try
                        .topN("s2", false, 10)
                        .build(context);
     {
-        String expected = "Expression\n"
-                          " MergeSorting\n"
-                          "  PartialSorting\n"
-                          "   Expression\n"
-                          "    Filter\n"
-                          "     ParallelAggregating\n"
-                          "      Expression x 10\n"
-                          "       Expression\n"
-                          "        Filter\n"
-                          "         MockTableScan\n";
+        String expected = "Union\n"
+                          " SharedQuery x 10\n"
+                          "  Expression\n"
+                          "   MergeSorting\n"
+                          "    Union\n"
+                          "     PartialSorting x 10\n"
+                          "      Expression\n"
+                          "       Filter\n"
+                          "        SharedQuery\n"
+                          "         ParallelAggregating\n"
+                          "          Expression x 10\n"
+                          "           Expression\n"
+                          "            Filter\n"
+                          "             MockTableScan\n";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
 }

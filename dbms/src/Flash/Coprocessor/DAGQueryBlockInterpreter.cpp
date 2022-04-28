@@ -339,6 +339,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     auto columns = getColumnsForTableScan(table_scan);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(columns.second), context);
     auto mock_table_scan_streams = context.getDAGContext()->mockTableScanStreams();
+    max_streams = mock_table_scan_streams;
     for (size_t i = 0; i < mock_table_scan_streams; ++i)
     {
         auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(std::get<0>(columns), context.getSettingsRef().max_block_size);
@@ -831,7 +832,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         collators,
         aggregate_descriptions,
         is_final_agg);
-
+    
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
@@ -849,6 +850,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         pipeline.streams.resize(1);
         // should record for agg before restore concurrency. See #3804.
         recordProfileStreams(pipeline, query_block.aggregation_name);
+        std::cout << "can restore: " << query_block.can_restore_pipeline_concurrency << std::endl;
         restorePipelineConcurrency(pipeline);
     }
     else
