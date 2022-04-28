@@ -233,20 +233,23 @@ TEST_F(DTToolTest, BlockwiseInvariant)
         stream->readSuffix();
     }
 
-    std::vector<std::tuple<size_t, DB::ChecksumAlgo, DB::CompressionMethod, int>> test_cases{
-        {2, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::LZ4, -1},
-        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::ZSTD, 1},
-        {2, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
-        {2, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
-        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::NONE, -1}};
-    for (auto [version, algo, comp, level] : test_cases)
+    std::vector<std::tuple<size_t, size_t, DB::ChecksumAlgo, DB::CompressionMethod, int>> test_cases{
+        {2, DBMS_DEFAULT_BUFFER_SIZE, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::LZ4, -1},
+        {1, 64, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::ZSTD, 1},
+        {2, DBMS_DEFAULT_BUFFER_SIZE * 2, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
+        {2, DBMS_DEFAULT_BUFFER_SIZE * 4, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
+        {2, 4, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
+        {2, 13, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
+        {2, 5261, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
+        {1, DBMS_DEFAULT_BUFFER_SIZE, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::NONE, -1}};
+    for (auto [version, frame_size, algo, comp, level] : test_cases)
     {
         auto a = DTTool::Migrate::MigrateArgs{
             .no_keep = false,
             .dry_mode = false,
             .file_id = 1,
             .version = version,
-            .frame = DBMS_DEFAULT_BUFFER_SIZE,
+            .frame = frame_size,
             .algorithm = algo,
             .workdir = getTemporaryPath(),
             .compression_method = comp,
@@ -260,6 +263,10 @@ TEST_F(DTToolTest, BlockwiseInvariant)
             0,
             getTemporaryPath(),
             DB::DM::DMFile::ReadMetaMode::all());
+        if (version == 2)
+        {
+            EXPECT_EQ(refreshed_file->getConfiguration()->getChecksumFrameLength(), frame_size);
+        }
         auto stream = DB::DM::createSimpleBlockInputStream(*db_context, refreshed_file);
         auto size_iter = size_info.begin();
         auto prop_iter = dmfile->getPackProperties().property().begin();
