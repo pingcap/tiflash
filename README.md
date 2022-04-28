@@ -218,7 +218,7 @@ ninja gtests_libdaemon
 There are known false positives reported from leak sanitizer (which is included in address sanitizer). To suppress these errors, set the following environment variables before running the executables:
 
 ```
-LSAN_OPTIONS=suppressions=/path/to/tiflash/test/sanitize/asan.suppression
+LSAN_OPTIONS=suppressions=$WORKSPACE/tiflash/test/sanitize/asan.suppression
 ```
 
 ## Run Integration Tests
