@@ -1104,9 +1104,12 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
             auto field_checksum = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
             if (unlikely(to_read.entry.size != 0 && field_checksum != expect_checksum))
             {
-                throw Exception(fmt::format("Page [{}] field [{}] checksum not match, broken file: {}, expected: 0x{:X}, but: 0x{:X}",
+                throw Exception(fmt::format("Page [{}] field [{}], entry offset [{}], entry size[{}], checksum not match, "
+                                            "broken file: {},  expected: 0x{:X}, but: 0x{:X}",
                                             to_read.page_id,
                                             field_index,
+                                            to_read.entry.offset,
+                                            to_read.entry.size,
                                             data_file_path,
                                             expect_checksum,
                                             field_checksum),

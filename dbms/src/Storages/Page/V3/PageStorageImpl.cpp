@@ -139,7 +139,7 @@ DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageId page_id, const Read
     }
 
     auto page_entry = throw_on_not_exist ? page_directory->get(buildV3Id(ns_id, page_id), snapshot) : page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
-    if (page_entry.second.file_id == INVALID_BLOBFILE_ID)
+    if (!page_entry.second.isValid())
     {
         Page page_not_found;
         page_not_found.page_id = INVALID_PAGE_ID;
@@ -216,7 +216,7 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
     for (const auto & [page_id, field_indices] : page_fields)
     {
         const auto & [id, entry] = throw_on_not_exist ? page_directory->get(buildV3Id(ns_id, page_id), snapshot) : page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
-        if (entry.file_id != INVALID_BLOBFILE_ID)
+        if (entry.isValid())
         {
             auto info = BlobStore::FieldReadInfo(buildV3Id(ns_id, page_id), entry, field_indices);
             read_infos.emplace_back(info);

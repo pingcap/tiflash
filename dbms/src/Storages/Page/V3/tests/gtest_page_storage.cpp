@@ -130,7 +130,7 @@ try
 
     {
         const auto & page = page_storage->readImpl(TEST_NAMESPACE_ID, 1, nullptr, nullptr, false);
-        ASSERT_EQ(page.page_id, INVALID_PAGE_ID);
+        ASSERT_FALSE(page.isValid());
     }
 
     {
@@ -146,14 +146,14 @@ try
         // readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true);
         auto page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
         ASSERT_EQ(page_maps[1].page_id, 1);
-        ASSERT_EQ(page_maps[2].page_id, INVALID_PAGE_ID);
-        ASSERT_EQ(page_maps[5].page_id, INVALID_PAGE_ID);
+        ASSERT_FALSE(page_maps[2].isValid());
+        ASSERT_FALSE(page_maps[5].isValid());
 
         const auto & page1 = page_storage->readImpl(TEST_NAMESPACE_ID, 1, nullptr, nullptr, false);
         ASSERT_EQ(page1.page_id, 1);
 
         const auto & page2 = page_storage->readImpl(TEST_NAMESPACE_ID, 2, nullptr, nullptr, false);
-        ASSERT_EQ(page2.page_id, INVALID_PAGE_ID);
+        ASSERT_FALSE(page2.isValid());
 
         std::vector<PageStorage::PageReadFields> fields;
         PageStorage::PageReadFields field1;
@@ -168,7 +168,7 @@ try
 
         page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, fields, nullptr, nullptr, false);
         ASSERT_EQ(page_maps[4].page_id, 4);
-        ASSERT_EQ(page_maps[6].page_id, INVALID_PAGE_ID);
+        ASSERT_FALSE(page_maps[6].isValid());
 
         PageIds page_ids_not_found = page_storage->readImpl(
             TEST_NAMESPACE_ID,
@@ -734,7 +734,7 @@ TEST_F(PageStorageWith2PagesTest, PutDuplicateRefPages)
 
         WriteBatch batch2;
         batch2.putRefPage(3, 1);
-        page_storage->write(std::move(batch));
+        page_storage->write(std::move(batch2));
         // now Page1's entry has ref count == 2 but not 3
     }
     PageEntry entry1 = page_storage->getEntry(1);
@@ -781,7 +781,7 @@ TEST_F(PageStorageWith2PagesTest, PutCollapseDuplicatedRefPages)
         WriteBatch batch2;
         // RefPage4 -> Page1, duplicated due to ref-path-collapse
         batch2.putRefPage(4, 1);
-        page_storage->write(std::move(batch));
+        page_storage->write(std::move(batch2));
         // now Page1's entry has ref count == 3 but not 2
     }
 
