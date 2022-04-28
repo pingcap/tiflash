@@ -44,12 +44,31 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         {
             send_thread->join();
         }
+<<<<<<< HEAD
         clearSendQueue();
+=======
+        LOG_FMT_TRACE(log, "waiting consumer finish!");
+        waitForConsumerFinish(/*allow_throw=*/false);
+        LOG_FMT_TRACE(log, "waiting child thread finished!");
+        thread_manager->wait();
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
+<<<<<<< HEAD
+=======
+    LOG_FMT_TRACE(log, "destructed tunnel obj!");
+}
+
+template <typename Writer>
+void MPPTunnelBase<Writer>::finishSendQueue()
+{
+    bool flag = send_queue.finish();
+    if (flag && !is_local && is_async)
+        writer->tryFlushOne();
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 }
 
 /// exit abnormally, such as being cancelled.

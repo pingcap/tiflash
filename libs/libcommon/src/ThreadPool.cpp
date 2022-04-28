@@ -1,16 +1,68 @@
+<<<<<<< HEAD
+=======
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Poco/Logger.h>
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 #include <common/ThreadPool.h>
+#include <common/logger_useful.h>
 
 #include <iostream>
 
 
+<<<<<<< HEAD
 ThreadPool::ThreadPool(size_t m_size, Job pre_worker) : m_size(m_size)
+=======
+static Poco::Logger * getLogger()
+{
+    static Poco::Logger * logger = &Poco::Logger::get("ThreadPool");
+    return logger;
+}
+
+ThreadPool::ThreadPool(size_t m_size, Job pre_worker)
+    : m_size(m_size)
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 {
     threads.reserve(m_size);
-    for (size_t i = 0; i < m_size; ++i)
-        threads.emplace_back([this, pre_worker] {
-            pre_worker();
-            worker();
-        });
+    try
+    {
+        for (size_t i = 0; i < m_size; ++i)
+            threads.emplace_back([this, pre_worker] {
+                pre_worker();
+                worker();
+            });
+    }
+    catch (...)
+    {
+        LOG_FMT_ERROR(getLogger(), "ThreadPool failed to allocate threads.");
+        finalize();
+        throw;
+    }
+}
+
+void ThreadPool::finalize()
+{
+    {
+        std::unique_lock lock(mutex);
+        shutdown = true;
+    }
+
+    has_new_job_or_shutdown.notify_all();
+
+    for (auto & thread : threads)
+        thread.join();
 }
 
 void ThreadPool::schedule(Job job)
@@ -44,6 +96,7 @@ void ThreadPool::wait()
 
 ThreadPool::~ThreadPool()
 {
+<<<<<<< HEAD
     {
         std::unique_lock<std::mutex> lock(mutex);
         shutdown = true;
@@ -53,6 +106,9 @@ ThreadPool::~ThreadPool()
 
     for (auto & thread : threads)
         thread.join();
+=======
+    finalize();
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 }
 
 size_t ThreadPool::active() const
