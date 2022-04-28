@@ -25,6 +25,8 @@
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
+#include "Storages/Transaction/TypeMapping.h"
+#include "tipb/executor.pb.h"
 
 namespace DB
 {
@@ -75,6 +77,31 @@ Field GenDefaultField(const TiDB::ColumnInfo & col_info)
     default:
         throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+std::pair<std::vector<ColumnWithTypeAndName>, std::vector<NameAndTypePair>> getColumnsForTableScan(
+    const tipb::Executor * table_scan)
+{
+    std::vector<ColumnWithTypeAndName> columms;
+    std::vector<NameAndTypePair> names_and_types;
+    TiDB::TableInfo table_info;
+    const auto& tipb_table_scan = table_scan->tbl_scan();
+
+    for (Int32 i = 0; i < tipb_table_scan.columns_size(); ++i)
+    {
+        auto const & ci = tipb_table_scan.columns(i);
+        TiDB::ColumnInfo column_info;
+        column_info.id = ci.column_id();
+        column_info.tp = TiDB::TypeString;
+        table_info.columns.push_back(column_info);
+    }
+    for (const auto & column : table_info.columns)
+    {
+        auto type = getDataTypeByColumnInfoForComputingLayer(column);
+        names_and_types.push_back({"test", type});
+        columms.push_back(DB::ColumnWithTypeAndName(type, "test"));
+    }
+    return {columms, names_and_types};
 }
 } // namespace DB
 

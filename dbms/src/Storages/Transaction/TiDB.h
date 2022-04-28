@@ -20,8 +20,11 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/Types.h>
+#include <Core/ColumnWithTypeAndName.h>
+#include <Core/NamesAndTypes.h>
 
 #include <optional>
+#include "tipb/executor.pb.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -40,6 +43,8 @@ extern const int LOGICAL_ERROR;
 namespace DB
 {
 struct SchemaNameMapper;
+std::pair<std::vector<ColumnWithTypeAndName>, std::vector<NameAndTypePair>> getColumnsForTableScan(
+    const tipb::Executor * table_scan);
 }
 
 namespace TiDB

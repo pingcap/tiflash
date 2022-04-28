@@ -34,7 +34,7 @@ public:
 
 protected:
     Block readImpl() override;
-    ColumnPtr makeColumn(ColumnWithTypeAndName elem);
+    ColumnPtr makeColumn(ColumnWithTypeAndName elem) const;
 };
 
 } // namespace DB

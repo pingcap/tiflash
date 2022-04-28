@@ -32,7 +32,7 @@ MockTableScanBlockInputStream::MockTableScanBlockInputStream(ColumnsWithTypeAndN
     }
 }
 
-ColumnPtr MockTableScanBlockInputStream::makeColumn(ColumnWithTypeAndName elem)
+ColumnPtr MockTableScanBlockInputStream::makeColumn(ColumnWithTypeAndName elem) const
 {
     auto column = elem.type->createColumn();
     size_t row_count = 0;

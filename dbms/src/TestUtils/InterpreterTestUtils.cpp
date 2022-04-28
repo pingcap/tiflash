@@ -55,10 +55,7 @@ void InterpreterTest::initializeClientInfo()
 
 void InterpreterTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request)
 {
-    DAGContext dag_context(*request);
-    dag_context.log = Logger::get("interpreterTest");
-    dag_context.setIsInterpreterTest(true);
-    dag_context.setMockTableScanStreams(10);
+    DAGContext dag_context(*request, "interpreter_test", 10);
     // todo change the code here.
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in interpreter tests.

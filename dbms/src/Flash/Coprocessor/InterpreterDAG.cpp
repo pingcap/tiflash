@@ -30,6 +30,8 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
         max_streams = settings.max_threads;
     else
         max_streams = 1;
+    if (dagContext().isTest())
+        max_streams = dagContext().initialize_concurrency;
     if (max_streams > 1)
     {
         max_streams *= settings.max_streams_to_max_threads_ratio;

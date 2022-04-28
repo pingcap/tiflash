@@ -55,7 +55,6 @@ Union
         SharedQuery
          ParallelAggregating
           Expression x 10
-           Expression
             Filter
              MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
@@ -81,9 +80,8 @@ Union
         SharedQuery
          ParallelAggregating
           Expression x 10
-           Expression
-            Filter
-             MockTableScan)";
+           Filter
+            MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
 }
@@ -121,17 +119,19 @@ Union
                   .build(context);
     {
         String expected = R"(
-Expression
- Expression
+Union
+ Expression x 10
   Expression
    Expression
-    MergeSorting
-     Union
-      PartialSorting x 10
-       Expression
-        Expression
+    SharedQuery
+     Expression
+      MergeSorting
+       Union
+        PartialSorting x 10
          Expression
-          MockTableScan)";
+          Expression
+           Expression
+            MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
 
@@ -144,23 +144,25 @@ Expression
                   .build(context);
     {
         String expected = R"(
-Expression
- Expression
+Union
+ Expression x 10
   Expression
    Expression
-    Aggregating
-     Concat
-      Expression
-       Expression
+    Expression
+     SharedQuery
+      ParallelAggregating
+       Expression x 10
         Expression
          Expression
-          MergeSorting
-           Union
-            PartialSorting x 10
-             Expression
-              Expression
+          SharedQuery
+           Expression
+            MergeSorting
+             Union
+              PartialSorting x 10
                Expression
-                MockTableScan)";
+                Expression
+                 Expression
+                  MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
 
@@ -176,29 +178,34 @@ Expression
                   .build(context);
     {
         String expected = R"(
-Limit
- Expression
-  Expression
-   Expression
-    Expression
+Union
+ SharedQuery x 10
+  Limit
+   Union
+    Limit x 10
      Expression
-      Filter
+      Expression
        Expression
         Expression
          Expression
-          Aggregating
-           Concat
+          Filter
+           Expression
             Expression
              Expression
-              Expression
-               Expression
-                MergeSorting
-                 Union
-                  PartialSorting x 10
-                   Expression
+              SharedQuery
+               ParallelAggregating
+                Expression x 10
+                 Expression
+                  Expression
+                   SharedQuery
                     Expression
-                     Expression
-                      MockTableScan)";
+                     MergeSorting
+                      Union
+                       PartialSorting x 10
+                        Expression
+                         Expression
+                          Expression
+                           MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
 

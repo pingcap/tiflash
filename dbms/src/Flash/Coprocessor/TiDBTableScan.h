@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 
 #include <vector>
+#include "tipb/executor.pb.h"
 
 namespace DB
 {
@@ -49,6 +50,10 @@ public:
     String getTableScanExecutorID() const
     {
         return table_scan->executor_id();
+    }
+    const tipb::Executor * getTableScan() const
+    {
+        return table_scan;
     }
 
 private:
