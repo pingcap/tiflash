@@ -102,7 +102,7 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
-    inline bool isValid() const { return file_id != 0; }
+    inline bool isValid() const { return file_id != INVALID_PAGE_ID; }
     inline bool isTombstone() const { return ref == 0; }
 
     PageFileIdAndLevel fileIdLevel() const
