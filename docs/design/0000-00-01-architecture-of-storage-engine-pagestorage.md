@@ -1,16 +1,16 @@
 # Architecture Of Storage Engine - PageStorage
 
-- Authors(order by last name): [JaySon-Huang](https://github.com/JaySon-Huang),[flowbehappy](https://github.com/flowbehappy) [Jiaqi Zhou](https://github.com/jiaqizho)
+- Authors(order by last name): [JaySon-Huang](https://github.com/JaySon-Huang), [flowbehappy](https://github.com/flowbehappy), [Jiaqi Zhou](https://github.com/jiaqizho)
 
 ## Introduction
 
-PageStorage is one of the earliest components used as Delta merge storage.In the early days of the Tiflash, PageStorage was used as the basic storage moudle, All of IO from DT will store into PageStorage. Over time, we only place elements of `delta` and `metadata of DT` in PageStorage.
+PageStorage is one of the earliest components used in delta merge storage. In the early days of the TIFlash, PageStorage was used as the basic storage moudle, All of IO from DT will store into PageStorage. Over time, we only place elements of `delta` and `metadata of DT` in PageStorage.
 
 PageStorage needs to handle a large amount of delta data read and write, this part of the data is hot data. And a small amount of DT meta information needs to be persisted, this part is cold data. The data of delta  will eventually be merged into the stable part, eq. stored in the DT file.
 
 You can see the picture below. Described in the picture is the design of the entire DT. PageStorage carries the traffic of the upper half of DT.
 
-![tiflash-overall](./images/tiflash-dt-architecture.png)
+![tiflash-dt-architecture](./images/tiflash-dt-architecture.png)
 
 
 As one of the important components of DMS, PageStorage mainly provides a KV storage service which also support MVCC. Unlike other KV services, the KV interface provided by PageStorage is limited. Key is limited to uint64_t, Value is limited to a buffer or a array of buffer(we called it fields) or null.
@@ -24,9 +24,6 @@ PageStorage supported:
 - Write/Read operation atomicity
 - Full MVCC function 
 - KV store function
-   - 	basic write functions
-   - basic read functions 
-   - read with MVCC
 - GC
 
 
@@ -40,7 +37,7 @@ The V3 version has been proposed for a period of time, and it was officially use
 
 ### 1. V2 version
 
-![tiflash-overall](./images/tiflash-ps-v2-architecture.png)
+![tiflash-ps-v2-architecture](./images/tiflash-ps-v2-architecture.png)
 
 The picture below describes the design in PageStorage V2.
 We provider a big PageMap which stored data and meta of pages. Also provider Writable/Readable pagefile to support write/read of page.
