@@ -694,8 +694,44 @@ int Server::main(const std::vector<std::string> & /*args*/)
       * Examples: do repair of local data; clone all replicated tables from replica.
       */
     {
+<<<<<<< HEAD
         Poco::File(path + "flags/").createDirectories();
         global_context->setFlagsPath(path + "flags/");
+=======
+        try
+        {
+            /// Shut down grpc server.
+            LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
+            flash_grpc_server->Shutdown();
+            *is_shutdown = true;
+            // Wait all existed MPPTunnels done to prevent crash.
+            // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
+            const int max_wait_cnt = 300;
+            int wait_cnt = 0;
+            while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            for (auto & cq : cqs)
+                cq->Shutdown();
+            for (auto & cq : notify_cqs)
+                cq->Shutdown();
+            thread_manager->wait();
+            flash_grpc_server->Wait();
+            flash_grpc_server.reset();
+            LOG_FMT_INFO(log, "Shut down flash grpc server");
+
+            /// Close flash service.
+            LOG_FMT_INFO(log, "Begin to shut down flash service");
+            flash_service.reset();
+            LOG_FMT_INFO(log, "Shut down flash service");
+        }
+        catch (...)
+        {
+            auto message = getCurrentExceptionMessage(false);
+            LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
+            std::terminate();
+        }
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
     }
 
     /** Directory with user provided files that are usable by 'file' table function.

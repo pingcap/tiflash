@@ -22,8 +22,76 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
     }
 };
 
+<<<<<<< HEAD
 } // namespace kv
 } // namespace pingcap
+=======
+template <typename RPCContext>
+ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
+    std::shared_ptr<RPCContext> rpc_context_,
+    size_t source_num_,
+    size_t max_streams_,
+    const String & req_id,
+    const String & executor_id)
+    : rpc_context(std::move(rpc_context_))
+    , source_num(source_num_)
+    , max_streams(max_streams_)
+    , max_buffer_size(std::max<size_t>(batch_packet_count, std::max(source_num, max_streams_) * 2))
+    , thread_manager(newThreadManager())
+    , msg_channel(max_buffer_size)
+    , live_connections(source_num)
+    , state(ExchangeReceiverState::NORMAL)
+    , exc_log(Logger::get("ExchangeReceiver", req_id, executor_id))
+    , collected(false)
+{
+    try
+    {
+        rpc_context->fillSchema(schema);
+        setUpConnection();
+    }
+    catch (...)
+    {
+        try
+        {
+            cancel();
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        }
+        throw;
+    }
+}
+
+template <typename RPCContext>
+ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
+{
+    try
+    {
+        close();
+        thread_manager->wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+    }
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::cancel()
+{
+    setEndState(ExchangeReceiverState::CANCELED);
+    msg_channel.finish();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::close()
+{
+    setEndState(ExchangeReceiverState::CLOSED);
+    msg_channel.finish();
+}
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 
 namespace DB
 {
