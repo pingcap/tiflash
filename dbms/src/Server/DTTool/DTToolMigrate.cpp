@@ -176,6 +176,8 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         LOG_FMT_INFO(logger, "source version: {}", (src_file->getConfiguration() ? 2 : 1));
         LOG_FMT_INFO(logger, "source bytes: {}", src_file->getBytesOnDisk());
         LOG_FMT_INFO(logger, "migration temporary directory: {}", keeper.migration_temp_dir.path().c_str());
+        LOG_FMT_INFO(logger, "target version: {}", args.version);
+        LOG_FMT_INFO(logger, "target frame size: {}", args.frame);
         DB::DM::DMConfigurationOpt option{};
 
         // if new format is the target, we construct a config file.
@@ -341,30 +343,30 @@ int migrateEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         if (args.version == 2)
         {
             args.frame = vm["frame"].as<size_t>();
-            auto algorithm_ = vm["algorithm"].as<std::string>();
-            if (algorithm_ == "xxh3")
+            auto raw_algorithm = vm["algorithm"].as<std::string>();
+            if (raw_algorithm == "xxh3")
             {
                 args.algorithm = DB::ChecksumAlgo::XXH3;
             }
-            else if (algorithm_ == "crc32")
+            else if (raw_algorithm == "crc32")
             {
                 args.algorithm = DB::ChecksumAlgo::CRC32;
             }
-            else if (algorithm_ == "crc64")
+            else if (raw_algorithm == "crc64")
             {
                 args.algorithm = DB::ChecksumAlgo::CRC64;
             }
-            else if (algorithm_ == "city128")
+            else if (raw_algorithm == "city128")
             {
                 args.algorithm = DB::ChecksumAlgo::City128;
             }
-            else if (algorithm_ == "none")
+            else if (raw_algorithm == "none")
             {
                 args.algorithm = DB::ChecksumAlgo::None;
             }
             else
             {
-                std::cerr << "invalid algorithm: " << algorithm_ << std::endl;
+                std::cerr << "invalid algorithm: " << raw_algorithm << std::endl;
                 return -EINVAL;
             }
         }
