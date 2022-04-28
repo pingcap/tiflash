@@ -3271,7 +3271,7 @@ struct TiDBWeekOfYearTransformerImpl
             return 0;
         }
         /// Behavior differences from TiDB:
-        /// for date in ['0000-01-02'), weekofyear is the same with MySQL, while TiDB is offset by one day
+        /// for '0000-01-02', weekofyear is the same with MySQL, while TiDB is offset by one day
         /// TiDB_weekofyear('0000-01-02') = 52, MySQL/TiFlash_weekofyear('0000-01-02') = 1
         return static_cast<ToFieldType>(val.week(3));
     }
