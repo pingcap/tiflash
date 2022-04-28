@@ -278,7 +278,7 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
 
         try
         {
-            removePosFromStats(entry.file_id, entry.offset, entry.size+ entry.align_size);
+            removePosFromStats(entry.file_id, entry.offset, entry.size + entry.align_size);
         }
         catch (DB::Exception & e)
         {
