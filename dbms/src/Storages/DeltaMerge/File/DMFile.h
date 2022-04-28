@@ -317,14 +317,14 @@ private:
 
     bool isColIndexExist(const ColId & col_id) const;
 
-    const String encryptionBasePath() const;
-    const EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionMetaPath() const;
-    const EncryptionPath encryptionPackStatPath() const;
-    const EncryptionPath encryptionPackPropertyPath() const;
-    const EncryptionPath encryptionConfigurationPath() const;
+    String encryptionBasePath() const;
+    EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionMetaPath() const;
+    EncryptionPath encryptionPackStatPath() const;
+    EncryptionPath encryptionPackPropertyPath() const;
+    EncryptionPath encryptionConfigurationPath() const;
 
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
     {
