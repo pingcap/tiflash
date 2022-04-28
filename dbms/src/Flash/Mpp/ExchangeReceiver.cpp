@@ -25,6 +25,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , log(getMPPTaskLog(log_, "ExchangeReceiver"))
 {
+<<<<<<< HEAD
     for (int i = 0; i < exc.field_types_size(); ++i)
     {
         String name = "exchange_receiver_" + std::to_string(i);
@@ -33,14 +34,46 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     }
 
     setUpConnection();
+=======
+    try
+    {
+        rpc_context->fillSchema(schema);
+        setUpConnection();
+    }
+    catch (...)
+    {
+        try
+        {
+            cancel();
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        }
+        throw;
+    }
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 }
 
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
+<<<<<<< HEAD
     close();
     if (thread_manager)
         thread_manager->wait();
+=======
+    try
+    {
+        close();
+        thread_manager->wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+    }
+>>>>>>> 4019600ea9 (fix some unsafe constructor and destructor (#4782))
 }
 
 template <typename RPCContext>
