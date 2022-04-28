@@ -47,6 +47,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/Transaction/TiDB.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
@@ -303,9 +304,9 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    auto columns = getColumnsForTableScan(table_scan.getTableScan());
+    auto columns = TiDB::getColumnsFromTableScan(table_scan.getTableScan()->tbl_scan());
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(columns.second), context);
-    for (size_t i = 0; i < context.getDAGContext()->final_concurrency; ++i)
+    for (size_t i = 0; i < max_streams; ++i)
     {
         auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(std::get<0>(columns), context.getSettingsRef().max_block_size);
         pipeline.streams.emplace_back(mock_table_scan_stream);

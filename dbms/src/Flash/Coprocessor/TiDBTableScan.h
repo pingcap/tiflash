@@ -16,9 +16,6 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 
-#include <vector>
-#include "tipb/executor.pb.h"
-
 namespace DB
 {
 /// TiDBTableScan is a wrap to hide the difference of `TableScan` and `PartitionTableScan`

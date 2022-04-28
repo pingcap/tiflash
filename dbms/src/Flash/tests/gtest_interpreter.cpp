@@ -55,8 +55,8 @@ Union
         SharedQuery
          ParallelAggregating
           Expression x 10
-            Filter
-             MockTableScan)";
+           Filter
+            MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
 
@@ -244,10 +244,9 @@ CreatingSets
  Union
   Expression x 10
    Expression
-    Expression
-     HashJoinProbe
-      Expression
-       MockTableScan)";
+    HashJoinProbe
+     Expression
+      MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
     }
 }

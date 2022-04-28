@@ -14,17 +14,17 @@
 
 #pragma once
 
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
+#include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/Types.h>
-#include <Core/ColumnWithTypeAndName.h>
-#include <Core/NamesAndTypes.h>
+#include <tipb/executor.pb.h>
 
 #include <optional>
-#include "tipb/executor.pb.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -43,8 +43,6 @@ extern const int LOGICAL_ERROR;
 namespace DB
 {
 struct SchemaNameMapper;
-std::pair<std::vector<ColumnWithTypeAndName>, std::vector<NameAndTypePair>> getColumnsForTableScan(
-    const tipb::Executor * table_scan);
 }
 
 namespace TiDB
@@ -402,5 +400,12 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+
+using ColumnsWithTypeAndName = DB::ColumnsWithTypeAndName;
+using NamesAndTypes = DB::NamesAndTypes;
+std::pair<ColumnsWithTypeAndName, NamesAndTypes> getColumnsFromTableScan(
+    const tipb::TableScan & table_scan);
+NamesAndTypes getNamesAndTypeFromTableScan(const tipb::TableScan & table_scan);
+ColumnsWithTypeAndName getColumnWithTypeAndNameFromTableScan(const tipb::TableScan & table_scan);
 
 } // namespace TiDB
