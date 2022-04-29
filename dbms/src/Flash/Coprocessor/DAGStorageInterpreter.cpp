@@ -986,7 +986,7 @@ void DAGStorageInterpreter::buildRemoteRequests()
             *context.getDAGContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
-            pushed_down_filter,
+            push_down_filter,
             log));
     }
 }
