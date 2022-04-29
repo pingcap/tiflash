@@ -53,9 +53,9 @@ void InterpreterTest::initializeClientInfo()
     client_info.interface = ClientInfo::Interface::GRPC;
 }
 
-void InterpreterTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request)
+void InterpreterTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
-    DAGContext dag_context(*request, "interpreter_test", 10);
+    DAGContext dag_context(*request, "interpreter_test", concurrency);
     // todo change the code here.
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in interpreter tests.

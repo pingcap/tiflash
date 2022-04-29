@@ -57,7 +57,7 @@ Union
           Expression x 10
            Filter
             MockTableScan)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
     request = context.scan("test_db", "test_table_1")
@@ -82,7 +82,7 @@ Union
           Expression x 10
            Filter
             MockTableScan)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }
 CATCH
@@ -109,7 +109,7 @@ Union
          Expression
           Expression
            MockTableScan)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
     request = context.scan("test_db", "test_table_1")
@@ -132,7 +132,7 @@ Union
           Expression
            Expression
             MockTableScan)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
     request = context.scan("test_db", "test_table_1")
@@ -163,7 +163,7 @@ Union
                 Expression
                  Expression
                   MockTableScan)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
     request = context.scan("test_db", "test_table_1")
@@ -206,7 +206,7 @@ Union
                          Expression
                           Expression
                            MockTableScan)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
     // Join Source.
@@ -247,7 +247,7 @@ CreatingSets
     HashJoinProbe
      Expression
       MockTableScan)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request);
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }
 CATCH

@@ -50,7 +50,7 @@ public:
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
-    void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request);
+    void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
 protected:
     MockDAGRequestContext context;
@@ -58,7 +58,5 @@ protected:
 };
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
-#define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request) executeInterpreter((str), (request))
-
-// #define xxxx
+#define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
 } // namespace DB::tests
