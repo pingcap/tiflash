@@ -74,20 +74,30 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     row_to_dump += "filter_" + DB::toString(filter_to_dump->data()[row_index]);
                 }
                 LOG_WARNING(log,
-                            "Found suspicious row!!! [table_name=" << table_name << "] [tso=" << tso << "] [row_index=" << row_index
+                            "Found suspicious row!!! [table_name=" << table_name << "] [tso=" << tso
+                                                                   << "] [num_rows=" << block_to_dump.rows() << "] [row_index=" << row_index
                                                                    << "] [" << row_to_dump << "]");
             };
 
             // find if there exist any of target column id
-            for (auto & c : block_to_ret)
+
+            for (auto c_iter = block_to_ret.begin(); c_iter != block_to_ret.end(); ++c_iter)
             {
-                LOG_WARNING(log, "itering column: " << c.name << ", id: " << c.column_id);
-                if (c.type->isDecimal() && (c.column_id == col_id_price || c.column_id == col_id_combo_price))
+                const auto & c              = *c_iter;
+                auto         unwrapped_type = removeNullable(c.type);
+                if (unwrapped_type->isDecimal() && (c.column_id == col_id_price || c.column_id == col_id_combo_price))
                 {
-                    for (size_t row_idx = 0; row_idx < c.column->size(); ++row_idx)
+                    auto unwrapped_col = c.column;
+                    if (c.column->isColumnNullable())
+                    {
+                        const auto * null_input_column = checkAndGetColumn<ColumnNullable>(c.column.get());
+                        unwrapped_col                  = null_input_column->getNestedColumnPtr();
+                    }
+
+                    for (size_t row_idx = 0; row_idx < unwrapped_col->size(); ++row_idx)
                     {
                         // check whether the row value is suspicious
-                        const int compare_res = c.column->compareAt(row_idx, 0, *suspicious_const_col, 0);
+                        const int compare_res = unwrapped_col->compareAt(row_idx, 0, *suspicious_const_col, 0);
                         // greater or equal to suspicious value
                         if (compare_res >= 0)
                         {
