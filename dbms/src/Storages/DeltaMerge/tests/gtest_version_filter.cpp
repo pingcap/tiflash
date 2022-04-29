@@ -46,7 +46,7 @@ template <int MODE>
 BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefines & columns, UInt64 max_version)
 {
     ColumnDefine handle_define(TiDBPkColumnID, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_TYPE);
-    return std::make_shared<DMVersionFilterBlockInputStream<MODE>>(std::make_shared<DebugBlockInputStream>(blocks), columns, max_version);
+    return std::make_shared<DMVersionFilterBlockInputStream<MODE>>(std::make_shared<DebugBlockInputStream>(blocks), columns, max_version, "");
 }
 
 } // namespace
