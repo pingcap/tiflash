@@ -39,6 +39,7 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
+#include <Flash/Coprocessor/GenSchema.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -116,6 +117,7 @@ AnalysisResult analyzeExpressions(
     AnalysisResult res;
     ExpressionActionsChain chain;
     // selection on table scan had been executed in handleTableScan
+    // In test mode, filter is not pushed down to table scan
     if (query_block.selection && (!query_block.isTableScanSource() || context.getDAGContext()->isTest()))
     {
         std::vector<const tipb::Expr *> where_conditions;
@@ -304,8 +306,8 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
 
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    auto names_and_types = TiDB::genNamesAndTypesFromTableScan(table_scan.getTableScan()->tbl_scan());
-    auto columns_with_type_and_name = TiDB::getColumnWithTypeAndName(names_and_types);
+    auto names_and_types = genNamesAndTypesFromTableScan(table_scan.getTableScan()->tbl_scan());
+    auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
     for (size_t i = 0; i < max_streams; ++i)
     {

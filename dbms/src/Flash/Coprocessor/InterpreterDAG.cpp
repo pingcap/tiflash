@@ -28,10 +28,11 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     const Settings & settings = context.getSettingsRef();
     if (dagContext().isBatchCop() || dagContext().isMPPTask())
         max_streams = settings.max_threads;
+    else if (dagContext().isTest())
+        max_streams = dagContext().initialize_concurrency;
     else
         max_streams = 1;
-    if (dagContext().isTest())
-        max_streams = dagContext().initialize_concurrency;
+
     if (max_streams > 1)
     {
         max_streams *= settings.max_streams_to_max_threads_ratio;

@@ -14,15 +14,12 @@
 
 #pragma once
 
-#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
-#include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/Types.h>
-#include <tipb/executor.pb.h>
 
 #include <optional>
 
@@ -400,15 +397,4 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
-
-using ColumnsWithTypeAndName = DB::ColumnsWithTypeAndName;
-using NamesAndTypes = DB::NamesAndTypes;
-using DAGColumnInfo = std::pair<String, ColumnInfo>;
-using DAGSchema = std::vector<DAGColumnInfo>;
-
-DAGSchema genSchemaFromTableScan(const tipb::TableScan & table_scan);
-NamesAndTypes genNamesAndTypesFromTableScan(const tipb::TableScan & table_scan);
-ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema);
-ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
-
 } // namespace TiDB

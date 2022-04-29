@@ -166,6 +166,7 @@ public:
         , max_recorded_error_count(max_error_count_)
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , is_test(true)
     {}
 
     // for tests need to run query tasks.

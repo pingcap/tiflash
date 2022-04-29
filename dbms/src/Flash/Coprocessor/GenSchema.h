@@ -14,11 +14,17 @@
 
 #pragma once
 
-#include <Core/ColumnWithTypeAndName.h>
-
-#include <vector>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/NamesAndTypes.h>
+#include <Storages/Transaction/TiDB.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
-using ColumnsWithTypeAndName = std::vector<ColumnWithTypeAndName>;
-}
+using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
+using DAGSchema = std::vector<DAGColumnInfo>;
+NamesAndTypes genNamesAndTypesFromTableScan(const tipb::TableScan & table_scan);
+DAGSchema genSchemaFromTableScan(const tipb::TableScan & table_scan);
+ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema);
+ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
+} // namespace DB

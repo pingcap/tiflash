@@ -142,7 +142,6 @@ try
         String expected = "topn_1 | order_by: {(<0, String>, desc: false)}, limit: 10\n"
                           " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
-        // executeInterpreter(request, context.context);
     }
 }
 CATCH
