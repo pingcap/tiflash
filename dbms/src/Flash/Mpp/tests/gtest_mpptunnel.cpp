@@ -469,6 +469,7 @@ try
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
     mpp_tunnel_ptr->close("Cancel");
+    mpp_tunnel_ptr->getThreadManager->wait(); // Join local read thread
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 2); //Second for err msg
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
@@ -486,6 +487,7 @@ try
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
     mpp_tunnel_ptr->writeDone();
+    mpp_tunnel_ptr->getThreadManager->wait(); // Join local read thread
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 1);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
