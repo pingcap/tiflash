@@ -314,7 +314,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         }
 
         stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, read_range, 0);
-        stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, columns_to_read, max_version);
+        stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, columns_to_read, max_version, dm_context.table_name);
 
         return stream;
     };
@@ -465,7 +465,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const Seg
     data_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, range, 0);
     data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        data_stream, read_info.read_columns, dm_context.min_version);
+        data_stream, read_info.read_columns, dm_context.min_version, dm_context.table_name);
 
     auto new_stable = createNewStable(dm_context, data_stream, segment_snap->stable->getId(), wbs);
 
@@ -775,7 +775,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
         my_data = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_NAME);
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            my_data, read_info.read_columns, dm_context.min_version);
+            my_data, read_info.read_columns, dm_context.min_version, dm_context.table_name);
         auto my_stable_id = segment_snap->stable->getId();
         my_new_stable     = createNewStable(dm_context, my_data, my_stable_id, wbs);
     }
@@ -799,7 +799,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
         other_data = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            other_data, read_info.read_columns, dm_context.min_version);
+            other_data, read_info.read_columns, dm_context.min_version, dm_context.table_name);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
         other_stable         = createNewStable(dm_context, other_data, other_stable_id, wbs);
     }
@@ -927,7 +927,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
         stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, segment->range, 0);
         stream = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-            stream, read_info.read_columns, dm_context.min_version);
+            stream, read_info.read_columns, dm_context.min_version, dm_context.table_name);
 
         return stream;
     };
