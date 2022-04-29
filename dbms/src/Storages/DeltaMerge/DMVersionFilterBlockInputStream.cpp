@@ -33,13 +33,9 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
 
         auto log_if_exist_suspicious_row = [&](const Block & block_to_ret, IColumn::Filter * filter_to_ret) {
-            constexpr std::string_view table_to_check     = "t_45";
-            constexpr ColId            col_id_price       = 21;
-            constexpr ColId            col_id_combo_price = 23;
-
-            // constexpr std::string_view table_to_check = "t_705";
-            // constexpr ColId col_id_price       = 21;
-            // constexpr ColId col_id_combo_price = 50;
+            constexpr std::string_view table_to_check = "t_705";
+            constexpr ColId col_id_price       = 21;
+            constexpr ColId col_id_combo_price = 50;
             if (table_name != table_to_check)
             {
                 return;
