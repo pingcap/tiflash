@@ -12,8 +12,9 @@ if (NOT USE_INTERNAL_SSL_LIBRARY)
 
     if (NOT OPENSSL_FOUND)
         # Try to find manually.
-        set (OPENSSL_INCLUDE_PATHS "/usr/local/opt/openssl/include")
-        set (OPENSSL_PATHS "/usr/local/opt/openssl/lib")
+        set (OPENSSL_ROOT_DIR "/usr/local/opt/openssl")
+        set (OPENSSL_INCLUDE_PATHS "${OPENSSL_ROOT_DIR}/include")
+        set (OPENSSL_PATHS "${OPENSSL_ROOT_DIR}/lib")
         find_path (OPENSSL_INCLUDE_DIR NAMES openssl/ssl.h PATHS ${OPENSSL_INCLUDE_PATHS})
         find_library (OPENSSL_SSL_LIBRARY ssl PATHS ${OPENSSL_PATHS})
         find_library (OPENSSL_CRYPTO_LIBRARY crypto PATHS ${OPENSSL_PATHS})
