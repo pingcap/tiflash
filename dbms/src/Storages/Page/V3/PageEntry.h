@@ -41,6 +41,11 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
+    PageSize getTotalSize() const
+    {
+        return size + align_size;
+    }
+
     size_t getFieldSize(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))

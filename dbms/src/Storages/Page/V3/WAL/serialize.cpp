@@ -40,6 +40,7 @@ inline void serializeEntryTo(const PageEntryV3 & entry, WriteBuffer & buf)
     writeIntBinary(entry.file_id, buf);
     writeIntBinary(entry.offset, buf);
     writeIntBinary(entry.size, buf);
+    writeIntBinary(entry.align_size, buf);
     writeIntBinary(entry.checksum, buf);
     writeIntBinary(entry.tag, buf);
     // fieldsOffset TODO: compression on `fieldsOffset`

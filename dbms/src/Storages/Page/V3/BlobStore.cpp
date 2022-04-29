@@ -278,7 +278,7 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
 
         try
         {
-            removePosFromStats(entry.file_id, entry.offset, entry.size + entry.align_size);
+            removePosFromStats(entry.file_id, entry.offset, entry.getTotalSize());
         }
         catch (DB::Exception & e)
         {
@@ -983,7 +983,7 @@ BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, B
 void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
     auto stat = blobIdToStat(entry.file_id);
-    stat->restoreSpaceMap(entry.offset, entry.size + entry.align_size);
+    stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
 }
 
 std::pair<BlobFileId, String> BlobStore::BlobStats::getBlobIdFromName(String blob_name)
