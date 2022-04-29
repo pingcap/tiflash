@@ -151,7 +151,10 @@ public:
     PageId maxMetaPageId() { return max_meta_page_id; }
     PageId newLogPageId() { return ++max_log_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
-
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+    bool doV2Gc(const Settings & settings);
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
