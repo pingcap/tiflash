@@ -63,7 +63,6 @@ void InterpreterTest::executeInterpreter(const String & expected_string, const s
     auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
     FmtBuffer fb;
     res.in->dumpTree(fb);
-    std::cout << fb.toString() << std::endl;
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
 }
 
