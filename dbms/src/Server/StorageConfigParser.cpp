@@ -197,7 +197,7 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
         format_version = *version;
     }
 
-    auto get_bool_config = [&](const String & name) {
+    auto get_bool_config_or_default = [&](const String & name, bool default_value) {
         if (auto value = table->get_qualified_as<Int32>(name); value)
         {
             return (*value != 0);
@@ -208,12 +208,12 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
         }
         else
         {
-            return false;
+            return default_value;
         }
     };
-    lazily_init_store = get_bool_config("lazily_init_store");
+    lazily_init_store = get_bool_config_or_default("lazily_init_store", lazily_init_store);
     // config for experimental feature, may remove later
-    enable_ps_v3 = get_bool_config("enable_ps_v3");
+    enable_ps_v3 = get_bool_config_or_default("enable_ps_v3", enable_ps_v3);
 
     LOG_FMT_INFO(log, "format_version {} lazily_init_store {} enable_ps_v3 {}", format_version, lazily_init_store, enable_ps_v3);
 }
