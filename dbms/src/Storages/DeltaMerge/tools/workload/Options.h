@@ -57,6 +57,9 @@ struct WorkloadOptions
 
     uint64_t bg_thread_count;
 
+    int64_t table_id;
+    std::string table_name;
+
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
     void initFailpoints() const;
