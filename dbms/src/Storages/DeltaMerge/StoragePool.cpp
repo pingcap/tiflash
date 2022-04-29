@@ -308,6 +308,27 @@ void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
         data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
 }
 
+
+bool StoragePool::doV2Gc(const Settings & settings)
+{
+    bool done_anything = false;
+    auto write_limiter = global_context.getWriteLimiter();
+    auto read_limiter = global_context.getReadLimiter();
+
+    auto config = extractConfig(settings, StorageType::Meta);
+    meta_storage_v2->reloadSettings(config);
+    done_anything |= meta_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Data);
+    data_storage_v2->reloadSettings(config);
+    done_anything |= data_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
+
+    config = extractConfig(settings, StorageType::Log);
+    log_storage_v2->reloadSettings(config);
+    done_anything |= log_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
+    return done_anything;
+}
+
 bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
     if (run_mode == PageStorageRunMode::ONLY_V3)
@@ -325,21 +346,7 @@ bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
     }
 
     // Only do the v2 GC
-    bool done_anything = false;
-    auto write_limiter = global_context.getWriteLimiter();
-    auto read_limiter = global_context.getReadLimiter();
-    auto config = extractConfig(settings, StorageType::Meta);
-    meta_storage_v2->reloadSettings(config);
-    done_anything |= meta_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Data);
-    data_storage_v2->reloadSettings(config);
-    done_anything |= data_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
-
-    config = extractConfig(settings, StorageType::Log);
-    log_storage_v2->reloadSettings(config);
-    done_anything |= log_storage_v2->gc(/*not_skip*/ false, write_limiter, read_limiter);
-    return done_anything;
+    return doV2Gc(settings);
 }
 
 void StoragePool::shutdown()
