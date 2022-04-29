@@ -1104,25 +1104,24 @@ ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
     return ret;
 }
 
-ColumnsWithTypeAndName getColumnWithTypeAndNameFromTableScan(const tipb::TableScan & table_scan)
+DAGSchema genSchemaFromTableScan(const tipb::TableScan & table_scan)
 {
-    std::vector<DB::ColumnWithTypeAndName> column_with_type_and_names;
-    column_with_type_and_names.reserve(table_scan.columns_size());
+    DAGSchema schema;
+    schema.reserve(table_scan.columns_size());
     for (Int32 i = 0; i < table_scan.columns_size(); ++i)
     {
         String name = "mock_table_scan_" + std::to_string(i);
-        auto const & ci = table_scan.columns(i);
         TiDB::ColumnInfo column_info;
-        column_info.id = ci.column_id();
+        auto const & ci = table_scan.columns(i);
         column_info.tp = static_cast<TiDB::TP>(ci.tp());
+        column_info.id = ci.column_id();
         column_info.name = name;
-        auto type = DB::getDataTypeByColumnInfoForComputingLayer(column_info);
-        column_with_type_and_names.push_back(DB::ColumnWithTypeAndName(type, name));
+        schema.push_back({name, column_info});
     }
-    return column_with_type_and_names;
+    return schema;
 }
 
-NamesAndTypes getNamesAndTypeFromTableScan(const tipb::TableScan & table_scan)
+NamesAndTypes genNamesAndTypesFromTableScan(const tipb::TableScan & table_scan)
 {
     NamesAndTypes names_and_types;
     names_and_types.reserve(table_scan.columns_size());
@@ -1140,26 +1139,27 @@ NamesAndTypes getNamesAndTypeFromTableScan(const tipb::TableScan & table_scan)
     return names_and_types;
 }
 
-std::pair<ColumnsWithTypeAndName, NamesAndTypes> getColumnsFromTableScan(
-    const tipb::TableScan & table_scan)
+ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema)
 {
-    ColumnsWithTypeAndName column_with_type_and_names;
-    NamesAndTypes names_and_types;
-    column_with_type_and_names.reserve(table_scan.columns_size());
-    names_and_types.reserve(table_scan.columns_size());
-
-    for (Int32 i = 0; i < table_scan.columns_size(); ++i)
+    std::vector<DB::ColumnWithTypeAndName> column_with_type_and_names;
+    column_with_type_and_names.reserve(schema.size());
+    for (const auto & col : schema)
     {
-        String name = "mock_table_scan_" + std::to_string(i);
-        auto const & ci = table_scan.columns(i);
-        TiDB::ColumnInfo column_info;
-        column_info.id = ci.column_id();
-        column_info.tp = static_cast<TiDB::TP>(ci.tp());
-        auto type = DB::getDataTypeByColumnInfoForComputingLayer(column_info);
-        names_and_types.push_back({name, type});
-        column_with_type_and_names.push_back(DB::ColumnWithTypeAndName(type, name));
+        auto type = DB::getDataTypeByColumnInfoForComputingLayer(col.second);
+        column_with_type_and_names.push_back(DB::ColumnWithTypeAndName(type, col.first));
     }
-    return {column_with_type_and_names, names_and_types};
+    return column_with_type_and_names;
+}
+
+ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types)
+{
+    std::vector<DB::ColumnWithTypeAndName> column_with_type_and_names;
+    column_with_type_and_names.reserve(names_and_types.size());
+    for (const auto & col : names_and_types)
+    {
+        column_with_type_and_names.push_back(DB::ColumnWithTypeAndName(col.type, col.name));
+    }
+    return column_with_type_and_names;
 }
 
 } // namespace TiDB

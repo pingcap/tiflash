@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <cstddef>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__

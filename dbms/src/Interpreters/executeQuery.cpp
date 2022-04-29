@@ -384,7 +384,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
             };
 
-            if (!internal && res.in && context.getDAGContext()->isTest())
+            if (!internal && res.in && !context.getDAGContext()->isTest())
             {
                 auto pipeline_log_str = [&res]() {
                     FmtBuffer log_buffer;

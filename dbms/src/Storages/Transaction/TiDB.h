@@ -403,9 +403,12 @@ ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 
 using ColumnsWithTypeAndName = DB::ColumnsWithTypeAndName;
 using NamesAndTypes = DB::NamesAndTypes;
-std::pair<ColumnsWithTypeAndName, NamesAndTypes> getColumnsFromTableScan(
-    const tipb::TableScan & table_scan);
-NamesAndTypes getNamesAndTypeFromTableScan(const tipb::TableScan & table_scan);
-ColumnsWithTypeAndName getColumnWithTypeAndNameFromTableScan(const tipb::TableScan & table_scan);
+using DAGColumnInfo = std::pair<String, ColumnInfo>;
+using DAGSchema = std::vector<DAGColumnInfo>;
+
+DAGSchema genSchemaFromTableScan(const tipb::TableScan & table_scan);
+NamesAndTypes genNamesAndTypesFromTableScan(const tipb::TableScan & table_scan);
+ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema);
+ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 
 } // namespace TiDB
