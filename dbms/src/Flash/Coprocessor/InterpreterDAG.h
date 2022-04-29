@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #pragma GCC diagnostic push
@@ -7,16 +21,9 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/DAGUtils.h>
-#include <Interpreters/AggregateDescription.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
-#include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
 {
@@ -36,9 +43,9 @@ public:
     BlockIO execute() override;
 
 private:
-    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets);
+    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block);
 
-    DAGContext & dagContext() const { return *context.getDAGContext(); }
+    DAGContext & dagContext() const;
 
     Context & context;
     const DAGQuerySource & dag;

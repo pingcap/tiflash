@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
@@ -138,7 +152,9 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         auto begin = table_files.begin() + i * bunch_size;
         auto end = (i + 1 == num_bunches) ? table_files.end() : (table_files.begin() + (i + 1) * bunch_size);
 
-        auto task = std::bind(task_function, begin, end);
+        auto task = [&task_function, begin, end] {
+            task_function(begin, end);
+        };
         if (thread_pool)
             thread_pool->schedule(task);
         else
@@ -170,7 +186,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
     /// But there is protection from it - see using DDLGuard in InterpreterCreateQuery.
 
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         if (tables.find(table_name) != tables.end())
             throw Exception("Table " + name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
     }
@@ -194,7 +210,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
     {
         /// Add a table to the map of known tables.
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             if (!tables.emplace(table_name, table).second)
                 throw Exception("Table " + name + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
         }
@@ -255,10 +271,10 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
     // DatabaseTiFlash should only manage tables in TMTContext.
     ManageableStoragePtr table;
     {
-        StoragePtr table_ = tryGetTable(context, table_name);
-        if (!table_)
+        StoragePtr tmp = tryGetTable(context, table_name);
+        if (!tmp)
             throw Exception("Table " + name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
-        table = std::dynamic_pointer_cast<IManageableStorage>(table_);
+        table = std::dynamic_pointer_cast<IManageableStorage>(tmp);
         if (!table)
             throw Exception("Table " + name + "." + table_name + " is not manageable storage.", ErrorCodes::UNKNOWN_TABLE);
     }
@@ -301,7 +317,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         EncryptionPath encryption_path
             = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
         {
-            bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+            bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
             WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
@@ -400,7 +416,7 @@ void DatabaseTiFlash::alterTable(
     EncryptionPath encryption_path
         = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
     {
-        bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+        bool create_new_encryption_info = !use_target_encrypt_info && !statement.empty();
         WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
@@ -474,7 +490,7 @@ void DatabaseTiFlash::shutdown()
 
     Tables tables_snapshot;
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         tables_snapshot = tables;
     }
 
@@ -488,7 +504,7 @@ void DatabaseTiFlash::shutdown()
             managed_storage->removeFromTMTContext();
     }
 
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     tables.clear();
 }
 
@@ -505,7 +521,7 @@ void DatabaseTiFlash::alterTombstone(const Context & context, Timestamp tombston
     {
         // Alter the attach statement in metadata.
         auto dbinfo_literal = std::make_shared<ASTLiteral>(Field(db_info == nullptr ? "" : (db_info->serialize())));
-        Field format_version_field((UInt64)DatabaseTiFlash::CURRENT_VERSION);
+        Field format_version_field(static_cast<UInt64>(DatabaseTiFlash::CURRENT_VERSION));
         auto version_literal = std::make_shared<ASTLiteral>(format_version_field);
         auto tombstone_literal = std::make_shared<ASTLiteral>(Field(tombstone_));
 

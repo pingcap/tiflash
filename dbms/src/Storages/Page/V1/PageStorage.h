@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Encryption/FileProvider.h>
@@ -21,8 +35,8 @@ namespace DB::PS::V1
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
- * will covered the old ones. The file used to persist the Pages called PageFile. The meta data of a Page, like the
- * latest PageFile the Page is stored , the offset in file, and checksum, are cached in memory. Users should call
+ * will cover the old ones. The file used to persist the Pages called PageFile. The meta data of a Page, like the
+ * latest PageFile the Page is stored, the offset in file, and checksum, are cached in memory. Users should call
  * #gc() constantly to clean up the sparse PageFiles and release disk space.
  *
  * This class is multi-threads safe. Support single thread write, and multi threads read.

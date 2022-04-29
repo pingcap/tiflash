@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #if !(defined(__FreeBSD__) || defined(__APPLE__) || defined(_MSC_VER))
@@ -150,7 +164,7 @@ class AIOContextPool : public ext::Singleton<AIOContextPool>
         if (num_events == 0)
             return;
 
-        const std::lock_guard<std::mutex> lock{mutex};
+        const std::lock_guard lock{mutex};
 
         /// look at returned events and find corresponding promise, set result and erase promise from map
         for (const auto & event : boost::make_iterator_range(events, events + num_events))
@@ -162,7 +176,7 @@ class AIOContextPool : public ext::Singleton<AIOContextPool>
             const auto it = promises.find(id);
             if (it == std::end(promises))
             {
-                LOG_ERROR(&Poco::Logger::get("AIOcontextPool"), "Found io_event with unknown id " << id);
+                LOG_FMT_ERROR(&Poco::Logger::get("AIOcontextPool"), "Found io_event with unknown id {}", id);
                 continue;
             }
 
@@ -184,7 +198,7 @@ class AIOContextPool : public ext::Singleton<AIOContextPool>
 
     void reportExceptionToAnyProducer()
     {
-        const std::lock_guard<std::mutex> lock{mutex};
+        const std::lock_guard lock{mutex};
 
         const auto any_promise_it = std::begin(promises);
         any_promise_it->second.set_exception(std::current_exception());
@@ -194,7 +208,7 @@ public:
     /// Request AIO read operation for iocb, returns a future with number of bytes read
     std::future<BytesRead> post(struct iocb & iocb)
     {
-        std::unique_lock<std::mutex> lock{mutex};
+        std::unique_lock lock{mutex};
 
         /// get current id and increment it by one
         const auto request_id = id++;

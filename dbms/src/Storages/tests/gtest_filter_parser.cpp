@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
@@ -40,14 +54,14 @@ public:
     }
 
     FilterParserTest()
-        : log(&Poco::Logger::get("FilterParserTest"))
+        : log(Logger::get("FilterParserTest"))
         , ctx(TiFlashTestEnv::getContext())
     {
         default_timezone_info = ctx.getTimezoneInfo();
     }
 
 protected:
-    Poco::Logger * log;
+    LoggerPtr log;
     Context ctx;
     static TimezoneInfo default_timezone_info;
     DM::RSOperatorPtr generateRsOperator(String table_info_json, const String & query, TimezoneInfo & timezone_info);
@@ -84,7 +98,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     DM::ColumnDefines columns_to_read;
     {
         NamesAndTypes source_columns;
-        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info, log);
+        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info, log->getLog());
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
             DAGPreparedSets(),

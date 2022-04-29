@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/Channel.h>
@@ -90,7 +104,7 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, ShortOldStream)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(log, " GC exit within " << elapsed_sec << " sec.");
+            LOG_FMT_INFO(log, " GC exit within {} sec.", elapsed_sec);
         }
     }
 }
@@ -104,7 +118,7 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, ShortOldFmt)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(log, fmt::format(" GC exit within {} sec.", elapsed_sec));
+            LOG_FMT_INFO(log, " GC exit within {} sec.", elapsed_sec);
         }
     }
 }
@@ -132,15 +146,20 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, LoogOldStream)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(
+            LOG_FMT_INFO(
                 log,
-                " GC exit within " << std::setprecision(2) << elapsed_sec << " sec. PageFiles from " //
-                                   << beg.first << "_" << beg.second << " to "
-                                   << end.first << "_" << end.second //
-                                   << ", min writing " << min.first << "_" << min.second
-                                   << ", num files: " << num_files << ", num legacy:" << num_legacy
-                                   << ", compact legacy archive files: " << num_compact
-                                   << ", remove data files: " << num_removed);
+                " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}, num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
+                elapsed_sec,
+                beg.first,
+                beg.second,
+                end.first,
+                end.second,
+                min.first,
+                min.second,
+                num_files,
+                num_legacy,
+                num_compact,
+                num_removed);
         }
     }
 }
@@ -154,22 +173,20 @@ BENCHMARK_DEFINE_F(UnifiedLogBM, LoogOldFmt)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(
+            LOG_FMT_INFO(
                 log,
-                fmt::format(
-                    " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}"
-                    ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
-                    elapsed_sec,
-                    beg.first,
-                    beg.second,
-                    end.first,
-                    end.second,
-                    min.first,
-                    min.second,
-                    num_files,
-                    num_legacy,
-                    num_compact,
-                    num_removed));
+                "GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}, num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
+                elapsed_sec,
+                beg.first,
+                beg.second,
+                end.first,
+                end.second,
+                min.first,
+                min.second,
+                num_files,
+                num_legacy,
+                num_compact,
+                num_removed);
         }
     }
 }

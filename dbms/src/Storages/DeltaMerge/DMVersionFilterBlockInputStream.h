@@ -1,6 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnsCommon.h>
+#include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -22,17 +38,20 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
 {
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
+    constexpr static const char * MVCC_FILTER_NAME = "DMVersionFilterBlockInputStream<MVCC>";
+    constexpr static const char * COMPACT_FILTER_NAME = "DMVersionFilterBlockInputStream<COMPACT>";
+
 public:
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
                                     const ColumnDefines & read_columns,
                                     UInt64 version_limit_,
                                     bool is_common_handle_,
-                                    const String & query_id_ = "")
+                                    const String & tracing_id = "")
         : version_limit(version_limit_)
         , is_common_handle(is_common_handle_)
         , header(toEmptyBlock(read_columns))
-        , query_id(query_id_)
-        , log(&Poco::Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
+        , log(Logger::get((MODE == DM_VERSION_FILTER_MODE_MVCC ? MVCC_FILTER_NAME : COMPACT_FILTER_NAME),
+                          tracing_id))
     {
         children.push_back(input);
 
@@ -45,14 +64,18 @@ public:
 
     ~DMVersionFilterBlockInputStream()
     {
-        LOG_DEBUG(log,
-                  "Total rows: " << total_rows << ", pass: " << DB::toString((Float64)passed_rows * 100 / total_rows, 2)
-                                 << "%, complete pass: " << DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
-                                 << "%, complete not pass: " << DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2)
-                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2) //
-                                 << "%, effective: " << DB::toString((Float64)effective_num_rows * 100 / passed_rows, 2) //
-                                 << "%, read tso: " << version_limit
-                                 << ", query id: " << (query_id.empty() ? String("<non-query>") : query_id));
+        LOG_FMT_DEBUG(log,
+                      "Total rows: {}, pass: {:.2f}%"
+                      ", complete pass: {:.2f}%, complete not pass: {:.2f}%"
+                      ", not clean: {:.2f}%, effective: {:.2f}%"
+                      ", read tso: {}",
+                      total_rows,
+                      passed_rows * 100.0 / total_rows,
+                      complete_passed * 100.0 / total_blocks,
+                      complete_not_passed * 100.0 / total_blocks,
+                      not_clean_rows * 100.0 / passed_rows,
+                      effective_num_rows * 100.0 / passed_rows,
+                      version_limit);
     }
 
     void readPrefix() override;
@@ -169,14 +192,13 @@ private:
             }
         }
 
-        return matched ? cur_version : UINT64_MAX;
+        return matched ? cur_version : std::numeric_limits<UInt64>::max();
     }
 
 private:
     const UInt64 version_limit;
     const bool is_common_handle;
     const Block header;
-    const String query_id;
 
     size_t handle_col_pos;
     size_t version_col_pos;
@@ -214,7 +236,7 @@ private:
     size_t not_clean_rows = 0;
     size_t effective_num_rows = 0;
 
-    Poco::Logger * const log;
+    const LoggerPtr log;
 };
 } // namespace DM
 } // namespace DB

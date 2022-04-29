@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 if (USE_INCLUDE_WHAT_YOU_USE)
     set (CMAKE_CXX_INCLUDE_WHAT_YOU_USE ${IWYU_PATH})
 endif ()
@@ -75,6 +89,7 @@ add_headers_and_sources(dbms src/Storages/Page/V2)
 add_headers_and_sources(dbms src/Storages/Page/V2/mvcc)
 add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
 add_headers_and_sources(dbms src/Storages/Page/V2/gc)
+add_headers_and_sources(dbms src/WindowFunctions)
 if (ENABLE_V3_PAGESTORAGE)
     add_headers_and_sources(dbms src/Storages/Page/V3)
     add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
@@ -175,9 +190,10 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
     cpptoml
+    libsymbolization
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
-
+target_compile_definitions(clickhouse_common_io PUBLIC -DTIFLASH_SOURCE_PREFIX=\"${TiFlash_SOURCE_DIR}\")
 target_link_libraries (dbms
     clickhouse_parsers
     clickhouse_common_config
@@ -191,6 +207,7 @@ target_link_libraries (dbms
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
+    absl::synchronization
 )
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
@@ -204,8 +221,10 @@ if (Poco_Data_FOUND AND NOT USE_INTERNAL_POCO_LIBRARY)
     target_include_directories (dbms PRIVATE ${Poco_Data_INCLUDE_DIRS})
 endif()
 
+# NetSSL headers are exposed in clickhouse_common_io's headers.
+# We mark it public to make the headers available.
 if (Poco_NetSSL_FOUND)
-    target_link_libraries (clickhouse_common_io PRIVATE ${Poco_NetSSL_LIBRARY})
+    target_link_libraries (clickhouse_common_io PUBLIC ${Poco_NetSSL_LIBRARY})
 endif()
 
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
@@ -272,7 +291,7 @@ if (ENABLE_TESTS)
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
-    target_link_libraries(gtests_dbms gtest_main dbms test_utils clickhouse_functions tiflash-dttool-lib)
+    target_link_libraries(gtests_dbms test_util_gtest_main clickhouse_functions tiflash-dttool-lib)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
@@ -285,9 +304,9 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
         )
-    target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+    target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
 
-    target_link_libraries(bench_dbms gtest dbms test_utils benchmark clickhouse_functions)
+    target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark clickhouse_functions)
     if (ENABLE_TIFLASH_DTWORKLOAD)
         target_link_libraries(bench_dbms dt-workload-lib)
     endif ()

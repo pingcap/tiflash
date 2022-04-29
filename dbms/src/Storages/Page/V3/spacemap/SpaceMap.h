@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <Core/Types.h>
 #include <common/logger_useful.h>
@@ -82,6 +96,10 @@ public:
      */
     virtual UInt64 getRightMargin() = 0;
 
+    /**
+     * Get the accurate max capacity of the space map.
+     */
+    virtual UInt64 updateAccurateMaxCapacity() = 0;
 
     /**
      * Return the size of file and the size contains valid data.
@@ -100,7 +118,12 @@ public:
     /**
      * Log the status of space map
      */
-    void logStats();
+    void logDebugString();
+
+    /**
+     * return the status of space map
+     */
+    virtual String toDebugString() = 0;
 
     SpaceMapType getType() const
     {
@@ -124,9 +147,6 @@ protected:
     SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_);
 
     virtual ~SpaceMap() = default;
-
-    /* Print space maps status  */
-    virtual void smapStats() = 0;
 
     // Return true if space [offset, offset+size) are all free
     virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;

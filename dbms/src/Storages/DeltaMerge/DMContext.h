@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
@@ -10,10 +25,10 @@ namespace DB
 {
 class StoragePathPool;
 
+
 namespace DM
 {
 class StoragePool;
-class PageIdGenerator;
 using NotCompress = std::unordered_set<ColId>;
 struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
@@ -27,7 +42,6 @@ struct DMContext : private boost::noncopyable
 
     StoragePathPool & path_pool;
     StoragePool & storage_pool;
-    PageIdGenerator & page_id_generator;
     const UInt64 hash_salt;
 
     // gc safe-point, maybe update.
@@ -69,24 +83,22 @@ struct DMContext : private boost::noncopyable
     const bool enable_relevant_place;
     const bool enable_skippable_place;
 
-    const String query_id;
+    String tracing_id;
 
 public:
     DMContext(const Context & db_context_,
               StoragePathPool & path_pool_,
               StoragePool & storage_pool_,
-              PageIdGenerator & page_id_generator_,
               const UInt64 hash_salt_,
               const DB::Timestamp min_version_,
               const NotCompress & not_compress_,
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
-              const String & query_id_ = "")
+              const String & tracing_id_ = "")
         : db_context(db_context_)
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
-        , page_id_generator(page_id_generator_)
         , hash_salt(hash_salt_)
         , min_version(min_version_)
         , not_compress(not_compress_)
@@ -107,7 +119,7 @@ public:
         , read_stable_only(settings.dt_read_stable_only)
         , enable_relevant_place(settings.dt_enable_relevant_place)
         , enable_skippable_place(settings.dt_enable_skippable_place)
-        , query_id(query_id_)
+        , tracing_id(tracing_id_)
     {
     }
 

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/DeltaMerge/tools/workload/KeyGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
 #include <fmt/core.h>
@@ -35,14 +49,14 @@ public:
         : rand_gen(std::random_device()())
         , uniform_dist(dist_a, dist_b)
     {}
-    UniformDistributionKeyGenerator(uint64_t key_count)
+    explicit UniformDistributionKeyGenerator(uint64_t key_count)
         : rand_gen(std::random_device()())
         , uniform_dist(0, key_count)
     {}
 
     virtual uint64_t get64() override
     {
-        std::lock_guard<std::mutex> lock(mtx);
+        std::lock_guard lock(mtx);
         return uniform_dist(rand_gen);
     }
 
@@ -59,14 +73,14 @@ public:
         : rand_gen(std::random_device()())
         , normal_dist(mean, stddev)
     {}
-    NormalDistributionKeyGenerator(uint64_t key_count)
+    explicit NormalDistributionKeyGenerator(uint64_t key_count)
         : rand_gen(std::random_device()())
-        , normal_dist(key_count / 2, key_count / 20)
+        , normal_dist(key_count / 2.0, key_count / 20.0)
     {}
 
     virtual uint64_t get64() override
     {
-        std::lock_guard<std::mutex> lock(mtx);
+        std::lock_guard lock(mtx);
         return normal_dist(rand_gen);
     }
 

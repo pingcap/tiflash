@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "ConfigReloader.h"
 
 #include <Common/Exception.h>
@@ -61,7 +75,7 @@ void ConfigReloader::run()
 
 void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
 {
-    std::lock_guard<std::mutex> lock(reload_mutex);
+    std::lock_guard lock(reload_mutex);
 
     FilesChangesTracker new_files = getNewFileList();
     if (force || new_files.isDifferOrNewerThan(files))
@@ -70,7 +84,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
         ConfigProcessor::LoadedConfig loaded_config;
         try
         {
-            LOG_DEBUG(log, "Loading config `" << path << "'");
+            LOG_FMT_DEBUG(log, "Loading config `{}`", path);
 
             loaded_config = config_processor.loadConfig();
         }

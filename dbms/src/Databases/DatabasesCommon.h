@@ -1,16 +1,29 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Types.h>
+#include <Databases/IDatabase.h>
 #include <Parsers/IAST.h>
 #include <Storages/IStorage.h>
-#include <Databases/IDatabase.h>
 
 
 /// General functionality for several different database engines.
 
 namespace DB
 {
-
 class Context;
 
 
@@ -48,20 +61,20 @@ ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_pat
 
 ASTPtr getCreateQueryFromMetadata(const Context & context, const String & metadata_path, const String & database, bool throw_on_error);
 
-std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log);
+std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log);
 
 // Startup tables with thread_pool. If exception with code TIDB_TABLE_ALREADY_EXISTS thrown in startup,
 // those tables' meta will be removed and deatch from database.
 void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log);
 
 void loadTable(Context & context,
-    IDatabase & database,
-    const String & database_metadata_path,
-    const String & database_name,
-    const String & database_data_path,
-    const String & database_engine,
-    const String & file_name,
-    bool has_force_restore_data_flag);
+               IDatabase & database,
+               const String & database_metadata_path,
+               const String & database_name,
+               const String & database_data_path,
+               const String & database_engine,
+               const String & file_name,
+               bool has_force_restore_data_flag);
 } // namespace DatabaseLoading
 
 
@@ -74,10 +87,14 @@ private:
 
 public:
     DatabaseSnapshotIterator(Tables & tables_)
-        : tables(tables_), it(tables.begin()) {}
+        : tables(tables_)
+        , it(tables.begin())
+    {}
 
     DatabaseSnapshotIterator(Tables && tables_)
-        : tables(tables_), it(tables.begin()) {}
+        : tables(tables_)
+        , it(tables.begin())
+    {}
 
     void next() override
     {
@@ -131,7 +148,9 @@ protected:
     mutable std::mutex mutex;
     Tables tables;
 
-    DatabaseWithOwnTablesBase(String name_) : name(std::move(name_)) { }
+    DatabaseWithOwnTablesBase(String name_)
+        : name(std::move(name_))
+    {}
 };
 
-}
+} // namespace DB

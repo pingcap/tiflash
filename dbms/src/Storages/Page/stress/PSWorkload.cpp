@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/MemoryTracker.h>
 #include <Encryption/MockKeyManager.h>
 #include <PSWorkload.h>
@@ -122,7 +136,7 @@ void StressWorkload::startBackgroundTimer()
 
 void StressWorkloadManger::runWorkload()
 {
-    if (options.situation_mask == NORMAL_WORKLOAD)
+    if (options.just_init_pages || options.situation_mask == NORMAL_WORKLOAD)
     {
         String name;
         WorkloadCreator func;
@@ -130,7 +144,10 @@ void StressWorkloadManger::runWorkload()
         auto workload = std::shared_ptr<StressWorkload>(func(options));
         LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
         workload->run();
-        workload->onDumpResult();
+        if (!options.just_init_pages)
+        {
+            workload->onDumpResult();
+        }
         return;
     }
 

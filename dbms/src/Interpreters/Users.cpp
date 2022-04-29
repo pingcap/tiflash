@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Common/SimpleCache.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -65,9 +79,9 @@ public:
         else
         {
             String addr(str, 0, pos - str.c_str());
-            UInt8 prefix_bits_ = parse<UInt8>(pos + 1);
+            UInt8 prefix_bits = parse<UInt8>(pos + 1);
 
-            construct(Poco::Net::IPAddress(addr), prefix_bits_);
+            construct(Poco::Net::IPAddress(addr), prefix_bits);
         }
     }
 
@@ -196,28 +210,28 @@ public:
         String domain = cache(addr);
         Poco::RegularExpression::Match match;
 
-        if (host_regexp.match(domain, match) && HostExactPattern(domain).contains(addr))
-            return true;
-
-        return false;
+        return host_regexp.match(domain, match) && HostExactPattern(domain).contains(addr);
     }
 };
 
 
 bool AddressPatterns::contains(const Poco::Net::IPAddress & addr) const
 {
-    for (size_t i = 0, size = patterns.size(); i < size; ++i)
+    for (const auto & pattern : patterns)
     {
         /// If host cannot be resolved, skip it and try next.
         try
         {
-            if (patterns[i]->contains(addr))
+            if (pattern->contains(addr))
                 return true;
         }
         catch (const DB::Exception & e)
         {
-            LOG_WARNING(&Poco::Logger::get("AddressPatterns"),
-                        "Failed to check if pattern contains address " << addr.toString() << ". " << e.displayText() << ", code = " << e.code());
+            LOG_FMT_WARNING(&Poco::Logger::get("AddressPatterns"),
+                            "Failed to check if pattern contains address {}. {}, code = {}",
+                            addr.toString(),
+                            e.displayText(),
+                            e.code());
 
             if (e.code() == ErrorCodes::DNS_ERROR)
             {
@@ -262,8 +276,6 @@ const User & User::getDefaultUser()
 
 User::User(const String & name_)
     : name(name_)
-    , password()
-    , password_sha256_hex()
     , profile(User::DEFAULT_USER_NAME)
     , quota(QuotaForInterval::DEFAULT_QUOTA_NAME)
 {}

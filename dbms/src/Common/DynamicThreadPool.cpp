@@ -1,4 +1,19 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/DynamicThreadPool.h>
+#include <Common/TiFlashMetrics.h>
 
 namespace DB
 {
@@ -80,8 +95,16 @@ void DynamicThreadPool::scheduledToNewDynamicThread(TaskPtr & task)
     t.detach();
 }
 
+void DynamicThreadPool::executeTask(TaskPtr & task)
+{
+    UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_active_threads_of_thdpool, type_max_active_threads_of_thdpool);
+    task->execute();
+    task.reset();
+}
+
 void DynamicThreadPool::fixedWork(size_t index)
 {
+    UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_thdpool, type_max_threads_of_thdpool);
     Queue * queue = fixed_queues[index].get();
     while (true)
     {
@@ -89,7 +112,7 @@ void DynamicThreadPool::fixedWork(size_t index)
         queue->pop(task);
         if (!task)
             break;
-        task->execute();
+        executeTask(task);
 
         idle_fixed_queues.push(queue);
     }
@@ -97,26 +120,30 @@ void DynamicThreadPool::fixedWork(size_t index)
 
 void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
-    initial_task->execute();
-
-    DynamicNode node;
-    while (true)
     {
-        {
-            std::unique_lock lock(dynamic_mutex);
-            if (in_destructing)
-                break;
-            // attach to just after head to reuse hot threads so that cold threads have chance to exit
-            node.appendTo(&dynamic_idle_head);
-            node.cv.wait_for(lock, dynamic_auto_shrink_cooldown);
-            node.detach();
-        }
+        UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_thdpool, type_max_threads_of_thdpool);
+        executeTask(initial_task);
 
-        if (!node.task) // may be timeout or cancelled
-            break;
-        node.task->execute();
-        node.task.reset();
+        DynamicNode node;
+        while (true)
+        {
+            {
+                std::unique_lock lock(dynamic_mutex);
+                if (in_destructing)
+                    break;
+                // attach to just after head to reuse hot threads so that cold threads have chance to exit
+                node.appendTo(&dynamic_idle_head);
+                node.cv.wait_for(lock, dynamic_auto_shrink_cooldown);
+                node.detach();
+            }
+
+            if (!node.task) // may be timeout or cancelled
+                break;
+            executeTask(node.task);
+        }
     }
+    // must decrease counter after scope of `UPDATE_CUR_AND_MAX_METRIC`
+    // to avoid potential data race (#4595)
     alive_dynamic_threads.fetch_sub(1);
 }
 

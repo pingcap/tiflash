@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Debug/MockTiDB.h>
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncCoprocessor.h>
@@ -21,6 +35,7 @@ namespace ErrorCodes
 extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
 
+static const String CONTINUE_WHEN_ERROR = "continue_when_error";
 static const String TABLE_IDS = "table_of_interest";
 static const String TABLE_DATA = "table_data";
 static const String TABLE_META = "meta";
@@ -33,6 +48,7 @@ static const String TIKV_KEY = "key";
 static const String TIKV_VALUE = "value";
 static const String REQ_RSP_DATA = "request_data";
 static const String REQ_TYPE = "type";
+static const String REQ_ID = "req_id";
 static const String REQUEST = "request";
 static const String RESPONSE = "response";
 static const String DEFAULT_DATABASE_NAME = "test";
@@ -70,18 +86,25 @@ void NaturalDag::init()
     auto json_str = String((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     Poco::JSON::Parser parser;
     Poco::Dynamic::Var result = parser.parse(json_str);
-    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed parsing json file: " << json_dag_path);
+    LOG_FMT_INFO(log, "Succeed parsing json file: {}", json_dag_path);
 
     const auto & obj = result.extract<JSONObjectPtr>();
+
+    if (obj->has(CONTINUE_WHEN_ERROR))
+    {
+        continue_when_error = obj->getValue<bool>(CONTINUE_WHEN_ERROR);
+        LOG_FMT_INFO(log, "Succeed load continue_when_error flag: {}!", continue_when_error);
+    }
     loadTables(obj);
-    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed loading table data!");
+    LOG_FMT_INFO(log, "Succeed loading table data!");
     loadReqAndRsp(obj);
-    LOG_INFO(log, __PRETTY_FUNCTION__ << ": Succeed loading req and rsp data!");
+    LOG_FMT_INFO(log, "Succeed loading req and rsp data!");
 }
 
 void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
 {
     auto req_data_json = obj->getArray(REQ_RSP_DATA);
+    int32_t default_req_id = 0;
     for (const auto & req_data_json_obj : *req_data_json)
     {
         auto req_data_obj = req_data_json_obj.extract<JSONObjectPtr>();
@@ -100,6 +123,12 @@ void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
         if (!cop_response.ParseFromString(response))
             throw Exception("Incorrect response data!", ErrorCodes::BAD_ARGUMENTS);
         req_rsp.emplace_back(std::make_pair(std::move(cop_request), std::move(cop_response)));
+
+        if (req_data_obj->has(REQ_ID))
+            req_id_vec.push_back(req_data_obj->getValue<int32_t>(REQ_ID));
+        else
+            req_id_vec.push_back(default_req_id);
+        ++default_req_id;
     }
 }
 void NaturalDag::loadTables(const NaturalDag::JSONObjectPtr & obj)
@@ -142,7 +171,7 @@ NaturalDag::LoadedRegionInfo NaturalDag::loadRegion(const Poco::Dynamic::Var & r
     String region_end;
     decodeBase64(region_obj->getValue<String>(REGION_END), region_end);
     region.end = RecordKVFormat::encodeAsTiKVKey(region_end);
-    LOG_INFO(log, __PRETTY_FUNCTION__ << ": RegionID: " << region.id << ", RegionStart: " << printAsBytes(region.start) << ", RegionEnd: " << printAsBytes(region.end));
+    LOG_FMT_INFO(log, "RegionID: {}, RegionStart: {}, RegionEnd: {}", region.id, printAsBytes(region.start), printAsBytes(region.end));
 
     auto pairs_json = region_obj->getArray(REGION_KEYVALUE_DATA);
     for (const auto & pair_json : *pairs_json)
