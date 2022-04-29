@@ -62,7 +62,7 @@ struct ExternalPageCallbacks
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageID. Store Page with the same PageID
- * will covered the old ones.
+ * will cover the old ones.
  * Users should call #gc() constantly to release disk space.
  *
  * This class is multi-threads safe. Support multi threads write, and multi threads read.

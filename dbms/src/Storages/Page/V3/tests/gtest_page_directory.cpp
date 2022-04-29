@@ -1972,8 +1972,8 @@ try
     PageEntryV3 entry_5_v2{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x400, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        edit.put(file_id1, entry_1_v1);
-        edit.put(file_id2, entry_5_v1);
+        edit.put(1, entry_1_v1);
+        edit.put(5, entry_5_v1);
         dir->apply(std::move(edit));
     }
     {
@@ -1999,6 +1999,11 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         BlobStore::BlobStats stats(log, delegator, BlobStore::Config{});
+        {
+            const auto & lock = stats.lock();
+            stats.createStatNotChecking(file_id1, lock);
+            stats.createStatNotChecking(file_id2, lock);
+        }
         auto restored_dir = restore_from_edit(edit, stats);
         auto temp_snap = restored_dir->createSnapshot();
         EXPECT_SAME_ENTRY(entry_1_v1, restored_dir->get(2, temp_snap).second);
@@ -2006,9 +2011,9 @@ try
         EXPECT_SAME_ENTRY(entry_5_v2, restored_dir->get(5, temp_snap).second);
 
         // The entry_1_v1 should be restored to stats
-        auto stat_for_file_1 = stats.blobIdToStat(file_id1, false, false);
+        auto stat_for_file_1 = stats.blobIdToStat(file_id1, /*ignore_not_exist*/ false);
         EXPECT_TRUE(stat_for_file_1->smap->isMarkUsed(entry_1_v1.offset, entry_1_v1.size));
-        auto stat_for_file_5 = stats.blobIdToStat(file_id2, false, false);
+        auto stat_for_file_5 = stats.blobIdToStat(file_id2, /*ignore_not_exist*/ false);
         // entry_5_v1 should not be restored to stats
         EXPECT_FALSE(stat_for_file_5->smap->isMarkUsed(entry_5_v1.offset, entry_5_v1.size));
         EXPECT_TRUE(stat_for_file_5->smap->isMarkUsed(entry_5_v2.offset, entry_5_v2.size));

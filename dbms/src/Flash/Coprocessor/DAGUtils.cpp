@@ -44,6 +44,12 @@ extern const String uniq_raw_res_name;
 
 namespace
 {
+const std::unordered_map<tipb::ExprType, String> window_func_map({
+    {tipb::ExprType::Rank, "rank"},
+    {tipb::ExprType::DenseRank, "dense_rank"},
+    {tipb::ExprType::RowNumber, "row_number"},
+});
+
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
@@ -719,7 +725,7 @@ bool isScalarFunctionExpr(const tipb::Expr & expr)
 
 bool isFunctionExpr(const tipb::Expr & expr)
 {
-    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr);
+    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr) || isWindowFunctionExpr(expr);
 }
 
 const String & getAggFunctionName(const tipb::Expr & expr)
@@ -744,6 +750,19 @@ const String & getAggFunctionName(const tipb::Expr & expr)
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
+const String & getWindowFunctionName(const tipb::Expr & expr)
+{
+    auto it = window_func_map.find(expr.tp());
+    if (it != window_func_map.end())
+        return it->second;
+
+    const auto errmsg = fmt::format(
+        "{} is not supported.",
+        tipb::ExprType_Name(expr.tp()));
+    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
+}
+
+
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
@@ -756,6 +775,98 @@ const String & getFunctionName(const tipb::Expr & expr)
         if (it == scalar_func_map.end())
             throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.", Errors::Coprocessor::Unimplemented);
         return it->second;
+    }
+}
+
+String getExchangeTypeName(const tipb::ExchangeType & tp)
+{
+    switch (tp)
+    {
+    case tipb::ExchangeType::Broadcast:
+        return "Broadcast";
+    case tipb::ExchangeType::PassThrough:
+        return "PassThrough";
+    case tipb::ExchangeType::Hash:
+        return "Hash";
+    default:
+        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getJoinTypeName(const tipb::JoinType & tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinType::TypeAntiLeftOuterSemiJoin:
+        return "AntiLeftOuterSemiJoin";
+    case tipb::JoinType::TypeLeftOuterJoin:
+        return "LeftOuterJoin";
+    case tipb::JoinType::TypeRightOuterJoin:
+        return "RightOuterJoin";
+    case tipb::JoinType::TypeLeftOuterSemiJoin:
+        return "LeftOuterSemiJoin";
+    case tipb::JoinType::TypeAntiSemiJoin:
+        return "AntiSemiJoin";
+    case tipb::JoinType::TypeInnerJoin:
+        return "InnerJoin";
+    case tipb::JoinType::TypeSemiJoin:
+        return "SemiJoin";
+    default:
+        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getJoinExecTypeName(const tipb::JoinExecType & tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinExecType::TypeHashJoin:
+        return "HashJoin";
+    default:
+        throw TiFlashException(fmt::format("Not supported Join exectution type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getFieldTypeName(Int32 tp)
+{
+    switch (tp)
+    {
+    case TiDB::TypeTiny:
+        return "Tiny";
+    case TiDB::TypeShort:
+        return "Short";
+    case TiDB::TypeInt24:
+        return "Int24";
+    case TiDB::TypeLong:
+        return "Long";
+    case TiDB::TypeLongLong:
+        return "Longlong";
+    case TiDB::TypeYear:
+        return "Year";
+    case TiDB::TypeDouble:
+        return "Double";
+    case TiDB::TypeTime:
+        return "Time";
+    case TiDB::TypeDate:
+        return "Date";
+    case TiDB::TypeDatetime:
+        return "Datetime";
+    case TiDB::TypeNewDate:
+        return "NewDate";
+    case TiDB::TypeTimestamp:
+        return "Timestamp";
+    case TiDB::TypeFloat:
+        return "Float";
+    case TiDB::TypeDecimal:
+        return "Decimal";
+    case TiDB::TypeNewDecimal:
+        return "NewDecimal";
+    case TiDB::TypeVarchar:
+        return "Varchar";
+    case TiDB::TypeString:
+        return "String";
+    default:
+        throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -898,6 +1009,39 @@ bool isAggFunctionExpr(const tipb::Expr & expr)
     }
 }
 
+bool isWindowFunctionExpr(const tipb::Expr & expr)
+{
+    switch (expr.tp())
+    {
+    case tipb::ExprType::RowNumber:
+    case tipb::ExprType::Rank:
+    case tipb::ExprType::DenseRank:
+    case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
+        //    case tipb::ExprType::CumeDist:
+        //    case tipb::ExprType::PercentRank:
+        //    case tipb::ExprType::Ntile:
+        //    case tipb::ExprType::FirstValue:
+        //    case tipb::ExprType::LastValue:
+        //    case tipb::ExprType::NthValue:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWindowLagOrLeadFunctionExpr(const tipb::Expr & expr)
+{
+    switch (expr.tp())
+    {
+    case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool isLiteralExpr(const tipb::Expr & expr)
 {
     switch (expr.tp())
@@ -983,6 +1127,16 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
         throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
     return input_col[column_index].name;
+}
+
+NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
+{
+    auto column_index = decodeDAGInt64(expr.val());
+    if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
+    {
+        throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
+    }
+    return input_col[column_index];
 }
 
 // For some historical or unknown reasons, TiDB might set an invalid
@@ -1181,7 +1335,6 @@ String genFuncString(
     const Names & argument_names,
     const TiDB::TiDBCollators & collators)
 {
-    assert(!collators.empty());
     FmtBuffer buf;
     buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
     for (const auto & collator : collators)

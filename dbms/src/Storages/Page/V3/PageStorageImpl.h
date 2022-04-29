@@ -106,6 +106,7 @@ public:
 #endif
 
     friend class PageDirectoryFactory;
+    friend class PageStorageControl;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

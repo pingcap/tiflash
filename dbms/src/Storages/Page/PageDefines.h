@@ -80,7 +80,11 @@ struct ByteBuffer
 {
     using Pos = char *;
 
-    ByteBuffer() = default;
+    ByteBuffer()
+        : begin_pos(nullptr)
+        , end_pos(nullptr)
+    {}
+
     ByteBuffer(Pos begin_pos_, Pos end_pos_)
         : begin_pos(begin_pos_)
         , end_pos(end_pos_)
