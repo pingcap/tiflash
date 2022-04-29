@@ -203,13 +203,11 @@ bool addExtraCastsAfterTs(
 DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
     const TiDBTableScan & table_scan_,
-    const String & pushed_down_filter_executor_id_,
-    const std::vector<const tipb::Expr *> & pushed_down_conditions_,
+    const PushDownFilter & push_down_filter_,
     size_t max_streams_)
     : context(context_)
     , table_scan(table_scan_)
-    , pushed_down_filter_executor_id(pushed_down_filter_executor_id_)
-    , pushed_down_conditions(pushed_down_conditions_)
+    , push_down_filter(push_down_filter_)
     , max_streams(max_streams_)
     , log(Logger::get("DAGStorageInterpreter", context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
@@ -221,13 +219,6 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     {
         throw TiFlashException(
             fmt::format("Dag Request does not have region to read for table: {}", logical_table_id),
-            Errors::Coprocessor::BadRequest);
-    }
-
-    if (unlikely(pushed_down_conditions.empty() != pushed_down_filter_executor_id.empty()))
-    {
-        throw TiFlashException(
-            "pushed_down_conditions and pushed_down_filter_executor_id should both be empty or neither should be empty",
             Errors::Coprocessor::BadRequest);
     }
 }
@@ -290,10 +281,10 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     recordProfileStreams(pipeline, table_scan.getTableScanExecutorID());
 
     /// handle pushed down filter for local and remote table scan.
-    if (!pushed_down_conditions.empty())
+    if (push_down_filter.hasValue())
     {
         executePushedDownFilter(remote_read_streams_start_index, pipeline);
-        recordProfileStreams(pipeline, pushed_down_filter_executor_id);
+        recordProfileStreams(pipeline, push_down_filter.executor_id);
     }
 }
 
@@ -322,7 +313,7 @@ void DAGStorageInterpreter::executePushedDownFilter(
 {
     ExpressionActionsChain chain;
     analyzer->initChain(chain, analyzer->getCurrentInputColumns());
-    String filter_column_name = analyzer->appendWhere(chain, pushed_down_conditions);
+    String filter_column_name = analyzer->appendWhere(chain, push_down_filter.conditions);
     ExpressionActionsPtr before_where = chain.getLastActions();
     chain.addStep();
 
@@ -558,7 +549,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         /// to avoid null point exception
         query_info.query = makeDummyQuery();
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
-            pushed_down_conditions,
+            push_down_filter.conditions,
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
@@ -995,8 +986,7 @@ void DAGStorageInterpreter::buildRemoteRequests()
             *context.getDAGContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
-            pushed_down_filter_executor_id,
-            pushed_down_conditions,
+            pushed_down_filter,
             log));
     }
 }

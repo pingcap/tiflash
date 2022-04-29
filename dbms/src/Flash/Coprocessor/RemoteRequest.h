@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
 #include <pingcap/coprocessor/Client.h>
@@ -51,8 +52,7 @@ struct RemoteRequest
         DAGContext & dag_context,
         const TiDBTableScan & table_scan,
         const TiDB::TableInfo & table_info,
-        const String & sel_executor_id,
-        const std::vector<const tipb::Expr *> & sel_conditions,
+        const PushDownFilter & push_down_filter,
         const LoggerPtr & log);
 };
 } // namespace DB

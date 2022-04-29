@@ -23,8 +23,7 @@ RemoteRequest RemoteRequest::build(
     DAGContext & dag_context,
     const TiDBTableScan & table_scan,
     const TiDB::TableInfo & table_info,
-    const String & sel_executor_id,
-    const std::vector<const tipb::Expr *> & sel_conditions,
+    const PushDownFilter & push_down_filter,
     const LoggerPtr & log)
 {
     auto print_retry_regions = [&retry_regions, &table_info] {
@@ -44,12 +43,12 @@ RemoteRequest RemoteRequest::build(
     tipb::DAGRequest dag_req;
     auto * executor = dag_req.mutable_root_executor();
 
-    if (!sel_conditions.empty())
+    if (push_down_filter.hasValue())
     {
         executor->set_tp(tipb::ExecType::TypeSelection);
-        executor->set_executor_id(sel_executor_id);
+        executor->set_executor_id(push_down_filter.executor_id);
         auto * new_selection = executor->mutable_selection();
-        for (const auto & condition : sel_conditions)
+        for (const auto & condition : push_down_filter.conditions)
             *new_selection->add_conditions() = *condition;
         executor = new_selection->mutable_child();
     }

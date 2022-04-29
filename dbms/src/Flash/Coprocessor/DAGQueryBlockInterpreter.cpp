@@ -38,6 +38,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Aggregator.h>
@@ -154,15 +155,9 @@ AnalysisResult analyzeExpressions(
 
 void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    // construct pushed down filter conditions.
-    std::vector<const tipb::Expr *> conditions;
-    if (query_block.selection)
-    {
-        for (const auto & condition : query_block.selection->selection().conditions())
-            conditions.push_back(&condition);
-    }
+    auto push_down_filter = PushDownFilter::toPushDownFilter(query_block.selection);
 
-    DAGStorageInterpreter storage_interpreter(context, table_scan, query_block.selection_name, conditions, max_streams);
+    DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
     storage_interpreter.execute(pipeline);
 
     analyzer = std::move(storage_interpreter.analyzer);

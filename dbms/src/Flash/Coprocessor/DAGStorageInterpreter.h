@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
@@ -49,8 +50,7 @@ public:
     DAGStorageInterpreter(
         Context & context_,
         const TiDBTableScan & table_scan,
-        const String & pushed_down_filter_executor_id_,
-        const std::vector<const tipb::Expr *> & pushed_down_conditions_,
+        const PushDownFilter & push_down_filter_,
         size_t max_streams_);
 
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
@@ -114,8 +114,7 @@ private:
 
     Context & context;
     const TiDBTableScan & table_scan;
-    const String & pushed_down_filter_executor_id;
-    const std::vector<const tipb::Expr *> & pushed_down_conditions;
+    const PushDownFilter & push_down_filter;
     size_t max_streams;
     LoggerPtr log;
 
