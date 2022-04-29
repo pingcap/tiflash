@@ -190,6 +190,11 @@ public:
             return lhs.curr_write_batch_sequence < rhs.curr_write_batch_sequence;
         }
 
+        PageEntriesEdit & getCurrentEdits()
+        {
+            return curr_edit;
+        }
+
     private:
         void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter, const bool background = false);
 

@@ -90,8 +90,8 @@ private:
 
 public:
     // No copying allowed
-    PageEntriesEdit(const PageEntriesEdit &) = delete;
-    PageEntriesEdit & operator=(const PageEntriesEdit &) = delete;
+    // PageEntriesEdit(const PageEntriesEdit &) = delete;
+    // PageEntriesEdit & operator=(const PageEntriesEdit &) = delete;
     // Only move allowed
     PageEntriesEdit(PageEntriesEdit && rhs) noexcept
         : PageEntriesEdit()

@@ -196,9 +196,117 @@ toConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
     return assert_cast<PageStorage::ConcreteSnapshotRawPtr>(ptr.get());
 }
 
+
+WriteBatch PageStorage::convertEditToWB(const std::shared_ptr<PageFile::Reader> & page_reader, const PageEntriesEdit & entries_edits)
+{
+    // TODO make sure ns_id
+    WriteBatch wb{0};
+    for (const auto & record : entries_edits.getRecords())
+    {
+        switch (record.type)
+        {
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT:
+        {
+            std::vector<PageIdAndEntry> id_and_entreis;
+            id_and_entreis.emplace_back(std::make_pair(record.page_id, record.entry));
+            auto page_map = page_reader->read(id_and_entreis);
+            auto page_for_put = page_map[record.page_id];
+
+            if (page_for_put.page_id == INVALID_PAGE_ID || page_for_put.data.size() != record.entry.size)
+            {
+                throw Exception(fmt::format("Invalid entry from V1, failed read pages from V1. [page_id={}]", record.page_id),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+
+            if (record.entry.field_offsets.empty())
+            {
+                wb.putPage(record.page_id, //
+                           record.entry.tag,
+                           std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
+                           page_for_put.data.size());
+            }
+            else
+            {
+                // V1 not support field offsets
+                throw Exception(fmt::format("V1 not support field offset, But field_offsets is not empty [page_id={}][field_offsets size={}]",
+                                            record.page_id,
+                                            record.entry.field_offsets.size()),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+
+            break;
+        }
+        case WriteBatch::WriteType::REF:
+        {
+            wb.putRefPage(record.page_id, record.ori_page_id);
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            wb.delPage(record.page_id);
+            break;
+        }
+        // WriteBatch::WriteType::PUT_EXTERNAL
+        // We won't get PUT_EXTERNAL in V1 and V2
+        default:
+        {
+            throw Exception(fmt::format("Get invalid write batch [type={}]", record.type),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+        }
+    }
+
+    return wb;
+}
+
+WriteBatch PageStorage::detectDataFromV1()
+{
+    auto detect_binary_version = DB::PS::V2::PageStorage::getMaxDataVersion(file_provider, delegator);
+
+    WriteBatch wb_for_v2{0};
+    switch (detect_binary_version)
+    {
+    case (PageFormat::V1):
+    {
+        ListPageFilesOption opt;
+        opt.remove_tmp_files = true;
+        opt.ignore_legacy = false;
+        opt.ignore_checkpoint = false;
+        opt.remove_invalid_files = true;
+        PageFileSet page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
+
+        for (auto page_file : page_files)
+        {
+            auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
+            while (reader->hasNext())
+            {
+                // Read all edits
+                reader->moveNext();
+            }
+
+            const auto & page_reader = page_file.createReader();
+            const auto & curr_enits = reader->getCurrentEdits();
+            wb_for_v2.copyWrites(convertEditToWB(page_reader, curr_enits).getWrites());
+        }
+    }
+    case (PageFormat::V2):
+    {
+        LOG_FMT_INFO(log, "Current binary version is V2, no ned convert V1 to V2");
+        break;
+    }
+    default:
+        throw Exception("Can detect current binary version, illegal version.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return wb_for_v2;
+}
+
 void PageStorage::restore()
 {
     LOG_FMT_INFO(log, "{} begin to restore data from disk. [path={}] [num_writers={}]", storage_name, delegator->defaultPath(), write_files.size());
+
+    auto write_batch_for_v2 = detectDataFromV1();
 
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
@@ -218,7 +326,7 @@ void PageStorage::restore()
     {
         if (!(page_file.getType() == PageFile::Type::Formal || page_file.getType() == PageFile::Type::Legacy
               || page_file.getType() == PageFile::Type::Checkpoint))
-            throw Exception("Try to recover from " + page_file.toString() + ", illegal type.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Try to recover from {}, illegal type.", page_file.toString()), ErrorCodes::LOGICAL_ERROR);
 
         if (auto reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file));
             reader->hasNext())
@@ -353,6 +461,12 @@ void PageStorage::restore()
         auto snapshot = getConcreteSnapshot();
         size_t num_pages = snapshot->version()->numPages();
         LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
+    }
+
+    if (!write_batch_for_v2.empty())
+    {
+        LOG_FMT_INFO(log, "{} rewrite {} writebatchs from V1", storage_name, write_batch_for_v2.getWrites().size());
+        writeImpl(std::move(write_batch_for_v2), nullptr);
     }
 }
 

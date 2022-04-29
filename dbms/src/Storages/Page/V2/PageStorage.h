@@ -276,6 +276,9 @@ private:
         const String & parent_path_hint,
         WriterPtr && old_writer = nullptr,
         const String & logging_msg = "");
+
+    WriteBatch convertEditToWB(const std::shared_ptr<PageFile::Reader> & page_reader, const PageEntriesEdit & entries_edits);
+    WriteBatch detectDataFromV1();
 };
 
 } // namespace PS::V2
