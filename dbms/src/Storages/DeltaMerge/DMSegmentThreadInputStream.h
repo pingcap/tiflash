@@ -118,6 +118,8 @@ private:
 
     SegmentPtr cur_segment;
 
+    const String table_name;
+
     Logger * log;
 };
 

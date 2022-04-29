@@ -328,7 +328,8 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                store_columns,
                                latest_gc_safe_point,
                                settings.not_compress_columns,
-                               db_settings);
+                               db_settings,
+                               table_name);
     return DMContextPtr(ctx);
 }
 
@@ -443,7 +444,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             auto range   = segment->getRange();
             auto end_pos = range.end == P_INF_HANDLE ? handle_data.cend()
                                                      : std::lower_bound(handle_data.cbegin() + offset, handle_data.cend(), range.end);
-            limit = end_pos - (handle_data.cbegin() + offset);
+            limit        = end_pos - (handle_data.cbegin() + offset);
 
             bool should_cache = limit < dm_context->delta_cache_limit_rows / 4;
             if (should_cache)
