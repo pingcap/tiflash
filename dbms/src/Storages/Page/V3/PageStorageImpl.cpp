@@ -36,12 +36,12 @@ PageStorageImpl::PageStorageImpl(
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , log(Logger::get("PageStorage", name))
-    , blob_store(name, file_provider_, delegator, blob_config)
+    , blob_store(name, file_provider_, delegator, parseBlobConfig(config_))
 {
+    LOG_FMT_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());
 }
 
 PageStorageImpl::~PageStorageImpl() = default;
-
 
 void PageStorageImpl::restore()
 {
@@ -52,7 +52,7 @@ void PageStorageImpl::restore()
     PageDirectoryFactory factory;
     page_directory = factory
                          .setBlobStore(blob_store)
-                         .create(storage_name, file_provider, delegator);
+                         .create(storage_name, file_provider, delegator, parseWALConfig(config));
     // factory.max_applied_page_id // TODO: return it to outer function
 }
 
