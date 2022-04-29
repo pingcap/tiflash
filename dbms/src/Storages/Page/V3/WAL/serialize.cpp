@@ -57,6 +57,7 @@ inline void deserializeEntryFrom(ReadBuffer & buf, PageEntryV3 & entry)
     readIntBinary(entry.file_id, buf);
     readIntBinary(entry.offset, buf);
     readIntBinary(entry.size, buf);
+    readIntBinary(entry.align_size, buf);
     readIntBinary(entry.checksum, buf);
     readIntBinary(entry.tag, buf);
     // fieldsOffset
