@@ -46,6 +46,7 @@ rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
       -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
+      -DOPENSSL_ROOT_DIR='/usr/local/opt/openssl' \
       -DENABLE_ICU=OFF \
       -DENABLE_MYSQL=OFF \
       -DENABLE_TESTING=OFF \
