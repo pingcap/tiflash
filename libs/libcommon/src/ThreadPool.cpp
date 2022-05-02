@@ -12,20 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Poco/Logger.h>
 #include <common/ThreadPool.h>
+#include <common/logger_useful.h>
 
 #include <iostream>
 
+
+static Poco::Logger * getLogger()
+{
+    static Poco::Logger * logger = &Poco::Logger::get("ThreadPool");
+    return logger;
+}
 
 ThreadPool::ThreadPool(size_t m_size, Job pre_worker)
     : m_size(m_size)
 {
     threads.reserve(m_size);
-    for (size_t i = 0; i < m_size; ++i)
-        threads.emplace_back([this, pre_worker] {
-            pre_worker();
-            worker();
-        });
+    try
+    {
+        for (size_t i = 0; i < m_size; ++i)
+            threads.emplace_back([this, pre_worker] {
+                pre_worker();
+                worker();
+            });
+    }
+    catch (...)
+    {
+        LOG_FMT_ERROR(getLogger(), "ThreadPool failed to allocate threads.");
+        finalize();
+        throw;
+    }
+}
+
+void ThreadPool::finalize()
+{
+    {
+        std::unique_lock lock(mutex);
+        shutdown = true;
+    }
+
+    has_new_job_or_shutdown.notify_all();
+
+    for (auto & thread : threads)
+        thread.join();
 }
 
 void ThreadPool::schedule(Job job)
@@ -59,15 +89,7 @@ void ThreadPool::wait()
 
 ThreadPool::~ThreadPool()
 {
-    {
-        std::unique_lock lock(mutex);
-        shutdown = true;
-    }
-
-    has_new_job_or_shutdown.notify_all();
-
-    for (auto & thread : threads)
-        thread.join();
+    finalize();
 }
 
 size_t ThreadPool::active() const

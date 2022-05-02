@@ -22,10 +22,10 @@
 
 namespace DB::PS::V3
 {
-PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
 {
-    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config);
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal), config.max_persisted_log_files);
     loadFromDisk(dir, std::move(reader));
 
     // Reset the `sequence` to the maximum of persisted.
@@ -63,7 +63,7 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
 
 PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
 {
-    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALStore::Config());
     (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadEdit(dir, edit);

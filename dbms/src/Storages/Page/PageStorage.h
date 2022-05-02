@@ -74,6 +74,9 @@ public:
 
     struct Config
     {
+        //==========================================================================================
+        // V2 config
+        //==========================================================================================
         SettingBool sync_on_write = true;
 
         SettingUInt64 file_roll_size = PAGE_FILE_ROLL_SIZE;
@@ -109,6 +112,18 @@ public:
 
         MVCC::VersionSetConfig version_set_config;
 
+        //==========================================================================================
+        // V3 config
+        //==========================================================================================
+        SettingUInt64 blob_file_limit_size = BLOBFILE_LIMIT_SIZE;
+        SettingUInt64 blob_spacemap_type = 2;
+        SettingUInt64 blob_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
+        SettingDouble blob_heavy_gc_valid_rate = 0.2;
+
+        SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
+        SettingUInt64 wal_recover_mode = 0;
+        SettingUInt64 wal_max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
+
         void reload(const Config & rhs)
         {
             // Reload is not atomic, but should be good enough
@@ -122,9 +137,18 @@ public:
             prob_do_gc_when_write_is_low = rhs.prob_do_gc_when_write_is_low;
             // Reload fd idle time
             open_file_max_idle_time = rhs.open_file_max_idle_time;
+
+            // Reload V3 setting
+            blob_file_limit_size = rhs.blob_file_limit_size;
+            blob_spacemap_type = rhs.blob_spacemap_type;
+            blob_cached_fd_size = rhs.blob_cached_fd_size;
+            blob_heavy_gc_valid_rate = rhs.blob_heavy_gc_valid_rate;
+            wal_roll_size = rhs.wal_roll_size;
+            wal_recover_mode = rhs.wal_recover_mode;
+            wal_max_persisted_log_files = rhs.wal_max_persisted_log_files;
         }
 
-        String toDebugString() const
+        String toDebugStringV2() const
         {
             return fmt::format(
                 "PageStorage::Config {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, gc_max_valid_rate: {:.3f}, "
@@ -140,10 +164,25 @@ public:
                 prob_do_gc_when_write_is_low,
                 open_file_max_idle_time);
         }
+
+        String toDebugStringV3() const
+        {
+            return fmt::format(
+                "PageStorage::Config V3 {{"
+                "blob_file_limit_size: {}, blob_spacemap_type: {}, "
+                "blob_cached_fd_size: {}, blob_heavy_gc_valid_rate: {:.3f}, "
+                "wal_roll_size: {}, wal_recover_mode: {}, wal_max_persisted_log_files: {}}}",
+                blob_file_limit_size.get(),
+                blob_spacemap_type.get(),
+                blob_cached_fd_size.get(),
+                blob_heavy_gc_valid_rate.get(),
+                wal_roll_size.get(),
+                wal_recover_mode.get(),
+                wal_max_persisted_log_files.get());
+        }
     };
     void reloadSettings(const Config & new_config) { config.reload(new_config); };
     Config getSettings() const { return config; }
-
 
 public:
     static PageStoragePtr
