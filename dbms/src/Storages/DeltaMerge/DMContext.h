@@ -57,8 +57,6 @@ struct DMContext : private boost::noncopyable
     const bool read_stable_only;
     const bool enable_skippable_place;
 
-    const String table_name;
-
     DMContext(const Context &          db_context_,
               const String &           store_path_,
               PathPool &               extra_paths_,
@@ -67,8 +65,7 @@ struct DMContext : private boost::noncopyable
               const ColumnDefinesPtr & store_columns_,
               const DB::Timestamp      min_version_,
               const NotCompress &      not_compress_,
-              const DB::Settings &     settings,
-              const String &           table_name_ = "")
+              const DB::Settings &     settings)
         : db_context(db_context_),
           metrics(db_context.getTiFlashMetrics()),
           store_path(store_path_),
@@ -86,8 +83,7 @@ struct DMContext : private boost::noncopyable
           enable_logical_split(settings.dt_enable_logical_split),
           read_delta_only(settings.dt_read_delta_only),
           read_stable_only(settings.dt_read_stable_only),
-          enable_skippable_place(settings.dt_enable_skippable_place),
-          table_name(table_name_)
+          enable_skippable_place(settings.dt_enable_skippable_place)
     {
     }
 };

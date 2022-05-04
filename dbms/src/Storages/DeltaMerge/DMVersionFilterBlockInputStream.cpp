@@ -1,8 +1,4 @@
-#include <Common/Decimal.h>
-#include <Common/FieldVisitors.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
-
-#include "common/logger_useful.h"
 
 namespace ProfileEvents
 {
@@ -31,79 +27,6 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         Block  cur_raw_block = raw_block;
         size_t rows          = cur_raw_block.rows();
 
-
-        auto log_if_exist_suspicious_row = [&](const Block & block_to_ret, IColumn::Filter * filter_to_ret) {
-            constexpr std::string_view table_to_check = "t_705";
-            constexpr ColId col_id_price       = 21;
-            constexpr ColId col_id_combo_price = 50;
-            if (table_name != table_to_check)
-            {
-                return;
-            }
-
-            // 0x400000000 == 1717986.9184 * 10000
-            const DecimalField<Decimal64> suspicious_val(static_cast<Int64>(0x400000000), 4);
-            const DataTypeDecimal64       suspicious_data_type(18, 4);
-            const auto                    suspicious_const_col = suspicious_data_type.createColumn();
-            suspicious_const_col->insert(suspicious_val);
-            auto log_block_row = [](const Block &     block_to_dump,
-                                    IColumn::Filter * filter_to_dump,
-                                    size_t            row_index,
-                                    UInt64            tso,
-                                    const String &    table_name,
-                                    Poco::Logger *    log) {
-                Field  col_field;
-                String row_to_dump;
-                for (auto & col_with_n : block_to_dump)
-                {
-                    col_with_n.column->get(row_index, col_field);
-                    // "${col_name}_${col_val},"
-                    row_to_dump += col_with_n.name + "_" + applyVisitor(FieldVisitorDump(), col_field) + ",";
-                }
-                // this row has been filtered by the filter or not
-                if (filter_to_dump == nullptr)
-                {
-                    row_to_dump += "filter_<null>";
-                }
-                else
-                {
-                    row_to_dump += "filter_" + DB::toString(filter_to_dump->data()[row_index]);
-                }
-                LOG_WARNING(log,
-                            "Found suspicious row!!! [table_name=" << table_name << "] [tso=" << tso
-                                                                   << "] [num_rows=" << block_to_dump.rows() << "] [row_index=" << row_index
-                                                                   << "] [" << row_to_dump << "]");
-            };
-
-            // find if there exist any of target column id
-
-            for (auto c_iter = block_to_ret.begin(); c_iter != block_to_ret.end(); ++c_iter)
-            {
-                const auto & c              = *c_iter;
-                auto         unwrapped_type = removeNullable(c.type);
-                if (unwrapped_type->isDecimal() && (c.column_id == col_id_price || c.column_id == col_id_combo_price))
-                {
-                    auto unwrapped_col = c.column;
-                    if (c.column->isColumnNullable())
-                    {
-                        const auto * null_input_column = checkAndGetColumn<ColumnNullable>(c.column.get());
-                        unwrapped_col                  = null_input_column->getNestedColumnPtr();
-                    }
-
-                    for (size_t row_idx = 0; row_idx < unwrapped_col->size(); ++row_idx)
-                    {
-                        // check whether the row value is suspicious
-                        const int compare_res = unwrapped_col->compareAt(row_idx, 0, *suspicious_const_col, 0);
-                        // greater or equal to suspicious value
-                        if (compare_res >= 0)
-                        {
-                            log_block_row(block_to_ret, filter_to_ret, row_idx, version_limit, table_name, log);
-                        }
-                    }
-                }
-            }
-        };
-
         if (cur_raw_block.getByPosition(handle_col_pos).column->isColumnConst())
         {
             // Clean read optimization.
@@ -118,11 +41,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
             ProfileEvents::increment(ProfileEvents::DMCleanReadRows, rows);
 
-            auto res = getNewBlockByHeader(header, cur_raw_block);
-
-            log_if_exist_suspicious_row(res, nullptr);
-
-            return res;
+            return getNewBlockByHeader(header, cur_raw_block);
         }
 
         filter.resize(rows);
@@ -355,22 +274,14 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         if (passed_count == rows)
         {
             ++complete_passed;
-            auto res = getNewBlockByHeader(header, cur_raw_block);
-
-            log_if_exist_suspicious_row(res, nullptr);
-
-            return res;
+            return getNewBlockByHeader(header, cur_raw_block);
         }
 
         if (return_filter)
         {
             // The caller of this method should do the filtering, we just need to return the original block.
             res_filter = &filter;
-            auto res   = getNewBlockByHeader(header, cur_raw_block);
-
-            log_if_exist_suspicious_row(res, &filter);
-
-            return res;
+            return getNewBlockByHeader(header, cur_raw_block);
         }
         else
         {
@@ -381,9 +292,6 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 column.column = column.column->filter(filter, passed_count);
                 res.insert(std::move(column));
             }
-
-            log_if_exist_suspicious_row(res, &filter);
-
             return res;
         }
     }

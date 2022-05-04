@@ -1,9 +1,10 @@
 #pragma once
 
+#include <common/logger_useful.h>
+
 #include <Columns/ColumnsCommon.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -23,13 +24,9 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
 public:
-    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
-                                    const ColumnDefines &       read_columns,
-                                    UInt64                      version_limit_,
-                                    const String &              table_name_)
+    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & read_columns, UInt64 version_limit_)
         : version_limit(version_limit_),
           header(toEmptyBlock(read_columns)),
-          table_name(table_name_),
           log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
     {
         children.push_back(input);
@@ -134,8 +131,6 @@ private:
     size_t complete_passed     = 0;
     size_t complete_not_passed = 0;
     size_t not_clean_rows      = 0;
-
-    String table_name;
 
     Logger * log;
 };
