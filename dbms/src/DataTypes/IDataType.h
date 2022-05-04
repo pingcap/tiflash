@@ -368,7 +368,7 @@ public:
 
     virtual bool isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() const
     {
-        return isValueRepresentedByNumber() || isFixedString();
+        return isValueUnambiguouslyRepresentedInContiguousMemoryRegion() && (isValueRepresentedByNumber() || isFixedString());
     };
 
     virtual bool isString() const { return false; };

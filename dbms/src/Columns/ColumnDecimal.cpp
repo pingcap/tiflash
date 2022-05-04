@@ -36,16 +36,67 @@ int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) c
 template <typename T>
 StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
-    auto pos = arena.allocContinue(sizeof(T), begin);
-    memcpy(pos, &data[n], sizeof(T));
-    return StringRef(pos, sizeof(T));
+    if constexpr (is_Decimal256)
+    {
+        /// serialize Decimal256 in `Non-trivial, Binary` way, the serialization logical is
+        /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L149
+        size_t mem_size = 0;
+        const typename T::NativeType::backend_type & val = data[n].value.backend();
+        bool s = val.sign();
+        size_t limb_count = val.size();
+
+        mem_size = sizeof(bool) + sizeof(size_t) + limb_count * sizeof(boost::multiprecision::limb_type);
+
+        auto pos = arena.allocContinue(mem_size, begin);
+        auto current_pos = pos;
+        memcpy(current_pos, &s, sizeof(bool));
+        current_pos += sizeof(bool);
+
+        memcpy(current_pos, &limb_count, sizeof(std::size_t));
+        current_pos += sizeof(size_t);
+
+        memcpy(current_pos, val.limbs(), limb_count * sizeof(boost::multiprecision::limb_type));
+
+        return StringRef(pos, mem_size);
+    }
+    else
+    {
+        auto pos = arena.allocContinue(sizeof(T), begin);
+        memcpy(pos, &data[n], sizeof(T));
+        return StringRef(pos, sizeof(T));
+    }
 }
 
 template <typename T>
 const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>)
 {
-    data.push_back(unalignedLoad<T>(pos));
-    return pos + sizeof(T);
+    if constexpr (is_Decimal256)
+    {
+        /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
+        /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
+        T value;
+        auto & val = value.value.backend();
+
+        size_t offset = 0;
+        bool s = unalignedLoad<bool>(pos + offset);
+        offset += sizeof(bool);
+        size_t limb_count = unalignedLoad<size_t>(pos + offset);
+        offset += sizeof(size_t);
+
+        val.resize(limb_count,limb_count);
+        memcpy(val.limbs(), pos + offset, limb_count * sizeof(boost::multiprecision::limb_type));
+        if(s != val.sign())
+            val.negate();
+        val.normalize();
+        data.push_back(value);
+
+        return pos + offset + limb_count * sizeof(boost::multiprecision::limb_type);
+    }
+    else
+    {
+        data.push_back(unalignedLoad<T>(pos));
+        return pos + sizeof(T);
+    }
 }
 
 template <typename T>

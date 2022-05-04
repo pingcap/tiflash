@@ -233,6 +233,33 @@ inline T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType p
     return value;
 }
 
+Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info)
+{
+    PrecType prec = raw_value[cursor++];
+    ScaleType scale = raw_value[cursor++];
+    auto type = createDecimal(column_info.flen, column_info.decimal);
+    if (checkDecimal<Decimal32>(*type))
+    {
+        auto res = DecodeDecimalImpl<Decimal32>(cursor, raw_value, prec, scale);
+        return DecimalField<Decimal32>(res, scale);
+    }
+    else if (checkDecimal<Decimal64>(*type))
+    {
+        auto res = DecodeDecimalImpl<Decimal64>(cursor, raw_value, prec, scale);
+        return DecimalField<Decimal64>(res, scale);
+    }
+    else if (checkDecimal<Decimal128>(*type))
+    {
+        auto res = DecodeDecimalImpl<Decimal128>(cursor, raw_value, prec, scale);
+        return DecimalField<Decimal128>(res, scale);
+    }
+    else
+    {
+        auto res = DecodeDecimalImpl<Decimal256>(cursor, raw_value, prec, scale);
+        return DecimalField<Decimal256>(res, scale);
+    }
+}
+
 Field DecodeDecimal(size_t & cursor, const String & raw_value)
 {
     PrecType prec = raw_value[cursor++];
@@ -267,6 +294,19 @@ void SkipDecimal(size_t & cursor, const String & raw_value)
 
     int binSize = getBytes(prec, frac);
     cursor += binSize;
+}
+
+Field DecodeDatumForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info)
+{
+    if (raw_value[cursor] == TiDB::CodecFlagDecimal)
+    {
+        cursor++;
+        return DecodeDecimalForCHRow(cursor, raw_value, column_info);
+    }
+    else
+    {
+        return DecodeDatum(cursor, raw_value);
+    }
 }
 
 Field DecodeDatum(size_t & cursor, const String & raw_value)
@@ -491,6 +531,34 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::string
     ss.write(buf.c_str(), buf.size());
 }
 
+void EncodeDecimalForRow(const Field & field, std::stringstream & ss, const ColumnInfo & column_info)
+{
+    if (field.getType() == Field::Types::Decimal32)
+    {
+        auto decimal_field = field.get<DecimalField<Decimal32>>();
+        return EncodeDecimalImpl(decimal_field.getValue(), column_info.flen, column_info.decimal, ss);
+    }
+    else if (field.getType() == Field::Types::Decimal64)
+    {
+        auto decimal_field = field.get<DecimalField<Decimal64>>();
+        return EncodeDecimalImpl(decimal_field.getValue(), column_info.flen, column_info.decimal, ss);
+    }
+    else if (field.getType() == Field::Types::Decimal128)
+    {
+        auto decimal_field = field.get<DecimalField<Decimal128>>();
+        return EncodeDecimalImpl(decimal_field.getValue(), column_info.flen, column_info.decimal, ss);
+    }
+    else if (field.getType() == Field::Types::Decimal256)
+    {
+        auto decimal_field = field.get<DecimalField<Decimal256>>();
+        return EncodeDecimalImpl(decimal_field.getValue(), column_info.flen, column_info.decimal, ss);
+    }
+    else
+    {
+        throw Exception("Not a decimal when decoding decimal", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 void EncodeDecimal(const Field & field, std::stringstream & ss)
 {
     if (field.getType() == Field::Types::Decimal32)
@@ -517,6 +585,16 @@ void EncodeDecimal(const Field & field, std::stringstream & ss)
     {
         throw Exception("Not a decimal when decoding decimal", ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+void EncodeDatumForRow(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss, const ColumnInfo & column_info)
+{
+    if (flag == TiDB::CodecFlagDecimal && !field.isNull())
+    {
+        ss << UInt8(flag);
+        return EncodeDecimalForRow(field, ss, column_info);
+    }
+    return EncodeDatum(field, flag, ss);
 }
 
 void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)

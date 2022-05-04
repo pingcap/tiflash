@@ -43,7 +43,7 @@ Block DefaultChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & sch
     size_t cursor = 0;
     while (cursor < data.size())
     {
-        curr_row.push_back(DecodeDatum(cursor, data));
+        curr_row.push_back(DecodeDatumForCHRow(cursor, data, schema[curr_row.size()].second));
         if (curr_row.size() == schema.size())
         {
             rows.emplace_back(std::move(curr_row));

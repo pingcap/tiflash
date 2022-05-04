@@ -67,6 +67,8 @@ public:
     using Container = DecimalPaddedPODArray<T>;
 
 private:
+
+    static constexpr bool is_Decimal256 = std::is_same_v<Decimal256, T>;
     ColumnDecimal(const size_t n, UInt32 scale_)
     :   data(n, scale_),
         scale(scale_)
@@ -111,7 +113,12 @@ public:
     Field operator[](size_t n) const override { return DecimalField(data[n], scale); }
 
     //StringRef getRawData() const override { return StringRef(reinterpret_cast<const char*>(data.data()), data.size()); }
-    StringRef getDataAt(size_t n) const override { return StringRef(reinterpret_cast<const char *>(&data[n]), sizeof(data[n])); }
+    StringRef getDataAt(size_t n) const override {
+        if constexpr (is_Decimal256) {
+            throw Exception("getDataAt is not supported for " + IColumn::getName());
+        }
+        return StringRef(reinterpret_cast<const char *>(&data[n]), sizeof(data[n]));
+    }
     void get(size_t n, Field & res) const override { res = (*this)[n]; }
 //    bool getBool(size_t n) const override { return bool(data[n]); }
     Int64 getInt(size_t n) const override { return Int64(static_cast<typename T::NativeType>(data[n]) * scale); }
