@@ -22,7 +22,10 @@ namespace DB
 class TiDBTableScan
 {
 public:
-    TiDBTableScan(const tipb::Executor * table_scan_, const DAGContext & dag_context);
+    TiDBTableScan(
+        const tipb::Executor * table_scan_,
+        const String & executor_id_,
+        const DAGContext & dag_context);
     bool isPartitionTableScan() const
     {
         return is_partition_table_scan;
@@ -46,11 +49,12 @@ public:
     }
     String getTableScanExecutorID() const
     {
-        return table_scan->executor_id();
+        return executor_id;
     }
 
 private:
     const tipb::Executor * table_scan;
+    String executor_id;
     bool is_partition_table_scan;
     const google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & columns;
     /// logical_table_id is the table id for a TiDB' table, while if the
