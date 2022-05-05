@@ -40,6 +40,8 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
+    inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID; }
+
     size_t getFieldSize(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))

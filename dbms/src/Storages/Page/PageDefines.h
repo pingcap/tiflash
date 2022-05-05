@@ -54,6 +54,7 @@ static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
 using PageId = UInt64;
 using PageIds = std::vector<PageId>;
 using PageIdSet = std::unordered_set<PageId>;
+static constexpr PageId INVALID_PAGE_ID = 0;
 
 using PageIdV3Internal = UInt128;
 using PageIdV3Internals = std::vector<PageIdV3Internal>;
