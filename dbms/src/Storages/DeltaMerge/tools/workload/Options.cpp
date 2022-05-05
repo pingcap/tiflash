@@ -160,7 +160,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     bg_thread_count = vm["bg_thread_count"].as<uint64_t>();
 
-    table_id= vm["table_id"].as<int64_t>();
+    table_id = vm["table_id"].as<int64_t>();
     table_name = vm["table_name"].as<std::string>();
 
     return {true, toString()};

@@ -136,7 +136,7 @@ void run(WorkloadOptions & opts)
     catch (...)
     {
         DB::tryLogCurrentException("exception thrown");
-        std::abort();  // Finish testing if some error happened.
+        std::abort(); // Finish testing if some error happened.
     }
 
     outputResult(log, stats, opts);
@@ -248,7 +248,7 @@ int DTWorkload::mainEntry(int argc, char ** argv)
 
     // Log file is created in the first directory of `opts.work_dirs` by default.
     // So create these work_dirs before logger initialization.
-    // Attention: This function will remove directory first if `work_dirs` exists. 
+    // Attention: This function will remove directory first if `work_dirs` exists.
     initWorkDirs(opts.work_dirs);
     // need to init logger before creating global context,
     // or the logging in global context won't be output to
