@@ -43,15 +43,7 @@ RemoteRequest RemoteRequest::build(
     tipb::DAGRequest dag_req;
     auto * executor = dag_req.mutable_root_executor();
 
-    if (push_down_filter.hasValue())
-    {
-        executor->set_tp(tipb::ExecType::TypeSelection);
-        executor->set_executor_id(push_down_filter.executor_id);
-        auto * new_selection = executor->mutable_selection();
-        for (const auto & condition : push_down_filter.conditions)
-            *new_selection->add_conditions() = *condition;
-        executor = new_selection->mutable_child();
-    }
+    executor = push_down_filter.constructSelectionForRemoteRead(executor);
 
     {
         tipb::Executor * ts_exec = executor;

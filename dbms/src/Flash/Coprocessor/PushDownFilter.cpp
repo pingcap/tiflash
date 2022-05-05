@@ -32,6 +32,23 @@ PushDownFilter::PushDownFilter(
     }
 }
 
+tipb::Executor * PushDownFilter::constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const
+{
+    if (hasValue())
+    {
+        mutable_executor->set_tp(tipb::ExecType::TypeSelection);
+        mutable_executor->set_executor_id(executor_id);
+        auto * new_selection = mutable_executor->mutable_selection();
+        for (const auto & condition : conditions)
+            *new_selection->add_conditions() = *condition;
+        return new_selection->mutable_child();
+    }
+    else
+    {
+        return mutable_executor;
+    }
+}
+
 PushDownFilter PushDownFilter::toPushDownFilter(const tipb::Executor * filter_executor)
 {
     if (!filter_executor || !filter_executor->has_selection())

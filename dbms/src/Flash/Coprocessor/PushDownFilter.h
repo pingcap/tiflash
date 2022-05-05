@@ -31,6 +31,8 @@ struct PushDownFilter
 
     bool hasValue() const { return !conditions.empty(); }
 
+    tipb::Executor * constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const;
+
     String executor_id;
     std::vector<const tipb::Expr *> conditions;
 };
