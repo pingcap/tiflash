@@ -155,7 +155,7 @@ AnalysisResult analyzeExpressions(
 
 void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    auto push_down_filter = PushDownFilter::toPushDownFilter(query_block.selection);
+    const auto push_down_filter = PushDownFilter::toPushDownFilter(query_block.selection);
 
     DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
     storage_interpreter.execute(pipeline);
