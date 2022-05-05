@@ -109,6 +109,8 @@ public:
 
     size_t getNumberOfPages() override;
 
+    std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) override;
+
     void writeImpl(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter) override;
 
     DB::PageEntry getEntryImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;

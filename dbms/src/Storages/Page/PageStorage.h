@@ -237,6 +237,8 @@ public:
 
     virtual size_t getNumberOfPages() = 0;
 
+    virtual std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) = 0;
+
     void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
     {
         writeImpl(std::move(write_batch), write_limiter);

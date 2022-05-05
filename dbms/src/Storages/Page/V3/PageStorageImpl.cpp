@@ -91,6 +91,11 @@ size_t PageStorageImpl::getNumberOfPages()
     return page_directory->numPages();
 }
 
+std::set<PageId> PageStorageImpl::getAliveExternalPageIds(NamespaceId ns_id)
+{
+    return page_directory->getAliveExternalIds(ns_id);
+}
+
 void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
 {
     if (unlikely(write_batch.empty()))
@@ -299,7 +304,7 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
             for (const auto & [ns_id, callbacks] : callbacks_container)
             {
                 auto pending_external_pages = callbacks.scanner();
-                auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
+                auto alive_external_ids = getAliveExternalPageIds(ns_id);
                 callbacks.remover(pending_external_pages, alive_external_ids);
             }
         }

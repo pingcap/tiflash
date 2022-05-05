@@ -328,13 +328,13 @@ public:
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range);
 
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);

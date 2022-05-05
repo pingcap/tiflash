@@ -667,7 +667,7 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId fil
 void DeltaMergeStore::ingestFiles(
     const DMContextPtr & dm_context,
     const RowKeyRange & range,
-    const std::vector<PageId> & file_ids,
+    const PageIds & file_ids,
     bool clear_data_in_range)
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
