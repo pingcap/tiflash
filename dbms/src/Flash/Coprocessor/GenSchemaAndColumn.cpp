@@ -20,31 +20,23 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan)
 {
     NamesAndTypes names_and_types;
     names_and_types.reserve(table_scan.getColumnSize());
-
-    String handle_column_name = MutableSupport::tidb_pk_column_name;
-
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
-        String name = fmt::format("mock_table_scan_{}", i);
         TiDB::ColumnInfo column_info;
-        auto const & ci = table_scan.getColumns()[i];
+        const auto & ci = table_scan.getColumns()[i];
         column_info.tp = static_cast<TiDB::TP>(ci.tp());
-        ColumnID cid = ci.column_id();
-        // Column ID -1 return the handle column
-        if (cid == TiDBPkColumnID)
-            name = handle_column_name;
-        else if (cid == ExtraTableIDColumnID)
-            name = MutableSupport::extra_table_id_column_name;
-        if (cid == ExtraTableIDColumnID)
+        column_info.id = ci.column_id();
+
+        switch (column_info.id)
         {
-            NameAndTypePair extra_table_id_column_pair = {name, MutableSupport::extra_table_id_column_type};
-            names_and_types.push_back(std::move(extra_table_id_column_pair));
-        }
-        else
-        {
-            auto type = getDataTypeByColumnInfoForComputingLayer(column_info);
-            NameAndTypePair pair = {name, type};
-            names_and_types.push_back(std::move(pair));
+        case TiDBPkColumnID:
+            names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, getDataTypeByColumnInfoForComputingLayer(column_info));
+            break;
+        case ExtraTableIDColumnID:
+            names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, MutableSupport::extra_table_id_column_type);
+            break;
+        default:
+            names_and_types.emplace_back(fmt::format("mock_table_scan_{}", i), getDataTypeByColumnInfoForComputingLayer(column_info));
         }
     }
     return names_and_types;
