@@ -43,7 +43,7 @@ RemoteRequest RemoteRequest::build(
     tipb::DAGRequest dag_req;
     auto * executor = dag_req.mutable_root_executor();
 
-    executor = push_down_filter.constructSelectionForRemoteRead(executor);
+    auto * executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
 
     {
         tipb::Executor * ts_exec = executor;
