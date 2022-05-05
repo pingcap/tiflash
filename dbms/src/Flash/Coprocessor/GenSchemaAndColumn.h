@@ -16,17 +16,15 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
-#include <tipb/executor.pb.h>
 
 namespace DB
 {
 using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
-NamesAndTypes genNamesAndTypes(const tipb::TableScan & table_scan);
-DAGSchema genSchema(const tipb::TableScan & table_scan);
-NamesAndTypes genNamesAndTypes(::google::protobuf::RepeatedPtrField<::tipb::ColumnInfo> & column_infos);
-DAGSchema genSchema(::google::protobuf::RepeatedPtrField<::tipb::ColumnInfo> & column_infos);
+NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan);
+DAGSchema genSchema(const TiDBTableScan & table_scan);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 

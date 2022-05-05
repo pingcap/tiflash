@@ -48,10 +48,6 @@ public:
     {
         return table_scan->executor_id();
     }
-    const tipb::Executor * getTableScan() const
-    {
-        return table_scan;
-    }
 
 private:
     const tipb::Executor * table_scan;
