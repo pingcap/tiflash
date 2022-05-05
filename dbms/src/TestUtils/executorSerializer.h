@@ -12,17 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
 
-#include <DataStreams/HashJoinBuildBlockInputStream.h>
+#include <Common/FmtUtils.h>
+#include <Flash/Statistics/traverseExecutors.h>
+#include <Interpreters/Context.h>
+#include <TestUtils/TiFlashTestException.h>
 namespace DB
 {
-Block HashJoinBuildBlockInputStream::readImpl()
+namespace tests
 {
-    Block block = children.back()->read();
-    if (!block)
-        return block;
-    join->insertFromBlock(block, concurrency_build_index);
-    return block;
-}
+class ExecutorSerializer
+{
+public:
+    String serialize(const tipb::DAGRequest * dag_request);
+
+private:
+    void serialize(const tipb::Executor & root_executor, size_t level);
+    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
+
+private:
+    FmtBuffer buf;
+};
+} // namespace tests
 
 } // namespace DB

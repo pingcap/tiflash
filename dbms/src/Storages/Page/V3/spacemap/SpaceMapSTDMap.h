@@ -40,7 +40,7 @@ public:
     bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override
     {
         size_t idx = 0;
-        for (const auto [offset, length] : free_map)
+        for (const auto & [offset, length] : free_map)
         {
             if (!checker(idx, offset, offset + length))
                 return false;
