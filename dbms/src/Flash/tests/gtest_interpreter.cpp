@@ -244,9 +244,10 @@ CreatingSets
  Union
   Expression x 10
    Expression
-    HashJoinProbe
-     Expression
-      MockTableScan)";
+    Expression
+     HashJoinProbe
+      Expression
+       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }

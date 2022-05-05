@@ -12,55 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
-#include <Storages/Transaction/TypeMapping.h>
-#include <fmt/core.h>
+#include <Storages/MutableSupport.h>
+
 namespace DB
 {
-DAGSchema genSchema(const TiDBTableScan & table_scan)
-{
-    DAGSchema schema;
-    schema.reserve(table_scan.getColumnSize());
-    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
-    {
-        String name = fmt::format("mock_table_scan_{}", i);
-        TiDB::ColumnInfo column_info;
-        auto const & ci = table_scan.getColumns()[i];
-        column_info.tp = static_cast<TiDB::TP>(ci.tp());
-        column_info.id = ci.column_id();
-        column_info.name = name;
-        schema.push_back({name, column_info});
-    }
-    return schema;
-}
-
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan)
 {
     NamesAndTypes names_and_types;
     names_and_types.reserve(table_scan.getColumnSize());
 
+    String handle_column_name = MutableSupport::tidb_pk_column_name;
+
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         String name = fmt::format("mock_table_scan_{}", i);
         TiDB::ColumnInfo column_info;
         auto const & ci = table_scan.getColumns()[i];
         column_info.tp = static_cast<TiDB::TP>(ci.tp());
-        column_info.id = ci.column_id();
-        auto type = getDataTypeByColumnInfoForComputingLayer(column_info);
-        names_and_types.push_back({name, type});
+        ColumnID cid = ci.column_id();
+        // Column ID -1 return the handle column
+        if (cid == TiDBPkColumnID)
+            name = handle_column_name;
+        else if (cid == ExtraTableIDColumnID)
+            name = MutableSupport::extra_table_id_column_name;
+        if (cid == ExtraTableIDColumnID)
+        {
+            NameAndTypePair extra_table_id_column_pair = {name, MutableSupport::extra_table_id_column_type};
+            names_and_types.push_back(std::move(extra_table_id_column_pair));
+        }
+        else
+        {
+            auto type = getDataTypeByColumnInfoForComputingLayer(column_info);
+            NameAndTypePair pair = {name, type};
+            names_and_types.push_back(std::move(pair));
+        }
     }
     return names_and_types;
-}
-
-ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema)
-{
-    std::vector<DB::ColumnWithTypeAndName> column_with_type_and_names;
-    column_with_type_and_names.reserve(schema.size());
-    for (const auto & col : schema)
-    {
-        auto type = getDataTypeByColumnInfoForComputingLayer(col.second);
-        column_with_type_and_names.push_back(DB::ColumnWithTypeAndName(type, col.first));
-    }
-    return column_with_type_and_names;
 }
 
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types)

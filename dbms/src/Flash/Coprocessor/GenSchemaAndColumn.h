@@ -24,8 +24,6 @@ namespace DB
 using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan);
-DAGSchema genSchema(const TiDBTableScan & table_scan);
-ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 
 } // namespace DB
