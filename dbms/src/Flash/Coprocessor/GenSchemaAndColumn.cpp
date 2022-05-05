@@ -30,6 +30,7 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan)
         switch (column_info.id)
         {
         case TiDBPkColumnID:
+            // todo: need to check if the type of pk_handle_columns matches the type that used in delta merge tree.
             names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, getDataTypeByColumnInfoForComputingLayer(column_info));
             break;
         case ExtraTableIDColumnID:
