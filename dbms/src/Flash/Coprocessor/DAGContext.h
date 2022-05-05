@@ -154,6 +154,7 @@ public:
         initExecutorIdToJoinIdMap();
         initOutputInfo();
     }
+
     // for test
     explicit DAGContext(UInt64 max_error_count_)
         : dag_request(nullptr)

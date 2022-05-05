@@ -56,7 +56,6 @@ void InterpreterTest::initializeClientInfo()
 void InterpreterTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
-    // todo change the code here.
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in interpreter tests.
     DAGQuerySource dag(context.context);
