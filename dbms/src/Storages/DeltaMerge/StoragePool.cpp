@@ -281,6 +281,8 @@ PageStorageRunMode StoragePool::restore()
         }
         break;
     }
+    default:
+        throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
     return run_mode;
 }
@@ -300,14 +302,52 @@ void StoragePool::enableGC()
 
 void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
 {
-    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
+    switch (run_mode)
+    {
+    case PageStorageRunMode::ONLY_V2:
+    {
         data_storage_v2->registerExternalPagesCallbacks(callbacks);
+        break;
+    }
+    case PageStorageRunMode::ONLY_V3:
+    {
+        data_storage_v3->registerExternalPagesCallbacks(callbacks);
+        break;
+    }
+    case PageStorageRunMode::MIX_MODE:
+    {
+        data_storage_v2->registerExternalPagesCallbacks(callbacks);
+        data_storage_v3->registerExternalPagesCallbacks(callbacks);
+        break;
+    }
+    default:
+        throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
 {
-    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
+    switch (run_mode)
+    {
+    case PageStorageRunMode::ONLY_V2:
+    {
         data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
+        break;
+    }
+    case PageStorageRunMode::ONLY_V3:
+    {
+        data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
+        break;
+    }
+    case PageStorageRunMode::MIX_MODE:
+    {
+        data_storage_v2->unregisterExternalPagesCallbacks(ns_id);
+        data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
+        break;
+    }
+    default:
+        throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 

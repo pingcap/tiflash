@@ -245,22 +245,30 @@ try
 
     {
         PageIds page_ids = {1, 2, 3, 4};
-        page_ids.emplace_back(1);
-        page_ids.emplace_back(2);
-        page_ids.emplace_back(3);
-        page_ids.emplace_back(4);
         auto page_maps = page_reader_mix->read(page_ids);
         ASSERT_EQ(page_maps.size(), 4);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[2], 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page_maps[3], 3);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page_maps[4], 4);
+
+        // Read page ids which only exited in V2
+        page_ids = {1, 2, 7};
+        page_maps = page_reader_mix->read(page_ids);
+        ASSERT_EQ(page_maps.size(), 3);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[2], 2);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[7], 7);
     }
 
     {
         PageIds page_ids = {1, 2, 3, 4};
         PageHandler hander = [](DB::PageId /*page_id*/, const Page & /*page*/) {
         };
+        ASSERT_NO_THROW(page_reader_mix->read(page_ids, hander));
+
+        // Read page ids which only exited in V2
+        page_ids = {1, 2, 7};
         ASSERT_NO_THROW(page_reader_mix->read(page_ids, hander));
     }
 
@@ -280,6 +288,7 @@ try
     }
 
     {
+        // Read page ids which only exited in V2
         std::vector<PageStorage::PageReadFields> read_fields;
         read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
         ASSERT_NO_THROW(page_reader_mix->read(read_fields));
