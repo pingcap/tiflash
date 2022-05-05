@@ -58,12 +58,6 @@ private:
 #endif
     void executeImpl(DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
-    void executeCastAfterTableScan(
-        const TiDBTableScan & table_scan,
-        const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column,
-        size_t remote_read_streams_start_index,
-        DAGPipeline & pipeline);
-    void executePushedDownFilter(const std::vector<const tipb::Expr *> & conditions, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
@@ -93,10 +87,6 @@ private:
     void recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr);
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
-
-    void executeRemoteQueryImpl(
-        DAGPipeline & pipeline,
-        std::vector<RemoteRequest> & remote_requests);
 
     DAGContext & dagContext() const { return *context.getDAGContext(); }
 

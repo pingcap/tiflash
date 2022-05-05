@@ -326,13 +326,6 @@ Databases Context::getDatabases() const
     return shared->databases;
 }
 
-Databases Context::getDatabases()
-{
-    auto lock = getLock();
-    return shared->databases;
-}
-
-
 Context::SessionKey Context::getSessionKey(const String & session_id) const
 {
     const auto & user_name = client_info.current_user;
@@ -458,25 +451,7 @@ DatabasePtr Context::getDatabase(const String & database_name) const
     return shared->databases[db];
 }
 
-DatabasePtr Context::getDatabase(const String & database_name)
-{
-    auto lock = getLock();
-    String db = resolveDatabase(database_name, current_database);
-    assertDatabaseExists(db);
-    return shared->databases[db];
-}
-
 DatabasePtr Context::tryGetDatabase(const String & database_name) const
-{
-    auto lock = getLock();
-    String db = resolveDatabase(database_name, current_database);
-    auto it = shared->databases.find(db);
-    if (it == shared->databases.end())
-        return {};
-    return it->second;
-}
-
-DatabasePtr Context::tryGetDatabase(const String & database_name)
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
