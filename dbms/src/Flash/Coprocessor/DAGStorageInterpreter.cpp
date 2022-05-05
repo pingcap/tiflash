@@ -262,7 +262,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         remote_read_streams_start_index = 1;
     }
 
-    /// We don't wants to the table to be dropped during the lifetime of this query,
+    /// We don't want the table to be dropped during the lifetime of this query,
     /// and sometimes if there is no local region, we will use the RemoteBlockInputStream
     /// or even the null_stream to hold the lock.
     pipeline.transform([&](auto & stream) {
