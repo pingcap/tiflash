@@ -58,7 +58,6 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
         testdata_path.swap(absolute_testdata_path);
     }
     global_context->initializePathCapacityMetric(0, testdata_path, {}, {}, {});
-    global_context->setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
 
     auto paths = getPathPool(testdata_path);
     global_context->setPathPool(

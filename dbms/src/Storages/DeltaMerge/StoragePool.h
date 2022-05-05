@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Poco/Logger.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
@@ -158,6 +159,8 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    LoggerPtr logger;
+
     PageStorageRunMode run_mode;
 
     // whether the three storage instance is owned by this StoragePool

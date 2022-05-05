@@ -148,7 +148,8 @@ bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_per
 }
 
 StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool, const String & name)
-    : run_mode(global_ctx.getPageStorageRunMode())
+    : logger(Logger::get("StoragePool", name.size() != 0 ? name : DB::toString(ns_id_)))
+    , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , global_context(global_ctx)
 {
@@ -264,6 +265,7 @@ PageStorageRunMode StoragePool::restore()
         // Check number of valid pages in v2
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
+            LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", static_cast<UInt8>(PageStorageRunMode::MIX_MODE), static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
             run_mode = PageStorageRunMode::ONLY_V3;
             log_storage_v2 = nullptr;
             data_storage_v2 = nullptr;
@@ -394,8 +396,9 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
             break;
         }
         // else there is a DTFile with that id, continue to acquire a new ID.
-        LOG_FMT_WARNING(&Poco::Logger::get(who),
-                        "The DTFile is already exists, continute to acquire another ID. [path={}] [id={}]",
+        LOG_FMT_WARNING(logger,
+                        "The DTFile is already exists, continute to acquire another ID. [call={}][path={}] [id={}]",
+                        who,
                         existed_path,
                         dtfile_id);
     } while (true);

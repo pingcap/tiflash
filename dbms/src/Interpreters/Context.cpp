@@ -1548,10 +1548,9 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
-static bool isPageStorageV2Existed(const PathPool & path_pool)
+static bool isPageStorageV2NotExisted(const PathPool & path_pool)
 {
     // Check whether there are any files in kvstore path, if exists, then this is not a new node.
-    // If it's a new node, then we enable v3. Otherwise, we use v2.
     for (const auto & path : path_pool.listKVStorePaths())
     {
         Poco::File dir(path);
@@ -1572,13 +1571,17 @@ void Context::initializePageStorageMode(const PathPool & path_pool, bool enable_
 {
     auto lock = getLock();
 
+    // If it's a new node also enable_ps_v3 is 1, then we direct use ONLY_V3.
+    // If it's not a new node also enable_ps_v3 is 1, then we use MIX_MODE.
+    // If it's not a new node also enable_ps_v3 is 0, then we use Only_V2.
+    // If it's a new node also enable_ps_v3 is 0, then we use Only_V2.
     if (!enable_ps_v3)
     {
         shared->storage_run_mode = PageStorageRunMode::ONLY_V2;
         return;
     }
 
-    shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
+    shared->storage_run_mode = isPageStorageV2NotExisted(path_pool) ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::MIX_MODE;
 }
 
 PageStorageRunMode Context::getPageStorageRunMode() const
@@ -1601,7 +1604,7 @@ bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
         // Can't init GlobalStoragePool twice.
         // Because we won't remove the gc task in BackGroundPool
         // Also won't remove it from ~GlobalStoragePool()
-        throw Exception("Can't initializeGlobalStoragePool twice", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("GlobalStoragePool has already been initialized.", ErrorCodes::LOGICAL_ERROR);
     }
 
     if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
