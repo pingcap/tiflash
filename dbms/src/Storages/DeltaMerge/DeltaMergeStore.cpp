@@ -210,10 +210,10 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , hash_salt(++DELTA_MERGE_STORE_HASH_SALT)
     , log(Logger::get("DeltaMergeStore", fmt::format("{}.{}", db_name, table_name)))
 {
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}]", db_name, table_name);
-
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
+
+    LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}] [table_id = {}]", db_name, table_name, physical_table_id);
 
     storage_pool = std::make_shared<StoragePool>(global_context,
                                                  ns_id,

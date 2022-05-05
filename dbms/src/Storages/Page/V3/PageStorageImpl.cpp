@@ -158,7 +158,10 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
 
     PageIdV3Internals page_id_v3s;
     for (auto p_id : page_ids)
+    {
         page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
+    }
+
 
     if (throw_on_not_exist)
     {
@@ -168,7 +171,12 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
     else
     {
         auto [page_entries, page_ids_not_found] = page_directory->getOrNull(page_id_v3s, snapshot);
-        auto page_map = blob_store.read(page_entries, read_limiter);
+        PageMap page_map = {};
+        if (!page_entries.empty())
+        {
+            page_map = blob_store.read(page_entries, read_limiter);
+        }
+
         for (const auto & page_id_not_found : page_ids_not_found)
         {
             Page page_not_found;
@@ -193,13 +201,19 @@ PageIds PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
     if (throw_on_not_exist)
     {
         auto page_entries = page_directory->get(page_id_v3s, snapshot);
-        blob_store.read(page_entries, handler, read_limiter);
+        if (!page_entries.empty())
+        {
+            blob_store.read(page_entries, handler, read_limiter);
+        }
         return {};
     }
     else
     {
         auto [page_entries, page_ids_not_found] = page_directory->getOrNull(page_id_v3s, snapshot);
-        blob_store.read(page_entries, handler, read_limiter);
+        if (!page_entries.empty())
+        {
+            blob_store.read(page_entries, handler, read_limiter);
+        }
         return page_ids_not_found;
     }
 }
@@ -216,6 +230,7 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
     for (const auto & [page_id, field_indices] : page_fields)
     {
         const auto & [id, entry] = throw_on_not_exist ? page_directory->get(buildV3Id(ns_id, page_id), snapshot) : page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
+
         if (entry.isValid())
         {
             auto info = BlobStore::FieldReadInfo(buildV3Id(ns_id, page_id), entry, field_indices);
@@ -226,8 +241,12 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
             page_ids_not_found.emplace_back(id);
         }
     }
+    PageMap page_map = {};
+    if (!read_infos.empty())
+    {
+        page_map = blob_store.read(read_infos, read_limiter);
+    }
 
-    auto page_map = blob_store.read(read_infos, read_limiter);
     for (const auto & page_id_not_found : page_ids_not_found)
     {
         Page page_not_found;

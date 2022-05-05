@@ -148,7 +148,7 @@ bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_per
 }
 
 StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool, const String & name)
-    : logger(Logger::get("StoragePool", name.size() != 0 ? name : DB::toString(ns_id_)))
+    : logger(Logger::get("StoragePool", !name.empty() ? name : DB::toString(ns_id_)))
     , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , global_context(global_ctx)

@@ -280,6 +280,12 @@ try
     }
 
     {
+        std::vector<PageStorage::PageReadFields> read_fields;
+        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(2, {1, 3, 6}));
+        ASSERT_NO_THROW(page_reader_mix->read(read_fields));
+    }
+
+    {
         // Revert v3
         WriteBatch batch;
         batch.delPage(3);

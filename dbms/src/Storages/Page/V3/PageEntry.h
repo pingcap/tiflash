@@ -40,6 +40,17 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
+    String toString() const
+    {
+        return fmt::format("[file_id={}],[offset={}][size={}],[tag={}],[crc=0x{:X}],[field_offsets size={}]", //
+                           file_id,
+                           offset,
+                           size,
+                           tag,
+                           checksum,
+                           field_offsets.size());
+    }
+
     inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID; }
 
     size_t getFieldSize(size_t index) const
