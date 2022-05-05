@@ -23,8 +23,11 @@ namespace DB
 {
 using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
-NamesAndTypes genNamesAndTypesFromTableScan(const tipb::TableScan & table_scan);
-DAGSchema genSchemaFromTableScan(const tipb::TableScan & table_scan);
+NamesAndTypes genNamesAndTypes(const tipb::TableScan & table_scan);
+DAGSchema genSchema(const tipb::TableScan & table_scan);
+NamesAndTypes genNamesAndTypes(::google::protobuf::RepeatedPtrField<::tipb::ColumnInfo> & column_infos);
+DAGSchema genSchema(::google::protobuf::RepeatedPtrField<::tipb::ColumnInfo> & column_infos);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
+
 } // namespace DB

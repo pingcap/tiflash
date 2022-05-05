@@ -25,7 +25,6 @@
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
@@ -1103,4 +1102,5 @@ ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
     }
     return ret;
 }
+
 } // namespace TiDB

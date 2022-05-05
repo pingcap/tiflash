@@ -13,9 +13,80 @@
 // limitations under the License.
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/Transaction/TypeMapping.h>
-
 namespace DB
 {
+// unused
+DAGSchema genSchema(const tipb::TableScan & table_scan)
+{
+    DAGSchema schema;
+    schema.reserve(table_scan.columns_size());
+    for (Int32 i = 0; i < table_scan.columns_size(); ++i)
+    {
+        String name = "mock_table_scan_" + std::to_string(i);
+        TiDB::ColumnInfo column_info;
+        auto const & ci = table_scan.columns(i);
+        column_info.tp = static_cast<TiDB::TP>(ci.tp());
+        column_info.id = ci.column_id();
+        column_info.name = name;
+        schema.push_back({name, column_info});
+    }
+    return schema;
+}
+
+NamesAndTypes genNamesAndTypes(const tipb::TableScan & table_scan)
+{
+    NamesAndTypes names_and_types;
+    names_and_types.reserve(table_scan.columns_size());
+
+    for (Int32 i = 0; i < table_scan.columns_size(); ++i)
+    {
+        String name = "mock_table_scan_" + std::to_string(i);
+        TiDB::ColumnInfo column_info;
+        table_scan.columns();
+        auto const & ci = table_scan.columns(i);
+        column_info.tp = static_cast<TiDB::TP>(ci.tp());
+        column_info.id = ci.column_id();
+        auto type = getDataTypeByColumnInfoForComputingLayer(column_info);
+        names_and_types.push_back({name, type});
+    }
+    return names_and_types;
+}
+
+DAGSchema genSchema(::google::protobuf::RepeatedPtrField<::tipb::ColumnInfo> column_infos)
+{
+    DAGSchema schema;
+    schema.reserve(column_infos.size());
+    for (Int32 i = 0; i < column_infos.size(); ++i)
+    {
+        String name = "mock_table_scan_" + std::to_string(i);
+        TiDB::ColumnInfo column_info;
+        auto const & ci = column_infos[i];
+        column_info.tp = static_cast<TiDB::TP>(ci.tp());
+        column_info.id = ci.column_id();
+        column_info.name = name;
+        schema.push_back({name, column_info});
+    }
+    return schema;
+}
+
+NamesAndTypes genNamesAndTypes(::google::protobuf::RepeatedPtrField<::tipb::ColumnInfo> column_infos)
+{
+    NamesAndTypes names_and_types;
+    names_and_types.reserve(column_infos.size());
+
+    for (Int32 i = 0; i < column_infos.size(); ++i)
+    {
+        String name = "mock_table_scan_" + std::to_string(i);
+        TiDB::ColumnInfo column_info;
+        auto const & ci = column_infos[i];
+        column_info.tp = static_cast<TiDB::TP>(ci.tp());
+        column_info.id = ci.column_id();
+        auto type = getDataTypeByColumnInfoForComputingLayer(column_info);
+        names_and_types.push_back({name, type});
+    }
+    return names_and_types;
+}
+
 ColumnsWithTypeAndName getColumnWithTypeAndName(const DAGSchema & schema)
 {
     std::vector<DB::ColumnWithTypeAndName> column_with_type_and_names;
@@ -37,40 +108,5 @@ ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_
         column_with_type_and_names.push_back(DB::ColumnWithTypeAndName(col.type, col.name));
     }
     return column_with_type_and_names;
-}
-
-DAGSchema genSchemaFromTableScan(const tipb::TableScan & table_scan)
-{
-    DAGSchema schema;
-    schema.reserve(table_scan.columns_size());
-    for (Int32 i = 0; i < table_scan.columns_size(); ++i)
-    {
-        String name = "mock_table_scan_" + std::to_string(i);
-        TiDB::ColumnInfo column_info;
-        auto const & ci = table_scan.columns(i);
-        column_info.tp = static_cast<TiDB::TP>(ci.tp());
-        column_info.id = ci.column_id();
-        column_info.name = name;
-        schema.push_back({name, column_info});
-    }
-    return schema;
-}
-
-NamesAndTypes genNamesAndTypesFromTableScan(const tipb::TableScan & table_scan)
-{
-    NamesAndTypes names_and_types;
-    names_and_types.reserve(table_scan.columns_size());
-
-    for (Int32 i = 0; i < table_scan.columns_size(); ++i)
-    {
-        String name = "mock_table_scan_" + std::to_string(i);
-        TiDB::ColumnInfo column_info;
-        auto const & ci = table_scan.columns(i);
-        column_info.tp = static_cast<TiDB::TP>(ci.tp());
-        column_info.id = ci.column_id();
-        auto type = getDataTypeByColumnInfoForComputingLayer(column_info);
-        names_and_types.push_back({name, type});
-    }
-    return names_and_types;
 }
 } // namespace DB
