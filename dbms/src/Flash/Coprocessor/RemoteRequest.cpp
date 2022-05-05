@@ -41,8 +41,6 @@ RemoteRequest RemoteRequest::build(
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;
-    auto * executor = dag_req.mutable_root_executor();
-
     auto * executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
 
     {
