@@ -31,6 +31,6 @@ inline auto packTask(bool propagate_memory_tracker, Func && func, Args &&... arg
     using PackagedTask = std::packaged_task<TaskResult()>;
     PackagedTask task{std::move(capture)};
 
-    return std::move(task);
+    return task;
 }
 } // namespace DB
