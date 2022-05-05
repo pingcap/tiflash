@@ -1103,7 +1103,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         query_block.qb_column_prefix,
         pipeline.streams.size());
     dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
-    
+
     if (res.before_aggregation)
     {
         // execute aggregation
