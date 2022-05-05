@@ -14,13 +14,11 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
@@ -43,7 +41,7 @@ namespace DB
 using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
 /// It's only intended to be used by DAGQueryBlockInterpreter.
-/// After DAGStorageInterpreter::execute some of its members will be transfered to DAGQueryBlockInterpreter.
+/// After DAGStorageInterpreter::execute some of its members will be transferred to DAGQueryBlockInterpreter.
 class DAGStorageInterpreter
 {
 public:
@@ -78,7 +76,7 @@ private:
 
     std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
 
-    void buildRemoteRequests();
+    std::vector<RemoteRequest> buildRemoteRequests();
 
     void releaseAlterLocks();
 
@@ -88,7 +86,7 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    void executeRemoteQuery(DAGPipeline & pipeline);
+    void executeRemoteQuery(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline);
 
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
@@ -107,8 +105,6 @@ private:
     /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry_from_local_region;
     TableLockHolders drop_locks;
-    std::vector<RemoteRequest> remote_requests;
-    BlockInputStreamPtr null_stream_if_empty;
 
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 

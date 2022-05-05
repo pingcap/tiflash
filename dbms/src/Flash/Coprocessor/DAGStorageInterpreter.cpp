@@ -21,10 +21,13 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/RemoteRequest.h>
+#include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
@@ -239,10 +242,10 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     if (!mvcc_query_info->regions_query_info.empty())
         buildLocalRead(pipeline, settings.max_block_size);
 
-    null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
+    // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
+    auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
 
-    // Should build these vars under protect of `table_structure_lock`.
-    buildRemoteRequests();
+    auto remote_requests = buildRemoteRequests();
 
     // A failpoint to test pause before alter lock released
     FAIL_POINT_PAUSE(FailPoints::pause_with_alter_locks_acquired);
@@ -259,7 +262,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
-        executeRemoteQuery(pipeline);
+        executeRemoteQuery(std::move(remote_requests), pipeline);
 
     /// record local and remote io input stream
     auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
@@ -267,7 +270,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     if (pipeline.streams.empty())
     {
-        pipeline.streams.emplace_back(null_stream_if_empty);
+        pipeline.streams.emplace_back(std::move(null_stream_if_empty));
         // reset remote_read_streams_start_index for null_stream_if_empty.
         remote_read_streams_start_index = 1;
     }
@@ -417,7 +420,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     }
 }
 
-void DAGStorageInterpreter::executeRemoteQuery(DAGPipeline & pipeline)
+void DAGStorageInterpreter::executeRemoteQuery(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline)
 {
     assert(!remote_requests.empty());
     DAGSchema & schema = remote_requests[0].schema;
@@ -981,8 +984,9 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
 }
 
 // Build remote requests from `region_retry_from_local_region`
-void DAGStorageInterpreter::buildRemoteRequests()
+std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
 {
+    std::vector<RemoteRequest> remote_requests;
     std::unordered_map<Int64, Int64> region_id_to_table_id_map;
     std::unordered_map<Int64, RegionRetryList> retry_regions_map;
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
@@ -1018,6 +1022,7 @@ void DAGStorageInterpreter::buildRemoteRequests()
             push_down_filter,
             log));
     }
+    return remote_requests;
 }
 
 void DAGStorageInterpreter::releaseAlterLocks()
