@@ -33,6 +33,9 @@ void mergeConfigFromSettings(const DB::Settings & settings, PageStorage::Config 
         config.gc_max_expect_legacy_files = settings.dt_page_num_max_expect_legacy_files;
     if (settings.dt_page_num_max_gc_valid_rate > 0.0)
         config.gc_max_valid_rate_bound = settings.dt_page_num_max_gc_valid_rate;
+
+    // V3 setting which export to global setting
+    config.blob_heavy_gc_valid_rate = settings.dt_storage_blob_heavy_gc_valid_rate;
 }
 
 PageStorage::Config getConfigFromSettings(const DB::Settings & settings)
