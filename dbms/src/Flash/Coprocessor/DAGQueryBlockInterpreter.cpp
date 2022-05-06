@@ -53,6 +53,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char pause_after_copr_streams_acquired[];
+extern const char pause_after_copr_streams_acquired_once[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
@@ -283,6 +284,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     /// Set the limits and quota for reading data, the speed and time of the query.
     setQuotaAndLimitsOnTableScan(context, pipeline);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(
