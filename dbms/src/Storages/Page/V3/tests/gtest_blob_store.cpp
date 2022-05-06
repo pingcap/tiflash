@@ -583,7 +583,7 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     size_t buff_size = 100ul * 1024;
     const size_t rate_target = buff_size - 1;
 
-    auto blob_store = BlobStore(file_provider, path, config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[wb_nums * buff_size];
 
     WriteBatch wbs[wb_nums];

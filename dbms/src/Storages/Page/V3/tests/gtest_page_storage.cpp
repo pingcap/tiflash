@@ -165,7 +165,7 @@ try
         AtomicStopwatch read_watch;
         for (size_t i = 0; i < wb_nums; ++i)
         {
-            page_storage->read(page_id + i, read_limiter, nullptr);
+            page_storage->readImpl(TEST_NAMESPACE_ID, page_id + i, read_limiter, nullptr, true);
         }
 
         auto read_elapsed = read_watch.elapsedSeconds();
@@ -186,7 +186,7 @@ try
         }
 
         AtomicStopwatch read_watch;
-        page_storage->read(page_ids, read_limiter, nullptr);
+        page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, read_limiter, nullptr, true);
 
         auto read_elapsed = read_watch.elapsedSeconds();
         auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
@@ -197,47 +197,6 @@ try
 CATCH
 
 TEST_F(PageStorageTest, GCWithReadLimiter)
-try
-{
-    // In this case, BlobStore throput is very low.
-    // Because we only need 10bytes to new blob.
-    const size_t buff_size = 10;
-    char c_buff[buff_size];
-
-    const size_t num_repeat = 1024 * 150ul;
-    PageId pid = 1;
-
-    // repeated put page1
-    for (size_t n = 1; n <= num_repeat; ++n)
-    {
-        WriteBatch batch;
-        memset(c_buff, n, buff_size);
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(pid, 0, buff, buff_size);
-        page_storage->write(std::move(batch));
-    }
-
-    const size_t rate_target = DB::PAGE_META_ROLL_SIZE - 1;
-
-    Int64 consumed = 0;
-    auto get_stat = [&consumed]() {
-        return consumed;
-    };
-    ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
-                                                                    rate_target,
-                                                                    LimiterType::UNKNOW);
-
-    AtomicStopwatch read_watch;
-    page_storage->gc(/*not_skip*/ false, nullptr, read_limiter);
-
-    auto elapsed = read_watch.elapsedSeconds();
-    auto read_actual_rate = read_limiter->getTotalBytesThrough() / elapsed;
-    EXPECT_GE(read_actual_rate / rate_target, 0.70);
-    EXPECT_LE(read_actual_rate / rate_target, 1.30);
-}
-CATCH
-
-TEST_F(PageStorageTest, GCWithReadLimiter2)
 try
 {
     // In this case, WALStore throput is very low.
