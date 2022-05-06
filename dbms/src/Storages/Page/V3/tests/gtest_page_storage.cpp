@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Encryption/MockKeyManager.h>
+#include <Encryption/PosixRandomAccessFile.h>
+#include <Encryption/RandomAccessFile.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -108,6 +111,70 @@ try
     }
 }
 CATCH
+
+TEST_F(PageStorageTest, WriteReadWithEncryption)
+try
+{
+    const UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
+    const auto enc_file_provider = std::make_shared<FileProvider>(key_manager, true);
+    auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(getTemporaryPath());
+    auto page_storage_enc = std::make_shared<PageStorageImpl>("test.t", delegator, config, enc_file_provider);
+    page_storage_enc->restore();
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(2, tag, buff, buf_sz);
+        page_storage_enc->write(std::move(batch));
+    }
+
+    // Make sure that we can't restore from no-enc pagestore.
+    // Because WALStore can't get any record from it.
+
+    page_storage->restore();
+    ASSERT_ANY_THROW(page_storage->read(1));
+
+    page_storage_enc = std::make_shared<PageStorageImpl>("test.t", delegator, config, enc_file_provider);
+    page_storage_enc->restore();
+
+    DB::Page page1 = page_storage_enc->read(1);
+    ASSERT_EQ(page1.data.size(), buf_sz);
+    ASSERT_EQ(page1.page_id, 1UL);
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+    DB::Page page2 = page_storage_enc->read(2);
+    ASSERT_EQ(page2.data.size(), buf_sz);
+    ASSERT_EQ(page2.page_id, 2UL);
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        EXPECT_EQ(*(page2.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+
+    char c_buff_read[buf_sz] = {0};
+
+    // Make sure in-disk data is encrypted.
+
+    RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(fmt::format("{}/{}{}", getTemporaryPath(), BlobFile::BLOB_PREFIX_NAME, 1),
+                                                                            -1,
+                                                                            nullptr);
+    file_read->pread(c_buff_read, buf_sz, 0);
+    ASSERT_NE(c_buff_read, c_buff);
+    file_read->pread(c_buff_read, buf_sz, buf_sz);
+    ASSERT_NE(c_buff_read, c_buff);
+}
+CATCH
+
 
 TEST_F(PageStorageTest, ReadNULL)
 try
