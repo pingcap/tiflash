@@ -548,7 +548,7 @@ std::tuple<UInt64, UInt64, bool> RBTreeSpaceMap::searchInsertOffset(size_t size)
     UInt64 offset = UINT64_MAX, last_offset = UINT64_MAX;
     UInt64 max_cap = 0;
     struct rb_node *node = nullptr, *last_node = nullptr;
-    struct SmapRbEntry * entry;
+    struct SmapRbEntry *entry, *last_entry;
 
     UInt64 scan_biggest_cap = 0;
     UInt64 scan_biggest_offset = 0;
@@ -564,7 +564,8 @@ std::tuple<UInt64, UInt64, bool> RBTreeSpaceMap::searchInsertOffset(size_t size)
     last_node = rb_tree_last(&rb_tree->root);
     if (last_node != nullptr)
     {
-        last_offset = node_to_entry(last_node)->start;
+        last_entry = node_to_entry(last_node);
+        last_offset = (last_entry->start + last_entry->count == end) ? last_entry->start : UINT64_MAX;
     }
     else
     {

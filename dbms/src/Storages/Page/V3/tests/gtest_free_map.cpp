@@ -359,6 +359,25 @@ TEST_P(SpaceMapTest, TestSearch)
     ASSERT_EQ(expansion, true);
 }
 
+TEST_P(SpaceMapTest, TestSearchIsExpansion)
+{
+    auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+    UInt64 offset;
+    UInt64 max_cap;
+    bool expansion = true;
+
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
+    ASSERT_EQ(offset, 0);
+    ASSERT_EQ(max_cap, 80);
+    ASSERT_EQ(expansion, true);
+
+    ASSERT_TRUE(smap->markUsed(90, 10));
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
+    ASSERT_EQ(expansion, false);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
+    ASSERT_EQ(expansion, false);
+}
+
 
 TEST_P(SpaceMapTest, TestGetSizes)
 {

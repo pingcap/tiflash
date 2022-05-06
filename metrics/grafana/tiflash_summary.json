@@ -4188,19 +4188,19 @@
               "refId": "F"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) + rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "hide": true,
-              "legendFormat": "BlobExpansion",
+              "legendFormat": "BlobQPS",
               "refId": "G"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) /  (rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) + 1)) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "hide": true,
-              "legendFormat": "BlobReused",
+              "legendFormat": "BlobReusedRate",
               "refId": "H"
             }
           ],

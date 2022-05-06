@@ -197,7 +197,7 @@ protected:
         }
 
         auto r_it = free_map.rbegin();
-        last_offset = r_it->first;
+        last_offset = (r_it->first + r_it->second == end) ? r_it->first : UINT64_MAX;
 
         auto it = free_map.begin();
         for (; it != free_map.end(); it++)
