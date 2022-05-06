@@ -36,6 +36,7 @@ void mergeConfigFromSettings(const DB::Settings & settings, PageStorage::Config 
 
     // V3 setting which export to global setting
     config.blob_heavy_gc_valid_rate = settings.dt_storage_blob_heavy_gc_valid_rate;
+    config.blob_block_alignment_bytes = settings.dt_storage_blob_block_alignment_bytes;
 }
 
 PageStorage::Config getConfigFromSettings(const DB::Settings & settings)
