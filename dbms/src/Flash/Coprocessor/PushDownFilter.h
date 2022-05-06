@@ -14,23 +14,26 @@
 
 #pragma once
 
-#include <Common/wrapInvocable.h>
+#include <common/types.h>
+#include <tipb/executor.pb.h>
 
-#include <future>
+#include <vector>
 
 namespace DB
 {
-template <typename Func, typename... Args>
-inline auto packTask(bool propagate_memory_tracker, Func && func, Args &&... args)
+struct PushDownFilter
 {
-    auto capture = wrapInvocable(propagate_memory_tracker, std::forward<Func>(func), std::forward<Args>(args)...);
-    // get return type of our task
-    using TaskResult = std::invoke_result_t<decltype(capture)>;
+    static PushDownFilter toPushDownFilter(const tipb::Executor * filter_executor);
 
-    // create package_task to capture exceptions
-    using PackagedTask = std::packaged_task<TaskResult()>;
-    PackagedTask task{std::move(capture)};
+    PushDownFilter(
+        const String & executor_id_,
+        const std::vector<const tipb::Expr *> & conditions_);
 
-    return task;
-}
+    bool hasValue() const { return !conditions.empty(); }
+
+    tipb::Executor * constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const;
+
+    String executor_id;
+    std::vector<const tipb::Expr *> conditions;
+};
 } // namespace DB
