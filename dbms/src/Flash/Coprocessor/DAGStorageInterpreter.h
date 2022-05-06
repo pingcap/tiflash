@@ -28,12 +28,6 @@
 #include <Storages/Transaction/Types.h>
 #include <pingcap/coprocessor/Client.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <kvproto/coprocessor.pb.h>
-#include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
-
 #include <vector>
 
 namespace DB
@@ -78,7 +72,7 @@ private:
 
     std::vector<RemoteRequest> buildRemoteRequests();
 
-    void releaseAlterLocks();
+    TableLockHolders releaseAlterLocks();
 
     std::unordered_map<TableID, SelectQueryInfo> generateSelectQueryInfos();
 
@@ -104,7 +98,6 @@ private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
     /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry_from_local_region;
-    TableLockHolders drop_locks;
 
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 

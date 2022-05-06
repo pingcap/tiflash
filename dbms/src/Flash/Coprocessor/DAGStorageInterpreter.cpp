@@ -35,6 +35,13 @@
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <kvproto/coprocessor.pb.h>
+#include <tipb/select.pb.h>
+#pragma GCC diagnostic pop
+
+
 namespace DB
 {
 namespace FailPoints
@@ -253,7 +260,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
-    releaseAlterLocks();
+    TableLockHolders drop_locks = releaseAlterLocks();
 
     // It is impossible to have no joined stream.
     assert(pipeline.streams_with_non_joined_data.empty());
@@ -1025,12 +1032,14 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
     return remote_requests;
 }
 
-void DAGStorageInterpreter::releaseAlterLocks()
+TableLockHolders DAGStorageInterpreter::releaseAlterLocks()
 {
+    TableLockHolders drop_locks;
     for (auto storage_with_lock : storages_with_structure_lock)
     {
         drop_locks.emplace_back(std::get<1>(std::move(storage_with_lock.second.lock).release()));
     }
+    return drop_locks;
 }
 
 } // namespace DB
