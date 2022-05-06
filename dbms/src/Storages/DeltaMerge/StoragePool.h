@@ -56,7 +56,6 @@ private:
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
-    static std::shared_ptr<GlobalStoragePool> global_storage_pool;
     PageStoragePtr log_storage;
     PageStoragePtr data_storage;
     PageStoragePtr meta_storage;

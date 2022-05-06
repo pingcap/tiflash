@@ -381,7 +381,7 @@ public:
         case PageStorageRunMode::MIX_MODE:
         {
             const auto & page_from_v3 = storage_v3->read(ns_id, page_id, read_limiter, toConcreteV3Snapshot(), false);
-            if (page_from_v3.page_id != INVALID_PAGE_ID)
+            if (page_from_v3.isValid())
             {
                 return page_from_v3;
             }
@@ -410,8 +410,7 @@ public:
             PageIds invalid_page_ids;
             for (const auto & [query_page_id, page] : page_maps)
             {
-                // TODO : change to isvalid(), after pre pr merged.
-                if (page.page_id == INVALID_PAGE_ID)
+                if (!page.isValid())
                 {
                     invalid_page_ids.emplace_back(query_page_id);
                 }
@@ -479,8 +478,7 @@ public:
 
             for (const auto & page_field : page_fields)
             {
-                // TODO : change to isvalid(), after pre pr merged.
-                if (page_maps[page_field.first].page_id == INVALID_PAGE_ID)
+                if (!page_maps[page_field.first].isValid())
                 {
                     invalid_page_fields.emplace_back(page_field);
                 }

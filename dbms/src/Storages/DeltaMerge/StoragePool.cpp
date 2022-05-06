@@ -70,8 +70,6 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     return config;
 }
 
-
-std::shared_ptr<GlobalStoragePool> GlobalStoragePool::global_storage_pool = nullptr;
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
     : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
     log_storage(PageStorage::create("__global__.log",
