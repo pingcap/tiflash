@@ -147,8 +147,8 @@ try
     auto write_elapsed = write_watch.elapsedSeconds();
     auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
 
-    // make sure that 0.7 * rate_target <= actual_rate <= 1.30 * rate_target
-    EXPECT_GE(write_actual_rate / rate_target, 0.70);
+    // It must lower than 1.30
+    // But we do have some disk rw, so don't set GE
     EXPECT_LE(write_actual_rate / rate_target, 1.30);
 
     Int64 consumed = 0;
@@ -169,7 +169,6 @@ try
 
         auto read_elapsed = read_watch.elapsedSeconds();
         auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
-        EXPECT_GE(read_actual_rate / rate_target, 0.70);
         EXPECT_LE(read_actual_rate / rate_target, 1.30);
     }
 
@@ -189,7 +188,6 @@ try
 
         auto read_elapsed = read_watch.elapsedSeconds();
         auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
-        EXPECT_GE(read_actual_rate / rate_target, 0.70);
         EXPECT_LE(read_actual_rate / rate_target, 1.30);
     }
 }
@@ -240,7 +238,6 @@ try
 
     auto elapsed = read_watch.elapsedSeconds();
     auto read_actual_rate = read_limiter->getTotalBytesThrough() / elapsed;
-    EXPECT_GE(read_actual_rate / rate_target, 0.70);
     EXPECT_LE(read_actual_rate / rate_target, 1.30);
 }
 CATCH
@@ -274,7 +271,6 @@ try
     auto elapsed = write_watch.elapsedSeconds();
     auto read_actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
 
-    EXPECT_GE(read_actual_rate / rate_target, 0.70);
     EXPECT_LE(read_actual_rate / rate_target, 1.30);
 }
 CATCH
@@ -320,7 +316,6 @@ try
 
     auto elapsed = write_watch.elapsedSeconds();
     auto read_actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
-    EXPECT_GE(read_actual_rate / rate_target, 0.70);
     EXPECT_LE(read_actual_rate / rate_target, 1.30);
 }
 CATCH
