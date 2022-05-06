@@ -247,7 +247,7 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
-        buildLocalRead(pipeline, settings.max_block_size);
+        buildLocalStreams(pipeline, settings.max_block_size);
 
     // Should build `remote_requests` and `null_stream` under protect of `table_structure_lock`.
     auto null_stream_if_empty = std::make_shared<NullBlockInputStream>(storage_for_logical_table->getSampleBlockForColumns(required_columns));
@@ -264,12 +264,12 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // It is impossible to have no joined stream.
     assert(pipeline.streams_with_non_joined_data.empty());
-    // after executeRemoteQuery, remote read stream will be appended in pipeline.streams.
+    // after buildRemoteStreams, remote read stream will be appended in pipeline.streams.
     size_t remote_read_streams_start_index = pipeline.streams.size();
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
-        executeRemoteQuery(std::move(remote_requests), pipeline);
+        buildRemoteStreams(std::move(remote_requests), pipeline);
 
     /// record local and remote io input stream
     auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
@@ -427,7 +427,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     }
 }
 
-void DAGStorageInterpreter::executeRemoteQuery(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline)
+void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline)
 {
     assert(!remote_requests.empty());
     DAGSchema & schema = remote_requests[0].schema;
@@ -620,7 +620,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     return ret;
 }
 
-void DAGStorageInterpreter::buildLocalRead(DAGPipeline & pipeline, size_t max_block_size)
+void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size)
 {
     const DAGContext & dag_context = *context.getDAGContext();
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();

@@ -64,7 +64,7 @@ private:
 
     LearnerReadSnapshot doBatchCopLearnerRead();
 
-    void buildLocalRead(DAGPipeline & pipeline, size_t max_block_size);
+    void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
@@ -80,7 +80,7 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    void executeRemoteQuery(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline);
+    void buildRemoteStreams(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline);
 
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
