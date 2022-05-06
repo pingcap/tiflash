@@ -36,6 +36,15 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     }
 }
 
+void setRestorePipelineConcurrency(DAGQueryBlock & query_block)
+{
+    if (query_block.source->tp() == tipb::ExecType::TypeWindow)
+    {
+        assert(query_block.children.size() == 1);
+        query_block.children.back()->can_restore_pipeline_concurrency = false;
+    }
+}
+
 DAGContext & InterpreterDAG::dagContext() const
 {
     return *context.getDAGContext();
@@ -47,6 +56,7 @@ DAGContext & InterpreterDAG::dagContext() const
 BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
 {
     std::vector<BlockInputStreams> input_streams_vec;
+    setRestorePipelineConcurrency(query_block);
     for (auto & child : query_block.children)
     {
         BlockInputStreams child_streams = executeQueryBlock(*child);

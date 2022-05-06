@@ -54,7 +54,7 @@ public:
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        dir = factory.create("PageDirectoryTest", provider, delegator);
+        dir = factory.create("PageDirectoryTest", provider, delegator, WALStore::Config());
     }
 
 protected:

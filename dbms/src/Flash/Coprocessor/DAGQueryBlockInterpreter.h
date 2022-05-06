@@ -53,15 +53,11 @@ public:
 
     BlockInputStreams execute();
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     void executeImpl(DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
-    void executeCastAfterTableScan(
-        const TiDBTableScan & table_scan,
-        const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column,
-        size_t remote_read_streams_start_index,
-        DAGPipeline & pipeline);
-    void executePushedDownFilter(const std::vector<const tipb::Expr *> & conditions, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -74,6 +70,8 @@ private:
         String & filter_column_name);
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
+    void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
+    void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
     ExpressionActionsPtr genJoinOtherConditionAction(
         const tipb::Join & join,
         std::vector<NameAndTypePair> & source_columns,
@@ -81,13 +79,18 @@ private:
         String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
+    void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
+    void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
     void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
+    void executeWindow(
+        DAGPipeline & pipeline,
+        WindowDescription & window_description);
     void executeAggregation(
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expression_actions_ptr,
-        Names & key_names,
-        TiDB::TiDBCollators & collators,
+        const Names & key_names,
+        const TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions,
         bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
@@ -98,10 +101,6 @@ private:
     void recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr);
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
-
-    void executeRemoteQueryImpl(
-        DAGPipeline & pipeline,
-        std::vector<RemoteRequest> & remote_requests);
 
     DAGContext & dagContext() const { return *context.getDAGContext(); }
 

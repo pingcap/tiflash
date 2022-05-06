@@ -17,8 +17,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
-#include <Flash/Coprocessor/DAGQueryBlock.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
@@ -50,9 +49,8 @@ class DAGStorageInterpreter
 public:
     DAGStorageInterpreter(
         Context & context_,
-        const DAGQueryBlock & query_block_,
         const TiDBTableScan & table_scan,
-        const std::vector<const tipb::Expr *> & conditions_,
+        const PushDownFilter & push_down_filter_,
         size_t max_streams_);
 
     DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
@@ -63,12 +61,6 @@ public:
     /// Members will be transfered to DAGQueryBlockInterpreter after execute
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
-    std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
-    /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
-    RegionRetryList region_retry_from_local_region;
-    TableLockHolders drop_locks;
-    std::vector<RemoteRequest> remote_requests;
-    BlockInputStreamPtr null_stream_if_empty;
 
 private:
     struct StorageWithStructureLock
@@ -92,12 +84,37 @@ private:
 
     std::unordered_map<TableID, SelectQueryInfo> generateSelectQueryInfos();
 
+    DAGContext & dagContext() const;
+
+    void recordProfileStreams(DAGPipeline & pipeline, const String & key);
+
+    void executeRemoteQuery(DAGPipeline & pipeline);
+
+    void executeCastAfterTableScan(
+        size_t remote_read_streams_start_index,
+        DAGPipeline & pipeline);
+
+    void executePushedDownFilter(
+        size_t remote_read_streams_start_index,
+        DAGPipeline & pipeline);
+
+    void prepare();
+
+    void executeImpl(DAGPipeline & pipeline);
+
+private:
+    std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
+    /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
+    RegionRetryList region_retry_from_local_region;
+    TableLockHolders drop_locks;
+    std::vector<RemoteRequest> remote_requests;
+    BlockInputStreamPtr null_stream_if_empty;
+
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 
     Context & context;
-    const DAGQueryBlock & query_block;
     const TiDBTableScan & table_scan;
-    const std::vector<const tipb::Expr *> & conditions;
+    const PushDownFilter & push_down_filter;
     size_t max_streams;
     LoggerPtr log;
 

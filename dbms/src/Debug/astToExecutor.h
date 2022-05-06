@@ -294,4 +294,6 @@ ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, ti
 
 ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
 
+//TODO: add compileWindow
+
 } // namespace DB
