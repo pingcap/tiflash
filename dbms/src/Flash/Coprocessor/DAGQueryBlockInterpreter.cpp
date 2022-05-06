@@ -157,6 +157,19 @@ AnalysisResult analyzeExpressions(
 }
 } // namespace
 
+// for tests, we need to mock tableScan blockInputStream as the source stream.
+void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
+{
+    auto names_and_types = genNamesAndTypes(table_scan);
+    auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+    for (size_t i = 0; i < max_streams; ++i)
+    {
+        auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size);
+        pipeline.streams.emplace_back(mock_table_scan_stream);
+    }
+}
+
 void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
     const auto push_down_filter = PushDownFilter::toPushDownFilter(query_block.selection);
