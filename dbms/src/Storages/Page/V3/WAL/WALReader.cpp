@@ -209,7 +209,7 @@ bool WALStoreReader::openNextFile()
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,
             fullname,
-            EncryptionPath{parent_path, filename},
+            EncryptionPath{parent_path + "/" + filename, ""},
             /*estimated_size*/ Format::BLOCK_SIZE,
             /*aio_threshold*/ 0,
             /*read_limiter*/ read_limiter,

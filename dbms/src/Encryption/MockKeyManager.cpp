@@ -107,6 +107,10 @@ FileEncryptionInfo MockKeyManager::getFile(const String & fname)
     std::ignore = fname;
     if (encryption_enabled)
     {
+        if (!fileExist(fname))
+        {
+            files.emplace_back(fname);
+        }
         auto * file_key = RawCppString::New(key);
         auto * file_iv = RawCppString::New(iv);
         FileEncryptionInfo file_info{

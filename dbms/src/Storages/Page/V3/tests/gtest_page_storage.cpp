@@ -140,8 +140,8 @@ try
     // Make sure that we can't restore from no-enc pagestore.
     // Because WALStore can't get any record from it.
 
-    // page_storage->restore();
-    // ASSERT_ANY_THROW(page_storage->read(1));
+    page_storage->restore();
+    ASSERT_ANY_THROW(page_storage->read(1));
 
     page_storage_enc = std::make_shared<PageStorageImpl>("test.t", delegator, config, enc_file_provider);
     page_storage_enc->restore();
@@ -164,7 +164,7 @@ try
     char c_buff_read[buf_sz] = {0};
 
     // Make sure in-disk data is encrypted.
-    
+
     RandomAccessFilePtr file_read = std::make_shared<PosixRandomAccessFile>(fmt::format("{}/{}{}", getTemporaryPath(), BlobFile::BLOB_PREFIX_NAME, 1),
                                                                             -1,
                                                                             nullptr);
