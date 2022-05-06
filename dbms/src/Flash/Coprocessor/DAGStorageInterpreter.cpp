@@ -260,7 +260,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // The DeltaTree engine ensures that once input streams are created, the caller can get a consistent result
     // from those streams even if DDL operations are applied. Release the alter lock so that reading does not
     // block DDL operations, keep the drop lock so that the storage not to be dropped during reading.
-    TableLockHolders drop_locks = releaseAlterLocks();
+    const TableLockHolders drop_locks = releaseAlterLocks();
 
     // It is impossible to have no joined stream.
     assert(pipeline.streams_with_non_joined_data.empty());
