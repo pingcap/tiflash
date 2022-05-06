@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# todo this should be a unit test on DTFile
+#TODO: rewrite it as unit test
+#RETURN
+
 >> set dt_segment_stable_pack_rows = 5;
 
 >> drop table if exists A;
