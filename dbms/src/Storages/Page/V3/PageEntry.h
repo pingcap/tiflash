@@ -45,6 +45,7 @@ public:
     {
         return size + align_size;
     }
+    inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID; }
 
     size_t getFieldSize(size_t index) const
     {

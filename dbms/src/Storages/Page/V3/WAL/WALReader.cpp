@@ -122,27 +122,39 @@ WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
 WALStoreReaderPtr WALStoreReader::create(String storage_name,
                                          FileProviderPtr & provider,
                                          LogFilenameSet files,
+                                         WALRecoveryMode recovery_mode_,
                                          const ReadLimiterPtr & read_limiter)
 {
     auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
-    auto reader = std::make_shared<WALStoreReader>(std::move(storage_name), provider, checkpoint, std::move(files_to_read), read_limiter);
+    auto reader = std::make_shared<WALStoreReader>(storage_name, provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
     reader->openNextFile();
     return reader;
 }
 
-WALStoreReaderPtr WALStoreReader::create(String storage_name, FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(
+    String storage_name,
+    FileProviderPtr & provider,
+    PSDiskDelegatorPtr & delegator,
+    WALRecoveryMode recovery_mode_,
+    const ReadLimiterPtr & read_limiter)
 {
     LogFilenameSet log_files = listAllFiles(delegator, Logger::get("WALStore", storage_name));
-    return create(storage_name, provider, std::move(log_files), read_limiter);
+    return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
-WALStoreReader::WALStoreReader(String storage_name, FileProviderPtr & provider_, std::optional<LogFilename> checkpoint, LogFilenameSet && files_, const ReadLimiterPtr & read_limiter_)
+WALStoreReader::WALStoreReader(String storage_name,
+                               FileProviderPtr & provider_,
+                               std::optional<LogFilename> checkpoint,
+                               LogFilenameSet && files_,
+                               WALRecoveryMode recovery_mode_,
+                               const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , read_limiter(read_limiter_)
     , checkpoint_read_done(!checkpoint.has_value())
     , checkpoint_file(checkpoint)
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
+    , recovery_mode(recovery_mode_)
     , logger(Logger::get("WALStore", std::move(storage_name)))
 {}
 
@@ -208,7 +220,7 @@ bool WALStoreReader::openNextFile()
             &reporter,
             /*verify_checksum*/ true,
             log_num,
-            WALRecoveryMode::TolerateCorruptedTailRecords);
+            recovery_mode);
     };
 
     if (!checkpoint_read_done)

@@ -66,10 +66,7 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     , blob_stats(log, delegator, config_)
     , cached_files(config.cached_fd_size)
 {
-    if (config.block_alignment_bytes % 4096 != 0)
-    {
-        LOG_FMT_WARNING(log, "[block_alignment_bytes={}] is not an integer multiple of 4096, which may slow down writes.", config.block_alignment_bytes);
-    }
+    
 }
 
 void BlobStore::registerPaths()
