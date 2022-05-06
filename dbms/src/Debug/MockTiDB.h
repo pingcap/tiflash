@@ -135,6 +135,8 @@ public:
 
     Int64 getVersion() { return version; }
 
+    TableID newTableID() { return table_id_allocator++; }
+
 private:
     TablePtr dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions);
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
