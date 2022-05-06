@@ -59,10 +59,11 @@ bool SpaceMap::checkSpace(UInt64 offset, size_t size) const
     return (offset < start) || (offset > end) || (offset + size - 1 > end);
 }
 
-void SpaceMap::logStats()
+void SpaceMap::logDebugString()
 {
-    smapStats();
+    LOG_DEBUG(log, toDebugString());
 }
+
 
 bool SpaceMap::markFree(UInt64 offset, size_t length)
 {

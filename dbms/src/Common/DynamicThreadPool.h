@@ -56,7 +56,7 @@ public:
         auto task = packTask(propagate_memory_tracker, std::forward<Func>(func), std::forward<Args>(args)...);
         auto future = task.get_future();
         scheduleTask(std::make_unique<ExecutableTask<decltype(task)>>(std::move(task)));
-        return std::move(future);
+        return future;
     }
 
     // wrap func into a lambda and users can't get the status of execution.

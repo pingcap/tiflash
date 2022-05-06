@@ -294,12 +294,8 @@ public:
     ASTPtr getCreateDatabaseQuery(const String & database_name) const;
 
     DatabasePtr getDatabase(const String & database_name) const;
-    DatabasePtr getDatabase(const String & database_name);
     DatabasePtr tryGetDatabase(const String & database_name) const;
-    DatabasePtr tryGetDatabase(const String & database_name);
-
     Databases getDatabases() const;
-    Databases getDatabases();
 
     std::shared_ptr<Context> acquireSession(
         const String & session_id,
@@ -404,7 +400,7 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(Poco::Util::AbstractConfiguration & config);
+    void initializeRateLimiter(Poco::Util::AbstractConfiguration & config, BackgroundProcessingPool & bg_pool, BackgroundProcessingPool & blockable_bg_pool) const;
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;

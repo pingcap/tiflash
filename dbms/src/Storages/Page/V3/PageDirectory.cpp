@@ -26,7 +26,6 @@
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
-#include <openssl/base64.h>
 
 #include <memory>
 #include <mutex>
@@ -322,7 +321,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
         // We may add reference to an external id even if it is logically deleted.
-        bool ok = check_prev ? true : (!is_deleted || (is_deleted && seq < delete_ver.sequence));
+        bool ok = check_prev ? true : (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
             return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersionType(0)};
@@ -330,7 +329,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     }
     else if (type == EditRecordType::VAR_REF)
     {
-        if (create_ver.sequence <= seq && (!is_deleted || (is_deleted && seq < delete_ver.sequence)))
+        if (create_ver.sequence <= seq && (!is_deleted || seq < delete_ver.sequence))
         {
             return {RESOLVE_TO_REF, ori_page_id, create_ver};
         }
@@ -639,10 +638,12 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal p
   * PageDirectory methods *
   *************************/
 
-PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_)
+PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 max_persisted_log_files_)
     : sequence(0)
     , wal(std::move(wal_))
+    , max_persisted_log_files(max_persisted_log_files_)
     , log(Logger::get("PageDirectory", std::move(storage_name)))
+
 {
 }
 
@@ -746,11 +747,13 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
     throw Exception(fmt::format("Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]", page_id, snap->sequence, id_to_resolve, ver_to_resolve), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
 }
 
-PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const
+std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
+    PageIds page_not_found = {};
+
     const PageVersionType init_ver_to_resolve(snap->sequence, 0);
-    auto get_one = [&entry_got, init_ver_to_resolve, this](PageIdV3Internal page_id, PageVersionType ver_to_resolve, size_t idx) {
+    auto get_one = [&entry_got, init_ver_to_resolve, throw_on_not_exist, this](PageIdV3Internal page_id, PageVersionType ver_to_resolve, size_t idx) {
         PageIdV3Internal id_to_resolve = page_id;
         bool ok = true;
         while (ok)
@@ -761,7 +764,14 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const 
                 iter = mvcc_table_directory.find(id_to_resolve);
                 if (iter == mvcc_table_directory.end())
                 {
-                    throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                    if (throw_on_not_exist)
+                    {
+                        throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                    }
+                    else
+                    {
+                        return false;
+                    }
                 }
             }
             auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, &entry_got);
@@ -793,17 +803,21 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const 
         {
             id_entries.emplace_back(page_ids[idx], entry_got);
         }
+        else
+        {
+            page_not_found.emplace_back(page_ids[idx]);
+        }
     }
 
-    return id_entries;
+    return std::make_pair(id_entries, page_not_found);
 }
 
-PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const
+PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageIdV3Internal id_to_resolve = page_id;
     PageVersionType ver_to_resolve(snap->sequence, 0);
-    bool ok = true;
-    while (ok)
+    bool keep_resolve = true;
+    while (keep_resolve)
     {
         MVCCMapType::const_iterator iter;
         {
@@ -811,7 +825,14 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
             iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
-                throw Exception(fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                if (throw_on_not_exist)
+                {
+                    throw Exception(fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                }
+                else
+                {
+                    return PageIdV3Internal(0, INVALID_PAGE_ID);
+                }
             }
         }
         auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, nullptr);
@@ -820,12 +841,14 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
         case VersionedPageEntries::RESOLVE_TO_NORMAL:
             return id_to_resolve;
         case VersionedPageEntries::RESOLVE_FAIL:
-            ok = false;
+            // resolve failed
+            keep_resolve = false;
             break;
         case VersionedPageEntries::RESOLVE_TO_REF:
             if (id_to_resolve == next_id_to_resolve)
             {
-                ok = false;
+                // dead-loop, so break the `while(keep_resolve)`
+                keep_resolve = false;
                 break;
             }
             id_to_resolve = next_id_to_resolve;
@@ -833,12 +856,20 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
             break; // continue the resolving
         }
     }
-    throw Exception(fmt::format(
-        "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
-        page_id,
-        snap->sequence,
-        id_to_resolve,
-        ver_to_resolve));
+
+    if (throw_on_not_exist)
+    {
+        throw Exception(fmt::format(
+            "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
+            page_id,
+            snap->sequence,
+            id_to_resolve,
+            ver_to_resolve));
+    }
+    else
+    {
+        return PageIdV3Internal(0, INVALID_PAGE_ID);
+    }
 }
 
 PageId PageDirectory::getMaxId(NamespaceId ns_id) const
@@ -1128,7 +1159,7 @@ bool PageDirectory::tryDumpSnapshot(const WriteLimiterPtr & write_limiter)
     bool done_any_io = false;
     // In order not to make read amplification too high, only apply compact logs when ...
     auto files_snap = wal->getFilesSnapshot();
-    if (files_snap.needSave())
+    if (files_snap.needSave(max_persisted_log_files))
     {
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
         auto edit = dumpSnapshotToEdit();
