@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RandomAccessFile.h>
+#include <Encryption/RateLimiter.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -27,6 +29,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 
@@ -109,6 +112,214 @@ try
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
+}
+CATCH
+
+TEST_F(PageStorageTest, WriteReadWithIOLimiter)
+try
+{
+    // In this case, WalStore throput is very low.
+    // Because we only have 5 record to write.
+    size_t wb_nums = 5;
+    PageId page_id = 50;
+    size_t buff_size = 100ul * 1024;
+    const size_t rate_target = buff_size - 1;
+
+    char c_buff[wb_nums * buff_size];
+
+    WriteBatch wbs[wb_nums];
+    PageEntriesEdit edits[wb_nums];
+
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        wbs[i].putPage(page_id + i, /* tag */ 0, buff, buff_size);
+    }
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+
+    AtomicStopwatch write_watch;
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        page_storage->write(std::move(wbs[i]), write_limiter);
+    }
+    auto write_elapsed = write_watch.elapsedSeconds();
+    auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
+
+    // It must lower than 1.30
+    // But we do have some disk rw, so don't set GE
+    EXPECT_LE(write_actual_rate / rate_target, 1.30);
+
+    Int64 consumed = 0;
+    auto get_stat = [&consumed]() {
+        return consumed;
+    };
+
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        AtomicStopwatch read_watch;
+        for (size_t i = 0; i < wb_nums; ++i)
+        {
+            page_storage->readImpl(TEST_NAMESPACE_ID, page_id + i, read_limiter, nullptr, true);
+        }
+
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_LE(read_actual_rate / rate_target, 1.30);
+    }
+
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        std::vector<PageId> page_ids;
+        for (size_t i = 0; i < wb_nums; ++i)
+        {
+            page_ids.emplace_back(page_id + i);
+        }
+
+        AtomicStopwatch read_watch;
+        page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, read_limiter, nullptr, true);
+
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_LE(read_actual_rate / rate_target, 1.30);
+    }
+}
+CATCH
+
+TEST_F(PageStorageTest, GCWithReadLimiter)
+try
+{
+    // In this case, WALStore throput is very low.
+    // Because we only have 10 record to write.
+    const size_t buff_size = 10ul * 1024;
+    char c_buff[buff_size];
+
+    const size_t num_repeat = 5;
+
+    // put page [1,num_repeat]
+    for (size_t n = 1; n <= num_repeat; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(n, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    // put page [num_repeat + 1, num_repeat * 6]
+    for (size_t n = num_repeat + 1; n <= num_repeat * 6; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    const size_t rate_target = buff_size - 1;
+
+    Int64 consumed = 0;
+    auto get_stat = [&consumed]() {
+        return consumed;
+    };
+    ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                    rate_target,
+                                                                    LimiterType::UNKNOW);
+
+    AtomicStopwatch read_watch;
+    page_storage->gc(/*not_skip*/ false, nullptr, read_limiter);
+
+    auto elapsed = read_watch.elapsedSeconds();
+    auto read_actual_rate = read_limiter->getTotalBytesThrough() / elapsed;
+    EXPECT_LE(read_actual_rate / rate_target, 1.30);
+}
+CATCH
+
+TEST_F(PageStorageTest, GCWithWriteLimiter)
+try
+{
+    // In this case, BlobStore throput is very low.
+    // Because we only need 1024* 150bytes to new blob.
+    const size_t buff_size = 10;
+    char c_buff[buff_size];
+
+    const size_t num_repeat = 1024 * 300ul;
+
+    for (size_t n = 1; n <= num_repeat; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(n <= num_repeat / 2 ? n : 1, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    const size_t rate_target = DB::PAGE_META_ROLL_SIZE - 1;
+
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+
+    AtomicStopwatch write_watch;
+    page_storage->gc(/*not_skip*/ false, write_limiter, nullptr);
+
+    auto elapsed = write_watch.elapsedSeconds();
+    auto read_actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
+
+    EXPECT_LE(read_actual_rate / rate_target, 1.30);
+}
+CATCH
+
+TEST_F(PageStorageTest, GCWithWriteLimiter2)
+try
+{
+    // In this case, BlobStore throput is very low.
+    // Because we only need 1bytes * to new blob.
+    const size_t buff_size = 1024 * 300ul;
+    char c_buff[buff_size];
+
+    const size_t num_repeat = 8;
+
+    // put page [1,num_repeat]
+    for (size_t n = 1; n <= num_repeat; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(n, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    // put page [num_repeat + 1, num_repeat * 6]
+    for (size_t n = num_repeat + 1; n <= num_repeat * 6; ++n)
+    {
+        WriteBatch batch;
+        memset(c_buff, n, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buff_size);
+        page_storage->write(std::move(batch));
+    }
+
+    // It is meanless, Because in GC, BlobStore will compact all data(<512M) in single IO
+    // But we still can make sure through is corrent.
+    const size_t rate_target = buff_size - 1;
+
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+
+    AtomicStopwatch write_watch;
+    page_storage->gc(/*not_skip*/ false, write_limiter, nullptr);
+
+    auto elapsed = write_watch.elapsedSeconds();
+    auto read_actual_rate = write_limiter->getTotalBytesThrough() / elapsed;
+    EXPECT_LE(read_actual_rate / rate_target, 1.30);
 }
 CATCH
 
