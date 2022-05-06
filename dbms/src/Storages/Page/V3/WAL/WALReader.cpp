@@ -202,8 +202,8 @@ bool WALStoreReader::openNextFile()
         const auto & parent_path = next_file.parent_path;
         const auto log_num = next_file.log_num;
         const auto level_num = next_file.level_num;
-        const auto filename = fmt::format("log_{}_{}", log_num, level_num);
-        const auto fullname = fmt::format("{}/{}", parent_path, filename);
+        const auto filename = next_file.filename(next_file.stage);
+        const auto fullname = next_file.fullname(next_file.stage);
         LOG_FMT_DEBUG(logger, "Open log file for reading [file={}]", fullname);
 
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
