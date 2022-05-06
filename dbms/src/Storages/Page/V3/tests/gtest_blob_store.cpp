@@ -579,8 +579,8 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
 
     PageId page_id = 50;
-    size_t wb_nums = 10;
-    size_t buff_size = 100ul * 1024;
+    size_t wb_nums = 5;
+    size_t buff_size = 10ul * 1024;
     const size_t rate_target = buff_size - 1;
 
     auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
@@ -600,7 +600,7 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
         wbs[i].putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
-    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 5);
 
     AtomicStopwatch write_watch;
     for (size_t i = 0; i < wb_nums; ++i)
@@ -610,8 +610,8 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     auto write_elapsed = write_watch.elapsedSeconds();
     auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
 
-    // make sure that 0.8 * rate_target <= actual_rate <= 1.25 * rate_target
-    EXPECT_GE(write_actual_rate / rate_target, 0.80);
+    // make sure that 0.7 * rate_target <= actual_rate <= 1.25 * rate_target
+    EXPECT_GE(write_actual_rate / rate_target, 0.70);
     EXPECT_LE(write_actual_rate / rate_target, 1.25);
 
     Int64 consumed = 0;

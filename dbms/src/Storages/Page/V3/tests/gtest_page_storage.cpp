@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Encryption/MockFileProvider.h>
 #include <Encryption/RateLimiter.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
@@ -28,7 +29,6 @@
 #include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
-
 
 namespace DB
 {
@@ -116,8 +116,8 @@ TEST_F(PageStorageTest, WriteReadWithIOLimiter)
 try
 {
     // In this case, WalStore throput is very low.
-    // Because we only have 10 record to write.
-    size_t wb_nums = 10;
+    // Because we only have 5 record to write.
+    size_t wb_nums = 5;
     PageId page_id = 50;
     size_t buff_size = 100ul * 1024;
     const size_t rate_target = buff_size - 1;
@@ -139,7 +139,6 @@ try
     }
     WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
 
-
     AtomicStopwatch write_watch;
     for (size_t i = 0; i < wb_nums; ++i)
     {
@@ -148,7 +147,7 @@ try
     auto write_elapsed = write_watch.elapsedSeconds();
     auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
 
-    // make sure that 0.8 * rate_target <= actual_rate <= 1.30 * rate_target
+    // make sure that 0.7 * rate_target <= actual_rate <= 1.30 * rate_target
     EXPECT_GE(write_actual_rate / rate_target, 0.70);
     EXPECT_LE(write_actual_rate / rate_target, 1.30);
 
@@ -201,10 +200,10 @@ try
 {
     // In this case, WALStore throput is very low.
     // Because we only have 10 record to write.
-    const size_t buff_size = 100ul * 1024;
+    const size_t buff_size = 10ul * 1024;
     char c_buff[buff_size];
 
-    const size_t num_repeat = 8;
+    const size_t num_repeat = 5;
 
     // put page [1,num_repeat]
     for (size_t n = 1; n <= num_repeat; ++n)
