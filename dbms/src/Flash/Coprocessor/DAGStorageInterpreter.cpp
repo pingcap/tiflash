@@ -990,7 +990,7 @@ std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> DAGStorageIn
     return {required_columns_tmp, source_columns_tmp, need_cast_column};
 }
 
-// Build remote requests from `region_retry_from_local_region`
+// Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`
 std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
 {
     std::vector<RemoteRequest> remote_requests;
