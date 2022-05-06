@@ -66,7 +66,6 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     , blob_stats(log, delegator, config_)
     , cached_files(config.cached_fd_size)
 {
-    
 }
 
 void BlobStore::registerPaths()
@@ -160,9 +159,9 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         replenish_size = config.block_alignment_bytes - all_page_data_size % config.block_alignment_bytes;
     }
 
-    size_t actually_alloced_size = all_page_data_size + replenish_size;
+    size_t actually_allocated_size = all_page_data_size + replenish_size;
 
-    auto [blob_id, offset_in_file] = getPosFromStats(actually_alloced_size);
+    auto [blob_id, offset_in_file] = getPosFromStats(actually_allocated_size);
 
     size_t offset_in_allocated = 0;
 
@@ -235,14 +234,14 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     if (buffer_pos != buffer + all_page_data_size)
     {
-        removePosFromStats(blob_id, offset_in_file, actually_alloced_size);
+        removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
         throw Exception(
             fmt::format(
                 "write batch have a invalid total size, or something wrong in parse write batch "
-                "[expect_offset={}] [actual_offset={}] [actually_alloced_size={}]",
+                "[expect_offset={}] [actual_offset={}] [actually_allocated_size={}]",
                 all_page_data_size,
                 (buffer_pos - buffer),
-                actually_alloced_size),
+                actually_allocated_size),
             ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -253,8 +252,8 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     }
     catch (DB::Exception & e)
     {
-        removePosFromStats(blob_id, offset_in_file, actually_alloced_size);
-        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_alloced_size={}] write failed.", blob_id, offset_in_file, all_page_data_size, actually_alloced_size);
+        removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
+        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed.", blob_id, offset_in_file, all_page_data_size, actually_allocated_size);
         throw e;
     }
 
