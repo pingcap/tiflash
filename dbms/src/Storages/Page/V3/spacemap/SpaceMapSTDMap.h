@@ -40,7 +40,7 @@ public:
     bool check(std::function<bool(size_t idx, UInt64 start, UInt64 end)> checker, size_t size) override
     {
         size_t idx = 0;
-        for (const auto [offset, length] : free_map)
+        for (const auto & [offset, length] : free_map)
         {
             if (!checker(idx, offset, offset + length))
                 return false;
@@ -57,16 +57,21 @@ protected:
         free_map.insert({start, end});
     }
 
-    void smapStats() override
+    String toDebugString() override
     {
         UInt64 count = 0;
 
-        LOG_FMT_DEBUG(log, "STD-Map entries status: ");
+        FmtBuffer fmt_buffer;
+        fmt_buffer.append("    STD-Map entries status: \n");
+
+        // Need use `count`,so can't use `joinStr` here.
         for (auto it = free_map.begin(); it != free_map.end(); it++)
         {
-            LOG_FMT_DEBUG(log, "  Space: {} start: {} size : {}", count, it->first, it->second);
+            fmt_buffer.fmtAppend("      Space: {} start: {} size : {}\n", count, it->first, it->second);
             count++;
         }
+
+        return fmt_buffer.toString();
     }
 
     std::pair<UInt64, UInt64> getSizes() const override

@@ -176,6 +176,83 @@ try
 CATCH
 
 
+TEST_F(PageStorageTest, ReadNULL)
+try
+{
+    {
+        WriteBatch batch;
+        batch.putExternal(0, 0);
+        page_storage->write(std::move(batch));
+    }
+    const auto & page = page_storage->read(0);
+    ASSERT_EQ(page.data.begin(), nullptr);
+}
+CATCH
+
+TEST_F(PageStorageTest, readNotThrowOnNotFound)
+try
+{
+    const size_t buf_sz = 100;
+    char c_buff[buf_sz] = {0};
+
+    {
+        const auto & page = page_storage->readImpl(TEST_NAMESPACE_ID, 1, nullptr, nullptr, false);
+        ASSERT_FALSE(page.isValid());
+    }
+
+    {
+        WriteBatch batch;
+        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        batch.putPage(3, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        batch.putPage(4, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {20, 20, 30, 30});
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        PageIds page_ids = {1, 2, 5};
+        // readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true);
+        auto page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, false);
+        ASSERT_EQ(page_maps[1].page_id, 1);
+        ASSERT_FALSE(page_maps[2].isValid());
+        ASSERT_FALSE(page_maps[5].isValid());
+
+        const auto & page1 = page_storage->readImpl(TEST_NAMESPACE_ID, 1, nullptr, nullptr, false);
+        ASSERT_EQ(page1.page_id, 1);
+
+        const auto & page2 = page_storage->readImpl(TEST_NAMESPACE_ID, 2, nullptr, nullptr, false);
+        ASSERT_FALSE(page2.isValid());
+
+        std::vector<PageStorage::PageReadFields> fields;
+        PageStorage::PageReadFields field1;
+        field1.first = 4;
+        field1.second = {0, 1, 2};
+        fields.emplace_back(field1);
+
+        PageStorage::PageReadFields field2;
+        field2.first = 6;
+        field2.second = {0, 1, 2};
+        fields.emplace_back(field2);
+
+        page_maps = page_storage->readImpl(TEST_NAMESPACE_ID, fields, nullptr, nullptr, false);
+        ASSERT_EQ(page_maps[4].page_id, 4);
+        ASSERT_FALSE(page_maps[6].isValid());
+
+        PageIds page_ids_not_found = page_storage->readImpl(
+            TEST_NAMESPACE_ID,
+            page_ids,
+            [](PageId /*page_id*/, const Page & /*page*/) {},
+            nullptr,
+            nullptr,
+            false);
+
+        std::sort(page_ids_not_found.begin(), page_ids_not_found.end());
+        ASSERT_EQ(page_ids_not_found.size(), 2);
+        ASSERT_EQ(page_ids_not_found[0], 2);
+        ASSERT_EQ(page_ids_not_found[1], 5);
+    }
+}
+CATCH
+
 TEST_F(PageStorageTest, WriteMultipleBatchRead1)
 try
 {
@@ -724,7 +801,7 @@ TEST_F(PageStorageWith2PagesTest, PutDuplicateRefPages)
 
         WriteBatch batch2;
         batch2.putRefPage(3, 1);
-        page_storage->write(std::move(batch));
+        page_storage->write(std::move(batch2));
         // now Page1's entry has ref count == 2 but not 3
     }
     PageEntry entry1 = page_storage->getEntry(1);
@@ -771,7 +848,7 @@ TEST_F(PageStorageWith2PagesTest, PutCollapseDuplicatedRefPages)
         WriteBatch batch2;
         // RefPage4 -> Page1, duplicated due to ref-path-collapse
         batch2.putRefPage(4, 1);
-        page_storage->write(std::move(batch));
+        page_storage->write(std::move(batch2));
         // now Page1's entry has ref count == 3 but not 2
     }
 

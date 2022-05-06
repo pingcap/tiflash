@@ -81,7 +81,13 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
     }
     else
     {
-        LOG_FMT_DEBUG(log, "{} DataCompactor::tryMigrate exit without compaction [candidates size={}] [total byte size={}], [files without valid page={}] Config{{ {} }}", storage_name, result.candidate_size, result.bytes_migrate, candidates.files_without_valid_pages.size(), config.toDebugString());
+        LOG_FMT_DEBUG(log, "{} DataCompactor::tryMigrate exit without compaction [candidates size={}] [total byte size={}], "
+                           "[files without valid page={}] Config{{ {} }}", //
+                      storage_name,
+                      result.candidate_size,
+                      result.bytes_migrate,
+                      candidates.files_without_valid_pages.size(),
+                      config.toDebugStringV2());
     }
 
     return {result, std::move(migrate_entries_edit)};
@@ -339,7 +345,7 @@ DataCompactor<SnapshotPtr>::migratePages( //
             }
 
             // Create meta reader and update `compact_seq`
-            auto meta_reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), read_limiter);
+            auto meta_reader = PageFile::MetaMergingReader::createFrom(const_cast<PageFile &>(page_file), read_limiter, /*background*/ true);
             while (meta_reader->hasNext())
             {
                 meta_reader->moveNext();
@@ -456,7 +462,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
             // The changes will be recorded by `gc_file_edit` and the bytes written will be return.
             auto migrate_entries =
                 [compact_sequence, &data_reader, &gc_file_id, &gc_file_writer, &gc_file_edit, this](PageIdAndEntries & entries) -> size_t {
-                const PageMap pages = data_reader->read(entries, read_limiter);
+                const PageMap pages = data_reader->read(entries, read_limiter, /*background*/ true);
                 // namespace id in v2 is useless
                 WriteBatch wb{MAX_NAMESPACE_ID};
                 wb.setSequence(compact_sequence);
@@ -471,7 +477,8 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
                                   page.data.size(),
                                   entry.field_offsets);
                 }
-                return gc_file_writer->write(wb, gc_file_edit, write_limiter);
+
+                return gc_file_writer->write(wb, gc_file_edit, write_limiter, true);
             };
 
 #ifndef NDEBUG
@@ -554,7 +561,13 @@ void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos,
     }
     migrate_stream << "]";
     remove_stream << "]";
-    LOG_FMT_DEBUG(log, "{} Migrate pages to PageFile_{}_{}, migrate: {}, remove: {}, Config{{ {} }}", storage_name, migrate_file_id.first, migrate_file_id.second, migrate_stream.str(), remove_stream.str(), config.toDebugString());
+    LOG_FMT_DEBUG(log, "{} Migrate pages to PageFile_{}_{}, migrate: {}, remove: {}, Config{{ {} }}", //
+                  storage_name,
+                  migrate_file_id.first,
+                  migrate_file_id.second,
+                  migrate_stream.str(),
+                  remove_stream.str(),
+                  config.toDebugStringV2());
 }
 
 
