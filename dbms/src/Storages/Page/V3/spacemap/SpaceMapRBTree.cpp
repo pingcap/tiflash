@@ -304,7 +304,7 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct RbPrivate * priva
     // Root node have not been init
     if (private_data->root.rb_node == nullptr)
     {
-        assert(false);
+        LOG_ERROR(log, "Current spacemap is invalid.");
     }
 
     while (*n)
@@ -500,7 +500,7 @@ bool RBTreeSpaceMap::isMarkUnused(UInt64 offset, size_t length)
 
     if (length == 0 || rb_tree->root.rb_node == nullptr)
     {
-        assert(0);
+        LOG_ERROR(log, "Current spacemap is invalid.");
     }
 
     while (*n)
@@ -569,7 +569,7 @@ std::tuple<UInt64, UInt64, bool> RBTreeSpaceMap::searchInsertOffset(size_t size)
     }
     else
     {
-        assert(false);
+        LOG_ERROR(log, "Current spacemap is invalid.");
     }
 
     for (; node != nullptr; node = rb_tree_next(node))
