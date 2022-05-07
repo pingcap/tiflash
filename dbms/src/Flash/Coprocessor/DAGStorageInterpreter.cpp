@@ -288,7 +288,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) {
         // todo do not need to hold all locks in each stream, if the stream is reading from table a
         //  it only needs to hold the lock of table a
-        for (auto & lock : drop_locks)
+        for (const auto & lock : drop_locks)
             stream->addTableLock(lock);
     });
 
