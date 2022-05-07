@@ -552,8 +552,7 @@ try
     std::uniform_int_distribution<> d_20(0, 20);
 
     // Stage 2. insert many edits
-    // constexpr size_t num_edits_test = 100000;
-    constexpr size_t num_edits_test = 10;
+    constexpr size_t num_edits_test = 100000;
     PageId page_id = 0;
     std::vector<size_t> size_each_edit;
     size_each_edit.reserve(num_edits_test);
