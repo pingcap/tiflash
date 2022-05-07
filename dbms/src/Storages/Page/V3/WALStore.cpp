@@ -208,6 +208,8 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
 
     auto f = Poco::File{temp_fullname};
     f.renameTo(normal_fullname);
+    // Also need delete old encryption info after rename
+    provider->deleteEncryptionInfo(temp_fullname);
     LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
 
     // #define ARCHIVE_COMPACTED_LOGS // keep for debug
