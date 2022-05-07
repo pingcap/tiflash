@@ -14,30 +14,14 @@
 
 #pragma once
 
-#include <Common/nocopyable.h>
+#define DISALLOW_COPY(ClassName)           \
+    ClassName(const ClassName &) = delete; \
+    ClassName & operator=(const ClassName &) = delete
 
-#include <cstring>
+#define DISALLOW_MOVE(ClassName)      \
+    ClassName(ClassName &&) = delete; \
+    ClassName & operator=(ClassName &&) = delete
 
-namespace DB
-{
-struct RawCppString : std::string
-{
-    using Base = std::string;
-    using Base::Base;
-    RawCppString() = delete;
-    RawCppString(Base && src)
-        : Base(std::move(src))
-    {}
-    RawCppString(const Base & src)
-        : Base(src)
-    {}
-    DISALLOW_COPY(RawCppString);
-
-    template <class... Args>
-    static RawCppString * New(Args &&... _args)
-    {
-        return new RawCppString{std::forward<Args>(_args)...};
-    }
-};
-
-} // namespace DB
+#define DISALLOW_COPY_AND_MOVE(ClassName) \
+    DISALLOW_COPY(ClassName);             \
+    DISALLOW_MOVE(ClassName)

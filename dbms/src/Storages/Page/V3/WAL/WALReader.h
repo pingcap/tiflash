@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -97,8 +98,7 @@ public:
         WALRecoveryMode recovery_mode_,
         const ReadLimiterPtr & read_limiter_);
 
-    WALStoreReader(const WALStoreReader &) = delete;
-    WALStoreReader & operator=(const WALStoreReader &) = delete;
+    DISALLOW_COPY(WALStoreReader);
 
 private:
     bool openNextFile();
