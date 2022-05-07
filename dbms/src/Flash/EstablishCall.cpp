@@ -31,7 +31,7 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
     // the tag uniquely identifying the request.
-    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
+    service->requestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
 EstablishCallData::~EstablishCallData()
@@ -71,7 +71,7 @@ void EstablishCallData::initRpc()
     std::exception_ptr eptr = nullptr;
     try
     {
-        service->EstablishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
+        service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
     }
     catch (...)
     {
