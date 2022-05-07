@@ -1729,7 +1729,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 }
             }
             if (!finish_gc_on_segment)
-                LOG_FMT_DEBUG(
+                LOG_FMT_TRACE(
                     log,
                     "GC is skipped Segment [{}] [range={}] [table={}]",
                     segment_id,
