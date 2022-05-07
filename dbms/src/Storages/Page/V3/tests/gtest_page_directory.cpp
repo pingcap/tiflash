@@ -2057,6 +2057,36 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryTest, GetMaxId2)
+try
+{
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(1, entry1);
+        edit.put(2, entry2);
+        dir->apply(std::move(edit));
+    }
+
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 2);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        dir->apply(std::move(edit));
+    }
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 1);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(1);
+        dir->apply(std::move(edit));
+    }
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
+}
+CATCH
+
 #undef INSERT_ENTRY_TO
 #undef INSERT_ENTRY
 #undef INSERT_ENTRY_ACQ_SNAP
