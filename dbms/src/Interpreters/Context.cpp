@@ -1548,9 +1548,8 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
-static bool isPageStorageV2NotExisted(const PathPool & path_pool)
+static bool isKVStoreEmpty(const PathPool & path_pool)
 {
-    // Check whether there are any files in kvstore path, if exists, then this is not a new node.
     for (const auto & path : path_pool.listKVStorePaths())
     {
         Poco::File dir(path);
@@ -1567,6 +1566,52 @@ static bool isPageStorageV2NotExisted(const PathPool & path_pool)
     return true;
 }
 
+static bool isPageStorageV2Existed(const PathPool & path_pool)
+{
+    for (const auto & path : path_pool.listKVStorePaths())
+    {
+        Poco::File dir(path);
+        if (!dir.exists())
+            continue;
+
+        std::vector<std::string> files;
+        dir.list(files);
+        if (!files.empty())
+        {
+            for (const auto file_name : files)
+            {
+                const auto & find_index = file_name.find("page");
+                if (find_index != std::string::npos)
+                {
+                    return true;
+                }
+            }
+            // KVStore is not empty, but can't find any of v2 data in it.
+        }
+    }
+
+    // If not data in KVStore. It means V2 data must not existed.
+    return false;
+}
+
+static bool isPageStorageV3Existed(const PathPool & path_pool)
+{
+    for (const auto & path : path_pool.listGlobalPagePaths())
+    {
+        Poco::File dir(path);
+        if (!dir.exists())
+            continue;
+
+        std::vector<std::string> files;
+        dir.list(files);
+        if (!files.empty())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Context::initializePageStorageMode(const PathPool & path_pool, bool enable_ps_v3)
 {
     auto lock = getLock();
@@ -1581,7 +1626,7 @@ void Context::initializePageStorageMode(const PathPool & path_pool, bool enable_
         return;
     }
 
-    shared->storage_run_mode = isPageStorageV2NotExisted(path_pool) ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::MIX_MODE;
+    shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
 }
 
 PageStorageRunMode Context::getPageStorageRunMode() const
