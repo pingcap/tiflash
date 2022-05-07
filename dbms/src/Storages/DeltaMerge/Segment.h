@@ -232,7 +232,7 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
-    SegmentPtr dropNextSegment(WriteBatches & wbs);
+    SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);

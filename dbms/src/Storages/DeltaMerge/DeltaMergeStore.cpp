@@ -396,20 +396,20 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
             }
             auto segment_to_drop = id_to_segment[segment_id_to_drop];
             segment_ids.pop();
+            SegmentPtr previous_segment;
+            SegmentPtr new_previous_segment;
             if (!segment_ids.empty())
             {
                 // This is not the last segment, so we need to set previous segment's next_segment_id to 0 to indicate that this segment has been dropped
                 auto previous_segment_id = segment_ids.top();
-                auto previous_segment = id_to_segment[previous_segment_id];
+                previous_segment = id_to_segment[previous_segment_id];
                 assert(previous_segment->nextSegmentId() == segment_id_to_drop);
                 auto previous_lock = previous_segment->mustGetUpdateLock();
 
                 FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_drop_segment);
                 // No need to abandon previous_segment, because it's delta and stable is managed by the new_previous_segment.
                 // Abandon previous_segment will actually abandon new_previous_segment
-                auto new_previous_segment = previous_segment->dropNextSegment(wbs);
-                segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
-                id_to_segment.emplace(previous_segment_id, new_previous_segment);
+                new_previous_segment = previous_segment->dropNextSegment(wbs, segment_to_drop->getRowKeyRange());
                 FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_drop_segment);
             }
             // The order to drop the meta and data of this segment doesn't matter,
@@ -417,6 +417,15 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
             // so it won't be restored again even the drop process was interrupted by restart
             segments.erase(segment_to_drop->getRowKeyRange().getEnd());
             id_to_segment.erase(segment_id_to_drop);
+            if (previous_segment)
+            {
+                assert(new_previous_segment);
+                assert(previous_segment->segmentId() == new_previous_segment->segmentId());
+                segments.erase(previous_segment->getRowKeyRange().getEnd());
+                segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
+                id_to_segment.erase(previous_segment->segmentId());
+                id_to_segment.emplace(new_previous_segment->segmentId(), new_previous_segment);
+            }
             auto drop_lock = segment_to_drop->mustGetUpdateLock();
             segment_to_drop->abandon(*dm_context);
             segment_to_drop->drop(global_context.getFileProvider(), wbs);
@@ -432,7 +441,7 @@ void DeltaMergeStore::clearData()
     // We don't drop the first segment in clearData, because if we drop it and tiflash crashes before drop the table's metadata,
     // when restart the table will try to restore the first segment but failed to do it which cause tiflash crash again.
     // The reason this happens is that even we delete all data in a PageStorage instance,
-    // the call to PageStorage::getMaxId is still not 0 so tiflash treat it as an old table and will try to restore it's first segment.
+    // the call to PageStorage::getMaxId is still not 0(v3 can return 0, but v2 cannot) so tiflash treat it as an old table and will try to restore it's first segment.
     dropAllSegments(true);
     LOG_FMT_INFO(log, "Clear DeltaMerge segments data done [{}.{}]", db_name, table_name);
 }
