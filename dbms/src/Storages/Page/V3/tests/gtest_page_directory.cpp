@@ -2054,6 +2054,53 @@ try
         ASSERT_EQ(dir->getMaxId(medium), 320);
         ASSERT_EQ(dir->getMaxId(large), 2);
     }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(medium, 320));
+        dir->apply(std::move(edit));
+        ASSERT_EQ(dir->getMaxId(medium), 300);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(medium, 300));
+        dir->apply(std::move(edit));
+        ASSERT_EQ(dir->getMaxId(medium), 0);
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, GetMaxIdAfterDelete)
+try
+{
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(1, entry1);
+        edit.put(2, entry2);
+        dir->apply(std::move(edit));
+    }
+
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 2);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        dir->apply(std::move(edit));
+    }
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 1);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(1);
+        dir->apply(std::move(edit));
+    }
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
+
+    dir->gcInMemEntries();
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
 }
 CATCH
 
