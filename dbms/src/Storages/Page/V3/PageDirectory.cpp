@@ -890,29 +890,30 @@ PageId PageDirectory::getMaxId(NamespaceId ns_id) const
         // so iter-- must be a valid iterator, and it's the largest page id which is smaller than the target page id.
         iter--;
 
-
         do
         {
+            // Can't find any entries in current ns_id
             if (iter->first.high != ns_id)
             {
-                return 0;
+                break;
             }
 
+            // Find the last valid one
             if (iter->second->getEntry(UINT64_MAX - 1) != std::nullopt)
             {
                 return iter->first.low;
             }
 
+            // Current entries is deleted. There are no entries before current.
             if (iter == mvcc_table_directory.begin())
             {
-                return 0;
+                break;
             }
 
             iter--;
-
         } while (true);
 
-        return iter->first.low;
+        return 0;
     }
 }
 
