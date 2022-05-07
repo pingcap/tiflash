@@ -239,13 +239,13 @@ public:
         , rand_gen(std::random_device()())
     {}
 
-    virtual TableInfo get() override
+    virtual TableInfo get(int64_t table_id, std::string table_name) override
     {
         TableInfo table_info;
 
-        table_info.table_id = rand_gen();
+        table_info.table_id = table_id < 0 ? rand_gen() : table_id;
+        table_info.table_name = table_name.empty() ? fmt::format("t_{}", table_info.table_id) : table_name;
         table_info.db_name = "workload";
-        table_info.table_name = fmt::format("random_table_{}", table_info.table_id);
 
         auto type = getPkType();
         table_info.columns = TablePkType::getDefaultColumns(type);
@@ -295,13 +295,13 @@ private:
 
 class ConstantTableGenerator : public TableGenerator
 {
-    virtual TableInfo get() override
+    virtual TableInfo get(int64_t table_id, std::string table_name) override
     {
         TableInfo table_info;
 
-        table_info.table_id = 0;
+        table_info.table_id = table_id < 0 ? 0 : table_id;
+        table_info.table_name = table_name.empty() ? "constant" : table_name;
         table_info.db_name = "workload";
-        table_info.table_name = "constant";
 
         table_info.columns = TablePkType::getDefaultColumns();
 
