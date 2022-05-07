@@ -151,7 +151,7 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 // `get_io_stat_period_us` is the interval between calling getIOStatistic_.
 //
 // Other parameters are the same as WriteLimiter.
-class ReadLimiter final : public WriteLimiter
+class ReadLimiter : public WriteLimiter
 {
 public:
     ReadLimiter(
