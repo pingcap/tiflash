@@ -186,7 +186,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             // The last put write
             if (offset_in_allocated == all_page_data_size)
             {
-                entry.align_size = replenish_size;
+                entry.padded_size = replenish_size;
             }
 
             digest.update(buffer_pos, write.size);
