@@ -904,7 +904,7 @@ PageId PageDirectory::getMaxId(NamespaceId ns_id) const
                 return iter->first.low;
             }
 
-            // Current entries is deleted. There are no entries before current.
+            // Current entry is deleted and there are no entries before it.
             if (iter == mvcc_table_directory.begin())
             {
                 break;
