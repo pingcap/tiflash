@@ -736,10 +736,15 @@ try
         ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
+        TiDB::TableInfo table_info;
+        table_info.id = 1233;
+        table_info.is_common_handle = false;
+        table_info.pk_is_handle = false;
+
         storage = StorageDeltaMerge::create("TiFlash",
                                             /* db_name= */ "default",
                                             table_name,
-                                            std::nullopt,
+                                            table_info,
                                             ColumnsDescription{names_and_types_list},
                                             astptr,
                                             0,
@@ -798,7 +803,7 @@ try
     storage->flushCache(ctx);
     // throw exception before drop first segment
     DB::FailPointHelper::enableFailPoint(DB::FailPoints::exception_before_drop_segment);
-    EXPECT_ANY_THROW(storage->clearData());
+    ASSERT_ANY_THROW(storage->clearData());
     storage->removeFromTMTContext();
 
     // restore the table and make sure no data has been dropped
@@ -821,7 +826,7 @@ try
     storage->flushCache(ctx);
     // throw exception after drop first segment
     DB::FailPointHelper::enableFailPoint(DB::FailPoints::exception_after_drop_segment);
-    EXPECT_ANY_THROW(storage->clearData());
+    ASSERT_ANY_THROW(storage->clearData());
     storage->removeFromTMTContext();
 
     // restore the table and make sure some data has been dropped
