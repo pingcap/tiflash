@@ -28,10 +28,11 @@ namespace PS::V3
 class ReportCollector : public LogReader::Reporter
 {
 public:
-    void corruption(size_t /*bytes*/, const String & /*msg*/) override
+    void corruption(size_t /*bytes*/, const String & msg) override
     {
         error_happened = true;
         // FIXME: store the reason of corruption
+        throw Exception(msg);
     }
 
     bool hasError() const
