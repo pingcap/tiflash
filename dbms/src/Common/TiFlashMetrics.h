@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/TiFlashBuildInfo.h>
+#include <Common/nocopyable.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -23,6 +24,7 @@
 #include <prometheus/registry.h>
 
 #include <ext/scope_guard.h>
+
 
 // to make GCC 11 happy
 #include <cassert>
@@ -341,11 +343,7 @@ public:
     }
     APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 
-    TiFlashMetrics(const TiFlashMetrics &) = delete;
-    TiFlashMetrics & operator=(const TiFlashMetrics &) = delete;
-
-    TiFlashMetrics(TiFlashMetrics &&) = delete;
-    TiFlashMetrics & operator=(TiFlashMetrics &&) = delete;
+    DISALLOW_COPY_AND_MOVE(TiFlashMetrics);
 
     friend class MetricsPrometheus;
 };

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 
 namespace DB
@@ -23,13 +24,12 @@ namespace DB
 struct TableRowIDMinMax
 {
     TableRowIDMinMax(const TableID table_id)
-        : handle_min(RecordKVFormat::genRawKey(table_id, std::numeric_limits<HandleID>::min())),
-          handle_max(RecordKVFormat::genRawKey(table_id, std::numeric_limits<HandleID>::max()))
+        : handle_min(RecordKVFormat::genRawKey(table_id, std::numeric_limits<HandleID>::min()))
+        , handle_max(RecordKVFormat::genRawKey(table_id, std::numeric_limits<HandleID>::max()))
     {}
 
     /// Make this struct can't be copied or moved.
-    TableRowIDMinMax(const TableRowIDMinMax &) = delete;
-    TableRowIDMinMax(TableRowIDMinMax &&) = delete;
+    DISALLOW_COPY_AND_MOVE(TableRowIDMinMax);
 
     const DecodedTiKVKey handle_min;
     const DecodedTiKVKey handle_max;

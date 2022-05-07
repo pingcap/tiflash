@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <common/defines.h>
 
 #include <string>
@@ -126,9 +127,6 @@ private:
     CPUAffinityManager();
     // Disable copy and move
 public:
-    CPUAffinityManager(const CPUAffinityManager &) = delete;
-    CPUAffinityManager & operator=(const CPUAffinityManager &) = delete;
-    CPUAffinityManager(CPUAffinityManager &&) = delete;
-    CPUAffinityManager & operator=(CPUAffinityManager &&) = delete;
+    DISALLOW_COPY_AND_MOVE(CPUAffinityManager);
 };
 } // namespace DB
