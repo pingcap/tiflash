@@ -20,6 +20,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int CORRUPTED_DATA;
+}
+
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 
@@ -32,7 +37,7 @@ public:
     {
         error_happened = true;
         // FIXME: store the reason of corruption
-        throw Exception(msg);
+        throw Exception(msg, ErrorCodes::CORRUPTED_DATA);
     }
 
     bool hasError() const
