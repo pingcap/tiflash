@@ -49,7 +49,7 @@ public:
     {
         return physical_table_ids;
     }
-    String getTableScanExecutorID() const
+    const String & getTableScanExecutorID() const
     {
         return executor_id;
     }

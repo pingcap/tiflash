@@ -44,6 +44,7 @@ public:
         blob_config.cached_fd_size = config.blob_cached_fd_size;
         blob_config.spacemap_type = config.blob_spacemap_type;
         blob_config.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate;
+        blob_config.block_alignment_bytes = config.blob_block_alignment_bytes;
 
         return blob_config;
     }
