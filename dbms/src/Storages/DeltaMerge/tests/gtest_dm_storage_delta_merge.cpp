@@ -710,8 +710,11 @@ try
     Context ctx = DMTestEnv::getContext();
     auto & settings = ctx.getSettingsRef();
     settings.dt_segment_limit_rows = 11;
+    settings.dt_segment_limit_size = 20;
     settings.dt_segment_delta_limit_rows = 7;
+    settings.dt_segment_delta_limit_size = 20;
     settings.dt_segment_force_split_size = 100;
+    settings.dt_segment_delta_cache_limit_size = 20;
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
@@ -736,6 +739,7 @@ try
         ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
+        // table_info.id is used as the ns_id
         TiDB::TableInfo table_info;
         table_info.id = 1233;
         table_info.is_common_handle = false;
