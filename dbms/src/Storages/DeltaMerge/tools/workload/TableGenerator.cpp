@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/nocopyable.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
@@ -44,10 +45,7 @@ std::vector<std::string> TableInfo::toStrings() const
 class TablePkType
 {
 public:
-    TablePkType(const TablePkType &) = delete;
-    TablePkType(TablePkType &&) = delete;
-    TablePkType & operator=(const TablePkType &) = delete;
-    TablePkType && operator=(TablePkType &&) = delete;
+    DISALLOW_COPY_AND_MOVE(TablePkType);
 
     static TablePkType & instance()
     {

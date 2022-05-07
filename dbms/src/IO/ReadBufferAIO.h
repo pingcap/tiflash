@@ -18,6 +18,7 @@
 
 #include <Common/AIO.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/nocopyable.h>
 #include <Core/Defines.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/ReadBuffer.h>
@@ -48,8 +49,7 @@ public:
         char * existing_memory_ = nullptr);
     ~ReadBufferAIO() override;
 
-    ReadBufferAIO(const ReadBufferAIO &) = delete;
-    ReadBufferAIO & operator=(const ReadBufferAIO &) = delete;
+    DISALLOW_COPY(ReadBufferAIO);
 
     void setMaxBytes(size_t max_bytes_read_);
     off_t getPositionInFile() override { return first_unread_pos_in_file - (working_buffer.end() - pos); }
