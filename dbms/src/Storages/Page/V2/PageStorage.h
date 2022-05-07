@@ -148,11 +148,11 @@ public:
         option.remove_tmp_files = false;
         auto page_files = listAllPageFiles(file_provider, delegator, log, option);
         if (page_files.empty())
-            return STORAGE_FORMAT_CURRENT.page;
+            return PageFormat::V2;
 
         bool all_empty = true;
         PageFormat::Version max_binary_version = PageFormat::V1;
-        PageFormat::Version temp_version = STORAGE_FORMAT_CURRENT.page;
+        PageFormat::Version temp_version = PageFormat::V2;
         for (auto iter = page_files.rbegin(); iter != page_files.rend(); ++iter)
         {
             // Skip those files without valid meta
@@ -171,7 +171,7 @@ public:
             LOG_FMT_DEBUG(log, "getMaxDataVersion done from {} [max version={}]", reader->toString(), max_binary_version);
             break;
         }
-        max_binary_version = (all_empty ? STORAGE_FORMAT_CURRENT.page : max_binary_version);
+        max_binary_version = (all_empty ? PageFormat::V2 : max_binary_version);
         return max_binary_version;
     }
 
