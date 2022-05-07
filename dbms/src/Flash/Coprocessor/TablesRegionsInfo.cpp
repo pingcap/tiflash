@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 namespace DB
 {
@@ -46,6 +47,10 @@ const SingleTableRegions & TablesRegionsInfo::getTableRegionInfoByTableID(Int64 
 static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
 {
     fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
+    // If this server serve as a read node, then all regions are read from remote.
+    if (tmt_context.getRole() == TiDB::NodeRole::ReadNode)
+        return true;
+
     RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
         return true;
@@ -53,7 +58,12 @@ static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tm
     return meta_snap.ver != region_info.region_version;
 }
 
-static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions, Int64 table_id, TablesRegionsInfo & tables_region_infos, std::unordered_set<RegionID> & local_region_id_set, const TMTContext & tmt_context)
+static void insertRegionInfoToTablesRegionInfo(
+    const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions,
+    Int64 table_id,
+    TablesRegionsInfo & tables_region_infos,
+    std::unordered_set<RegionID> & local_region_id_set,
+    const TMTContext & tmt_context)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
     for (const auto & r : regions)
@@ -92,12 +102,17 @@ TablesRegionsInfo TablesRegionsInfo::create(
     const TMTContext & tmt_context)
 {
     assert(regions.empty() || table_regions.empty());
-    TablesRegionsInfo tables_regions_info(!regions.empty());
+    TablesRegionsInfo tables_regions_info(/*is_single_table_=*/!regions.empty());
     std::unordered_set<RegionID> local_region_id_set;
+
     if (!regions.empty())
+    {
+        // For single table
         insertRegionInfoToTablesRegionInfo(regions, InvalidTableID, tables_regions_info, local_region_id_set, tmt_context);
+    }
     else
     {
+        // For partition table
         for (const auto & table_region : table_regions)
         {
             assert(table_region.physical_table_id() != InvalidTableID);

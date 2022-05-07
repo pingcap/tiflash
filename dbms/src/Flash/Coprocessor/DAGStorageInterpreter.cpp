@@ -252,6 +252,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
     {
+        assert(!is_read_node);
         buildLocalStreams(pipeline, settings.max_block_size);
     }
 
@@ -275,7 +276,11 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
+    {
+        if (is_read_node)
+            LOG_FMT_DEBUG(log, "building remote streams for read role [num_streams={}]", remote_requests.size());
         buildRemoteStreams(std::move(remote_requests), pipeline);
+    }
 
     /// record local and remote io input stream
     auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
@@ -316,30 +321,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 void DAGStorageInterpreter::prepare()
 {
-    if (is_read_node)
-    {
-        const DAGContext & dag_context = *context.getDAGContext();
-        // For read node, there is no local Region. It build requested to write node for all requested Regions.
-        // (We don't need to apply learner read on read node, it is done by write node when building inputstreams.)
-        size_t num_read_tasks = 0;
-        TablesRegionInfoMap regions_to_read;
-        for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
-        {
-            for (const auto & [id, r] : dag_context.getTableRegionsInfoByTableID(physical_table_id).local_regions)
-            {
-                if (r.key_ranges.empty())
-                {
-                    throw TiFlashException(
-                        fmt::format("Income key ranges is empty for region: {}", r.region_id),
-                        Errors::Coprocessor::BadRequest);
-                }
-                region_retry_from_local_region.emplace_back(r);
-                num_read_tasks += 1;
-            }
-        }
-        LOG_FMT_INFO(log, "read role build {} tasks", num_read_tasks);
-    }
-    else
+    if (!is_read_node)
     {
         // For write node, apply learner read to ensure we can get strong consistent with TiKV Region
         // leaders. If the local regions do not match the requested regions, then
@@ -365,6 +347,12 @@ void DAGStorageInterpreter::prepare()
             learner_read_snapshot = doBatchCopLearnerRead();
         else
             learner_read_snapshot = doCopLearnerRead();
+    }
+    else
+    {
+        // For read node, there is no local Region. It build requested to write node according to
+        // `table_regions_info.remote_regions`.
+        // We don't need to apply learner read on read node, it is done by write node when building inputstreams.
     }
 
     // Acquire read lock on `alter lock` and build the requested inputstreams
