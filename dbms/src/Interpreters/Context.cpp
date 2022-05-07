@@ -1548,23 +1548,6 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
-static bool isKVStoreEmpty(const PathPool & path_pool)
-{
-    for (const auto & path : path_pool.listKVStorePaths())
-    {
-        Poco::File dir(path);
-        if (!dir.exists())
-            continue;
-
-        std::vector<std::string> files;
-        dir.list(files);
-        if (!files.empty())
-        {
-            return false;
-        }
-    }
-    return true;
-}
 
 static bool isPageStorageV2Existed(const PathPool & path_pool)
 {
@@ -1578,7 +1561,7 @@ static bool isPageStorageV2Existed(const PathPool & path_pool)
         dir.list(files);
         if (!files.empty())
         {
-            for (const auto file_name : files)
+            for (const auto & file_name : files)
             {
                 const auto & find_index = file_name.find("page");
                 if (find_index != std::string::npos)
@@ -1612,21 +1595,39 @@ static bool isPageStorageV3Existed(const PathPool & path_pool)
     return false;
 }
 
-void Context::initializePageStorageMode(const PathPool & path_pool, bool enable_ps_v3)
+void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 storage_page_format_version)
 {
     auto lock = getLock();
 
-    // If it's a new node also enable_ps_v3 is 1, then we direct use ONLY_V3.
-    // If it's not a new node also enable_ps_v3 is 1, then we use MIX_MODE.
-    // If it's not a new node also enable_ps_v3 is 0, then we use Only_V2.
-    // If it's a new node also enable_ps_v3 is 0, then we use Only_V2.
-    if (!enable_ps_v3)
+    /**
+     * PageFormat::V2 + isPageStorageV3Existed is false + whatever isPageStorageV2Existed true or false = ONLY_V2
+     * PageFormat::V2 + isPageStorageV3Existed is true  + whatever isPageStorageV2Existed true or false = ERROR Config
+     * PageFormat::V3 + isPageStorageV2Existed is true  + whatever isPageStorageV3Existed true or false = MIX_MODE
+     * PageFormat::V3 + isPageStorageV2Existed is false + whatever isPageStorageV3Existed true or false = ONLY_V3
+     */
+
+    switch (storage_page_format_version)
     {
+    case PageFormat::V2:
+    {
+        if (isPageStorageV3Existed(path_pool))
+        {
+            throw Exception("Invalid config `storage.format_version`, Current page V3 data exist. But using the PageFormat::V2",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+        // not exist V3
         shared->storage_run_mode = PageStorageRunMode::ONLY_V2;
         return;
     }
-
-    shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
+    case PageFormat::V3:
+    {
+        shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
+        return;
+    }
+    default:
+        throw Exception(fmt::format("Can't detect the format version of Page [page_version={}]", storage_page_format_version),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 PageStorageRunMode Context::getPageStorageRunMode() const

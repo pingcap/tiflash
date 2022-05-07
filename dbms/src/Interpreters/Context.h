@@ -406,7 +406,7 @@ public:
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    void initializePageStorageMode(const PathPool & path_pool, bool enable_ps_v3);
+    void initializePageStorageMode(const PathPool & path_pool, UInt64 storage_page_format_version);
     void setPageStorageRunMode(PageStorageRunMode run_mode) const;
     PageStorageRunMode getPageStorageRunMode() const;
     bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
