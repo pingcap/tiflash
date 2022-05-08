@@ -91,7 +91,7 @@ public:
                 const FileProviderPtr & file_provider_);
     ~PageStorage() = default;
 
-    void restore() override;
+    void restoreImpl(bool remove_invalid_file) override;
 
     void drop() override;
 

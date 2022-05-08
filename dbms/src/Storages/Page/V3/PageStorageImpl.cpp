@@ -43,7 +43,7 @@ PageStorageImpl::PageStorageImpl(
 
 PageStorageImpl::~PageStorageImpl() = default;
 
-void PageStorageImpl::restore()
+void PageStorageImpl::restoreImpl(bool /*remove_invalid_file*/)
 {
     // TODO: clean up blobstore.
     // TODO: Speedup restoring

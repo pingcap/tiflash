@@ -211,7 +211,13 @@ public:
 
     virtual ~PageStorage() = default;
 
-    virtual void restore() = 0;
+    // Should not set `remove_invalid_file` to false except `KVStore`.
+    // If `remove_invalid_file` is true, It will work in V2 and will delete everything except `PageFile`.
+    // This arg won't work in V3.
+    void restore(bool remove_invalid_file = true)
+    {
+        restoreImpl(remove_invalid_file);
+    }
 
     virtual void drop() = 0;
 
@@ -291,6 +297,8 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
+    virtual void restoreImpl(bool remove_invalid_file) = 0;
+
     virtual void writeImpl(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) = 0;
 
     virtual PageEntry getEntryImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) = 0;

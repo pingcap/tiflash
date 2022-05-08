@@ -60,7 +60,7 @@ public:
         return wal_config;
     }
 
-    void restore() override;
+    void restoreImpl(bool remove_invalid_file) override;
 
     void drop() override;
 

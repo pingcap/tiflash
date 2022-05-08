@@ -196,7 +196,7 @@ toConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
     return assert_cast<PageStorage::ConcreteSnapshotRawPtr>(ptr.get());
 }
 
-void PageStorage::restore()
+void PageStorage::restoreImpl(bool remove_invalid_file)
 {
     LOG_FMT_INFO(log, "{} begin to restore data from disk. [path={}] [num_writers={}]", storage_name, delegator->defaultPath(), write_files.size());
 
@@ -208,7 +208,7 @@ void PageStorage::restore()
 #endif
     opt.ignore_legacy = false;
     opt.ignore_checkpoint = false;
-    opt.remove_invalid_files = true;
+    opt.remove_invalid_files = remove_invalid_file;
     PageFileSet page_files = PageStorage::listAllPageFiles(file_provider, delegator, page_file_log, opt);
 
     /// Restore current version from both formal and legacy page files
