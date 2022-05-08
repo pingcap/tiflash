@@ -1,7 +1,7 @@
 import subprocess as sp
 import shutil
 import sys
-prefix = "__TIFLASH_PROXY__"
+prefix = "@TIFLASH_PROXY@"
 required_symbols = [
     "__dso_handle",
     "run_raftstore_proxy_ffi",

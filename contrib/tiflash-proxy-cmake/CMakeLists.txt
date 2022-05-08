@@ -35,7 +35,7 @@ add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY_PATCHED}
         COMMAND python3 ${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-cmake/script.py ${_TIFLASH_PROXY_LIBRARY} ${_TIFLASH_PROXY_LIBRARY_PATCHED}
         VERBATIM
         WORKING_DIRECTORY ${_TIFLASH_PROXY_SOURCE_DIR}
-        DEPENDS ${_TIFLASH_PROXY_LIBRARY})
+        DEPENDS ${_TIFLASH_PROXY_LIBRARY} ${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-cmake/script.py)
 
 add_custom_target(tiflash_proxy ALL
         DEPENDS ${_TIFLASH_PROXY_LIBRARY_PATCHED})
