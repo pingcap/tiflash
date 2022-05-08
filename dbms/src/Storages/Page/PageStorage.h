@@ -629,18 +629,20 @@ public:
         {
         case PageStorageRunMode::ONLY_V2:
         {
-            storage_v2->traverse(acceptor, snap);
+            storage_v2->traverse(acceptor, nullptr);
             break;
         }
         case PageStorageRunMode::ONLY_V3:
         {
-            storage_v3->traverse(acceptor, snap);
+            storage_v3->traverse(acceptor, nullptr);
             break;
         }
         case PageStorageRunMode::MIX_MODE:
         {
-            storage_v2->traverse(acceptor, toConcreteV3Snapshot());
-            storage_v3->traverse(acceptor, toConcreteV2Snapshot());
+            // Used by RegionPersister::restore
+            // Must traverse storage_v3 before storage_v2
+            storage_v3->traverse(acceptor, toConcreteV3Snapshot());
+            storage_v2->traverse(acceptor, toConcreteV2Snapshot());
             break;
         }
         default:

@@ -269,10 +269,19 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
     if (page_reader)
     {
         auto acceptor = [&](const DB::Page & page) {
+            // We will traverse the pages in V3 before traverse the pages in V2 When we used MIX MODE
+            // So if we found the page_id have been traversed, just skip it.
+            if (const auto it = regions.find(page.page_id); it != regions.end())
+            {
+                LOG_FMT_INFO(log, "Already exist [page_id={}], skip it.", page.page_id);
+                return;
+            }
+
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
             auto region = Region::deserialize(buf, proxy_helper);
             if (page.page_id != region->id())
                 throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
+
             regions.emplace(page.page_id, region);
         };
         page_reader->traverse(acceptor);
