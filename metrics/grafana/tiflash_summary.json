@@ -5258,7 +5258,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "opm",
+              "format": "ops",
               "label": null,
               "logBase": 1,
               "max": null,
