@@ -26,4 +26,9 @@ class Context;
 //   ./storage-client.sh "DBGInvoke search_log_for_key(key)"
 void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+// Trigger the gc process of global storage pool. Used to remove obsolete entry left by previous dropped table
+// Usage:
+//   ./storage-client.sh "DBGInvoke trigger_global_storage_pool_gc()"
+void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 } // namespace DB

@@ -16,6 +16,7 @@
 #include <Debug/dbgFuncMisc.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 
 #include <fstream>
 #include <regex>
@@ -96,5 +97,14 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         output(m[1]);
     else
         output("Invalid");
+}
+
+void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/, DBGInvoker::Printer /*output*/)
+{
+    auto global_storage_pool = context.getGlobalStoragePool();
+    if (global_storage_pool)
+    {
+        global_storage_pool->meta()->gc();
+    }
 }
 } // namespace DB
