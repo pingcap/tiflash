@@ -323,14 +323,12 @@ std::tuple<ExpressionActionsPtr, String, String> TiFlashJoin::genJoinOtherCondit
             left_input_header,
             right_input_header,
             probe_side_prepare_join,
-            build_side_prepare_join,
-            build_side_index)
+            build_side_prepare_join)
         : genColumnsForOtherJoinFilter(
             left_input_header,
             right_input_header,
             build_side_prepare_join,
-            probe_side_prepare_join,
-            build_side_index);
+            probe_side_prepare_join);
 
     return doGenJoinOtherConditionAction(context, join, columns_for_other_join_filter);
 }
