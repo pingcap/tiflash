@@ -160,6 +160,9 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
     const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
 
     const auto * raw_type = type.get();
+
+    // if minmaxes_data has null value, the value of minmaxes_data[i] is meaningless and maybe just some random value.
+    // But in checkEqual, we have checked the has_null_marks and ensured that there is no null value in MinMax Indexes.
 #define DISPATCH(TYPE)                                                                         \
     if (typeid_cast<const DataType##TYPE *>(raw_type))                                         \
     {                                                                                          \
@@ -173,8 +176,6 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
         const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(column_nullable.getNestedColumnPtr());
-        // if minmaxes_data has null value, the value of minmaxes_data[i] is meaningless and maybe just some random value.
-        // But in checkEqual, we have checked the has_null_marks and ensured that there is no null value in MinMax Indexes.
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDate::FieldType>(value, type, min, max);
