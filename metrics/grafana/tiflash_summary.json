@@ -5164,7 +5164,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The BlobStore metrics.",
+          "description": "The states of BlobStore (an internal component of storage engine)",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -5204,7 +5204,7 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "BlobQPS",
+              "alias": "BlobAllocated",
               "yaxis": 1
             },
             {
@@ -5223,7 +5223,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "BlobQPS",
+              "legendFormat": "BlobAllocated",
               "refId": "A"
             },
             {
