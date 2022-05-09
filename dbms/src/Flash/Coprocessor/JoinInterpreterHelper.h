@@ -101,7 +101,11 @@ struct TiFlashJoin
 
     /// @other_condition_expr: generates other_filter_column and other_eq_filter_from_in_column
     /// @other_filter_column_name: column name of `and(other_cond1, other_cond2, ...)`
-    /// @other_eq_filter_from_in_column_name: column name of `and(other_eq_cond1, other_eq_cond2, ...)`
+    /// @other_eq_filter_from_in_column_name: column name of `and(other_eq_cond1_from_in, other_eq_cond2_from_in, ...)`
+    /// such as
+    ///   `select * from t where col1 in (select col2 from t2 where t1.col2 = t2.col3)`
+    ///   - other_filter is `t1.col2 = t2.col3`
+    ///   - other_eq_filter_from_in_column is `t1.col1 = t2.col2`
     std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
         const Context & context,
         const Block & left_input_header,
