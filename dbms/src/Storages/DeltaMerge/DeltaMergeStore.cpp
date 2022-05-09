@@ -409,6 +409,11 @@ void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
                 FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_drop_segment);
                 // No need to abandon previous_segment, because it's delta and stable is managed by the new_previous_segment.
                 // Abandon previous_segment will actually abandon new_previous_segment
+                //
+                // And we need to use the previous_segment to manage the dropped segment's range,
+                // because if tiflash crash in the middle of the drop table process, and when restoring this table at restart,
+                // there are some possibilities that this table will trigger some background tasks,
+                // and in these background tasks, it may check that all ranges of this table should be managed by some segment.
                 new_previous_segment = previous_segment->dropNextSegment(wbs, segment_to_drop->getRowKeyRange());
                 FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_drop_segment);
             }
@@ -441,7 +446,7 @@ void DeltaMergeStore::clearData()
     // We don't drop the first segment in clearData, because if we drop it and tiflash crashes before drop the table's metadata,
     // when restart the table will try to restore the first segment but failed to do it which cause tiflash crash again.
     // The reason this happens is that even we delete all data in a PageStorage instance,
-    // the call to PageStorage::getMaxId is still not 0(v3 can return 0, but v2 cannot) so tiflash treat it as an old table and will try to restore it's first segment.
+    // the call to PageStorage::getMaxId is still not 0 so tiflash treat it as an old table and will try to restore it's first segment.
     dropAllSegments(true);
     LOG_FMT_INFO(log, "Clear DeltaMerge segments data done [{}.{}]", db_name, table_name);
 }
