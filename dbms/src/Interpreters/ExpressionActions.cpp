@@ -461,8 +461,56 @@ void ExpressionAction::executeOnTotals(Block & block) const
         join->joinTotals(block);
 }
 
+// ywq todo
+void ExpressionAction::dumpAction(FmtBuffer & fb) const
+{
+    switch (type)
+    {
+    case ADD_COLUMN:
+        fb.append("Add column");
+        // fb.fmtAppend("Add {} {} {}", result_name,
+        // (result_type ? result_type->getName() : "(no type)"),
+        //  (added_column ? added_column->getName() : "(no column)"));
+        break;
+    case REMOVE_COLUMN:
+        fb.append("Remove column");
+        // fb.fmtAppend("Remove {}", source_name);
+        break;
+    case COPY_COLUMN:
+        fb.append("Copy column");
+        // fb.fmtAppend("Copy {} = {}", result_name, source_name);
+        break;
+    case APPLY_FUNCTION:
+        fb.fmtAppend("{}", (function ? function->getName() : "(no function)"));
+        // fb.joinStr(
+        //     argument_names.cbegin(),
+        //     argument_names.cend(),
+        //     [](const auto & s, FmtBuffer & fb) {
+        //         fb.append(s);
+        //     },
+        //     ", ");
+        break;
+    case JOIN:
+        fb.append("join");
+        // fb.joinStr(columns_added_by_join.cbegin(), columns_added_by_join.cend(), [](const auto & c, FmtBuffer &fb){
+        //     fb.append(c.name);
+        // }, ", ");
+        break;
+    case PROJECT:
+        fb.append("project");
+        // fb.joinStr(projections.cbegin(), projections.cend(), [](const auto & proj, FmtBuffer & fb) {
+        //     fb.append(proj.first);
+        //     // if (!proj.second.empty() && proj.first != proj.second)
+        //     //    fb.fmtAppend(" as {}", proj.second);
+        // }, ", ");
+        // fb.append("}");
+        break;
+    default:
+        break;
+    }
+}
 
-std::string ExpressionAction::toString() const
+String ExpressionAction::toString() const
 {
     std::stringstream ss;
     switch (type)
@@ -529,7 +577,6 @@ std::string ExpressionAction::toString() const
     default:
         throw Exception("Unexpected Action type", ErrorCodes::LOGICAL_ERROR);
     }
-
     return ss.str();
 }
 
@@ -935,6 +982,12 @@ std::string ExpressionActions::dumpActions() const
         ss << it->name << " " << it->type->getName() << "\n";
 
     return ss.str();
+}
+
+void ExpressionActions::dumpActions(FmtBuffer & fb) const
+{
+    for (const auto & action : actions)
+        action.dumpAction(fb);
 }
 
 void ExpressionActions::optimize()

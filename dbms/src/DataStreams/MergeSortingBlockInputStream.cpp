@@ -287,5 +287,18 @@ Block MergeSortingBlocksBlockInputStream::mergeImpl(std::priority_queue<TSortCur
     return blocks[0].cloneWithColumns(std::move(merged_columns));
 }
 
+void MergeSortingBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+{
+    IProfilingBlockInputStream::print(buffer, indent, multiplier);
+    buffer.fmtAppend(": limit = {}, columns {{", limit);
+    buffer.joinStr(
+        description.cbegin(),
+        description.cend(),
+        [](const auto & des, FmtBuffer & fb) {
+            fb.fmtAppend("<{}, {}>", des.column_name, des.direction == 1 ? "ASC" : "DESC");
+        },
+        ", ");
+    buffer.append("}");
+}
 
 } // namespace DB

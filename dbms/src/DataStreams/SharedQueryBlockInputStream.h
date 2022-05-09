@@ -169,6 +169,12 @@ protected:
             throw Exception(exception_msg);
     }
 
+    // void print(FmtBuffer & buffer, size_t indent, size_t multiplier) const override
+    // {
+    //     IProfilingBlockInputStream::print(buffer, indent, multiplier);
+    //     buffer.fmtAppend(": clients: {}", queue.size());
+    // }
+
 private:
     MPMCQueue<Block> queue;
 

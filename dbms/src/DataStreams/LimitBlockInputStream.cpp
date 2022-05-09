@@ -83,4 +83,10 @@ Block LimitBlockInputStream::readImpl()
     return res;
 }
 
+void LimitBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+{
+    IProfilingBlockInputStream::print(buffer, indent, multiplier);
+    buffer.fmtAppend(": limit = {}, offset = {}, pos = {}", limit, offset, pos);
+}
+
 } // namespace DB

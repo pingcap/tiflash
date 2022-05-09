@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
@@ -60,11 +61,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
-        for (auto & execution_summary : resp.execution_summaries())
+        for (const auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
-                auto & executor_id = execution_summary.executor_id();
+                const auto & executor_id = execution_summary.executor_id();
                 execution_summaries[index][executor_id].time_processed_ns = execution_summary.time_processed_ns();
                 execution_summaries[index][executor_id].num_produced_rows = execution_summary.num_produced_rows();
                 execution_summaries[index][executor_id].num_iterations = execution_summary.num_iterations();
@@ -84,11 +85,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             return;
         }
         auto & execution_summaries_map = execution_summaries[index];
-        for (auto & execution_summary : resp.execution_summaries())
+        for (const auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
-                auto & executor_id = execution_summary.executor_id();
+                const auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
                     LOG_FMT_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
@@ -243,6 +244,20 @@ protected:
     {
         LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
         remote_reader->close();
+    }
+
+    void print(FmtBuffer & buffer, size_t indent, size_t multiplier) const override
+    {
+        IProfilingBlockInputStream::print(buffer, indent, multiplier);
+        buffer.append(": schema: {");
+        buffer.joinStr(
+            sample_block.begin(),
+            sample_block.end(),
+            [](const auto & arg, FmtBuffer & fb) {
+                fb.fmtAppend("<{}, {}>", arg.name, arg.type->getName());
+            },
+            ", ");
+        buffer.append("}");
     }
 };
 

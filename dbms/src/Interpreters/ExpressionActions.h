@@ -121,6 +121,8 @@ public:
 
     std::string toString() const;
 
+    void dumpAction(FmtBuffer & fb) const;
+
 private:
     friend class ExpressionActions;
 
@@ -212,6 +214,8 @@ public:
 
     std::string dumpActions() const;
 
+    void dumpActions(FmtBuffer & fb) const;
+
     static std::string getSmallestColumn(const NamesAndTypesList & columns);
 
     BlockInputStreamPtr createStreamWithNonJoinedDataIfFullOrRightJoin(const Block & source_header, size_t index, size_t step, size_t max_block_size) const;
@@ -251,7 +255,7 @@ struct ExpressionActionsChain
         ExpressionActionsPtr actions;
         Names required_output;
 
-        Step(const ExpressionActionsPtr & actions_ = nullptr, const Names & required_output_ = Names())
+        explicit Step(const ExpressionActionsPtr & actions_ = nullptr, const Names & required_output_ = Names())
             : actions(actions_)
             , required_output(required_output_)
         {}

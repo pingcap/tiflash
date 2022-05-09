@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include <Common/FmtUtils.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 namespace DB
 {
@@ -25,4 +26,23 @@ Block HashJoinBuildBlockInputStream::readImpl()
     return block;
 }
 
+void HashJoinBuildBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+{
+    IProfilingBlockInputStream::print(buffer, indent, multiplier);
+    static const std::unordered_map<ASTTableJoin::Kind, String> join_type_map{
+        {ASTTableJoin::Kind::Inner, "Inner"},
+        {ASTTableJoin::Kind::Left, "Left"},
+        {ASTTableJoin::Kind::Right, "Right"},
+        {ASTTableJoin::Kind::Full, "Full"},
+        {ASTTableJoin::Kind::Cross, "Cross"},
+        {ASTTableJoin::Kind::Comma, "Comma"},
+        {ASTTableJoin::Kind::Anti, "Anti"},
+        {ASTTableJoin::Kind::Cross_Left, "Cross_Left"},
+        {ASTTableJoin::Kind::Cross_Right, "Cross_Right"},
+        {ASTTableJoin::Kind::Cross_Anti, "Cross_Anti"}};
+    auto join_type_it = join_type_map.find(join->getKind());
+    if (join_type_it == join_type_map.end())
+        throw TiFlashException("Unknown join type", Errors::Coprocessor::Internal);
+    buffer.fmtAppend(": build_concurrency{{{}}}, join_kind{{{}}}", join->getBuildConcurrency(), join_type_it->second);
+}
 } // namespace DB

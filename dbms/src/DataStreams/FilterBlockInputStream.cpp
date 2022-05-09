@@ -219,5 +219,28 @@ Block FilterBlockInputStream::readImpl()
     }
 }
 
+// ywq todo complicate...
+void FilterBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+{
+    IProfilingBlockInputStream::print(buffer, indent, multiplier);
+    buffer.append(": {");
+    const auto & actions = expression->getActions();
+    buffer.joinStr(
+        actions.begin(),
+        actions.end(),
+        [](const auto & arg, FmtBuffer & fb) {
+            arg.dumpAction(fb);
+        },
+        ", ");
+    buffer.append("}");
+    // ostr << "} input: {";
+    // const auto & input_columns = expression->getRequiredColumnsWithTypes();
+    // dumpIter(input_columns.cbegin(), input_columns.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
+    // ostr << "} output: {";
+    // const auto & output = expression->getSampleBlock();
+    // dumpIter(output.cbegin(), output.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
+    // ostr << "}]";
+}
+
 
 } // namespace DB

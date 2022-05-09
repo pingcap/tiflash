@@ -19,6 +19,7 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
+#include <Interpreters/Aggregator.h>
 
 namespace DB
 {
@@ -62,6 +63,8 @@ protected:
     }
 
     Block readImpl() override;
+    void print(FmtBuffer & buffer, size_t indent, size_t multiplier) const override;
+
 
 private:
     const LoggerPtr log;

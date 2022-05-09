@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include <Common/ClickHouseRevision.h>
+#include <Common/FmtUtils.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
@@ -273,6 +276,20 @@ void ParallelAggregatingBlockInputStream::execute()
             threads_data[0].aggregate_columns,
             threads_data[0].local_delta_memory,
             no_more_keys);
+}
+// ywq todo
+// add aggregate keys.
+void ParallelAggregatingBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+{
+    IProfilingBlockInputStream::print(buffer, indent, multiplier);
+    buffer.fmtAppend(": max_threads: {}, final: {}, agg_funcs: {{", max_threads, final ? "true" : "false");
+    const auto & aggregates = params.aggregates;
+    buffer.joinStr(
+        aggregates.cbegin(),
+        aggregates.cend(),
+        [](const auto & agg, FmtBuffer & fb) { fb.append(agg.column_name); },
+        ", ");
+    buffer.append("}");
 }
 
 } // namespace DB
