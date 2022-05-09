@@ -20,14 +20,17 @@
 
 namespace DB
 {
+using AggregateColumns = std::vector<ColumnRawPtrs>;
+
 struct AggregateStore
 {
     AggregateStore(
+        const String & req_id,
         const Aggregator::Params & params,
         size_t max_threads,
         const FileProviderPtr & file_provider_,
         bool is_final_)
-        : aggregator(params)
+        : aggregator(params, req_id)
         , file_provider(file_provider_)
         , is_final(is_final_)
     {
@@ -46,7 +49,29 @@ struct AggregateStore
     size_t maxThreads() const { return many_data.size(); }
 
     Block getHeader() const { return aggregator.getHeader(is_final); }
+
+    const Aggregator::Params & getParams() const { return aggregator.getParams(); }
+
+    const AggregatedDataVariantsPtr & getData(size_t index) const { return many_data[index] }
+
+    void executeOnBlock(
+        size_t stream_index,
+        const Block & block,
+        ColumnRawPtrs & key_columns,
+        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
+        Int64 & local_delta_memory,
+        bool & no_more_keys)
+    {
+        aggregator.executeOnBlock(
+            block,
+            *many_data[stream_index],
+            file_provider,
+            key_columns,
+            aggregate_columns,
+            local_delta_memory,
+            no_more_keys);
+    }
 };
 
 using AggregateStorePtr = std::shared_ptr<AggregateStore>;
-}
+} // namespace DB

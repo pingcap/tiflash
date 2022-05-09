@@ -16,5 +16,25 @@
 
 namespace DB
 {
+Block FinalAggregatingBlockInputStream::readImpl()
+{
+    const auto child = children.back();
+    while(child->read()) {}
 
+    if (!isCancelled() && aggregate_store->aggregator.hasTemporaryFiles())
+    {
+        /// It may happen that some data has not yet been flushed,
+        ///  because at the time of `onFinishThread` call, no data has been flushed to disk, and then some were.
+        for (auto & data : aggregate_store->many_data)
+        {
+            if (data->isConvertibleToTwoLevel())
+                data->convertToTwoLevel();
+
+            if (!data->empty())
+                aggregate_store->aggregator.writeToTemporaryFile(*data, aggregate_store->file_provider);
+        }
+    }
+
+
+}
 }

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Interpreters/AggregateStore.h>
 
 namespace DB
 {
@@ -23,8 +24,16 @@ class FinalAggregatingBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "FinalAggregating";
 
 public:
+    String getName() const override { return NAME; }
+
+    Block getHeader() const override { return aggregate_store->getHeader(); }
+
 protected:
+    Block readImpl() override;
+
 private:
     const LoggerPtr log;
+
+    AggregateStorePtr aggregate_store;
 };
 }

@@ -26,6 +26,8 @@ PartialAggregatingBlockInputStream::PartialAggregatingBlockInputStream(
     , aggregate_store(aggregate_store_)
 {
     children.push_back(input);
+    key_columns.resize(aggregate_store->getParams().keys_size);
+    aggregate_columns.resize(aggregate_store->getParams().aggregates_size);
 }
 
 Block PartialAggregatingBlockInputStream::readImpl()
@@ -33,15 +35,40 @@ Block PartialAggregatingBlockInputStream::readImpl()
     Block block = children.back()->read();
     if (block)
     {
-        aggregate_store->aggregator.executeOnBlock(
+        aggregate_store->executeOnBlock(
+            stream_index,
             block,
-            *aggregate_store->many_data[stream_index],
-            aggregate_store->file_provider,
             key_columns,
             aggregate_columns,
             local_delta_memory,
             no_more_keys);
+        return block;
     }
-    return block;
+    else
+    {
+        double elapsed_seconds = static_cast<double>(getProfileInfo().execution_time) / 1000000;
+        LOG_FMT_TRACE(
+            log,
+            "Aggregated. {} to {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+            getProfileInfo().rows,
+            aggregate_store->getData(stream_index)->size(),
+            (getProfileInfo().bytes / 1048576.0),
+            elapsed_seconds,
+            getProfileInfo().rows / elapsed_seconds,
+            getProfileInfo().bytes / elapsed_seconds / 1048576.0);
+
+        if (!isCancelled() && aggregate_store->aggregator.hasTemporaryFiles())
+        {
+            /// Flush data in the RAM to disk. So it's easier to unite them later.
+            const auto & data = aggregate_store->getData(stream_index);
+
+            if (data->isConvertibleToTwoLevel())
+                data->convertToTwoLevel();
+
+            if (!data->empty())
+                aggregate_store->aggregator.writeToTemporaryFile(*data, aggregate_store->file_provider);
+        }
+        return {};
+    }
 }
 } // namespace DB
