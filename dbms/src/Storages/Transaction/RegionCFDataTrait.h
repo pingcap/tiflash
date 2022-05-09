@@ -93,9 +93,10 @@ struct RegionLockCFDataTrait
     static Map::value_type genKVPair(TiKVKey && key_, TiKVValue && value_)
     {
         auto key = std::make_shared<const TiKVKey>(std::move(key_));
-        auto value = std::make_shared<const TiKVValue>(std::move(value_));
+        auto value = std::make_shared<TiKVValue>(std::move(value_));
+        auto decoded_lock_cf_value = std::make_shared<const DecodedLockCFValue>(key, std::move(value));
         return {{key, std::string_view(key->data(), key->dataSize())},
-            Value{key, value, std::make_shared<const DecodedLockCFValue>(key, value)}};
+                Value{key, decoded_lock_cf_value->val, std::move(decoded_lock_cf_value)}};
     }
 };
 

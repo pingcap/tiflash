@@ -239,7 +239,7 @@ inline TiKVValue encodeLockCfValue(
 
 struct DecodedLockCFValue : boost::noncopyable
 {
-    DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_);
+    DecodedLockCFValue(std::shared_ptr<const TiKVKey> & key_, std::shared_ptr<TiKVValue> val_);
     std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
     void intoLockInfo(kvrpcpb::LockInfo &) const;
 
