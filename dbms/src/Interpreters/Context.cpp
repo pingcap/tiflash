@@ -1612,7 +1612,8 @@ void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 stora
     {
         if (isPageStorageV3Existed(path_pool))
         {
-            throw Exception("Invalid config `storage.format_version`, Current page V3 data exist. But using the PageFormat::V2",
+            throw Exception("Invalid config `storage.format_version`, Current page V3 data exist. But using the PageFormat::V2."
+                            "If you are downgrading the format_version for this TiFlash node, you need to rebuild the data from scratch.",
                             ErrorCodes::LOGICAL_ERROR);
         }
         // not exist V3

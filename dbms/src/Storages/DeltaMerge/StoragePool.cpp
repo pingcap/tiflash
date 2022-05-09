@@ -257,10 +257,6 @@ PageStorageRunMode StoragePool::restore()
     }
     case PageStorageRunMode::MIX_MODE:
     {
-        max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), log_storage_v3->getMaxId(ns_id));
-        max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), data_storage_v3->getMaxId(ns_id));
-        max_meta_page_id = std::max(meta_storage_v2->getMaxId(ns_id), meta_storage_v3->getMaxId(ns_id));
-
         // Check number of valid pages in v2
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
@@ -277,6 +273,16 @@ PageStorageRunMode StoragePool::restore()
             log_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, log_storage_v3);
             data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
             meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
+
+            max_log_page_id = log_storage_v3->getMaxId(ns_id);
+            max_data_page_id = data_storage_v3->getMaxId(ns_id);
+            max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
+        }
+        else
+        {
+            max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), log_storage_v3->getMaxId(ns_id));
+            max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), data_storage_v3->getMaxId(ns_id));
+            max_meta_page_id = std::max(meta_storage_v2->getMaxId(ns_id), meta_storage_v3->getMaxId(ns_id));
         }
         break;
     }
@@ -321,10 +327,7 @@ void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks
         // When V3 GC happend, scan the external pages from V3, in remover will scanner all of external pages from V2.
         ExternalPageCallbacks mix_mode_callbacks;
 
-        mix_mode_callbacks.scanner = [callbacks]() {
-            return callbacks.scanner();
-        };
-
+        mix_mode_callbacks.scanner = callbacks.scanner;
         mix_mode_callbacks.remover = [this, callbacks](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
             // ns_id won't used on V2
             auto v2_valid_page_ids = data_storage_v2->getAliveExternalPageIds(ns_id);
