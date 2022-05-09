@@ -31,7 +31,11 @@ std::string StackTrace::toString() const
     {
         output.append("\n");
         auto demangle_func = [](const char * name) {
+            static constexpr char proxy_prefix[] = "(TIFLASH_PROXY) ";
             int status = 0;
+            if (const auto* position = ::strstr(name, proxy_prefix); position != nullptr) {
+                name = position + std::size(proxy_prefix);
+            }
             auto result = demangle(name, status);
             return std::pair<std::string, int>{result, status};
         };
