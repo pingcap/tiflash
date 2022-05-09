@@ -211,11 +211,17 @@ public:
 
     virtual ~PageStorage() = default;
 
-    virtual void restore() = 0;
+    // Return the map[ns_id, max_applied_page_id]
+    // The different between max_applied_page_id and max_page_id is that:
+    //
+    // 1. In V2, it means same thing.
+    // Also ns_id will be 0, because V2 will not use ns_id to distinguish different tables
+    // 2. In V3, max_applied_page_id can be a del id. In V3, we do not allow writebatch type reuse of the same page_id.
+    // So we need get the max_page_id before MVCC do the memory GC.
+    // The max_page_id before MVCC GC in restore, we called max_applied_page_id.
+    virtual std::map<NamespaceId, PageId> restore() = 0;
 
     virtual void drop() = 0;
-
-    virtual PageId getMaxId(NamespaceId ns_id) = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 
@@ -360,11 +366,6 @@ public:
     PageMap read(const std::vector<PageReadFields> & page_fields) const
     {
         return storage->read(ns_id, page_fields, read_limiter, snap);
-    }
-
-    PageId getMaxId() const
-    {
-        return storage->getMaxId(ns_id);
     }
 
     PageId getNormalPageId(PageId page_id) const

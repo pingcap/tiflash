@@ -60,11 +60,10 @@ public:
         return wal_config;
     }
 
-    void restore() override;
+    std::map<NamespaceId, PageId> restore() override;
 
     void drop() override;
 
-    PageId getMaxId(NamespaceId ns_id) override;
 
     PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
