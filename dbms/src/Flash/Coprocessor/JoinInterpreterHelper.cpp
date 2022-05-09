@@ -101,7 +101,7 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(const tipb::J
 
 DataTypes getJoinKeyTypes(const tipb::Join & join)
 {
-    if (unlikely(join.left_join_keys_size() == join.right_join_keys_size()))
+    if (unlikely(join.left_join_keys_size() != join.right_join_keys_size()))
         throw TiFlashException("size of join.left_join_keys != size of join.right_join_keys", Errors::Coprocessor::BadRequest);
     DataTypes key_types;
     for (int i = 0; i < join.left_join_keys_size(); ++i)
