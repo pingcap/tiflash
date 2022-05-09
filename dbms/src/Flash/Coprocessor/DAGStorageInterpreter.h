@@ -14,13 +14,12 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Common/nocopyable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <Interpreters/Context.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
@@ -30,12 +29,6 @@
 #include <Storages/Transaction/Types.h>
 #include <pingcap/coprocessor/Client.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <kvproto/coprocessor.pb.h>
-#include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
-
 #include <vector>
 
 namespace DB
@@ -43,7 +36,7 @@ namespace DB
 using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
 /// It's only intended to be used by DAGQueryBlockInterpreter.
-/// After DAGStorageInterpreter::execute some of its members will be transfered to DAGQueryBlockInterpreter.
+/// After DAGStorageInterpreter::execute some of its members will be transferred to DAGQueryBlockInterpreter.
 class DAGStorageInterpreter
 {
 public:
@@ -53,12 +46,11 @@ public:
         const PushDownFilter & push_down_filter_,
         size_t max_streams_);
 
-    DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
-    DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
+    DISALLOW_MOVE(DAGStorageInterpreter);
 
     void execute(DAGPipeline & pipeline);
 
-    /// Members will be transfered to DAGQueryBlockInterpreter after execute
+    /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
@@ -72,15 +64,15 @@ private:
 
     LearnerReadSnapshot doBatchCopLearnerRead();
 
-    void doLocalRead(DAGPipeline & pipeline, size_t max_block_size);
+    void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
     std::tuple<Names, NamesAndTypes, std::vector<ExtraCastAfterTSMode>> getColumnsForTableScan(Int64 max_columns_to_read);
 
-    void buildRemoteRequests();
+    std::vector<RemoteRequest> buildRemoteRequests();
 
-    void releaseAlterLocks();
+    TableLockHolders releaseAlterLocks();
 
     std::unordered_map<TableID, SelectQueryInfo> generateSelectQueryInfos();
 
@@ -88,7 +80,7 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    void executeRemoteQuery(DAGPipeline & pipeline);
+    void buildRemoteStreams(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline);
 
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
@@ -106,9 +98,6 @@ private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
     /// it shouldn't be hash map because duplicated region id may occur if merge regions to retry of dag.
     RegionRetryList region_retry_from_local_region;
-    TableLockHolders drop_locks;
-    std::vector<RemoteRequest> remote_requests;
-    BlockInputStreamPtr null_stream_if_empty;
 
     /// passed from caller, doesn't change during DAGStorageInterpreter's lifetime
 

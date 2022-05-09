@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/Utils.h>
@@ -205,7 +206,7 @@ struct ReadIndexDataNode : MutexLockWrap
             , start_ts(start_ts_)
         {}
 
-        ReadIndexElement(const ReadIndexElement &) = delete;
+        DISALLOW_COPY(ReadIndexElement);
 
         void doTriggerCallbacks();
 

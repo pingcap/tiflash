@@ -12,31 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/nocopyable.h>
-
-#include <cstring>
+#include <Encryption/RateLimiter.h>
 
 namespace DB
 {
-struct RawCppString : std::string
+class MockReadLimiter final : public ReadLimiter
 {
-    using Base = std::string;
-    using Base::Base;
-    RawCppString() = delete;
-    RawCppString(Base && src)
-        : Base(std::move(src))
-    {}
-    RawCppString(const Base & src)
-        : Base(src)
-    {}
-    DISALLOW_COPY(RawCppString);
-
-    template <class... Args>
-    static RawCppString * New(Args &&... _args)
+public:
+    MockReadLimiter(
+        std::function<Int64()> getIOStatistic_,
+        Int64 rate_limit_per_sec_,
+        LimiterType type_ = LimiterType::UNKNOW,
+        Int64 get_io_stat_period_us = 2000,
+        UInt64 refill_period_ms_ = 100)
+        : ReadLimiter(getIOStatistic_, rate_limit_per_sec_, type_, get_io_stat_period_us, refill_period_ms_)
     {
-        return new RawCppString{std::forward<Args>(_args)...};
+    }
+
+protected:
+    void consumeBytes(Int64 bytes) override
+    {
+        // Need soft limit here.
+        WriteLimiter::consumeBytes(bytes);
     }
 };
 
