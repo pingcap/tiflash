@@ -70,10 +70,10 @@ struct TiFlashJoin
         return build_side_index == 0 ? join.right_conditions() : join.left_conditions();
     }
 
-    bool isTiflashLeftJoin() const { return kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left; }
+    bool isTiFlashLeftJoin() const { return kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left; }
 
     /// Cross_Right join will be converted to Cross_Left join, so no need to check Cross_Right
-    bool isTiflashRightJoin() const { return kind == ASTTableJoin::Kind::Right; }
+    bool isTiFlashRightJoin() const { return kind == ASTTableJoin::Kind::Right; }
 
     /// return a name that is unique in header1 and header2 for left semi family join,
     /// return "" for everything else.
@@ -82,8 +82,8 @@ struct TiFlashJoin
     NamesAndTypes genColumnsForOtherJoinFilter(
         const Block & left_input_header,
         const Block & right_input_header,
-        const ExpressionActionsPtr & prepare_join_actions1,
-        const ExpressionActionsPtr & prepare_join_actions2) const;
+        const ExpressionActionsPtr & left_prepare_join_actions,
+        const ExpressionActionsPtr & right_prepare_join_actions) const;
 
     /// columns_added_by_join
     /// = join_output_columns - probe_side_columns
@@ -110,8 +110,8 @@ struct TiFlashJoin
         const Context & context,
         const Block & left_input_header,
         const Block & right_input_header,
-        const ExpressionActionsPtr & prepare_join_actions1,
-        const ExpressionActionsPtr & prepare_join_actions2) const;
+        const ExpressionActionsPtr & probe_side_prepare_join,
+        const ExpressionActionsPtr & build_side_prepare_join) const;
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column
