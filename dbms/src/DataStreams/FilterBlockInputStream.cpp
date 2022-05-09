@@ -20,6 +20,8 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <Interpreters/ExpressionActions.h>
 
+#include "Common/FmtUtils.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -233,12 +235,6 @@ void FilterBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t mul
         },
         ", ");
     buffer.append("}");
-    // ostr << "} input: {";
-    // const auto & input_columns = expression->getRequiredColumnsWithTypes();
-    // dumpIter(input_columns.cbegin(), input_columns.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
-    // ostr << "} output: {";
-    // const auto & output = expression->getSampleBlock();
-    // dumpIter(output.cbegin(), output.cend(), ostr, [](const auto & s, std::ostream & os) { os << s.name << '(' << s.type->getName() << ')'; });
     // ostr << "}]";
 }
 
