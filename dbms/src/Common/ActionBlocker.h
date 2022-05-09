@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/nocopyable.h>
 
 #include <atomic>
 
@@ -60,8 +61,7 @@ public:
             return *this;
         }
 
-        LockHolder(const LockHolder & other) = delete;
-        LockHolder & operator=(const LockHolder & other) = delete;
+        DISALLOW_COPY(LockHolder);
 
         ~LockHolder()
         {
