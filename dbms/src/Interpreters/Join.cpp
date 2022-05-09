@@ -343,7 +343,7 @@ struct KeyGetterForType
     using Type = typename KeyGetterForTypeImpl<type, Value, Mapped>::Type;
 };
 
-void Join::init(Type type_)
+void Join::initMapImpl(Type type_)
 {
     type = type_;
 
@@ -471,7 +471,7 @@ void Join::init(const Block & sample_block, size_t build_concurrency_)
     initialized = true;
     setBuildConcurrencyAndInitPool(build_concurrency_);
     /// Choose data structure to use for JOIN.
-    init(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
+    initMapImpl(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
     setSampleBlock(sample_block);
 }
 

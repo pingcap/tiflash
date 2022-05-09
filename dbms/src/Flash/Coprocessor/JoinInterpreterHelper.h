@@ -31,9 +31,9 @@ class Context;
 
 namespace JoinInterpreterHelper
 {
-struct TiflashJoin
+struct TiFlashJoin
 {
-    explicit TiflashJoin(const tipb::Join & join_);
+    explicit TiFlashJoin(const tipb::Join & join_);
 
     const tipb::Join & join;
 

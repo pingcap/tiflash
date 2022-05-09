@@ -108,7 +108,7 @@ public:
          size_t max_block_size = 0,
          const String & match_helper_name = "");
 
-    /** Call `init`, `setSampleBlock` and `setBuildConcurrencyAndInitPool`.
+    /** Call `setBuildConcurrencyAndInitPool`, `initMapImpl` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
     void init(const Block & sample_block, size_t build_concurrency_ = 1);
@@ -357,11 +357,12 @@ private:
         return getBuildConcurrencyInternal();
     }
 
-    void init(Type type_);
+    /// Initialize map implementations for various join types.
+    void initMapImpl(Type type_);
 
     /** Set information about structure of right hand of JOIN (joined data).
-     * You must call this method before subsequent calls to insertFromBlock.
-     */
+      * You must call this method before subsequent calls to insertFromBlock.
+      */
     void setSampleBlock(const Block & block);
 
     /** Set Join build concurrency and init hash map.
