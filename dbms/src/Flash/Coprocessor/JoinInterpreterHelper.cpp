@@ -350,11 +350,7 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     Names key_names;
     String filter_column_name;
     dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name);
-
-    auto prepare_actions = chain.getLastActions();
-    RUNTIME_ASSERT(prepare_actions, log, "prepare_actions cannot be nullptr");
-
-    return {std::move(prepare_actions), std::move(key_names), std::move(filter_column_name)};
+    return {chain.getLastActions(), std::move(key_names), std::move(filter_column_name)};
 }
 
 std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurrency)
