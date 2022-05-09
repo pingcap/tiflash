@@ -79,12 +79,6 @@ struct TiFlashJoin
     /// return "" for everything else.
     String genMatchHelperName(const Block & header1, const Block & header2) const;
 
-    NamesAndTypes genColumnsForOtherJoinFilter(
-        const Block & left_input_header,
-        const Block & right_input_header,
-        const ExpressionActionsPtr & left_prepare_join_actions,
-        const ExpressionActionsPtr & right_prepare_join_actions) const;
-
     /// columns_added_by_join
     /// = join_output_columns - probe_side_columns
     /// = build_side_columns + match_helper_name
@@ -106,12 +100,20 @@ struct TiFlashJoin
     ///   `select * from t where col1 in (select col2 from t2 where t1.col2 = t2.col3)`
     ///   - other_filter is `t1.col2 = t2.col3`
     ///   - other_eq_filter_from_in_column is `t1.col1 = t2.col2`
+    ///
+    /// new columns from build side prepare join actions cannot be appended.
+    /// because the input that other filter accepts is
+    /// {left_input_columns, right_input_columns, new_columns_from_probe_side_prepare, match_helper_name}.
     std::tuple<ExpressionActionsPtr, String, String> genJoinOtherConditionAction(
         const Context & context,
         const Block & left_input_header,
         const Block & right_input_header,
-        const ExpressionActionsPtr & probe_side_prepare_join,
-        const ExpressionActionsPtr & build_side_prepare_join) const;
+        const ExpressionActionsPtr & probe_side_prepare_join) const;
+
+    NamesAndTypes genColumnsForOtherJoinFilter(
+        const Block & left_input_header,
+        const Block & right_input_header,
+        const ExpressionActionsPtr & probe_prepare_join_actions) const;
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column
