@@ -878,6 +878,8 @@ public:
     /// Get data structure of the result.
     Block getHeader(bool final) const;
 
+    const Params getParams() const { return params; }
+
 protected:
     friend struct AggregatedDataVariants;
     friend class MergingAndConvertingBlockInputStream;

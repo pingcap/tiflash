@@ -18,21 +18,30 @@ namespace DB
 {
 PartialAggregatingBlockInputStream::PartialAggregatingBlockInputStream(
     const BlockInputStreamPtr & input,
+    size_t stream_index_,
     const AggregateStorePtr & aggregate_store_,
     const String & req_id)
     : log(Logger::get(NAME, req_id))
+    , stream_index(stream_index_)
     , aggregate_store(aggregate_store_)
-    {
+{
     children.push_back(input);
-    }
+}
 
 Block PartialAggregatingBlockInputStream::readImpl()
 {
     Block block = children.back()->read();
     if (block)
     {
-        
+        aggregate_store->aggregator.executeOnBlock(
+            block,
+            *aggregate_store->many_data[stream_index],
+            aggregate_store->file_provider,
+            key_columns,
+            aggregate_columns,
+            local_delta_memory,
+            no_more_keys);
     }
     return block;
 }
-}
+} // namespace DB

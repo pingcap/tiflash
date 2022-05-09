@@ -25,8 +25,10 @@ struct AggregateStore
     AggregateStore(
         const Aggregator::Params & params,
         size_t max_threads,
+        const FileProviderPtr & file_provider_,
         bool is_final_)
         : aggregator(params)
+        , file_provider(file_provider_)
         , is_final(is_final_)
     {
         many_data.resize(max_threads);
@@ -36,6 +38,8 @@ struct AggregateStore
 
     Aggregator aggregator;
     ManyAggregatedDataVariants many_data;
+
+    FileProviderPtr file_provider;
 
     bool is_final;
 
