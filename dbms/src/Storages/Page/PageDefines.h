@@ -48,6 +48,8 @@ static constexpr UInt64 MAX_PERSISTED_LOG_FILES = 4;
 
 using NamespaceId = UInt64;
 static constexpr NamespaceId MAX_NAMESPACE_ID = UINT64_MAX;
+// KVStore stores it's data individually, so the actual `ns_id` value doesn't matter(just different from `MAX_NAMESPACE_ID` is enough)
+static constexpr NamespaceId KVSTORE_NAMESPACE_ID = 1000000UL;
 // just a random namespace id for test, the value doesn't matter
 static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
 
