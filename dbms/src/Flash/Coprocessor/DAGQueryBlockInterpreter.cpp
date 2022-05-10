@@ -682,6 +682,34 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
+void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline, const tipb::ExchangeReceiver & receiver)
+{
+    for (size_t i = 0; i < max_streams; ++i)
+    {
+        auto exchange_receiver = std::make_shared<ExchangeReceiver>(
+            std::make_shared<GRPCReceiverContext>(
+                receiver,
+                dagContext().getMPPTaskMeta(),
+                context.getTMTContext().getKVCluster(),
+                context.getTMTContext().getMPPTaskManager(),
+                context.getSettingsRef().enable_local_tunnel,
+                context.getSettingsRef().enable_async_grpc_client),
+            receiver.encoded_task_meta_size(),
+            max_streams,
+            log->identifier(),
+            "receiver" + std::to_string(i));
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, log->identifier(), "receiver" + std::to_string(i));
+        pipeline.streams.push_back(stream);
+    }
+    std::vector<NameAndTypePair> source_columns;
+    Block block = pipeline.firstStream()->getHeader();
+    for (const auto & col : block.getColumnsWithTypeAndName())
+    {
+        source_columns.emplace_back(NameAndTypePair(col.name, col.type));
+    }
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+}
+
 void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
 {
     std::vector<NameAndTypePair> input_columns;
@@ -758,7 +786,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        handleExchangeReceiver(pipeline);
+        if (dagContext().isTest())
+            handleMockExchangeReceiver(pipeline, query_block.source->exchange_receiver());
+        else
+            handleExchangeReceiver(pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
@@ -850,7 +881,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // execute exchange_sender
     if (query_block.exchange_sender)
     {
-        handleExchangeSender(pipeline);
+        if (dagContext().isTest())
+            handleMockExchangeSender(pipeline);
+        else
+            handleExchangeSender(pipeline);
         recordProfileStreams(pipeline, query_block.exchange_sender_name);
     }
 }
@@ -890,6 +924,39 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
             context.getDAGContext()->tunnel_set,
+            partition_col_ids,
+            partition_col_collators,
+            exchange_sender.tp(),
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
+            stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+            dagContext());
+        stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+    });
+}
+
+void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline)
+{
+    /// exchange sender should be at the top of operators
+    const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
+    std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
+    TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
+    int stream_id = 0;
+    // mock tunnels
+    auto tunnel_set = std::make_shared<MPPTunnelSet>();
+    std::chrono::seconds timeout(10);
+    for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
+    {
+        mpp::TaskMeta task_meta;
+        if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
+            throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_meta, timeout, context.getSettingsRef().max_threads, false, false, log->identifier());
+        LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
+        tunnel_set->addTunnel(tunnel);
+    }
+    pipeline.transform([&](auto & stream) {
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
+            tunnel_set,
             partition_col_ids,
             partition_col_collators,
             exchange_sender.tp(),

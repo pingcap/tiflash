@@ -30,6 +30,9 @@ public:
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "l_table"}, {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeRelationSchema("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
+        context.addExchangeRelationSchema("sender_l", {{"l_a", TiDB::TP::TypeString}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeRelationSchema("sender_r", {{"r_a", TiDB::TP::TypeString}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
     }
 };
 
@@ -249,9 +252,96 @@ CreatingSets
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
+
+    request = context.receive("sender_1")
+                  .project({"s1", "s2", "s3"})
+                  .project({"s1", "s2"})
+                  .project("s1")
+                  .build(context);
+    {
+        String expected = R"(
+Union
+ Expression x 10
+  Expression
+   Expression
+    Expression
+     Expression
+      Expression
+       Expression
+        Expression
+         Expression
+          Expression
+           TiRemoteBlockInputStream(ExchangeReceiver))";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    request = context.receive("sender_1")
+                  .project({"s1", "s2", "s3"})
+                  .project({"s1", "s2"})
+                  .project("s1")
+                  .exchangeSender(tipb::Broadcast)
+                  .build(context);
+    {
+        String expected = R"(
+Union
+ ExchangeSender x 10
+  Expression
+   Expression
+    Expression
+     Expression
+      Expression
+       Expression
+        Expression
+         Expression
+          Expression
+           Expression
+            TiRemoteBlockInputStream(ExchangeReceiver))";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    // only join + ExchangeReceiver
+
+    DAGRequestBuilder receiver1 = context.receive("sender_l");
+    DAGRequestBuilder receiver2 = context.receive("sender_r");
+    DAGRequestBuilder receiver3 = context.receive("sender_l");
+    DAGRequestBuilder receiver4 = context.receive("sender_r");
+
+    request = receiver1.join(
+                           receiver2.join(
+                               receiver3.join(receiver4,
+                                              {col("join_c")},
+                                              ASTTableJoin::Kind::Left),
+                               {col("join_c")},
+                               ASTTableJoin::Kind::Left),
+                           {col("join_c")},
+                           ASTTableJoin::Kind::Left)
+                  .build(context);
+    {
+        String expected = R"(
+CreatingSets
+ Union
+  HashJoinBuildBlockInputStream x 10
+   Expression
+    Expression
+     TiRemoteBlockInputStream(ExchangeReceiver)
+ Union x 2
+  HashJoinBuildBlockInputStream x 10
+   Expression
+    Expression
+     Expression
+      HashJoinProbe
+       Expression
+        TiRemoteBlockInputStream(ExchangeReceiver)
+ Union
+  Expression x 10
+   Expression
+    HashJoinProbe
+     Expression
+      TiRemoteBlockInputStream(ExchangeReceiver))";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
 }
 CATCH
-
 
 } // namespace tests
 } // namespace DB

@@ -71,6 +71,7 @@ private:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
     void handleExchangeReceiver(DAGPipeline & pipeline);
+    void handleMockExchangeReceiver(DAGPipeline & pipeline, const tipb::ExchangeReceiver & receiver);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
@@ -97,6 +98,7 @@ private:
         bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
     void handleExchangeSender(DAGPipeline & pipeline);
+    void handleMockExchangeSender(DAGPipeline & pipeline);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
