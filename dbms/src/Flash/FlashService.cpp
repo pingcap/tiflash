@@ -451,10 +451,11 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
             context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
 
-        String max_threads = getClientMetaVarWithDefault(grpc_context, "max_threads", "");
+        String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
         if (!max_threads.empty())
         {
             context->setSetting("max_threads", max_threads);
+            LOG_FMT_INFO(log, "set context setting max_threads to {}", max_threads);
         }
 
         context->setSetting("enable_async_server", is_async ? "true" : "false");
