@@ -176,7 +176,6 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         auto & path_pool = global_context.getPathPool();
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         auto provider = global_context.getFileProvider();
-        // If the GlobalStoragePool is initialized, then use v3 format
         auto run_mode = global_context.getPageStorageRunMode();
 
         switch (run_mode)
@@ -272,7 +271,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
     {
         auto acceptor = [&](const DB::Page & page) {
             // We will traverse the pages in V3 before traverse the pages in V2 When we used MIX MODE
-            // So if we found the page_id have been traversed, just skip it.
+            // If we found the page_id has been restored, just skip it.
             if (const auto it = regions.find(page.page_id); it != regions.end())
             {
                 LOG_FMT_INFO(log, "Already exist [page_id={}], skip it.", page.page_id);
