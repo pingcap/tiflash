@@ -106,6 +106,7 @@ public:
         , additional_input_at_end(additional_input_at_end_)
         , max_threads(std::min(inputs_.size(), max_threads_))
         , handler(handler_)
+        , may_available_inputs(inputs_.size())
         , log(log_)
     {
         for (size_t i = 0; i < inputs_.size(); ++i)
@@ -186,7 +187,7 @@ private:
         BlockInputStreamPtr in;
         size_t i; /// The source number (for debugging).
 
-        InputData() {}
+        InputData() = default;
         InputData(const BlockInputStreamPtr & in_, size_t i_)
             : in(in_)
             , i(i_)
@@ -285,8 +286,11 @@ private:
                 std::lock_guard lock(available_inputs_mutex);
 
                 /// If there are no free sources, then this thread is no longer needed. (But other threads can work with their sources.)
-                if (available_inputs.empty())
+                if (0 == may_available_inputs)
                     break;
+
+                if (available_inputs.empty())
+                    continue;
 
                 input = available_inputs.front();
 
@@ -311,7 +315,7 @@ private:
                     }
                     else
                     {
-                        if (available_inputs.empty())
+                        if (0 == --may_available_inputs)
                             break;
                     }
                 }
@@ -352,6 +356,8 @@ private:
       */
     using AvailableInputs = std::queue<InputData>;
     AvailableInputs available_inputs;
+
+    size_t may_available_inputs;
 
     /** For parallel preparing (readPrefix) child streams.
       * First, streams are located here.
