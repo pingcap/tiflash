@@ -215,14 +215,25 @@ inline TiKVKey genKey(TableID tableId, HandleID handleId, Timestamp ts)
 }
 
 inline TiKVValue encodeLockCfValue(
-    UInt8 lock_type, const String & primary, Timestamp ts, UInt64 ttl, const String * short_value = nullptr, Timestamp min_commit_ts = 0)
+    UInt8 lock_type,
+    const String & primary,
+    UInt64 lock_version,
+    UInt64 ttl,
+    const String * short_value = nullptr,
+    UInt64 min_commit_ts = 0,
+    UInt64 lock_for_update_ts = 0,
+    UInt64 txn_size = 0,
+    std::shared_ptr<std::string> secondaries = nullptr)
 {
     WriteBufferFromOwnString res;
     res.write(lock_type);
     TiKV::writeVarInt(static_cast<Int64>(primary.size()), res);
     res.write(primary.data(), primary.size());
-    TiKV::writeVarUInt(ts, res);
-    TiKV::writeVarUInt(ttl, res);
+    TiKV::writeVarUInt(lock_version, res);
+    if (ttl)
+    {
+        TiKV::writeVarUInt(ttl, res);
+    }
     if (short_value)
     {
         res.write(SHORT_VALUE_PREFIX);
@@ -234,17 +245,32 @@ inline TiKVValue encodeLockCfValue(
         res.write(MIN_COMMIT_TS_PREFIX);
         encodeUInt64(min_commit_ts, res);
     }
+    if (lock_for_update_ts)
+    {
+        res.write(FOR_UPDATE_TS_PREFIX);
+        encodeUInt64(lock_for_update_ts, res);
+    }
+    if (txn_size)
+    {
+        res.write(TXN_SIZE_PREFIX);
+        encodeUInt64(txn_size, res);
+    }
+    if (secondaries)
+    {
+        res.write(ASYNC_COMMIT_PREFIX);
+        res.write(secondaries->data(), secondaries->size());
+    }
     return TiKVValue(res.releaseStr());
 }
 
 struct DecodedLockCFValue : boost::noncopyable
 {
-    DecodedLockCFValue(std::shared_ptr<const TiKVKey> & key_, std::shared_ptr<TiKVValue> val_);
+    DecodedLockCFValue(std::shared_ptr<const TiKVKey> & key_, std::shared_ptr<const TiKVValue> & value_);
     std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
     void intoLockInfo(kvrpcpb::LockInfo &) const;
+    std::shared_ptr<const TiKVValue> getLockCfValue() const;
 
     std::shared_ptr<const TiKVKey> key;
-    std::shared_ptr<const TiKVValue> val;
     UInt64 lock_version{0};
     UInt64 lock_ttl{0};
     UInt64 txn_size{0};
@@ -252,8 +278,8 @@ struct DecodedLockCFValue : boost::noncopyable
     kvrpcpb::Op lock_type{kvrpcpb::Op_MIN};
     bool use_async_commit{0};
     UInt64 min_commit_ts{0};
-    std::string_view secondaries;
-    std::string_view primary_lock;
+    std::shared_ptr<std::string> secondaries;
+    std::shared_ptr<std::string> primary_lock;
 };
 
 template <typename R = Int64>

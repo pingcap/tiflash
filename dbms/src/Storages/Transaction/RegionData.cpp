@@ -143,9 +143,8 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
     {
         std::ignore = pk;
 
-        const auto & [tikv_key, tikv_val, lock_info_ptr] = value;
+        const auto & [tikv_key, lock_info_ptr] = value;
         std::ignore = tikv_key;
-        std::ignore = tikv_val;
         const auto & lock_info = *lock_info_ptr;
 
         if (lock_info.lock_version > query.read_tso || lock_info.lock_type == kvrpcpb::Op::Lock

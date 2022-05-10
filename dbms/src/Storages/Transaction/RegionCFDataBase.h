@@ -37,7 +37,7 @@ struct RegionCFDataBase
 
     static const TiKVKey & getTiKVKey(const Value & val);
 
-    static const TiKVValue & getTiKVValue(const Value & val);
+    static std::shared_ptr<const TiKVValue> getTiKVValuePtr(const Value & val);
 
     RegionDataRes insert(TiKVKey && key, TiKVValue && value);
 

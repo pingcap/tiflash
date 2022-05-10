@@ -27,16 +27,17 @@ const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
     return *std::get<0>(val);
 }
 
-template <typename Value>
-const std::shared_ptr<const TiKVValue> & getTiKVValuePtr(const Value & val)
+template <typename Trait>
+std::shared_ptr<const TiKVValue> RegionCFDataBase<Trait>::getTiKVValuePtr(const Value & val)
 {
     return std::get<1>(val);
 }
 
-template <typename Trait>
-const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
+template <>
+std::shared_ptr<const TiKVValue> RegionCFDataBase<RegionLockCFDataTrait>::getTiKVValuePtr(const Value & val)
 {
-    return *getTiKVValuePtr<Value>(val);
+    auto decode_lock_value_ptr = std::get<1>(val);
+    return decode_lock_value_ptr->getLockCfValue();
 }
 
 template <typename Trait>
@@ -73,7 +74,15 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
 template <typename Trait>
 size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const Value & value)
 {
-    return calcTiKVKeyValueSize(getTiKVKey(value), getTiKVValue(value));
+    return calcTiKVKeyValueSize(getTiKVKey(value), *getTiKVValuePtr(value));
+}
+
+template <>
+size_t RegionCFDataBase<RegionLockCFDataTrait>::calcTiKVKeyValueSize(const Value & value)
+{
+    std::ignore = value;
+    return 0;
+    return calcTiKVKeyValueSize(getTiKVKey(value), *getTiKVValuePtr(value));
 }
 
 template <typename Trait>
@@ -133,7 +142,7 @@ bool RegionCFDataBase<Trait>::cmp(const Map & a, const Map & b)
     {
         if (auto it = b.find(key); it != b.end())
         {
-            if (getTiKVKey(value) != getTiKVKey(it->second) || getTiKVValue(value) != getTiKVValue(it->second))
+            if (getTiKVKey(value) != getTiKVKey(it->second) || *getTiKVValuePtr(value) != *getTiKVValuePtr(it->second))
                 return false;
         }
         else
@@ -224,7 +233,7 @@ size_t RegionCFDataBase<Trait>::serialize(WriteBuffer & buf) const
     for (const auto & ele : data)
     {
         const auto & key = getTiKVKey(ele.second);
-        const auto & value = getTiKVValue(ele.second);
+        const auto & value = *getTiKVValuePtr(ele.second);
         total_size += key.serialize(buf);
         total_size += value.serialize(buf);
     }
@@ -266,11 +275,10 @@ template struct RegionCFDataBase<RegionLockCFDataTrait>;
 namespace RecordKVFormat
 {
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
-inline std::pair<size_t, size_t> decodeLockCfValue(DecodedLockCFValue & res)
+inline std::pair<size_t, size_t> decodeLockCfValue(DecodedLockCFValue & res, std::shared_ptr<const TiKVValue> & value)
 {
-    const TiKVValue & value = *res.val;
-    const char * data = value.data();
-    size_t total_size = value.dataSize();
+    const char * data = value->data();
+    size_t total_size = value->dataSize();
     size_t len = total_size;
 
     kvrpcpb::Op lock_type = kvrpcpb::Op_MIN;
@@ -290,7 +298,7 @@ inline std::pair<size_t, size_t> decodeLockCfValue(DecodedLockCFValue & res)
         break;
     }
     res.lock_type = lock_type;
-    res.primary_lock = readVarString<std::string_view>(data, len);
+    res.primary_lock = std::make_shared<std::string>(readVarString<std::string>(data, len));
     res.lock_version = readVarUInt(data, len);
 
     if (len > 0)
@@ -307,7 +315,7 @@ inline std::pair<size_t, size_t> decodeLockCfValue(DecodedLockCFValue & res)
                 if (len < str_len)
                     throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
                 // no need short value
-                return std::make_pair(total_size - (len + 2 * sizeof(UInt8)), str_len + 2 * sizeof(UInt8));
+                readRawString<std::nullptr_t>(data, len, str_len);
                 break;
             };
             case MIN_COMMIT_TS_PREFIX:
@@ -335,7 +343,7 @@ inline std::pair<size_t, size_t> decodeLockCfValue(DecodedLockCFValue & res)
                     readVarString<std::nullptr_t>(data, len);
                 }
                 const auto * end = data;
-                res.secondaries = {start, static_cast<size_t>(end - start)};
+                res.secondaries = std::make_shared<std::string>(start, end - start);
                 break;
             }
             case ROLLBACK_TS_PREFIX:
@@ -349,36 +357,27 @@ inline std::pair<size_t, size_t> decodeLockCfValue(DecodedLockCFValue & res)
             }
             default:
             {
-                std::string msg = std::string("invalid flag ") + flag + " in lock value " + res.val->toDebugString();
+                std::string msg = std::string("invalid flag ") + flag + " in lock value " + value->toDebugString();
                 throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
             }
             }
         }
         if (len != 0)
-            throw Exception("invalid lock value " + res.val->toDebugString(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("invalid lock value " + value->toDebugString(), ErrorCodes::LOGICAL_ERROR);
     }
     return std::make_pair(0, 0);
 }
 
-DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> & key_, std::shared_ptr<TiKVValue> val_)
+DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> & key_, std::shared_ptr<const TiKVValue> & val_)
     : key(key_)
-    , val(val_)
 {
-    auto [short_value_offset, short_value_len] = decodeLockCfValue(*this);
-    if (short_value_len != 0)
-    {
-        // remove short value to save memory because it's value is useless for a raft learner
-        val_->erase(short_value_offset, short_value_len);
-        // need create a new TiKVValue because after erase the old TiKVValue's capacity doesn't change
-        val = std::make_shared<const TiKVValue>(TiKVValue::copyFrom(*val_));
-        decodeLockCfValue(*this);
-    }
+    decodeLockCfValue(*this, val_);
 }
 
 void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
 {
     res.set_lock_type(lock_type);
-    res.set_primary_lock(primary_lock.data(), primary_lock.size());
+    res.set_primary_lock(primary_lock->data(), primary_lock->size());
     res.set_lock_version(lock_version);
     res.set_lock_ttl(lock_ttl);
     res.set_min_commit_ts(min_commit_ts);
@@ -389,8 +388,8 @@ void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
 
     if (use_async_commit)
     {
-        const auto * data = secondaries.data();
-        auto len = secondaries.size();
+        const auto * data = secondaries->data();
+        auto len = secondaries->size();
         UInt64 cnt = readVarUInt(data, len);
         for (UInt64 i = 0; i < cnt; ++i)
         {
@@ -404,6 +403,11 @@ std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
     auto res = std::make_unique<kvrpcpb::LockInfo>();
     intoLockInfo(*res);
     return res;
+}
+
+std::shared_ptr<const TiKVValue> DecodedLockCFValue::getLockCfValue() const
+{
+    return std::make_shared<const TiKVValue>(encodeLockCfValue(lock_type, *primary_lock, lock_version, lock_ttl, nullptr, min_commit_ts, lock_for_update_ts, txn_size, secondaries));
 }
 
 } // namespace RecordKVFormat

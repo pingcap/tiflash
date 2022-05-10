@@ -87,16 +87,16 @@ struct RegionLockCFDataTrait
         bool operator==(const Key & tar) const { return view == tar.view; }
     };
     using DecodedLockCFValue = RecordKVFormat::DecodedLockCFValue;
-    using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, std::shared_ptr<const DecodedLockCFValue>>;
+    using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const DecodedLockCFValue>>;
     using Map = std::unordered_map<Key, Value, Key::Hash>;
 
     static Map::value_type genKVPair(TiKVKey && key_, TiKVValue && value_)
     {
         auto key = std::make_shared<const TiKVKey>(std::move(key_));
-        auto value = std::make_shared<TiKVValue>(std::move(value_));
-        auto decoded_lock_cf_value = std::make_shared<const DecodedLockCFValue>(key, std::move(value));
+        auto value = std::make_shared<const TiKVValue>(std::move(value_));
+        auto decoded_lock_cf_value = std::make_shared<const DecodedLockCFValue>(key, value);
         return {{key, std::string_view(key->data(), key->dataSize())},
-                Value{key, decoded_lock_cf_value->val, std::move(decoded_lock_cf_value)}};
+                Value{key, std::move(decoded_lock_cf_value)}};
     }
 };
 
