@@ -18,10 +18,29 @@
 
 namespace DB
 {
-enum PlanType
+struct PlanType
 {
-    Source,
-};
+    enum PlanTypeEnum
+    {
+        Source = 0x1,
+    };
+    PlanTypeEnum enum_value;
 
-String toString(const PlanType & plan_type);
+    PlanType(int value = 0) // NOLINT(google-explicit-constructor)
+        : enum_value(static_cast<PlanTypeEnum>(value))
+    {}
+
+    PlanType & operator=(int value)
+    {
+        this->enum_value = static_cast<PlanTypeEnum>(value);
+        return *this;
+    }
+
+    operator int() const // NOLINT(google-explicit-constructor)
+    {
+        return this->enum_value;
+    }
+
+    String toString() const;
+};
 } // namespace DB

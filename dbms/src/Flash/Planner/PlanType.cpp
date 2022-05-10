@@ -17,9 +17,9 @@
 
 namespace DB
 {
-String toString(const PlanType & plan_type)
+String PlanType::toString() const
 {
-    switch (plan_type)
+    switch (enum_value)
     {
     case Source:
         return "Source";

@@ -34,12 +34,11 @@ using PhysicalPlanPtr = std::shared_ptr<PhysicalPlan>;
 class PhysicalPlan
 {
 public:
-    PhysicalPlan(const String & executor_id_, const PlanType & type_, const NamesAndTypes & schema_, const String & req_id)
-        : executor_id(executor_id_)
-        , type(type_)
-        , schema(schema_)
-        , log(Logger::get(DB::toString(type_), req_id))
-    {}
+    PhysicalPlan(
+        const String & executor_id_,
+        const PlanType & type_,
+        const NamesAndTypes & schema_,
+        const String & req_id);
 
     virtual ~PhysicalPlan() = default;
 

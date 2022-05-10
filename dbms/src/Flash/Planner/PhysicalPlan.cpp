@@ -21,6 +21,17 @@
 
 namespace DB
 {
+PhysicalPlan::PhysicalPlan(
+    const String & executor_id_,
+    const PlanType & type_,
+    const NamesAndTypes & schema_,
+    const String & req_id)
+    : executor_id(executor_id_)
+    , type(type_)
+    , schema(schema_)
+    , log(Logger::get(type_.toString(), req_id))
+{}
+
 String PhysicalPlan::toString()
 {
     auto schema_to_string = [&]() {
@@ -34,7 +45,7 @@ String PhysicalPlan::toString()
     };
     return fmt::format(
         "type: {}, executor_id: {}, is_record_profile_streams: {}, schema: {}",
-        DB::toString(type),
+        type.toString(),
         executor_id,
         is_record_profile_streams,
         schema_to_string());
