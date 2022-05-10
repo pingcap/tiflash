@@ -71,7 +71,7 @@ private:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
     void handleExchangeReceiver(DAGPipeline & pipeline);
-    void handleMockExchangeReceiver(DAGPipeline & pipeline, const tipb::ExchangeReceiver & receiver);
+    void handleMockExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);

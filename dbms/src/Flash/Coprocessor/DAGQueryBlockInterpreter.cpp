@@ -682,19 +682,19 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
-void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline, const tipb::ExchangeReceiver & receiver)
+void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
     for (size_t i = 0; i < max_streams; ++i)
     {
         auto exchange_receiver = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(
-                receiver,
+                query_block.source->exchange_receiver(),
                 dagContext().getMPPTaskMeta(),
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
                 context.getSettingsRef().enable_local_tunnel,
                 context.getSettingsRef().enable_async_grpc_client),
-            receiver.encoded_task_meta_size(),
+            query_block.source->exchange_receiver().encoded_task_meta_size(),
             max_streams,
             log->identifier(),
             "receiver" + std::to_string(i));
@@ -787,7 +787,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
         if (dagContext().isTest())
-            handleMockExchangeReceiver(pipeline, query_block.source->exchange_receiver());
+            handleMockExchangeReceiver(pipeline);
         else
             handleExchangeReceiver(pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
