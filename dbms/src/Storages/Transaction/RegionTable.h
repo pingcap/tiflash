@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Core/Names.h>
 #include <Storages/Transaction/Region.h>
@@ -217,7 +218,7 @@ struct RegionPreDecodeBlockData
         , schema_version(schema_version_)
         , data_list_read(std::move(data_list_read_))
     {}
-    RegionPreDecodeBlockData(const RegionPreDecodeBlockData &) = delete;
+    DISALLOW_COPY(RegionPreDecodeBlockData);
     void toString(std::stringstream & ss) const
     {
         ss << " {";

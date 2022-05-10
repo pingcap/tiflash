@@ -36,6 +36,8 @@ namespace ProfileEvents
 {
 extern const Event PSMWritePages;
 extern const Event PSMReadPages;
+extern const Event PSV3MBlobExpansion;
+extern const Event PSV3MBlobReused;
 } // namespace ProfileEvents
 
 namespace DB
@@ -1243,8 +1245,10 @@ BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size, c
 {
     BlobFileOffset offset = 0;
     UInt64 max_cap = 0;
+    bool expansion = true;
 
-    std::tie(offset, max_cap) = smap->searchInsertOffset(buf_size);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(buf_size);
+    ProfileEvents::increment(expansion ? ProfileEvents::PSV3MBlobExpansion : ProfileEvents::PSV3MBlobReused);
 
     /**
      * Whatever `searchInsertOffset` success or failed,

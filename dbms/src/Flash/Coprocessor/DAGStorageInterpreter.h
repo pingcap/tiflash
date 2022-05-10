@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
@@ -45,8 +46,7 @@ public:
         const PushDownFilter & push_down_filter_,
         size_t max_streams_);
 
-    DAGStorageInterpreter(DAGStorageInterpreter &&) = delete;
-    DAGStorageInterpreter & operator=(DAGStorageInterpreter &&) = delete;
+    DISALLOW_MOVE(DAGStorageInterpreter);
 
     void execute(DAGPipeline & pipeline);
 

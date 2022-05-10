@@ -70,8 +70,7 @@ private:
     PageStoragePtr page_storage;
     std::shared_ptr<PS::V1::PageStorage> stable_page_storage;
 
-    // RegionPersister stores it's data individually, so the `ns_id` value doesn't matter
-    NamespaceId ns_id = MAX_NAMESPACE_ID;
+    NamespaceId ns_id = KVSTORE_NAMESPACE_ID;
     const RegionManager & region_manager;
     std::mutex mutex;
     Poco::Logger * log;

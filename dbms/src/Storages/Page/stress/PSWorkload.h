@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <Common/nocopyable.h>
 #include <PSBackground.h>
 #include <PSRunnable.h>
 #include <PSStressEnv.h>
@@ -126,8 +127,7 @@ private:
     StressWorkloadManger() = default;
 
 public:
-    StressWorkloadManger(const StressWorkloadManger &) = delete;
-    StressWorkloadManger(StressWorkloadManger &&) = delete;
+    DISALLOW_COPY_AND_MOVE(StressWorkloadManger);
 
     static StressWorkloadManger & getInstance()
     {
