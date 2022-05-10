@@ -213,9 +213,10 @@ NamesAndTypes TiFlashJoin::genColumnsForOtherJoinFilter(
         }
         return true;
     };
-    RUNTIME_ASSERT(
-        is_prepare_actions_valid(build_side_index == 1 ? left_input_header : right_input_header, probe_prepare_join_actions),
-        "probe_prepare_join_actions isn't valid");
+    if (unlikely(!is_prepare_actions_valid(build_side_index == 1 ? left_input_header : right_input_header, probe_prepare_join_actions)))
+    {
+        throw TiFlashException("probe_prepare_join_actions isn't valid", Errors::Coprocessor::Internal);
+    }
 #endif
 
     /// columns_for_other_join_filter is a vector of columns used
