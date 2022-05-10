@@ -1608,6 +1608,7 @@ void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 stora
 
     switch (storage_page_format_version)
     {
+    case PageFormat::V1:
     case PageFormat::V2:
     {
         if (isPageStorageV3Existed(path_pool))
