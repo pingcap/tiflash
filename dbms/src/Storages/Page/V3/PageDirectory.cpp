@@ -721,6 +721,11 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
             {
                 if (throw_on_not_exist)
                 {
+                    LOG_FMT_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
+                    for (const auto &[dump_id, dump_entry]: mvcc_table_directory)
+                    {
+                        LOG_FMT_WARNING(log, "Dumping state [page_id={}] [entry={}]", dump_id, dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
+                    }
                     throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
                 }
                 else
