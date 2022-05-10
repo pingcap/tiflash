@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
+#include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
 #include <fmt/core.h>
 
@@ -151,7 +152,7 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 // `get_io_stat_period_us` is the interval between calling getIOStatistic_.
 //
 // Other parameters are the same as WriteLimiter.
-class ReadLimiter final : public WriteLimiter
+class ReadLimiter : public WriteLimiter
 {
 public:
     ReadLimiter(
@@ -179,7 +180,10 @@ private:
     std::function<Int64()> getIOStatistic;
     Int64 last_stat_bytes;
     using TimePoint = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
-    static TimePoint now() { return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now()); }
+    static TimePoint now()
+    {
+        return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
+    }
     TimePoint last_stat_time;
     Poco::Logger * log;
 
@@ -262,10 +266,7 @@ private:
     std::thread auto_tune_thread;
 
     // Noncopyable and nonmovable.
-    IORateLimiter(const IORateLimiter & limiter) = delete;
-    IORateLimiter & operator=(const IORateLimiter & limiter) = delete;
-    IORateLimiter(IORateLimiter && limiter) = delete;
-    IORateLimiter && operator=(IORateLimiter && limiter) = delete;
+    DISALLOW_COPY_AND_MOVE(IORateLimiter);
 };
 
 class LimiterStat
@@ -371,8 +372,14 @@ private:
     {
         return writeLimiterCount() + readLimiterCount();
     }
-    int writeLimiterCount() const { return (bg_write_stat != nullptr) + (fg_write_stat != nullptr); }
-    int readLimiterCount() const { return (bg_read_stat != nullptr) + (fg_read_stat != nullptr); }
+    int writeLimiterCount() const
+    {
+        return (bg_write_stat != nullptr) + (fg_write_stat != nullptr);
+    }
+    int readLimiterCount() const
+    {
+        return (bg_read_stat != nullptr) + (fg_read_stat != nullptr);
+    }
 
     // Background write and foreground write
     Int64 avgWriteBytesPerSec() const

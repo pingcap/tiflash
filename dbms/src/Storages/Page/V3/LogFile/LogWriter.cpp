@@ -43,7 +43,7 @@ LogWriter::LogWriter(
         path,
         EncryptionPath(path, ""),
         false,
-        /*create_new_encryption_info_*/ false);
+        /*create_new_encryption_info_*/ true);
 
     buffer = static_cast<char *>(alloc(buffer_size));
     write_buffer = WriteBuffer(buffer, buffer_size);

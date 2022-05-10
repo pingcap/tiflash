@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
+
 #include <boost/smart_ptr/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <initializer_list>
@@ -121,7 +123,7 @@ protected:
 
     public:
         /// Copy: not possible.
-        mutable_ptr(const mutable_ptr &) = delete;
+        DISALLOW_COPY(mutable_ptr);
 
         /// Move: ok.
         mutable_ptr(mutable_ptr &&) = default;
