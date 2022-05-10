@@ -334,6 +334,11 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             return {RESOLVE_TO_REF, ori_page_id, create_ver};
         }
     }
+    else
+    {
+        LOG_FMT_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't reslove the EditRecordType {}", type);
+    }
+
     return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersionType(0)};
 }
 
