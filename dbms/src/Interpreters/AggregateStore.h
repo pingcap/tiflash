@@ -14,63 +14,92 @@
 
 #pragma once
 
+#include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
+#include <DataStreams/TemporaryFileStream.h>
 #include <Interpreters/Aggregator.h>
 
 #include <memory>
+#include <utility>
+
+namespace ProfileEvents
+{
+extern const Event ExternalAggregationMerge;
+}
 
 namespace DB
 {
-using AggregateColumns = std::vector<ColumnRawPtrs>;
-
-struct AggregateStore
+struct ThreadData
 {
+    size_t src_rows = 0;
+    size_t src_bytes = 0;
+
+    Int64 local_delta_memory = 0;
+
+    ColumnRawPtrs key_columns;
+    /// Passed to not create them anew for each block
+    Aggregator::AggregateColumns aggregate_columns;
+
+    /** Used if there is a limit on the maximum number of rows in the aggregation,
+      *  and if group_by_overflow_mode == ANY.
+      * In this case, new keys are not added to the set, but aggregation is performed only by
+      *  keys that have already been added into the set.
+      */
+    bool no_more_keys = false;
+
+    ThreadData(
+        size_t keys_size,
+        size_t aggregates_size)
+    {
+        key_columns.resize(keys_size);
+        aggregate_columns.resize(aggregates_size);
+    }
+};
+
+class AggregateStore
+{
+public:
     AggregateStore(
         const String & req_id,
         const Aggregator::Params & params,
-        size_t max_threads,
         const FileProviderPtr & file_provider_,
-        bool is_final_)
-        : aggregator(params, req_id)
-        , file_provider(file_provider_)
-        , is_final(is_final_)
-    {
-        many_data.resize(max_threads);
-        for (auto & elem : many_data)
-            elem = std::make_shared<AggregatedDataVariants>();
-    }
+        bool is_final_,
+        size_t max_threads_,
+        size_t temporary_data_merge_threads_);
+
+    Block getHeader() const;
+
+    const Aggregator::Params & getParams() const;
+
+    const AggregatedDataVariantsPtr & getData(size_t index) const;
+
+    void executeOnBlock(size_t index, const Block & block);
+
+    void tryFlush(size_t index);
+
+    void tryFlush();
+
+    std::unique_ptr<IBlockInputStream> merge();
+
+    // total_src_rows, total_src_bytes
+    std::pair<size_t, size_t> mergeSrcRowsAndBytes() const;
+
+public:
+    const FileProviderPtr file_provider;
+
+    const bool is_final;
+
+    const size_t max_threads;
+    const size_t temporary_data_merge_threads;
+
+private:
+    const LoggerPtr log;
 
     Aggregator aggregator;
+
+    std::vector<ThreadData> threads_data;
     ManyAggregatedDataVariants many_data;
 
-    FileProviderPtr file_provider;
-
-    bool is_final;
-
-    size_t maxThreads() const { return many_data.size(); }
-
-    Block getHeader() const { return aggregator.getHeader(is_final); }
-
-    const Aggregator::Params & getParams() const { return aggregator.getParams(); }
-
-    const AggregatedDataVariantsPtr & getData(size_t index) const { return many_data[index] }
-
-    void executeOnBlock(
-        size_t stream_index,
-        const Block & block,
-        ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        Int64 & local_delta_memory,
-        bool & no_more_keys)
-    {
-        aggregator.executeOnBlock(
-            block,
-            *many_data[stream_index],
-            file_provider,
-            key_columns,
-            aggregate_columns,
-            local_delta_memory,
-            no_more_keys);
-    }
+    std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 };
 
 using AggregateStorePtr = std::shared_ptr<AggregateStore>;

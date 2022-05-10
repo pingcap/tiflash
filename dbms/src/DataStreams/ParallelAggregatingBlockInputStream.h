@@ -16,9 +16,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <IO/CompressedReadBuffer.h>
+#include <DataStreams/TemporaryFileStream.h>
 
 namespace DB
 {
@@ -85,17 +83,6 @@ private:
 
     std::atomic<bool> executed{false};
 
-    /// To read the data stored into the temporary data file.
-    struct TemporaryFileStream
-    {
-        FileProviderPtr file_provider;
-        ReadBufferFromFileProvider file_in;
-        CompressedReadBuffer<> compressed_in;
-        BlockInputStreamPtr block_in;
-
-        TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_);
-        ~TemporaryFileStream();
-    };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 
     ManyAggregatedDataVariants many_data;

@@ -19,12 +19,14 @@
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
+#include <DataStreams/FinalAggregatingBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
+#include <DataStreams/PartialAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -41,6 +43,7 @@
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Interpreters/AggregateStore.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -548,43 +551,29 @@ void DAGQueryBlockInterpreter::executeAggregation(
         aggregate_descriptions,
         is_final_agg);
 
-    /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.streams.size() > 1)
+    const Settings & settings = context.getSettingsRef();
+    AggregateStorePtr aggregate_store = std::make_shared<AggregateStore>(
+        log->identifier(),
+        params,
+        context.getFileProvider(),
+        true,
+        std::min(max_streams, pipeline.streams.size()),
+        settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads));
+
     {
-        const Settings & settings = context.getSettingsRef();
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
-            pipeline.streams,
-            stream_with_non_joined_data,
-            params,
-            context.getFileProvider(),
-            true,
-            max_streams,
-            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
-            log->identifier());
-        pipeline.streams.resize(1);
-        // should record for agg before restore concurrency. See #3804.
-        recordProfileStreams(pipeline, query_block.aggregation_name);
-        restorePipelineConcurrency(pipeline);
+        size_t stream_index = 0;
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<PartialAggregatingBlockInputStream>(stream, stream_index++, aggregate_store, log->identifier());
+        });
     }
-    else
-    {
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-        else
-            pipeline.streams.resize(1);
-        if (stream_with_non_joined_data)
-            inputs.push_back(stream_with_non_joined_data);
-        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
-            std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
-            params,
-            context.getFileProvider(),
-            true,
-            log->identifier());
-        recordProfileStreams(pipeline, query_block.aggregation_name);
-    }
+
+    executeUnion(pipeline, max_streams, log, /*ignore_block=*/true);
+
+    pipeline.firstStream() = std::make_shared<FinalAggregatingBlockInputStream>(pipeline.firstStream(), aggregate_store, log->identifier());
+
+    // should record for agg before restore concurrency. See #3804.
+    recordProfileStreams(pipeline, query_block.aggregation_name);
+    restorePipelineConcurrency(pipeline);
 }
 
 void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)

@@ -16,25 +16,62 @@
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::readImpl()
+FinalAggregatingBlockInputStream::FinalAggregatingBlockInputStream(
+    const BlockInputStreamPtr & input,
+    const AggregateStorePtr & aggregate_store_,
+    const String & req_id)
+    : log(Logger::get(NAME, req_id))
+    , aggregate_store(aggregate_store_)
 {
+    children.push_back(input);
+}
+
+void FinalAggregatingBlockInputStream::prepare()
+{
+    if (prepared)
+        return;
+
+    Stopwatch watch;
+
     const auto child = children.back();
-    while(child->read()) {}
+    while (child->read()) {}
 
-    if (!isCancelled() && aggregate_store->aggregator.hasTemporaryFiles())
+    if (!isCancelled())
     {
-        /// It may happen that some data has not yet been flushed,
-        ///  because at the time of `onFinishThread` call, no data has been flushed to disk, and then some were.
-        for (auto & data : aggregate_store->many_data)
-        {
-            if (data->isConvertibleToTwoLevel())
-                data->convertToTwoLevel();
-
-            if (!data->empty())
-                aggregate_store->aggregator.writeToTemporaryFile(*data, aggregate_store->file_provider);
-        }
+        aggregate_store->tryFlush();
     }
 
+    double elapsed_seconds = watch.elapsedSeconds();
 
+    auto [total_src_rows, total_src_bytes] = aggregate_store->mergeSrcRowsAndBytes();
+    LOG_FMT_TRACE(
+        log,
+        "Total aggregated. {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
+        total_src_rows,
+        (total_src_bytes / 1048576.0),
+        elapsed_seconds,
+        total_src_rows / elapsed_seconds,
+        total_src_bytes / elapsed_seconds / 1048576.0);
+
+    /// If there was no data, and we aggregate without keys, we must return single row with the result of empty aggregation.
+    /// To do this, we pass a block with zero rows to aggregate.
+    const auto & params = aggregate_store->getParams();
+    if (total_src_rows == 0 && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
+        aggregate_store->executeOnBlock(0, children.back()->getHeader());
+
+    impl = aggregate_store->merge();
+
+    prepared = true;
 }
+
+Block FinalAggregatingBlockInputStream::readImpl()
+{
+    prepare();
+
+    Block res;
+    if (isCancelledOrThrowIfKilled() || !impl)
+        return res;
+
+    return impl->read();
 }
+} // namespace DB

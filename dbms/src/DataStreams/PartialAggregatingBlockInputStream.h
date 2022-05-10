@@ -26,7 +26,7 @@ class PartialAggregatingBlockInputStream : public IProfilingBlockInputStream
 public:
     PartialAggregatingBlockInputStream(
         const BlockInputStreamPtr & input,
-        size_t stream_index_,
+        size_t stream_index,
         const AggregateStorePtr & aggregate_store_,
         const String & req_id);
 
@@ -40,20 +40,8 @@ protected:
 private:
     const LoggerPtr log;
 
-    size_t stream_index;
+    size_t thread_index;
 
     AggregateStorePtr aggregate_store;
-
-    Int64 local_delta_memory = 0;
-
-    ColumnRawPtrs key_columns;
-    Aggregator::AggregateColumns aggregate_columns;
-
-    /** Used if there is a limit on the maximum number of rows in the aggregation,
-      *  and if group_by_overflow_mode == ANY.
-      * In this case, new keys are not added to the set, but aggregation is performed only by
-      *  keys that have already been added into the set.
-      */
-    bool no_more_keys = false;
 };
 } // namespace DB

@@ -24,6 +24,11 @@ class FinalAggregatingBlockInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "FinalAggregating";
 
 public:
+    FinalAggregatingBlockInputStream(
+        const BlockInputStreamPtr & input,
+        const AggregateStorePtr & aggregate_store_,
+        const String & req_id);
+
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return aggregate_store->getHeader(); }
@@ -32,8 +37,17 @@ protected:
     Block readImpl() override;
 
 private:
+    void prepare();
+
+private:
     const LoggerPtr log;
 
     AggregateStorePtr aggregate_store;
+
+    /** From here we get the finished blocks after the aggregation.
+      */
+    std::unique_ptr<IBlockInputStream> impl;
+
+    std::atomic<bool> prepared{false};
 };
-}
+} // namespace DB
