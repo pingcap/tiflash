@@ -36,7 +36,7 @@
 => drop table default.test
 => DBGInvoke __reset_schemas()
 # remove obsolete entry left by previous dropped table
-=> DBGInvoke __trigger_global_storage_pool_gc()
+=> DBGInvoke __gc_global_storage_pool()
 
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 Nullable(Int8)')
 => DBGInvoke __rename_tidb_table(default, test, test1)
