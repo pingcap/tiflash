@@ -44,8 +44,15 @@ TiKVValue encode_lock_cf_value(
         }
     }
     auto lock_value = RecordKVFormat::encodeLockCfValue(
-        lock_type, primary, lock_version, ttl, short_value, min_commit_ts,
-        for_update_ts, txn_size, std::make_shared<std::string>(secondaries.releaseStr()));
+        lock_type,
+        primary,
+        lock_version,
+        ttl,
+        short_value,
+        min_commit_ts,
+        for_update_ts,
+        txn_size,
+        std::make_shared<std::string>(secondaries.releaseStr()));
     WriteBufferFromOwnString res;
     res.write(lock_value.getStr().data(), lock_value.getStr().size());
     {
