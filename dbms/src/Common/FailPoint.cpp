@@ -100,6 +100,10 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_when_altering_dt_store)          \
     M(pause_after_copr_streams_acquired)
 
+#define APPLY_FOR_RANDOM_FAILPOINTS_ENABLED_OUTSIDE(M) \
+    M(random_tunnel_failpoint)                         \
+    M(random_receiver_failpoint)
+
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";
@@ -107,6 +111,7 @@ APPLY_FOR_FAILPOINTS_ONCE(M)
 APPLY_FOR_FAILPOINTS(M)
 APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
 APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
+APPLY_FOR_RANDOM_FAILPOINTS_ENABLED_OUTSIDE(M)
 #undef M
 } // namespace FailPoints
 

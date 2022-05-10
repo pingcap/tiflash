@@ -15,13 +15,24 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/FailPoint.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <fmt/core.h>
 
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+#include <pcg_random.hpp>
+#endif
+
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_receiver_failpoint[];
+} // namespace FailPoints
+
 namespace
 {
 String getReceiverStateStr(const ExchangeReceiverState & s)
@@ -470,13 +481,30 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = req.source_index;
                 bool success = reader->read(recv_msg->packet);
+                fiu_do_on(FailPoints::random_receiver_failpoint, {
+                    // Since the code will run very frequently, then other failpoint might have no chance to trigger
+                    // so internally low down the possibility to 1/100
+                    pcg64 rng(randomSeed());
+                    int num = std::uniform_int_distribution(0, 100)(rng);
+                    if (num == 11)
+                        success = false;
+                });
                 if (!success)
                     break;
                 has_data = true;
                 if (recv_msg->packet->has_error())
                     throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
 
-                if (!msg_channel.push(std::move(recv_msg)))
+                bool push_success = msg_channel.push(std::move(recv_msg));
+                fiu_do_on(FailPoints::random_receiver_failpoint, {
+                    // Since the code will run very frequently, then other failpoint might have no chance to trigger
+                    // so internally low down the possibility to 1/100
+                    pcg64 rng(randomSeed());
+                    int num = std::uniform_int_distribution(0, 100)(rng);
+                    if (num == 71)
+                        push_success = false;
+                });
+                if (!push_success)
                 {
                     meet_error = true;
                     auto local_state = getState();

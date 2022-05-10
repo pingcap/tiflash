@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 
@@ -50,6 +51,11 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_receiver_failpoint[];
+} // namespace FailPoints
+
 namespace
 {
 struct GrpcExchangePacketReader : public ExchangePacketReader
@@ -218,7 +224,9 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
     if (request.is_local)
     {
         auto [tunnel, status] = establishMPPConnectionLocal(request.req.get(), task_manager);
-        if (!status.ok())
+        bool status_ok = status.ok();
+        fiu_do_on(FailPoints::random_receiver_failpoint, status_ok = false;);
+        if (!status_ok)
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
         }
