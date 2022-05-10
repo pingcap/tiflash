@@ -307,7 +307,7 @@ inline std::pair<size_t, size_t> decodeLockCfValue(DecodedLockCFValue & res)
                 if (len < str_len)
                     throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
                 // no need short value
-                return std::make_pair(total_size - (len + sizeof(UInt8)), str_len);
+                return std::make_pair(total_size - (len + 2 * sizeof(UInt8)), str_len + 2 * sizeof(UInt8));
                 break;
             };
             case MIN_COMMIT_TS_PREFIX:
