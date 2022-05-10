@@ -407,7 +407,25 @@ std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
 
 std::shared_ptr<const TiKVValue> DecodedLockCFValue::getLockCfValue() const
 {
-    return std::make_shared<const TiKVValue>(encodeLockCfValue(lock_type, *primary_lock, lock_version, lock_ttl, nullptr, min_commit_ts, lock_for_update_ts, txn_size, secondaries));
+    LockType cf_lock_type;
+    switch (lock_type)
+    {
+    case kvrpcpb::Op::Put:
+        cf_lock_type = LockType::Put;
+        break;
+    case kvrpcpb::Op::Del:
+        cf_lock_type = LockType::Delete;
+        break;
+    case kvrpcpb::Op::Lock:
+        cf_lock_type = LockType::Lock;
+        break;
+    case kvrpcpb::Op::PessimisticLock:
+        cf_lock_type = LockType::Pessimistic;
+        break;
+    default:
+        throw Exception("Unknown lock type: " + std::to_string(lock_type), ErrorCodes::LOGICAL_ERROR);
+    }
+    return std::make_shared<const TiKVValue>(encodeLockCfValue(cf_lock_type, *primary_lock, lock_version, lock_ttl, nullptr, min_commit_ts, lock_for_update_ts, txn_size, secondaries));
 }
 
 } // namespace RecordKVFormat
