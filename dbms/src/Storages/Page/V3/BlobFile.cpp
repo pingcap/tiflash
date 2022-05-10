@@ -34,14 +34,13 @@ BlobFile::BlobFile(String parent_path_,
     , delegator(std::move(delegator_))
     , parent_path(std::move(parent_path_))
 {
-    // TODO: support encryption file
+    Poco::File file_in_disk(getPath());
     wrfile = file_provider->newWriteReadableFile(
         getPath(),
         getEncryptionPath(),
         false,
-        /*create_new_encryption_info_*/ false);
+        /*create_new_encryption_info_*/ !file_in_disk.exists());
 
-    Poco::File file_in_disk(getPath());
     file_size = file_in_disk.getSize();
     {
         std::lock_guard lock(file_size_lock);

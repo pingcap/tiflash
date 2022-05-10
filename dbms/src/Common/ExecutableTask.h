@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
+
 #include <memory>
 
 namespace DB
@@ -24,8 +26,8 @@ public:
     IExecutableTask() = default;
 
     virtual ~IExecutableTask() = default;
-    IExecutableTask(const IExecutableTask & rhs) = delete;
-    IExecutableTask & operator=(const IExecutableTask & rhs) = delete;
+
+    DISALLOW_COPY(IExecutableTask);
     IExecutableTask(IExecutableTask && other) = default;
     IExecutableTask & operator=(IExecutableTask && other) = default;
 

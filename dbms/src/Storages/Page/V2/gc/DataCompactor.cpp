@@ -81,7 +81,13 @@ DataCompactor<SnapshotPtr>::tryMigrate( //
     }
     else
     {
-        LOG_FMT_DEBUG(log, "{} DataCompactor::tryMigrate exit without compaction [candidates size={}] [total byte size={}], [files without valid page={}] Config{{ {} }}", storage_name, result.candidate_size, result.bytes_migrate, candidates.files_without_valid_pages.size(), config.toDebugString());
+        LOG_FMT_DEBUG(log, "{} DataCompactor::tryMigrate exit without compaction [candidates size={}] [total byte size={}], "
+                           "[files without valid page={}] Config{{ {} }}", //
+                      storage_name,
+                      result.candidate_size,
+                      result.bytes_migrate,
+                      candidates.files_without_valid_pages.size(),
+                      config.toDebugStringV2());
     }
 
     return {result, std::move(migrate_entries_edit)};
@@ -555,7 +561,13 @@ void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos,
     }
     migrate_stream << "]";
     remove_stream << "]";
-    LOG_FMT_DEBUG(log, "{} Migrate pages to PageFile_{}_{}, migrate: {}, remove: {}, Config{{ {} }}", storage_name, migrate_file_id.first, migrate_file_id.second, migrate_stream.str(), remove_stream.str(), config.toDebugString());
+    LOG_FMT_DEBUG(log, "{} Migrate pages to PageFile_{}_{}, migrate: {}, remove: {}, Config{{ {} }}", //
+                  storage_name,
+                  migrate_file_id.first,
+                  migrate_file_id.second,
+                  migrate_stream.str(),
+                  remove_stream.str(),
+                  config.toDebugStringV2());
 }
 
 

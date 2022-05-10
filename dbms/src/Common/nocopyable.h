@@ -14,23 +14,14 @@
 
 #pragma once
 
-#include <Common/wrapInvocable.h>
+#define DISALLOW_COPY(ClassName)           \
+    ClassName(const ClassName &) = delete; \
+    ClassName & operator=(const ClassName &) = delete
 
-#include <future>
+#define DISALLOW_MOVE(ClassName)      \
+    ClassName(ClassName &&) = delete; \
+    ClassName & operator=(ClassName &&) = delete
 
-namespace DB
-{
-template <typename Func, typename... Args>
-inline auto packTask(bool propagate_memory_tracker, Func && func, Args &&... args)
-{
-    auto capture = wrapInvocable(propagate_memory_tracker, std::forward<Func>(func), std::forward<Args>(args)...);
-    // get return type of our task
-    using TaskResult = std::invoke_result_t<decltype(capture)>;
-
-    // create package_task to capture exceptions
-    using PackagedTask = std::packaged_task<TaskResult()>;
-    PackagedTask task{std::move(capture)};
-
-    return task;
-}
-} // namespace DB
+#define DISALLOW_COPY_AND_MOVE(ClassName) \
+    DISALLOW_COPY(ClassName);             \
+    DISALLOW_MOVE(ClassName)

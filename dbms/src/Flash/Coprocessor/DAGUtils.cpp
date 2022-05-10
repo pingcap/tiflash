@@ -516,7 +516,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::WeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::WeekWithoutMode, "cast"},
     //{tipb::ScalarFuncSig::WeekDay, "cast"},
-    //{tipb::ScalarFuncSig::WeekOfYear, "cast"},
+    {tipb::ScalarFuncSig::WeekOfYear, "tidbWeekOfYear"},
 
     {tipb::ScalarFuncSig::Year, "toYear"},
     //{tipb::ScalarFuncSig::YearWeekWithMode, "cast"},
