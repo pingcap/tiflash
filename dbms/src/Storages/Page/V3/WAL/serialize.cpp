@@ -100,7 +100,6 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     UInt32 flags = 0;
     readIntBinary(flags, buf);
 
-    // All consider as put
     PageEntriesEdit::EditRecord rec;
     rec.type = record_type;
     readIntBinary(rec.page_id, buf);

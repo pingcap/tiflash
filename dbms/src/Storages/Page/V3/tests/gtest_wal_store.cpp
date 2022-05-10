@@ -132,6 +132,33 @@ TEST(WALSeriTest, Upserts)
     EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
 }
 
+TEST(WALSeriTest, RefExternal)
+{
+    PageVersionType ver1_0(/*seq=*/1, /*epoch*/ 0);
+    PageVersionType ver2_0(/*seq=*/2, /*epoch*/ 0);
+    PageVersionType ver3_0(/*seq=*/3, /*epoch*/ 0);
+
+    PageEntriesEdit edit;
+    edit.varExternal(1, ver1_0, 2);
+    edit.varDel(1, ver2_0);
+    edit.varRef(2, ver3_0, 1);
+
+    auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+    ASSERT_EQ(deseri_edit.size(), 3);
+    auto iter = deseri_edit.getRecords().begin();
+    EXPECT_EQ(iter->type, EditRecordType::VAR_EXTERNAL);
+    EXPECT_EQ(iter->page_id.low, 1);
+    EXPECT_EQ(iter->version, ver1_0);
+    iter++;
+    EXPECT_EQ(iter->type, EditRecordType::VAR_DELETE);
+    EXPECT_EQ(iter->page_id.low, 1);
+    EXPECT_EQ(iter->version, ver2_0);
+    iter++;
+    EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
+    EXPECT_EQ(iter->page_id.low, 2);
+    EXPECT_EQ(iter->version, ver3_0);
+}
+
 TEST(WALLognameTest, parsing)
 {
     LoggerPtr log = Logger::get("WALLognameTest");
