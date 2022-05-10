@@ -748,6 +748,7 @@ try
         storage->write(std::move(batch));
     }
 
+    storage = nullptr;
     auto [page_storage, max_ids] = reopen();
     ASSERT_EQ(max_ids.size(), 1);
     ASSERT_EQ(max_ids[0], 2);

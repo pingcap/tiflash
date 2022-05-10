@@ -105,13 +105,13 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
 
     for (const auto & r : edit.getRecords())
     {
-        if (const auto it = max_apply_page_ids.find(r.page_id.high); it == max_apply_page_ids.end())
+        if (auto it = max_apply_page_ids.find(r.page_id.high); it == max_apply_page_ids.end())
         {
             max_apply_page_ids[r.page_id.high] = r.page_id.low;
         }
         else
         {
-            max_apply_page_ids[it->first] = std::max(max_apply_page_ids[it->first], r.page_id.low);
+            it->second = std::max(it->second, r.page_id.low);
         }
 
         if (max_applied_ver < r.version)

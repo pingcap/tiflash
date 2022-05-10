@@ -1337,11 +1337,12 @@ try
         page_storage->write(std::move(batch3));
     }
 
+    page_storage = nullptr;
     auto [page_storage, max_ids] = reopen();
     ASSERT_EQ(max_ids.size(), 3);
-    ASSERT_EQ(max_ids[TEST_NAMESPACE_ID], 2);
+    ASSERT_EQ(max_ids[TEST_NAMESPACE_ID], 2); // external page 2 is marked as deleted, but we can still restore it.
     ASSERT_EQ(max_ids[TEST_NAMESPACE_ID + 1], 100);
-    ASSERT_EQ(max_ids[TEST_NAMESPACE_ID + 2], 10);
+    ASSERT_EQ(max_ids[TEST_NAMESPACE_ID + 2], 10); // page 10 is marked as deleted, but we can still restore it.
 }
 CATCH
 
