@@ -77,14 +77,14 @@ private:
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
     ExpressionActionsPtr genJoinOtherConditionAction(
         const tipb::Join & join,
-        std::vector<NameAndTypePair> & source_columns,
+        NamesAndTypes & source_columns,
         String & filter_column_for_other_condition,
         String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
     void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
-    void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
+    void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeWindow(
         DAGPipeline & pipeline,

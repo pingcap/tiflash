@@ -15,8 +15,6 @@
 #include <DataStreams/MockExchangeSenderInputStream.h>
 namespace DB
 {
-
-
 MockExchangeSenderInputStream::MockExchangeSenderInputStream(
     const BlockInputStreamPtr & input,
     const String & req_id)
@@ -37,16 +35,12 @@ Block MockExchangeSenderInputStream::getTotals()
 
 Block MockExchangeSenderInputStream::getHeader() const
 {
-    Block res = children.back()->getHeader();
-    return res;
+    return children.back()->getHeader();
 }
 
 Block MockExchangeSenderInputStream::readImpl()
 {
-    Block res = children.back()->read();
-    if (!res)
-        return res;
-    return res;
+    return children.back()->read();
 }
 
 } // namespace DB

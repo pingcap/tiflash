@@ -24,6 +24,7 @@
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/MockExchangeReceiverInputStream.h>
+#include <DataStreams/MockExchangeSenderInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
@@ -52,7 +53,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
-#include "DataStreams/MockExchangeSenderInputStream.h"
+#include "Core/NamesAndTypes.h"
 
 
 namespace DB
@@ -194,7 +195,7 @@ void DAGQueryBlockInterpreter::prepareJoin(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
     String & filter_column_name)
 {
-    std::vector<NameAndTypePair> source_columns;
+    NamesAndTypes source_columns;
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
@@ -207,7 +208,7 @@ void DAGQueryBlockInterpreter::prepareJoin(
 
 ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
     const tipb::Join & join,
-    std::vector<NameAndTypePair> & source_columns,
+    NamesAndTypes & source_columns,
     String & filter_column_for_other_condition,
     String & filter_column_for_other_eq_condition)
 {
@@ -330,7 +331,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         right_pipeline.streams = input_streams_vec[1];
     }
 
-    std::vector<NameAndTypePair> join_output_columns;
+    NamesAndTypes join_output_columns;
     /// columns_for_other_join_filter is a vector of columns used
     /// as the input columns when compiling other join filter.
     /// Note the order in the column vector is very important:
@@ -340,7 +341,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     /// append the extra columns afterwards. In order to figure out
     /// whether a given column is already in the column vector or
     /// not quickly, we use another set to store the column names
-    std::vector<NameAndTypePair> columns_for_other_join_filter;
+    NamesAndTypes columns_for_other_join_filter;
     std::unordered_set<String> column_set_for_other_join_filter;
     bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
@@ -483,7 +484,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     right_query.join = join_ptr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
 
-    std::vector<NameAndTypePair> source_columns;
+    NamesAndTypes source_columns;
     for (const auto & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
@@ -621,7 +622,7 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
     orderStreams(pipeline, sort_desc, 0);
 }
 
-void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
+void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
     orderStreams(pipeline, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit);
@@ -677,7 +678,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         pipeline.streams.push_back(stream);
     }
-    std::vector<NameAndTypePair> source_columns;
+    NamesAndTypes source_columns;
     Block block = pipeline.firstStream()->getHeader();
     for (const auto & col : block.getColumnsWithTypeAndName())
     {
@@ -692,25 +693,24 @@ void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline
     {
         pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(query_block.source->exchange_receiver(), context.getSettingsRef().max_block_size));
     }
-    std::vector<NameAndTypePair> source_columns;
-    Block block = pipeline.firstStream()->getHeader();
-    for (const auto & col : block.getColumnsWithTypeAndName())
+    NamesAndTypes source_columns;
+    for (const auto & col : pipeline.firstStream()->getHeader())
     {
-        source_columns.emplace_back(NameAndTypePair(col.name, col.type));
+        source_columns.emplace_back(col.name, col.type);
     }
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
 void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
 {
-    std::vector<NameAndTypePair> input_columns;
+    NamesAndTypes input_columns;
     pipeline.streams = input_streams_vec[0];
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
     ExpressionActionsChain chain;
     auto & last_step = dag_analyzer.initAndGetLastStep(chain);
-    std::vector<NameAndTypePair> output_columns;
+    NamesAndTypes output_columns;
     NamesWithAliases project_cols;
     UniqueNameGenerator unique_name_generator;
     for (const auto & expr : projection.exprs())

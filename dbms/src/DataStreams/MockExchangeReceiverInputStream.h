@@ -20,7 +20,6 @@
 
 namespace DB
 {
-
 /// Mock the receiver like table scan, can mock blocks according to the receiver's schema.
 /// TODO: Mock the receiver process
 class MockExchangeReceiverInputStream : public IProfilingBlockInputStream
