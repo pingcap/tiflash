@@ -679,10 +679,9 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         pipeline.streams.push_back(stream);
     }
     NamesAndTypes source_columns;
-    Block block = pipeline.firstStream()->getHeader();
-    for (const auto & col : block.getColumnsWithTypeAndName())
+    for (const auto & col : pipeline.firstStream()->getHeader())
     {
-        source_columns.emplace_back(NameAndTypePair(col.name, col.type));
+        source_columns.emplace_back(col.name, col.type);
     }
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
