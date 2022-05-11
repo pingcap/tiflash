@@ -271,7 +271,7 @@ Union
         Expression
          Expression
           Expression
-           TiRemoteBlockInputStream(ExchangeReceiver))";
+           MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -284,7 +284,7 @@ Union
     {
         String expected = R"(
 Union
- ExchangeSender x 10
+ MockExchangeSender x 10
   Expression
    Expression
     Expression
@@ -295,7 +295,7 @@ Union
          Expression
           Expression
            Expression
-            TiRemoteBlockInputStream(ExchangeReceiver))";
+            MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -323,7 +323,7 @@ CreatingSets
   HashJoinBuildBlockInputStream x 10
    Expression
     Expression
-     TiRemoteBlockInputStream(ExchangeReceiver)
+     MockExchangeReceiver
  Union x 2
   HashJoinBuildBlockInputStream x 10
    Expression
@@ -331,13 +331,13 @@ CreatingSets
      Expression
       HashJoinProbe
        Expression
-        TiRemoteBlockInputStream(ExchangeReceiver)
+        MockExchangeReceiver
  Union
   Expression x 10
    Expression
     HashJoinProbe
      Expression
-      TiRemoteBlockInputStream(ExchangeReceiver))";
+      MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }

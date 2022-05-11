@@ -23,6 +23,7 @@
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/MockExchangeReceiverInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
@@ -50,6 +51,9 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/Transaction/TiDB.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
+
+#include "DataStreams/MockExchangeSenderInputStream.h"
+
 
 namespace DB
 {
@@ -686,20 +690,7 @@ void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline
 {
     for (size_t i = 0; i < max_streams; ++i)
     {
-        auto exchange_receiver = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(
-                query_block.source->exchange_receiver(),
-                dagContext().getMPPTaskMeta(),
-                context.getTMTContext().getKVCluster(),
-                context.getTMTContext().getMPPTaskManager(),
-                context.getSettingsRef().enable_local_tunnel,
-                context.getSettingsRef().enable_async_grpc_client),
-            query_block.source->exchange_receiver().encoded_task_meta_size(),
-            max_streams,
-            log->identifier(),
-            "receiver" + std::to_string(i));
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, log->identifier(), "receiver" + std::to_string(i));
-        pipeline.streams.push_back(stream);
+        pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(query_block.source->exchange_receiver(), context.getSettingsRef().max_block_size));
     }
     std::vector<NameAndTypePair> source_columns;
     Block block = pipeline.firstStream()->getHeader();
@@ -937,34 +928,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
 
 void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline)
 {
-    /// exchange sender should be at the top of operators
-    const auto & exchange_sender = query_block.exchange_sender->exchange_sender();
-    std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
-    TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
-    int stream_id = 0;
-    // mock tunnels
-    auto tunnel_set = std::make_shared<MPPTunnelSet>();
-    std::chrono::seconds timeout(10);
-    for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
-    {
-        mpp::TaskMeta task_meta;
-        if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
-            throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
-        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_meta, timeout, context.getSettingsRef().max_threads, false, false, log->identifier());
-        LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
-        tunnel_set->addTunnel(tunnel);
-    }
     pipeline.transform([&](auto & stream) {
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
-            tunnel_set,
-            partition_col_ids,
-            partition_col_collators,
-            exchange_sender.tp(),
-            context.getSettingsRef().dag_records_per_chunk,
-            context.getSettingsRef().batch_send_min_limit,
-            stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-            dagContext());
-        stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+        stream = std::make_shared<MockExchangeSenderInputStream>(stream, log->identifier());
     });
 }
 
