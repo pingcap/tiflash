@@ -52,7 +52,7 @@ void executeParallel(
     auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log, false);
     if (!pipeline.streams.empty())
     {
-        pipeline.firstStream() = std::make_shared<ParallelBlockInputStream>(
+        pipeline.firstStream() = std::make_shared<ParallelBlockInputStream<StreamHandler>>(
             pipeline.streams,
             non_joined_data_stream,
             max_streams,
