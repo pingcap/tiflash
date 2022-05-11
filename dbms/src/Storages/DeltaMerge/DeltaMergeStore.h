@@ -311,6 +311,8 @@ public:
 
     void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
 
+    void clearData();
+
     void drop();
 
     // Stop all background tasks.
@@ -457,8 +459,13 @@ private:
                                           size_t expected_tasks_count = 1,
                                           const SegmentIdSet & read_segments = {});
 
+private:
+    void dropAllSegments(bool keep_first_segment);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
 #endif
 
     Context & global_context;
