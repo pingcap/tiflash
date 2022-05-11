@@ -23,7 +23,6 @@
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterInsertQuery.h>
-#include <Interpreters/InterpreterKillQueryQuery.h>
 #include <Interpreters/InterpreterManageQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -42,7 +41,6 @@
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTInsertQuery.h>
-#include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/ASTManageQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -152,10 +150,6 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     else if (typeid_cast<ASTCheckQuery *>(query.get()))
     {
         return std::make_unique<InterpreterCheckQuery>(query, context);
-    }
-    else if (typeid_cast<ASTKillQueryQuery *>(query.get()))
-    {
-        return std::make_unique<InterpreterKillQueryQuery>(query, context);
     }
     else if (typeid_cast<ASTDeleteQuery *>(query.get()))
     {
