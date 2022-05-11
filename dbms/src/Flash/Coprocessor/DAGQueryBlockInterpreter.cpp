@@ -23,6 +23,7 @@
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/MockTableScanBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
@@ -35,6 +36,7 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
@@ -44,6 +46,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -93,7 +96,8 @@ AnalysisResult analyzeExpressions(
     AnalysisResult res;
     ExpressionActionsChain chain;
     // selection on table scan had been executed in handleTableScan
-    if (query_block.selection && !query_block.isTableScanSource())
+    // In test mode, filter is not pushed down to table scan
+    if (query_block.selection && (!query_block.isTableScanSource() || context.getDAGContext()->isTest()))
     {
         std::vector<const tipb::Expr *> where_conditions;
         for (const auto & c : query_block.selection->selection().conditions())
@@ -149,6 +153,19 @@ AnalysisResult analyzeExpressions(
     return res;
 }
 } // namespace
+
+// for tests, we need to mock tableScan blockInputStream as the source stream.
+void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
+{
+    auto names_and_types = genNamesAndTypes(table_scan);
+    auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+    for (size_t i = 0; i < max_streams; ++i)
+    {
+        auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size);
+        pipeline.streams.emplace_back(mock_table_scan_stream);
+    }
+}
 
 void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
@@ -544,7 +561,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.isTableScanSource())
     {
         TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
-        handleTableScan(table_scan, pipeline);
+        if (dagContext().isTest())
+            handleMockTableScan(table_scan, pipeline);
+        else
+            handleTableScan(table_scan, pipeline);
         dagContext().table_scan_executor_id = query_block.source_name;
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeWindow)
@@ -591,14 +611,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
     }
-
     if (res.before_having)
     {
         // execute having
         executeWhere(pipeline, res.before_having, res.having_column_name);
         recordProfileStreams(pipeline, query_block.having_name);
     }
-
     if (res.before_order_and_select)
     {
         executeExpression(pipeline, res.before_order_and_select);
@@ -613,14 +631,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // execute final project action
     executeProject(pipeline, final_project);
-
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
         recordProfileStreams(pipeline, query_block.limit_or_topn_name);
     }
-
     restorePipelineConcurrency(pipeline);
 
     // execute exchange_sender
