@@ -73,7 +73,7 @@ static Field convertNumericTypeImpl(const Field & from)
 template <typename From, typename To>
 static Field convertDecimalTypeImpl(const Field & from)
 {
-    auto decimal_field = from.safeGet<DecimalField<From>>();
+    const auto & decimal_field = from.safeGet<DecimalField<From>>();
     // FIXME:: There is some bugs when `to` is int;
     return Field(typename NearestFieldType<To>::Type(static_cast<To>(decimal_field)));
 }
@@ -128,7 +128,7 @@ static Field convertDecimalToDecimalType(const Field & from, const DataTypeDecim
     // TODO:: Refine this, Consider overflow!!
     if constexpr (sizeof(From) <= sizeof(To))
     {
-        auto field = from.get<DecimalField<From>>();
+        const auto & field = from.get<DecimalField<From>>();
         if (field.getScale() <= type.getScale())
         {
             ScaleType scale = type.getScale() - field.getScale();
@@ -227,13 +227,13 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
             return convertNumericType<Float32>(src, type);
         if (typeid_cast<const DataTypeFloat64 *>(&type))
             return convertNumericType<Float64>(src, type);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal32 *>(&type))
+        if (const auto * ptype = typeid_cast<const DataTypeDecimal32 *>(&type))
             return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal64 *>(&type))
+        if (const auto * ptype = typeid_cast<const DataTypeDecimal64 *>(&type))
             return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal128 *>(&type))
+        if (const auto * ptype = typeid_cast<const DataTypeDecimal128 *>(&type))
             return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal256 *>(&type))
+        if (const auto * ptype = typeid_cast<const DataTypeDecimal256 *>(&type))
             return convertDecimalType(src, *ptype);
 
         const bool is_date = typeid_cast<const DataTypeDate *>(&type);
@@ -350,6 +350,24 @@ Field convertFieldToType(const Field & from_value, const IDataType & to_type, co
     }
     else
         return convertFieldToTypeImpl(from_value, to_type);
+}
+
+Field convertFieldToTypeOrThrow(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint)
+{
+    bool is_null = from_value.isNull();
+    if (is_null && !to_type.isNullable())
+        throw Exception(ErrorCodes::TYPE_MISMATCH, "Cannot convert NULL to {}", to_type.getName());
+
+    Field converted = convertFieldToType(from_value, to_type, from_type_hint);
+
+    if (!is_null && converted.isNull())
+        throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND,
+                        "Cannot convert value '{}'{}: it cannot be represented as {}",
+                        from_value.toString(),
+                        from_type_hint ? " from " + from_type_hint->getName() : "",
+                        to_type.getName());
+
+    return converted;
 }
 
 

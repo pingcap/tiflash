@@ -26,7 +26,6 @@
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
-#include <openssl/base64.h>
 
 #include <memory>
 #include <mutex>
@@ -322,7 +321,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
         // We may add reference to an external id even if it is logically deleted.
-        bool ok = check_prev ? true : (!is_deleted || (is_deleted && seq < delete_ver.sequence));
+        bool ok = check_prev ? true : (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
             return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersionType(0)};
@@ -330,7 +329,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     }
     else if (type == EditRecordType::VAR_REF)
     {
-        if (create_ver.sequence <= seq && (!is_deleted || (is_deleted && seq < delete_ver.sequence)))
+        if (create_ver.sequence <= seq && (!is_deleted || seq < delete_ver.sequence))
         {
             return {RESOLVE_TO_REF, ori_page_id, create_ver};
         }
@@ -639,10 +638,12 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal p
   * PageDirectory methods *
   *************************/
 
-PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_)
+PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 max_persisted_log_files_)
     : sequence(0)
     , wal(std::move(wal_))
+    , max_persisted_log_files(max_persisted_log_files_)
     , log(Logger::get("PageDirectory", std::move(storage_name)))
+
 {
 }
 
@@ -746,11 +747,13 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
     throw Exception(fmt::format("Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]", page_id, snap->sequence, id_to_resolve, ver_to_resolve), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
 }
 
-PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const
+std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
+    PageIds page_not_found = {};
+
     const PageVersionType init_ver_to_resolve(snap->sequence, 0);
-    auto get_one = [&entry_got, init_ver_to_resolve, this](PageIdV3Internal page_id, PageVersionType ver_to_resolve, size_t idx) {
+    auto get_one = [&entry_got, init_ver_to_resolve, throw_on_not_exist, this](PageIdV3Internal page_id, PageVersionType ver_to_resolve, size_t idx) {
         PageIdV3Internal id_to_resolve = page_id;
         bool ok = true;
         while (ok)
@@ -761,7 +764,14 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const 
                 iter = mvcc_table_directory.find(id_to_resolve);
                 if (iter == mvcc_table_directory.end())
                 {
-                    throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                    if (throw_on_not_exist)
+                    {
+                        throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
+                    }
+                    else
+                    {
+                        return false;
+                    }
                 }
             }
             auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, &entry_got);
@@ -793,17 +803,21 @@ PageIDAndEntriesV3 PageDirectory::get(const PageIdV3Internals & page_ids, const 
         {
             id_entries.emplace_back(page_ids[idx], entry_got);
         }
+        else
+        {
+            page_not_found.emplace_back(page_ids[idx]);
+        }
     }
 
-    return id_entries;
+    return std::make_pair(id_entries, page_not_found);
 }
 
-PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const
+PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageIdV3Internal id_to_resolve = page_id;
     PageVersionType ver_to_resolve(snap->sequence, 0);
-    bool ok = true;
-    while (ok)
+    bool keep_resolve = true;
+    while (keep_resolve)
     {
         MVCCMapType::const_iterator iter;
         {
@@ -811,7 +825,14 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
             iter = mvcc_table_directory.find(id_to_resolve);
             if (iter == mvcc_table_directory.end())
             {
-                throw Exception(fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                if (throw_on_not_exist)
+                {
+                    throw Exception(fmt::format("Invalid page id [page_id={}] [resolve_id={}]", page_id, id_to_resolve));
+                }
+                else
+                {
+                    return PageIdV3Internal(0, INVALID_PAGE_ID);
+                }
             }
         }
         auto [need_collapse, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, id_to_resolve != page_id, nullptr);
@@ -820,12 +841,14 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
         case VersionedPageEntries::RESOLVE_TO_NORMAL:
             return id_to_resolve;
         case VersionedPageEntries::RESOLVE_FAIL:
-            ok = false;
+            // resolve failed
+            keep_resolve = false;
             break;
         case VersionedPageEntries::RESOLVE_TO_REF:
             if (id_to_resolve == next_id_to_resolve)
             {
-                ok = false;
+                // dead-loop, so break the `while(keep_resolve)`
+                keep_resolve = false;
                 break;
             }
             id_to_resolve = next_id_to_resolve;
@@ -833,12 +856,20 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
             break; // continue the resolving
         }
     }
-    throw Exception(fmt::format(
-        "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
-        page_id,
-        snap->sequence,
-        id_to_resolve,
-        ver_to_resolve));
+
+    if (throw_on_not_exist)
+    {
+        throw Exception(fmt::format(
+            "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
+            page_id,
+            snap->sequence,
+            id_to_resolve,
+            ver_to_resolve));
+    }
+    else
+    {
+        return PageIdV3Internal(0, INVALID_PAGE_ID);
+    }
 }
 
 PageId PageDirectory::getMaxId(NamespaceId ns_id) const
@@ -1045,6 +1076,8 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
         const auto & versioned_entries = iter->second;
         versioned_entries->createNewEntry(record.version, record.entry);
     }
+
+    LOG_FMT_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
 }
 
 std::set<PageId> PageDirectory::getAliveExternalIds(NamespaceId ns_id) const
@@ -1086,13 +1119,19 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
             return {blob_versioned_entries, total_page_size};
     }
 
+    UInt64 total_page_nums = 0;
     while (true)
     {
         // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do scan on the version list without lock on `mvcc_table_directory`.
         auto page_id = iter->first;
         const auto & version_entries = iter->second;
-        total_page_size += version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries);
+        auto single_page_size = version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries);
+        total_page_size += single_page_size;
+        if (single_page_size != 0)
+        {
+            total_page_nums++;
+        }
 
         {
             std::shared_lock read_lock(table_rw_mutex);
@@ -1108,6 +1147,10 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
             throw Exception(fmt::format("Can't get any entries from [blob_id={}]", blob_id));
         }
     }
+
+    LOG_FMT_INFO(log, "Get entries by Blob ids done. [total_page_size={}] [total_page_nums={}]", //
+                 total_page_size, //
+                 total_page_nums);
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
@@ -1116,7 +1159,7 @@ bool PageDirectory::tryDumpSnapshot(const WriteLimiterPtr & write_limiter)
     bool done_any_io = false;
     // In order not to make read amplification too high, only apply compact logs when ...
     auto files_snap = wal->getFilesSnapshot();
-    if (files_snap.needSave())
+    if (files_snap.needSave(max_persisted_log_files))
     {
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
         auto edit = dumpSnapshotToEdit();
@@ -1129,17 +1172,39 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
 {
     UInt64 lowest_seq = sequence.load();
 
+    UInt64 invalid_snapshot_nums = 0;
+    UInt64 valid_snapshot_nums = 0;
+    UInt64 longest_alive_snapshot_time = 0;
+    UInt64 longest_alive_snapshot_seq = 0;
+    UInt64 stale_snapshot_nums = 0;
     {
         // Cleanup released snapshots
         std::lock_guard lock(snapshots_mutex);
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
         {
             if (auto snap = iter->lock(); snap == nullptr)
+            {
                 iter = snapshots.erase(iter);
+                invalid_snapshot_nums++;
+            }
             else
             {
                 lowest_seq = std::min(lowest_seq, snap->sequence);
                 ++iter;
+                valid_snapshot_nums++;
+                const auto alive_time_seconds = snap->elapsedSeconds();
+
+                if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
+                {
+                    LOG_FMT_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
+                    stale_snapshot_nums++;
+                }
+
+                if (longest_alive_snapshot_time < alive_time_seconds)
+                {
+                    longest_alive_snapshot_time = alive_time_seconds;
+                    longest_alive_snapshot_seq = snap->sequence;
+                }
             }
         }
     }
@@ -1152,6 +1217,9 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         if (iter == mvcc_table_directory.end())
             return all_del_entries;
     }
+
+    UInt64 invalid_page_nums = 0;
+    UInt64 valid_page_nums = 0;
 
     // The page_id that we need to decrease ref count
     // { id_0: <version, num to decrease>, id_1: <...>, ... }
@@ -1172,9 +1240,11 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
             if (all_deleted)
             {
                 iter = mvcc_table_directory.erase(iter);
+                invalid_page_nums++;
             }
             else
             {
+                valid_page_nums++;
                 iter++;
             }
 
@@ -1182,6 +1252,8 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
                 break;
         }
     }
+
+    UInt64 total_deref_counter = 0;
 
     // Iterate all page_id that need to decrease ref count of specified version.
     for (const auto & [page_id, deref_counter] : normal_entries_to_deref)
@@ -1205,8 +1277,27 @@ PageEntriesV3 PageDirectory::gcInMemEntries()
         {
             std::unique_lock write_lock(table_rw_mutex);
             mvcc_table_directory.erase(iter);
+            invalid_page_nums++;
+            valid_page_nums--;
         }
     }
+
+    LOG_FMT_INFO(log, "After MVCC gc in memory [lowest_seq={}] "
+                      "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
+                      "[total_deref_counter={}] [all_del_entries={}]. "
+                      "Still exist [snapshot_nums={}], [page_nums={}]. "
+                      "Longest alive snapshot: [longest_alive_snapshot_time={}] "
+                      "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
+                 lowest_seq,
+                 invalid_snapshot_nums,
+                 invalid_page_nums,
+                 total_deref_counter,
+                 all_del_entries.size(),
+                 valid_snapshot_nums,
+                 valid_page_nums,
+                 longest_alive_snapshot_time,
+                 longest_alive_snapshot_seq,
+                 stale_snapshot_nums);
 
     return all_del_entries;
 }
@@ -1237,7 +1328,8 @@ PageEntriesEdit PageDirectory::dumpSnapshotToEdit(PageDirectorySnapshotPtr snap)
                 break;
         }
     }
-    // TODO: log down the sequence and time elapsed
+
+    LOG_FMT_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
     return edit;
 }
 

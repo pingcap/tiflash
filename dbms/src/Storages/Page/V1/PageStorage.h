@@ -35,8 +35,8 @@ namespace DB::PS::V1
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
- * will covered the old ones. The file used to persist the Pages called PageFile. The meta data of a Page, like the
- * latest PageFile the Page is stored , the offset in file, and checksum, are cached in memory. Users should call
+ * will cover the old ones. The file used to persist the Pages called PageFile. The meta data of a Page, like the
+ * latest PageFile the Page is stored, the offset in file, and checksum, are cached in memory. Users should call
  * #gc() constantly to clean up the sparse PageFiles and release disk space.
  *
  * This class is multi-threads safe. Support single thread write, and multi threads read.
@@ -105,8 +105,8 @@ public:
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot);
     Page read(PageId page_id, SnapshotPtr snapshot);
-    PageMap read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot);
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot);
+    PageMap read(const PageIds & page_ids, SnapshotPtr snapshot);
+    void read(const PageIds & page_ids, const PageHandler & handler, SnapshotPtr snapshot);
     void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot);
     bool gc();
 
@@ -197,8 +197,8 @@ public:
     {}
 
     Page read(PageId page_id) const { return storage.read(page_id, snap); }
-    PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
-    void read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
+    PageMap read(const PageIds & page_ids) const { return storage.read(page_ids, snap); }
+    void read(const PageIds & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
 
     PageId getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
     UInt64 getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }

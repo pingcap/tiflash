@@ -29,6 +29,15 @@
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>
+inline static pid_t getTid()
+{
+    return syscall(SYS_gettid);
+}
+#else
+inline static pid_t getTid()
+{
+    return -1;
+}
 #endif
 
 namespace CurrentMetrics
@@ -76,6 +85,7 @@ void BackgroundProcessingPool::TaskInfo::wake()
 
 BackgroundProcessingPool::BackgroundProcessingPool(int size_)
     : size(size_)
+    , thread_ids_counter(size_)
 {
     LOG_FMT_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with {} threads", size);
 
@@ -140,9 +150,7 @@ void BackgroundProcessingPool::threadFunction()
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
         is_background_thread = true;
-#ifdef __linux__
-        addThreadId(syscall(SYS_gettid));
-#endif
+        addThreadId(getTid());
     }
 
     MemoryTracker memory_tracker;
@@ -272,14 +280,23 @@ void BackgroundProcessingPool::threadFunction()
 
 std::vector<pid_t> BackgroundProcessingPool::getThreadIds()
 {
+    thread_ids_counter.Wait();
     std::lock_guard lock(thread_ids_mtx);
+    if (thread_ids.size() != size)
+    {
+        LOG_FMT_ERROR(&Poco::Logger::get("BackgroundProcessingPool"), "thread_ids.size is {}, but {} is required", thread_ids.size(), size);
+        throw Exception("Background threads' number not match");
+    }
     return thread_ids;
 }
 
 void BackgroundProcessingPool::addThreadId(pid_t tid)
 {
-    std::lock_guard lock(thread_ids_mtx);
-    thread_ids.push_back(tid);
+    {
+        std::lock_guard lock(thread_ids_mtx);
+        thread_ids.push_back(tid);
+    }
+    thread_ids_counter.DecrementCount();
 }
 
 } // namespace DB

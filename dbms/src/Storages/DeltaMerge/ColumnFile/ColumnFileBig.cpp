@@ -43,7 +43,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         {},
         context.db_context.getFileProvider(),
         context.getReadLimiter(),
-        /*tracing_logger*/ nullptr);
+        /*tracing_id*/ context.tracing_id);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
@@ -87,7 +87,9 @@ void ColumnFileBigReader::initStream()
         return;
 
     DMFileBlockInputStreamBuilder builder(context.db_context);
-    file_stream = builder.build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
+    file_stream = builder
+                      .setTracingID(context.tracing_id)
+                      .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
 
     // If we only need to read pk and version columns, then cache columns data in memory.
     if (pk_ver_only)

@@ -89,6 +89,7 @@ add_headers_and_sources(dbms src/Storages/Page/V2)
 add_headers_and_sources(dbms src/Storages/Page/V2/mvcc)
 add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
 add_headers_and_sources(dbms src/Storages/Page/V2/gc)
+add_headers_and_sources(dbms src/WindowFunctions)
 if (ENABLE_V3_PAGESTORAGE)
     add_headers_and_sources(dbms src/Storages/Page/V3)
     add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
@@ -206,6 +207,7 @@ target_link_libraries (dbms
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
+    absl::synchronization
 )
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)

@@ -527,6 +527,10 @@ ColumnWithTypeAndName createConstColumn(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual);
 
+void blockEqual(
+    const Block & expected,
+    const Block & actual);
+
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
@@ -711,5 +715,6 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
+#define ASSERT_BLOCK_EQ(expected, actual) DB::tests::blockEqual((expected), (actual))
 } // namespace tests
 } // namespace DB

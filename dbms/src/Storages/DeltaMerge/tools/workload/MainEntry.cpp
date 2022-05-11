@@ -32,6 +32,19 @@ using namespace DB::DM::tests;
 
 std::ofstream log_ofs;
 
+void initWorkDirs(const std::vector<std::string> & dirs)
+{
+    for (const auto & dir : dirs)
+    {
+        Poco::File d(dir);
+        if (d.exists())
+        {
+            d.remove(true);
+        }
+        d.createDirectories();
+    }
+}
+
 void init(WorkloadOptions & opts)
 {
     log_ofs.open(opts.log_file, std::ios_base::out | std::ios_base::app);
@@ -41,21 +54,6 @@ void init(WorkloadOptions & opts)
     }
     TiFlashTestEnv::setupLogger(opts.log_level, log_ofs);
     opts.initFailpoints();
-}
-
-void finish()
-{
-    log_ofs.close();
-}
-
-void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
-{
-    for (const auto & dir : data_dirs)
-    {
-        LOG_FMT_ERROR(log, "rm -rf {}", dir);
-        Poco::File d(dir);
-        d.remove(true);
-    }
 }
 
 void outputResultHeader()
@@ -118,7 +116,6 @@ void run(WorkloadOptions & opts)
 {
     auto * log = &Poco::Logger::get("DTWorkload_main");
     LOG_FMT_INFO(log, "{}", opts.toString());
-    auto data_dirs = DB::tests::TiFlashTestEnv::getGlobalContext().getPathPool().listPaths();
     std::vector<Statistics> stats;
     try
     {
@@ -126,7 +123,7 @@ void run(WorkloadOptions & opts)
         auto handle_table = createHandleTable(opts);
         // Table Schema
         auto table_gen = TableGenerator::create(opts);
-        auto table_info = table_gen->get();
+        auto table_info = table_gen->get(opts.table_id, opts.table_name);
         // In this for loop, destory DeltaMergeStore gracefully and recreate it.
         for (uint64_t i = 0; i < opts.verify_round; i++)
         {
@@ -135,15 +132,14 @@ void run(WorkloadOptions & opts)
             stats.push_back(workload.getStat());
             LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
         }
-        removeData(log, data_dirs);
     }
     catch (...)
     {
         DB::tryLogCurrentException("exception thrown");
+        std::abort(); // Finish testing if some error happened.
     }
 
     outputResult(log, stats, opts);
-    finish();
 }
 
 void randomKill(WorkloadOptions & opts, pid_t pid)
@@ -218,9 +214,11 @@ void dailyPerformanceTest(WorkloadOptions & opts)
 {
     outputResultHeader();
     std::vector<std::string> workloads{"uniform", "normal", "incremental"};
-    for (const auto & w : workloads)
+    for (size_t i = 0; i < workloads.size(); i++)
     {
-        opts.write_key_distribution = w;
+        opts.write_key_distribution = workloads[i];
+        opts.table_id = i;
+        opts.table_name = workloads[i];
         ::run(opts);
     }
 }
@@ -248,6 +246,10 @@ int DTWorkload::mainEntry(int argc, char ** argv)
         return -1;
     }
 
+    // Log file is created in the first directory of `opts.work_dirs` by default.
+    // So create these work_dirs before logger initialization.
+    // Attention: This function will remove directory first if `work_dirs` exists.
+    initWorkDirs(opts.work_dirs);
     // need to init logger before creating global context,
     // or the logging in global context won't be output to
     // the log file
