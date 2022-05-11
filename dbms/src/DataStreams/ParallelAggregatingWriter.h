@@ -40,9 +40,9 @@ public:
         LOG_FMT_TRACE(
             log,
             "Aggregated. {} to {} rows (from {:.3f} MiB)).",
-            threads_data[i].src_rows,
+            threads_data[thread_num].src_rows,
             many_data[thread_num]->size(),
-            (threads_data[i].src_bytes / 1048576.0));
+            (threads_data[thread_num].src_bytes / 1048576.0));
     }
 
     void onFinish()
