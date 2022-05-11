@@ -49,17 +49,17 @@ tipb::Executor * PushDownFilter::constructSelectionForRemoteRead(tipb::Executor 
     }
 }
 
-PushDownFilter PushDownFilter::toPushDownFilter(const tipb::Executor * filter_executor)
+PushDownFilter PushDownFilter::toPushDownFilter(const String & executor_id, const tipb::Executor * executor)
 {
-    if (!filter_executor || !filter_executor->has_selection())
+    if (!executor || !executor->has_selection())
     {
         return {"", {}};
     }
 
     std::vector<const tipb::Expr *> conditions;
-    for (const auto & condition : filter_executor->selection().conditions())
+    for (const auto & condition : executor->selection().conditions())
         conditions.push_back(&condition);
 
-    return {filter_executor->executor_id(), conditions};
+    return {executor_id, conditions};
 }
 } // namespace DB
