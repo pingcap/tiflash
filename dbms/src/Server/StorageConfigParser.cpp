@@ -216,7 +216,6 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
     // config for experimental feature, may remove later
     enable_ps_v3 = get_bool_config_or_default("enable_ps_v3", enable_ps_v3);
 
-
     LOG_FMT_INFO(log, "format_version {} lazily_init_store {} enable_ps_v3 {}", format_version, lazily_init_store, enable_ps_v3);
 }
 
