@@ -14,56 +14,40 @@
 
 #pragma once
 
-#include <Common/MPMCQueue.h>
+//#include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/ParallelInputsProcessor.h>
-#include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
-
-#include "Storages/DeltaMerge/DMSegmentThreadInputStream.h"
-
-
-//#include "Storages/DeltaMerge/DMSegmentThreadInputStream.h"
+#include <queue>
+#include <vector>
+#include <memory>
+//#include <DataStreams/ParallelInputsProcessor.h>
+//#include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+} // namespace ErrorCodes
 
-
-namespace MultiplexDMSegInputStreamImpl
+class MultiPartitionStreamPool
 {
-//template <StreamUnionMode mode>
-//struct OutputData;
+public:
+    MultiPartitionStreamPool() = default;
 
-/// A block or an exception.
-struct OutputData
-{
-    Block block;
-    std::exception_ptr exception;
+    void addPartitionStreams(const BlockInputStreams & cur_streams)
+    {
+        std::unique_lock lk(mu);
+        if (cur_streams.empty())
+            return;
+        streams_queue_by_partition.push_back(
+            std::make_shared<std::queue<std::shared_ptr<IBlockInputStream>>>());
+        for (const auto & stream : cur_streams)
+            streams_queue_by_partition.back()->push(stream);
+        added_streams.insert(added_streams.end(), cur_streams.begin(), cur_streams.end());
+    }
 
-    OutputData() = default;
-    explicit OutputData(Block & block_)
-        : block(block_)
-    {}
-    explicit OutputData(const std::exception_ptr & exception_)
-        : exception(exception_)
-    {}
-};
-
-} // namespace MultiplexDMSegInputStreamImpl
-
-//class DMSegmentThreadInputStream;
-
-
-struct DMSegThdInputStreamPool
-{
-    std::vector<std::shared_ptr<std::queue<std::shared_ptr<DM::DMSegmentThreadInputStream>>>> streams_queue_by_partition;
-    //    std::list<std::queue<std::shared_ptr<DM::DMSegmentThreadInputStream>>>::iterator a = streams_queue_by_partition.begin();
-    int streams_queue_id = 0;
-    std::mutex mu;
-    std::shared_ptr<DM::DMSegmentThreadInputStream> pickOne()
+    std::shared_ptr<IBlockInputStream> pickOne()
     {
         std::unique_lock lk(mu);
         if (streams_queue_by_partition.empty())
@@ -73,17 +57,26 @@ struct DMSegThdInputStreamPool
 
         auto & q_ptr = streams_queue_by_partition[streams_queue_id];
         auto & q = *q_ptr;
-        std::shared_ptr<DM::DMSegmentThreadInputStream> ret = nullptr;
+        std::shared_ptr<IBlockInputStream> ret = nullptr;
         assert(!q.empty());
         ret = q.front();
         q.pop();
         if (q.empty())
-        {
             streams_queue_id = removeQueue(streams_queue_id);
-        }
+        else
+            streams_queue_id = nextQueueId(streams_queue_id);
         return ret;
     }
 
+    int exportAddedStreams(BlockInputStreams & ret_streams)
+    {
+        std::unique_lock lk(mu);
+        for (auto & stream : added_streams)
+            ret_streams.push_back(stream);
+        return added_streams.size();
+    }
+
+private:
     int removeQueue(int queue_id)
     {
         streams_queue_by_partition[queue_id] = nullptr;
@@ -92,67 +85,72 @@ struct DMSegThdInputStreamPool
             swap(streams_queue_by_partition[queue_id], streams_queue_by_partition.back());
         }
         streams_queue_by_partition.pop_back();
-        return nextQueueId(queue_id);
-    }
-
-    int nextQueueId(int queue_id)
-    {
-        if (queue_id + 1 >= static_cast<int>(streams_queue_by_partition.size()))
-        {
-            return 0;
-        }
+        if (queue_id < static_cast<int>(streams_queue_by_partition.size()))
+            return queue_id;
         else
-        {
-            return queue_id + 1;
-        }
+            return 0;
     }
 
-    static void swap(std::shared_ptr<std::queue<std::shared_ptr<DM::DMSegmentThreadInputStream>>> & a, std::shared_ptr<std::queue<std::shared_ptr<DM::DMSegmentThreadInputStream>>> & b)
+    int nextQueueId(int queue_id) const
+    {
+        if (queue_id + 1 < static_cast<int>(streams_queue_by_partition.size()))
+            return queue_id + 1;
+        else
+            return 0;
+    }
+
+    static void swap(std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & a,
+                     std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & b)
     {
         auto tmp = a;
         a = b;
         b = tmp;
     }
+
+    std::vector<
+        std::shared_ptr<std::queue<
+            std::shared_ptr<IBlockInputStream>>>>
+        streams_queue_by_partition;
+    std::vector<std::shared_ptr<IBlockInputStream>> added_streams;
+    int streams_queue_id = 0;
+    std::mutex mu;
 };
 
-class MultiplexDMSegInputStream final : public IProfilingBlockInputStream
+class MultiplexInputStream final : public IProfilingBlockInputStream
 {
-public:
-    using ExceptionCallback = std::function<void()>;
-
 private:
     static constexpr auto NAME = "MultiplexDMSeg";
 
 public:
-    MultiplexDMSegInputStream(
-        BlockInputStreams inputs,
-        std::shared_ptr<DMSegThdInputStreamPool> & shared_pool,
+    MultiplexInputStream(
+        //        BlockInputStreams inputs,
+        std::shared_ptr<MultiPartitionStreamPool> & shared_pool,
         const String & req_id)
         : log(Logger::get(NAME, req_id))
         , shared_pool(shared_pool)
     {
         // TODO: assert capacity of output_queue is not less than processor.getMaxThreads()
-        children = inputs;
-
+        shared_pool->exportAddedStreams(children);
         size_t num_children = children.size();
         if (num_children > 1)
         {
             Block header = children.at(0)->getHeader();
             for (size_t i = 1; i < num_children; ++i)
-                assertBlocksHaveEqualStructure(children[i]->getHeader(), header, "MULTIPLEX_DMSEG");
+                assertBlocksHaveEqualStructure(
+                    children[i]->getHeader(),
+                    header,
+                    "MULTIPLEX_DMSEG");
         }
     }
 
     String getName() const override { return NAME; }
 
-    ~MultiplexDMSegInputStream() override
+    ~MultiplexInputStream() override
     {
         try
         {
             if (!all_read)
                 cancel(false);
-
-            //            finalize();
         }
         catch (...)
         {
@@ -169,14 +167,20 @@ public:
             is_killed = true;
 
         bool old_val = false;
-        if (!is_cancelled.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+        if (!is_cancelled.compare_exchange_strong(
+                old_val,
+                true,
+                std::memory_order_seq_cst,
+                std::memory_order_relaxed))
             return;
 
         if (cur_stream)
         {
-            cur_stream->cancel(kill);
+            if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(&*cur_stream))
+            {
+                child->cancel(kill);
+            }
         }
-        //        processor.cancel(kill);
     }
 
     BlockExtraInfo getBlockExtraInfo() const override
@@ -248,8 +252,8 @@ protected:
 private:
     LoggerPtr log;
 
-    std::shared_ptr<DMSegThdInputStreamPool> shared_pool;
-    std::shared_ptr<DM::DMSegmentThreadInputStream> cur_stream;
+    std::shared_ptr<MultiPartitionStreamPool> shared_pool;
+    std::shared_ptr<IBlockInputStream> cur_stream;
 
     bool all_read = false;
 };

@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataStreams/MultiplexInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -308,6 +309,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
     if (total_local_region_num == 0)
         return;
     auto table_query_infos = generateSelectQueryInfos();
+    std::shared_ptr<MultiPartitionStreamPool> stream_pool = std::make_shared<MultiPartitionStreamPool>();
     for (auto & table_query_info : table_query_infos)
     {
         DAGPipeline current_pipeline;
@@ -329,7 +331,7 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
             try
             {
                 current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, current_max_streams);
-
+                stream_pool->addPartitionStreams(current_pipeline.streams);
                 // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
                 // In case the versions of regions have changed, those `streams` may contain different data other than expected.
                 // Like after region merge/split.
@@ -438,7 +440,11 @@ void DAGStorageInterpreter::doLocalRead(DAGPipeline & pipeline, size_t max_block
                 throw;
             }
         }
-        pipeline.streams.insert(pipeline.streams.end(), current_pipeline.streams.begin(), current_pipeline.streams.end());
+    }
+    //TODO use old style when table_query_infos.size() <= 1;
+    for (int i = 0; i < static_cast<int>(max_streams); i++)
+    {
+        pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, context.getDAGContext()->getMPPTaskId().toString()));
     }
 }
 
