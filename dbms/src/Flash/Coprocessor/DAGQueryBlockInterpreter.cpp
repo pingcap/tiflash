@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
+#include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
@@ -52,8 +53,6 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/Transaction/TiDB.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-
-#include "Core/NamesAndTypes.h"
 
 
 namespace DB

@@ -21,20 +21,13 @@ MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const tipb::Exc
     : output_index(0)
     , max_block_size(max_block_size)
 {
-    rows = 0;
-    DAGSchema schema;
     for (int i = 0; i < receiver.field_types_size(); ++i)
     {
-        String name = "exchange_receiver_" + std::to_string(i);
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(receiver.field_types(i));
-        schema.emplace_back(std::move(name), std::move(info));
+        columns.emplace_back(
+            getDataTypeByColumnInfoForComputingLayer(TiDB::fieldTypeToColumnInfo(receiver.field_types(i))),
+            fmt::format("exchange_receiver_{}", i));
     }
-    for (auto & dag_col : schema)
-    {
-        auto tp = getDataTypeByColumnInfoForComputingLayer(dag_col.second);
-        ColumnWithTypeAndName col(tp, dag_col.first);
-        columns.emplace_back(col);
-    }
+    rows = 0;
     for (const auto & elem : columns)
     {
         if (elem.column)
@@ -52,7 +45,7 @@ ColumnPtr MockExchangeReceiverInputStream::makeColumn(ColumnWithTypeAndName elem
     for (size_t i = output_index; i < rows & row_count < max_block_size; ++i)
     {
         column->insert((*elem.column)[i]);
-        row_count++;
+        ++row_count;
     }
 
     return column;
