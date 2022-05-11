@@ -12,23 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Parsers/ParserQueryWithOutput.h>
-#include <Parsers/ParserShowTablesQuery.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserTablePropertiesQuery.h>
-#include <Parsers/ParserDescribeTableQuery.h>
-#include <Parsers/ParserShowProcesslistQuery.h>
+#include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCheckQuery.h>
 #include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ParserRenameQuery.h>
-#include <Parsers/ParserAlterQuery.h>
+#include <Parsers/ParserDescribeTableQuery.h>
 #include <Parsers/ParserDropQuery.h>
-#include <Parsers/ParserKillQueryQuery.h>
+#include <Parsers/ParserQueryWithOutput.h>
+#include <Parsers/ParserRenameQuery.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
+#include <Parsers/ParserShowProcesslistQuery.h>
+#include <Parsers/ParserShowTablesQuery.h>
+#include <Parsers/ParserTablePropertiesQuery.h>
 
 
 namespace DB
 {
-
 bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserShowTablesQuery show_tables_p;
@@ -41,7 +39,6 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserRenameQuery rename_p;
     ParserDropQuery drop_p;
     ParserCheckQuery check_p;
-    ParserKillQueryQuery kill_query_p;
 
     ASTPtr query;
 
@@ -54,8 +51,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || alter_p.parse(pos, query, expected)
         || rename_p.parse(pos, query, expected)
         || drop_p.parse(pos, query, expected)
-        || check_p.parse(pos, query, expected)
-        || kill_query_p.parse(pos, query, expected);
+        || check_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;
@@ -89,4 +85,4 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     return true;
 }
 
-}
+} // namespace DB
