@@ -269,6 +269,14 @@ PageStorageRunMode StoragePool::restore()
     }
     case PageStorageRunMode::MIX_MODE:
     {
+        auto v2_log_max_ids = log_storage_v2->restore();
+        auto v2_data_max_ids = data_storage_v2->restore();
+        auto v2_meta_max_ids = meta_storage_v2->restore();
+
+        assert(v2_log_max_ids.size() == 1);
+        assert(v2_data_max_ids.size() == 1);
+        assert(v2_meta_max_ids.size() == 1);
+
         // Check number of valid pages in v2
         // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
@@ -293,14 +301,6 @@ PageStorageRunMode StoragePool::restore()
         }
         else // Still running Mix Mode
         {
-            auto v2_log_max_ids = log_storage_v2->restore();
-            auto v2_data_max_ids = data_storage_v2->restore();
-            auto v2_meta_max_ids = meta_storage_v2->restore();
-
-            assert(v2_log_max_ids.size() == 1);
-            assert(v2_data_max_ids.size() == 1);
-            assert(v2_meta_max_ids.size() == 1);
-
             max_log_page_id = std::max(v2_log_max_ids[0], global_storage_pool->getLogMaxId(ns_id));
             max_data_page_id = std::max(v2_data_max_ids[0], global_storage_pool->getDataMaxId(ns_id));
             max_meta_page_id = std::max(v2_meta_max_ids[0], global_storage_pool->getMetaMaxId(ns_id));
