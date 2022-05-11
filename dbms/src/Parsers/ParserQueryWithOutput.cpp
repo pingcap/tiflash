@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Parsers/ParserAlterQuery.h>
-#include <Parsers/ParserCheckQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDescribeTableQuery.h>
 #include <Parsers/ParserDropQuery.h>
@@ -38,7 +37,6 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserAlterQuery alter_p;
     ParserRenameQuery rename_p;
     ParserDropQuery drop_p;
-    ParserCheckQuery check_p;
 
     ASTPtr query;
 
@@ -50,8 +48,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || create_p.parse(pos, query, expected)
         || alter_p.parse(pos, query, expected)
         || rename_p.parse(pos, query, expected)
-        || drop_p.parse(pos, query, expected)
-        || check_p.parse(pos, query, expected);
+        || drop_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;
