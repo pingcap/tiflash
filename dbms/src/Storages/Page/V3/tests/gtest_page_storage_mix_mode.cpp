@@ -461,7 +461,7 @@ try
         ASSERT_EQ(page_reader_mix->getNormalPageId(10), 8);
 
         std::vector<PageStorage::PageReadFields> read_fields;
-        read_fields.emplace_back(std::make_pair<PageId, PageStorage::FieldIndices>(10, {0, 1, 2, 6}));
+        read_fields.emplace_back(std::pair<PageId, PageStorage::FieldIndices>(10, {0, 1, 2, 6}));
 
         PageMap page_maps = page_reader_mix->read(read_fields);
         ASSERT_EQ(page_maps.size(), 1);

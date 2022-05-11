@@ -29,6 +29,7 @@
 
 #include <condition_variable>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <queue>
 #include <set>
@@ -340,39 +341,19 @@ protected:
     FileProviderPtr file_provider;
 };
 
+// An impl class to hide the details for PageReaderImplMixed
+class PageReaderImpl;
+// A class to wrap read with a specify snapshot
 class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_)
-        : run_mode(run_mode_)
-        , ns_id(ns_id_)
-        , storage_v2(storage_v2_)
-        , storage_v3(storage_v3_)
-        , read_limiter(read_limiter_)
-    {
-    }
+    explicit PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_);
 
     /// Snapshot read.
-    PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
-        : run_mode(run_mode_)
-        , ns_id(ns_id_)
-        , storage_v2(storage_v2_)
-        , storage_v3(storage_v3_)
-        , snap(snap_)
-        , read_limiter(read_limiter_)
-    {
-    }
+    PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr snap_, ReadLimiterPtr read_limiter_);
 
-    PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
-        : run_mode(run_mode_)
-        , ns_id(ns_id_)
-        , storage_v2(storage_v2_)
-        , storage_v3(storage_v3_)
-        , snap(std::move(snap_))
-        , read_limiter(read_limiter_)
-    {
-    }
+    ~PageReader();
 
     DB::Page read(PageId page_id) const;
 
@@ -397,17 +378,7 @@ public:
     void traverse(const std::function<void(const DB::Page & page)> & acceptor) const;
 
 private:
-    PageStorage::SnapshotPtr toConcreteV3Snapshot() const;
-
-    PageStorage::SnapshotPtr toConcreteV2Snapshot() const;
-
-private:
-    const PageStorageRunMode run_mode;
-    NamespaceId ns_id;
-    PageStoragePtr storage_v2;
-    PageStoragePtr storage_v3;
-    PageStorage::SnapshotPtr snap;
-    ReadLimiterPtr read_limiter;
+    std::unique_ptr<PageReaderImpl> impl;
 };
 using PageReaderPtr = std::shared_ptr<PageReader>;
 
