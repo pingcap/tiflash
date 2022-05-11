@@ -287,13 +287,20 @@ void StorageDeltaMerge::updateTableColumnInfo()
     rowkey_column_size = rowkey_column_defines.size();
 }
 
+void StorageDeltaMerge::clearData()
+{
+    shutdown();
+    // init the store so it can clear data
+    auto & store = getAndMaybeInitStore();
+    store->clearData();
+}
+
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    if (storeInited())
-    {
-        _store->drop();
-    }
+    // init the store so it can do the drop work
+    auto & store = getAndMaybeInitStore();
+    store->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)

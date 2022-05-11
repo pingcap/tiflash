@@ -53,6 +53,21 @@ public:
     PageStoragePtr data() const { return data_storage; }
     PageStoragePtr meta() const { return meta_storage; }
 
+    std::map<NamespaceId, PageId> getLogMaxIds() const
+    {
+        return log_max_ids;
+    }
+
+    std::map<NamespaceId, PageId> getDataMaxIds() const
+    {
+        return data_max_ids;
+    }
+
+    std::map<NamespaceId, PageId> getMetaMaxIds() const
+    {
+        return meta_max_ids;
+    }
+
 private:
     // TODO: maybe more frequent gc for GlobalStoragePool?
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
@@ -61,6 +76,10 @@ private:
     PageStoragePtr log_storage;
     PageStoragePtr data_storage;
     PageStoragePtr meta_storage;
+
+    std::map<NamespaceId, PageId> log_max_ids;
+    std::map<NamespaceId, PageId> data_max_ids;
+    std::map<NamespaceId, PageId> meta_max_ids;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
@@ -142,6 +161,11 @@ private:
     std::mutex mutex;
 
     Context & global_context;
+
+    // TBD: Will be replaced GlobalPathPoolPtr after mix mode ptr ready
+    std::map<NamespaceId, PageId> v3_log_max_ids;
+    std::map<NamespaceId, PageId> v3_data_max_ids;
+    std::map<NamespaceId, PageId> v3_meta_max_ids;
 
     std::atomic<PageId> max_log_page_id = 0;
     std::atomic<PageId> max_data_page_id = 0;

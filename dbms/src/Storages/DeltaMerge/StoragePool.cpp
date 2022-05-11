@@ -114,9 +114,9 @@ GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & globa
 
 void GlobalStoragePool::restore()
 {
-    log_storage->restore();
-    data_storage->restore();
-    meta_storage->restore();
+    log_max_ids = log_storage->restore();
+    data_max_ids = data_storage->restore();
+    meta_max_ids = meta_storage->restore();
 
     gc_handle = global_context.getBackgroundPool().addTask(
         [this] {
@@ -187,6 +187,9 @@ StoragePool::StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_st
     , data_storage_reader(ns_id, data_storage, nullptr)
     , meta_storage_reader(ns_id, meta_storage, nullptr)
     , global_context(global_ctx)
+    , v3_log_max_ids(global_storage_pool.getLogMaxIds())
+    , v3_data_max_ids(global_storage_pool.getDataMaxIds())
+    , v3_meta_max_ids(global_storage_pool.getMetaMaxIds())
 {}
 
 void StoragePool::restore()
@@ -194,14 +197,48 @@ void StoragePool::restore()
     // If the storage instances is not global, we need to initialize it by ourselves and add a gc task.
     if (owned_storage)
     {
-        log_storage->restore();
-        data_storage->restore();
-        meta_storage->restore();
-    }
+        auto log_max_ids = log_storage->restore();
+        auto data_max_ids = data_storage->restore();
+        auto meta_max_ids = meta_storage->restore();
 
-    max_log_page_id = log_storage->getMaxId(ns_id);
-    max_data_page_id = data_storage->getMaxId(ns_id);
-    max_meta_page_id = meta_storage->getMaxId(ns_id);
+        assert(log_max_ids.size() == 1);
+        assert(data_max_ids.size() == 1);
+        assert(meta_max_ids.size() == 1);
+
+        max_log_page_id = log_max_ids[0];
+        max_data_page_id = data_max_ids[0];
+        max_meta_page_id = meta_max_ids[0];
+    }
+    else
+    {
+        if (const auto & it = v3_log_max_ids.find(ns_id); it == v3_log_max_ids.end())
+        {
+            max_log_page_id = 0;
+        }
+        else
+        {
+            max_log_page_id = it->second;
+        }
+
+        if (const auto & it = v3_data_max_ids.find(ns_id); it == v3_data_max_ids.end())
+        {
+            max_data_page_id = 0;
+        }
+        else
+        {
+            max_data_page_id = it->second;
+        }
+
+        if (const auto & it = v3_meta_max_ids.find(ns_id); it == v3_meta_max_ids.end())
+        {
+            max_meta_page_id = 0;
+        }
+        else
+        {
+            max_meta_page_id = it->second;
+        }
+    }
+    // TODO: add a log to show max_*_page_id after mix mode pr ready.
 }
 
 StoragePool::~StoragePool()
