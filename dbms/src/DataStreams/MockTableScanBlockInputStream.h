@@ -14,30 +14,27 @@
 
 #pragma once
 
-#include <Common/nocopyable.h>
-
-#include <cstring>
+#include <DataStreams/IProfilingBlockInputStream.h>
 
 namespace DB
 {
-struct RawCppString : std::string
+class MockTableScanBlockInputStream : public IProfilingBlockInputStream
 {
-    using Base = std::string;
-    using Base::Base;
-    RawCppString() = delete;
-    RawCppString(Base && src)
-        : Base(std::move(src))
-    {}
-    RawCppString(const Base & src)
-        : Base(src)
-    {}
-    DISALLOW_COPY(RawCppString);
-
-    template <class... Args>
-    static RawCppString * New(Args &&... _args)
+public:
+    MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size);
+    Block getHeader() const override
     {
-        return new RawCppString{std::forward<Args>(_args)...};
+        return Block(columns);
     }
+    String getName() const override { return "MockTableScan"; }
+    ColumnsWithTypeAndName columns;
+    size_t output_index;
+    size_t max_block_size;
+    size_t rows;
+
+protected:
+    Block readImpl() override;
+    ColumnPtr makeColumn(ColumnWithTypeAndName elem) const;
 };
 
 } // namespace DB

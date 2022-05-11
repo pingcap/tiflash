@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
@@ -275,6 +276,7 @@ class WALStoreTest
 public:
     WALStoreTest()
         : multi_paths(GetParam())
+        , log(Logger::get("WALStoreTest"))
     {
     }
 
@@ -305,11 +307,11 @@ private:
 protected:
     PSDiskDelegatorPtr delegator;
     WALStore::Config config;
+    LoggerPtr log;
 };
 
 TEST_P(WALStoreTest, FindCheckpointFile)
 {
-    LoggerPtr log = Logger::get("WALLognameTest");
     auto path = getTemporaryPath();
 
     {
@@ -602,7 +604,7 @@ try
     ASSERT_NE(wal, nullptr);
 
     std::mt19937 rd;
-    std::uniform_int_distribution<> d(0, 20);
+    std::uniform_int_distribution<> d_20(0, 20);
 
     // Stage 2. insert many edits
     constexpr size_t num_edits_test = 100000;
@@ -614,7 +616,7 @@ try
     {
         PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         PageEntriesEdit edit;
-        const size_t num_pages_put = d(rd);
+        const size_t num_pages_put = d_20(rd);
         for (size_t p = 0; p < num_pages_put; ++p)
         {
             page_id += 1;
@@ -650,23 +652,45 @@ try
 
     LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 
-    // Stage 3. compact logs and verify
-    // wal->compactLogs();
-    // wal.reset();
+    // Test for save snapshot (with encryption)
+    auto enc_key_manager = std::make_shared<MockKeyManager>(/*encryption_enabled_=*/true);
+    auto enc_provider = std::make_shared<FileProvider>(enc_key_manager, true);
+    LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, log);
+    WALStore::FilesSnapshot file_snap{.current_writting_log_num = 100, // just a fake value
+                                      .persisted_log_files = persisted_log_files};
 
-    // // After logs compacted, they should be written as one edit.
-    // num_edits_read = 0;
-    // num_pages_read = 0;
-    // wal = WALStore::create(
-    //     [&](PageEntriesEdit && edit) {
-    //         num_pages_read += edit.size();
-    //         EXPECT_EQ(page_id, edit.size()) << fmt::format("at idx={}", num_edits_read);
-    //         num_edits_read += 1;
-    //     },
-    //     provider,
-    //     delegator);
-    // EXPECT_EQ(num_edits_read, 1);
-    // EXPECT_EQ(num_pages_read, page_id);
+    PageEntriesEdit snap_edit;
+    PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    std::uniform_int_distribution<> d_10000(0, 10000);
+    // just fill in some random entry
+    for (size_t i = 0; i < 70; ++i)
+    {
+        snap_edit.varEntry(d_10000(rd), PageVersionType(345, 22), entry, 1);
+    }
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
+    bool done = wal->saveSnapshot(std::move(file_snap), std::move(snap_edit));
+    ASSERT_TRUE(done);
+    wal.reset();
+    reader.reset();
+
+    // After logs compacted, they should be written as one edit.
+    num_edits_read = 0;
+    num_pages_read = 0;
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
+    while (reader->remained())
+    {
+        auto [ok, edit] = reader->next();
+        if (!ok)
+        {
+            reader->throwIfError();
+            // else it just run to the end of file.
+            break;
+        }
+        num_pages_read += edit.size();
+        num_edits_read += 1;
+    }
+    EXPECT_EQ(num_edits_read, 1);
+    EXPECT_EQ(num_pages_read, 70);
 }
 CATCH
 

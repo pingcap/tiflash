@@ -16,6 +16,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Logger.h>
+#include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
@@ -362,12 +363,8 @@ public:
         return mvcc_table_directory.size();
     }
 
-    // No copying
-    PageDirectory(const PageDirectory &) = delete;
-    PageDirectory & operator=(const PageDirectory &) = delete;
-    // No moving
-    PageDirectory(PageDirectory && rhs) = delete;
-    PageDirectory & operator=(PageDirectory && rhs) = delete;
+    // No copying and no moving
+    DISALLOW_COPY_AND_MOVE(PageDirectory);
 
     friend class PageDirectoryFactory;
     friend class PageStorageControl;

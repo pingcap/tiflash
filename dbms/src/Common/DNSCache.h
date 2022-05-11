@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/nocopyable.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Net/SocketAddress.h>
 
@@ -27,7 +28,7 @@ namespace DB
 class DNSCache : public ext::Singleton<DNSCache>
 {
 public:
-    DNSCache(const DNSCache &) = delete;
+    DISALLOW_COPY(DNSCache);
 
     /// Accepts host names like 'example.com' or '127.0.0.1' or '::1' and resolve its IP
     Poco::Net::IPAddress resolveHost(const std::string & host);

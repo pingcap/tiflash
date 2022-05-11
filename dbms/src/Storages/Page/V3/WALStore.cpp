@@ -201,9 +201,15 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     // Rename it to be a normal log file.
     const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);
     const auto normal_fullname = log_filename.fullname(LogFileStage::Normal);
+
     LOG_FMT_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
-    auto f = Poco::File{temp_fullname};
-    f.renameTo(normal_fullname);
+    // Use `renameFile` from FileProvider that take good care of encryption path
+    provider->renameFile(
+        temp_fullname,
+        EncryptionPath(temp_fullname, ""),
+        normal_fullname,
+        EncryptionPath(normal_fullname, ""),
+        true);
     LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
 
     // #define ARCHIVE_COMPACTED_LOGS // keep for debug
