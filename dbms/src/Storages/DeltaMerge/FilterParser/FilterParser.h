@@ -47,7 +47,7 @@ public:
         const DAGQueryInfo & dag_info,
         const ColumnDefines & columns_to_read,
         AttrCreatorByColumnID && creator,
-        Poco::Logger * log);
+        const LoggerPtr & log);
 
     /// Some helper structure
 

@@ -226,6 +226,11 @@ void submitLocalDeltaMemory()
     local_delta = 0;
 }
 
+Int64 getLocalDeltaMemory()
+{
+    return local_delta;
+}
+
 void alloc(Int64 size)
 {
     checkSubmitAndUpdateLocalDelta(local_delta + size);

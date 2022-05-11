@@ -287,9 +287,9 @@ public:
 
         // first element of return value means whether task is added or not
         // second element of return value means whether task is heavy or not
-        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, Poco::Logger * log_);
+        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, const LoggerPtr & log_);
 
-        BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
+        BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
     };
 
     DeltaMergeStore(Context & db_context, //
@@ -310,6 +310,8 @@ public:
     const String & getTableName() const { return table_name; }
 
     void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
+
+    void clearData();
 
     void drop();
 
@@ -358,6 +360,7 @@ public:
                            size_t num_streams,
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
+                           const String & tracing_id,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
@@ -414,9 +417,12 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id = "");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
 
-    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    static bool pkIsHandle(const ColumnDefine & handle_define)
+    {
+        return handle_define.id != EXTRA_HANDLE_COLUMN_ID;
+    }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
@@ -436,8 +442,14 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
-    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    {
+        return doIsSegmentValid(segment);
+    }
+    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    {
+        return doIsSegmentValid(segment);
+    }
     bool doIsSegmentValid(const SegmentPtr & segment);
 
     void restoreStableFiles();
@@ -447,8 +459,13 @@ private:
                                           size_t expected_tasks_count = 1,
                                           const SegmentIdSet & read_segments = {});
 
+private:
+    void dropAllSegments(bool keep_first_segment);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
 #endif
 
     Context & global_context;
@@ -496,7 +513,7 @@ private:
 
     UInt64 hash_salt;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 }; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;

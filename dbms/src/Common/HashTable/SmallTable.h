@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/HashTable/HashMap.h>
-
+#include <Common/nocopyable.h>
 
 namespace DB
 {
@@ -95,8 +95,7 @@ public:
         {
         }
 
-        Reader(const Reader &) = delete;
-        Reader & operator=(const Reader &) = delete;
+        DISALLOW_COPY(Reader);
 
         bool next()
         {

@@ -14,20 +14,26 @@
 
 #pragma once
 
-#include <Parsers/IParserBase.h>
-#include <Parsers/ExpressionElementParsers.h>
+#include <common/types.h>
+#include <tipb/executor.pb.h>
 
+#include <vector>
 
 namespace DB
 {
-
-/** Query OPTIMIZE TABLE [db.]name [PARTITION partition] [FINAL] [DEDUPLICATE]
-  */
-class ParserOptimizeQuery : public IParserBase
+struct PushDownFilter
 {
-protected:
-    const char * getName() const { return "OPTIMIZE query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-};
+    static PushDownFilter toPushDownFilter(const tipb::Executor * filter_executor);
 
-}
+    PushDownFilter(
+        const String & executor_id_,
+        const std::vector<const tipb::Expr *> & conditions_);
+
+    bool hasValue() const { return !conditions.empty(); }
+
+    tipb::Executor * constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const;
+
+    String executor_id;
+    std::vector<const tipb::Expr *> conditions;
+};
+} // namespace DB

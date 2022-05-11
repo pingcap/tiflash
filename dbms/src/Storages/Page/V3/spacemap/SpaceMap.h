@@ -86,10 +86,11 @@ public:
      * It will mark that span to be used and also return a hint of the max capacity available in this SpaceMap. 
      * 
      * return value is <insert_offset, max_cap>:
-     *  insert_offset : start offset for the inserted space
-     *  max_cap : A hint of the largest available space this SpaceMap can hold. 
+     *  insert_offset: start offset for the inserted space
+     *  max_cap: A hint of the largest available space this SpaceMap can hold. 
+     *  is_expansion: Whether it is an expansion span
      */
-    virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
+    virtual std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) = 0;
 
     /**
      * Get the offset of the last free block. `[margin_offset, +∞)` is not used at all.
@@ -118,7 +119,12 @@ public:
     /**
      * Log the status of space map
      */
-    void logStats();
+    void logDebugString();
+
+    /**
+     * return the status of space map
+     */
+    virtual String toDebugString() = 0;
 
     SpaceMapType getType() const
     {
@@ -142,9 +148,6 @@ protected:
     SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_);
 
     virtual ~SpaceMap() = default;
-
-    /* Print space maps status  */
-    virtual void smapStats() = 0;
 
     // Return true if space [offset, offset+size) are all free
     virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;
