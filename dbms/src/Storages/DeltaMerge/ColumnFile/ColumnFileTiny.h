@@ -27,7 +27,9 @@ using ColumnTinyFilePtr = std::shared_ptr<ColumnFileTiny>;
 /// It may be created in two ways:
 ///   1. created directly when writing to storage if the data is large enough
 ///   2. created when flushed `ColumnFileInMemory` to disk
-/// And it may have cache data if the column file is small enough(The details are in the flush process).
+///
+/// If the contained data is small, these data may be attached in this ColumnFile memory structure as a cache.
+/// See flush process for details.
 class ColumnFileTiny : public ColumnFilePersisted
 {
     friend class ColumnFileTinyReader;

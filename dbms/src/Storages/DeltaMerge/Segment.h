@@ -136,9 +136,15 @@ public:
 
     void serialize(WriteBatch & wb);
 
+    /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
+    /// Usually the ColumnFile should not contain block data. To write block data, you can use `writeToCache`.
     bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file);
+
+    /// Write a block of data into the MemTableSet part of the Segment. The data will be flushed to disk later.
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
-    bool write(DMContext & dm_context, const Block & block); // For test only
+
+    /// For test only.
+    bool write(DMContext & dm_context, const Block & block);
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
     bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
@@ -220,7 +226,12 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & merged_stable);
 
+    /// Merge the delta (major compaction) and return the new segment.
+    ///
+    /// Note: This is only a shortcut function used in tests.
+    /// Normally you should call `prepareMergeDelta`, `applyMergeDelta` instead.
     SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+
     StableValueSpacePtr prepareMergeDelta(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
@@ -238,6 +249,8 @@ public:
     bool flushCache(DMContext & dm_context);
     void placeDeltaIndex(DMContext & dm_context);
 
+    /// Compact the delta layer, merging fragment column files into bigger column files.
+    /// It does not merge the delta into stable layer.
     bool compactDelta(DMContext & dm_context);
 
     size_t getEstimatedRows() const { return delta->getRows() + stable->getRows(); }
@@ -267,11 +280,18 @@ public:
         return lock;
     }
 
+    /// Marks this segment as abandoned.
+    /// Note: Segment member functions never abandon the segment itself.
+    /// The abandon state is usually triggered by the DeltaMergeStore.
     void abandon(DMContext & context)
     {
         LOG_FMT_DEBUG(log, "Abandon segment [{}]", segment_id);
         delta->abandon(context);
     }
+
+    /// Returns whether this segment has been marked as abandoned.
+    /// Note: Segment member functions never abandon the segment itself.
+    /// The abandon state is usually triggered by the DeltaMergeStore.
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
     bool isSplitForbidden() { return split_forbidden; }
@@ -373,7 +393,9 @@ private:
         bool relevant_place) const;
 
 private:
-    const UInt64 epoch; // After split / merge / merge delta, epoch got increased by 1.
+    /// The version of this segment. After split / merge / merge delta, epoch got increased by 1.
+    const UInt64 epoch;
+
     RowKeyRange rowkey_range;
     bool is_common_handle;
     size_t rowkey_column_size;

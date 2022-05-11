@@ -33,7 +33,7 @@ namespace DM
 {
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
-    // If this column file's schema is identical to last_schema, then use the last_schema instance,
+    // If this column file's schema is identical to last_schema, then use the last_schema instance (instead of the one in `column_file`),
     // so that we don't have to serialize my_schema instance.
     if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
     {
@@ -54,6 +54,8 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 
     if (!column_files.empty())
     {
+        // As we are now appending a new column file (which can be used for new appends),
+        // let's simply mark the last column file as not appendable.
         auto & last_column_file = column_files.back();
         if (last_column_file->isAppendable())
             last_column_file->disableAppend();
@@ -212,7 +214,7 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
     if (column_files.empty())
         return nullptr;
 
-    // make the last column file not appendable
+    // Mark the last ColumnFile not appendable, so that `appendToCache` will not reuse it and we will be safe to flush it to disk.
     if (column_files.back()->isAppendable())
         column_files.back()->disableAppend();
 
@@ -224,6 +226,8 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
         auto & task = flush_task->addColumnFile(column_file);
         if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
         {
+            // If the ColumnFile is not yet persisted in the disk, it will contain block data.
+            // In this case, let's write the block data in the flush process as well.
             task.rows_offset = cur_rows_offset;
             task.deletes_offset = cur_deletes_offset;
             task.block_data = m_file->readDataForFlush();

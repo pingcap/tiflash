@@ -113,7 +113,8 @@ public:
     virtual ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
 
-    /// only ColumnInMemoryFile can be appendable
+    /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
+    /// already been persisted in the disk and they should be immutable.
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
     virtual bool append(DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
