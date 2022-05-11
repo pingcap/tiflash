@@ -254,7 +254,6 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionToTiDBToSeconds>();
     factory.registerFunction<FunctionToTiDBToDays>();
     factory.registerFunction<FunctionTiDBFromDays>();
-
     factory.registerFunction<FunctionToTimeZone>();
     factory.registerFunction<FunctionToLastDay>();
 }

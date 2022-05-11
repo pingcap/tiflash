@@ -200,6 +200,9 @@ void fromDayNum(MyDateTime & t, int day_num);
 // returns seconds since '0000-00-00'
 UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second);
 
+// returns seconds since '0000-00-00'
+UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second);
+
 size_t maxFormattedDateTimeStringLength(const String & format);
 
 inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
