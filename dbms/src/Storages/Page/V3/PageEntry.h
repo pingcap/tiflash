@@ -92,7 +92,8 @@ inline String toDebugString(const PageEntryV3 & entry)
                        entry.offset,
                        entry.size,
                        entry.checksum,
-                       entry.tag, entry.field_offsets.size());
+                       entry.tag,
+                       entry.field_offsets.size());
 }
 
 } // namespace PS::V3
