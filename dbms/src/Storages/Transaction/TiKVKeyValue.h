@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/RedactHelpers.h>
+#include <Common/nocopyable.h>
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
 
@@ -46,7 +47,7 @@ public:
     {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
 
-    StringObject & operator=(const StringObject & a) = delete;
+    DISALLOW_COPY(StringObject);
     StringObject & operator=(StringObject && a)
     {
         if (this == &a)
@@ -73,7 +74,6 @@ private:
     StringObject(const Base & str_)
         : Base(str_)
     {}
-    StringObject(const StringObject & obj) = delete;
     size_t size() const = delete;
 };
 

@@ -42,12 +42,13 @@ struct WriteBatches : private boost::noncopyable
     WriteLimiterPtr write_limiter;
 
     WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
-        : log(storage_pool_.getNamespaceId())
-        , data(storage_pool_.getNamespaceId())
-        , meta(storage_pool_.getNamespaceId())
-        , removed_log(storage_pool_.getNamespaceId())
-        , removed_data(storage_pool_.getNamespaceId())
-        , removed_meta(storage_pool_.getNamespaceId())
+        : ns_id(storage_pool_.getNamespaceId())
+        , log(ns_id)
+        , data(ns_id)
+        , meta(ns_id)
+        , removed_log(ns_id)
+        , removed_data(ns_id)
+        , removed_meta(ns_id)
         , storage_pool(storage_pool_)
         , write_limiter(write_limiter_)
     {

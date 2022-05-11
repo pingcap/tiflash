@@ -66,9 +66,15 @@ struct MPPInfo
     Timestamp start_ts;
     Int64 partition_id;
     Int64 task_id;
-    const std::vector<Int64> & sender_target_task_ids;
-    const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map;
-    MPPInfo(Timestamp start_ts_, Int64 partition_id_, Int64 task_id_, const std::vector<Int64> & sender_target_task_ids_, const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
+    const std::vector<Int64> sender_target_task_ids;
+    const std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+
+    MPPInfo(
+        Timestamp start_ts_,
+        Int64 partition_id_,
+        Int64 task_id_,
+        const std::vector<Int64> & sender_target_task_ids_,
+        const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
         : start_ts(start_ts_)
         , partition_id(partition_id_)
         , task_id(task_id_)
@@ -283,5 +289,11 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
 ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr select_list);
 
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
+
+ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
+
+ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
+
+//TODO: add compileWindow
 
 } // namespace DB

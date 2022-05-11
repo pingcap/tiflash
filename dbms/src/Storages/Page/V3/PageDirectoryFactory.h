@@ -46,7 +46,7 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
 
     // just for test
     PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
@@ -58,11 +58,17 @@ public:
         return *this;
     }
 
+    std::map<NamespaceId, PageId> getMaxApplyPageIds() const
+    {
+        return max_apply_page_ids;
+    }
+
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
 
     BlobStore::BlobStats * blob_stats = nullptr;
+    std::map<NamespaceId, PageId> max_apply_page_ids;
 };
 
 } // namespace PS::V3
