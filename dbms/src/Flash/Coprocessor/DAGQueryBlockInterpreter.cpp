@@ -26,7 +26,8 @@
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
-#include <DataStreams/PartialAggregatingBlockInputStream.h>
+#include <DataStreams/ParallelBlockInputStream.h>
+#include <DataStreams/ParallelAggregatingWriter.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
