@@ -51,24 +51,45 @@ public:
 
     friend class StoragePool;
 
-    std::map<NamespaceId, PageId> getLogMaxIds() const
+    PageId getLogMaxId(NamespaceId ns_id) const
     {
-        return log_max_ids;
+        PageId max_log_page_id = 0;
+        if (const auto & it = log_max_ids.find(ns_id); it != log_max_ids.end())
+        {
+            max_log_page_id = it->second;
+        }
+
+        return max_log_page_id;
     }
 
-    std::map<NamespaceId, PageId> getDataMaxIds() const
+    PageId getDataMaxId(NamespaceId ns_id) const
     {
-        return data_max_ids;
+        PageId max_data_page_id = 0;
+        if (const auto & it = data_max_ids.find(ns_id); it != data_max_ids.end())
+        {
+            max_data_page_id = it->second;
+        }
+
+        return max_data_page_id;
     }
 
-    std::map<NamespaceId, PageId> getMetaMaxIds() const
+    PageId getMetaMaxId(NamespaceId ns_id) const
     {
-        return meta_max_ids;
+        PageId max_meta_page_id = 0;
+        if (const auto & it = meta_max_ids.find(ns_id); it != meta_max_ids.end())
+        {
+            max_meta_page_id = it->second;
+        }
+
+        return max_meta_page_id;
     }
+
+    // GC immediately
+    // Only used on dbgFuncMisc
+    bool gc();
 
 private:
-    // TODO: maybe more frequent gc for GlobalStoragePool?
-    bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
+    bool gc(const Settings & settings, bool immediately = false, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
     PageStoragePtr log_storage;
@@ -205,11 +226,6 @@ private:
     std::mutex mutex;
 
     Context & global_context;
-
-    // TBD: Will be replaced GlobalPathPoolPtr after mix mode ptr ready
-    std::map<NamespaceId, PageId> v3_log_max_ids;
-    std::map<NamespaceId, PageId> v3_data_max_ids;
-    std::map<NamespaceId, PageId> v3_meta_max_ids;
 
     std::atomic<PageId> max_log_page_id = 0;
     std::atomic<PageId> max_data_page_id = 0;

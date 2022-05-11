@@ -119,12 +119,20 @@ void GlobalStoragePool::restore()
         false);
 }
 
-bool GlobalStoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
+bool GlobalStoragePool::gc()
 {
-    // No need lock
+    return gc(Settings(), true, DELTA_MERGE_GC_PERIOD);
+}
+
+bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)
+{
     Timepoint now = Clock::now();
-    if (now < (last_try_gc_time.load() + try_gc_period))
-        return false;
+    if (!immediately)
+    {
+        // No need lock
+        if (now < (last_try_gc_time.load() + try_gc_period))
+            return false;
+    }
 
     last_try_gc_time = now;
 
@@ -237,9 +245,9 @@ PageStorageRunMode StoragePool::restore()
     {
     case PageStorageRunMode::ONLY_V2:
     {
-        auto log_max_ids = log_storage->restore();
-        auto data_max_ids = data_storage->restore();
-        auto meta_max_ids = meta_storage->restore();
+        auto log_max_ids = log_storage_v2->restore();
+        auto data_max_ids = data_storage_v2->restore();
+        auto meta_max_ids = meta_storage_v2->restore();
 
         assert(log_max_ids.size() == 1);
         assert(data_max_ids.size() == 1);
@@ -253,9 +261,9 @@ PageStorageRunMode StoragePool::restore()
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        max_log_page_id = global_storage_pool.getLogMaxId(ns_id);
-        max_data_page_id = global_storage_pool.getDataMaxId(ns_id);
-        max_meta_page_id = global_storage_pool.getMetaMaxId(ns_id);
+        max_log_page_id = global_storage_pool->getLogMaxId(ns_id);
+        max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
+        max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
 
         break;
     }
@@ -279,27 +287,23 @@ PageStorageRunMode StoragePool::restore()
             data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
             meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
 
-            max_log_page_id = global_storage_pool.getLogMaxId(ns_id);
-            max_data_page_id = global_storage_pool.getDataMaxId(ns_id);
-            max_meta_page_id = global_storage_pool.getMetaMaxId(ns_id);
+            max_log_page_id = global_storage_pool->getLogMaxId(ns_id);
+            max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
+            max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
         }
         else // Still running Mix Mode
         {
-            auto v2_log_max_ids = log_storage->restore();
-            auto v2_data_max_ids = data_storage->restore();
-            auto v2_meta_max_ids = meta_storage->restore();
+            auto v2_log_max_ids = log_storage_v2->restore();
+            auto v2_data_max_ids = data_storage_v2->restore();
+            auto v2_meta_max_ids = meta_storage_v2->restore();
 
             assert(v2_log_max_ids.size() == 1);
             assert(v2_data_max_ids.size() == 1);
             assert(v2_meta_max_ids.size() == 1);
 
-            max_log_page_id = v2_log_max_ids[0];
-            max_data_page_id = v2_data_max_ids[0];
-            max_meta_page_id = v2_meta_max_ids[0];
-
-            max_log_page_id = std::max(max_log_page_id, global_storage_pool.getLogMaxId(ns_id));
-            max_data_page_id = std::max(max_data_page_id, global_storage_pool.getDataMaxId(ns_id));
-            max_meta_page_id = std::max(max_meta_page_id, global_storage_pool.getMetaMaxId(ns_id));
+            max_log_page_id = std::max(v2_log_max_ids[0], global_storage_pool->getLogMaxId(ns_id));
+            max_data_page_id = std::max(v2_data_max_ids[0], global_storage_pool->getDataMaxId(ns_id));
+            max_meta_page_id = std::max(v2_meta_max_ids[0], global_storage_pool->getMetaMaxId(ns_id));
         }
         break;
     }
