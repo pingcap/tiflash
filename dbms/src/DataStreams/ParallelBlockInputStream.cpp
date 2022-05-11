@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #include <Common/ClickHouseRevision.h>
-#include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
-#include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/ParallelBlockInputStream.h>
 
 namespace DB
