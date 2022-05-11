@@ -380,6 +380,11 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
 
 void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, const ReadLimiterPtr & read_limiter)
 {
+    if (entries.empty())
+    {
+        return;
+    }
+
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
@@ -444,6 +449,11 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
 
 PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
 {
+    if (to_read.empty())
+    {
+        return {};
+    }
+
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
     // Sort in ascending order by offset in file.
@@ -542,6 +552,11 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
 
 PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter)
 {
+    if (entries.empty())
+    {
+        return {};
+    }
+
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
@@ -621,6 +636,13 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
+    if (!id_entry.second.isValid())
+    {
+        Page page_not_found;
+        page_not_found.page_id = INVALID_PAGE_ID;
+        return page_not_found;
+    }
+
     const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
 

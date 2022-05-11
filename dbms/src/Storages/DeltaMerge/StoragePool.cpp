@@ -282,7 +282,7 @@ PageStorageRunMode StoragePool::restore()
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
             LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", static_cast<UInt8>(PageStorageRunMode::MIX_MODE), static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
-            run_mode = PageStorageRunMode::ONLY_V3;
+
             log_storage_v2 = nullptr;
             data_storage_v2 = nullptr;
             meta_storage_v2 = nullptr;
@@ -298,6 +298,8 @@ PageStorageRunMode StoragePool::restore()
             max_log_page_id = global_storage_pool->getLogMaxId(ns_id);
             max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
             max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
+
+            run_mode = PageStorageRunMode::ONLY_V3;
         }
         else // Still running Mix Mode
         {
