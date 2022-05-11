@@ -1234,7 +1234,7 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
         sleep_ms = std::numeric_limits<size_t>::max();
     else
         // For force merge (soft limit), wait for a reasonable amount of time.
-        // If is possible that the segment is still not updated after the wait.
+        // It is possible that the segment is still not updated after the wait.
         sleep_ms = static_cast<double>(segment_bytes) / k10mb * 1000 * wait_duration_factor;
 
     // checkSegmentUpdate could do foreground merge delta, so call it before sleep.

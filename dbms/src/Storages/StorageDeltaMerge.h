@@ -77,7 +77,7 @@ public:
     /// Merge delta into the stable layer for all segments.
     ///
     /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
-    void mergeDelta(const Context & context);
+    void mergeDelta(const Context & context) override;
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 

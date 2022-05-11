@@ -114,11 +114,10 @@ public:
     ///
     /// Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
     /// Different from `IStorage::rename`, storage's data path do not contain database name, nothing to do with data path, `new_path_to_db` is ignored.
-    /// But `getDatabaseName` and `getTableInfo` means we usally store database name / TiDB table info as member in storage,
+    /// But `getDatabaseName` and `getTableInfo` means we usually store database name / TiDB table info as member in storage,
     /// we need to update database name with `new_database_name`, and table name in tidb table info with `new_display_table_name`.
     ///
     /// Called when the table structure is locked for write.
-    /// TODO: For TiFlash, we can rename without any lock on data?
     virtual void rename(
         const String & new_path_to_db,
         const String & new_database_name,
