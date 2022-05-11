@@ -62,6 +62,14 @@ public:
     {
         return mpp_req_rsp;
     }
+    const std::vector<int32_t> & getReqIDVec() const
+    {
+        return req_id_vec;
+    }
+    bool continueWhenError() const
+    {
+        return continue_when_error;
+    }
     static void clean(Context & context);
 
 private:
@@ -97,6 +105,8 @@ private:
     Poco::Logger * log;
     LoadedTableMap tables;
     TableIDVec table_ids;
+    bool continue_when_error = false;
+    std::vector<int32_t> req_id_vec;
     ReqRspVec req_rsp;
     BatchReqRspVec batch_req_rsp;
     MPPReqRspVec mpp_req_rsp;

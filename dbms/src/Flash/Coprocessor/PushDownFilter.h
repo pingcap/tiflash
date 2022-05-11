@@ -14,23 +14,26 @@
 
 #pragma once
 
-#include <Parsers/ASTQueryWithOutput.h>
-#include <Parsers/IAST.h>
+#include <common/types.h>
+#include <tipb/executor.pb.h>
+
+#include <vector>
 
 namespace DB
 {
-class ASTKillQueryQuery : public ASTQueryWithOutput
+struct PushDownFilter
 {
-public:
-    ASTPtr where_expression; // expression to filter processes from system.processes table
-    bool sync = false; // SYNC or ASYNC mode
-    bool test = false; // does it TEST mode? (doesn't cancel queries just checks and shows them)
+    static PushDownFilter toPushDownFilter(const String & executor_id, const tipb::Executor * executor);
 
-    ASTPtr clone() const override { return std::make_shared<ASTKillQueryQuery>(*this); }
+    PushDownFilter(
+        const String & executor_id_,
+        const std::vector<const tipb::Expr *> & conditions_);
 
-    String getID() const override;
+    bool hasValue() const { return !conditions.empty(); }
 
-    void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+    tipb::Executor * constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const;
+
+    String executor_id;
+    std::vector<const tipb::Expr *> conditions;
 };
-
 } // namespace DB

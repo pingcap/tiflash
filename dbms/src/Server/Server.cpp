@@ -69,6 +69,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
+#include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/getMemoryAmount.h>
@@ -643,30 +644,39 @@ public:
 
     ~FlashGrpcServerHolder()
     {
-        /// Shut down grpc server.
-        LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown();
-        *is_shutdown = true;
-        // Wait all existed MPPTunnels done to prevent crash.
-        // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
-        const int max_wait_cnt = 300;
-        int wait_cnt = 0;
-        while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+        try
+        {
+            /// Shut down grpc server.
+            LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
+            flash_grpc_server->Shutdown();
+            *is_shutdown = true;
+            // Wait all existed MPPTunnels done to prevent crash.
+            // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
+            const int max_wait_cnt = 300;
+            int wait_cnt = 0;
+            while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
+                std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        for (auto & cq : cqs)
-            cq->Shutdown();
-        for (auto & cq : notify_cqs)
-            cq->Shutdown();
-        thread_manager->wait();
-        flash_grpc_server->Wait();
-        flash_grpc_server.reset();
-        LOG_FMT_INFO(log, "Shut down flash grpc server");
+            for (auto & cq : cqs)
+                cq->Shutdown();
+            for (auto & cq : notify_cqs)
+                cq->Shutdown();
+            thread_manager->wait();
+            flash_grpc_server->Wait();
+            flash_grpc_server.reset();
+            LOG_FMT_INFO(log, "Shut down flash grpc server");
 
-        /// Close flash service.
-        LOG_FMT_INFO(log, "Begin to shut down flash service");
-        flash_service.reset();
-        LOG_FMT_INFO(log, "Shut down flash service");
+            /// Close flash service.
+            LOG_FMT_INFO(log, "Begin to shut down flash service");
+            flash_service.reset();
+            LOG_FMT_INFO(log, "Shut down flash service");
+        }
+        catch (...)
+        {
+            auto message = getCurrentExceptionMessage(false);
+            LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
+            std::terminate();
+        }
     }
 
 private:
@@ -989,6 +999,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     registerFunctions();
     registerAggregateFunctions();
+    registerWindowFunctions();
     registerTableFunctions();
     registerStorages();
 
@@ -1215,8 +1226,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
-    /// Init Rate Limiter
-    global_context->initializeRateLimiter(config());
+    /// Initialize users config reloader.
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
+
+    /// Load global settings from default_profile and system_profile.
+    /// It internally depends on UserConfig::parseSettings.
+    global_context->setDefaultProfiles(config());
+    Settings & settings = global_context->getSettingsRef();
+
+    /// Initialize the background thread pool.
+    /// It internally depends on settings.background_pool_size,
+    /// so must be called after settings has been load.
+    auto & bg_pool = global_context->getBackgroundPool();
+    auto & blockable_bg_pool = global_context->getBlockableBackgroundPool();
+
+    /// Initialize RateLimiter.
+    global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
 
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
@@ -1229,9 +1254,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->reloadDeltaTreeConfig(*config);
         },
         /* already_loaded = */ true);
-
-    /// Initialize users config reloader.
-    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
@@ -1253,10 +1275,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     bool use_l0_opt = config().getBool("l0_optimize", false);
     global_context->setUseL0Opt(use_l0_opt);
-
-    /// Load global settings from default_profile and system_profile.
-    global_context->setDefaultProfiles(config());
-    Settings & settings = global_context->getSettingsRef();
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);

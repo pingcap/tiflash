@@ -14,20 +14,27 @@
 
 #pragma once
 
-#include <Parsers/IParserBase.h>
-
+#include <DataStreams/IProfilingBlockInputStream.h>
 
 namespace DB
 {
-
-/** KILL QUERY WHERE <logical expression upon system.processes fields> [SYNC|ASYNC|TEST]
-  */
-class ParserKillQueryQuery : public IParserBase
+class MockTableScanBlockInputStream : public IProfilingBlockInputStream
 {
+public:
+    MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size);
+    Block getHeader() const override
+    {
+        return Block(columns);
+    }
+    String getName() const override { return "MockTableScan"; }
+    ColumnsWithTypeAndName columns;
+    size_t output_index;
+    size_t max_block_size;
+    size_t rows;
+
 protected:
-    const char * getName() const override { return "KILL QUERY query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    Block readImpl() override;
+    ColumnPtr makeColumn(ColumnWithTypeAndName elem) const;
 };
 
-}
-
+} // namespace DB

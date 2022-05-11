@@ -14,30 +14,21 @@
 
 #pragma once
 
-#include <Interpreters/IInterpreter.h>
-
+#include <Core/Defines.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
-class Context;
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-
-
-class InterpreterTruncateQuery : public IInterpreter
+struct DAGProperties
 {
-public:
-    InterpreterTruncateQuery(const ASTPtr & query_ptr_, Context & context_)
-        : query_ptr(query_ptr_)
-        , context(context_)
-    {}
-
-    BlockIO execute() override;
-
-private:
-    ASTPtr query_ptr;
-    Context & context;
+    String encode_type;
+    Int64 tz_offset = 0;
+    String tz_name;
+    Int32 collator = 0;
+    bool is_mpp_query = false;
+    bool use_broadcast_join = false;
+    Int32 mpp_partition_num = 1;
+    Timestamp start_ts = DEFAULT_MAX_READ_TSO;
+    Int32 mpp_timeout = 10;
 };
-
-
 } // namespace DB

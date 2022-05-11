@@ -14,33 +14,13 @@
 
 #pragma once
 
-#include <Interpreters/IInterpreter.h>
+#include <Storages/Transaction/Collator.h>
+#include <common/types.h>
+#include <tipb/executor.pb.h>
 
-
-namespace DB
+namespace DB::ExchangeSenderInterpreterHelper
 {
-class Context;
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
+std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_sender);
 
-
-/** Just call method "optimize" for table.
-  */
-class InterpreterOptimizeQuery : public IInterpreter
-{
-public:
-    InterpreterOptimizeQuery(const ASTPtr & query_ptr_, Context & context_)
-        : query_ptr(query_ptr_)
-        , context(context_)
-    {
-    }
-
-    BlockIO execute() override;
-
-private:
-    ASTPtr query_ptr;
-    Context & context;
-};
-
-
-} // namespace DB
+TiDB::TiDBCollators genPartitionColCollators(const tipb::ExchangeSender & exchange_sender);
+} // namespace DB::ExchangeSenderInterpreterHelper

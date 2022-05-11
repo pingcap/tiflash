@@ -22,10 +22,10 @@
 
 namespace DB::PS::V3
 {
-PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
 {
-    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config);
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal), config.max_persisted_log_files);
     loadFromDisk(dir, std::move(reader));
 
     // Reset the `sequence` to the maximum of persisted.
@@ -63,7 +63,7 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
 
 PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
 {
-    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator);
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALStore::Config());
     (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadEdit(dir, edit);
@@ -105,6 +105,15 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
 
     for (const auto & r : edit.getRecords())
     {
+        if (auto it = max_apply_page_ids.find(r.page_id.high); it == max_apply_page_ids.end())
+        {
+            max_apply_page_ids[r.page_id.high] = r.page_id.low;
+        }
+        else
+        {
+            it->second = std::max(it->second, r.page_id.low);
+        }
+
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
         max_applied_page_id = std::max(r.page_id, max_applied_page_id);

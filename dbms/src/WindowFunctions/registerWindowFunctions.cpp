@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Parsers/IParserBase.h>
-
+#include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
 {
+void registerWindowFunctions(WindowFunctionFactory & factory);
 
-/** Query USE db
-  */
-class ParserTruncateQuery : public IParserBase
+void registerWindowFunctions()
 {
-protected:
-  const char * getName() const { return "TRUNCATE query"; }
-  bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-};
-
+    auto & window_factory = WindowFunctionFactory::instance();
+    registerWindowFunctions(window_factory);
 }
+
+} // namespace DB

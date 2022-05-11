@@ -14,25 +14,14 @@
 
 #pragma once
 
-#include <Interpreters/IInterpreter.h>
-#include <Parsers/IAST.h>
+#define DISALLOW_COPY(ClassName)           \
+    ClassName(const ClassName &) = delete; \
+    ClassName & operator=(const ClassName &) = delete
 
-namespace DB
-{
-class Context;
+#define DISALLOW_MOVE(ClassName)      \
+    ClassName(ClassName &&) = delete; \
+    ClassName & operator=(ClassName &&) = delete
 
-class InterpreterCheckQuery : public IInterpreter
-{
-public:
-    InterpreterCheckQuery(const ASTPtr & query_ptr_, const Context & context_);
-
-    BlockIO execute() override;
-
-private:
-    ASTPtr query_ptr;
-
-    const Context & context;
-    Block result;
-};
-
-} // namespace DB
+#define DISALLOW_COPY_AND_MOVE(ClassName) \
+    DISALLOW_COPY(ClassName);             \
+    DISALLOW_MOVE(ClassName)
