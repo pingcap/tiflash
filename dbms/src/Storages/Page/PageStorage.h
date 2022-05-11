@@ -366,8 +366,6 @@ public:
 
     PageId getNormalPageId(PageId page_id) const;
 
-    UInt64 getPageChecksum(PageId page_id) const;
-
     PageEntry getPageEntry(PageId page_id) const;
 
     PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const;

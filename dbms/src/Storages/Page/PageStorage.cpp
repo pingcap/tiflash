@@ -59,8 +59,6 @@ public:
 
     virtual PageId getNormalPageId(PageId page_id) const = 0;
 
-    virtual UInt64 getPageChecksum(PageId page_id) const = 0;
-
     virtual PageEntry getPageEntry(PageId page_id) const = 0;
 
     virtual PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const = 0;
@@ -116,11 +114,6 @@ public:
     PageId getNormalPageId(PageId page_id) const override
     {
         return storage->getNormalPageId(ns_id, page_id, snap);
-    }
-
-    UInt64 getPageChecksum(PageId page_id) const override
-    {
-        return getPageEntry(page_id).checksum;
     }
 
     PageEntry getPageEntry(PageId page_id) const override
@@ -260,11 +253,6 @@ public:
         return storage_v2->getNormalPageId(ns_id, page_id, toConcreteV2Snapshot());
     }
 
-    UInt64 getPageChecksum(PageId page_id) const override
-    {
-        return getPageEntry(page_id).checksum;
-    }
-
     PageEntry getPageEntry(PageId page_id) const override
     {
         PageEntry page_entry = storage_v3->getEntry(ns_id, page_id, toConcreteV3Snapshot());
@@ -400,11 +388,6 @@ PageMap PageReader::read(const std::vector<PageStorage::PageReadFields> & page_f
 PageId PageReader::getNormalPageId(PageId page_id) const
 {
     return impl->getNormalPageId(page_id);
-}
-
-UInt64 PageReader::getPageChecksum(PageId page_id) const
-{
-    return impl->getPageChecksum(page_id);
 }
 
 PageEntry PageReader::getPageEntry(PageId page_id) const
