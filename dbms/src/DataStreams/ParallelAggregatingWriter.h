@@ -40,9 +40,9 @@ public:
         LOG_FMT_TRACE(
             log,
             "Aggregated. {} to {} rows (from {:.3f} MiB)).",
-            threads_data[thread_num].src_rows,
-            many_data[thread_num]->size(),
-            (threads_data[thread_num].src_bytes / 1048576.0));
+            aggregate_store->getThreadData(thread_num).src_rows,
+            aggregate_store->getData(thread_num)->size(),
+            (aggregate_store->getThreadData(thread_num).src_bytes / 1048576.0));
     }
 
     void onFinish()

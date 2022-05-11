@@ -66,6 +66,12 @@ const AggregatedDataVariantsPtr & AggregateStore::getData(size_t index) const
     return many_data[index];
 }
 
+const ThreadData & AggregateStore::getThreadData(size_t index) const
+{
+    assert(index < max_threads);
+    return threads_data[index];
+}
+
 void AggregateStore::executeOnBlock(size_t index, const Block & block)
 {
     assert(index < max_threads);

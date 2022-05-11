@@ -72,6 +72,8 @@ public:
 
     const AggregatedDataVariantsPtr & getData(size_t index) const;
 
+    const ThreadData & getThreadData(size_t index) const;
+
     void executeOnBlock(size_t index, const Block & block);
 
     void tryFlush(size_t index);
