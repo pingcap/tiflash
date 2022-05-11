@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <fmt/format.h>
+
+
+namespace CurrentMetrics
+{
+extern const Metric StoragePoolV2Only;
+extern const Metric StoragePoolV3Only;
+extern const Metric StoragePoolMixMode;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -30,6 +39,7 @@ namespace FailPoints
 {
 extern const char force_set_dtfile_exist_when_acquire_id[];
 } // namespace FailPoints
+
 namespace DM
 {
 enum class StorageType
@@ -159,6 +169,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , global_context(global_ctx)
+    , storage_pool_metrics(CurrentMetrics::StoragePoolV3Only, 0)
 {
     const auto & global_storage_pool = global_context.getGlobalStoragePool();
     switch (run_mode)
@@ -200,7 +211,6 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
         log_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, log_storage_v3);
         data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
         meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
-
         break;
     }
     case PageStorageRunMode::MIX_MODE:
@@ -257,6 +267,7 @@ PageStorageRunMode StoragePool::restore()
         max_data_page_id = data_max_ids[0];
         max_meta_page_id = meta_max_ids[0];
 
+        storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV2Only};
         break;
     }
     case PageStorageRunMode::ONLY_V3:
@@ -265,6 +276,7 @@ PageStorageRunMode StoragePool::restore()
         max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
         max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
 
+        storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         break;
     }
     case PageStorageRunMode::MIX_MODE:
@@ -304,12 +316,14 @@ PageStorageRunMode StoragePool::restore()
             max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
 
             run_mode = PageStorageRunMode::ONLY_V3;
+            storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         }
         else // Still running Mix Mode
         {
             max_log_page_id = std::max(v2_log_max_ids[0], global_storage_pool->getLogMaxId(ns_id));
             max_data_page_id = std::max(v2_data_max_ids[0], global_storage_pool->getDataMaxId(ns_id));
             max_meta_page_id = std::max(v2_meta_max_ids[0], global_storage_pool->getMetaMaxId(ns_id));
+            storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolMixMode};
         }
         break;
     }
