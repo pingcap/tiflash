@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -131,7 +132,7 @@ class ColumnFileReader
 public:
     virtual ~ColumnFileReader() = default;
     ColumnFileReader() = default;
-    ColumnFileReader(const ColumnFileReader & o) = delete;
+    DISALLOW_COPY(ColumnFileReader);
 
     /// Read data from this reader and store the result into output_cols.
     /// Note that if "range" is specified, then the caller must guarantee that the rows between [rows_offset, rows_offset + rows_limit) are sorted.

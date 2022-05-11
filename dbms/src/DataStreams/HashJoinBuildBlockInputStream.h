@@ -28,9 +28,9 @@ public:
     HashJoinBuildBlockInputStream(
         const BlockInputStreamPtr & input,
         JoinPtr join_,
-        size_t stream_index_,
+        size_t concurrency_build_index_,
         const String & req_id)
-        : stream_index(stream_index_)
+        : concurrency_build_index(concurrency_build_index_)
         , log(Logger::get(NAME, req_id))
     {
         children.push_back(input);
@@ -44,7 +44,7 @@ protected:
 
 private:
     JoinPtr join;
-    size_t stream_index;
+    size_t concurrency_build_index;
     const LoggerPtr log;
 };
 
