@@ -14,33 +14,26 @@
 
 #pragma once
 
-#include <Interpreters/IInterpreter.h>
-
-
+#include <Common/FmtUtils.h>
+#include <Flash/Statistics/traverseExecutors.h>
+#include <Interpreters/Context.h>
+#include <TestUtils/TiFlashTestException.h>
 namespace DB
 {
-class Context;
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-
-
-/** Just call method "optimize" for table.
-  */
-class InterpreterOptimizeQuery : public IInterpreter
+namespace tests
+{
+class ExecutorSerializer
 {
 public:
-    InterpreterOptimizeQuery(const ASTPtr & query_ptr_, Context & context_)
-        : query_ptr(query_ptr_)
-        , context(context_)
-    {
-    }
-
-    BlockIO execute() override;
+    String serialize(const tipb::DAGRequest * dag_request);
 
 private:
-    ASTPtr query_ptr;
-    Context & context;
-};
+    void serialize(const tipb::Executor & root_executor, size_t level);
+    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
 
+private:
+    FmtBuffer buf;
+};
+} // namespace tests
 
 } // namespace DB

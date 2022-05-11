@@ -24,7 +24,6 @@
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterManageQuery.h>
-#include <Interpreters/InterpreterOptimizeQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -43,7 +42,6 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTManageQuery.h>
-#include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -123,11 +121,6 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     {
         /// readonly is checked inside InterpreterSetQuery
         return std::make_unique<InterpreterSetQuery>(query, context);
-    }
-    else if (typeid_cast<ASTOptimizeQuery *>(query.get()))
-    {
-        throwIfReadOnly(context);
-        return std::make_unique<InterpreterOptimizeQuery>(query, context);
     }
     else if (typeid_cast<ASTExistsQuery *>(query.get()))
     {
