@@ -149,10 +149,12 @@ TEST(WALSeriTest, RefExternal)
     EXPECT_EQ(iter->type, EditRecordType::VAR_EXTERNAL);
     EXPECT_EQ(iter->page_id.low, 1);
     EXPECT_EQ(iter->version, ver1_0);
+    EXPECT_EQ(iter->being_ref_count, 2);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::VAR_DELETE);
     EXPECT_EQ(iter->page_id.low, 1);
     EXPECT_EQ(iter->version, ver2_0);
+    EXPECT_EQ(iter->being_ref_count, 1);
     iter++;
     EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
     EXPECT_EQ(iter->page_id.low, 2);
