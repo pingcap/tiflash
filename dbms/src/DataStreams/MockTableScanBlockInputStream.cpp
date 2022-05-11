@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/MockTableScanBlockInputStream.h>
+#include <DataStreams/MockTableScanBlockInputStream.h>
 
 namespace DB
 {
@@ -32,7 +32,7 @@ MockTableScanBlockInputStream::MockTableScanBlockInputStream(ColumnsWithTypeAndN
     }
 }
 
-ColumnPtr MockTableScanBlockInputStream::makeColumn(ColumnWithTypeAndName elem)
+ColumnPtr MockTableScanBlockInputStream::makeColumn(ColumnWithTypeAndName elem) const
 {
     auto column = elem.type->createColumn();
     size_t row_count = 0;

@@ -14,27 +14,13 @@
 
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/NamesAndTypes.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
-class MockTableScanBlockInputStream : public IProfilingBlockInputStream
-{
-public:
-    MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size);
-    Block getHeader() const override
-    {
-        return Block(columns);
-    }
-    String getName() const override { return "MockTableScan"; }
-    ColumnsWithTypeAndName columns;
-    size_t output_index;
-    size_t max_block_size;
-    size_t rows;
-
-protected:
-    Block readImpl() override;
-    ColumnPtr makeColumn(ColumnWithTypeAndName elem);
-};
-
+NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan);
+ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 } // namespace DB
