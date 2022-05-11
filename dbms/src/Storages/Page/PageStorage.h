@@ -211,11 +211,15 @@ public:
 
     virtual ~PageStorage() = default;
 
-    virtual void restore() = 0;
+    // Return the map[ns_id, max_page_id]
+    // The caller should ensure that it only allocate new id that is larger than `max_page_id`. Reusing the
+    // same ID for different kind of write (put/ref/put_external) would make PageStorage run into unexpected error.
+    //
+    // Note that for V2, we always return a map with only one element: <ns_id=0, max_id> cause V2 have no
+    // idea about ns_id.
+    virtual std::map<NamespaceId, PageId> restore() = 0;
 
     virtual void drop() = 0;
-
-    virtual PageId getMaxId(NamespaceId ns_id) = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 
@@ -360,11 +364,6 @@ public:
     PageMap read(const std::vector<PageReadFields> & page_fields) const
     {
         return storage->read(ns_id, page_fields, read_limiter, snap);
-    }
-
-    PageId getMaxId() const
-    {
-        return storage->getMaxId(ns_id);
     }
 
     PageId getNormalPageId(PageId page_id) const
