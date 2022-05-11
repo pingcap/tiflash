@@ -19,7 +19,7 @@
 
 namespace DB
 {
-template<typename StreamHandler>
+template <typename StreamHandler>
 class ParallelBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "Parallel";

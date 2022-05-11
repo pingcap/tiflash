@@ -54,4 +54,4 @@ private:
     const LoggerPtr log;
     AggregateStorePtr aggregate_store;
 };
-}
+} // namespace DB

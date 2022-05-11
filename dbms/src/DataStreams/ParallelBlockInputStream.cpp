@@ -19,7 +19,7 @@
 
 namespace DB
 {
-template<typename StreamHandler>
+template <typename StreamHandler>
 ParallelBlockInputStream<StreamHandler>::ParallelBlockInputStream(
     const BlockInputStreams & inputs,
     const BlockInputStreamPtr & additional_input_at_end,
@@ -37,13 +37,13 @@ ParallelBlockInputStream<StreamHandler>::ParallelBlockInputStream(
         children.push_back(additional_input_at_end);
 }
 
-template<typename StreamHandler>
+template <typename StreamHandler>
 Block ParallelBlockInputStream<StreamHandler>::getHeader() const
 {
     return children.back()->getHeader();
 }
 
-template<typename StreamHandler>
+template <typename StreamHandler>
 void ParallelBlockInputStream<StreamHandler>::cancel(bool kill)
 {
     if (kill)
@@ -56,7 +56,7 @@ void ParallelBlockInputStream<StreamHandler>::cancel(bool kill)
         processor.cancel(kill);
 }
 
-template<typename StreamHandler>
+template <typename StreamHandler>
 Block ParallelBlockInputStream<StreamHandler>::readImpl()
 {
     if (!executed)
@@ -79,13 +79,13 @@ Block ParallelBlockInputStream<StreamHandler>::readImpl()
     return {};
 }
 
-template<typename StreamHandler>
+template <typename StreamHandler>
 void ParallelBlockInputStream<StreamHandler>::Handler::onBlock(Block & block, size_t thread_num)
 {
     parent.stream_handler.onBlock(block, thread_num);
 }
 
-template<typename StreamHandler>
+template <typename StreamHandler>
 void ParallelBlockInputStream<StreamHandler>::Handler::onFinishThread(size_t thread_num)
 {
     if (!parent.isCancelled())
@@ -94,7 +94,7 @@ void ParallelBlockInputStream<StreamHandler>::Handler::onFinishThread(size_t thr
     }
 }
 
-template<typename StreamHandler>
+template <typename StreamHandler>
 void ParallelBlockInputStream<StreamHandler>::Handler::onFinish()
 {
     if (!parent.isCancelled())
@@ -103,7 +103,7 @@ void ParallelBlockInputStream<StreamHandler>::Handler::onFinish()
     }
 }
 
-template<typename StreamHandler>
+template <typename StreamHandler>
 void ParallelBlockInputStream<StreamHandler>::Handler::onException(std::exception_ptr & exception, size_t thread_num)
 {
     parent.exceptions[thread_num] = exception;

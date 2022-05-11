@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <DataStreams/ParallelBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Interpreters/ExpressionActions.h>
 
@@ -38,6 +39,32 @@ void executeUnion(
     size_t max_streams,
     const LoggerPtr & log,
     bool ignore_block = false);
+
+template <typename StreamHandler>
+void executeParallel(
+    DAGPipeline & pipeline,
+    size_t max_streams,
+    const StreamHandler & stream_handler,
+    const LoggerPtr & log)
+{
+    if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
+        return;
+    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log, false);
+    if (!pipeline.streams.empty())
+    {
+        pipeline.firstStream() = std::make_shared<ParallelBlockInputStream>(
+            pipeline.streams,
+            non_joined_data_stream,
+            max_streams,
+            stream_handler,
+            log->identifier());
+        pipeline.streams.resize(1);
+    }
+    else if (non_joined_data_stream != nullptr)
+    {
+        pipeline.streams.push_back(non_joined_data_stream);
+    }
+}
 
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,

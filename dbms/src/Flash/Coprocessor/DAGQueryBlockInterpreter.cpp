@@ -25,8 +25,6 @@
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
-#include <DataStreams/ParallelAggregatingBlockInputStream.h>
-#include <DataStreams/ParallelBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingWriter.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
@@ -561,14 +559,9 @@ void DAGQueryBlockInterpreter::executeAggregation(
         std::min(max_streams, pipeline.streams.size()),
         settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads));
 
-    {
-        size_t stream_index = 0;
-        pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<PartialAggregatingBlockInputStream>(stream, stream_index++, aggregate_store, log->identifier());
-        });
-    }
+    ParallelAggregatingWriter writer{aggregate_store, log->identifier()};
 
-    executeUnion(pipeline, max_streams, log, /*ignore_block=*/true);
+    executeParallel(pipeline, max_streams, writer, log);
 
     pipeline.firstStream() = std::make_shared<FinalAggregatingBlockInputStream>(pipeline.firstStream(), aggregate_store, log->identifier());
 
