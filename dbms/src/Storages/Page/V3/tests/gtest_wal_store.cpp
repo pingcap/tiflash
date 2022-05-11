@@ -133,6 +133,61 @@ TEST(WALSeriTest, Upserts)
     EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
 }
 
+TEST(WALSeriTest, RefExternalAndEntry)
+{
+    PageVersionType ver1_0(/*seq=*/1, /*epoch*/ 0);
+    PageVersionType ver2_0(/*seq=*/2, /*epoch*/ 0);
+    PageVersionType ver3_0(/*seq=*/3, /*epoch*/ 0);
+    {
+        PageEntriesEdit edit;
+        edit.varExternal(1, ver1_0, 2);
+        edit.varDel(1, ver2_0);
+        edit.varRef(2, ver3_0, 1);
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 3);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, EditRecordType::VAR_EXTERNAL);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver1_0);
+        EXPECT_EQ(iter->being_ref_count, 2);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_DELETE);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver2_0);
+        EXPECT_EQ(iter->being_ref_count, 1);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
+        EXPECT_EQ(iter->page_id.low, 2);
+        EXPECT_EQ(iter->version, ver3_0);
+    }
+
+    {
+        PageEntriesEdit edit;
+        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        edit.varEntry(1, ver1_0, entry_p1_2, 2);
+        edit.varDel(1, ver2_0);
+        edit.varRef(2, ver3_0, 1);
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 3);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, EditRecordType::VAR_ENTRY);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver1_0);
+        EXPECT_EQ(iter->being_ref_count, 2);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_DELETE);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver2_0);
+        EXPECT_EQ(iter->being_ref_count, 1);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
+        EXPECT_EQ(iter->page_id.low, 2);
+        EXPECT_EQ(iter->version, ver3_0);
+    }
+}
+
 TEST(WALLognameTest, parsing)
 {
     LoggerPtr log = Logger::get("WALLognameTest");
