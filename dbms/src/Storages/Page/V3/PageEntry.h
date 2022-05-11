@@ -41,17 +41,6 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
-    String toString() const
-    {
-        return fmt::format("[file_id={}],[offset={}][size={}],[tag={}],[crc=0x{:X}],[field_offsets size={}]", //
-                           file_id,
-                           offset,
-                           size,
-                           tag,
-                           checksum,
-                           field_offsets.size());
-    }
-
     PageSize getTotalSize() const
     {
         return size + padded_size;
@@ -98,7 +87,12 @@ inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageId p_id)
 
 inline String toDebugString(const PageEntryV3 & entry)
 {
-    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}}}", entry.file_id, entry.offset, entry.size, entry.checksum);
+    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
+                       entry.file_id,
+                       entry.offset,
+                       entry.size,
+                       entry.checksum,
+                       entry.tag, entry.field_offsets.size());
 }
 
 } // namespace PS::V3

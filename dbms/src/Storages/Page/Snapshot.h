@@ -45,12 +45,12 @@ public:
 
     ~PageStorageSnapshotMixed() = default;
 
-    PageStorageSnapshotPtr getV2Snasphot()
+    PageStorageSnapshotPtr getV2Snapshot()
     {
         return snapshot_v2;
     }
 
-    PageStorageSnapshotPtr getV3Snasphot()
+    PageStorageSnapshotPtr getV3Snapshot()
     {
         return snapshot_v3;
     }
