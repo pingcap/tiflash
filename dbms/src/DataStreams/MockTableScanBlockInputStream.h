@@ -14,33 +14,27 @@
 
 #pragma once
 
-#include <Interpreters/IInterpreter.h>
-
+#include <DataStreams/IProfilingBlockInputStream.h>
 
 namespace DB
 {
-class Context;
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-
-
-/** Just call method "optimize" for table.
-  */
-class InterpreterOptimizeQuery : public IInterpreter
+class MockTableScanBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    InterpreterOptimizeQuery(const ASTPtr & query_ptr_, Context & context_)
-        : query_ptr(query_ptr_)
-        , context(context_)
+    MockTableScanBlockInputStream(ColumnsWithTypeAndName columns, size_t max_block_size);
+    Block getHeader() const override
     {
+        return Block(columns);
     }
+    String getName() const override { return "MockTableScan"; }
+    ColumnsWithTypeAndName columns;
+    size_t output_index;
+    size_t max_block_size;
+    size_t rows;
 
-    BlockIO execute() override;
-
-private:
-    ASTPtr query_ptr;
-    Context & context;
+protected:
+    Block readImpl() override;
+    ColumnPtr makeColumn(ColumnWithTypeAndName elem) const;
 };
-
 
 } // namespace DB

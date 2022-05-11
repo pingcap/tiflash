@@ -14,25 +14,13 @@
 
 #pragma once
 
-#include <Interpreters/IInterpreter.h>
-#include <Parsers/IAST.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/NamesAndTypes.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
-class Context;
-
-class InterpreterCheckQuery : public IInterpreter
-{
-public:
-    InterpreterCheckQuery(const ASTPtr & query_ptr_, const Context & context_);
-
-    BlockIO execute() override;
-
-private:
-    ASTPtr query_ptr;
-
-    const Context & context;
-    Block result;
-};
-
+NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan);
+ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 } // namespace DB

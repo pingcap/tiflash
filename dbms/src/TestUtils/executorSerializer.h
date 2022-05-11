@@ -14,18 +14,26 @@
 
 #pragma once
 
-#include <Parsers/ParserQueryWithOutput.h>
-
+#include <Common/FmtUtils.h>
+#include <Flash/Statistics/traverseExecutors.h>
+#include <Interpreters/Context.h>
+#include <TestUtils/TiFlashTestException.h>
 namespace DB
 {
-/** Query of form
- * CHECK [TABLE] [database.]table
- */
-class ParserCheckQuery : public IParserBase
+namespace tests
 {
-protected:
-    const char * getName() const { return "ALTER query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-};
+class ExecutorSerializer
+{
+public:
+    String serialize(const tipb::DAGRequest * dag_request);
 
-}
+private:
+    void serialize(const tipb::Executor & root_executor, size_t level);
+    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
+
+private:
+    FmtBuffer buf;
+};
+} // namespace tests
+
+} // namespace DB

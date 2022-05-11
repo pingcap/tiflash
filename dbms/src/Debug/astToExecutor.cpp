@@ -808,6 +808,15 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t col
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
+
+    for (auto & field : output_schema)
+    {
+        auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+        tipb_type.set_collate(collator_id);
+        auto * field_type = exchange_sender->add_all_field_types();
+        *field_type = tipb_type;
+    }
+
     auto * child_executor = exchange_sender->mutable_child();
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
@@ -1523,6 +1532,20 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
     join->children.push_back(left);
     join->children.push_back(right);
     return join;
+}
+
+ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type)
+{
+    ExecutorPtr exchange_sender = std::make_shared<mock::ExchangeSender>(executor_index, input->output_schema, exchange_type);
+    exchange_sender->children.push_back(input);
+    return exchange_sender;
+}
+
+
+ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
+{
+    ExecutorPtr exchange_receiver = std::make_shared<mock::ExchangeReceiver>(executor_index, schema);
+    return exchange_receiver;
 }
 
 } // namespace DB

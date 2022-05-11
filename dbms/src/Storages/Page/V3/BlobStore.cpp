@@ -36,6 +36,8 @@ namespace ProfileEvents
 {
 extern const Event PSMWritePages;
 extern const Event PSMReadPages;
+extern const Event PSV3MBlobExpansion;
+extern const Event PSV3MBlobReused;
 } // namespace ProfileEvents
 
 namespace DB
@@ -151,9 +153,20 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         free(buffer, all_page_data_size);
     });
     char * buffer_pos = buffer;
-    auto [blob_id, offset_in_file] = getPosFromStats(all_page_data_size);
+
+    // Calculate alignment space
+    size_t replenish_size = 0;
+    if (config.block_alignment_bytes != 0 && all_page_data_size % config.block_alignment_bytes != 0)
+    {
+        replenish_size = config.block_alignment_bytes - all_page_data_size % config.block_alignment_bytes;
+    }
+
+    size_t actually_allocated_size = all_page_data_size + replenish_size;
+
+    auto [blob_id, offset_in_file] = getPosFromStats(actually_allocated_size);
 
     size_t offset_in_allocated = 0;
+
 
     for (auto & write : wb.getWrites())
     {
@@ -171,6 +184,12 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             entry.tag = write.tag;
             entry.offset = offset_in_file + offset_in_allocated;
             offset_in_allocated += write.size;
+
+            // The last put write
+            if (offset_in_allocated == all_page_data_size)
+            {
+                entry.padded_size = replenish_size;
+            }
 
             digest.update(buffer_pos, write.size);
             entry.checksum = digest.checksum();
@@ -217,13 +236,14 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     if (buffer_pos != buffer + all_page_data_size)
     {
-        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
+        removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
         throw Exception(
             fmt::format(
                 "write batch have a invalid total size, or something wrong in parse write batch "
-                "[expect_offset={}] [actual_offset={}]",
+                "[expect_offset={}] [actual_offset={}] [actually_allocated_size={}]",
                 all_page_data_size,
-                (buffer_pos - buffer)),
+                (buffer_pos - buffer),
+                actually_allocated_size),
             ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -234,8 +254,8 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     }
     catch (DB::Exception & e)
     {
-        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
-        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, all_page_data_size);
+        removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
+        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed.", blob_id, offset_in_file, all_page_data_size, actually_allocated_size);
         throw e;
     }
 
@@ -256,7 +276,7 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
 
         try
         {
-            removePosFromStats(entry.file_id, entry.offset, entry.size);
+            removePosFromStats(entry.file_id, entry.offset, entry.getTotalSize());
         }
         catch (DB::Exception & e)
         {
@@ -372,6 +392,21 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
     for (const auto & p : entries)
         buf_size = std::max(buf_size, p.second.size);
 
+    // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
+    // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
+    if (buf_size == 0)
+    {
+        for (const auto & [page_id_v3, entry] : entries)
+        {
+            (void)entry;
+            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            Page page;
+            page.page_id = page_id_v3.low;
+            handler(page_id_v3.low, page);
+        }
+        return;
+    }
+
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
@@ -418,11 +453,23 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry.offset < b.entry.offset; });
 
     // allocate data_buf that can hold all pages with specify fields
+
     size_t buf_size = 0;
     for (auto & [page_id, entry, fields] : to_read)
     {
         (void)page_id;
-        buf_size += entry.size;
+        // Sort fields to get better read on disk
+        std::sort(fields.begin(), fields.end());
+        for (const auto field_index : fields)
+        {
+            buf_size += entry.getFieldSize(field_index);
+        }
+    }
+
+    // Read with `FieldReadInfos`, buf_size must not be 0.
+    if (buf_size == 0)
+    {
+        throw Exception("Reading with fields but entry size is 0.", ErrorCodes::LOGICAL_ERROR);
     }
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
@@ -476,13 +523,13 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
 
         Page page;
         page.page_id = page_id_v3.low;
-        page.data = ByteBuffer(pos, pos + entry.size);
+        page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
         page_map.emplace(page_id_v3.low, std::move(page));
 
-        pos += entry.size;
+        pos = write_offset;
     }
 
     if (unlikely(pos != data_buf + buf_size))
@@ -507,6 +554,22 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     for (const auto & p : entries)
     {
         buf_size += p.second.size;
+    }
+
+    // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
+    // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
+    if (buf_size == 0)
+    {
+        PageMap page_map;
+        for (const auto & [page_id_v3, entry] : entries)
+        {
+            (void)entry;
+            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            Page page;
+            page.page_id = page_id_v3.low;
+            page_map.emplace(page_id_v3.low, page);
+        }
+        return page_map;
     }
 
     char * data_buf = static_cast<char *>(alloc(buf_size));
@@ -561,6 +624,16 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
 
+    // When we read `WriteBatch` which is `WriteType::PUT_EXTERNAL`.
+    // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
+    if (buf_size == 0)
+    {
+        LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+        Page page;
+        page.page_id = page_id_v3.low;
+        return page;
+    }
+
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) {
         free(p, buf_size);
@@ -593,11 +666,11 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     return page;
 }
 
-BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter)
+BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
     assert(buffers != nullptr);
     auto blob_file = getBlobFile(blob_id);
-    blob_file->read(buffers, offset, size, read_limiter);
+    blob_file->read(buffers, offset, size, read_limiter, background);
     return blob_file;
 }
 
@@ -790,7 +863,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 file_offset,
                 data_size,
                 total_page_size);
-            blob_file->write(data_beg, file_offset, data_size, write_limiter);
+            blob_file->write(data_beg, file_offset, data_size, write_limiter, /*background*/ true);
         }
         catch (DB::Exception & e)
         {
@@ -845,7 +918,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 
             PageEntryV3 new_entry;
 
-            read(file_id, entry.offset, data_pos, entry.size, read_limiter);
+            read(file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
 
             // No need do crc again, crc won't be changed.
             new_entry.checksum = entry.checksum;
@@ -908,7 +981,7 @@ BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, B
 void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
     auto stat = blobIdToStat(entry.file_id);
-    stat->restoreSpaceMap(entry.offset, entry.size);
+    stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
 }
 
 std::pair<BlobFileId, String> BlobStore::BlobStats::getBlobIdFromName(String blob_name)
@@ -1172,8 +1245,10 @@ BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size, c
 {
     BlobFileOffset offset = 0;
     UInt64 max_cap = 0;
+    bool expansion = true;
 
-    std::tie(offset, max_cap) = smap->searchInsertOffset(buf_size);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(buf_size);
+    ProfileEvents::increment(expansion ? ProfileEvents::PSV3MBlobExpansion : ProfileEvents::PSV3MBlobReused);
 
     /**
      * Whatever `searchInsertOffset` success or failed,

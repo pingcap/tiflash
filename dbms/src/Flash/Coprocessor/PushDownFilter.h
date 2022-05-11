@@ -14,20 +14,26 @@
 
 #pragma once
 
-#include <Parsers/IParserBase.h>
+#include <common/types.h>
+#include <tipb/executor.pb.h>
 
+#include <vector>
 
 namespace DB
 {
-
-/** KILL QUERY WHERE <logical expression upon system.processes fields> [SYNC|ASYNC|TEST]
-  */
-class ParserKillQueryQuery : public IParserBase
+struct PushDownFilter
 {
-protected:
-    const char * getName() const override { return "KILL QUERY query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    static PushDownFilter toPushDownFilter(const tipb::Executor * filter_executor);
+
+    PushDownFilter(
+        const String & executor_id_,
+        const std::vector<const tipb::Expr *> & conditions_);
+
+    bool hasValue() const { return !conditions.empty(); }
+
+    tipb::Executor * constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const;
+
+    String executor_id;
+    std::vector<const tipb::Expr *> conditions;
 };
-
-}
-
+} // namespace DB

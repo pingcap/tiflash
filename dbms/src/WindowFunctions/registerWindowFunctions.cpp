@@ -12,25 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Parsers/ASTQueryWithOutput.h>
-#include <Parsers/IAST.h>
+#include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
 {
-class ASTKillQueryQuery : public ASTQueryWithOutput
+void registerWindowFunctions(WindowFunctionFactory & factory);
+
+void registerWindowFunctions()
 {
-public:
-    ASTPtr where_expression; // expression to filter processes from system.processes table
-    bool sync = false; // SYNC or ASYNC mode
-    bool test = false; // does it TEST mode? (doesn't cancel queries just checks and shows them)
-
-    ASTPtr clone() const override { return std::make_shared<ASTKillQueryQuery>(*this); }
-
-    String getID() const override;
-
-    void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
-};
+    auto & window_factory = WindowFunctionFactory::instance();
+    registerWindowFunctions(window_factory);
+}
 
 } // namespace DB

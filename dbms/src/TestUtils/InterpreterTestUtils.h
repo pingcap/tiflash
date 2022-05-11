@@ -15,59 +15,48 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
 namespace DB::tests
 {
-void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
-class MockExecutorTest : public ::testing::Test
+void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
+class InterpreterTest : public ::testing::Test
 {
 protected:
     void SetUp() override
     {
         initializeContext();
+        initializeClientInfo();
     }
 
 public:
-    MockExecutorTest()
+    InterpreterTest()
         : context(TiFlashTestEnv::getContext())
     {}
+    static void SetUpTestCase();
 
-    static void SetUpTestCase()
-    {
-        try
-        {
-            DB::registerFunctions();
-        }
-        catch (DB::Exception &)
-        {
-            // Maybe another test has already registered, ignore exception here.
-        }
-    }
+    virtual void initializeContext();
 
-    virtual void initializeContext()
-    {
-        dag_context_ptr = std::make_unique<DAGContext>(1024);
-        context.setDAGContext(dag_context_ptr.get());
-        mock_dag_request_context = MockDAGRequestContext();
-    }
+    void initializeClientInfo();
 
-    DAGContext & getDAGContext()
-    {
-        assert(dag_context_ptr != nullptr);
-        return *dag_context_ptr;
-    }
+    DAGContext & getDAGContext();
+
+    static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
+
+    void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
 protected:
-    Context context;
-    MockDAGRequestContext mock_dag_request_context;
+    MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
-#define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual(str, request);
+#define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
+#define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
 } // namespace DB::tests

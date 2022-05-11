@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Core/Defines.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -105,8 +106,7 @@ public:
     {
     }
 
-    Reader(const Reader &) = delete;
-    Reader & operator=(const Reader &) = delete;
+    DISALLOW_COPY(Reader);
 
     bool next()
     {

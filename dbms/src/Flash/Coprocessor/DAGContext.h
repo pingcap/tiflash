@@ -29,6 +29,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Interpreters/SubqueryForSet.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -166,7 +167,29 @@ public:
         , max_recorded_error_count(max_error_count_)
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , is_test(true)
     {}
+
+    // for tests need to run query tasks.
+    explicit DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
+        : dag_request(&dag_request_)
+        , initialize_concurrency(concurrency)
+        , is_mpp_task(false)
+        , is_root_mpp_task(false)
+        , tunnel_set(nullptr)
+        , log(Logger::get(log_identifier))
+        , flags(dag_request->flags())
+        , sql_mode(dag_request->sql_mode())
+        , max_recorded_error_count(getMaxErrorCount(*dag_request))
+        , warnings(max_recorded_error_count)
+        , warning_count(0)
+        , is_test(true)
+    {
+        assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
+        return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
+
+        initOutputInfo();
+    }
 
     void attachBlockIO(const BlockIO & io_);
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
@@ -274,14 +297,21 @@ public:
         return sql_mode & f;
     }
 
+    bool isTest() const { return is_test; }
+
     void cancelAllExchangeReceiver();
 
     void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
 
+    void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
+    bool hasSubquery() const { return !subqueries.empty(); }
+    std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
+
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
+    size_t initialize_concurrency = 1;
     bool has_read_wait_index = false;
     Clock::time_point read_wait_index_start_timestamp{Clock::duration::zero()};
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
@@ -337,6 +367,11 @@ private:
     /// key: executor_id of ExchangeReceiver nodes in dag.
     std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
     bool mpp_exchange_receiver_map_inited = false;
+    /// vector of SubqueriesForSets(such as join build subquery).
+    /// The order of the vector is also the order of the subquery.
+    std::vector<SubqueriesForSets> subqueries;
+
+    bool is_test = false; /// switch for test, do not use it in production.
 };
 
 } // namespace DB
