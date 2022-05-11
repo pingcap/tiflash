@@ -1262,10 +1262,13 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     return merged;
 }
 
-SegmentPtr Segment::dropNextSegment(WriteBatches & wbs)
+SegmentPtr Segment::dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range)
 {
+    assert(rowkey_range.end == next_segment_range.start);
+    // merge the rowkey range of the next segment to this segment
+    auto new_rowkey_range = RowKeyRange(rowkey_range.start, next_segment_range.end, rowkey_range.is_common_handle, rowkey_range.rowkey_column_size);
     auto new_segment = std::make_shared<Segment>(epoch + 1, //
-                                                 rowkey_range,
+                                                 new_rowkey_range,
                                                  segment_id,
                                                  0,
                                                  delta,

@@ -43,7 +43,7 @@ PageStorageImpl::PageStorageImpl(
 
 PageStorageImpl::~PageStorageImpl() = default;
 
-void PageStorageImpl::restore()
+std::map<NamespaceId, PageId> PageStorageImpl::restore()
 {
     // TODO: clean up blobstore.
     // TODO: Speedup restoring
@@ -53,17 +53,12 @@ void PageStorageImpl::restore()
     page_directory = factory
                          .setBlobStore(blob_store)
                          .create(storage_name, file_provider, delegator, parseWALConfig(config));
-    // factory.max_applied_page_id // TODO: return it to outer function
+    return factory.getMaxApplyPageIds();
 }
 
 void PageStorageImpl::drop()
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
-}
-
-PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
-{
-    return page_directory->getMaxId(ns_id);
 }
 
 PageId PageStorageImpl::getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)

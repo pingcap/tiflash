@@ -108,9 +108,9 @@ GlobalStoragePool::~GlobalStoragePool()
 
 void GlobalStoragePool::restore()
 {
-    log_storage->restore();
-    data_storage->restore();
-    meta_storage->restore();
+    log_max_ids = log_storage->restore();
+    data_max_ids = data_storage->restore();
+    meta_max_ids = meta_storage->restore();
 
     gc_handle = global_context.getBackgroundPool().addTask(
         [this] {
@@ -231,33 +231,38 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
 
 PageStorageRunMode StoragePool::restore()
 {
-    // If the storage instances is not global, we need to initialize it by ourselves and add a gc task.
-    if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
-    {
-        log_storage_v2->restore();
-        data_storage_v2->restore();
-        meta_storage_v2->restore();
-    }
+    const auto & global_storage_pool = global_context.getGlobalStoragePool();
 
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
     {
-        max_log_page_id = log_storage_v2->getMaxId(ns_id);
-        max_data_page_id = data_storage_v2->getMaxId(ns_id);
-        max_meta_page_id = meta_storage_v2->getMaxId(ns_id);
+        auto log_max_ids = log_storage->restore();
+        auto data_max_ids = data_storage->restore();
+        auto meta_max_ids = meta_storage->restore();
+
+        assert(log_max_ids.size() == 1);
+        assert(data_max_ids.size() == 1);
+        assert(meta_max_ids.size() == 1);
+
+        max_log_page_id = log_max_ids[0];
+        max_data_page_id = data_max_ids[0];
+        max_meta_page_id = meta_max_ids[0];
+
         break;
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        max_log_page_id = log_storage_v3->getMaxId(ns_id);
-        max_data_page_id = data_storage_v3->getMaxId(ns_id);
-        max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
+        max_log_page_id = global_storage_pool.getLogMaxId(ns_id);
+        max_data_page_id = global_storage_pool.getDataMaxId(ns_id);
+        max_meta_page_id = global_storage_pool.getMetaMaxId(ns_id);
+
         break;
     }
     case PageStorageRunMode::MIX_MODE:
     {
         // Check number of valid pages in v2
+        // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
             LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", static_cast<UInt8>(PageStorageRunMode::MIX_MODE), static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
@@ -274,21 +279,40 @@ PageStorageRunMode StoragePool::restore()
             data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
             meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
 
-            max_log_page_id = log_storage_v3->getMaxId(ns_id);
-            max_data_page_id = data_storage_v3->getMaxId(ns_id);
-            max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
+            max_log_page_id = global_storage_pool.getLogMaxId(ns_id);
+            max_data_page_id = global_storage_pool.getDataMaxId(ns_id);
+            max_meta_page_id = global_storage_pool.getMetaMaxId(ns_id);
         }
-        else
+        else // Still running Mix Mode
         {
-            max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), log_storage_v3->getMaxId(ns_id));
-            max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), data_storage_v3->getMaxId(ns_id));
-            max_meta_page_id = std::max(meta_storage_v2->getMaxId(ns_id), meta_storage_v3->getMaxId(ns_id));
+            auto v2_log_max_ids = log_storage->restore();
+            auto v2_data_max_ids = data_storage->restore();
+            auto v2_meta_max_ids = meta_storage->restore();
+
+            assert(v2_log_max_ids.size() == 1);
+            assert(v2_data_max_ids.size() == 1);
+            assert(v2_meta_max_ids.size() == 1);
+
+            max_log_page_id = v2_log_max_ids[0];
+            max_data_page_id = v2_data_max_ids[0];
+            max_meta_page_id = v2_meta_max_ids[0];
+
+            max_log_page_id = std::max(max_log_page_id, global_storage_pool.getLogMaxId(ns_id));
+            max_data_page_id = std::max(max_data_page_id, global_storage_pool.getDataMaxId(ns_id));
+            max_meta_page_id = std::max(max_meta_page_id, global_storage_pool.getMetaMaxId(ns_id));
         }
         break;
     }
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
+    LOG_FMT_WARNING(logger, "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
+                            " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
+                    static_cast<UInt8>(run_mode),
+                    ns_id,
+                    max_log_page_id,
+                    max_data_page_id,
+                    max_meta_page_id);
     return run_mode;
 }
 
