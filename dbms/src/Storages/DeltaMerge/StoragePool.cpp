@@ -299,6 +299,7 @@ StoragePool::~StoragePool()
 
 void StoragePool::enableGC()
 {
+    // The data in V3 will be GCed by `GlobalStoragePool::gc`, only register gc task under only v2/mix mode
     if (run_mode == PageStorageRunMode::ONLY_V2 || run_mode == PageStorageRunMode::MIX_MODE)
     {
         gc_handle = global_context.getBackgroundPool().addTask([this] { return this->gc(global_context.getSettingsRef()); });
