@@ -27,6 +27,8 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
+#include <cstddef>
+#include "tipb/executor.pb.h"
 
 namespace DB
 {
@@ -272,6 +274,36 @@ struct Join : Executor
 
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
+
+struct Window : Executor
+{
+    std::vector<ASTPtr> func_descs;
+    std::vector<ASTPtr> partition_by_exprs;
+    std::vector<ASTPtr> order_by_exprs;
+    tipb::WindowFrame frame;
+
+    Window(size_t & index_, const DAGSchema & output_schema_, ASTPtr params_); // todo
+
+    void columnPrune(std::unordered_set<String> & used_columns) override;
+
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+
+    void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
+};
+
+struct Sort : Executor
+{
+    bool is_partial_sort;
+    std::vector<ASTPtr> by_exprs;
+
+    Sort(size_t & index_, const DAGSchema & output_schema_, ASTPtr params_); // todo
+
+    void columnPrune(std::unordered_set<String> & used_columns) override;
+
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+
+    void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
+};
 } // namespace mock
 
 using ExecutorPtr = std::shared_ptr<mock::Executor>;
@@ -294,6 +326,8 @@ ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, ti
 
 ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
 
-//TODO: add compileWindow
+ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, std::vector<ASTPtr> func_descs, std::vector<ASTPtr> partition_by_exprs, std::vector<ASTPtr> order_by_exprs, tipb::WindowFrame frame);
+
+ExecutorPtr compileSort(); // todo
 
 } // namespace DB

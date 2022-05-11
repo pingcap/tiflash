@@ -1541,11 +1541,12 @@ ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, ti
     return exchange_sender;
 }
 
-
 ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
 {
     ExecutorPtr exchange_receiver = std::make_shared<mock::ExchangeReceiver>(executor_index, schema);
     return exchange_receiver;
 }
+
+
 
 } // namespace DB
