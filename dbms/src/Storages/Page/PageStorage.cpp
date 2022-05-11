@@ -484,7 +484,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
             if (resolved_page_id == INVALID_PAGE_ID)
             {
                 const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
-                if (entry_for_put.file_id != 0)
+                if (entry_for_put.isValid())
                 {
                     auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
 
@@ -510,7 +510,12 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
                                               page_for_put.data.size());
                     }
 
-                    LOG_FMT_INFO(Logger::get("PageWriter"), "Can't find [origin_id={}] in v3. Created a new page with [field_offsets={}] into V3", write.ori_page_id, entry_for_put.field_offsets.size());
+                    LOG_FMT_INFO(
+                        Logger::get("PageWriter"),
+                        "Can't find the origin page in v3, migrate a new being ref page into V3 [page_id={}] [origin_id={}] [field_offsets={}]",
+                        write.page_id,
+                        write.ori_page_id,
+                        entry_for_put.field_offsets.size());
                 }
                 else
                 {
