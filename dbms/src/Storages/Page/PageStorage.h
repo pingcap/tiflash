@@ -211,14 +211,12 @@ public:
 
     virtual ~PageStorage() = default;
 
-    // Return the map[ns_id, max_applied_page_id]
-    // The different between max_applied_page_id and max_page_id is that:
+    // Return the map[ns_id, max_page_id]
+    // The caller should ensure that it only allocate new id that is larger than `max_page_id`. Reusing the
+    // same ID for different kind of write (put/ref/put_external) would make PageStorage run into unexpected error.
     //
-    // 1. In V2, it means same thing.
-    // Also ns_id will be 0, because V2 will not use ns_id to distinguish different tables
-    // 2. In V3, max_applied_page_id can be a del id. In V3, we do not allow writebatch type reuse of the same page_id.
-    // So we need get the max_page_id before MVCC do the memory GC.
-    // The max_page_id before MVCC GC in restore, we called max_applied_page_id.
+    // Note that for V2, we always return a map with only one element: <ns_id=0, max_id> cause V2 have no
+    // idea about ns_id.
     virtual std::map<NamespaceId, PageId> restore() = 0;
 
     virtual void drop() = 0;

@@ -350,7 +350,6 @@ std::map<NamespaceId, PageId> PageStorage::restore()
 
     statistics = restore_info;
 
-    // No need lock here
     auto snapshot = getConcreteSnapshot();
     size_t num_pages = snapshot->version()->numPages();
     LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
