@@ -51,17 +51,7 @@ BackgroundService::~BackgroundService()
         background_pool.removeTask(single_thread_task_handle);
         single_thread_task_handle = nullptr;
     }
-    if (table_flush_handle)
-    {
-        background_pool.removeTask(table_flush_handle);
-        table_flush_handle = nullptr;
-    }
 
-    if (region_handle)
-    {
-        background_pool.removeTask(region_handle);
-        region_handle = nullptr;
-    }
     if (storage_gc_handle)
     {
         background_pool.removeTask(storage_gc_handle);

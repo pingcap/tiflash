@@ -27,6 +27,7 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include "common/likely.h"
 
 namespace DB
 {
@@ -131,11 +132,12 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
 {
     auto table_id = region.getMappedTableID();
     auto storage = tmt.getStorages().get(table_id);
-    if (storage == nullptr)
+    if (unlikely(storage == nullptr))
     {
-        LOG_WARNING(log,
-                    "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
-                        + " with table id: " + DB::toString(table_id) + ", ignored");
+        LOG_FMT_WARNING(log,
+                        "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
+                        region.toString(),
+                        DB::toString(table_id));
         return;
     }
 
