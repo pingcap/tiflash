@@ -19,23 +19,10 @@
 
 namespace DB
 {
-
 struct ASTExistsQueryIDAndQueryNames
 {
     static constexpr auto ID = "ExistsQuery";
     static constexpr auto Query = "EXISTS TABLE";
-};
-
-struct ASTShowCreateTableQueryIDAndQueryNames
-{
-    static constexpr auto ID = "ShowCreateTableQuery";
-    static constexpr auto Query = "SHOW CREATE TABLE";
-};
-
-struct ASTShowCreateDatabaseQueryIDAndQueryNames
-{
-    static constexpr auto ID = "ShowCreateDatabaseQuery";
-    static constexpr auto Query = "SHOW CREATE DATABASE";
 };
 
 struct ASTDescribeQueryExistsQueryIDAndQueryNames
@@ -45,17 +32,6 @@ struct ASTDescribeQueryExistsQueryIDAndQueryNames
 };
 
 using ASTExistsQuery = ASTQueryWithTableAndOutputImpl<ASTExistsQueryIDAndQueryNames>;
-using ASTShowCreateTableQuery = ASTQueryWithTableAndOutputImpl<ASTShowCreateTableQueryIDAndQueryNames>;
-
-class ASTShowCreateDatabaseQuery : public ASTQueryWithTableAndOutputImpl<ASTShowCreateDatabaseQueryIDAndQueryNames>
-{
-protected:
-    void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
-    {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << ASTShowCreateDatabaseQueryIDAndQueryNames::Query
-                      << " " << (settings.hilite ? hilite_none : "") << backQuoteIfNeed(database);
-    }
-};
 
 class ASTDescribeQuery : public ASTQueryWithOutput
 {
@@ -84,7 +60,6 @@ protected:
                       << "DESCRIBE TABLE " << (settings.hilite ? hilite_none : "");
         table_expression->formatImpl(settings, state, frame);
     }
-
 };
 
-}
+} // namespace DB
