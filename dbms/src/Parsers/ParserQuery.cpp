@@ -15,7 +15,6 @@
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDBGInvokeQuery.h>
-#include <Parsers/ParserDeleteQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/ParserManageQuery.h>
@@ -33,7 +32,6 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserInsertQuery insert_p(end);
     ParserUseQuery use_p;
     ParserSetQuery set_p;
-    ParserDeleteQuery delete_p;
     ParserDBGInvokeQuery dbginvoke_p;
     ParserManageQuery manage_p;
 
@@ -41,7 +39,6 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || insert_p.parse(pos, node, expected)
         || use_p.parse(pos, node, expected)
         || set_p.parse(pos, node, expected)
-        || delete_p.parse(pos, node, expected)
         || dbginvoke_p.parse(pos, node, expected)
         || manage_p.parse(pos, node, expected);
 

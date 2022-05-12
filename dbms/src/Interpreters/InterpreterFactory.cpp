@@ -16,7 +16,6 @@
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDBGInvokeQuery.h>
-#include <Interpreters/InterpreterDeleteQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterExistsQuery.h>
@@ -33,7 +32,6 @@
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDBGInvokeQuery.h>
-#include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTManageQuery.h>
@@ -131,11 +129,6 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     {
         throwIfReadOnly(context);
         return std::make_unique<InterpreterAlterQuery>(query, context);
-    }
-    else if (typeid_cast<ASTDeleteQuery *>(query.get()))
-    {
-        bool allow_materialized = static_cast<bool>(context.getSettingsRef().insert_allow_materialized_columns);
-        return std::make_unique<InterpreterDeleteQuery>(query, context, allow_materialized);
     }
     else if (typeid_cast<ASTDBGInvokeQuery *>(query.get()))
     {
