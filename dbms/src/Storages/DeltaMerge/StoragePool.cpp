@@ -281,6 +281,10 @@ PageStorageRunMode StoragePool::restore()
         // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
+            // TODO: when `compaction` happend
+            // 1. Will rewrite meta into V3 by DT.
+            // 2. Need `DEL` meta in V2.
+            // 3. Need drop V2 in disk and check.
             LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", static_cast<UInt8>(PageStorageRunMode::MIX_MODE), static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
 
             log_storage_v2 = nullptr;
@@ -312,13 +316,13 @@ PageStorageRunMode StoragePool::restore()
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_FMT_WARNING(logger, "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
-                            " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
-                    static_cast<UInt8>(run_mode),
-                    ns_id,
-                    max_log_page_id,
-                    max_data_page_id,
-                    max_meta_page_id);
+    LOG_FMT_TRACE(logger, "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
+                          " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
+                  static_cast<UInt8>(run_mode),
+                  ns_id,
+                  max_log_page_id,
+                  max_data_page_id,
+                  max_meta_page_id);
     return run_mode;
 }
 
