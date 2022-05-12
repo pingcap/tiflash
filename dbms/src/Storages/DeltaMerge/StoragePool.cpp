@@ -327,7 +327,11 @@ PageStorageRunMode StoragePool::restore()
         if (auto meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
         {
             bool traslate_done = forceTransformMetaV2toV3();
-            LOG_FMT_INFO(logger, "Current meta translate to V3 finished. [ns_id={}] [done={}] [remain_before_translate_pages={}], [remain_after_translate_pages={}]", ns_id, traslate_done, meta_remain_pages, traslate_done ? 0 : meta_storage_v2->getNumberOfPages());
+            LOG_FMT_INFO(logger, "Current meta translate to V3 finished. [ns_id={}] [done={}] [remain_before_translate_pages={}], [remain_after_translate_pages={}]", //
+                         ns_id,
+                         traslate_done,
+                         meta_remain_pages,
+                         traslate_done ? 0 : meta_storage_v2->getNumberOfPages());
         }
         else
         {
