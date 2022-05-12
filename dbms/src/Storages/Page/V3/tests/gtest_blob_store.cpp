@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
+#include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
@@ -24,6 +25,7 @@
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::PS::V3::tests
@@ -69,6 +71,12 @@ try
 
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
+
+    {
+        const auto & lock = stats.lock();
+        stats.createStatNotChecking(file_id1, lock);
+        stats.createStatNotChecking(file_id2, lock);
+    }
 
     {
         stats.restoreByEntry(PageEntryV3{
@@ -163,38 +171,38 @@ TEST_F(BlobStoreStatsTest, testStat)
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
     ASSERT_TRUE(stat);
 
-    auto offset = stat->getPosFromStat(10);
+    auto offset = stat->getPosFromStat(10, stats.lock());
     ASSERT_EQ(offset, 0);
 
-    offset = stat->getPosFromStat(100);
+    offset = stat->getPosFromStat(100, stats.lock());
     ASSERT_EQ(offset, 10);
 
-    offset = stat->getPosFromStat(20);
+    offset = stat->getPosFromStat(20, stats.lock());
     ASSERT_EQ(offset, 110);
 
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20);
     ASSERT_EQ(stat->sm_valid_size, 10 + 100 + 20);
     ASSERT_EQ(stat->sm_valid_rate, 1);
 
-    stat->removePosFromStat(10, 100);
+    stat->removePosFromStat(10, 100, stats.lock());
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20);
     ASSERT_LE(stat->sm_valid_rate, 1);
 
-    offset = stat->getPosFromStat(110);
+    offset = stat->getPosFromStat(110, stats.lock());
     ASSERT_EQ(offset, 130);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 110);
     ASSERT_LE(stat->sm_valid_rate, 1);
 
-    offset = stat->getPosFromStat(90);
+    offset = stat->getPosFromStat(90, stats.lock());
     ASSERT_EQ(offset, 10);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 110 + 90);
     ASSERT_LE(stat->sm_valid_rate, 1);
 
     // Unmark the last range
-    stat->removePosFromStat(130, 110);
+    stat->removePosFromStat(130, 110, stats.lock());
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 90);
     ASSERT_LE(stat->sm_valid_rate, 1);
@@ -207,7 +215,7 @@ TEST_F(BlobStoreStatsTest, testStat)
      * Total size should plus 10, rather than 120.
      * And the postion return should be last range freed.
      */
-    offset = stat->getPosFromStat(120);
+    offset = stat->getPosFromStat(120, stats.lock());
     ASSERT_EQ(offset, 130);
     ASSERT_EQ(stat->sm_total_size, 10 + 100 + 20 + 110 + 10);
     ASSERT_EQ(stat->sm_valid_size, 10 + 20 + 90 + 120);
@@ -223,11 +231,11 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     BlobStats stats(logger, delegator, config);
 
     stat = stats.createStat(1, stats.lock());
-    offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1);
+    offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1, stats.lock());
     ASSERT_EQ(offset, 0);
 
     // Can't get pos from a full stat
-    offset = stat->getPosFromStat(100);
+    offset = stat->getPosFromStat(100, stats.lock());
     ASSERT_EQ(offset, INVALID_BLOBFILE_OFFSET);
 
     // Stat internal property should not changed
@@ -242,14 +250,14 @@ TEST_F(BlobStoreStatsTest, testFullStats)
 
     // A new stat can use
     stat = stats.createStat(blob_file_id, stats.lock());
-    offset = stat->getPosFromStat(100);
+    offset = stat->getPosFromStat(100, stats.lock());
     ASSERT_EQ(offset, 0);
 
     // Remove the stat which id is 0 , now remain the stat which id is 1
     stats.eraseStat(1, stats.lock());
 
     // Then full the stat which id 2
-    offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 100);
+    offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 100, stats.lock());
     ASSERT_EQ(offset, 100);
 
     // Then choose stat , it should return the stat id 3
@@ -285,6 +293,12 @@ try
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
 
+    const auto & path = getTemporaryPath();
+    createIfNotExist(path);
+    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
+    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
+    blob_store.registerPaths();
+
     {
         blob_store.blob_stats.restoreByEntry(PageEntryV3{
             .file_id = file_id1,
@@ -314,6 +328,7 @@ try
     {
         for (const auto & [path, stats] : blob_store.blob_stats.getStats())
         {
+            (void)path;
             for (const auto & stat : stats)
             {
                 if (stat->id == file_id1)
@@ -330,6 +345,149 @@ try
                 }
             }
         }
+    }
+}
+CATCH
+
+
+TEST_F(BlobStoreTest, RestoreWithInvalidBlob)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    config.file_limit_size = 1024;
+
+    // Generate blob [1,2,3]
+    auto write_blob_datas = [](BlobStore & blob_store) {
+        WriteBatch write_batch;
+        PageId page_id = 55;
+        size_t buff_size = 1024;
+        char c_buff[buff_size];
+        memset(c_buff, 0x1, buff_size);
+
+        // write blob 1
+        write_batch.putPage(page_id, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        blob_store.write(write_batch, nullptr);
+        write_batch.clear();
+
+        // write blob 2
+        write_batch.putPage(page_id + 1, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        blob_store.write(write_batch, nullptr);
+        write_batch.clear();
+
+        // write blob 3
+        write_batch.putPage(page_id + 2, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size), buff_size);
+        blob_store.write(write_batch, nullptr);
+        write_batch.clear();
+    };
+
+    auto check_in_disk_file = [](String parent_path, std::vector<BlobFileId> exited_blobs) -> bool {
+        for (const auto blob_id : exited_blobs)
+        {
+            Poco::File file(fmt::format("{}/{}{}", parent_path, BlobFile::BLOB_PREFIX_NAME, blob_id));
+            if (!file.exists())
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    auto restore_blobs = [](BlobStore & blob_store, std::vector<BlobFileId> blob_ids) {
+        blob_store.registerPaths();
+        for (const auto & id : blob_ids)
+        {
+            blob_store.blob_stats.restoreByEntry(PageEntryV3{
+                .file_id = id,
+                .size = 1024,
+                .tag = 0,
+                .offset = 0,
+                .checksum = 0x4567,
+            });
+        }
+    };
+
+    // Case 1, all of blob been restored
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        write_blob_datas(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        restore_blobs(blob_store_check, {1, 2, 3});
+
+        blob_store_check.blob_stats.restore();
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
+        createIfNotExist(test_path);
+    }
+
+    // Case 2, only recover blob 1
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        write_blob_datas(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        restore_blobs(blob_store_check, {1});
+
+        blob_store_check.blob_stats.restore();
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1}));
+        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
+        createIfNotExist(test_path);
+    }
+
+    // Case 3, only recover blob 2
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        write_blob_datas(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        restore_blobs(blob_store_check, {2});
+
+        blob_store_check.blob_stats.restore();
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {2}));
+        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
+        createIfNotExist(test_path);
+    }
+
+    // Case 4, only recover blob 3
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        write_blob_datas(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        restore_blobs(blob_store_check, {3});
+
+        blob_store_check.blob_stats.restore();
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {3}));
+        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
+        createIfNotExist(test_path);
+    }
+
+    // Case 5, recover a not exist blob
+    {
+        auto test_path = getTemporaryPath();
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        write_blob_datas(blob_store);
+
+        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+
+        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        ASSERT_THROW(restore_blobs(blob_store_check, {4}), DB::Exception);
     }
 }
 CATCH
@@ -417,6 +575,183 @@ TEST_F(BlobStoreTest, testWriteRead)
     ASSERT_EQ(index, buff_nums);
 }
 
+TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+
+    PageId page_id = 50;
+    size_t wb_nums = 5;
+    size_t buff_size = 10ul * 1024;
+    const size_t rate_target = buff_size - 1;
+
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    char c_buff[wb_nums * buff_size];
+
+    WriteBatch wbs[wb_nums];
+    PageEntriesEdit edits[wb_nums];
+
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        for (size_t j = 0; j < buff_size; ++j)
+        {
+            c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+        wbs[i].putPage(page_id++, /* tag */ 0, buff, buff_size);
+    }
+
+    WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);
+
+    AtomicStopwatch write_watch;
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        edits[i] = blob_store.write(wbs[i], write_limiter);
+    }
+    auto write_elapsed = write_watch.elapsedSeconds();
+    auto write_actual_rate = write_limiter->getTotalBytesThrough() / write_elapsed;
+
+    // It must lower than 1.30
+    // But we do have some disk rw, so don't set GE
+    EXPECT_LE(write_actual_rate / rate_target, 1.30);
+
+    Int64 consumed = 0;
+    auto get_stat = [&consumed]() {
+        return consumed;
+    };
+
+    char c_buff_read[wb_nums * buff_size];
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        AtomicStopwatch read_watch;
+        for (size_t i = 0; i < wb_nums; ++i)
+        {
+            for (const auto & record : edits[i].getRecords())
+            {
+                blob_store.read(record.entry.file_id,
+                                record.entry.offset,
+                                c_buff_read + i * buff_size,
+                                record.entry.size,
+                                read_limiter);
+            }
+        }
+
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_LE(read_actual_rate / rate_target, 1.30);
+    }
+
+    PageIDAndEntriesV3 entries = {};
+    for (size_t i = 0; i < wb_nums; ++i)
+    {
+        for (const auto & record : edits[i].getRecords())
+        {
+            entries.emplace_back(std::make_pair(record.page_id, record.entry));
+        }
+    }
+
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        AtomicStopwatch read_watch;
+
+        // Test `PageMap` read
+        blob_store.read(entries, read_limiter);
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_LE(read_actual_rate / rate_target, 1.30);
+    }
+
+    {
+        ReadLimiterPtr read_limiter = std::make_shared<MockReadLimiter>(get_stat,
+                                                                        rate_target,
+                                                                        LimiterType::UNKNOW);
+
+        AtomicStopwatch read_watch;
+
+        // Test single `Page` read
+        for (auto & entry : entries)
+        {
+            blob_store.read(entry, read_limiter);
+        }
+        auto read_elapsed = read_watch.elapsedSeconds();
+        auto read_actual_rate = read_limiter->getTotalBytesThrough() / read_elapsed;
+        EXPECT_LE(read_actual_rate / rate_target, 1.30);
+    }
+}
+TEST_F(BlobStoreTest, testWriteReadWithFiled)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+
+    PageId page_id1 = 50;
+    PageId page_id2 = 51;
+    PageId page_id3 = 53;
+
+    size_t buff_size = 120;
+    WriteBatch wb;
+
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    char c_buff[buff_size];
+
+    for (size_t j = 0; j < buff_size; ++j)
+    {
+        c_buff[j] = static_cast<char>(j & 0xff);
+    }
+
+    ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
+    ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
+    ReadBufferPtr buff3 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), buff_size);
+    wb.putPage(page_id1, /* tag */ 0, buff1, buff_size, {20, 40, 40, 20});
+    wb.putPage(page_id2, /* tag */ 0, buff2, buff_size, {10, 50, 20, 20, 20});
+    wb.putPage(page_id3, /* tag */ 0, buff3, buff_size, {10, 5, 20, 20, 15, 5, 15, 30});
+    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    ASSERT_EQ(edit.size(), 3);
+
+    BlobStore::FieldReadInfo read_info1(buildV3Id(TEST_NAMESPACE_ID, page_id1), edit.getRecords()[0].entry, {0, 1, 2, 3});
+    BlobStore::FieldReadInfo read_info2(buildV3Id(TEST_NAMESPACE_ID, page_id2), edit.getRecords()[1].entry, {2, 4});
+    BlobStore::FieldReadInfo read_info3(buildV3Id(TEST_NAMESPACE_ID, page_id3), edit.getRecords()[2].entry, {1, 3});
+
+    BlobStore::FieldReadInfos read_infos = {read_info1, read_info2, read_info3};
+
+    const auto & page_map = blob_store.read(read_infos, nullptr);
+    ASSERT_EQ(page_map.size(), 3);
+
+    for (const auto & [pageid, page] : page_map)
+    {
+        if (pageid == page_id1)
+        {
+            ASSERT_EQ(page.page_id, page_id1);
+            ASSERT_EQ(page.data.size(), buff_size);
+            ASSERT_EQ(strncmp(page.data.begin(), c_buff, buff_size), 0);
+        }
+        else if (pageid == page_id2)
+        {
+            ASSERT_EQ(page.page_id, page_id2);
+            // the buffer size read is equal to the fields size we read
+            // field {2, 4}
+            ASSERT_EQ(page.data.size(), 40);
+            ASSERT_EQ(strncmp(page.data.begin(), &c_buff[60], 20), 0);
+            ASSERT_EQ(strncmp(&page.data.begin()[20], &c_buff[100], 20), 0);
+        }
+        else if (pageid == page_id3)
+        {
+            ASSERT_EQ(page.page_id, page_id3);
+            // the buffer size read is equal to the fields size we read
+            // field {1, 3}
+            ASSERT_EQ(page.data.size(), 25);
+            ASSERT_EQ(strncmp(page.data.begin(), &c_buff[10], 5), 0);
+            ASSERT_EQ(strncmp(&page.data.begin()[5], &c_buff[35], 20), 0);
+        }
+    }
+}
+CATCH
+
 TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
@@ -496,8 +831,8 @@ try
     const size_t buff_size = 1024;
     WriteBatch wb;
     {
-        char c_buff1[buff_size];
-        char c_buff2[buff_size];
+        char c_buff1[buff_size] = {0};
+        char c_buff2[buff_size] = {0};
 
         for (size_t i = 0; i < buff_size; ++i)
         {
@@ -622,7 +957,7 @@ TEST_F(BlobStoreTest, testWriteOutOfLimitSize)
     config.file_limit_size = buff_size;
 
     size_t buffer_sizes[] = {buff_size, buff_size - 1, buff_size / 2 + 1};
-    for (auto & buf_size : buffer_sizes)
+    for (const auto & buf_size : buffer_sizes)
     {
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
 
@@ -740,7 +1075,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     ASSERT_EQ(stat->sm_valid_size, buff_size * 3);
 
     // Check disk file have been truncate to right margin
-    String path = blob_store.getBlobFilePath(1);
+    String path = blob_store.getBlobFile(1)->getPath();
     Poco::File blob_file_in_disk(path);
     ASSERT_EQ(blob_file_in_disk.getSize(), stat->sm_total_size);
 }
@@ -859,8 +1194,8 @@ TEST_F(BlobStoreTest, GC)
     }
 
     // Check blobfile1
-    Poco::File file1(blob_store.getBlobFilePath(1));
-    Poco::File file2(blob_store.getBlobFilePath(2));
+    Poco::File file1(blob_store.getBlobFile(1)->getPath());
+    Poco::File file2(blob_store.getBlobFile(2)->getPath());
     ASSERT_TRUE(file1.exists());
     ASSERT_TRUE(file2.exists());
     ASSERT_EQ(file1.getSize(), file2.getSize());

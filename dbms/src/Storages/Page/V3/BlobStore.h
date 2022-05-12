@@ -44,7 +44,21 @@ public:
         SettingUInt64 file_limit_size = BLOBFILE_LIMIT_SIZE;
         SettingUInt64 spacemap_type = SpaceMap::SpaceMapType::SMAP64_STD_MAP;
         SettingUInt64 cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
+        SettingUInt64 block_alignment_bytes = 0;
         SettingDouble heavy_gc_valid_rate = 0.2;
+
+        String toString()
+        {
+            return fmt::format("BlobStore Config Info: "
+                               "[file_limit_size={}],[spacemap_type={}],"
+                               "[cached_fd_size={}],[block_alignment_bytes={}],"
+                               "[heavy_gc_valid_rate={}]",
+                               file_limit_size,
+                               spacemap_type,
+                               cached_fd_size,
+                               block_alignment_bytes,
+                               heavy_gc_valid_rate);
+        }
     };
 
     class BlobStats
@@ -74,26 +88,26 @@ public:
 
         struct BlobStat
         {
-            const SpaceMapPtr smap;
             const BlobFileId id;
-            BlobStatType type;
+            std::atomic<BlobStatType> type;
 
+            std::mutex sm_lock;
+            const SpaceMapPtr smap;
             /**
-            * If no any data inside. It shoule be same as space map `biggest_cap`
-            */
+             * If no any data inside. It shoule be same as space map `biggest_cap`,
+             * It is a hint for choosing quickly, should use `recalculateCapacity`
+             * to update it after some space are free in the spacemap.
+             */
             UInt64 sm_max_caps = 0;
-
             UInt64 sm_total_size = 0;
             UInt64 sm_valid_size = 0;
             double sm_valid_rate = 1.0;
 
-            std::mutex sm_lock;
-
         public:
             BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
-                : smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
-                , id(id_)
+                : id(id_)
                 , type(BlobStatType::NORMAL)
+                , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , sm_max_caps(sm_max_caps_)
             {}
 
@@ -104,17 +118,17 @@ public:
 
             bool isReadOnly() const
             {
-                return type == BlobStatType::READ_ONLY;
+                return type.load() == BlobStatType::READ_ONLY;
             }
 
             void changeToReadOnly()
             {
-                type = BlobStatType::READ_ONLY;
+                type.store(BlobStatType::READ_ONLY);
             }
 
-            BlobFileOffset getPosFromStat(size_t buf_size);
+            BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
-            void removePosFromStat(BlobFileOffset offset, size_t buf_size);
+            bool removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &);
 
             /**
              * This method is only used when blobstore restore
@@ -140,6 +154,16 @@ public:
     public:
         BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
 
+        // Don't require a lock from BlobStats When you already hold a BlobStat lock
+        //
+        // Safe options:
+        // 1. Hold a BlobStats lock, then Hold a/many BlobStat lock(s).
+        // 2. Without hold a BlobStats lock, But hold a/many BlobStat lock(s).
+        // 3. Hold a BlobStats lock, without hold a/many BlobStat lock(s).
+        //
+        // Not safe options:
+        // 1. then Hold a/many BlobStat lock(s), then a BlobStats lock.
+        //
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
         BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
@@ -166,7 +190,7 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr blobIdToStat(BlobFileId file_id, bool restore_if_not_exist = false, bool ignore_not_exist = false);
+        BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
         std::map<String, std::list<BlobStatPtr>> getStats() const
         {
@@ -174,6 +198,9 @@ public:
             return stats_map;
         }
 
+        std::set<BlobFileId> getBlobIdsFromDisk(String path) const;
+
+        static std::pair<BlobFileId, String> getBlobIdFromName(String blob_name);
 
 #ifndef DBMS_PUBLIC_GTEST
     private:
@@ -186,18 +213,19 @@ public:
     private:
 #endif
         LoggerPtr log;
+        PSDiskDelegatorPtr delegator;
         BlobStore::Config config;
 
-        BlobFileId roll_id = 1;
-        std::map<String, std::list<BlobStatPtr>> stats_map;
-        // Index for selecting next path for creating new blobfile
-        UInt16 stats_map_path_index = 0;
-
-        PSDiskDelegatorPtr delegator;
         mutable std::mutex lock_stats;
+        BlobFileId roll_id = 1;
+        // Index for selecting next path for creating new blobfile
+        UInt32 stats_map_path_index = 0;
+        std::map<String, std::list<BlobStatPtr>> stats_map;
     };
 
     BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
+
+    void registerPaths();
 
     std::vector<BlobFileId> getGCStats();
 
@@ -235,7 +263,7 @@ public:
 private:
 #endif
 
-    void read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr);
+    BlobFilePtr read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
     /**
      *  Ask BlobStats to get a span from BlobStat.
@@ -250,15 +278,16 @@ private:
      */
     void removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, size_t size);
 
-    String getBlobFilePath(BlobFileId blob_id);
+    String getBlobFileParentPath(BlobFileId blob_id);
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
     friend class PageDirectoryFactory;
+    friend class PageStorageControl;
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    constexpr static const char * blob_prefix_name = "/blobfile_";
 
     PSDiskDelegatorPtr delegator;
 

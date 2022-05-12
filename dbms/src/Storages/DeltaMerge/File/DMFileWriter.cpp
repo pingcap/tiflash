@@ -72,10 +72,9 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
-        // TODO: If column type is nullable, we won't generate index for it
         /// for handle column always generate index
-        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime();
-
+        auto type = removeNullable(cd.type);
+        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
         if (options.flags.isSingleFile())
         {
             if (do_index)
@@ -193,7 +192,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             auto & minmax_indexs = single_file_stream->minmax_indexs;
             if (auto iter = minmax_indexs.find(stream_name); iter != minmax_indexs.end())
             {
-                iter->second->addPack(column, del_mark);
+                // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
+                // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
+                iter->second->addPack(column, col_id == EXTRA_HANDLE_COLUMN_ID ? nullptr : del_mark);
             }
 
             auto offset_in_compressed_block = single_file_stream->original_layer.offset();
@@ -255,7 +256,11 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 const auto name = DMFile::getFileNameBase(col_id, substream);
                 auto & stream = column_streams.at(name);
                 if (stream->minmaxes)
-                    stream->minmaxes->addPack(column, del_mark);
+                {
+                    // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
+                    // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
+                    stream->minmaxes->addPack(column, col_id == EXTRA_HANDLE_COLUMN_ID ? nullptr : del_mark);
+                }
 
                 /// There could already be enough data to compress into the new block.
                 if (stream->compressed_buf->offset() >= options.min_compress_block_size)
@@ -360,10 +365,13 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                         dmfile->encryptionIndexPath(stream_name),
                         false,
                         write_limiter);
-                    if (!is_empty_file)
-                        stream->minmaxes->write(*type, buf);
+                    stream->minmaxes->write(*type, buf);
                     buf.sync();
-                    bytes_written += buf.getMaterializedBytes();
+                    // Ignore data written in index file when the dmfile is empty.
+                    // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
+                    // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
+                    // and we cannot change the index file format for empty dmfile because of backward compatibility.
+                    bytes_written += is_empty_file ? 0 : buf.getMaterializedBytes();
                 }
                 else
                 {
@@ -374,10 +382,13 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                                                                            write_limiter,
                                                                            dmfile->configuration->getChecksumAlgorithm(),
                                                                            dmfile->configuration->getChecksumFrameLength());
-                    if (!is_empty_file)
-                        stream->minmaxes->write(*type, *buf);
+                    stream->minmaxes->write(*type, *buf);
                     buf->sync();
-                    bytes_written += buf->getMaterializedBytes();
+                    // Ignore data written in index file when the dmfile is empty.
+                    // This is ok because the index file in this case is tiny, and we already ignore other small files like meta and pack stat file.
+                    // The motivation to do this is to show a zero `stable_size_on_disk` for empty segments,
+                    // and we cannot change the index file format for empty dmfile because of backward compatibility.
+                    bytes_written += is_empty_file ? 0 : buf->getMaterializedBytes();
 #ifndef NDEBUG
                     examine_buffer_size(*buf, *this->file_provider);
 #endif

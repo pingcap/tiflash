@@ -25,23 +25,22 @@ extern const char exception_before_page_file_write_sync[];
 
 namespace PS::V3
 {
-BlobFile::BlobFile(String path_,
+BlobFile::BlobFile(String parent_path_,
                    BlobFileId blob_id_,
                    FileProviderPtr file_provider_,
                    PSDiskDelegatorPtr delegator_)
     : blob_id(blob_id_)
     , file_provider{std::move(file_provider_)}
     , delegator(std::move(delegator_))
-    , path(path_)
+    , parent_path(std::move(parent_path_))
 {
-    // TODO: support encryption file
+    Poco::File file_in_disk(getPath());
     wrfile = file_provider->newWriteReadableFile(
         getPath(),
         getEncryptionPath(),
         false,
-        /*create_new_encryption_info_*/ false);
+        /*create_new_encryption_info_*/ !file_in_disk.exists());
 
-    Poco::File file_in_disk(getPath());
     file_size = file_in_disk.getSize();
     {
         std::lock_guard lock(file_size_lock);
@@ -52,24 +51,24 @@ BlobFile::BlobFile(String path_,
         {
             delegator->addPageFileUsedSize(id_lvl,
                                            file_size,
-                                           path,
+                                           parent_path,
                                            /*need_insert_location*/ true);
         }
     }
 }
 
-void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter)
+void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
     if (unlikely(wrfile->isClosed()))
     {
-        throw Exception("Write failed, FD is closed which [path=" + path + "], BlobFile should also be closed",
+        throw Exception("Write failed, FD is closed which [path=" + parent_path + "], BlobFile should also be closed",
                         ErrorCodes::LOGICAL_ERROR);
     }
 
-    PageUtil::readFile(wrfile, offset, buffer, size, read_limiter);
+    PageUtil::readFile(wrfile, offset, buffer, size, read_limiter, background);
 }
 
-void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter)
+void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter, bool background)
 {
     /**
      * Precautions:
@@ -81,7 +80,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
 
     if (unlikely(wrfile->isClosed()))
     {
-        throw Exception(fmt::format("Write failed, FD is closed which [path={}], BlobFile should also be closed", path),
+        throw Exception(fmt::format("Write failed, FD is closed which [path={}], BlobFile should also be closed", parent_path),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -92,9 +91,9 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
               });
 
 #ifndef NDEBUG
-    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, true);
+    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, background, true);
 #else
-    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, false);
+    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, background, false);
 #endif
     PageUtil::syncFile(wrfile);
 
@@ -112,7 +111,7 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
     {
         delegator->addPageFileUsedSize(std::make_pair(blob_id, 0),
                                        expand_size,
-                                       path,
+                                       parent_path,
                                        false);
     }
 }
@@ -127,7 +126,7 @@ void BlobFile::truncate(size_t size)
         shrink_size = file_size - size;
         file_size = size;
     }
-    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), shrink_size, path);
+    delegator->freePageFileUsedSize(std::make_pair(blob_id, 0), shrink_size, parent_path);
 }
 
 void BlobFile::remove()
