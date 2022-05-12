@@ -27,7 +27,7 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
-#include "common/likely.h"
+#include <common/likely.h>
 
 namespace DB
 {
