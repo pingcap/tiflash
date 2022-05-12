@@ -237,7 +237,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     }
 }
 
-bool StoragePool::forceTransformMetaV2toV3()
+void StoragePool::forceTransformMetaV2toV3()
 {
     assert(meta_storage_v2 != nullptr);
     assert(meta_storage_v3 != nullptr);
@@ -284,8 +284,6 @@ bool StoragePool::forceTransformMetaV2toV3()
 
     // DEL must call after rewrite.
     meta_transform_storage_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
-
-    return true;
 }
 
 PageStorageRunMode StoragePool::restore()
@@ -324,14 +322,15 @@ PageStorageRunMode StoragePool::restore()
         auto v2_data_max_ids = data_storage_v2->restore();
         auto v2_meta_max_ids = meta_storage_v2->restore();
 
-        if (auto meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
+        if (const auto & meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
         {
-            bool traslate_done = forceTransformMetaV2toV3();
+            forceTransformMetaV2toV3();
+            const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
             LOG_FMT_INFO(logger, "Current meta translate to V3 finished. [ns_id={}] [done={}] [remain_before_translate_pages={}], [remain_after_translate_pages={}]", //
                          ns_id,
-                         traslate_done,
+                         meta_remain_pages_after_transform == 0,
                          meta_remain_pages,
-                         traslate_done ? 0 : meta_storage_v2->getNumberOfPages());
+                         meta_remain_pages_after_transform);
         }
         else
         {
