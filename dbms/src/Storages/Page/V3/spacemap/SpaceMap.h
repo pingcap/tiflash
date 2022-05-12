@@ -38,7 +38,8 @@ public:
     {
         SMAP64_INVALID = 0,
         SMAP64_RBTREE = 1,
-        SMAP64_STD_MAP = 2
+        SMAP64_STD_MAP = 2,
+        SMAP64_BIG = 3 // support for writebatch bigger than 512M
     };
 
     /**
@@ -73,6 +74,7 @@ public:
 
     /**
      * Check a span [offset, offset + length) has been used or not.
+     * Only used in tests
      * 
      * ret value:
      *   true: This span is used, or some sub span is used
@@ -139,6 +141,8 @@ public:
             return "RB-Tree";
         case SMAP64_STD_MAP:
             return "STD Map";
+        case SMAP64_BIG:
+            return "STD Big";
         default:
             return "Invalid";
         }
