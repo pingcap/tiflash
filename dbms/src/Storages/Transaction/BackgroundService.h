@@ -39,8 +39,6 @@ public:
 
     ~BackgroundService();
 
-    void addRegionToFlush(const RegionPtr & region);
-
 private:
     TMTContext & tmt;
     BackgroundProcessingPool & background_pool;

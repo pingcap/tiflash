@@ -129,35 +129,32 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
 
 void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log)
 {
-    if (tmt.isBgFlushDisabled())
+    auto table_id = region.getMappedTableID();
+    auto storage = tmt.getStorages().get(table_id);
+    if (storage == nullptr)
     {
-        auto table_id = region.getMappedTableID();
-        auto storage = tmt.getStorages().get(table_id);
-        if (storage == nullptr)
-        {
-            LOG_WARNING(log,
-                        "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
-                            + " with table id: " + DB::toString(table_id) + ", ignored");
-            return;
-        }
+        LOG_WARNING(log,
+                    "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
+                        + " with table id: " + DB::toString(table_id) + ", ignored");
+        return;
+    }
 
-        try
-        {
-            // Acquire `drop_lock` so that no other threads can drop the storage during `flushCache`. `alter_lock` is not required.
-            auto storage_lock = storage->lockForShare(getThreadName());
-            auto rowkey_range = DM::RowKeyRange::fromRegionRange(
-                region.getRange(),
-                region.getRange()->getMappedTableID(),
-                storage->isCommonHandle(),
-                storage->getRowKeyColumnSize());
-            storage->flushCache(tmt.getContext(), rowkey_range);
-        }
-        catch (DB::Exception & e)
-        {
-            // We can ignore if storage is already dropped.
-            if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
-                throw;
-        }
+    try
+    {
+        // Acquire `drop_lock` so that no other threads can drop the storage during `flushCache`. `alter_lock` is not required.
+        auto storage_lock = storage->lockForShare(getThreadName());
+        auto rowkey_range = DM::RowKeyRange::fromRegionRange(
+            region.getRange(),
+            region.getRange()->getMappedTableID(),
+            storage->isCommonHandle(),
+            storage->getRowKeyColumnSize());
+        storage->flushCache(tmt.getContext(), rowkey_range);
+    }
+    catch (DB::Exception & e)
+    {
+        // We can ignore if storage is already dropped.
+        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+            throw;
     }
 }
 
@@ -445,21 +442,13 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         // After region split / merge, try to flush it
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
-            if (tmt.isBgFlushDisabled())
+            try
             {
-                try
-                {
-                    tmt.getRegionTable().tryFlushRegion(region, false);
-                }
-                catch (const Exception & e)
-                {
-                    tryLogCurrentException(__PRETTY_FUNCTION__);
-                }
+                tmt.getRegionTable().tryFlushRegion(region, false);
             }
-            else
+            catch (const Exception & e)
             {
-                if (region->writeCFCount() >= 8192)
-                    tmt.getBackgroundService().addRegionToFlush(region);
+                tryLogCurrentException(__PRETTY_FUNCTION__);
             }
         };
 
