@@ -15,7 +15,6 @@
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDBGInvokeQuery.h>
-#include <Parsers/ParserDeleteQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/ParserManageQuery.h>
