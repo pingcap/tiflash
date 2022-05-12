@@ -260,8 +260,9 @@ void StoragePool::forceTransformMetaV2toV3()
         const auto & page_transform_entry = meta_transform_storage_reader->getPageEntry(page_transform.page_id);
         if (!page_transform_entry.field_offsets.empty())
         {
-            throw Exception(fmt::format("Can't transfrom meta from V2 to V3, [page_id={}]",
-                                        page_transform.page_id),
+            throw Exception(fmt::format("Can't transfrom meta from V2 to V3, [page_id={}] {}", //
+                                        page_transform.page_id,
+                                        page_transform_entry.toDebugString()),
                             ErrorCodes::LOGICAL_ERROR);
         }
 
@@ -322,11 +323,15 @@ PageStorageRunMode StoragePool::restore()
         auto v2_data_max_ids = data_storage_v2->restore();
         auto v2_meta_max_ids = meta_storage_v2->restore();
 
+        // Meta part can rewrite by `delta merge`.
+        // But some of page won't be delete in `delta merge`.
+        // Need use forceTransformMetaV2toV3 to convert from V2 to V3.
         if (const auto & meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
         {
+            LOG_FMT_INFO(logger, "Current meta transform to V3 begin, [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
             forceTransformMetaV2toV3();
             const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
-            LOG_FMT_INFO(logger, "Current meta translate to V3 finished. [ns_id={}] [done={}] [remain_before_translate_pages={}], [remain_after_translate_pages={}]", //
+            LOG_FMT_INFO(logger, "Current meta transform to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
                          ns_id,
                          meta_remain_pages_after_transform == 0,
                          meta_remain_pages,
