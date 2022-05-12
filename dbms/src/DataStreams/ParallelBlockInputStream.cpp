@@ -33,12 +33,12 @@ ParallelBlockInputStream::ParallelBlockInputStream(
         children.push_back(additional_input_at_end);
 }
 
-Block ParallelBlockInputStream<StreamHandler>::getHeader() const
+Block ParallelBlockInputStream::getHeader() const
 {
     return children.back()->getHeader();
 }
 
-void ParallelBlockInputStream<StreamHandler>::cancel(bool kill)
+void ParallelBlockInputStream::cancel(bool kill)
 {
     if (kill)
         is_killed = true;
@@ -50,7 +50,7 @@ void ParallelBlockInputStream<StreamHandler>::cancel(bool kill)
         processor.cancel(kill);
 }
 
-Block ParallelBlockInputStream<StreamHandler>::readImpl()
+Block ParallelBlockInputStream::readImpl()
 {
     if (!executed)
     {
@@ -72,12 +72,12 @@ Block ParallelBlockInputStream<StreamHandler>::readImpl()
     return {};
 }
 
-void ParallelBlockInputStream<StreamHandler>::Handler::onBlock(Block & block, size_t thread_num)
+void ParallelBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
 {
     parent.parallel_writer->onBlock(block, thread_num);
 }
 
-void ParallelBlockInputStream<StreamHandler>::Handler::onFinishThread(size_t thread_num)
+void ParallelBlockInputStream::Handler::onFinishThread(size_t thread_num)
 {
     if (!parent.isCancelled())
     {
@@ -85,7 +85,7 @@ void ParallelBlockInputStream<StreamHandler>::Handler::onFinishThread(size_t thr
     }
 }
 
-void ParallelBlockInputStream<StreamHandler>::Handler::onFinish()
+void ParallelBlockInputStream::Handler::onFinish()
 {
     if (!parent.isCancelled())
     {
@@ -93,7 +93,7 @@ void ParallelBlockInputStream<StreamHandler>::Handler::onFinish()
     }
 }
 
-void ParallelBlockInputStream<StreamHandler>::Handler::onException(std::exception_ptr & exception, size_t thread_num)
+void ParallelBlockInputStream::Handler::onException(std::exception_ptr & exception, size_t thread_num)
 {
     parent.exceptions[thread_num] = exception;
     Int32 old_value = -1;
