@@ -195,6 +195,9 @@ public:
 private:
 #endif
     bool doV2Gc(const Settings & settings);
+
+    bool forceTransformMetaV2toV3();
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif

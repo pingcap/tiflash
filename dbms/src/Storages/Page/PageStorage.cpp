@@ -66,7 +66,7 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
-    virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor) const = 0;
+    virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const = 0;
 };
 
 
@@ -132,7 +132,7 @@ public:
         return storage->getSnapshotsStat();
     }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor) const override
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
     {
         storage->traverse(acceptor, nullptr);
     }
@@ -294,12 +294,30 @@ public:
         return statistics_total;
     }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor) const override
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const override
     {
         // Used by RegionPersister::restore
         // Must traverse storage_v3 before storage_v2
-        storage_v3->traverse(acceptor, toConcreteV3Snapshot());
-        storage_v2->traverse(acceptor, toConcreteV2Snapshot());
+        if (only_v3 && only_v2)
+        {
+            throw Exception("Can't enable both only_v2 and only_v3", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        if (only_v3)
+        {
+            storage_v3->traverse(acceptor, toConcreteV3Snapshot());
+        }
+        else if (only_v2)
+        {
+            storage_v2->traverse(acceptor, toConcreteV2Snapshot());
+        }
+        else
+        {
+            // Used by RegionPersister::restore
+            // Must traverse storage_v3 before storage_v2
+            storage_v3->traverse(acceptor, toConcreteV3Snapshot());
+            storage_v2->traverse(acceptor, toConcreteV2Snapshot());
+        }
     }
 
 private:
@@ -406,9 +424,9 @@ SnapshotsStatistics PageReader::getSnapshotsStat() const
     return impl->getSnapshotsStat();
 }
 
-void PageReader::traverse(const std::function<void(const DB::Page & page)> & acceptor) const
+void PageReader::traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const
 {
-    impl->traverse(acceptor);
+    impl->traverse(acceptor, only_v2, only_v3);
 }
 
 /**********************
@@ -436,7 +454,6 @@ void PageWriter::write(WriteBatch && write_batch, WriteLimiterPtr write_limiter)
     }
     }
 }
-
 
 void PageWriter::writeIntoV2(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const
 {
