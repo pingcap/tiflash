@@ -17,49 +17,109 @@
 
 #include <thread>
 
-#if defined(__x86_64__)
-#include <cpuid/libcpuid.h>
-#endif
+#if defined(__linux__)
+#include <cmath>
+#include <fstream>
+#endif // __linux__
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int CPUID_ERROR;
+} // namespace DB::ErrorCodes
+
+#if defined(__linux__)
+// Try to look at cgroups limit if it is available.
+static inline int read_int_from(const char * filename, int default_value)
+{
+    std::ifstream infile(filename);
+    if (!infile.is_open())
+    {
+        return default_value;
+    }
+    int idata;
+    if (infile >> idata)
+        return idata;
+    else
+        return default_value;
 }
-} // namespace DB
+
+unsigned calCPUCores(int cgroup_quota, int cgroup_period, int cgroup_share, unsigned default_cpu_count)
+{
+    unsigned quota_count = default_cpu_count;
+
+    if (cgroup_quota > -1 && cgroup_period > 0)
+    {
+        quota_count = ceil(static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period));
+    }
+
+    // Convert 1024 to no shares setup
+    if (cgroup_share == 1024)
+        cgroup_share = -1;
+
+#define PER_CPU_SHARES 1024
+    unsigned share_count = default_cpu_count;
+    if (cgroup_share > -1)
+    {
+        share_count = ceil(static_cast<float>(cgroup_share) / static_cast<float>(PER_CPU_SHARES));
+    }
+
+    return std::min(default_cpu_count, std::min(share_count, quota_count));
+}
+
+unsigned getCGroupDefaultLimitedCPUCores(unsigned default_cpu_count)
+{
+    // Return the number of milliseconds per period process is guaranteed to run.
+    // -1 for no quota
+    int cgroup_quota = read_int_from("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", -1);
+    int cgroup_period = read_int_from("/sys/fs/cgroup/cpu/cpu.cfs_period_us", -1);
+    // Share number (typically a number relative to 1024) (2048 typically expresses 2 CPUs worth of processing)
+    int cgroup_share = read_int_from("/sys/fs/cgroup/cpu/cpu.shares", -1);
+
+    return calCPUCores(cgroup_quota, cgroup_period, cgroup_share, default_cpu_count);
+}
+
+unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
+{
+    std::string cpu_filter = "cpuset:";
+    std::ifstream cgroup_cpu_info("/proc/self/cgroup");
+    if (cgroup_cpu_info.is_open())
+    {
+        std::string line;
+        while (std::getline(cgroup_cpu_info, line))
+        {
+            std::string::size_type cpu_str_idx = line.find(cpu_filter);
+            if (cpu_str_idx != std::string::npos)
+            {
+                line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
+                int cgroup_quota = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line).c_str(), -2);
+
+                // If can't read cgroup_quota here
+                // It means current process may in docker
+                if (cgroup_quota == -2)
+                {
+                    return getCGroupDefaultLimitedCPUCores(default_cpu_count);
+                }
+                int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line).c_str(), -1);
+                int cgroup_share = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.shares", line).c_str(), -1);
+
+                return calCPUCores(cgroup_quota, cgroup_period, cgroup_share, default_cpu_count);
+            }
+        }
+    }
+
+    return getCGroupDefaultLimitedCPUCores(default_cpu_count);
+}
+#endif // __linux__
 
 unsigned getNumberOfLogicalCPUCores()
 {
-    unsigned res = 0;
-#if defined(__x86_64__)
-
-    cpu_raw_data_t raw_data;
-    cpu_id_t data;
-    if (0 == cpuid_get_raw_data(&raw_data) && 0 == cpu_identify(&raw_data, &data) && data.num_logical_cpus != 0)
+    unsigned logical_cpu_count = std::thread::hardware_concurrency();
+    if (logical_cpu_count == 0)
     {
-        res = data.num_cores * data.total_logical_cpus / data.num_logical_cpus;
+        throw DB::Exception("Failed to get number of logical CPU cores", DB::ErrorCodes::CPUID_ERROR);
     }
-
-    /// Also, libcpuid gives strange result on Google Compute Engine VMs.
-    /// Example:
-    ///  num_cores = 12,            /// number of physical cores on current CPU socket
-    ///  total_logical_cpus = 1,    /// total number of logical cores on all sockets
-    ///  num_logical_cpus = 24.     /// number of logical cores on current CPU socket
-    /// It means two-way hyper-threading (24 / 12), but contradictory, 'total_logical_cpus' == 1.
-    if (res != 0)
-    {
-        return res;
-    }
-    // else fallback
-#endif
-
-    /// As a fallback (also for non-x86 architectures) assume there are no hyper-threading on the system.
-    /// (Actually, only Aarch64 is supported).
-    res = std::thread::hardware_concurrency();
-    if (res == 0)
-    {
-        throw DB::Exception("Cannot Identify CPU: Unsupported processor", DB::ErrorCodes::CPUID_ERROR);
-    }
-    return res;
+#if defined(__linux__)
+    logical_cpu_count = getCGroupLimitedCPUCores(logical_cpu_count);
+#endif // __linux__
+    return logical_cpu_count;
 }
