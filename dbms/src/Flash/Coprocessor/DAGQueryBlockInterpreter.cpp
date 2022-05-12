@@ -14,8 +14,6 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
-#include <DataStreams/AggregatingBlockInputStream.h>
-#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
@@ -452,12 +450,12 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     if (likely(join_build_concurrency > 1))
     {
-        ParallelHashJoinBuildWriter<true> writer{join_ptr, log->identifier()};
+        auto writer = std::make_shared<ParallelHashJoinBuildWriter<true>>(join_ptr, log->identifier());
         executeParallel(right_pipeline, max_streams, writer, log);
     }
     else
     {
-        ParallelHashJoinBuildWriter<false> writer{join_ptr, log->identifier()};
+        auto writer = std::make_shared<ParallelHashJoinBuildWriter<false>>(join_ptr, log->identifier());
         executeParallel(right_pipeline, max_streams, writer, log);
     }
 
@@ -560,8 +558,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         std::min(max_streams, pipeline.streams.size()),
         settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads));
 
-    ParallelAggregatingWriter writer{aggregate_store, log->identifier()};
-
+    auto writer = std::make_shared<ParallelAggregatingWriter>(aggregate_store, log->identifier());
     executeParallel(pipeline, max_streams, writer, log);
 
     pipeline.firstStream() = std::make_shared<FinalAggregatingBlockInputStream>(pipeline.firstStream(), aggregate_store, log->identifier());

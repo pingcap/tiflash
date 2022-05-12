@@ -14,11 +14,12 @@
 
 #pragma once
 
+#include <DataStreams/ParallelBlockInputStream.h>
 #include <Interpreters/AggregateStore.h>
 
 namespace DB
 {
-class ParallelAggregatingWriter
+class ParallelAggregatingWriter : public ParallelWriter
 {
 public:
     static constexpr auto name = "ParallelAggregatingWriter";
@@ -30,12 +31,12 @@ public:
         , aggregate_store(aggregate_store_)
     {}
 
-    void onBlock(Block & block, size_t thread_num)
+    void onBlock(Block & block, size_t thread_num) override
     {
         aggregate_store->executeOnBlock(thread_num, block);
     }
 
-    void onFinishThread(size_t thread_num)
+    void onFinishThread(size_t thread_num) override
     {
         aggregate_store->tryFlush(thread_num);
 
@@ -47,7 +48,7 @@ public:
             (aggregate_store->getThreadData(thread_num).src_bytes / 1048576.0));
     }
 
-    void onFinish()
+    void onFinish() override
     {
         aggregate_store->tryFlush();
     }

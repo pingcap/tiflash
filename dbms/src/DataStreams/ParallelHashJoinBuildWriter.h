@@ -14,12 +14,13 @@
 
 #pragma once
 
+#include <DataStreams/ParallelBlockInputStream.h>
 #include <Interpreters/Join.h>
 
 namespace DB
 {
 template <bool is_parallel>
-class ParallelHashJoinBuildWriter
+class ParallelHashJoinBuildWriter : public ParallelWriter
 {
 public:
     static constexpr auto name = "ParallelHashJoinBuildWriter";
@@ -31,7 +32,7 @@ public:
         , join(join_)
     {}
 
-    void onBlock(Block & block, size_t thread_num)
+    void onBlock(Block & block, size_t thread_num) override
     {
         if constexpr (is_parallel)
         {
@@ -43,9 +44,9 @@ public:
         }
     }
 
-    void onFinishThread(size_t /*thread_num*/) {}
+    void onFinishThread(size_t /*thread_num*/) override {}
 
-    void onFinish() {}
+    void onFinish() override {}
 
 private:
     const LoggerPtr log;

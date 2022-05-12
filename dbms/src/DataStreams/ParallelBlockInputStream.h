@@ -19,7 +19,19 @@
 
 namespace DB
 {
-template <typename StreamHandler>
+class ParallelWriter
+{
+public:
+    ParallelWriter() = default;
+
+    virtual void onBlock(Block & block, size_t thread_num) = 0;
+    virtual void onFinishThread(size_t thread_num) = 0;
+    virtual void onFinish() = 0;
+
+    virtual ~ParallelWriter() = default;
+};
+using ParallelWriterPtr = std::shared_ptr<ParallelWriter>;
+
 class ParallelBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "Parallel";
@@ -29,7 +41,7 @@ public:
         const BlockInputStreams & inputs,
         const BlockInputStreamPtr & additional_input_at_end,
         size_t max_threads_,
-        const StreamHandler & stream_handler_,
+        const ParallelWriterPtr & parallel_writer_,
         const String & req_id);
 
     String getName() const override { return NAME; }
@@ -56,7 +68,7 @@ private:
 
     size_t max_threads;
 
-    StreamHandler stream_handler;
+    ParallelWriterPtr parallel_writer;
 
     std::atomic<bool> executed{false};
 
@@ -75,7 +87,7 @@ private:
         void onException(std::exception_ptr & exception, size_t thread_num);
         static String getName()
         {
-            return StreamHandler::name;
+            return "ParallelWriter";
         }
 
         ParallelBlockInputStream & parent;
