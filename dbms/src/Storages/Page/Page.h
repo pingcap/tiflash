@@ -59,6 +59,8 @@ public:
     std::set<FieldOffset> field_offsets;
 
 public:
+    inline bool isValid() const { return page_id != INVALID_PAGE_ID; }
+
     ByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffset(index));

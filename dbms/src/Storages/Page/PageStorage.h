@@ -74,6 +74,9 @@ public:
 
     struct Config
     {
+        //==========================================================================================
+        // V2 config
+        //==========================================================================================
         SettingBool sync_on_write = true;
 
         SettingUInt64 file_roll_size = PAGE_FILE_ROLL_SIZE;
@@ -109,6 +112,19 @@ public:
 
         MVCC::VersionSetConfig version_set_config;
 
+        //==========================================================================================
+        // V3 config
+        //==========================================================================================
+        SettingUInt64 blob_file_limit_size = BLOBFILE_LIMIT_SIZE;
+        SettingUInt64 blob_spacemap_type = 2;
+        SettingUInt64 blob_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
+        SettingDouble blob_heavy_gc_valid_rate = 0.2;
+        SettingUInt64 blob_block_alignment_bytes = 0;
+
+        SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
+        SettingUInt64 wal_recover_mode = 0;
+        SettingUInt64 wal_max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
+
         void reload(const Config & rhs)
         {
             // Reload is not atomic, but should be good enough
@@ -122,9 +138,20 @@ public:
             prob_do_gc_when_write_is_low = rhs.prob_do_gc_when_write_is_low;
             // Reload fd idle time
             open_file_max_idle_time = rhs.open_file_max_idle_time;
+
+            // Reload V3 setting
+            blob_file_limit_size = rhs.blob_file_limit_size;
+            blob_spacemap_type = rhs.blob_spacemap_type;
+            blob_cached_fd_size = rhs.blob_cached_fd_size;
+            blob_heavy_gc_valid_rate = rhs.blob_heavy_gc_valid_rate;
+            blob_block_alignment_bytes = rhs.blob_block_alignment_bytes;
+
+            wal_roll_size = rhs.wal_roll_size;
+            wal_recover_mode = rhs.wal_recover_mode;
+            wal_max_persisted_log_files = rhs.wal_max_persisted_log_files;
         }
 
-        String toDebugString() const
+        String toDebugStringV2() const
         {
             return fmt::format(
                 "PageStorage::Config {{gc_min_files: {}, gc_min_bytes:{}, gc_force_hardlink_rate: {:.3f}, gc_max_valid_rate: {:.3f}, "
@@ -140,10 +167,26 @@ public:
                 prob_do_gc_when_write_is_low,
                 open_file_max_idle_time);
         }
+
+        String toDebugStringV3() const
+        {
+            return fmt::format(
+                "PageStorage::Config V3 {{"
+                "blob_file_limit_size: {}, blob_spacemap_type: {}, "
+                "blob_cached_fd_size: {}, blob_heavy_gc_valid_rate: {:.3f}, blob_block_alignment_bytes: {}, "
+                "wal_roll_size: {}, wal_recover_mode: {}, wal_max_persisted_log_files: {}}}",
+                blob_file_limit_size.get(),
+                blob_spacemap_type.get(),
+                blob_cached_fd_size.get(),
+                blob_heavy_gc_valid_rate.get(),
+                blob_block_alignment_bytes.get(),
+                wal_roll_size.get(),
+                wal_recover_mode.get(),
+                wal_max_persisted_log_files.get());
+        }
     };
     void reloadSettings(const Config & new_config) { config.reload(new_config); };
     Config getSettings() const { return config; }
-
 
 public:
     static PageStoragePtr
@@ -168,48 +211,65 @@ public:
 
     virtual ~PageStorage() = default;
 
-    virtual void restore() = 0;
+    // Return the map[ns_id, max_page_id]
+    // The caller should ensure that it only allocate new id that is larger than `max_page_id`. Reusing the
+    // same ID for different kind of write (put/ref/put_external) would make PageStorage run into unexpected error.
+    //
+    // Note that for V2, we always return a map with only one element: <ns_id=0, max_id> cause V2 have no
+    // idea about ns_id.
+    virtual std::map<NamespaceId, PageId> restore() = 0;
 
     virtual void drop() = 0;
-
-    virtual PageId getMaxId(NamespaceId ns_id) = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
+    virtual size_t getNumberOfPages() = 0;
+
     void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
     {
         writeImpl(std::move(write_batch), write_limiter);
     }
 
+    // If we can't get the entry.
+    // Then the null entry will be return
     PageEntry getEntry(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {})
     {
         return getEntryImpl(ns_id, page_id, snapshot);
     }
 
-    Page read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    Page read(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        return readImpl(ns_id, page_id, read_limiter, snapshot);
+        return readImpl(ns_id, page_id, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    PageMap read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    PageMap read(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        return readImpl(ns_id, page_ids, read_limiter, snapshot);
+        return readImpl(ns_id, page_ids, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    void read(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    /**
+     * If throw_on_not_exist is false, Also we do have some of page_id not found.
+     * Then the return value will record the all of page_id which not found.
+     */
+    PageIds read(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        readImpl(ns_id, page_ids, handler, read_limiter, snapshot);
+        return readImpl(ns_id, page_ids, handler, read_limiter, snapshot, throw_on_not_exist);
     }
 
     using FieldIndices = std::vector<size_t>;
     using PageReadFields = std::pair<PageId, FieldIndices>;
 
-    PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
+    PageMap read(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        return readImpl(ns_id, page_fields, read_limiter, snapshot);
+        return readImpl(ns_id, page_fields, read_limiter, snapshot, throw_on_not_exist);
+    }
+
+    Page read(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
+    {
+        return readImpl(ns_id, page_field, read_limiter, snapshot, throw_on_not_exist);
     }
 
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {})
@@ -217,9 +277,9 @@ public:
         traverseImpl(acceptor, snapshot);
     }
 
-    PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {})
+    PageId getNormalPageId(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {}, bool throw_on_not_exist = true)
     {
-        return getNormalPageIdImpl(ns_id, page_id, snapshot);
+        return getNormalPageIdImpl(ns_id, page_id, snapshot, throw_on_not_exist);
     }
 
     // We may skip the GC to reduce useless reading by default.
@@ -239,17 +299,19 @@ protected:
 
     virtual PageEntry getEntryImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) = 0;
 
-    virtual Page readImpl(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+    virtual Page readImpl(NamespaceId ns_id, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+    virtual PageMap readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual void readImpl(NamespaceId ns_id, const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+    virtual PageIds readImpl(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) = 0;
+    virtual PageMap readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
+
+    virtual Page readImpl(NamespaceId ns_id, const PageReadFields & page_field, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
 
-    virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) = 0;
+    virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) = 0;
 
@@ -302,11 +364,6 @@ public:
     PageMap read(const std::vector<PageReadFields> & page_fields) const
     {
         return storage->read(ns_id, page_fields, read_limiter, snap);
-    }
-
-    PageId getMaxId() const
-    {
-        return storage->getMaxId(ns_id);
     }
 
     PageId getNormalPageId(PageId page_id) const

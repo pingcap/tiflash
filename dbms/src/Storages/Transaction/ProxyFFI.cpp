@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/nocopyable.h>
 #include <Interpreters/Context.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/FileEncryption.h>
@@ -253,7 +254,7 @@ struct CppStrVec
     {
         updateView();
     }
-    CppStrVec(const CppStrVec &) = delete;
+    DISALLOW_COPY(CppStrVec);
     void updateView();
     CppStrVecView intoOuterView() const { return {view.data(), view.size()}; }
 };

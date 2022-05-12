@@ -84,18 +84,25 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         {
             std::unique_lock lock(mu);
             if (finished)
+            {
+                LOG_FMT_TRACE(log, "already finished!");
                 return;
+            }
+
             /// make sure to finish the tunnel after it is connected
             waitUntilConnectedOrFinished(lock);
             finishSendQueue();
         }
+        LOG_FMT_TRACE(log, "waiting consumer finish!");
         waitForConsumerFinish(/*allow_throw=*/false);
+        LOG_FMT_TRACE(log, "waiting child thread finished!");
+        thread_manager->wait();
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
-    thread_manager->wait();
+    LOG_FMT_TRACE(log, "destructed tunnel obj!");
 }
 
 template <typename Writer>
@@ -296,9 +303,11 @@ void MPPTunnelBase<Writer>::waitForConsumerFinish(bool allow_throw)
         assert(connected);
     }
 #endif
+    LOG_FMT_TRACE(log, "start wait for consumer finish!");
     String err_msg = consumer_state.getError(); // may blocking
     if (allow_throw && !err_msg.empty())
         throw Exception("Consumer exits unexpected, " + err_msg);
+    LOG_FMT_TRACE(log, "end wait for consumer finish!");
 }
 
 template <typename Writer>
@@ -330,8 +339,8 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_lock)
 {
     // must finish send_queue outside of the critical area to avoid deadlock with write.
+    LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue.finish();
-
     auto rest_work = [this, &err_msg] {
         // it's safe to call it multiple times
         if (finished && consumer_state.errHasSet())

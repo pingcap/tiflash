@@ -470,7 +470,7 @@ UInt8 LogReader::readMore(size_t * drop_size)
 
 void LogReader::reportCorruption(size_t bytes, const String & reason)
 {
-    reportDrop(bytes, "Corruption: " + reason);
+    reportDrop(bytes, fmt::format("Corruption: {} [offset={}] [file={}]", reason, file->getPositionInFile(), file->getFileName()));
 }
 
 void LogReader::reportDrop(size_t bytes, const String & reason)

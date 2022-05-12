@@ -18,7 +18,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Core/Types.h>
-#include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -213,7 +212,7 @@ grpc::Status FlashService::Coprocessor(
     return status;
 }
 
-::grpc::Status FlashService::EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
+::grpc::Status FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
                                                                const ::mpp::EstablishMPPConnectionRequest * request,
                                                                ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
                                                                EstablishCallData * calldata)
@@ -342,67 +341,6 @@ grpc::Status FlashService::Coprocessor(
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
-    return grpc::Status::OK;
-}
-
-// This function is deprecated.
-grpc::Status FlashService::BatchCommands(
-    grpc::ServerContext * grpc_context,
-    grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
-{
-    CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
-
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
-
-    tikvpb::BatchCommandsRequest request;
-    while (stream->Read(&request))
-    {
-        tikvpb::BatchCommandsResponse response;
-        GET_METRIC(tiflash_coprocessor_request_count, type_batch).Increment();
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Increment();
-        SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Decrement(); });
-        auto start_time = std::chrono::system_clock::now();
-        SCOPE_EXIT({
-            std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_batch).Observe(duration_sec.count());
-            GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
-        });
-
-        LOG_FMT_DEBUG(log, "Handling batch commands: {}", request.DebugString());
-
-        BatchCommandsContext batch_commands_context(
-            *context,
-            [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
-            *grpc_context);
-        BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
-        auto ret = batch_commands_handler.execute();
-        if (!ret.ok())
-        {
-            LOG_FMT_DEBUG(
-                log,
-                "Handle batch commands request done: {}, {}",
-                ret.error_code(),
-                ret.error_message());
-            return ret;
-        }
-
-        if (!stream->Write(response))
-        {
-            LOG_FMT_DEBUG(log, "Write response failed for unknown reason.");
-            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
-        }
-
-        LOG_FMT_DEBUG(log, "Handle batch commands request done: {}, {}", ret.error_code(), ret.error_message());
-    }
-
     return grpc::Status::OK;
 }
 

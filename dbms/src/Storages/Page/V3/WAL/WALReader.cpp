@@ -122,27 +122,39 @@ WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
 WALStoreReaderPtr WALStoreReader::create(String storage_name,
                                          FileProviderPtr & provider,
                                          LogFilenameSet files,
+                                         WALRecoveryMode recovery_mode_,
                                          const ReadLimiterPtr & read_limiter)
 {
     auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
-    auto reader = std::make_shared<WALStoreReader>(std::move(storage_name), provider, checkpoint, std::move(files_to_read), read_limiter);
+    auto reader = std::make_shared<WALStoreReader>(storage_name, provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
     reader->openNextFile();
     return reader;
 }
 
-WALStoreReaderPtr WALStoreReader::create(String storage_name, FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(
+    String storage_name,
+    FileProviderPtr & provider,
+    PSDiskDelegatorPtr & delegator,
+    WALRecoveryMode recovery_mode_,
+    const ReadLimiterPtr & read_limiter)
 {
     LogFilenameSet log_files = listAllFiles(delegator, Logger::get("WALStore", storage_name));
-    return create(storage_name, provider, std::move(log_files), read_limiter);
+    return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
-WALStoreReader::WALStoreReader(String storage_name, FileProviderPtr & provider_, std::optional<LogFilename> checkpoint, LogFilenameSet && files_, const ReadLimiterPtr & read_limiter_)
+WALStoreReader::WALStoreReader(String storage_name,
+                               FileProviderPtr & provider_,
+                               std::optional<LogFilename> checkpoint,
+                               LogFilenameSet && files_,
+                               WALRecoveryMode recovery_mode_,
+                               const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , read_limiter(read_limiter_)
     , checkpoint_read_done(!checkpoint.has_value())
     , checkpoint_file(checkpoint)
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
+    , recovery_mode(recovery_mode_)
     , logger(Logger::get("WALStore", std::move(storage_name)))
 {}
 
@@ -187,17 +199,15 @@ bool WALStoreReader::openNextFile()
     }
 
     auto do_open = [this](const LogFilename & next_file) {
-        const auto & parent_path = next_file.parent_path;
         const auto log_num = next_file.log_num;
-        const auto level_num = next_file.level_num;
-        const auto filename = fmt::format("log_{}_{}", log_num, level_num);
-        const auto fullname = fmt::format("{}/{}", parent_path, filename);
+        const auto filename = next_file.filename(next_file.stage);
+        const auto fullname = next_file.fullname(next_file.stage);
         LOG_FMT_DEBUG(logger, "Open log file for reading [file={}]", fullname);
 
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,
             fullname,
-            EncryptionPath{parent_path, filename},
+            EncryptionPath{fullname, ""},
             /*estimated_size*/ Format::BLOCK_SIZE,
             /*aio_threshold*/ 0,
             /*read_limiter*/ read_limiter,
@@ -208,7 +218,7 @@ bool WALStoreReader::openNextFile()
             &reporter,
             /*verify_checksum*/ true,
             log_num,
-            WALRecoveryMode::TolerateCorruptedTailRecords);
+            recovery_mode);
     };
 
     if (!checkpoint_read_done)

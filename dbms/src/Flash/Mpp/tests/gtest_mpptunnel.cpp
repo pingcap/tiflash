@@ -56,6 +56,10 @@ public:
     {
         return thread_manager;
     }
+    LoggerPtr getLog()
+    {
+        return log;
+    }
 };
 
 using MPPTunnelTestPtr = std::shared_ptr<MPPTunnelTest>;
@@ -94,7 +98,9 @@ struct MockLocalReader
         if (tunnel)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
+            LOG_FMT_TRACE(tunnel->getLog(), "before mocklocalreader invoking consumerFinish!");
             tunnel->consumerFinish("Receiver closed");
+            LOG_FMT_TRACE(tunnel->getLog(), "after mocklocalreader invoking consumerFinish!");
         }
     }
 
@@ -463,6 +469,7 @@ try
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
     mpp_tunnel_ptr->close("Cancel");
+    mpp_tunnel_ptr->getThreadManager()->wait(); // Join local read thread
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 2); //Second for err msg
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
@@ -480,9 +487,11 @@ try
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
     mpp_tunnel_ptr->writeDone();
+    mpp_tunnel_ptr->getThreadManager()->wait(); // Join local read thread
     GTEST_ASSERT_EQ(mpp_tunnel_ptr->getFinishFlag(), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 1);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
+    LOG_FMT_TRACE(mpp_tunnel_ptr->getLog(), "basic logic done!");
 }
 CATCH
 
