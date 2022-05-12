@@ -71,6 +71,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_mpp_hash_build)                                   \
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
+    M(force_role_read_node)                                       \
     M(exception_between_schema_change_in_the_same_diff)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \

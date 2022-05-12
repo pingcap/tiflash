@@ -75,7 +75,7 @@ public:
 
     const Context & getContext() const;
 
-    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
+    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_, TiDB::NodeRole role_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
 
@@ -104,6 +104,8 @@ public:
 
     const KVClusterPtr & getCluster() const { return cluster; }
 
+    TiDB::NodeRole getRole() const { return role; }
+
     UInt64 replicaReadMaxThread() const;
     UInt64 batchReadIndexTimeout() const;
     // timeout for wait index (ms). "0" means wait infinitely
@@ -130,6 +132,7 @@ private:
     MPPTaskManagerPtr mpp_task_manager;
 
     ::TiDB::StorageEngine engine;
+    const TiDB::NodeRole role;
 
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
