@@ -15,9 +15,20 @@
 #pragma once
 
 #include <Common/MemoryTrackerSetter.h>
+#include <Common/FailPoint.h>
+
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+#include <pcg_random.hpp>
+#endif
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_thread_failpoint[];
+} // namespace FailPoints
+
 template <typename Func, typename... Args>
 inline auto wrapInvocable(bool propagate_memory_tracker, Func && func, Args &&... args)
 {
@@ -33,7 +44,15 @@ inline auto wrapInvocable(bool propagate_memory_tracker, Func && func, Args &&..
                     args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
         MemoryTrackerSetter setter(propagate_memory_tracker, memory_tracker);
         // run the task with the parameters provided
-        return std::apply(std::move(func), std::move(args));
+        std::apply(std::move(func), std::move(args));
+        fiu_do_on(FailPoints::random_thread_failpoint, {
+            // Since the code will run very frequently, then other failpoint might have no chance to trigger
+            // so internally low down the possibility to 1/1000
+            pcg64 rng(randomSeed());
+            int num = std::uniform_int_distribution(0, 1000)(rng);
+            if (num == 241)
+                throw Exception("Fail point aggregate is triggered.", ErrorCodes::FAIL_POINT_ERROR);
+        });
     };
 
     return capture;
