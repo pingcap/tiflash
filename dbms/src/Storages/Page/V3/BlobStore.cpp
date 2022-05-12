@@ -405,7 +405,7 @@ std::pair<BlobFileId, BlobFileOffset> BlobStore::getPosFromStats(size_t size)
         auto lock_stats = blob_stats.lock();
         if (size > config.file_limit_size)
         {
-            auto blob_file_id = blob_stats.createBigStat(lock_stats);
+            auto blob_file_id = blob_stats.chooseBigStat(lock_stats);
             stat = blob_stats.createBigStat(blob_file_id, lock_stats);
 
             return stat->lock();
@@ -1337,7 +1337,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     return std::make_pair(stat_ptr, INVALID_BLOBFILE_ID);
 }
 
-BlobFileId BlobStore::BlobStats::createBigStat(const std::lock_guard<std::mutex> &)
+BlobFileId BlobStore::BlobStats::chooseBigStat(const std::lock_guard<std::mutex> &) const
 {
     return roll_id;
 }
