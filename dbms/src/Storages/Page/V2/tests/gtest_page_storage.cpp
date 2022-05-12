@@ -79,6 +79,15 @@ protected:
         return storage;
     }
 
+    std::pair<std::shared_ptr<PageStorage>, std::map<NamespaceId, PageId>> reopen()
+    {
+        auto delegator = path_pool->getPSDiskDelegatorSingle("log");
+        auto storage = std::make_shared<PageStorage>("test.t", delegator, config, file_provider);
+        auto max_ids = storage->restore();
+        return {storage, max_ids};
+    }
+
+
 protected:
     PageStorage::Config config;
     std::shared_ptr<PageStorage> storage;
@@ -724,6 +733,25 @@ try
         for (size_t i = 0; i < buf_sz; ++i)
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
+}
+CATCH
+
+TEST_F(PageStorage_test, getMaxIdsFromRestore)
+try
+{
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        batch.putExternal(2, 0);
+        batch.delPage(1);
+        batch.delPage(2);
+        storage->write(std::move(batch));
+    }
+
+    storage = nullptr;
+    auto [page_storage, max_ids] = reopen();
+    ASSERT_EQ(max_ids.size(), 1);
+    ASSERT_EQ(max_ids[0], 2);
 }
 CATCH
 

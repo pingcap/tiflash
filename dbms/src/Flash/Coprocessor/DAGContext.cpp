@@ -14,6 +14,8 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -33,6 +35,24 @@ bool strictSqlMode(UInt64 sql_mode)
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
 }
 
+void DAGContext::initOutputInfo()
+{
+    output_field_types = collectOutputFieldTypes(*dag_request);
+    output_offsets.clear();
+    result_field_types.clear();
+    for (UInt32 i : dag_request->output_offsets())
+    {
+        output_offsets.push_back(i);
+        if (unlikely(i >= output_field_types.size()))
+            throw TiFlashException(
+                fmt::format("{}: Invalid output offset(schema has {} columns, access index {}", __PRETTY_FUNCTION__, output_field_types.size(), i),
+                Errors::Coprocessor::BadRequest);
+        result_field_types.push_back(output_field_types[i]);
+    }
+    encode_type = analyzeDAGEncodeType(*this);
+    keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
+}
+
 bool DAGContext::allowZeroInDate() const
 {
     return flags & TiDBSQLFlags::IGNORE_ZERO_IN_DATE;
@@ -41,6 +61,13 @@ bool DAGContext::allowZeroInDate() const
 bool DAGContext::allowInvalidDate() const
 {
     return sql_mode & TiDBSQLMode::ALLOW_INVALID_DATES;
+}
+
+void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subquery)
+{
+    SubqueriesForSets subqueries_for_sets;
+    subqueries_for_sets[subquery_id] = std::move(subquery);
+    subqueries.push_back(std::move(subqueries_for_sets));
 }
 
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
