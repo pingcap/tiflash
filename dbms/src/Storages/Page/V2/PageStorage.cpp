@@ -607,6 +607,19 @@ size_t PageStorage::getNumberOfPages()
     }
 }
 
+std::set<PageId> PageStorage::getAliveExternalPageIds(NamespaceId /*ns_id*/)
+{
+    const auto & concrete_snap = getConcreteSnapshot();
+    if (concrete_snap)
+    {
+        return concrete_snap->version()->validNormalPageIds();
+    }
+    else
+    {
+        throw Exception("Can't get concrete snapshot", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 DB::Page PageStorage::readImpl(NamespaceId /*ns_id*/, PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)

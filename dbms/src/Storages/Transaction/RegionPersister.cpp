@@ -16,6 +16,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/V1/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
@@ -42,11 +43,11 @@ extern const char force_disable_region_persister_compatible_mode[];
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
-    if (page_storage)
+    if (page_writer)
     {
         DB::WriteBatch wb_v2{ns_id};
         wb_v2.delPage(region_id);
-        page_storage->write(std::move(wb_v2), global_context.getWriteLimiter());
+        page_writer->write(std::move(wb_v2), global_context.getWriteLimiter());
     }
     else
     {
@@ -65,7 +66,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
         LOG_FMT_WARNING(
-            &Poco::Logger::get("RegionPersister"),
+            Logger::get("RegionPersister"),
             "Persisting big region: {} with data info: {}, serialized size {}",
             region.toString(),
             region.dataInfo(),
@@ -101,9 +102,9 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
     std::lock_guard lock(mutex);
 
-    if (page_storage)
+    if (page_reader)
     {
-        auto entry = page_storage->getEntry(ns_id, region_id, nullptr);
+        auto entry = page_reader->getPageEntry(region_id);
         if (entry.isValid() && entry.tag > applied_index)
             return;
     }
@@ -121,11 +122,11 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     }
 
     auto read_buf = buffer.tryGetReadBuffer();
-    if (page_storage)
+    if (page_writer)
     {
         DB::WriteBatch wb{ns_id};
         wb.putPage(region_id, applied_index, read_buf, region_size);
-        page_storage->write(std::move(wb), global_context.getWriteLimiter());
+        page_writer->write(std::move(wb), global_context.getWriteLimiter());
     }
     else
     {
@@ -138,8 +139,18 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
     : global_context(global_context_)
     , region_manager(region_manager_)
-    , log(&Poco::Logger::get("RegionPersister"))
+    , log(Logger::get("RegionPersister"))
 {}
+
+PageStorage::Config RegionPersister::getPageStorageSettings() const
+{
+    if (!page_writer)
+    {
+        throw Exception("Not support for PS v1", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return page_writer->getSettings();
+}
 
 PS::V1::PageStorage::Config getV1PSConfig(const PS::V2::PageStorage::Config & config)
 {
@@ -165,21 +176,11 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         auto & path_pool = global_context.getPathPool();
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         auto provider = global_context.getFileProvider();
-        // If the GlobalStoragePool is initialized, then use v3 format
-        bool use_v3_format = global_context.getGlobalStoragePool() != nullptr;
-        if (use_v3_format)
-        {
-            mergeConfigFromSettings(global_context.getSettingsRef(), config);
+        auto run_mode = global_context.getPageStorageRunMode();
 
-            LOG_FMT_INFO(log, "RegionPersister running in v3 mode");
-            page_storage = std::make_unique<PS::V3::PageStorageImpl>( //
-                "RegionPersister",
-                delegator,
-                config,
-                provider);
-            page_storage->restore();
-        }
-        else
+        switch (run_mode)
+        {
+        case PageStorageRunMode::ONLY_V2:
         {
             // If there is no PageFile with basic version binary format, use version 2 of PageStorage.
             auto detect_binary_version = DB::PS::V2::PageStorage::getMaxDataVersion(provider, delegator);
@@ -193,13 +194,14 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                 mergeConfigFromSettings(global_context.getSettingsRef(), config);
                 config.num_write_slots = 4; // extend write slots to 4 at least
 
-                LOG_FMT_INFO(log, "RegionPersister running in v2 mode");
-                page_storage = std::make_unique<PS::V2::PageStorage>(
+                auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
                     "RegionPersister",
                     delegator,
                     config,
                     provider);
-                page_storage->restore();
+                page_storage_v2->restore();
+                page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, /*storage_v3_*/ nullptr);
+                page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, /*storage_v3_*/ nullptr, /*readlimiter*/ global_context.getReadLimiter());
             }
             else
             {
@@ -211,20 +213,79 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                     c,
                     provider);
             }
+            break;
         }
+        case PageStorageRunMode::ONLY_V3:
+        {
+            mergeConfigFromSettings(global_context.getSettingsRef(), config);
+
+            auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //
+                "RegionPersister",
+                path_pool.getPSDiskDelegatorGlobalMulti("kvstore"),
+                config,
+                provider);
+            page_storage_v3->restore();
+            page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
+            page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
+            break;
+        }
+        case PageStorageRunMode::MIX_MODE:
+        {
+            auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
+                "RegionPersister",
+                delegator,
+                config,
+                provider);
+            // V3 should not used getPSDiskDelegatorRaft
+            // Because V2 will delete all invalid(unrecognized) file when it restore
+            auto page_storage_v3 = std::make_shared<PS::V3::PageStorageImpl>( //
+                "RegionPersister",
+                path_pool.getPSDiskDelegatorGlobalMulti("kvstore"),
+                config,
+                provider);
+
+            page_storage_v2->restore();
+            page_storage_v3->restore();
+
+            if (page_storage_v2->getNumberOfPages() == 0)
+            {
+                page_storage_v2 = nullptr;
+                run_mode = PageStorageRunMode::ONLY_V3;
+                page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
+                page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
+            }
+            else
+            {
+                page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
+                page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
+            }
+            break;
+        }
+        }
+
+        LOG_FMT_INFO(log, "RegionPersister running. Current Run Mode is {}", static_cast<UInt8>(run_mode));
     }
 
     RegionMap regions;
-    if (page_storage)
+    if (page_reader)
     {
         auto acceptor = [&](const DB::Page & page) {
+            // We will traverse the pages in V3 before traverse the pages in V2 When we used MIX MODE
+            // If we found the page_id has been restored, just skip it.
+            if (const auto it = regions.find(page.page_id); it != regions.end())
+            {
+                LOG_FMT_INFO(log, "Already exist [page_id={}], skip it.", page.page_id);
+                return;
+            }
+
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
             auto region = Region::deserialize(buf, proxy_helper);
             if (page.page_id != region->id())
                 throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
+
             regions.emplace(page.page_id, region);
         };
-        page_storage->traverse(acceptor, nullptr);
+        page_reader->traverse(acceptor);
     }
     else
     {
@@ -243,11 +304,11 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
 bool RegionPersister::gc()
 {
-    if (page_storage)
+    if (page_writer)
     {
         PageStorage::Config config = getConfigFromSettings(global_context.getSettingsRef());
-        page_storage->reloadSettings(config);
-        return page_storage->gc(false, nullptr, nullptr);
+        page_writer->reloadSettings(config);
+        return page_writer->gc(false, nullptr, nullptr);
     }
     else
         return stable_page_storage->gc();
