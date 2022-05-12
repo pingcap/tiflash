@@ -190,7 +190,7 @@ try
                                                                         rate_target,
                                                                         LimiterType::UNKNOW);
 
-        std::vector<PageId> page_ids;
+        PageIds page_ids;
         for (size_t i = 0; i < wb_nums; ++i)
         {
             page_ids.emplace_back(page_id + i);
