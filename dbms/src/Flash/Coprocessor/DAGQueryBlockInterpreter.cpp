@@ -20,12 +20,12 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/FinalAggregatingBlockInputStream.h>
-#include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingWriter.h>
+#include <DataStreams/ParallelHashJoinBuildWriter.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -450,15 +450,16 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
 
-    // add a HashJoinBuildBlockInputStream to build a shared hash table
-    size_t concurrency_build_index = 0;
-    auto get_concurrency_build_index = [&concurrency_build_index, &join_build_concurrency]() {
-        return (concurrency_build_index++) % join_build_concurrency;
-    };
-    right_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
-    });
-    executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/true);
+    if (likely(join_build_concurrency > 1))
+    {
+        ParallelHashJoinBuildWriter<true> writer{join_ptr, log->identifier()};
+        executeParallel(right_pipeline, max_streams, writer, log);
+    }
+    else
+    {
+        ParallelHashJoinBuildWriter<false> writer{join_ptr, log->identifier()};
+        executeParallel(right_pipeline, max_streams, writer, log);
+    }
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = join_ptr;
