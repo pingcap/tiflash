@@ -236,12 +236,12 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_FMT_DEBUG(log, "{} Nothing to compact", simpleInfo());
             return true;
         }
-        log_storage_snap = context.storage_pool.log()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
+        log_storage_snap = context.storage_pool.logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
     // do compaction task
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    PageReader reader(context.storage_pool.getNamespaceId(), context.storage_pool.log(), std::move(log_storage_snap), context.getReadLimiter());
+    const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
     compaction_task->prepare(context, wbs, reader);
 
     {

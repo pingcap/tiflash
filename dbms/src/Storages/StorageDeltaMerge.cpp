@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -22,6 +23,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
+#include <Debug/MockTiDB.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -48,6 +50,7 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
+#include <common/logger_useful.h>
 
 #include <random>
 
@@ -80,7 +83,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     , store_inited(false)
     , max_column_id_used(0)
     , global_context(global_context_.getGlobalContext())
-    , log(&Poco::Logger::get("StorageDeltaMerge"))
+    , log(Logger::get("StorageDeltaMerge", fmt::format("{}.{}", db_name_, table_name_)))
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
@@ -93,6 +96,12 @@ StorageDeltaMerge::StorageDeltaMerge(
         tidb_table_info = table_info_->get();
         is_common_handle = tidb_table_info.is_common_handle;
         pk_is_handle = tidb_table_info.pk_is_handle;
+    }
+    else
+    {
+        const auto mock_table_id = MockTiDB::instance().newTableID();
+        tidb_table_info.id = mock_table_id;
+        LOG_FMT_WARNING(log, "Allocate table id for mock test [id={}]", mock_table_id);
     }
 
     table_column_info = std::make_unique<TableColumnInfo>(db_name_, table_name_, primary_expr_ast_);
@@ -278,13 +287,20 @@ void StorageDeltaMerge::updateTableColumnInfo()
     rowkey_column_size = rowkey_column_defines.size();
 }
 
+void StorageDeltaMerge::clearData()
+{
+    shutdown();
+    // init the store so it can clear data
+    auto & store = getAndMaybeInitStore();
+    store->clearData();
+}
+
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    if (storeInited())
-    {
-        _store->drop();
-    }
+    // init the store so it can do the drop work
+    auto & store = getAndMaybeInitStore();
+    store->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
@@ -626,8 +642,9 @@ BlockInputStreams StorageDeltaMerge::read(
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
+    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), query_info.req_id);
 
-    LOG_FMT_DEBUG(log, "Read with tso: {}", mvcc_query_info.read_tso);
+    LOG_FMT_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
     // Check whether tso is smaller than TiDB GcSafePoint
     const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
@@ -652,7 +669,7 @@ BlockInputStreams StorageDeltaMerge::read(
     check_read_tso(mvcc_query_info.read_tso);
 
     FmtBuffer fmt_buf;
-    if (unlikely(log->trace()))
+    if (unlikely(tracing_logger->trace()))
     {
         fmt_buf.append("orig, ");
         fmt_buf.joinStr(
@@ -685,9 +702,9 @@ BlockInputStreams StorageDeltaMerge::read(
         is_common_handle,
         rowkey_column_size,
         /*expected_ranges_count*/ num_streams,
-        log);
+        tracing_logger);
 
-    if (unlikely(log->trace()))
+    if (unlikely(tracing_logger->trace()))
     {
         fmt_buf.append(" merged, ");
         fmt_buf.joinStr(
@@ -697,7 +714,7 @@ BlockInputStreams StorageDeltaMerge::read(
                 fb.append(range.toDebugString());
             },
             ",");
-        LOG_FMT_TRACE(log, "reading ranges: {}", fmt_buf.toString());
+        LOG_FMT_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
     }
 
     /// Get Rough set filter from query
@@ -722,10 +739,10 @@ BlockInputStreams StorageDeltaMerge::read(
             rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
         }
         if (likely(rs_operator != DM::EMPTY_FILTER))
-            LOG_FMT_DEBUG(log, "Rough set filter: {}", rs_operator->toDebugString());
+            LOG_FMT_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
     }
     else
-        LOG_FMT_DEBUG(log, "Rough set filter is disabled.");
+        LOG_FMT_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
     auto streams = store->read(
         context,
@@ -735,6 +752,7 @@ BlockInputStreams StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
+        query_info.req_id,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
@@ -742,7 +760,7 @@ BlockInputStreams StorageDeltaMerge::read(
     /// Ensure read_tso info after read.
     check_read_tso(mvcc_query_info.read_tso);
 
-    LOG_FMT_TRACE(log, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
+    LOG_FMT_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
     return streams;
 }
@@ -797,6 +815,7 @@ UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
     return 0;
 }
 
+// just for testing
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
 {
     size_t rows = 0;
@@ -809,7 +828,8 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         {range},
         1,
         std::numeric_limits<UInt64>::max(),
-        EMPTY_FILTER)[0];
+        EMPTY_FILTER,
+        /*tracing_id*/ "getRows")[0];
     stream->readPrefix();
     Block block;
     while ((block = stream->read()))
@@ -819,6 +839,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
     return rows;
 }
 
+// just for testing
 DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
     auto start_index = rand() % (total_rows - delete_rows + 1); // NOLINT(cert-msc50-cpp)
@@ -832,7 +853,8 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             1,
             std::numeric_limits<UInt64>::max(),
-            EMPTY_FILTER)[0];
+            EMPTY_FILTER,
+            /*tracing_id*/ "getRange")[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;

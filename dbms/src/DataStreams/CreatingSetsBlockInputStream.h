@@ -17,7 +17,7 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Interpreters/ExpressionAnalyzer.h> /// SubqueriesForSets
+#include <Interpreters/SubqueryForSet.h>
 
 
 namespace DB

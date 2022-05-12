@@ -115,7 +115,7 @@ public:
     // handle will be called by ExchangeReceiver::reactor.
     void handle()
     {
-        LOG_FMT_TRACE(log, "Enter {}. stage: {}", __PRETTY_FUNCTION__, stage);
+        LOG_FMT_TRACE(log, "stage: {}", stage);
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
@@ -304,15 +304,38 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , exc_log(Logger::get("ExchangeReceiver", req_id, executor_id))
     , collected(false)
 {
-    rpc_context->fillSchema(schema);
-    setUpConnection();
+    try
+    {
+        rpc_context->fillSchema(schema);
+        setUpConnection();
+    }
+    catch (...)
+    {
+        try
+        {
+            cancel();
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        }
+        throw;
+    }
 }
 
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    close();
-    thread_manager->wait();
+    try
+    {
+        close();
+        thread_manager->wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+    }
 }
 
 template <typename RPCContext>

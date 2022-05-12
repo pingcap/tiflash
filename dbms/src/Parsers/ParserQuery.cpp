@@ -19,12 +19,10 @@
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/ParserManageQuery.h>
-#include <Parsers/ParserOptimizeQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/ParserRenameQuery.h>
 #include <Parsers/ParserSetQuery.h>
-#include <Parsers/ParserTruncateQuery.h>
 #include <Parsers/ParserUseQuery.h>
 
 namespace DB
@@ -37,8 +35,6 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserSetQuery set_p;
     ParserDeleteQuery delete_p;
     ParserDBGInvokeQuery dbginvoke_p;
-    ParserOptimizeQuery optimize_p;
-    ParserTruncateQuery truncate_p;
     ParserManageQuery manage_p;
 
     bool res = query_with_output_p.parse(pos, node, expected)
@@ -47,8 +43,6 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || set_p.parse(pos, node, expected)
         || delete_p.parse(pos, node, expected)
         || dbginvoke_p.parse(pos, node, expected)
-        || optimize_p.parse(pos, node, expected)
-        || truncate_p.parse(pos, node, expected)
         || manage_p.parse(pos, node, expected);
 
     return res;

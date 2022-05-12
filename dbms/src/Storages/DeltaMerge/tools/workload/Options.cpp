@@ -45,7 +45,9 @@ std::string WorkloadOptions::toString(std::string seperator) const
         fmt::format("testing_type {}{}", testing_type, seperator) + //
         fmt::format("log_write_request {}{}", log_write_request, seperator) + //
         fmt::format("enable_ps_v3 {}{}", enable_ps_v3, seperator) + //
-        fmt::format("bg_thread_count {}{}", bg_thread_count, seperator);
+        fmt::format("bg_thread_count {}{}", bg_thread_count, seperator) + //
+        fmt::format("table_id {}{}", table_id, seperator) + //
+        fmt::format("table_name {}{}", table_name, seperator);
 }
 
 std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv[])
@@ -86,9 +88,12 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
         //
-        ("enable_ps_v3", value<bool>()->default_value(false), "") //
+        ("enable_ps_v3", value<bool>()->default_value(true), "") //
         //
         ("bg_thread_count", value<uint64_t>()->default_value(4), "") //
+        //
+        ("table_name", value<std::string>()->default_value(""), "") //
+        ("table_id", value<int64_t>()->default_value(-1), "") //
         ;
 
     boost::program_options::variables_map vm;
@@ -154,6 +159,9 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     enable_ps_v3 = vm["enable_ps_v3"].as<bool>();
 
     bg_thread_count = vm["bg_thread_count"].as<uint64_t>();
+
+    table_id = vm["table_id"].as<int64_t>();
+    table_name = vm["table_name"].as<std::string>();
 
     return {true, toString()};
 }
