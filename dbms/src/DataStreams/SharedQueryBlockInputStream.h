@@ -18,12 +18,23 @@
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
+#include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 
 #include <thread>
 
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+#include <pcg_random.hpp>
+#endif
+
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_sharedquery_failpoint[];
+} // namespace FailPoints
+
 /** This block input stream is used by SharedQuery.
   * It enable multiple threads read from one stream.
  */
@@ -136,6 +147,14 @@ protected:
             in->readPrefix();
             while (true)
             {
+                fiu_do_on(FailPoints::random_sharedquery_failpoint, {
+                    // Since the code will run very frequently, then other failpoint might have no chance to trigger
+                    // so internally low down the possibility to 1/100
+                    pcg64 rng(randomSeed());
+                    int num = std::uniform_int_distribution(0, 100)(rng);
+                    if (num == 13)
+                        throw Exception("Fail point shared query is triggered.", ErrorCodes::FAIL_POINT_ERROR);
+                });
                 Block block = in->read();
                 // in is finished or queue is canceled
                 if (!block || !queue.push(block))

@@ -19,6 +19,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
+#include <Common/FailPoint.h>
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
 #include <Common/wrapInvocable.h>
@@ -37,6 +38,10 @@
 #include <iomanip>
 #include <thread>
 
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+#include <pcg_random.hpp>
+#endif
 
 namespace ProfileEvents
 {
@@ -61,6 +66,10 @@ extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char random_aggregate_failpoint[];
+} // namespace FailPoints
 
 AggregatedDataVariants::~AggregatedDataVariants()
 {
@@ -330,6 +339,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
               * In order that then everything is properly destroyed, we "roll back" some of the created states.
               * The code is not very convenient.
               */
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_failpoint);
             aggregate_functions[j]->create(aggregate_data + offsets_of_aggregate_states[j]);
         }
         catch (...)
@@ -1520,6 +1530,15 @@ protected:
 
         if (current_bucket_num >= NUM_BUCKETS)
             return {};
+
+        fiu_do_on(FailPoints::random_aggregate_failpoint, {
+            // Since the code will run very frequently, then other failpoint might have no chance to trigger
+            // so internally low down the possibility to 1/100
+            pcg64 rng(randomSeed());
+            int num = std::uniform_int_distribution(0, 100)(rng);
+            if (num == 41)
+                throw Exception("Fail point aggregate is triggered.", ErrorCodes::FAIL_POINT_ERROR);
+        });
 
         AggregatedDataVariantsPtr & first = data[0];
 

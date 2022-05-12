@@ -107,7 +107,12 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_RANDOM_FAILPOINTS_ENABLED_OUTSIDE(M) \
     M(random_tunnel_failpoint)                         \
-    M(random_receiver_failpoint)
+    M(random_receiver_failpoint)                       \
+    M(random_limit_check_failpoint)                    \
+    M(random_join_failpoint)                           \
+    M(random_aggregate_failpoint)                      \
+    M(random_sharedquery_failpoint)
+
 
 namespace FailPoints
 {
