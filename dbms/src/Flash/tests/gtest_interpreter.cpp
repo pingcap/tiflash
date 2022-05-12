@@ -341,6 +341,7 @@ CreatingSets
     }
 
     // join + receiver + sender
+    // TODO: Find a way to write the request easier.
     DAGRequestBuilder receiver5 = context.receive("sender_l");
     DAGRequestBuilder receiver6 = context.receive("sender_r");
     DAGRequestBuilder receiver7 = context.receive("sender_l");
