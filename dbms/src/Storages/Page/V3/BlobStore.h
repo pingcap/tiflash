@@ -191,7 +191,7 @@ public:
 
         BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr createBigStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createBigStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &) const;
 
         void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 
