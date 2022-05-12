@@ -448,7 +448,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
             {
                 tmt.getRegionTable().tryFlushRegion(region, false);
             }
-            catch (const Exception & e)
+            catch (...)
             {
                 tryLogCurrentException(__PRETTY_FUNCTION__);
             }
