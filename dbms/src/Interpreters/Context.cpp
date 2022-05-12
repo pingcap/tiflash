@@ -1649,10 +1649,8 @@ bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
     auto lock = getLock();
     if (shared->global_storage_pool)
     {
-        // Can't init GlobalStoragePool twice.
-        // Because we won't remove the gc task in BackGroundPool
-        // Also won't remove it from ~GlobalStoragePool()
-        throw Exception("GlobalStoragePool has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+        // GlobalStoragePool may be initialized many times in some test cases for restore.
+        LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
     }
 
     if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
