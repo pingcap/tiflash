@@ -170,6 +170,53 @@ PS::V1::PageStorage::Config getV1PSConfig(const PS::V2::PageStorage::Config & co
     return c;
 }
 
+void RegionPersister::forceTransformKVStoreV2toV3()
+{
+    assert(page_reader != nullptr);
+    assert(page_writer != nullptr);
+
+    Pages pages_transform = {};
+    auto meta_transform_acceptor = [&](const DB::Page & page) {
+        pages_transform.emplace_back(page);
+    };
+
+    page_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
+
+    WriteBatch write_batch_transform{KVSTORE_NAMESPACE_ID};
+
+    for (const auto & page_transform : pages_transform)
+    {
+        // Check pages have not contain field offset
+        // Also get the tag of page_id
+        const auto & page_transform_entry = page_reader->getPageEntry(page_transform.page_id);
+        if (!page_transform_entry.field_offsets.empty())
+        {
+            throw Exception(fmt::format("Can't transfrom kvstore from V2 to V3, [page_id={}]",
+                                        page_transform.page_id),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+
+        write_batch_transform.putPage(page_transform.page_id, //
+                                      page_transform_entry.tag,
+                                      std::make_shared<ReadBufferFromMemory>(page_transform.data.begin(),
+                                                                             page_transform.data.size()),
+                                      page_transform.data.size());
+    }
+
+    // Will rewrite into V3.
+    page_writer->write(std::move(write_batch_transform), nullptr);
+
+    WriteBatch write_batch_del_v2{KVSTORE_NAMESPACE_ID};
+
+    for (const auto & page_transform : pages_transform)
+    {
+        write_batch_del_v2.delPage(page_transform.page_id);
+    }
+
+    // DEL must call after rewrite.
+    page_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
+}
+
 RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, PageStorage::Config config)
 {
     {
@@ -247,17 +294,36 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             page_storage_v2->restore();
             page_storage_v3->restore();
 
-            if (page_storage_v2->getNumberOfPages() == 0)
-            {
+            auto changeToOnlyV3 = [&]() {
                 page_storage_v2 = nullptr;
-                run_mode = PageStorageRunMode::ONLY_V3;
                 page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
                 page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
-            }
-            else
+
+                run_mode = PageStorageRunMode::ONLY_V3;
+            };
+
+            if (const auto & kvstore_remain_pages = page_storage_v2->getNumberOfPages(); kvstore_remain_pages != 0)
             {
                 page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
                 page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
+
+                forceTransformKVStoreV2toV3();
+                const auto & kvstore_remain_pages_after_transform = page_storage_v2->getNumberOfPages();
+                LOG_FMT_INFO(log, "Current kvstore translate to V3 finished. [ns_id={}] [done={}] [remain_before_translate_pages={}], [remain_after_translate_pages={}]", //
+                             ns_id,
+                             kvstore_remain_pages_after_transform == 0,
+                             kvstore_remain_pages,
+                             kvstore_remain_pages_after_transform);
+
+                if (kvstore_remain_pages_after_transform == 0)
+                {
+                    changeToOnlyV3();
+                } // else do nothing, still use MIX_MODE
+            }
+            else // no need do transform
+            {
+                LOG_FMT_INFO(log, "Current kvstore translate already done before restored.");
+                changeToOnlyV3();
             }
             break;
         }

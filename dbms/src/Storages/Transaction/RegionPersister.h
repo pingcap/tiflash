@@ -61,6 +61,8 @@ public:
 private:
 #endif
 
+    void forceTransformKVStoreV2toV3();
+
     void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock, const Region & region);
     void doPersist(const Region & region, const RegionTaskLock * lock);
 
