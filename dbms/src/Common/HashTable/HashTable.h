@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/HashTable/HashTableAllocator.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
+#include <Common/nocopyable.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
 #include <IO/ReadBuffer.h>
@@ -31,6 +32,7 @@
 #include <boost/noncopyable.hpp>
 #include <new>
 #include <utility>
+
 
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES
 #include <Common/Stopwatch.h>
@@ -770,8 +772,7 @@ public:
         {
         }
 
-        Reader(const Reader &) = delete;
-        Reader & operator=(const Reader &) = delete;
+        DISALLOW_COPY(Reader);
 
         bool next()
         {

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -104,6 +105,8 @@ inline const char * typeToString(EditRecordType t)
         return "VAR_EXT";
     case EditRecordType::VAR_DELETE:
         return "VAR_DEL";
+    default:
+        return "INVALID";
     }
 }
 
@@ -220,6 +223,7 @@ public:
         EditRecord()
             : page_id(0)
             , ori_page_id(0)
+            , version(0, 0)
             , being_ref_count(1)
         {}
     };
@@ -247,15 +251,42 @@ public:
 
 #ifndef NDEBUG
     // Just for tests, refactor them out later
-    void put(PageId page_id, const PageEntryV3 & entry) { put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry); }
-    void putExternal(PageId page_id) { putExternal(buildV3Id(TEST_NAMESPACE_ID, page_id)); }
-    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry) { upsertPage(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry); }
-    void del(PageId page_id) { del(buildV3Id(TEST_NAMESPACE_ID, page_id)); }
-    void ref(PageId ref_id, PageId page_id) { ref(buildV3Id(TEST_NAMESPACE_ID, ref_id), buildV3Id(TEST_NAMESPACE_ID, page_id)); }
-    void varRef(PageId ref_id, const PageVersionType & ver, PageId ori_page_id) { varRef(buildV3Id(TEST_NAMESPACE_ID, ref_id), ver, buildV3Id(TEST_NAMESPACE_ID, ori_page_id)); }
-    void varExternal(PageId page_id, const PageVersionType & create_ver, Int64 being_ref_count) { varExternal(buildV3Id(TEST_NAMESPACE_ID, page_id), create_ver, being_ref_count); }
-    void varEntry(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count) { varEntry(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry, being_ref_count); }
-    void varDel(PageId page_id, const PageVersionType & delete_ver) { varDel(buildV3Id(TEST_NAMESPACE_ID, page_id), delete_ver); }
+    void put(PageId page_id, const PageEntryV3 & entry)
+    {
+        put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry);
+    }
+    void putExternal(PageId page_id)
+    {
+        putExternal(buildV3Id(TEST_NAMESPACE_ID, page_id));
+    }
+    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
+    {
+        upsertPage(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry);
+    }
+    void del(PageId page_id)
+    {
+        del(buildV3Id(TEST_NAMESPACE_ID, page_id));
+    }
+    void ref(PageId ref_id, PageId page_id)
+    {
+        ref(buildV3Id(TEST_NAMESPACE_ID, ref_id), buildV3Id(TEST_NAMESPACE_ID, page_id));
+    }
+    void varRef(PageId ref_id, const PageVersionType & ver, PageId ori_page_id)
+    {
+        varRef(buildV3Id(TEST_NAMESPACE_ID, ref_id), ver, buildV3Id(TEST_NAMESPACE_ID, ori_page_id));
+    }
+    void varExternal(PageId page_id, const PageVersionType & create_ver, Int64 being_ref_count)
+    {
+        varExternal(buildV3Id(TEST_NAMESPACE_ID, page_id), create_ver, being_ref_count);
+    }
+    void varEntry(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count)
+    {
+        varEntry(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry, being_ref_count);
+    }
+    void varDel(PageId page_id, const PageVersionType & delete_ver)
+    {
+        varDel(buildV3Id(TEST_NAMESPACE_ID, page_id), delete_ver);
+    }
 #endif
 
 private:
@@ -263,8 +294,7 @@ private:
 
 public:
     // No copying allowed
-    PageEntriesEdit(const PageEntriesEdit &) = delete;
-    PageEntriesEdit & operator=(const PageEntriesEdit &) = delete;
+    DISALLOW_COPY(PageEntriesEdit);
     // Only move allowed
     PageEntriesEdit(PageEntriesEdit && rhs) noexcept
         : PageEntriesEdit()

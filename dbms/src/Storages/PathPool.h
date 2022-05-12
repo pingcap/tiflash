@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Storages/Page/PageDefines.h>
 
@@ -109,7 +110,7 @@ private:
 
     FileProviderPtr file_provider;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 class StableDiskDelegator : private boost::noncopyable
@@ -453,7 +454,7 @@ private:
 
     FileProviderPtr file_provider;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB
