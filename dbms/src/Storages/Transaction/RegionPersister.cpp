@@ -182,10 +182,10 @@ void RegionPersister::forceTransformKVStoreV2toV3()
 
     page_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
 
-    WriteBatch write_batch_transform{KVSTORE_NAMESPACE_ID};
-
+    WriteBatch write_batch_del_v2{KVSTORE_NAMESPACE_ID};
     for (const auto & page_transform : pages_transform)
     {
+        WriteBatch write_batch_transform{KVSTORE_NAMESPACE_ID};
         // Check pages have not contain field offset
         // Also get the tag of page_id
         const auto & page_transform_entry = page_reader->getPageEntry(page_transform.page_id);
@@ -201,15 +201,12 @@ void RegionPersister::forceTransformKVStoreV2toV3()
                                       std::make_shared<ReadBufferFromMemory>(page_transform.data.begin(),
                                                                              page_transform.data.size()),
                                       page_transform.data.size());
-    }
 
-    // Will rewrite into V3.
-    page_writer->write(std::move(write_batch_transform), nullptr);
+        // Will rewrite into V3 one by one.
+        // The region data is big. It is not a good idea to combine pages.
+        page_writer->write(std::move(write_batch_transform), nullptr);
 
-    WriteBatch write_batch_del_v2{KVSTORE_NAMESPACE_ID};
-
-    for (const auto & page_transform : pages_transform)
-    {
+        // Record del page_id
         write_batch_del_v2.delPage(page_transform.page_id);
     }
 
