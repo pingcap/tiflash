@@ -252,6 +252,7 @@ void StoragePool::forceTransformMetaV2toV3()
     meta_transform_storage_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
 
     WriteBatch write_batch_transform{ns_id};
+    WriteBatch write_batch_del_v2{ns_id};
 
     for (const auto & page_transform : pages_transform)
     {
@@ -271,17 +272,12 @@ void StoragePool::forceTransformMetaV2toV3()
                                       std::make_shared<ReadBufferFromMemory>(page_transform.data.begin(),
                                                                              page_transform.data.size()),
                                       page_transform.data.size());
+        // Record del for V2
+        write_batch_del_v2.delPage(page_transform.page_id);
     }
 
     // Will rewrite into V3.
     meta_transform_storage_writer->write(std::move(write_batch_transform), nullptr);
-
-    WriteBatch write_batch_del_v2{ns_id};
-
-    for (const auto & page_transform : pages_transform)
-    {
-        write_batch_del_v2.delPage(page_transform.page_id);
-    }
 
     // DEL must call after rewrite.
     meta_transform_storage_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
