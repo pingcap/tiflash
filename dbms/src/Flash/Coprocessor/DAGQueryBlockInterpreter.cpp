@@ -775,7 +775,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        if (dagContext().isTest())
+        if (unlikely(dagContext().isTest()))
             handleMockExchangeReceiver(pipeline);
         else
             handleExchangeReceiver(pipeline);
@@ -789,7 +789,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.isTableScanSource())
     {
         TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
-        if (dagContext().isTest())
+        if (unlikely(dagContext().isTest()))
             handleMockTableScan(table_scan, pipeline);
         else
             handleTableScan(table_scan, pipeline);
@@ -870,7 +870,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // execute exchange_sender
     if (query_block.exchange_sender)
     {
-        if (dagContext().isTest())
+        if (unlikely(dagContext().isTest()))
             handleMockExchangeSender(pipeline);
         else
             handleExchangeSender(pipeline);

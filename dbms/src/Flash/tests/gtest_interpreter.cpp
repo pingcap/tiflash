@@ -300,7 +300,6 @@ Union
     }
 
     // only join + ExchangeReceiver
-
     DAGRequestBuilder receiver1 = context.receive("sender_l");
     DAGRequestBuilder receiver2 = context.receive("sender_r");
     DAGRequestBuilder receiver3 = context.receive("sender_l");
@@ -315,6 +314,43 @@ Union
                                ASTTableJoin::Kind::Left),
                            {col("join_c")},
                            ASTTableJoin::Kind::Left)
+                  .build(context);
+    {
+        String expected = R"(
+CreatingSets
+ Union
+  HashJoinBuildBlockInputStream x 10
+   Expression
+    Expression
+     MockExchangeReceiver
+ Union x 2
+  HashJoinBuildBlockInputStream x 10
+   Expression
+    Expression
+     Expression
+      HashJoinProbe
+       Expression
+        MockExchangeReceiver
+ Union
+  Expression x 10
+   Expression
+    HashJoinProbe
+     Expression
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    // join + receiver + sender
+    request = receiver1.join(
+                           receiver2.join(
+                               receiver3.join(receiver4,
+                                              {col("join_c")},
+                                              ASTTableJoin::Kind::Left),
+                               {col("join_c")},
+                               ASTTableJoin::Kind::Left),
+                           {col("join_c")},
+                           ASTTableJoin::Kind::Left)
+                  .exchangeSender(tipb::PassThrough)
                   .build(context);
     {
         String expected = R"(
