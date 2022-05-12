@@ -14,18 +14,13 @@
 
 #pragma once
 
-#include <Parsers/ParserQueryWithOutput.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/NamesAndTypes.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
-/** Query of form
- * CHECK [TABLE] [database.]table
- */
-class ParserCheckQuery : public IParserBase
-{
-protected:
-    const char * getName() const { return "ALTER query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-};
-
-}
+NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan);
+ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
+} // namespace DB

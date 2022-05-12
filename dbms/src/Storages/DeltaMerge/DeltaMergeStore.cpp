@@ -95,6 +95,8 @@ extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
 extern const char random_exception_after_dt_write_done[];
 extern const char force_slow_page_storage_snapshot_release[];
+extern const char exception_before_drop_segment[];
+extern const char exception_after_drop_segment[];
 } // namespace FailPoints
 
 namespace DM
@@ -369,12 +371,8 @@ void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_
     db_name.swap(new_database_name);
 }
 
-void DeltaMergeStore::drop()
+void DeltaMergeStore::dropAllSegments(bool keep_first_segment)
 {
-    // Remove all background task first
-    shutdown();
-
-    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
     auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
     {
         std::unique_lock lock(read_write_mutex);
@@ -390,28 +388,76 @@ void DeltaMergeStore::drop()
         while (!segment_ids.empty())
         {
             auto segment_id_to_drop = segment_ids.top();
+            if (keep_first_segment && (segment_id_to_drop == DELTA_MERGE_FIRST_SEGMENT_ID))
+            {
+                // This must be the last segment to drop
+                assert(segment_ids.size() == 1);
+                break;
+            }
             auto segment_to_drop = id_to_segment[segment_id_to_drop];
             segment_ids.pop();
+            SegmentPtr previous_segment;
+            SegmentPtr new_previous_segment;
             if (!segment_ids.empty())
             {
                 // This is not the last segment, so we need to set previous segment's next_segment_id to 0 to indicate that this segment has been dropped
                 auto previous_segment_id = segment_ids.top();
-                auto previous_segment = id_to_segment[previous_segment_id];
+                previous_segment = id_to_segment[previous_segment_id];
                 assert(previous_segment->nextSegmentId() == segment_id_to_drop);
                 auto previous_lock = previous_segment->mustGetUpdateLock();
-                auto new_previous_segment = previous_segment->dropNextSegment(wbs);
-                previous_segment->abandon(*dm_context);
-                segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
-                id_to_segment.emplace(previous_segment_id, new_previous_segment);
+
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_drop_segment);
+                // No need to abandon previous_segment, because it's delta and stable is managed by the new_previous_segment.
+                // Abandon previous_segment will actually abandon new_previous_segment
+                //
+                // And we need to use the previous_segment to manage the dropped segment's range,
+                // because if tiflash crash in the middle of the drop table process, and when restoring this table at restart,
+                // there are some possibilities that this table will trigger some background tasks,
+                // and in these background tasks, it may check that all ranges of this table should be managed by some segment.
+                new_previous_segment = previous_segment->dropNextSegment(wbs, segment_to_drop->getRowKeyRange());
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_drop_segment);
             }
             // The order to drop the meta and data of this segment doesn't matter,
             // Because there is no segment pointing to this segment,
             // so it won't be restored again even the drop process was interrupted by restart
+            segments.erase(segment_to_drop->getRowKeyRange().getEnd());
+            id_to_segment.erase(segment_id_to_drop);
+            if (previous_segment)
+            {
+                assert(new_previous_segment);
+                assert(previous_segment->segmentId() == new_previous_segment->segmentId());
+                segments.erase(previous_segment->getRowKeyRange().getEnd());
+                segments.emplace(new_previous_segment->getRowKeyRange().getEnd(), new_previous_segment);
+                id_to_segment.erase(previous_segment->segmentId());
+                id_to_segment.emplace(new_previous_segment->segmentId(), new_previous_segment);
+            }
             auto drop_lock = segment_to_drop->mustGetUpdateLock();
             segment_to_drop->abandon(*dm_context);
             segment_to_drop->drop(global_context.getFileProvider(), wbs);
         }
     }
+}
+
+void DeltaMergeStore::clearData()
+{
+    // Remove all background task first
+    shutdown();
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data [{}.{}]", db_name, table_name);
+    // We don't drop the first segment in clearData, because if we drop it and tiflash crashes before drop the table's metadata,
+    // when restart the table will try to restore the first segment but failed to do it which cause tiflash crash again.
+    // The reason this happens is that even we delete all data in a PageStorage instance,
+    // the call to PageStorage::getMaxId is still not 0 so tiflash treat it as an old table and will try to restore it's first segment.
+    dropAllSegments(true);
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data done [{}.{}]", db_name, table_name);
+}
+
+void DeltaMergeStore::drop()
+{
+    // Remove all background task first
+    shutdown();
+
+    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
+    dropAllSegments(false);
     storage_pool->drop();
 
     // Drop data in storage path pool
@@ -1726,7 +1772,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 }
             }
             if (!finish_gc_on_segment)
-                LOG_FMT_DEBUG(
+                LOG_FMT_TRACE(
                     log,
                     "GC is skipped Segment [{}] [range={}] [table={}]",
                     segment_id,

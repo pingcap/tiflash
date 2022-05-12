@@ -23,6 +23,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
@@ -54,7 +55,7 @@ public:
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        dir = factory.create("PageDirectoryTest", provider, delegator);
+        dir = factory.create("PageDirectoryTest", provider, delegator, WALStore::Config());
     }
 
 protected:
@@ -1760,16 +1761,88 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, DumpAndRestore)
+
+TEST_F(PageDirectoryGCTest, GCOnRefedExternalEntries2)
 try
 {
+    {
+        PageEntriesEdit edit; // ingest
+        edit.putExternal(352);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(353, 352);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // ingest done
+        edit.del(352);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // split
+        edit.ref(357, 352);
+        edit.ref(359, 352);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // split done
+        edit.del(353);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // one of segment delta-merge
+        edit.del(359);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = dir->getNormalPageId(357, snap);
+        EXPECT_EQ(normal_id.low, 352);
+    }
+    dir->gcInMemEntries();
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = dir->getNormalPageId(357, snap);
+        EXPECT_EQ(normal_id.low, 352);
+    }
+
+    auto s0 = dir->createSnapshot();
+    auto edit = dir->dumpSnapshotToEdit(s0);
+    edit.size();
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deseri_edit);
+        return d;
+    };
+    {
+        auto restored_dir = restore_from_edit(edit);
+        auto snap = restored_dir->createSnapshot();
+        auto normal_id = restored_dir->getNormalPageId(357, snap);
+        EXPECT_EQ(normal_id.low, 352);
+    }
+}
+CATCH
+
+
+TEST_F(PageDirectoryGCTest, DumpAndRestore)
+try
+{
+    auto restore_from_edit = [](const PageEntriesEdit & edit) {
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        auto ctx = DB::tests::TiFlashTestEnv::getContext();
+        auto provider = ctx.getFileProvider();
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        PageDirectoryFactory factory;
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deseri_edit);
         return d;
     };
 

@@ -14,20 +14,14 @@
 
 #pragma once
 
-#include <Parsers/IParserBase.h>
+#define DISALLOW_COPY(ClassName)           \
+    ClassName(const ClassName &) = delete; \
+    ClassName & operator=(const ClassName &) = delete
 
+#define DISALLOW_MOVE(ClassName)      \
+    ClassName(ClassName &&) = delete; \
+    ClassName & operator=(ClassName &&) = delete
 
-namespace DB
-{
-
-/** KILL QUERY WHERE <logical expression upon system.processes fields> [SYNC|ASYNC|TEST]
-  */
-class ParserKillQueryQuery : public IParserBase
-{
-protected:
-    const char * getName() const override { return "KILL QUERY query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
-};
-
-}
-
+#define DISALLOW_COPY_AND_MOVE(ClassName) \
+    DISALLOW_COPY(ClassName);             \
+    DISALLOW_MOVE(ClassName)
