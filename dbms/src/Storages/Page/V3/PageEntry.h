@@ -45,6 +45,7 @@ public:
     {
         return size + padded_size;
     }
+
     inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID; }
 
     size_t getFieldSize(size_t index) const
@@ -86,7 +87,13 @@ inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageId p_id)
 
 inline String toDebugString(const PageEntryV3 & entry)
 {
-    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}}}", entry.file_id, entry.offset, entry.size, entry.checksum);
+    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
+                       entry.file_id,
+                       entry.offset,
+                       entry.size,
+                       entry.checksum,
+                       entry.tag,
+                       entry.field_offsets.size());
 }
 
 } // namespace PS::V3

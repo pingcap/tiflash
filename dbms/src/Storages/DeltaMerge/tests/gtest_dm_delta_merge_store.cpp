@@ -178,7 +178,7 @@ public:
         return s;
     }
 
-    std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
     {
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto [store_path, file_id] = store->preAllocateIngestFile();
@@ -1344,7 +1344,7 @@ try
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
 
-        std::vector<PageId> file_ids;
+        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
         store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
     }
