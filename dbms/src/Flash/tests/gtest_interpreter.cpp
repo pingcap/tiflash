@@ -341,9 +341,13 @@ CreatingSets
     }
 
     // join + receiver + sender
-    request = receiver1.join(
-                           receiver2.join(
-                               receiver3.join(receiver4,
+    DAGRequestBuilder receiver5 = context.receive("sender_l");
+    DAGRequestBuilder receiver6 = context.receive("sender_r");
+    DAGRequestBuilder receiver7 = context.receive("sender_l");
+    DAGRequestBuilder receiver8 = context.receive("sender_r");
+    request = receiver5.join(
+                           receiver6.join(
+                               receiver7.join(receiver8,
                                               {col("join_c")},
                                               ASTTableJoin::Kind::Left),
                                {col("join_c")},
@@ -369,11 +373,12 @@ CreatingSets
        Expression
         MockExchangeReceiver
  Union
-  Expression x 10
+  MockExchangeSender x 10
    Expression
-    HashJoinProbe
-     Expression
-      MockExchangeReceiver)";
+    Expression
+     HashJoinProbe
+      Expression
+       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }
