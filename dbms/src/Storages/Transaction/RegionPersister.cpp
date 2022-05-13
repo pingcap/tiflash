@@ -175,40 +175,35 @@ void RegionPersister::forceTransformKVStoreV2toV3()
     assert(page_reader != nullptr);
     assert(page_writer != nullptr);
 
-    Pages pages_transform = {};
-    auto meta_transform_acceptor = [&](const DB::Page & page) {
-        pages_transform.emplace_back(page);
-    };
-
-    page_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
-
     WriteBatch write_batch_del_v2{KVSTORE_NAMESPACE_ID};
-    for (const auto & page_transform : pages_transform)
-    {
+    auto meta_transform_acceptor = [&](const DB::Page & page) {
         WriteBatch write_batch_transform{KVSTORE_NAMESPACE_ID};
         // Check pages have not contain field offset
         // Also get the tag of page_id
-        const auto & page_transform_entry = page_reader->getPageEntry(page_transform.page_id);
+        const auto & page_transform_entry = page_reader->getPageEntry(page.page_id);
         if (!page_transform_entry.field_offsets.empty())
         {
-            throw Exception(fmt::format("Can't transfrom kvstore from V2 to V3, [page_id={}]",
-                                        page_transform.page_id),
+            throw Exception(fmt::format("Can't transfrom kvstore from V2 to V3, [page_id={}] {}",
+                                        page.page_id,
+                                        page_transform_entry.toDebugString()),
                             ErrorCodes::LOGICAL_ERROR);
         }
 
-        write_batch_transform.putPage(page_transform.page_id, //
+        write_batch_transform.putPage(page.page_id, //
                                       page_transform_entry.tag,
-                                      std::make_shared<ReadBufferFromMemory>(page_transform.data.begin(),
-                                                                             page_transform.data.size()),
-                                      page_transform.data.size());
+                                      std::make_shared<ReadBufferFromMemory>(page.data.begin(),
+                                                                             page.data.size()),
+                                      page.data.size());
 
         // Will rewrite into V3 one by one.
         // The region data is big. It is not a good idea to combine pages.
         page_writer->write(std::move(write_batch_transform), nullptr);
 
         // Record del page_id
-        write_batch_del_v2.delPage(page_transform.page_id);
-    }
+        write_batch_del_v2.delPage(page.page_id);
+    };
+
+    page_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
 
     // DEL must call after rewrite.
     page_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
