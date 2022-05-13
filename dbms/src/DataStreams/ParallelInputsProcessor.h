@@ -139,6 +139,11 @@ public:
     {
         finish = true;
 
+        {
+            std::unique_lock lock(available_inputs_mutex);
+            available_inputs_cv.notify_all();
+        }
+
         for (auto & input : inputs)
         {
             if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(&*input))
@@ -228,7 +233,7 @@ private:
                 unprepared_input.in->readPrefix();
 
                 {
-                    std::lock_guard lock(available_inputs_mutex);
+                    std::unique_lock lock(available_inputs_mutex);
                     available_inputs.push(unprepared_input);
                     ++active_inputs;
                 }
@@ -283,14 +288,19 @@ private:
 
             /// Select the next source.
             {
-                std::lock_guard lock(available_inputs_mutex);
+                std::unique_lock lock(available_inputs_mutex);
 
                 /// If there are no free sources, then this thread is no longer needed. (But other threads can work with their sources.)
                 if (0 == active_inputs)
                     break;
 
                 if (available_inputs.empty())
-                    continue;
+                {
+                    auto deadline = std::chrono::system_clock::now() + std::chrono::milliseconds(10);
+                    available_inputs_cv.wait_until(lock, deadline);
+                    if (available_inputs.empty())
+                        continue;
+                }
 
                 input = available_inputs.front();
 
@@ -307,16 +317,20 @@ private:
 
                 /// If this source is not run out yet, then put the resulting block in the ready queue.
                 {
-                    std::lock_guard lock(available_inputs_mutex);
+                    std::unique_lock lock(available_inputs_mutex);
 
                     if (block)
                     {
                         available_inputs.push(input);
+                        available_inputs_cv.notify_one();
                     }
                     else
                     {
                         if (0 == --active_inputs)
+                        {
+                            available_inputs_cv.notify_all();
                             break;
+                        }
                     }
                 }
 
@@ -368,6 +382,7 @@ private:
 
     /// For operations with available_inputs.
     std::mutex available_inputs_mutex;
+    std::condition_variable available_inputs_cv;
 
     /// For operations with unprepared_inputs.
     std::mutex unprepared_inputs_mutex;
