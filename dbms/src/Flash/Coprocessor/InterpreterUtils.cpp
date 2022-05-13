@@ -36,11 +36,12 @@ BlockInputStreamPtr executeParallelForNonJoined(
     BlockInputStreamPtr ret = nullptr;
     if (pipeline.streams_with_non_joined_data.size() == 1)
     {
+        // execute `writer.write` in function caller(`executeParallel.executeParallelWrite`).
         ret = pipeline.streams_with_non_joined_data.at(0);
     }
     else if (pipeline.streams_with_non_joined_data.size() > 1)
     {
-        ret = std::make_shared<ParallelWritingBlockInputStream>(
+        ret = executeParallelWrite(
             pipeline.streams_with_non_joined_data,
             nullptr,
             parallel_writer,
@@ -127,24 +128,13 @@ void executeParallel(
     else
     {
         auto non_joined_data_stream = executeParallelForNonJoined(pipeline, parallel_writer, max_streams, log);
-        if (pipeline.streams.size() > 1)
-        {
-            pipeline.firstStream() = std::make_shared<ParallelWritingBlockInputStream>(
-                pipeline.streams,
-                non_joined_data_stream,
-                parallel_writer,
-                max_streams,
-                log->identifier());
-            pipeline.streams.resize(1);
-        }
-        else // pipeline.streams.size() == 1)
-        {
-            pipeline.firstStream() = std::make_shared<SerialWritingBlockInputStream>(
-                pipeline.firstStream(),
-                non_joined_data_stream,
-                parallel_writer,
-                log->identifier());
-        }
+        pipeline.firstStream() = executeParallelWrite(
+            pipeline.streams,
+            non_joined_data_stream,
+            parallel_writer,
+            max_streams,
+            log->identifier());
+        pipeline.streams.resize(1);
     }
     assert(pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty());
 }

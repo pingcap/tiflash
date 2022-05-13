@@ -16,6 +16,23 @@
 
 namespace DB
 {
+BlockInputStreamPtr executeParallelWrite(
+    const BlockInputStreams & inputs,
+    const BlockInputStreamPtr & additional_input_at_end,
+    const ParallelWriterPtr & parallel_writer,
+    size_t max_threads,
+    const String & req_id)
+{
+    if (inputs.size() == 1)
+    {
+        return std::make_shared<SerialWritingBlockInputStream>(inputs.back(), additional_input_at_end, parallel_writer, req_id);
+    }
+    else
+    {
+        return std::make_shared<ParallelWritingBlockInputStream>(inputs, additional_input_at_end, parallel_writer, max_threads, req_id);
+    }
+}
+
 SerialWritingBlockInputStream::SerialWritingBlockInputStream(
     const BlockInputStreamPtr & input,
     const BlockInputStreamPtr & additional_input_at_end,

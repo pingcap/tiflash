@@ -20,6 +20,13 @@
 
 namespace DB
 {
+BlockInputStreamPtr executeParallelWrite(
+    const BlockInputStreams & inputs,
+    const BlockInputStreamPtr & additional_input_at_end,
+    const ParallelWriterPtr & parallel_writer,
+    size_t max_threads,
+    const String & req_id);
+
 class SerialWritingBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "SerialWriting";
