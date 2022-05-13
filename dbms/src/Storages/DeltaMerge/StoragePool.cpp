@@ -247,6 +247,52 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     }
 }
 
+void StoragePool::forceTransformMetaV2toV3()
+{
+    assert(meta_storage_v2 != nullptr);
+    assert(meta_storage_v3 != nullptr);
+    auto meta_transform_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, meta_storage_v3);
+    auto meta_transform_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, meta_storage_v3, nullptr);
+
+    Pages pages_transform = {};
+    auto meta_transform_acceptor = [&](const DB::Page & page) {
+        pages_transform.emplace_back(page);
+    };
+
+    meta_transform_storage_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
+
+    WriteBatch write_batch_transform{ns_id};
+    WriteBatch write_batch_del_v2{ns_id};
+
+    for (const auto & page_transform : pages_transform)
+    {
+        // Check pages have not contain field offset
+        // Also get the tag of page_id
+        const auto & page_transform_entry = meta_transform_storage_reader->getPageEntry(page_transform.page_id);
+        if (!page_transform_entry.field_offsets.empty())
+        {
+            throw Exception(fmt::format("Can't transfrom meta from V2 to V3, [page_id={}] {}", //
+                                        page_transform.page_id,
+                                        page_transform_entry.toDebugString()),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+
+        write_batch_transform.putPage(page_transform.page_id, //
+                                      page_transform_entry.tag,
+                                      std::make_shared<ReadBufferFromMemory>(page_transform.data.begin(),
+                                                                             page_transform.data.size()),
+                                      page_transform.data.size());
+        // Record del for V2
+        write_batch_del_v2.delPage(page_transform.page_id);
+    }
+
+    // Will rewrite into V3.
+    meta_transform_storage_writer->write(std::move(write_batch_transform), nullptr);
+
+    // DEL must call after rewrite.
+    meta_transform_storage_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
+}
+
 PageStorageRunMode StoragePool::restore()
 {
     const auto & global_storage_pool = global_context.getGlobalStoragePool();
@@ -284,6 +330,24 @@ PageStorageRunMode StoragePool::restore()
         auto v2_log_max_ids = log_storage_v2->restore();
         auto v2_data_max_ids = data_storage_v2->restore();
         auto v2_meta_max_ids = meta_storage_v2->restore();
+
+        // The pages on data and log can be rewritten to V3 and the old pages on V2 are deleted by `delta merge`.
+        // However, the pages on meta V2 can not be deleted. As the pages in meta are small, we perform a forceTransformMetaV2toV3 to convert pages before all.
+        if (const auto & meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
+        {
+            LOG_FMT_INFO(logger, "Current meta transform to V3 begin, [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
+            forceTransformMetaV2toV3();
+            const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
+            LOG_FMT_INFO(logger, "Current meta transform to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
+                         ns_id,
+                         meta_remain_pages_after_transform == 0,
+                         meta_remain_pages,
+                         meta_remain_pages_after_transform);
+        }
+        else
+        {
+            LOG_FMT_INFO(logger, "Current meta translate already done before restored.[ns_id={}] ", ns_id);
+        }
 
         assert(v2_log_max_ids.size() == 1);
         assert(v2_data_max_ids.size() == 1);

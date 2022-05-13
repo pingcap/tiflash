@@ -126,6 +126,17 @@ public:
         return std::make_pair(file_id, level);
     }
 
+    String toDebugString() const
+    {
+        return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
+                           file_id,
+                           offset,
+                           size,
+                           checksum,
+                           tag,
+                           field_offsets.size());
+    }
+
     size_t getFieldSize(size_t index) const
     {
         if (unlikely(index >= field_offsets.size()))
