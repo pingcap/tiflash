@@ -992,6 +992,15 @@ int calcDayNum(int year, int month, int day)
     return delsum + year / 4 - temp;
 }
 
+UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second)
+{
+    if (year == 0 && month == 0)
+        return 0;
+    Int32 current_days = calcDayNum(year, month, day);
+    return current_days * MyTimeBase::SECOND_IN_ONE_DAY + hour * MyTimeBase::SECOND_IN_ONE_HOUR
+        + minute * MyTimeBase::SECOND_IN_ONE_MINUTE + second;
+}
+
 size_t maxFormattedDateTimeStringLength(const String & format)
 {
     size_t result = 0;
@@ -1142,7 +1151,7 @@ UInt64 addSeconds(UInt64 t, Int64 delta)
         return t;
     }
     MyDateTime my_time(t);
-    Int64 current_second = my_time.hour * 3600 + my_time.minute * 60 + my_time.second;
+    Int64 current_second = my_time.hour * MyTimeBase::SECOND_IN_ONE_HOUR + my_time.minute * MyTimeBase::SECOND_IN_ONE_MINUTE + my_time.second;
     current_second += delta;
     if (current_second >= 0)
     {
@@ -1161,9 +1170,9 @@ UInt64 addSeconds(UInt64 t, Int64 delta)
         current_second += days * MyTimeBase::SECOND_IN_ONE_DAY;
         addDays(my_time, -days);
     }
-    my_time.hour = current_second / 3600;
-    my_time.minute = (current_second % 3600) / 60;
-    my_time.second = current_second % 60;
+    my_time.hour = current_second / MyTimeBase::SECOND_IN_ONE_HOUR;
+    my_time.minute = (current_second % MyTimeBase::SECOND_IN_ONE_HOUR) / MyTimeBase::SECOND_IN_ONE_MINUTE;
+    my_time.second = current_second % MyTimeBase::SECOND_IN_ONE_MINUTE;
     return my_time.toPackedUInt();
 }
 
