@@ -233,7 +233,7 @@ set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fn
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
-if (MAKE_STATIC_LIBRARIES AND NOT APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+if (MAKE_STATIC_LIBRARIES AND NOT APPLE)
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 endif ()
 
@@ -271,8 +271,11 @@ if (ARCH_LINUX AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
       set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rtlib=compiler-rt")
       list (APPEND TIFLASH_LLVM_LINKAGE_FLAGS -rtlib=compiler-rt)
     endif ()
-
-    link_libraries (-Wl,-Bdynamic ${TIFLASH_LLVM_LINKAGE_FLAGS})
+    if (USE_STATIC_LIBRARIES)
+        link_libraries (-Wl,-Bstatic ${TIFLASH_LLVM_LINKAGE_FLAGS} -Wl,-Bdynamic)
+    else()
+        link_libraries (-Wl,-Bdynamic ${TIFLASH_LLVM_LINKAGE_FLAGS})
+    endif()
 endif ()
 
 if (USE_STATIC_LIBRARIES AND HAVE_NO_PIE)
@@ -434,11 +437,3 @@ add_subdirectory (libs)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
-
-# Building a rust project may require setting up toolchains. Rustup cannot handle parallel requests, hence it may fail to
-# finish the setup if multiple projects want to install a same version. To mitigate the situation, we force cargo targets
-# to be invoked sequentially by adding linear dependency relations between them.
-# Another way to do so is to use JOB_POOL with single concurrency. However, it is Ninja specific and it seems to have bugs
-# with a large number of threads.
-include (cmake/sequential.cmake)
-build_sequentially (symbolization tiflash_proxy)

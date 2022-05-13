@@ -54,3 +54,5 @@ message(STATUS "Using tiflash proxy: ${USE_INTERNAL_TIFLASH_PROXY} : ${TIFLASH_P
 if (NOT USE_INTERNAL_TIFLASH_PROXY)
     add_custom_target(tiflash_proxy ALL DEPENDS ${TIFLASH_PROXY_LIBRARY})
 endif()
+
+include_directories(${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/raftstore-proxy/include)

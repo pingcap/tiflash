@@ -554,14 +554,17 @@ private:
 #endif
 
         DB::FmtBuffer output;
-
         for (size_t f = 0; f < frames_size; ++f)
         {
             output.append("\n");
             auto demangle_func = [](const char * name) {
+                static constexpr char proxy_prefix[] = "(TIFLASH_PROXY) ";
                 int status = 0;
                 // __cxa_demangle will leak memory; but we are failing anyway
                 // freeing memory may increase possibilities to trigger other errors
+                if (const auto* position = ::strstr(name, proxy_prefix); position != nullptr) {
+                    name = position + std::size(proxy_prefix);
+                }
                 auto * result = abi::__cxa_demangle(name, nullptr, nullptr, &status);
                 return std::pair<const char *, int>{result, status};
             };
