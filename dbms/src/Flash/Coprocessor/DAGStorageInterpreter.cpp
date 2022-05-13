@@ -51,6 +51,7 @@ extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_with_alter_locks_acquired[];
 extern const char force_remote_read_for_batch_cop[];
 extern const char pause_after_copr_streams_acquired[];
+extern const char pause_after_copr_streams_acquired_once[];
 } // namespace FailPoints
 
 namespace
@@ -295,6 +296,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     /// Set the limits and quota for reading data, the speed and time of the query.
     setQuotaAndLimitsOnTableScan(context, pipeline);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
