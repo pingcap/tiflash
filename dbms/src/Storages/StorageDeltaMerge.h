@@ -18,6 +18,7 @@
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
@@ -73,6 +74,9 @@ public:
 
     void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush) override;
 
+    /// Merge delta into the stable layer for all segments.
+    ///
+    /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
     void mergeDelta(const Context & context) override;
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);

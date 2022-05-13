@@ -95,6 +95,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     context.setPath(root_path);
     auto paths = getPathPool(testdata_path);
     context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
+    global_context->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
     return context;
 }
