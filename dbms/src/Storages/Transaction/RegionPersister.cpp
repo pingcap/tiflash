@@ -291,7 +291,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             page_storage_v2->restore();
             page_storage_v3->restore();
 
-            auto changeToOnlyV3 = [&]() {
+            auto change_to_only_v3 = [&]() {
                 page_storage_v2 = nullptr;
                 page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
                 page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
@@ -314,13 +314,13 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
                 if (kvstore_remain_pages_after_transform == 0)
                 {
-                    changeToOnlyV3();
+                    change_to_only_v3();
                 } // else do nothing, still use MIX_MODE
             }
             else // no need do transform
             {
                 LOG_FMT_INFO(log, "Current kvstore translate already done before restored.");
-                changeToOnlyV3();
+                change_to_only_v3();
             }
             break;
         }
