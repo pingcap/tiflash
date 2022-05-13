@@ -137,7 +137,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
         LOG_FMT_WARNING(log,
                         "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
                         region.toString(),
-                        DB::toString(table_id));
+                        table_id);
         return;
     }
 
