@@ -25,15 +25,19 @@ namespace
 using UnionWithBlock = UnionBlockInputStream<>;
 using UnionWithoutBlock = UnionBlockInputStream<StreamUnionMode::Basic, /*ignore_block=*/true>;
 
+// return ParallelWritingBlockInputStream or origin stream(writer is not executed).
 BlockInputStreamPtr executeParallelForNonJoined(
     DAGPipeline & pipeline,
     const ParallelWriterPtr & parallel_writer,
     size_t max_threads,
     const LoggerPtr & log)
 {
+    assert(!pipeline.streams.empty());
     BlockInputStreamPtr ret = nullptr;
     if (pipeline.streams_with_non_joined_data.size() == 1)
+    {
         ret = pipeline.streams_with_non_joined_data.at(0);
+    }
     else if (pipeline.streams_with_non_joined_data.size() > 1)
     {
         ret = std::make_shared<ParallelWritingBlockInputStream>(
@@ -42,6 +46,9 @@ BlockInputStreamPtr executeParallelForNonJoined(
             parallel_writer,
             max_threads,
             log->identifier());
+    }
+    else // pipeline.streams_with_non_joined_data.empty(), just else here.
+    {
     }
     pipeline.streams_with_non_joined_data.clear();
     return ret;
@@ -110,31 +117,36 @@ void executeParallel(
     size_t max_streams,
     const LoggerPtr & log)
 {
-    if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
-        return;
-    auto non_joined_data_stream = executeParallelForNonJoined(pipeline, parallel_writer, max_streams, log);
-    if (pipeline.streams.size() > 1)
+    assert(!pipeline.streams.empty() && !pipeline.streams_with_non_joined_data.empty());
+    if (pipeline.streams.empty()) // !pipeline.streams_with_non_joined_data.empty()
     {
-        pipeline.firstStream() = std::make_shared<ParallelWritingBlockInputStream>(
-            pipeline.streams,
-            non_joined_data_stream,
-            parallel_writer,
-            max_streams,
-            log->identifier());
-        pipeline.streams.resize(1);
+        pipeline.streams = std::move(pipeline.streams_with_non_joined_data);
+        pipeline.streams_with_non_joined_data = {};
+        executeParallel(pipeline, parallel_writer, max_streams, log);
     }
-    else if (pipeline.streams.size() == 1)
+    else
     {
-        pipeline.firstStream() = std::make_shared<SerialWritingBlockInputStream>(
-            pipeline.firstStream(),
-            non_joined_data_stream,
-            parallel_writer,
-            log->identifier());
+        auto non_joined_data_stream = executeParallelForNonJoined(pipeline, parallel_writer, max_streams, log);
+        if (pipeline.streams.size() > 1)
+        {
+            pipeline.firstStream() = std::make_shared<ParallelWritingBlockInputStream>(
+                pipeline.streams,
+                non_joined_data_stream,
+                parallel_writer,
+                max_streams,
+                log->identifier());
+            pipeline.streams.resize(1);
+        }
+        else // pipeline.streams.size() == 1)
+        {
+            pipeline.firstStream() = std::make_shared<SerialWritingBlockInputStream>(
+                pipeline.firstStream(),
+                non_joined_data_stream,
+                parallel_writer,
+                log->identifier());
+        }
     }
-    else if (non_joined_data_stream != nullptr)
-    {
-        pipeline.streams.push_back(non_joined_data_stream);
-    }
+    assert(pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty());
 }
 
 ExpressionActionsPtr generateProjectExpressionActions(
