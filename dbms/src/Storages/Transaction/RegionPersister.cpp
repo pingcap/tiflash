@@ -291,7 +291,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                 page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
                 page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
 
-                LOG_FMT_INFO(logger, "Current kvstore transform to V3 begin [pages_before_transform={}]", kvstore_remain_pages);
+                LOG_FMT_INFO(log, "Current kvstore transform to V3 begin [pages_before_transform={}]", kvstore_remain_pages);
                 forceTransformKVStoreV2toV3();
                 const auto & kvstore_remain_pages_after_transform = page_storage_v2->getNumberOfPages();
                 LOG_FMT_INFO(log, "Current kvstore transfrom to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}] [pages_after_transform={}]", //
