@@ -82,10 +82,6 @@ public:
     /// Return true is data dir exist
     virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
 
-    virtual void mergeDelta(const Context &) { throw Exception("Unsupported"); }
-
-    virtual BlockInputStreamPtr listSegments(const Context &) { throw Exception("Unsupported"); }
-
     virtual ::TiDB::StorageEngine engineType() const = 0;
 
     virtual String getDatabaseName() const = 0;

@@ -77,6 +77,13 @@ public:
     /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
     void mergeDelta(const Context & context);
 
+    /// Merge delta into the stable layer for one segment located by the specified start key.
+    /// Returns the range of the merged segment, which can be used to merge the remaining segments incrementally (new_start_key = old_end_key).
+    /// If there is no segment found by the start key, nullopt is returned.
+    ///
+    /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key);
+
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
     void ingestFiles(

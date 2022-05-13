@@ -237,6 +237,24 @@ public:
     /**
      * Create a simple block with 3 columns:
      *   * `pk` - Int64 / `version` / `tag`
+     * @param beg       `pk`'s value begin
+     * @param end       `pk`'s value end (not included)
+     * @param reversed  increasing/decreasing insert `pk`'s value
+     * @return
+     */
+    static Block prepareSimpleWriteBlock(size_t beg,
+                                         size_t end,
+                                         bool reversed,
+                                         UInt64 tso,
+                                         bool is_common_handle,
+                                         size_t rowkey_column_size = 1)
+    {
+        return prepareSimpleWriteBlock(beg, end, reversed, tso, pk_name, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_INT_TYPE, is_common_handle, rowkey_column_size);
+    }
+
+    /**
+     * Create a simple block with 3 columns:
+     *   * `pk` - Int64 / `version` / `tag`
      * @param pk        `pk`'s value
      * @param ts_beg    `timestamp`'s value begin
      * @param ts_end    `timestamp`'s value end (not included)

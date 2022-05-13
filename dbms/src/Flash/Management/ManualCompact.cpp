@@ -1,0 +1,220 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/setThreadName.h>
+#include <Flash/Management/ManualCompact.h>
+#include <Flash/ServiceUtils.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/StorageDeltaMerge.h>
+#include <Storages/Transaction/TMTContext.h>
+
+#include <ext/scope_guard.h>
+#include <future>
+
+namespace DB
+{
+
+namespace Management
+{
+
+ManualCompactManager::ManualCompactManager(const Context & db_context_)
+    : db_context(db_context_)
+    , log(&Poco::Logger::get("ManualCompactManager"))
+{
+    const auto & settings = db_context_.getSettingsRef();
+    worker_pool = std::make_unique<ThreadPool>(static_cast<size_t>(settings.manual_compact_pool_size), [] { setThreadName("m-compact-pool"); });
+}
+
+grpc::Status ManualCompactManager::handleRequest(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+{
+    {
+        std::lock_guard lock(mutex);
+
+        // Check whether there are duplicated executions.
+        if (unsync_active_logical_table_ids.count(request->logical_table_id()))
+        {
+            response->mutable_error()->mutable_err_compact_in_progress();
+            response->set_has_remaining(false);
+            return grpc::Status::OK;
+        }
+
+        // Check whether exceeds the maximum number of concurrent executions.
+        if (unsync_running_or_pending_tasks > getSettingMaxConcurrency())
+        {
+            response->mutable_error()->mutable_err_too_many_pending_tasks();
+            response->set_has_remaining(false);
+            return grpc::Status::OK;
+        }
+
+        unsync_active_logical_table_ids.insert(request->logical_table_id());
+        unsync_running_or_pending_tasks++;
+    }
+    SCOPE_EXIT({
+        std::lock_guard lock(mutex);
+        unsync_active_logical_table_ids.erase(request->logical_table_id());
+        unsync_running_or_pending_tasks--;
+    });
+
+    std::packaged_task<grpc::Status()> task([&] {
+        return this->doWorkWithCatch(request, response);
+    });
+    std::future<grpc::Status> future = task.get_future();
+    worker_pool->schedule([&task] { task(); });
+    return future.get();
+}
+
+grpc::Status ManualCompactManager::doWorkWithCatch(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+{
+    try
+    {
+        return this->doWork(request, response);
+    }
+    catch (Exception & e)
+    {
+        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
+        return grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_FMT_ERROR(log, "std exception: {}", e.what());
+        return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_FMT_ERROR(log, "other exception");
+        return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
+    }
+}
+
+grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+{
+    const auto & tmt_context = db_context.getTMTContext();
+    auto storage = tmt_context.getStorages().get(request->physical_table_id());
+
+    if (storage == nullptr)
+    {
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, fmt::format("Physical table (id={}) not found", request->physical_table_id()));
+    }
+
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    if (dm_storage == nullptr)
+    {
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, fmt::format("Physical table (id={}) is not a DeltaTree table", request->physical_table_id()));
+    }
+
+    DM::RowKeyValue start_key;
+    if (request->start_key().empty())
+    {
+        if (dm_storage->isCommonHandle())
+        {
+            start_key = DM::RowKeyValue::COMMON_HANDLE_MIN_KEY;
+        }
+        else
+        {
+            start_key = DM::RowKeyValue::INT_HANDLE_MIN_KEY;
+        }
+    }
+    else
+    {
+        try
+        {
+            ReadBufferFromString buf(request->start_key());
+
+            // TODO: This function seems to be not safe for accepting arbitrary client inputs.
+            // When client passes a string with "invalid length" encoded, e.g. a very large length, we will allocate memory first and then discover the input is invalid.
+            // This will cause OOM.
+            // Also it is not a good idea to use Try-Catch for this scenario.
+            start_key = DM::RowKeyValue::deserialize(buf);
+        }
+        catch (...)
+        {
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Invalid start key");
+        }
+    }
+
+    size_t compacted_segments = 0;
+    bool has_remaining = true;
+    std::optional<DM::RowKeyValue> compacted_start_key;
+    std::optional<DM::RowKeyValue> compacted_end_key;
+
+    Stopwatch timer;
+
+    // Repeatedly merge multiple segments as much as possible.
+    while (true)
+    {
+        auto compacted_range = dm_storage->mergeDeltaBySegment(db_context, start_key);
+        if (compacted_range == std::nullopt)
+        {
+            // Segment not found according to current start key
+            has_remaining = false;
+            break;
+        }
+
+        compacted_segments++;
+        if (compacted_start_key == std::nullopt)
+        {
+            compacted_start_key = compacted_range->start;
+        }
+        compacted_end_key = compacted_range->end;
+
+        if (timer.elapsedMilliseconds() < getSettingCompactMoreUntilMs())
+        {
+            // Let's compact next segment, since the elapsed time is short. This saves round trip.
+            start_key = compacted_range->end;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    if (unlikely(has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)))
+    {
+        LOG_FMT_ERROR(log, "Assert failed: has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)");
+        throw Exception("Assert failed", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    response->clear_error();
+    response->set_has_remaining(has_remaining);
+    if (compacted_start_key != std::nullopt)
+    {
+        WriteBufferFromOwnString wb;
+        compacted_start_key->serialize(wb);
+        response->set_compacted_start_key(wb.releaseStr());
+    }
+    if (compacted_end_key != std::nullopt)
+    {
+        WriteBufferFromOwnString wb;
+        compacted_end_key->serialize(wb);
+        response->set_compacted_end_key(wb.releaseStr());
+    }
+
+    return grpc::Status::OK;
+}
+
+uint64_t ManualCompactManager::getSettingCompactMoreUntilMs() const
+{
+    return db_context.getSettingsRef().manual_compact_more_until_ms.get();
+}
+
+uint64_t ManualCompactManager::getSettingMaxConcurrency() const
+{
+    auto current_thread_size = worker_pool->size();
+    auto val = db_context.getSettingsRef().manual_compact_max_concurrency.get();
+    return std::max(val, current_thread_size);
+}
+
+} // namespace Management
+
+} // namespace DB

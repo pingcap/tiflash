@@ -49,7 +49,7 @@ The following are platform-specific prerequisites. Click to expand details:
 
   TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
   > But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
-  
+
 - LLVM 13.0.0+
 
   TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default. You can use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
@@ -195,11 +195,12 @@ To run unit tests, you need to build with `-DCMAKE_BUILD_TYPE=DEBUG`:
 ```shell
 cd $BUILD
 cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
-ninja gtests_dbms
+ninja gtests_dbms       # Most TiFlash unit tests
+ninja gtests_libdaemon  # Settings related tests
 ninja gtests_libcommon
-ninja gtests_libdaemon
 ```
-And the unit-test executables are at `$BUILD/dbms/gtests_dbms`, `$BUILD/libs/libcommon/src/tests/gtests_libcommon` and `$BUILD/libs/libdaemon/src/tests/gtests_libdaemon`.
+
+And the unit-test executables are at `$BUILD/dbms/gtests_dbms`, `$BUILD/libs/libdaemon/src/tests/gtests_libdaemon` and `$BUILD/libs/libcommon/src/tests/gtests_libcommon`.
 
 ## Run Integration Tests
 

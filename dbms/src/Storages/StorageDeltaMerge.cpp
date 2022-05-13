@@ -775,6 +775,11 @@ void StorageDeltaMerge::mergeDelta(const Context & context)
     getAndMaybeInitStore()->mergeDeltaAll(context);
 }
 
+std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key)
+{
+    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key);
+}
+
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)
 {
     GET_METRIC(tiflash_storage_command_count, type_delete_range).Increment();

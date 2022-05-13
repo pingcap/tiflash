@@ -986,6 +986,43 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     }
 }
 
+std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key)
+{
+    auto dm_context = newDMContext(context, context.getSettingsRef(), /*tracing_id*/ "mergeDeltaBySegment");
+    if (start_key.is_common_handle != dm_context->is_common_handle)
+    {
+        return std::nullopt;
+    }
+
+    // TODO: Is it a good idea not to retry?
+    while (true)
+    {
+        SegmentPtr segment;
+        {
+            std::shared_lock lock(read_write_mutex);
+            const auto segment_it = segments.upper_bound(start_key.toRowKeyValueRef());
+            if (segment_it == segments.end())
+            {
+                return std::nullopt;
+            }
+            segment = segment_it->second;
+        }
+
+        const auto new_segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        if (new_segment)
+        {
+            const auto segment_end = new_segment->getRowKeyRange().end;
+            if (unlikely(*segment_end.value <= *start_key.value))
+            {
+                // The next start key must be > current start key
+                LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
+                throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
+            }
+            return new_segment->getRowKeyRange();
+        }
+    }
+}
+
 void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & range)
 {
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef(), /*tracing_id*/ "compact");
