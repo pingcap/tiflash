@@ -25,11 +25,8 @@ namespace DB
 class MockExchangeReceiverInputStream : public IProfilingBlockInputStream
 {
 public:
-    MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size);
-    Block getHeader() const override
-    {
-        return Block(columns);
-    }
+    MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size, size_t rows_);
+    Block getHeader() const override { return Block(columns); }
     String getName() const override { return "MockExchangeReceiver"; }
     ColumnsWithTypeAndName columns;
     size_t output_index;

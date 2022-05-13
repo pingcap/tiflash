@@ -17,24 +17,16 @@
 
 namespace DB
 {
-MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size)
+MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const tipb::ExchangeReceiver & receiver, size_t max_block_size, size_t rows_)
     : output_index(0)
     , max_block_size(max_block_size)
+    , rows(rows_)
 {
     for (int i = 0; i < receiver.field_types_size(); ++i)
     {
         columns.emplace_back(
             getDataTypeByColumnInfoForComputingLayer(TiDB::fieldTypeToColumnInfo(receiver.field_types(i))),
             fmt::format("exchange_receiver_{}", i));
-    }
-    rows = 0;
-    for (const auto & elem : columns)
-    {
-        if (elem.column)
-        {
-            assert(rows == 0 || rows == elem.column->size());
-            rows = elem.column->size();
-        }
     }
 }
 
@@ -47,7 +39,6 @@ ColumnPtr MockExchangeReceiverInputStream::makeColumn(ColumnWithTypeAndName elem
         column->insert((*elem.column)[i]);
         ++row_count;
     }
-
     return column;
 }
 
@@ -61,8 +52,6 @@ Block MockExchangeReceiverInputStream::readImpl()
         output_columns.push_back({makeColumn(elem), elem.type, elem.name, elem.column_id});
     }
     output_index += max_block_size;
-
     return Block(output_columns);
 }
-
 } // namespace DB
