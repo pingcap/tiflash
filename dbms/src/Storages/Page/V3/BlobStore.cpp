@@ -1240,9 +1240,9 @@ BlobStatPtr BlobStore::BlobStats::createBigPageStatNotChecking(BlobFileId blob_f
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
         SpaceMap::SpaceMapType::SMAP64_BIG,
-        config.file_limit_size);
+        config.file_limit_size,
+        BlobStatType::BIG_BLOB);
 
-    stat->changeToBigBlob();
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
     stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
     return stat;

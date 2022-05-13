@@ -110,12 +110,15 @@ public:
             double sm_valid_rate = 1.0;
 
         public:
-            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
+            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_, BlobStatType type_ = BlobStatType::NORMAL)
                 : id(id_)
-                , type(BlobStatType::NORMAL)
+                , type(type_)
                 , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , sm_max_caps(sm_max_caps_)
-            {}
+            {
+                // Won't create read-only blob by default.
+                assert(type != BlobStatType::READ_ONLY);
+            }
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()
             {
@@ -140,11 +143,6 @@ public:
             bool isBigBlob() const
             {
                 return type.load() == BlobStatType::BIG_BLOB;
-            }
-
-            void changeToBigBlob()
-            {
-                type.store(BlobStatType::BIG_BLOB);
             }
 
             BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
