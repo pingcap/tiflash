@@ -467,7 +467,7 @@ struct RowKeyRange
         }
     }
 
-    // Create a RowKeyRange that covers all key space.
+    /// Create a RowKeyRange that covers all key space.
     static RowKeyRange newAll(bool is_common_handle, size_t rowkey_column_size)
     {
         if (is_common_handle)
@@ -657,7 +657,7 @@ struct RowKeyRange
         return {start_key, end_key};
     }
 
-    /// Clip the <offset, limit> according to this range, and returns the clipped <offset, limit>.
+    /// Clip the <offset, limit> according to this range, and return the clipped <offset, limit>.
     std::pair<size_t, size_t> getPosRange(const ColumnPtr & column, const size_t offset, const size_t limit) const
     {
         RowKeyColumnContainer rowkey_column(column, is_common_handle);
