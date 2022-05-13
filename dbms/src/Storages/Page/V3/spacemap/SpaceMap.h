@@ -39,7 +39,7 @@ public:
         SMAP64_INVALID = 0,
         SMAP64_RBTREE = 1,
         SMAP64_STD_MAP = 2,
-        SMAP64_BIG = 3 // support for writebatch bigger than 512M
+        SMAP64_BIG = 3 // support for writebatch bigger than blobstore.config.file_limit_size
     };
 
     /**

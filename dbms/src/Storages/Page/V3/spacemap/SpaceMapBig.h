@@ -30,6 +30,7 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
+// A space map that is designed for holding only one large page data (size > blobstore.config.file_limit_size)
 class BigSpaceMap
     : public SpaceMap
     , public ext::SharedPtrHelper<BigSpaceMap>

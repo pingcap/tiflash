@@ -189,9 +189,11 @@ public:
 
         BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard);
 
-        BlobStatPtr createBigStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createBigPageStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+
+        BlobStatPtr createBigStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard);
 
         void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 
@@ -286,7 +288,7 @@ public:
 private:
 #endif
 
-    PageEntriesEdit splitWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    PageEntriesEdit handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 

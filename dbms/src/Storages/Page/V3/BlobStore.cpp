@@ -94,7 +94,7 @@ void BlobStore::registerPaths()
                 delegator->addPageFileUsedSize({blob_id, 0}, blob_size, path, true);
                 if (blob_size > config.file_limit_size)
                 {
-                    blob_stats.createBigStat(blob_id, lock_stats);
+                    blob_stats.createBigPageStatNotChecking(blob_id, lock_stats);
                 }
                 else
                 {
@@ -109,7 +109,7 @@ void BlobStore::registerPaths()
     }
 }
 
-PageEntriesEdit BlobStore::splitWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
+PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     auto ns_id = wb.getNamespaceId();
     PageEntriesEdit edit;
@@ -198,7 +198,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     if (all_page_data_size > config.file_limit_size)
     {
-        return splitWrite(wb, write_limiter);
+        return handleLargeWrite(wb, write_limiter);
     }
 
     PageEntriesEdit edit;
@@ -1211,7 +1211,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
 
 BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
 {
-    LOG_FMT_DEBUG(log, "Created a new BlobStat [blob_id={}]", blob_file_id);
+    LOG_FMT_INFO(log, "Created a new BlobStat [blob_id={}]", blob_file_id);
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
         static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()),
@@ -1222,9 +1222,21 @@ BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id,
     return stat;
 }
 
-BlobStatPtr BlobStore::BlobStats::createBigStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+BlobStatPtr BlobStore::BlobStats::createBigStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard)
 {
-    LOG_FMT_DEBUG(log, "Created a new big BlobStat [blob_id={}]", blob_file_id);
+    auto stat = createBigPageStatNotChecking(blob_file_id, guard);
+    // Roll to the next new blob id
+    if (blob_file_id == roll_id)
+    {
+        roll_id++;
+    }
+
+    return stat;
+}
+
+BlobStatPtr BlobStore::BlobStats::createBigPageStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &)
+{
+    LOG_FMT_INFO(log, "Created a new big BlobStat [blob_id={}]", blob_file_id);
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
         SpaceMap::SpaceMapType::SMAP64_BIG,
@@ -1233,13 +1245,6 @@ BlobStatPtr BlobStore::BlobStats::createBigStat(BlobFileId blob_file_id, const s
     stat->changeToBigBlob();
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
     stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
-
-    // Roll to the next new blob id
-    if (blob_file_id == roll_id)
-    {
-        roll_id++;
-    }
-
     return stat;
 }
 
