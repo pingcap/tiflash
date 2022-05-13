@@ -36,8 +36,8 @@
 #include <memory>
 #include <vector>
 
+#include "MultiSegmentTestUtil.h"
 #include "dm_basic_include.h"
-#include "MultiSegmentTestUtils.h"
 
 namespace DB
 {
@@ -3362,45 +3362,68 @@ INSTANTIATE_TEST_CASE_P(
     testModeToString);
 
 
-using MergeDeltaBySegmentParam = std::tuple<UInt64 /* PageStorage version */, bool /* is_common_handle */>;
-
-String mergeDeltaBySegmentParamToString(const ::testing::TestParamInfo<MergeDeltaBySegmentParam> & info)
-{
-    const auto [ps_ver, is_common_handle] = info.param;
-    return fmt::format("PsV{}_{}", ps_ver, is_common_handle ? "CommonHandle" : "IntHandle");
-}
-
-// Test for different kind of handles (Int / Common).
 class DeltaMergeStoreMergeDeltaBySegmentTest
-    : public MultiSegmentTest
-    , public testing::WithParamInterface<MergeDeltaBySegmentParam>
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>>
 {
 public:
     void SetUp() override
     {
-        log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
-        std::tie(ps_ver, is_common_handle) = GetParam();
-        setStorageFormat(ps_ver);
-        TiFlashStorageTestBasic::SetUp();
-        prepareSegments(50, is_common_handle);
+        try
+        {
+            log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+            std::tie(ps_ver, pk_type) = GetParam();
+            setStorageFormat(ps_ver);
+            TiFlashStorageTestBasic::SetUp();
+
+            helper = std::make_unique<MultiSegmentTestUtil>(*db_context);
+            helper->setSettings(50);
+
+            setupDMStore();
+
+            // Split into 4 segments.
+            helper->prepareSegments(store, 50, pk_type);
+        }
+        CATCH
+    }
+
+    void setupDMStore()
+    {
+        auto cols = DMTestEnv::getDefaultColumns(pk_type);
+        store = std::make_shared<DeltaMergeStore>(*db_context,
+                                                  false,
+                                                  "test",
+                                                  DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+                                                  101,
+                                                  *cols,
+                                                  (*cols)[0],
+                                                  pk_type == DMTestEnv::PkType::CommonHandle,
+                                                  1,
+                                                  DeltaMergeStore::Settings());
+        dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
     }
 
 protected:
+    std::unique_ptr<MultiSegmentTestUtil> helper;
+    DeltaMergeStorePtr store;
+    DMContextPtr dm_context;
+
     UInt64 ps_ver;
-    bool is_common_handle;
+    DMTestEnv::PkType pk_type;
 
     [[maybe_unused]] Poco::Logger * log;
 };
 
 INSTANTIATE_TEST_CASE_P(
-    ByPsVerAndCommonHandle,
+    ByPsVerAndPkType,
     DeltaMergeStoreMergeDeltaBySegmentTest,
-    testing::Values(
-        std::make_pair(2, true),
-        std::make_pair(2, false),
-        std::make_pair(3, true),
-        std::make_pair(3, false)),
-    mergeDeltaBySegmentParamToString);
+    ::testing::Combine(
+        ::testing::Values(2, 3),
+        ::testing::Values(DMTestEnv::PkType::HiddenTiDBRowID, DMTestEnv::PkType::CommonHandle, DMTestEnv::PkType::PkIsHandleInt64)),
+    [](const testing::TestParamInfo<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>> & info) {
+        const auto [ps_ver, pk_type] = info.param;
+        return fmt::format("PsV{}_{}", ps_ver, DMTestEnv::PkTypeToString(pk_type));
+    });
 
 
 // The given key is the boundary of the segment.
@@ -3409,17 +3432,17 @@ try
 {
     {
         // Write data to first 3 segments.
-        auto newly_written_rows = rows_by_segments[0] + rows_by_segments[1] + rows_by_segments[2];
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, 5 /* new tso */, is_common_handle);
+        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
         store->write(*db_context, db_context->getSettingsRef(), block);
         store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
-        expected_delta_rows[0] += rows_by_segments[0];
-        expected_delta_rows[1] += rows_by_segments[1];
-        expected_delta_rows[2] += rows_by_segments[2];
-        verifyExpectedRowsForAllSegments();
+        helper->expected_delta_rows[0] += helper->rows_by_segments[0];
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
     }
-    if (is_common_handle)
+    if (store->isCommonHandle())
     {
         // For common handle, give int handle key and have a try
         auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
@@ -3442,7 +3465,7 @@ try
     std::optional<RowKeyRange> result_1;
     {
         // Specifies MIN_KEY. In this case, the first segment should be processed.
-        if (is_common_handle)
+        if (store->isCommonHandle())
         {
             result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
         }
@@ -3454,16 +3477,16 @@ try
         ASSERT_NE(result_1, std::nullopt);
         ASSERT_EQ(*result_1, store->segments.begin()->second->getRowKeyRange());
 
-        expected_stable_rows[0] += expected_delta_rows[0];
-        expected_delta_rows[0] = 0;
-        verifyExpectedRowsForAllSegments();
+        helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
+        helper->expected_delta_rows[0] = 0;
+        helper->verifyExpectedRowsForAllSegments();
     }
     {
         // Compact the first segment again, nothing should change.
         auto result = store->mergeDeltaBySegment(*db_context, result_1->start);
         ASSERT_EQ(*result, *result_1);
 
-        verifyExpectedRowsForAllSegments();
+        helper->verifyExpectedRowsForAllSegments();
     }
     std::optional<RowKeyRange> result_2;
     {
@@ -3472,9 +3495,9 @@ try
         ASSERT_NE(result_2, std::nullopt);
         ASSERT_EQ(*result_2, std::next(store->segments.begin())->second->getRowKeyRange());
 
-        expected_stable_rows[1] += expected_delta_rows[1];
-        expected_delta_rows[1] = 0;
-        verifyExpectedRowsForAllSegments();
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
     }
 }
 CATCH
@@ -3492,13 +3515,13 @@ try
 
         result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
-        verifyExpectedRowsForAllSegments();
+        helper->verifyExpectedRowsForAllSegments();
     }
     {
         // As we are the last segment, compact "next segment" should result in failure. A nullopt is returned.
         auto result2 = store->mergeDeltaBySegment(*db_context, result->end);
         ASSERT_EQ(result2, std::nullopt);
-        verifyExpectedRowsForAllSegments();
+        helper->verifyExpectedRowsForAllSegments();
     }
 }
 CATCH
@@ -3510,27 +3533,27 @@ try
 {
     {
         // Write data to first 3 segments.
-        auto newly_written_rows = rows_by_segments[0] + rows_by_segments[1] + rows_by_segments[2];
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, 5 /* new tso */, is_common_handle);
+        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
         store->write(*db_context, db_context->getSettingsRef(), block);
         store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
-        expected_delta_rows[0] += rows_by_segments[0];
-        expected_delta_rows[1] += rows_by_segments[1];
-        expected_delta_rows[2] += rows_by_segments[2];
-        verifyExpectedRowsForAllSegments();
+        helper->expected_delta_rows[0] += helper->rows_by_segments[0];
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
     }
     {
-        // Compact segment[1]
+        // Compact segment[1] by giving a prefix-next key.
         auto range = std::next(store->segments.begin())->second->getRowKeyRange();
         auto compact_key = range.start.toPrefixNext();
 
         auto result = store->mergeDeltaBySegment(*db_context, compact_key);
         ASSERT_NE(result, std::nullopt);
 
-        expected_stable_rows[1] += expected_delta_rows[1];
-        expected_delta_rows[1] = 0;
-        verifyExpectedRowsForAllSegments();
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
     }
 }
 CATCH

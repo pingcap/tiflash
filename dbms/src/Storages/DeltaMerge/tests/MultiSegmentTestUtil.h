@@ -39,61 +39,47 @@ namespace DM
 namespace tests
 {
 
-/// This utility helps you set up a DMStore with 4 segments.
-class MultiSegmentTest : public DB::base::TiFlashStorageTestBasic
+/// Helper class to test with multiple segments.
+/// You can call `prepareSegments` to prepare multiple segments. After that,
+/// you can use `verifyExpectedRowsForAllSegments` to verify the expectation for each segment.
+class MultiSegmentTestUtil : private boost::noncopyable
 {
 protected:
+    String tracing_id;
+    Context & db_context;
     DeltaMergeStorePtr store;
-    DMContextPtr dm_context; // Will be set after calling prepareSegments.
-    std::map<size_t, size_t> rows_by_segments; // Will be set after calling prepareSegments.
-    std::map<size_t, size_t> expected_stable_rows; // Will be set after calling prepareSegments.
-    std::map<size_t, size_t> expected_delta_rows; // Will be set after calling prepareSegments.
 
-    /// Retry until a segment at index is successfully split.
-    void forceForegroundSplit(size_t segment_idx) const
+public:
+    std::map<size_t, size_t> rows_by_segments;
+    std::map<size_t, size_t> expected_stable_rows;
+    std::map<size_t, size_t> expected_delta_rows;
+
+    MultiSegmentTestUtil(Context & db_context_)
+        : tracing_id(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName())
+        , db_context(db_context_)
+    {}
+
+    /// Update context settings to keep multiple segments stable.
+    void setSettings(size_t rows_per_segment)
     {
-        while (true)
-        {
-            store->read_write_mutex.lock();
-            auto seg = std::next(store->segments.begin(), segment_idx)->second;
-            store->read_write_mutex.unlock();
-            auto result = store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
-            if (result.first)
-            {
-                break;
-            }
-        }
-    }
-
-    /// Prepare segments * 4. The rows of each segment will be roughly close to n_avg_rows_per_segment. The exact rows will be recorded in rows_by_segments.
-    void prepareSegments(size_t n_avg_rows_per_segment, bool is_common_handle)
-    {
-        auto * log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
-
         // Avoid bg merge.
         // TODO (wenxuan): Seems to be not very stable.
-        db_context->setSetting("dt_bg_gc_max_segments_to_check_every_round", UInt64(0));
-        db_context->setSetting("dt_segment_limit_rows", UInt64(n_avg_rows_per_segment));
+        db_context.setSetting("dt_bg_gc_max_segments_to_check_every_round", UInt64(0));
+        db_context.setSetting("dt_segment_limit_rows", UInt64(rows_per_segment));
+    }
 
-        {
-            auto cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-            ColumnDefine handle_column_define = (*cols)[0];
-            store = std::make_shared<DeltaMergeStore>(*db_context,
-                                                      false,
-                                                      "test",
-                                                      GET_GTEST_FULL_NAME,
-                                                      101,
-                                                      *cols,
-                                                      handle_column_define,
-                                                      is_common_handle,
-                                                      1,
-                                                      DeltaMergeStore::Settings());
-        }
-        dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), /*tracing_id*/ GET_GTEST_FULL_NAME);
+    /// Prepare segments * 4. The rows of each segment will be roughly close to n_avg_rows_per_segment.
+    /// The exact rows will be recorded in rows_by_segments.
+    void prepareSegments(DeltaMergeStorePtr store_, size_t n_avg_rows_per_segment, DMTestEnv::PkType pk_type)
+    {
+        store = store_;
+
+        auto * log = &Poco::Logger::get(tracing_id);
+        auto dm_context = store->newDMContext(db_context, db_context.getSettingsRef(), /*tracing_id*/ tracing_id);
         {
             // Write [0, 4*N) data with tso=2.
-            Block block = DMTestEnv::prepareSimpleWriteBlock(0, n_avg_rows_per_segment * 4, false, 2, is_common_handle);
-            store->write(*db_context, db_context->getSettingsRef(), block);
+            Block block = DMTestEnv::prepareSimpleWriteBlock(0, n_avg_rows_per_segment * 4, false, pk_type, 2);
+            store->write(db_context, db_context.getSettingsRef(), block);
             store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
         }
         {
@@ -130,6 +116,24 @@ protected:
                 segment_idx++;
             }
             ASSERT_EQ(total_stable_rows, 4 * n_avg_rows_per_segment);
+        }
+        verifyExpectedRowsForAllSegments();
+    }
+
+    /// Retry until a segment at index is successfully split.
+    void forceForegroundSplit(size_t segment_idx) const
+    {
+        auto dm_context = store->newDMContext(db_context, db_context.getSettingsRef(), tracing_id);
+        while (true)
+        {
+            store->read_write_mutex.lock();
+            auto seg = std::next(store->segments.begin(), segment_idx)->second;
+            store->read_write_mutex.unlock();
+            auto result = store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
+            if (result.first)
+            {
+                break;
+            }
         }
     }
 
