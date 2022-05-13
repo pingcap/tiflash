@@ -25,7 +25,7 @@ namespace
 using UnionWithBlock = UnionBlockInputStream<>;
 using UnionWithoutBlock = UnionBlockInputStream<StreamUnionMode::Basic, /*ignore_block=*/true>;
 
-// return ParallelWritingBlockInputStream or origin stream(writer is not executed).
+// return nullptr, ParallelWritingBlockInputStream or origin stream(writer is not executed).
 BlockInputStreamPtr executeParallelForNonJoined(
     DAGPipeline & pipeline,
     const ParallelWriterPtr & parallel_writer,
