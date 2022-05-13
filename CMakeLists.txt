@@ -102,6 +102,28 @@ if (COMPILER_CLANG)
     # Clang doesn't have int128 predefined macros, workaround by manually defining them
     # Reference: https://stackoverflow.com/questions/41198673/uint128-t-not-working-with-clang-and-libstdc
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__GLIBCXX_BITSIZE_INT_N_0=128 -D__GLIBCXX_TYPE_INT_N_0=__int128")
+
+    option(ENABLE_TIME_TRACES "Enable clang feature time traces" OFF)
+    if (ENABLE_TIME_TRACES)
+        set (CLANG_TIME_TRACES_FLAGS "-ftime-trace")
+        message (STATUS "Using clang time traces flag `${CLANG_TIME_TRACES_FLAGS}`. Generates JSON file based on output filename. Results can be analyzed with chrome://tracing or https://www.speedscope.app for flamegraph visualization.")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLANG_TIME_TRACES_FLAGS}")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLANG_TIME_TRACES_FLAGS}")
+    endif ()
+
+    # https://clang.llvm.org/docs/ThinLTO.html
+    # Applies to clang only.
+    option(ENABLE_THINLTO "Clang-specific link time optimization" OFF)
+
+    if (ENABLE_THINLTO AND NOT ENABLE_TESTS)
+        # Link time optimization
+        option(THINLTO_JOBS "ThinLTO compilation parallelism" "0")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto=thin")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=thin")
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto=thin -Wl,--thinlto-jobs=${THINLTO_JOBS}")
+    elseif (ENABLE_THINLTO)
+        message (WARNING "Cannot enable ThinLTO")
+    endif ()
 endif ()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
