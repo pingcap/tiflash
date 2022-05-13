@@ -28,6 +28,11 @@
 
 #include <memory>
 
+namespace CurrentMetrics
+{
+extern const Metric RegionPersisterRunMode;
+}
+
 namespace DB
 {
 namespace ErrorCodes
@@ -320,6 +325,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         }
         }
 
+        CurrentMetrics::set(CurrentMetrics::RegionPersisterRunMode, static_cast<UInt8>(run_mode));
         LOG_FMT_INFO(log, "RegionPersister running. Current Run Mode is {}", static_cast<UInt8>(run_mode));
     }
 

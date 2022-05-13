@@ -235,6 +235,8 @@ private:
     std::atomic<PageId> max_meta_page_id = 0;
 
     BackgroundProcessingPool::TaskHandle gc_handle = nullptr;
+
+    CurrentMetrics::Increment storage_pool_metrics;
 };
 
 struct StorageSnapshot : private boost::noncopyable
