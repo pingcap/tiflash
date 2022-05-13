@@ -2167,7 +2167,7 @@ try
 
         ASSERT_THROW(restore_from_edit(edit);, DB::Exception);
     }
-    
+
     // ========= 2 =======//
     // Reuse same id: PUT/DEL/REF
     {
