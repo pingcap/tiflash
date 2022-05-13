@@ -36,6 +36,8 @@ namespace ProfileEvents
 {
 extern const Event PSMWritePages;
 extern const Event PSMReadPages;
+extern const Event PSV3MBlobExpansion;
+extern const Event PSV3MBlobReused;
 } // namespace ProfileEvents
 
 namespace DB
@@ -151,9 +153,20 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         free(buffer, all_page_data_size);
     });
     char * buffer_pos = buffer;
-    auto [blob_id, offset_in_file] = getPosFromStats(all_page_data_size);
+
+    // Calculate alignment space
+    size_t replenish_size = 0;
+    if (config.block_alignment_bytes != 0 && all_page_data_size % config.block_alignment_bytes != 0)
+    {
+        replenish_size = config.block_alignment_bytes - all_page_data_size % config.block_alignment_bytes;
+    }
+
+    size_t actually_allocated_size = all_page_data_size + replenish_size;
+
+    auto [blob_id, offset_in_file] = getPosFromStats(actually_allocated_size);
 
     size_t offset_in_allocated = 0;
+
 
     for (auto & write : wb.getWrites())
     {
@@ -171,6 +184,12 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             entry.tag = write.tag;
             entry.offset = offset_in_file + offset_in_allocated;
             offset_in_allocated += write.size;
+
+            // The last put write
+            if (offset_in_allocated == all_page_data_size)
+            {
+                entry.padded_size = replenish_size;
+            }
 
             digest.update(buffer_pos, write.size);
             entry.checksum = digest.checksum();
@@ -217,13 +236,14 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     if (buffer_pos != buffer + all_page_data_size)
     {
-        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
+        removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
         throw Exception(
             fmt::format(
                 "write batch have a invalid total size, or something wrong in parse write batch "
-                "[expect_offset={}] [actual_offset={}]",
+                "[expect_offset={}] [actual_offset={}] [actually_allocated_size={}]",
                 all_page_data_size,
-                (buffer_pos - buffer)),
+                (buffer_pos - buffer),
+                actually_allocated_size),
             ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -234,8 +254,8 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     }
     catch (DB::Exception & e)
     {
-        removePosFromStats(blob_id, offset_in_file, all_page_data_size);
-        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, all_page_data_size);
+        removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
+        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed.", blob_id, offset_in_file, all_page_data_size, actually_allocated_size);
         throw e;
     }
 
@@ -256,7 +276,7 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
 
         try
         {
-            removePosFromStats(entry.file_id, entry.offset, entry.size);
+            removePosFromStats(entry.file_id, entry.offset, entry.getTotalSize());
         }
         catch (DB::Exception & e)
         {
@@ -360,6 +380,11 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
 
 void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, const ReadLimiterPtr & read_limiter)
 {
+    if (entries.empty())
+    {
+        return;
+    }
+
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
@@ -424,6 +449,11 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
 
 PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
 {
+    if (to_read.empty())
+    {
+        return {};
+    }
+
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
     // Sort in ascending order by offset in file.
@@ -522,6 +552,11 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
 
 PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter)
 {
+    if (entries.empty())
+    {
+        return {};
+    }
+
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
@@ -601,6 +636,13 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
 
 Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & read_limiter)
 {
+    if (!id_entry.second.isValid())
+    {
+        Page page_not_found;
+        page_not_found.page_id = INVALID_PAGE_ID;
+        return page_not_found;
+    }
+
     const auto & [page_id_v3, entry] = id_entry;
     const size_t buf_size = entry.size;
 
@@ -961,7 +1003,7 @@ BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, B
 void BlobStore::BlobStats::restoreByEntry(const PageEntryV3 & entry)
 {
     auto stat = blobIdToStat(entry.file_id);
-    stat->restoreSpaceMap(entry.offset, entry.size);
+    stat->restoreSpaceMap(entry.offset, entry.getTotalSize());
 }
 
 std::pair<BlobFileId, String> BlobStore::BlobStats::getBlobIdFromName(String blob_name)
@@ -1225,8 +1267,10 @@ BlobFileOffset BlobStore::BlobStats::BlobStat::getPosFromStat(size_t buf_size, c
 {
     BlobFileOffset offset = 0;
     UInt64 max_cap = 0;
+    bool expansion = true;
 
-    std::tie(offset, max_cap) = smap->searchInsertOffset(buf_size);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(buf_size);
+    ProfileEvents::increment(expansion ? ProfileEvents::PSV3MBlobExpansion : ProfileEvents::PSV3MBlobReused);
 
     /**
      * Whatever `searchInsertOffset` success or failed,

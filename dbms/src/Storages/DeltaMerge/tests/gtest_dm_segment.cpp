@@ -74,7 +74,7 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", /*table_id*/ 100, *storage_path_pool, *db_context, db_context->getSettingsRef());
+        storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *storage_path_pool, "test.t1");
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
@@ -208,6 +208,43 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
         }
+    }
+}
+CATCH
+
+TEST_F(Segment_test, WriteRead2)
+try
+{
+    const size_t num_rows_write = dmContext().stable_pack_rows;
+    {
+        // write a block with rows all deleted
+        Block block = DMTestEnv::prepareBlockWithTso(2, 100, 100 + num_rows_write, false, true);
+        segment->write(dmContext(), block);
+        // write not deleted rows with larger pk
+        Block block2 = DMTestEnv::prepareBlockWithTso(3, 100, 100 + num_rows_write, false, false);
+        segment->write(dmContext(), block2);
+
+        // flush segment and make sure there is two packs in stable
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+    }
+
+    {
+        Block block = DMTestEnv::prepareBlockWithTso(1, 100, 100 + num_rows_write, false, false);
+        segment->write(dmContext(), block);
+    }
+
+    {
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        // only write two visible pks
+        ASSERT_EQ(num_rows_read, 2);
     }
 }
 CATCH
@@ -1243,7 +1280,7 @@ public:
         Segment_test::SetUp();
     }
 
-    std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
     {
         auto delegator = context.path_pool.getStableDiskDelegator();
         auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);

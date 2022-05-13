@@ -978,6 +978,7 @@ public:
         using Type = If<std::is_floating_point_v<ResultType>, ResultType, typename T::NativeType>;
     };
 
+
     template <typename T, typename ResultType>
     struct RefineCls<T, ResultType, false>
     {

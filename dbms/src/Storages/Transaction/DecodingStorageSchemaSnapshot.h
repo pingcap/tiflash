@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -139,8 +140,7 @@ struct DecodingStorageSchemaSnapshot
         }
     }
 
-    DecodingStorageSchemaSnapshot(const DecodingStorageSchemaSnapshot &) = delete;
-    DecodingStorageSchemaSnapshot & operator=(const DecodingStorageSchemaSnapshot &) = delete;
+    DISALLOW_COPY(DecodingStorageSchemaSnapshot);
 
     DecodingStorageSchemaSnapshot(DecodingStorageSchemaSnapshot &&) = default;
 };

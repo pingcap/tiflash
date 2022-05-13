@@ -86,10 +86,11 @@ public:
      * It will mark that span to be used and also return a hint of the max capacity available in this SpaceMap. 
      * 
      * return value is <insert_offset, max_cap>:
-     *  insert_offset : start offset for the inserted space
-     *  max_cap : A hint of the largest available space this SpaceMap can hold. 
+     *  insert_offset: start offset for the inserted space
+     *  max_cap: A hint of the largest available space this SpaceMap can hold. 
+     *  is_expansion: Whether it is an expansion span
      */
-    virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
+    virtual std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) = 0;
 
     /**
      * Get the offset of the last free block. `[margin_offset, +∞)` is not used at all.

@@ -311,6 +311,8 @@ public:
 
     void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
 
+    void clearData();
+
     void drop();
 
     // Stop all background tasks.
@@ -328,13 +330,13 @@ public:
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range);
 
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
@@ -417,7 +419,10 @@ private:
 
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
 
-    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    static bool pkIsHandle(const ColumnDefine & handle_define)
+    {
+        return handle_define.id != EXTRA_HANDLE_COLUMN_ID;
+    }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
@@ -437,8 +442,14 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
-    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    {
+        return doIsSegmentValid(segment);
+    }
+    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    {
+        return doIsSegmentValid(segment);
+    }
     bool doIsSegmentValid(const SegmentPtr & segment);
 
     void restoreStableFiles();
@@ -448,8 +459,13 @@ private:
                                           size_t expected_tasks_count = 1,
                                           const SegmentIdSet & read_segments = {});
 
+private:
+    void dropAllSegments(bool keep_first_segment);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
 #endif
 
     Context & global_context;

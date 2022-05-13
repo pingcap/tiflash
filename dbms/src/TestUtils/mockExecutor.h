@@ -88,8 +88,8 @@ public:
 
     // Currentlt only support inner join, left join and right join.
     // TODO support more types of join.
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list);
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list, ASTTableJoin::Kind kind);
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, MockAsts exprs);
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, MockAsts exprs, ASTTableJoin::Kind kind);
 
     // aggregation
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);

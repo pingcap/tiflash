@@ -90,7 +90,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 {
     auto stable = std::make_shared<StableValueSpace>(id);
 
-    Page page = context.storage_pool.metaReader().read(id); // not limit restore
+    Page page = context.storage_pool.metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     UInt64 version, valid_rows, valid_bytes, size;
     readIntBinary(version, buf);
@@ -105,7 +105,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
     {
         readIntBinary(ref_id, buf);
 
-        auto file_id = context.storage_pool.dataReader().getNormalPageId(ref_id);
+        auto file_id = context.storage_pool.dataReader()->getNormalPageId(ref_id);
         auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
         auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());

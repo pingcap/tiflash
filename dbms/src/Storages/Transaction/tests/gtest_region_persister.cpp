@@ -309,7 +309,8 @@ try
         // Force to run in compatible mode
         FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
         persister.restore(nullptr, config);
-        ASSERT_EQ(persister.page_storage, nullptr);
+        ASSERT_EQ(persister.page_writer, nullptr);
+        ASSERT_EQ(persister.page_reader, nullptr);
         ASSERT_NE(persister.stable_page_storage, nullptr);
 
         for (size_t i = 0; i < region_num; ++i)
@@ -330,7 +331,8 @@ try
         RegionPersister persister(ctx, region_manager);
         // restore normally, should run in compatible mode.
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_EQ(persister.page_storage, nullptr);
+        ASSERT_EQ(persister.page_writer, nullptr);
+        ASSERT_EQ(persister.page_reader, nullptr);
         ASSERT_NE(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num; ++i)
@@ -349,7 +351,8 @@ try
         // Force to run in normal mode
         FailPointHelper::enableFailPoint(FailPoints::force_disable_region_persister_compatible_mode);
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_NE(persister.page_storage, nullptr);
+        ASSERT_NE(persister.page_writer, nullptr);
+        ASSERT_NE(persister.page_reader, nullptr);
         ASSERT_EQ(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num; ++i)
@@ -379,7 +382,8 @@ try
         RegionPersister persister(ctx, region_manager);
         // Restore normally, should run in normal mode.
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_NE(persister.page_storage, nullptr);
+        ASSERT_NE(persister.page_writer, nullptr);
+        ASSERT_NE(persister.page_reader, nullptr);
         ASSERT_EQ(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num + region_num_under_nromal_mode; ++i)
