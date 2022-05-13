@@ -47,8 +47,7 @@ RegionPtr makeRegion(UInt64 id, const std::string start_key, const std::string e
 class RegionKVStoreTest : public ::testing::Test
 {
 public:
-    RegionKVStoreTest()
-        = default;
+    RegionKVStoreTest() = default;
 
     static void SetUpTestCase() {}
     static void testBasic();
@@ -1372,12 +1371,30 @@ void RegionKVStoreTest::testBasic()
     }
 }
 
-TEST_F(RegionKVStoreTest, run)
+TEST_F(RegionKVStoreTest, Basic)
 try
 {
     testBasic();
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, KVStore)
+try
+{
     testKVStore();
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, Region)
+try
+{
     testRegion();
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, ReadIndex)
+try
+{
     testReadIndex();
 }
 CATCH

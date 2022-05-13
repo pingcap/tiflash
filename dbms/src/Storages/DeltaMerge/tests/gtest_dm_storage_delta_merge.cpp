@@ -40,6 +40,7 @@
 
 #include <limits>
 
+#include "Storages/Transaction/TiDB.h"
 #include "dm_basic_include.h"
 
 namespace DB
@@ -609,6 +610,8 @@ try
     sample.insert(DB::tests::createColumn<String>(
         Strings(100, "a"),
         "col2"));
+    constexpr TiDB::TableID table_id = 1232;
+    const String table_name = fmt::format("t_{}", table_id);
 
     Context ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
@@ -631,12 +634,11 @@ try
             path.remove(true);
 
         // primary_expr_ast
-        const String table_name = "t_1233";
         ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         TiDB::TableInfo tidb_table_info;
-        tidb_table_info.id = 1;
+        tidb_table_info.id = table_id;
 
         storage = StorageDeltaMerge::create("TiFlash",
                                             /* db_name= */ "default",
@@ -692,8 +694,8 @@ try
                 {
                     Field res;
                     c->get(i, res);
-                    ASSERT(!res.isNull());
-                    ASSERT(res.get<Int64>() == 1);
+                    ASSERT_TRUE(!res.isNull());
+                    ASSERT_EQ(res.get<Int64>(), table_id);
                 }
             }
         }
