@@ -19,7 +19,7 @@
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
-#include <DataStreams/HashJoinBuildBlockInputStream.h>
+#include <DataStreams/HashJoinBuildParallelWriter.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
@@ -48,7 +48,6 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Storages/Transaction/TiDB.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 namespace DB
@@ -465,15 +464,11 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
 
-    // add a HashJoinBuildBlockInputStream to build a shared hash table
-    size_t concurrency_build_index = 0;
-    auto get_concurrency_build_index = [&concurrency_build_index, &join_build_concurrency]() {
-        return (concurrency_build_index++) % join_build_concurrency;
-    };
-    right_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
-    });
-    executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/true);
+    // to build a shared hash table.
+    if (join_build_concurrency > 0)
+        executeParallel(right_pipeline, std::make_shared<HashJoinBuildParallelWriter<true>>(join_ptr, log->identifier()), max_streams, log);
+    else
+        executeParallel(right_pipeline, std::make_shared<HashJoinBuildParallelWriter<false>>(join_ptr, log->identifier()), max_streams, log);
 
     right_query.source = right_pipeline.firstStream();
     right_query.join = join_ptr;

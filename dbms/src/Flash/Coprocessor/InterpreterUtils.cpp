@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/ParallelWritingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -23,6 +24,28 @@ namespace
 {
 using UnionWithBlock = UnionBlockInputStream<>;
 using UnionWithoutBlock = UnionBlockInputStream<StreamUnionMode::Basic, /*ignore_block=*/true>;
+
+BlockInputStreamPtr executeParallelForNonJoined(
+    DAGPipeline & pipeline,
+    const ParallelWriterPtr & parallel_writer,
+    size_t max_threads,
+    const LoggerPtr & log)
+{
+    BlockInputStreamPtr ret = nullptr;
+    if (pipeline.streams_with_non_joined_data.size() == 1)
+        ret = pipeline.streams_with_non_joined_data.at(0);
+    else if (pipeline.streams_with_non_joined_data.size() > 1)
+    {
+        ret = std::make_shared<ParallelWritingBlockInputStream>(
+            pipeline.streams_with_non_joined_data,
+            nullptr,
+            parallel_writer,
+            max_threads,
+            log->identifier());
+    }
+    pipeline.streams_with_non_joined_data.clear();
+    return ret;
+}
 } // namespace
 
 void restoreConcurrency(
@@ -74,6 +97,39 @@ void executeUnion(
         else
             pipeline.firstStream() = std::make_shared<UnionWithBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
         pipeline.streams.resize(1);
+    }
+    else if (non_joined_data_stream != nullptr)
+    {
+        pipeline.streams.push_back(non_joined_data_stream);
+    }
+}
+
+void executeParallel(
+    DAGPipeline & pipeline,
+    const ParallelWriterPtr & parallel_writer,
+    size_t max_streams,
+    const LoggerPtr & log)
+{
+    if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
+        return;
+    auto non_joined_data_stream = executeParallelForNonJoined(pipeline, parallel_writer, max_streams, log);
+    if (pipeline.streams.size() > 1)
+    {
+        pipeline.firstStream() = std::make_shared<ParallelWritingBlockInputStream>(
+            pipeline.streams,
+            non_joined_data_stream,
+            parallel_writer,
+            max_streams,
+            log->identifier());
+        pipeline.streams.resize(1);
+    }
+    else if (pipeline.streams.size() == 1)
+    {
+        pipeline.firstStream() = std::make_shared<SerialWritingBlockInputStream>(
+            pipeline.firstStream(),
+            non_joined_data_stream,
+            parallel_writer,
+            log->identifier());
     }
     else if (non_joined_data_stream != nullptr)
     {

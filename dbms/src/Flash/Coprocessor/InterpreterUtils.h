@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <DataStreams/ParallelWriter.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Interpreters/ExpressionActions.h>
 
@@ -38,6 +39,12 @@ void executeUnion(
     size_t max_streams,
     const LoggerPtr & log,
     bool ignore_block = false);
+
+void executeParallel(
+    DAGPipeline & pipeline,
+    const ParallelWriterPtr & parallel_writer,
+    size_t max_streams,
+    const LoggerPtr & log);
 
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
