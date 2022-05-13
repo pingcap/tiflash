@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
@@ -105,9 +106,7 @@ public:
         StableValueSpacePtr other_stable;
     };
 
-    Segment(const Segment &) = delete;
-    Segment & operator=(const Segment &) = delete;
-    Segment & operator=(Segment &&) = delete;
+    DISALLOW_COPY_AND_MOVE(Segment);
 
     Segment(
         UInt64 epoch_,
@@ -243,7 +242,7 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
-    SegmentPtr dropNextSegment(WriteBatches & wbs);
+    SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);

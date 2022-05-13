@@ -197,27 +197,24 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
         format_version = *version;
     }
 
-    if (auto lazily_init = table->get_qualified_as<Int32>("lazily_init_store"); lazily_init)
-    {
-        lazily_init_store = (*lazily_init != 0);
-    }
-
-
-    if (table->contains("enable_ps_v3"))
-    {
-        if (auto enable_v3 = table->get_qualified_as<Int32>("enable_ps_v3"); enable_v3)
+    auto get_bool_config_or_default = [&](const String & name, bool default_value) {
+        if (auto value = table->get_qualified_as<Int32>(name); value)
         {
-            enable_ps_v3 = (*enable_v3 != 0);
+            return (*value != 0);
         }
-    }
-    else
-    {
-        // default open enable_ps_v3
-        enable_ps_v3 = true;
-    }
+        else if (auto value_b = table->get_qualified_as<bool>(name); value_b)
+        {
+            return *value_b;
+        }
+        else
+        {
+            return default_value;
+        }
+    };
 
+    lazily_init_store = get_bool_config_or_default("lazily_init_store", lazily_init_store);
 
-    LOG_FMT_INFO(log, "format_version {} lazily_init_store {} enable_ps_v3 {}", format_version, lazily_init_store, enable_ps_v3);
+    LOG_FMT_INFO(log, "format_version {} lazily_init_store {}", format_version, lazily_init_store);
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const

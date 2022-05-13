@@ -12,24 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/typeid_cast.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/InterpreterTruncateQuery.h>
-#include <Parsers/ASTTruncateQuery.h>
-#include <Storages/IStorage.h>
+#pragma once
 
+#include <common/types.h>
+#include <tipb/executor.pb.h>
+
+#include <vector>
 
 namespace DB
 {
-BlockIO InterpreterTruncateQuery::execute()
+struct PushDownFilter
 {
-    auto & truncate = typeid_cast<ASTTruncateQuery &>(*query_ptr);
+    static PushDownFilter toPushDownFilter(const String & executor_id, const tipb::Executor * executor);
 
-    const String & table_name = truncate.table;
-    String database_name = truncate.database.empty() ? context.getCurrentDatabase() : truncate.database;
-    StoragePtr table = context.getTable(database_name, table_name);
-    table->truncate(query_ptr, context);
-    return {};
-}
+    PushDownFilter(
+        const String & executor_id_,
+        const std::vector<const tipb::Expr *> & conditions_);
 
+    bool hasValue() const { return !conditions.empty(); }
+
+    tipb::Executor * constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const;
+
+    String executor_id;
+    std::vector<const tipb::Expr *> conditions;
+};
 } // namespace DB

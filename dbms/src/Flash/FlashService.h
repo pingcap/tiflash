@@ -55,9 +55,6 @@ public:
         const coprocessor::Request * request,
         coprocessor::Response * response) override;
 
-    grpc::Status BatchCommands(grpc::ServerContext * grpc_context,
-                               grpc::ServerReaderWriter<tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream) override;
-
     ::grpc::Status BatchCoprocessor(::grpc::ServerContext * context,
                                     const ::coprocessor::BatchRequest * request,
                                     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer) override;
@@ -72,11 +69,11 @@ public:
         const ::mpp::IsAliveRequest * request,
         ::mpp::IsAliveResponse * response) override;
 
-    ::grpc::Status EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, EstablishCallData * calldata);
+    ::grpc::Status establishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, EstablishCallData * calldata);
 
     ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer) override
     {
-        return EstablishMPPConnectionSyncOrAsync(context, request, sync_writer, nullptr);
+        return establishMPPConnectionSyncOrAsync(context, request, sync_writer, nullptr);
     }
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
@@ -119,8 +116,7 @@ public:
         abort();
         return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-
-    void RequestEstablishMPPConnection(::grpc::ServerContext * context, ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> * writer, ::grpc::CompletionQueue * new_call_cq, ::grpc::ServerCompletionQueue * notification_cq, void * tag)
+    void requestEstablishMPPConnection(::grpc::ServerContext * context, ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> * writer, ::grpc::CompletionQueue * new_call_cq, ::grpc::ServerCompletionQueue * notification_cq, void * tag)
     {
         ::grpc::Service::RequestAsyncServerStreaming(EstablishMPPConnectionApiID, context, request, writer, new_call_cq, notification_cq, tag);
     }

@@ -13,18 +13,15 @@
 // limitations under the License.
 
 #pragma once
-#include <Parsers/IParserBase.h>
 
+#define DISALLOW_COPY(ClassName)           \
+    ClassName(const ClassName &) = delete; \
+    ClassName & operator=(const ClassName &) = delete
 
-namespace DB
-{
+#define DISALLOW_MOVE(ClassName)      \
+    ClassName(ClassName &&) = delete; \
+    ClassName & operator=(ClassName &&) = delete
 
-
-class ParserSystemQuery : public IParserBase
-{
-protected:
-    const char * getName() const override { return "SYSTEM query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
-};
-
-}
+#define DISALLOW_COPY_AND_MOVE(ClassName) \
+    DISALLOW_COPY(ClassName);             \
+    DISALLOW_MOVE(ClassName)

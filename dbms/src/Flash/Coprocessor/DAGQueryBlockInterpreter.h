@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
@@ -57,13 +58,8 @@ public:
 private:
 #endif
     void executeImpl(DAGPipeline & pipeline);
+    void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
-    void executeCastAfterTableScan(
-        const TiDBTableScan & table_scan,
-        const std::vector<ExtraCastAfterTSMode> & is_need_add_cast_column,
-        size_t remote_read_streams_start_index,
-        DAGPipeline & pipeline);
-    void executePushedDownFilter(const std::vector<const tipb::Expr *> & conditions, size_t remote_read_streams_start_index, DAGPipeline & pipeline);
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
@@ -95,8 +91,8 @@ private:
     void executeAggregation(
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expression_actions_ptr,
-        Names & key_names,
-        TiDB::TiDBCollators & collators,
+        const Names & key_names,
+        const TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions,
         bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
@@ -107,10 +103,6 @@ private:
     void recordJoinExecuteInfo(size_t build_side_index, const JoinPtr & join_ptr);
 
     void restorePipelineConcurrency(DAGPipeline & pipeline);
-
-    void executeRemoteQueryImpl(
-        DAGPipeline & pipeline,
-        std::vector<RemoteRequest> & remote_requests);
 
     DAGContext & dagContext() const { return *context.getDAGContext(); }
 

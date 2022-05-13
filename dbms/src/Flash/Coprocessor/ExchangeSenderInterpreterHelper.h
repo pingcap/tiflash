@@ -14,20 +14,13 @@
 
 #pragma once
 
-#include <Parsers/IParserBase.h>
+#include <Storages/Transaction/Collator.h>
+#include <common/types.h>
+#include <tipb/executor.pb.h>
 
-
-namespace DB
+namespace DB::ExchangeSenderInterpreterHelper
 {
+std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_sender);
 
-/** KILL QUERY WHERE <logical expression upon system.processes fields> [SYNC|ASYNC|TEST]
-  */
-class ParserKillQueryQuery : public IParserBase
-{
-protected:
-    const char * getName() const override { return "KILL QUERY query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
-};
-
-}
-
+TiDB::TiDBCollators genPartitionColCollators(const tipb::ExchangeSender & exchange_sender);
+} // namespace DB::ExchangeSenderInterpreterHelper

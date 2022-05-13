@@ -202,6 +202,26 @@ ninja gtests_libcommon
 
 And the unit-test executables are at `$BUILD/dbms/gtests_dbms`, `$BUILD/libs/libdaemon/src/tests/gtests_libdaemon` and `$BUILD/libs/libcommon/src/tests/gtests_libcommon`.
 
+## Run Sanitizer Tests
+
+TiFlash supports testing with thread sanitizer and address sanitizer.
+
+To generate unit test executables with sanitizer enabled:
+
+```shell
+cd $BUILD
+cmake $WORKSPACE/tiflash -GNinja -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=ASan # or TSan
+ninja gtests_dbms
+ninja gtests_libcommon
+ninja gtests_libdaemon
+```
+
+There are known false positives reported from leak sanitizer (which is included in address sanitizer). To suppress these errors, set the following environment variables before running the executables:
+
+```
+LSAN_OPTIONS=suppressions=$WORKSPACE/tiflash/test/sanitize/asan.suppression
+```
+
 ## Run Integration Tests
 
 TBD.

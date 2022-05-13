@@ -53,6 +53,8 @@ public:
     String getTableName() const override;
     String getDatabaseName() const override;
 
+    void clearData() override;
+
     void drop() override;
 
     BlockInputStreams read(
@@ -189,7 +191,10 @@ private:
     DataTypePtr getPKTypeImpl() const override;
 
     DM::DeltaMergeStorePtr & getAndMaybeInitStore();
-    bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
+    bool storeInited() const
+    {
+        return store_inited.load(std::memory_order_acquire);
+    }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();

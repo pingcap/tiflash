@@ -508,7 +508,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::WeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::WeekWithoutMode, "cast"},
     //{tipb::ScalarFuncSig::WeekDay, "cast"},
-    //{tipb::ScalarFuncSig::WeekOfYear, "cast"},
+    {tipb::ScalarFuncSig::WeekOfYear, "tidbWeekOfYear"},
 
     {tipb::ScalarFuncSig::Year, "toYear"},
     //{tipb::ScalarFuncSig::YearWeekWithMode, "cast"},
@@ -767,6 +767,98 @@ const String & getFunctionName(const tipb::Expr & expr)
         if (it == scalar_func_map.end())
             throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.", Errors::Coprocessor::Unimplemented);
         return it->second;
+    }
+}
+
+String getExchangeTypeName(const tipb::ExchangeType & tp)
+{
+    switch (tp)
+    {
+    case tipb::ExchangeType::Broadcast:
+        return "Broadcast";
+    case tipb::ExchangeType::PassThrough:
+        return "PassThrough";
+    case tipb::ExchangeType::Hash:
+        return "Hash";
+    default:
+        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getJoinTypeName(const tipb::JoinType & tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinType::TypeAntiLeftOuterSemiJoin:
+        return "AntiLeftOuterSemiJoin";
+    case tipb::JoinType::TypeLeftOuterJoin:
+        return "LeftOuterJoin";
+    case tipb::JoinType::TypeRightOuterJoin:
+        return "RightOuterJoin";
+    case tipb::JoinType::TypeLeftOuterSemiJoin:
+        return "LeftOuterSemiJoin";
+    case tipb::JoinType::TypeAntiSemiJoin:
+        return "AntiSemiJoin";
+    case tipb::JoinType::TypeInnerJoin:
+        return "InnerJoin";
+    case tipb::JoinType::TypeSemiJoin:
+        return "SemiJoin";
+    default:
+        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getJoinExecTypeName(const tipb::JoinExecType & tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinExecType::TypeHashJoin:
+        return "HashJoin";
+    default:
+        throw TiFlashException(fmt::format("Not supported Join exectution type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getFieldTypeName(Int32 tp)
+{
+    switch (tp)
+    {
+    case TiDB::TypeTiny:
+        return "Tiny";
+    case TiDB::TypeShort:
+        return "Short";
+    case TiDB::TypeInt24:
+        return "Int24";
+    case TiDB::TypeLong:
+        return "Long";
+    case TiDB::TypeLongLong:
+        return "Longlong";
+    case TiDB::TypeYear:
+        return "Year";
+    case TiDB::TypeDouble:
+        return "Double";
+    case TiDB::TypeTime:
+        return "Time";
+    case TiDB::TypeDate:
+        return "Date";
+    case TiDB::TypeDatetime:
+        return "Datetime";
+    case TiDB::TypeNewDate:
+        return "NewDate";
+    case TiDB::TypeTimestamp:
+        return "Timestamp";
+    case TiDB::TypeFloat:
+        return "Float";
+    case TiDB::TypeDecimal:
+        return "Decimal";
+    case TiDB::TypeNewDecimal:
+        return "NewDecimal";
+    case TiDB::TypeVarchar:
+        return "Varchar";
+    case TiDB::TypeString:
+        return "String";
+    default:
+        throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
