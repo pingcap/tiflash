@@ -43,13 +43,9 @@ dbms / src
 First, we need to create a new module -- dbms/src/TIDB to store:
 
 - Some data structures present in transaction/tidb.h: TableInfo / DBInfo etc..
-
 - TiFlashContext and ManagedStorages.
-
 - Module Codec: Decoding data from row to column (Block).
-
 - Module Schema: Syncing schema with TiDB.
-
 - Other components.
 
 ### Codec Module
@@ -57,15 +53,10 @@ First, we need to create a new module -- dbms/src/TIDB to store:
 Codec Module is used to place 'Decoding data from row to column and some serialization/encoding related components', including:
 
 - RowCodec
-
 - JsonCodec
-
 - Datum
-
   - Datum
-
   - DatumCodec
-
 - SerializationHelper
 
 ### Schema Module
@@ -73,13 +64,9 @@ Codec Module is used to place 'Decoding data from row to column and some seriali
 Schema module is used to place 'Syncing schema with TiDB', including:
 
 - SchemaSyncer & TiDBSchemaSyncer
-
 - SchemaSyncSerivce
-
 - SchemaBuilder
-
 - SchemaGetter
-
 - SchemaNameMapper
 
 ## 2.2 Raft Related
@@ -97,13 +84,8 @@ When the content in 2.1 is completed, the rest of the components in Transaction 
 Used to store Region-related components, including:
 
 - Region
-
 - RegionBlockReader
-
 - RegionCFDataBase
-
 - RegionData
-
 - RegionManager
-
 - etc …
