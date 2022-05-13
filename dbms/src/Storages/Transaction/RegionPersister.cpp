@@ -286,14 +286,6 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             page_storage_v2->restore();
             page_storage_v3->restore();
 
-            auto change_to_only_v3 = [&]() {
-                page_storage_v2 = nullptr;
-                page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
-                page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
-
-                run_mode = PageStorageRunMode::ONLY_V3;
-            };
-
             if (const auto & kvstore_remain_pages = page_storage_v2->getNumberOfPages(); kvstore_remain_pages != 0)
             {
                 page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
@@ -301,22 +293,28 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
                 forceTransformKVStoreV2toV3();
                 const auto & kvstore_remain_pages_after_transform = page_storage_v2->getNumberOfPages();
-                LOG_FMT_INFO(log, "Current kvstore translate to V3 finished. [ns_id={}] [done={}] [remain_before_translate_pages={}], [remain_after_translate_pages={}]", //
+                LOG_FMT_INFO(log, "Current kvstore transfrom to V3 finished. [ns_id={}] [done={}] [remain_before_translate_pages={}], [remain_after_translate_pages={}]", //
                              ns_id,
                              kvstore_remain_pages_after_transform == 0,
                              kvstore_remain_pages,
                              kvstore_remain_pages_after_transform);
 
-                if (kvstore_remain_pages_after_transform == 0)
+                if (kvstore_remain_pages_after_transform != 0)
                 {
-                    change_to_only_v3();
-                } // else do nothing, still use MIX_MODE
+                    throw Exception("KVStore transform failed. Still have some data exist in V2", ErrorCodes::LOGICAL_ERROR);
+                }
             }
             else // no need do transform
             {
                 LOG_FMT_INFO(log, "Current kvstore translate already done before restored.");
-                change_to_only_v3();
             }
+
+            // change run_mode to ONLY_V3
+            page_storage_v2 = nullptr;
+            page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
+            page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
+
+            run_mode = PageStorageRunMode::ONLY_V3;
             break;
         }
         }
