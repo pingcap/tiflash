@@ -114,7 +114,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(random_sharedquery_failpoint)                    \
     M(random_thread_failpoint)                         \
     M(random_interpreter_failpoint)                    \
-    M(random_scheduler_failpoint)                      \
+    M(random_task_lifecycle_failpoint)                 \
     M(random_task_manager_failpoint)
 
 namespace FailPoints

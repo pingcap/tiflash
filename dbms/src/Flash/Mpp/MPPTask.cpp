@@ -51,6 +51,7 @@ extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
+extern const char random_task_lifecycle_failpoint[];
 } // namespace FailPoints
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
@@ -397,7 +398,15 @@ void MPPTask::runImpl()
         writeErrToAllTunnels(err_msg);
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
-    unregisterTask();
+    // unregister flag is only for FailPoint usage, to produce the situation that MPPTask is destructed
+    // by grpc CancelMPPTask thread;
+    bool unregister = true;
+    fiu_do_on(FailPoints::random_task_lifecycle_failpoint, {
+        if (!err_msg.empty())
+            unregister = false;
+    });
+    if (unregister)
+        unregisterTask();
 
     if (switchStatus(RUNNING, FINISHED))
         LOG_INFO(log, "finish task");
