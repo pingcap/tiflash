@@ -27,9 +27,6 @@ using ColumnTinyFilePtr = std::shared_ptr<ColumnFileTiny>;
 /// It may be created in two ways:
 ///   1. created directly when writing to storage if the data is large enough
 ///   2. created when flushed `ColumnFileInMemory` to disk
-///
-/// If the contained data is small, these data may be attached in this ColumnFile memory structure as a cache.
-/// See flush process for details.
 class ColumnFileTiny : public ColumnFilePersisted
 {
     friend class ColumnFileTinyReader;
@@ -40,13 +37,15 @@ private:
     UInt64 rows = 0;
     UInt64 bytes = 0;
 
-    // The id of data page which stores the data of this pack.
+    /// The id of data page which stores the data of this pack.
     PageId data_page_id;
 
     /// The members below are not serialized.
-    // The cache data in memory.
+
+    /// The cache data in memory.
+    /// Currently this field is unused.
     CachePtr cache;
-    // Used to map column id to column instance in a Block.
+    /// Used to map column id to column instance in a Block.
     ColIdToOffset colid_to_offset;
 
 private:

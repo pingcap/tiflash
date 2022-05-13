@@ -136,7 +136,8 @@ public:
     void serialize(WriteBatch & wb);
 
     /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
-    /// Usually the ColumnFile should not contain block data. To write block data, you can use `writeToCache`.
+    /// The block data of the passed in ColumnFile should be placed on disk before calling this function.
+    /// To write new block data, you can use `writeToCache`.
     bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file);
 
     /// Write a block of data into the MemTableSet part of the Segment. The data will be flushed to disk later.
