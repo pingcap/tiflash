@@ -76,7 +76,8 @@ enum class EditRecordType
     DEL,
     //
     UPSERT,
-    //
+    // Variant types for dumping the in-memory entries into
+    // snapshot
     VAR_ENTRY,
     VAR_REF,
     VAR_EXTERNAL,

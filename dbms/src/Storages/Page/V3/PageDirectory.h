@@ -258,7 +258,13 @@ public:
 private:
     mutable std::mutex m;
 
+    // Valid value of `type` is one of
+    // - VAR_DELETE
+    // - VAR_ENTRY
+    // - VAR_REF
+    // - VAR_EXTERNAL
     EditRecordType type;
+
     // Has been deleted, valid when type == VAR_REF/VAR_EXTERNAL
     bool is_deleted;
     // Entries sorted by version, valid when type == VAR_ENTRY

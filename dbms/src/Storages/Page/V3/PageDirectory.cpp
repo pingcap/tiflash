@@ -57,6 +57,7 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 extern const int PS_ENTRY_NOT_EXISTS;
 extern const int PS_ENTRY_NO_VALID_VERSION;
+extern const int PS_DIR_APPLY_INVALID_STATUS;
 } // namespace ErrorCodes
 
 namespace PS::V3
@@ -93,11 +94,12 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
             // to replace the entry with newer sequence.
             if (unlikely(last_iter->second.being_ref_count != 1 && last_iter->first.sequence < ver.sequence))
             {
-                throw Exception(fmt::format(
-                    "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
-                    ver,
-                    last_iter->first,
-                    last_iter->second.toDebugString()));
+                throw Exception(
+                    fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
+                                ver,
+                                last_iter->first,
+                                last_iter->second.toDebugString()),
+                    ErrorCodes::LOGICAL_ERROR);
             }
             // create a new version that inherit the `being_ref_count` of the last entry
             entries.emplace(ver, EntryOrDelete::newRepalcingEntry(last_iter->second, entry));
@@ -105,12 +107,13 @@ void VersionedPageEntries::createNewEntry(const PageVersionType & ver, const Pag
         return;
     }
 
-    throw Exception(fmt::format(
-        "try to create entry version with invalid state "
-        "[ver={}] [entry={}] [state={}]",
-        ver,
-        ::DB::PS::V3::toDebugString(entry),
-        toDebugString()));
+    throw Exception(
+        fmt::format("try to create entry version with invalid state "
+                    "[ver={}] [entry={}] [state={}]",
+                    ver,
+                    ::DB::PS::V3::toDebugString(entry),
+                    toDebugString()),
+        ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
 
 // Create a new external version with version=`ver`.
@@ -160,11 +163,12 @@ std::shared_ptr<PageIdV3Internal> VersionedPageEntries::createNewExternal(const 
         }
     }
 
-    throw Exception(fmt::format(
-        "try to create external version with invalid state "
-        "[ver={}] [state={}]",
-        ver,
-        toDebugString()));
+    throw Exception(
+        fmt::format("try to create external version with invalid state "
+                    "[ver={}] [state={}]",
+                    ver,
+                    toDebugString()),
+        ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
 
 // Create a new delete version with version=`ver`.
@@ -248,11 +252,12 @@ bool VersionedPageEntries::createNewRef(const PageVersionType & ver, PageIdV3Int
 
     // adding ref to replace put/external is not allowed
     throw Exception(fmt::format(
-        "try to create ref version with invalid state "
-        "[ver={}] [ori_page_id={}] [state={}]",
-        ver,
-        ori_page_id_,
-        toDebugString()));
+                        "try to create ref version with invalid state "
+                        "[ver={}] [ori_page_id={}] [state={}]",
+                        ver,
+                        ori_page_id_,
+                        toDebugString()),
+                    ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
 }
 
 std::shared_ptr<PageIdV3Internal> VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
