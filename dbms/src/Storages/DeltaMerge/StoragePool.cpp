@@ -319,7 +319,8 @@ PageStorageRunMode StoragePool::restore()
         auto v2_data_max_ids = data_storage_v2->restore();
         auto v2_meta_max_ids = meta_storage_v2->restore();
 
-        // The pages on data and log can be rewritten to V3 and the old pages on V2 are deleted by `delta merge`. However, the pages on meta V2 can not be deleted. As the pages in meta is small, we perform a  forceTransformMetaV2toV3 to convert pages before all.
+        // The pages on data and log can be rewritten to V3 and the old pages on V2 are deleted by `delta merge`.
+        // However, the pages on meta V2 can not be deleted. As the pages in meta are small, we perform a forceTransformMetaV2toV3 to convert pages before all.
         if (const auto & meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
         {
             LOG_FMT_INFO(logger, "Current meta transform to V3 begin, [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
