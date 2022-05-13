@@ -998,7 +998,7 @@ UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int secon
         return 0;
     Int32 current_days = calcDayNum(year, month, day);
     return current_days * MyTimeBase::SECOND_IN_ONE_DAY + hour * MyTimeBase::SECOND_IN_ONE_HOUR
-            + minute * MyTimeBase::SECOND_IN_ONE_MINUTE + second;
+        + minute * MyTimeBase::SECOND_IN_ONE_MINUTE + second;
 }
 
 size_t maxFormattedDateTimeStringLength(const String & format)

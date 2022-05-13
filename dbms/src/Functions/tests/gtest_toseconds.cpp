@@ -97,4 +97,3 @@ try
 CATCH
 
 } // namespace DB::tests
-
