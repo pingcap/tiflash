@@ -841,7 +841,7 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
                 }
                 else
                 {
-                    return PageIdV3Internal(0, INVALID_PAGE_ID);
+                    return buildV3Id(0, INVALID_PAGE_ID);
                 }
             }
         }
@@ -878,7 +878,7 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
     }
     else
     {
-        return PageIdV3Internal(0, INVALID_PAGE_ID);
+        return buildV3Id(0, INVALID_PAGE_ID);
     }
 }
 

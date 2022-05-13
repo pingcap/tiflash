@@ -105,7 +105,7 @@ public:
 
         parent_path = TiFlashStorageTestBasic::getTemporaryPath();
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "DMFile_Test", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", /*table_id*/ 100, *path_pool, *db_context, db_context->getSettingsRef());
+        storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *path_pool, "test.t1");
         dm_file = DMFile::create(1, parent_path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();
@@ -1057,7 +1057,7 @@ public:
         auto configuration = mode == DMFileMode::DirectoryChecksum ? std::make_optional<DMChecksumConfig>() : std::nullopt;
 
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", table_id, *path_pool, *db_context, DB::Settings());
+        storage_pool = std::make_unique<StoragePool>(*db_context, table_id, *path_pool, "test.t1");
         dm_file = DMFile::create(0, path, single_file_mode, std::move(configuration));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_ = std::make_shared<ColumnCache>();

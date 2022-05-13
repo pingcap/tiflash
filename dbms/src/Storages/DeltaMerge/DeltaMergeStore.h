@@ -330,13 +330,13 @@ public:
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range);
 
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
@@ -374,10 +374,14 @@ public:
 
     void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
 
-    /// Do merge delta for all segments. Only used for debug.
+    /// Merge delta into the stable layer for all segments.
+    ///
+    /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
     void mergeDeltaAll(const Context & context);
 
-    /// Compact fragment column files into bigger one.
+
+    /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
+    /// This is a minor compaction as it does not merge the delta into stable layer.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -424,13 +428,33 @@ private:
         return handle_define.id != EXTRA_HANDLE_COLUMN_ID;
     }
 
+    /// Try to stall the writing. It will suspend the current thread if flow control is necessary.
+    /// There are roughly two flow control mechanisms:
+    /// - Force Merge (1 GB by default, see force_merge_delta_rows|size): Wait for a small amount of time at most.
+    /// - Stop Write (2 GB by default, see stop_write_delta_rows|size): Wait until delta is merged.
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
+
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
+    /// Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
+    /// If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
+    /// See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
+    ///
+    /// This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
+    /// A `thread_type` should be specified indicating the type of the thread calling this function.
+    /// Depend on the thread type, the "update" to do may be varied.
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
+    /// Split the segment into two.
+    /// After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+
+    /// Merge two segments into one.
+    /// After merging, both segments will be abandoned (with `segment->hasAbandoned() == true`).
     void segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
+
+    /// Merge the delta (major compaction) in the segment.
+    /// After delta-merging, the segment will be abandoned (with `segment->hasAbandoned() == true`) and a new segment will be returned.
     SegmentPtr segmentMergeDelta(
         DMContext & dm_context,
         const SegmentPtr & segment,
