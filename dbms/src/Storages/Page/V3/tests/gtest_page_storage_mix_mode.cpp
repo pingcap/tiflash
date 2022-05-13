@@ -43,16 +43,17 @@ public:
         storage_path_pool_v3 = std::make_unique<PathPool>(Strings{path}, Strings{path}, Strings{}, std::make_shared<PathCapacityMetrics>(0, paths, caps, Strings{}, caps), global_context.getFileProvider(), true);
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
+        if (!global_context.getGlobalStoragePool())
+            global_context.initializeGlobalStoragePoolIfNeed(*storage_path_pool_v3);
     }
 
     void SetUp() override
     {
-        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
-        global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
         TiFlashStorageTestBasic::SetUp();
         const auto & path = getTemporaryPath();
         createIfNotExist(path);
 
+        auto & global_context = DB::tests::TiFlashTestEnv::getGlobalContext();
 
         std::vector<size_t> caps = {};
         Strings paths = {path};
@@ -74,7 +75,7 @@ public:
 
     PageStorageRunMode reloadMixedStoragePool()
     {
-        db_context->setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
+        DB::tests::TiFlashTestEnv::getContext().setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
         PageStorageRunMode run_mode = storage_pool_mix->restore();
         page_writer_mix = storage_pool_mix->logWriter();
         page_reader_mix = storage_pool_mix->logReader();
@@ -83,7 +84,7 @@ public:
 
     void reloadV2StoragePool()
     {
-        db_context->setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
+        DB::tests::TiFlashTestEnv::getContext().setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
         storage_pool_v2->restore();
         page_writer_v2 = storage_pool_v2->logWriter();
         page_reader_v2 = storage_pool_v2->logReader();
