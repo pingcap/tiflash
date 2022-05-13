@@ -353,7 +353,8 @@ grpc::Status FlashService::Coprocessor(
 String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
 {
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
-        return it->second.data();
+        return String(it->second.data(), it->second.size());
+
     return default_val;
 }
 
@@ -393,6 +394,14 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         {
             context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
+
+        String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
+        if (!max_threads.empty())
+        {
+            context->setSetting("max_threads", max_threads);
+            LOG_FMT_INFO(log, "set context setting max_threads to {}", max_threads);
+        }
+
         context->setSetting("enable_async_server", is_async ? "true" : "false");
         context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
         context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
