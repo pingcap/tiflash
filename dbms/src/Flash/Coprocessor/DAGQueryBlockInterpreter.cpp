@@ -465,7 +465,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
 
     // to build a shared hash table.
-    if (join_build_concurrency > 0)
+    if (join_build_concurrency > 1)
         executeParallel(right_pipeline, std::make_shared<HashJoinBuildParallelWriter<true>>(join_ptr, log->identifier()), max_streams, log);
     else
         executeParallel(right_pipeline, std::make_shared<HashJoinBuildParallelWriter<false>>(join_ptr, log->identifier()), max_streams, log);
