@@ -44,6 +44,7 @@ inline auto wrapInvocable(bool propagate_memory_tracker, Func && func, Args &&..
                     args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
         MemoryTrackerSetter setter(propagate_memory_tracker, memory_tracker);
         // run the task with the parameters provided
+        #ifdef FIU_ENABLE
         std::apply(std::move(func), std::move(args));
         fiu_do_on(FailPoints::random_thread_failpoint, {
             // Since the code will run very frequently, then other failpoint might have no chance to trigger
@@ -51,10 +52,12 @@ inline auto wrapInvocable(bool propagate_memory_tracker, Func && func, Args &&..
             pcg64 rng(randomSeed());
             int num = std::uniform_int_distribution(0, 1000)(rng);
             if (num == 241)
-                throw Exception("Fail point aggregate is triggered.", ErrorCodes::FAIL_POINT_ERROR);
+                throw Exception("Fail point thread is triggered.", ErrorCodes::FAIL_POINT_ERROR);
         });
+        #else
+        return std::apply(std::move(func), std::move(args));
+        #endif
     };
-
     return capture;
 }
 } // namespace DB

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/FailPoint.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
 
@@ -20,8 +21,18 @@
 #include <thread>
 #include <unordered_map>
 
+#ifdef FIU_ENABLE
+#include <Common/randomSeed.h>
+#include <pcg_random.hpp>
+#endif
+
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_task_manager_failpoint[];
+} // namespace FailPoints
+
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
     , log(&Poco::Logger::get("TaskManager"))
@@ -49,6 +60,14 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
         }
         it = query_it->second->task_map.find(id);
         return it != query_it->second->task_map.end();
+    });
+    fiu_do_on(FailPoints::random_task_manager_failpoint, {
+        // Since the code will run very frequently, then other failpoint might have no chance to trigger
+        // so internally low down the possibility to 1/1000
+        pcg64 rng(randomSeed());
+        int num = std::uniform_int_distribution(0, 1000)(rng);
+        if (num == 127)
+            ret = false;
     });
     if (cancelled)
     {
