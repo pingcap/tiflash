@@ -34,6 +34,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char skip_check_segment_update[];
+} // namespace FailPoints
+
 namespace DM
 {
 namespace tests
@@ -54,18 +59,16 @@ public:
     std::map<size_t, size_t> expected_stable_rows;
     std::map<size_t, size_t> expected_delta_rows;
 
-    MultiSegmentTestUtil(Context & db_context_)
+    explicit MultiSegmentTestUtil(Context & db_context_)
         : tracing_id(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName())
         , db_context(db_context_)
-    {}
-
-    /// Update context settings to keep multiple segments stable.
-    void setSettings(size_t rows_per_segment)
     {
-        // Avoid bg merge.
-        // TODO (wenxuan): Seems to be not very stable.
-        db_context.setSetting("dt_bg_gc_max_segments_to_check_every_round", UInt64(0));
-        db_context.setSetting("dt_segment_limit_rows", UInt64(rows_per_segment));
+        FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
+    }
+
+    ~MultiSegmentTestUtil()
+    {
+        FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
     }
 
     /// Prepare segments * 4. The rows of each segment will be roughly close to n_avg_rows_per_segment.

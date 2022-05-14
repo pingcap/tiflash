@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/setThreadName.h>
 #include <Flash/Management/ManualCompact.h>
 #include <Flash/ServiceUtils.h>
@@ -24,6 +25,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char pause_before_server_merge_one_delta[];
+} // namespace FailPoints
 
 namespace Management
 {
@@ -153,7 +158,9 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
     // Repeatedly merge multiple segments as much as possible.
     while (true)
     {
+        FAIL_POINT_PAUSE(FailPoints::pause_before_server_merge_one_delta);
         auto compacted_range = dm_storage->mergeDeltaBySegment(db_context, start_key);
+
         if (compacted_range == std::nullopt)
         {
             // Segment not found according to current start key

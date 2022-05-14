@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Flash/Management/ManualCompact.h>
-#include <Parsers/ASTIdentifier.h>
 #include <Poco/Logger.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -26,9 +26,16 @@
 #include <gtest/gtest.h>
 
 #include <ext/scope_guard.h>
+#include <future>
+#include <thread>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char pause_before_server_merge_one_delta[];
+} // namespace FailPoints
+
 namespace tests
 {
 
@@ -50,17 +57,14 @@ public:
 
             manager = std::make_unique<DB::Management::ManualCompactManager>(*db_context);
 
+            setupStorage();
+
             // In tests let's only compact one segment.
             db_context->setSetting("manual_compact_more_until_ms", UInt64(0));
 
-            helper = std::make_unique<DM::tests::MultiSegmentTestUtil>(*db_context);
-            helper->setSettings(50);
-
-            setupStorage();
-
             // Split into 4 segments, and prepare some delta data for first 3 segments.
+            helper = std::make_unique<DM::tests::MultiSegmentTestUtil>(*db_context);
             helper->prepareSegments(storage->getAndMaybeInitStore(), 50, pk_type);
-
             prepareDataForFirstThreeSegments();
         }
         CATCH
@@ -131,7 +135,7 @@ try
 {
     auto request = ::kvrpcpb::CompactRequest();
     auto response = ::kvrpcpb::CompactResponse();
-    auto status_code = manager->doWork(&request, &response);
+    auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::INVALID_ARGUMENT);
 }
 CATCH
@@ -143,7 +147,7 @@ try
     auto request = ::kvrpcpb::CompactRequest();
     request.set_physical_table_id(9999);
     auto response = ::kvrpcpb::CompactResponse();
-    auto status_code = manager->doWork(&request, &response);
+    auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::INVALID_ARGUMENT);
 }
 CATCH
@@ -156,7 +160,7 @@ try
     request.set_physical_table_id(TABLE_ID);
     request.set_start_key("abcd");
     auto response = ::kvrpcpb::CompactResponse();
-    auto status_code = manager->doWork(&request, &response);
+    auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::INVALID_ARGUMENT);
 }
 CATCH
@@ -169,7 +173,7 @@ try
     auto request = ::kvrpcpb::CompactRequest();
     request.set_physical_table_id(TABLE_ID);
     auto response = ::kvrpcpb::CompactResponse();
-    auto status_code = manager->doWork(&request, &response);
+    auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
     ASSERT_FALSE(response.has_error());
 
@@ -188,7 +192,7 @@ try
     request.set_physical_table_id(TABLE_ID);
     request.set_start_key("");
     auto response = ::kvrpcpb::CompactResponse();
-    auto status_code = manager->doWork(&request, &response);
+    auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
     ASSERT_FALSE(response.has_error());
 
@@ -216,7 +220,7 @@ try
         request.set_start_key(wb.releaseStr());
     }
     auto response = ::kvrpcpb::CompactResponse();
-    auto status_code = manager->doWork(&request, &response);
+    auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
     ASSERT_FALSE(response.has_error());
 
@@ -236,7 +240,7 @@ try
         auto request = ::kvrpcpb::CompactRequest();
         request.set_physical_table_id(TABLE_ID);
         response = ::kvrpcpb::CompactResponse();
-        auto status_code = manager->doWork(&request, &response);
+        auto status_code = manager->handleRequest(&request, &response);
         ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
         ASSERT_FALSE(response.has_error());
 
@@ -250,7 +254,7 @@ try
         request.set_physical_table_id(TABLE_ID);
         request.set_start_key(response.compacted_end_key());
         response = ::kvrpcpb::CompactResponse();
-        auto status_code = manager->doWork(&request, &response);
+        auto status_code = manager->handleRequest(&request, &response);
         ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
         ASSERT_FALSE(response.has_error());
 
@@ -270,7 +274,7 @@ try
     auto request = ::kvrpcpb::CompactRequest();
     request.set_physical_table_id(TABLE_ID);
     auto response = ::kvrpcpb::CompactResponse();
-    auto status_code = manager->doWork(&request, &response);
+    auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
     ASSERT_FALSE(response.has_error());
 
@@ -289,6 +293,47 @@ CATCH
 TEST_P(BasicManualCompactTest, DuplicatedLogicalId)
 try
 {
+    using namespace std::chrono_literals;
+
+    FailPointHelper::enableFailPoint(FailPoints::pause_before_server_merge_one_delta);
+
+    auto thread_1_is_ready = std::promise<void>();
+    std::thread t_req1([&]() {
+        // req1
+        auto request = ::kvrpcpb::CompactRequest();
+        request.set_physical_table_id(TABLE_ID);
+        request.set_logical_table_id(2);
+        auto response = ::kvrpcpb::CompactResponse();
+        thread_1_is_ready.set_value();
+        auto status_code = manager->handleRequest(&request, &response);
+        ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+        ASSERT_FALSE(response.has_error());
+        helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
+        helper->expected_delta_rows[0] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    });
+
+    {
+        // send req1, wait request being processed.
+        thread_1_is_ready.get_future().wait();
+        std::this_thread::sleep_for(500ms); // TODO: Maybe better to use sync_channel to avoid hardcoded wait duration.
+
+        // req2: Now let's send another request with the same logical id.
+        // Although worker pool size is 1, this request will be returned immediately, but with an error.
+        auto request = ::kvrpcpb::CompactRequest();
+        request.set_physical_table_id(TABLE_ID);
+        request.set_logical_table_id(2);
+        auto response = ::kvrpcpb::CompactResponse();
+        auto status_code = manager->handleRequest(&request, &response);
+        ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+        ASSERT_TRUE(response.has_error());
+        ASSERT_TRUE(response.error().has_err_compact_in_progress());
+        helper->verifyExpectedRowsForAllSegments();
+    }
+
+    // Now let's continue req1's work
+    FailPointHelper::disableFailPoint(FailPoints::pause_before_server_merge_one_delta);
+    t_req1.join();
 }
 CATCH
 

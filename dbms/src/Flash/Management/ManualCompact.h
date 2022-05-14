@@ -37,7 +37,10 @@ namespace DB
 namespace Management
 {
 
-/// Serves manual compact requests.
+/// Serves manual compact requests. Notice that the "compact" term here has different meanings compared to
+/// the word "compact" in the DeltaMerge Store. The "compact request" here refer to the "delta merge" process
+/// (major compact), while the "compact" in delta merge store refers to the "compact delta layer" process
+/// (minor compact).
 /// This class is thread safe. Every public member function can be called without synchronization.
 class ManualCompactManager : private boost::noncopyable
 {
@@ -74,9 +77,9 @@ private:
 
     /// When there is a task containing the same logical_table running,
     /// the task will be rejected.
-    std::set<int64_t> unsync_active_logical_table_ids;
+    std::set<int64_t> unsync_active_logical_table_ids = {};
 
-    size_t unsync_running_or_pending_tasks;
+    size_t unsync_running_or_pending_tasks = 0;
 
     // == Accessing members above must be synchronized ==
 

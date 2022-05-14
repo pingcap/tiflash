@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnVector.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
-#include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
@@ -31,7 +29,6 @@
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
@@ -84,6 +81,7 @@ extern const int LOGICAL_ERROR;
 
 namespace FailPoints
 {
+extern const char skip_check_segment_update[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char pause_when_writing_to_dt_store[];
@@ -1295,6 +1293,8 @@ void DeltaMergeStore::waitForDeleteRange(const DB::DM::DMContextPtr &, const DB:
 
 void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const SegmentPtr & segment, ThreadType thread_type)
 {
+    fiu_do_on(FailPoints::skip_check_segment_update, { return; });
+
     if (segment->hasAbandoned())
         return;
     const auto & delta = segment->getDelta();

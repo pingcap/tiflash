@@ -3376,12 +3376,10 @@ public:
             setStorageFormat(ps_ver);
             TiFlashStorageTestBasic::SetUp();
 
-            helper = std::make_unique<MultiSegmentTestUtil>(*db_context);
-            helper->setSettings(50);
-
             setupDMStore();
 
             // Split into 4 segments.
+            helper = std::make_unique<MultiSegmentTestUtil>(*db_context);
             helper->prepareSegments(store, 50, pk_type);
         }
         CATCH
