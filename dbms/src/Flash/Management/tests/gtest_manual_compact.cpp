@@ -47,12 +47,16 @@ class BasicManualCompactTest
 public:
     static constexpr TableID TABLE_ID = 5;
 
+    BasicManualCompactTest()
+    {
+        log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+        pk_type = GetParam();
+    }
+
     void SetUp() override
     {
         try
         {
-            log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
-            pk_type = GetParam();
             TiFlashStorageTestBasic::SetUp();
 
             manager = std::make_unique<DB::Management::ManualCompactManager>(*db_context);

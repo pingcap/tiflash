@@ -135,7 +135,7 @@ class DeltaMergeStoreRWTest
     , public testing::WithParamInterface<TestMode>
 {
 public:
-    void SetUp() override
+    DeltaMergeStoreRWTest()
     {
         mode = GetParam();
 
@@ -150,7 +150,10 @@ public:
             setStorageFormat(2);
             break;
         }
+    }
 
+    void SetUp() override
+    {
         TiFlashStorageTestBasic::SetUp();
         store = reload();
     }
@@ -3367,12 +3370,16 @@ class DeltaMergeStoreMergeDeltaBySegmentTest
     , public testing::WithParamInterface<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>>
 {
 public:
+    DeltaMergeStoreMergeDeltaBySegmentTest()
+    {
+        log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+        std::tie(ps_ver, pk_type) = GetParam();
+    }
+
     void SetUp() override
     {
         try
         {
-            log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
-            std::tie(ps_ver, pk_type) = GetParam();
             setStorageFormat(ps_ver);
             TiFlashStorageTestBasic::SetUp();
 
