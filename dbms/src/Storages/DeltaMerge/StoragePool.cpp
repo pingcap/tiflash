@@ -295,8 +295,6 @@ void StoragePool::forceTransformMetaV2toV3()
 
 PageStorageRunMode StoragePool::restore()
 {
-    const auto & global_storage_pool = global_context.getGlobalStoragePool();
-
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
@@ -314,9 +312,9 @@ PageStorageRunMode StoragePool::restore()
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        max_log_page_id = global_storage_pool->log_storage->getMaxId(ns_id);
-        max_data_page_id = global_storage_pool->data_storage->getMaxId(ns_id);
-        max_meta_page_id = global_storage_pool->meta_storage->getMaxId(ns_id);
+        max_log_page_id = log_storage_v3->getMaxId(ns_id);
+        max_data_page_id = data_storage_v3->getMaxId(ns_id);
+        max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         break;
@@ -367,18 +365,18 @@ PageStorageRunMode StoragePool::restore()
             data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
             meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
 
-            max_log_page_id = global_storage_pool->log_storage->getMaxId(ns_id);
-            max_data_page_id = global_storage_pool->data_storage->getMaxId(ns_id);
-            max_meta_page_id = global_storage_pool->meta_storage->getMaxId(ns_id);
+            max_log_page_id = log_storage_v3->getMaxId(ns_id);
+            max_data_page_id = data_storage_v3->getMaxId(ns_id);
+            max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
 
             run_mode = PageStorageRunMode::ONLY_V3;
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         }
         else // Still running Mix Mode
         {
-            max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), global_storage_pool->log_storage->getMaxId(ns_id));
-            max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), global_storage_pool->data_storage->getMaxId(ns_id));
-            max_meta_page_id = std::max(meta_storage_v2->getMaxId(ns_id), global_storage_pool->meta_storage->getMaxId(ns_id));
+            max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), log_storage_v3->getMaxId(ns_id));
+            max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), data_storage_v3->getMaxId(ns_id));
+            max_meta_page_id = std::max(meta_storage_v2->getMaxId(ns_id), meta_storage_v3->getMaxId(ns_id));
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolMixMode};
         }
         break;
