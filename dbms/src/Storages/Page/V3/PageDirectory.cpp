@@ -380,8 +380,9 @@ std::optional<PageEntryV3> VersionedPageEntries::getLastEntry() const
     return std::nullopt;
 }
 
-// Returns true when **this id** is visible (not exist or already marked as deleted) by `seq`.
-// Note that it does not means this id can be GC.
+// Returns true when **this id** is "visible" by `seq`.
+// If this page id is marked as deleted or not created, it is "not visible".
+// Note that not visible does not means this id can be GC.
 bool VersionedPageEntries::isVisible(UInt64 seq) const
 {
     auto page_lock = acquireLock();

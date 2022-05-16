@@ -191,7 +191,7 @@ bool PageDirectoryFactory::applyRecord(
         {
             throw e;
         }
-        LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "try to resolve error during restore: {}", e.message());
+        LOG_FMT_WARNING(DB::Logger::get("PageDirectoryFactory"), "try to resolve error during restore: {}", e.message());
         return false;
     }
     return true;

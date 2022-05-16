@@ -243,8 +243,8 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     try
     {
         page_storage_run_mode = storage_pool->restore(); // restore from disk
-        if (const auto entry1 = storage_pool->metaReader()->getPageEntry(1);
-            !entry1.isValid())
+        if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
+            !first_segment_entry.isValid())
         {
             // Create the first segment.
             auto segment_id = storage_pool->newMetaPageId();
