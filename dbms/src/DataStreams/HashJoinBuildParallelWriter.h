@@ -42,8 +42,6 @@ public:
         }
     }
 
-    String getName() const override { return "HashJoinBuild"; }
-
 private:
     JoinPtr join;
 };

@@ -26,9 +26,10 @@ class ParallelWriter
 {
 public:
     ParallelWriter(
-        const String & writer_name,
+        const String & name_,
         const String & req_id)
-        : log(Logger::get(writer_name, req_id))
+        : name(name_)
+        , log(Logger::get(name_, req_id))
     {}
 
     virtual void write(Block & /*block*/, size_t /*thread_num*/){};
@@ -37,11 +38,12 @@ public:
     virtual void onFinishThread(size_t /*thread_num*/){};
     virtual void onFinish(){};
 
-    virtual String getName() const = 0;
+    String getName() const { return name; };
 
     virtual ~ParallelWriter() = default;
 
 protected:
+    const String name;
     const LoggerPtr log;
 };
 
