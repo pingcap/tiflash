@@ -29,8 +29,6 @@ BlockInputStreamPtr executeParallelWrite(
 
 class SerialWritingBlockInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "SerialWriting";
-
 public:
     SerialWritingBlockInputStream(
         const BlockInputStreamPtr & input,
@@ -38,7 +36,7 @@ public:
         const ParallelWriterPtr & parallel_writer_,
         const String & req_id);
 
-    String getName() const override { return NAME; }
+    String getName() const override { return name; }
 
     Block getHeader() const override;
 
@@ -46,6 +44,8 @@ protected:
     Block readImpl() override;
 
 private:
+    const String name;
+
     const LoggerPtr log;
 
     ParallelWriterPtr parallel_writer;
@@ -53,8 +53,6 @@ private:
 
 class ParallelWritingBlockInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "ParallelWriting";
-
 public:
     ParallelWritingBlockInputStream(
         const BlockInputStreams & inputs,
@@ -63,7 +61,7 @@ public:
         size_t max_threads_,
         const String & req_id);
 
-    String getName() const override { return NAME; }
+    String getName() const override { return name; }
 
     void cancel(bool kill) override;
 
@@ -83,6 +81,8 @@ protected:
     Block readImpl() override;
 
 private:
+    const String name;
+
     const LoggerPtr log;
 
     size_t max_threads;

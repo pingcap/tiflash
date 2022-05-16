@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/ParallelWritingBlockInputStream.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -38,7 +39,8 @@ SerialWritingBlockInputStream::SerialWritingBlockInputStream(
     const BlockInputStreamPtr & additional_input_at_end,
     const ParallelWriterPtr & parallel_writer_,
     const String & req_id)
-    : log(Logger::get(NAME, req_id))
+    : name(fmt::format("SerialWriting<{}>", parallel_writer_->getName()))
+    , log(Logger::get(name, req_id))
     , parallel_writer(parallel_writer_)
 {
     children.push_back(input);
@@ -73,7 +75,8 @@ ParallelWritingBlockInputStream::ParallelWritingBlockInputStream(
     const ParallelWriterPtr & parallel_writer_,
     size_t max_threads_,
     const String & req_id)
-    : log(Logger::get(NAME, req_id))
+    : name(fmt::format("ParallelWriting<{}>", parallel_writer_->getName()))
+    , log(Logger::get(name, req_id))
     , max_threads(std::min(inputs.size(), max_threads_))
     , parallel_writer(parallel_writer_)
     , handler(*this)

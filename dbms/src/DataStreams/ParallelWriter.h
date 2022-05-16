@@ -37,6 +37,8 @@ public:
     virtual void onFinishThread(size_t /*thread_num*/){};
     virtual void onFinish(){};
 
+    virtual String getName() const = 0;
+
     virtual ~ParallelWriter() = default;
 
 protected:

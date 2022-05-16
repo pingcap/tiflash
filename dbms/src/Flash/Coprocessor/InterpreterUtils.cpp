@@ -118,8 +118,10 @@ void executeParallel(
     size_t max_streams,
     const LoggerPtr & log)
 {
-    assert(!pipeline.streams.empty() && !pipeline.streams_with_non_joined_data.empty());
-    if (pipeline.streams.empty()) // !pipeline.streams_with_non_joined_data.empty()
+    if (pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty())
+        return;
+
+    if (pipeline.streams.empty()) // && !pipeline.streams_with_non_joined_data.empty()
     {
         pipeline.streams = std::move(pipeline.streams_with_non_joined_data);
         pipeline.streams_with_non_joined_data = {};

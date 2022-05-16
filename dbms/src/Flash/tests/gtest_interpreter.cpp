@@ -228,19 +228,17 @@ Union
     {
         String expected = R"(
 CreatingSets
- Union
-  HashJoinBuildBlockInputStream x 10
+ ParallelWriting<HashJoinBuild>
+  Expression x 10
+   Expression
+    MockTableScan
+ ParallelWriting<HashJoinBuild> x 2
+  Expression x 10
    Expression
     Expression
-     MockTableScan
- Union x 2
-  HashJoinBuildBlockInputStream x 10
-   Expression
-    Expression
-     Expression
-      HashJoinProbe
-       Expression
-        MockTableScan
+     HashJoinProbe
+      Expression
+       MockTableScan
  Union
   Expression x 10
    Expression
