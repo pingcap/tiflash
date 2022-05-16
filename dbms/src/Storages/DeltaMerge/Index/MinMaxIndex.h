@@ -80,7 +80,7 @@ public:
     RSResult checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
     RSResult checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
 
-    String toString() const;
+    static String toString();
 };
 
 
