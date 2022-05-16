@@ -174,6 +174,8 @@ public:
 
     std::optional<PageEntryV3> getLastEntry() const;
 
+    bool isVisible(UInt64 seq) const;
+
     /**
      * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and
      * store them into `blob_versioned_entries`.

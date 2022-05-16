@@ -356,7 +356,7 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
         if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
             iter != entries.end())
         {
-            // NORMAL
+            // not deleted
             if (iter->second.isEntry())
                 return iter->second.entry;
         }
@@ -378,6 +378,41 @@ std::optional<PageEntryV3> VersionedPageEntries::getLastEntry() const
         }
     }
     return std::nullopt;
+}
+
+// Returns true when **this id** is visible (not exist or already marked as deleted) by `seq`.
+// Note that it does not means this id can be GC.
+bool VersionedPageEntries::isVisible(UInt64 seq) const
+{
+    auto page_lock = acquireLock();
+    if (type == EditRecordType::VAR_DELETE)
+    {
+        return false;
+    }
+    else if (type == EditRecordType::VAR_ENTRY)
+    {
+        // entries are sorted by <ver, epoch>, find the first one less than <ver+1, 0>
+        if (auto iter = MapUtils::findLess(entries, PageVersionType(seq + 1));
+            iter != entries.end())
+        {
+            // not deleted
+            return iter->second.isEntry();
+        }
+        // else there are no valid entry less than seq
+        return false;
+    }
+    else if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF)
+    {
+        // `delete_ver` is only valid when `is_deleted == true`
+        return create_ver.sequence <= seq && !(is_deleted && delete_ver.sequence <= seq);
+    }
+
+    throw Exception(fmt::format(
+                        "calling isDeleted with invalid state "
+                        "[seq={}] [state={}]",
+                        seq,
+                        toDebugString()),
+                    ErrorCodes::LOGICAL_ERROR);
 }
 
 Int64 VersionedPageEntries::incrRefCount(const PageVersionType & ver)
@@ -904,10 +939,31 @@ PageId PageDirectory::getMaxId(NamespaceId ns_id) const
         // iter is not at the beginning and mvcc_table_directory is not empty,
         // so iter-- must be a valid iterator, and it's the largest page id which is smaller than the target page id.
         iter--;
-        if (iter->first.high == ns_id)
-            return iter->first.low;
-        else
-            return 0;
+
+        do
+        {
+            // Can't find any entries in current ns_id
+            if (iter->first.high != ns_id)
+            {
+                break;
+            }
+
+            // Check and return whether this id is visible, otherwise continue to check the previous one.
+            if (iter->second->isVisible(UINT64_MAX - 1))
+            {
+                return iter->first.low;
+            }
+
+            // Current entry/ref/external is deleted and there are no entries before it.
+            if (iter == mvcc_table_directory.begin())
+            {
+                break;
+            }
+
+            iter--;
+        } while (true);
+
+        return 0;
     }
 }
 

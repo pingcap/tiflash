@@ -722,6 +722,126 @@ TEST_F(VersionedEntriesTest, InsertWithLowerVersion)
     ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_v2);
 }
 
+TEST_F(VersionedEntriesTest, EntryIsVisible)
+try
+{
+    // init state
+    ASSERT_FALSE(entries.isVisible(0));
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_FALSE(entries.isVisible(2));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert some entries
+    INSERT_ENTRY(2);
+    INSERT_ENTRY(3);
+    INSERT_ENTRY(5);
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_TRUE(entries.isVisible(6));
+
+    // insert delete
+    entries.createDelete(PageVersionType(6));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert entry after delete
+    INSERT_ENTRY(7);
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_TRUE(entries.isVisible(7));
+    ASSERT_TRUE(entries.isVisible(10000));
+}
+CATCH
+
+TEST_F(VersionedEntriesTest, ExternalPageIsVisible)
+try
+{
+    // init state
+    ASSERT_FALSE(entries.isVisible(0));
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_FALSE(entries.isVisible(2));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert some entries
+    entries.createNewExternal(PageVersionType(2));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(10000));
+
+    // insert delete
+    entries.createDelete(PageVersionType(6));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert entry after delete
+    entries.createNewExternal(PageVersionType(7));
+
+    // after re-create external page, the visible for 1~5 has changed
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_TRUE(entries.isVisible(7));
+    ASSERT_TRUE(entries.isVisible(10000));
+}
+CATCH
+
+TEST_F(VersionedEntriesTest, RefPageIsVisible)
+try
+{
+    // init state
+    ASSERT_FALSE(entries.isVisible(0));
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_FALSE(entries.isVisible(2));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert some entries
+    entries.createNewRef(PageVersionType(2), buildV3Id(TEST_NAMESPACE_ID, 2));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(10000));
+
+    // insert delete
+    entries.createDelete(PageVersionType(6));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert entry after delete
+    entries.createNewRef(PageVersionType(7), buildV3Id(TEST_NAMESPACE_ID, 2));
+
+    // after re-create ref page, the visible for 1~5 has changed
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_TRUE(entries.isVisible(7));
+    ASSERT_TRUE(entries.isVisible(10000));
+}
+CATCH
+
 TEST_F(VersionedEntriesTest, GC)
 try
 {
@@ -2312,6 +2432,81 @@ try
         ASSERT_EQ(dir->getMaxId(medium), 320);
         ASSERT_EQ(dir->getMaxId(large), 2);
     }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(medium, 320));
+        dir->apply(std::move(edit));
+        ASSERT_EQ(dir->getMaxId(medium), 300);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(medium, 300));
+        dir->apply(std::move(edit));
+        ASSERT_EQ(dir->getMaxId(medium), 0);
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, GetMaxIdAfterDelete)
+try
+{
+    /// test for deleting put
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(1, entry1);
+        edit.put(2, entry2);
+        dir->apply(std::move(edit));
+    }
+
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 2);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        dir->apply(std::move(edit));
+    }
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 1);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(1);
+        dir->apply(std::move(edit));
+    }
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
+
+    dir->gcInMemEntries();
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
+
+    /// test for deleting put_ext/ref
+
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(1);
+        edit.ref(2, 1);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(1);
+        dir->apply(std::move(edit));
+    }
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 2);
+    dir->gcInMemEntries();
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 2);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        dir->apply(std::move(edit));
+    }
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
+    dir->gcInMemEntries();
+    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
 }
 CATCH
 
