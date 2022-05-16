@@ -127,6 +127,6 @@ inline bool mulOverflow(Int256 x, Int256 y, Int256 & res)
     {
         return true;
     }
-    return res >= Int256((Int256(0x1) << 255)); /// whether overflow int256
+    return false;
 }
 } // namespace common
