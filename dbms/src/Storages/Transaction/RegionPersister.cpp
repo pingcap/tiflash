@@ -317,8 +317,10 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
             // change run_mode to ONLY_V3
             page_storage_v2 = nullptr;
-            page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
-            page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
+
+            // Must use PageStorageRunMode::ONLY_V3 here.
+            page_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, page_storage_v3);
+            page_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
 
             run_mode = PageStorageRunMode::ONLY_V3;
             break;
