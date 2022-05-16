@@ -573,7 +573,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::TimeToSec, "cast"},
     //{tipb::ScalarFuncSig::TimestampAdd, "cast"},
     //{tipb::ScalarFuncSig::ToDays, "cast"},
-    //{tipb::ScalarFuncSig::ToSeconds, "cast"},
+    {tipb::ScalarFuncSig::ToSeconds, "tidbToSeconds"},
     //{tipb::ScalarFuncSig::UTCTimeWithArg, "cast"},
     //{tipb::ScalarFuncSig::UTCTimestampWithoutArg, "cast"},
     //{tipb::ScalarFuncSig::Timestamp1Arg, "cast"},
