@@ -81,9 +81,6 @@ public:
     RSResult checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
 
     static String toString();
-    RSResult checkNullableEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkNullableGreater(size_t pack_index, const Field & value, const DataTypePtr & type);
-    RSResult checkNullableGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
 };
 
 

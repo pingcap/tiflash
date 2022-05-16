@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
 #include <fmt/format.h>
+
+
+namespace CurrentMetrics
+{
+extern const Metric StoragePoolV2Only;
+extern const Metric StoragePoolV3Only;
+extern const Metric StoragePoolMixMode;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -30,6 +39,7 @@ namespace FailPoints
 {
 extern const char force_set_dtfile_exist_when_acquire_id[];
 } // namespace FailPoints
+
 namespace DM
 {
 enum class StorageType
@@ -159,6 +169,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , global_context(global_ctx)
+    , storage_pool_metrics(CurrentMetrics::StoragePoolV3Only, 0)
 {
     const auto & global_storage_pool = global_context.getGlobalStoragePool();
     switch (run_mode)
@@ -200,7 +211,6 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
         log_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, log_storage_v3);
         data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
         meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
-
         break;
     }
     case PageStorageRunMode::MIX_MODE:
@@ -237,6 +247,52 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
     }
 }
 
+void StoragePool::forceTransformMetaV2toV3()
+{
+    assert(meta_storage_v2 != nullptr);
+    assert(meta_storage_v3 != nullptr);
+    auto meta_transform_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, meta_storage_v3);
+    auto meta_transform_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, meta_storage_v2, meta_storage_v3, nullptr);
+
+    Pages pages_transform = {};
+    auto meta_transform_acceptor = [&](const DB::Page & page) {
+        pages_transform.emplace_back(page);
+    };
+
+    meta_transform_storage_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
+
+    WriteBatch write_batch_transform{ns_id};
+    WriteBatch write_batch_del_v2{ns_id};
+
+    for (const auto & page_transform : pages_transform)
+    {
+        // Check pages have not contain field offset
+        // Also get the tag of page_id
+        const auto & page_transform_entry = meta_transform_storage_reader->getPageEntry(page_transform.page_id);
+        if (!page_transform_entry.field_offsets.empty())
+        {
+            throw Exception(fmt::format("Can't transfrom meta from V2 to V3, [page_id={}] {}", //
+                                        page_transform.page_id,
+                                        page_transform_entry.toDebugString()),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+
+        write_batch_transform.putPage(page_transform.page_id, //
+                                      page_transform_entry.tag,
+                                      std::make_shared<ReadBufferFromMemory>(page_transform.data.begin(),
+                                                                             page_transform.data.size()),
+                                      page_transform.data.size());
+        // Record del for V2
+        write_batch_del_v2.delPage(page_transform.page_id);
+    }
+
+    // Will rewrite into V3.
+    meta_transform_storage_writer->write(std::move(write_batch_transform), nullptr);
+
+    // DEL must call after rewrite.
+    meta_transform_storage_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
+}
+
 PageStorageRunMode StoragePool::restore()
 {
     const auto & global_storage_pool = global_context.getGlobalStoragePool();
@@ -257,6 +313,7 @@ PageStorageRunMode StoragePool::restore()
         max_data_page_id = data_max_ids[0];
         max_meta_page_id = meta_max_ids[0];
 
+        storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV2Only};
         break;
     }
     case PageStorageRunMode::ONLY_V3:
@@ -265,6 +322,7 @@ PageStorageRunMode StoragePool::restore()
         max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
         max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
 
+        storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         break;
     }
     case PageStorageRunMode::MIX_MODE:
@@ -272,6 +330,24 @@ PageStorageRunMode StoragePool::restore()
         auto v2_log_max_ids = log_storage_v2->restore();
         auto v2_data_max_ids = data_storage_v2->restore();
         auto v2_meta_max_ids = meta_storage_v2->restore();
+
+        // The pages on data and log can be rewritten to V3 and the old pages on V2 are deleted by `delta merge`.
+        // However, the pages on meta V2 can not be deleted. As the pages in meta are small, we perform a forceTransformMetaV2toV3 to convert pages before all.
+        if (const auto & meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
+        {
+            LOG_FMT_INFO(logger, "Current meta transform to V3 begin, [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
+            forceTransformMetaV2toV3();
+            const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
+            LOG_FMT_INFO(logger, "Current meta transform to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
+                         ns_id,
+                         meta_remain_pages_after_transform == 0,
+                         meta_remain_pages,
+                         meta_remain_pages_after_transform);
+        }
+        else
+        {
+            LOG_FMT_INFO(logger, "Current meta translate already done before restored.[ns_id={}] ", ns_id);
+        }
 
         assert(v2_log_max_ids.size() == 1);
         assert(v2_data_max_ids.size() == 1);
@@ -281,35 +357,37 @@ PageStorageRunMode StoragePool::restore()
         // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
-            // TODO: when `compaction` happend
-            // 1. Will rewrite meta into V3 by DT.
-            // 2. Need `DEL` meta in V2.
-            // 3. Need drop V2 in disk and check.
-            LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", static_cast<UInt8>(PageStorageRunMode::MIX_MODE), static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
+            // TODO: Need drop V2 in disk and check.
+            LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", //
+                         static_cast<UInt8>(PageStorageRunMode::MIX_MODE),
+                         static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
 
             log_storage_v2 = nullptr;
             data_storage_v2 = nullptr;
             meta_storage_v2 = nullptr;
 
-            log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
-            data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
-            meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
+            // Must init by PageStorageRunMode::ONLY_V3
+            log_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
+            data_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
+            meta_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
 
-            log_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, log_storage_v3);
-            data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
-            meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
+            log_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, log_storage_v3);
+            data_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, data_storage_v3);
+            meta_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, meta_storage_v3);
 
             max_log_page_id = global_storage_pool->getLogMaxId(ns_id);
             max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
             max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
 
             run_mode = PageStorageRunMode::ONLY_V3;
+            storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         }
         else // Still running Mix Mode
         {
             max_log_page_id = std::max(v2_log_max_ids[0], global_storage_pool->getLogMaxId(ns_id));
             max_data_page_id = std::max(v2_data_max_ids[0], global_storage_pool->getDataMaxId(ns_id));
             max_meta_page_id = std::max(v2_meta_max_ids[0], global_storage_pool->getMetaMaxId(ns_id));
+            storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolMixMode};
         }
         break;
     }
