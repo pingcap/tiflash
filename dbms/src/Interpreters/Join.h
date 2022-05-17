@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnFixedString.h>
@@ -5,7 +19,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/HashMap.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/AggregationCommon.h>
@@ -84,6 +98,7 @@ public:
          const SizeLimits & limits,
          ASTTableJoin::Kind kind_,
          ASTTableJoin::Strictness strictness_,
+         const String & req_id,
          size_t build_concurrency = 1,
          const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators,
          const String & left_filter_column = "",
@@ -92,8 +107,7 @@ public:
          const String & other_eq_filter_from_in_column = "",
          ExpressionActionsPtr other_condition_ptr = nullptr,
          size_t max_block_size = 0,
-         const String & match_helper_name = "",
-         const LogWithPrefixPtr & log_ = nullptr);
+         const String & match_helper_name = "");
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -315,7 +329,7 @@ private:
     mutable std::condition_variable build_table_cv;
     BuildTableState build_table_state;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     /// Limits for maximum map size.
     SizeLimits limits;

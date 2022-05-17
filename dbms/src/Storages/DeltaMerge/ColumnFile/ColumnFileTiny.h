@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
@@ -13,7 +27,6 @@ using ColumnTinyFilePtr = std::shared_ptr<ColumnFileTiny>;
 /// It may be created in two ways:
 ///   1. created directly when writing to storage if the data is large enough
 ///   2. created when flushed `ColumnFileInMemory` to disk
-/// And it may have cache data if the column file is small enough(The details are in the flush process).
 class ColumnFileTiny : public ColumnFilePersisted
 {
     friend class ColumnFileTinyReader;
@@ -24,13 +37,15 @@ private:
     UInt64 rows = 0;
     UInt64 bytes = 0;
 
-    // The id of data page which stores the data of this pack.
+    /// The id of data page which stores the data of this pack.
     PageId data_page_id;
 
     /// The members below are not serialized.
-    // The cache data in memory.
+
+    /// The cache data in memory.
+    /// Currently this field is unused.
     CachePtr cache;
-    // Used to map column id to column instance in a Block.
+    /// Used to map column id to column instance in a Block.
     ColIdToOffset colid_to_offset;
 
 private:

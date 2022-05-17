@@ -1,7 +1,22 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
+#include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
@@ -30,10 +45,10 @@ class PageDirectorySnapshot : public DB::PageStorageSnapshot
 public:
     using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
-    UInt64 sequence;
-    explicit PageDirectorySnapshot(UInt64 seq)
+    explicit PageDirectorySnapshot(UInt64 seq, const String & tracing_id_)
         : sequence(seq)
-        , t_id(Poco::ThreadNumber::get())
+        , create_thread(Poco::ThreadNumber::get())
+        , tracing_id(tracing_id_)
         , create_time(std::chrono::steady_clock::now())
     {
         CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
@@ -51,13 +66,12 @@ public:
         return diff.count();
     }
 
-    unsigned getTid() const
-    {
-        return t_id;
-    }
+public:
+    const UInt64 sequence;
+    const unsigned create_thread;
+    const String tracing_id;
 
 private:
-    const unsigned t_id;
     const TimePoint create_time;
 };
 using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
@@ -132,7 +146,7 @@ public:
 
     [[nodiscard]] PageLock acquireLock() const
     {
-        return std::lock_guard<std::mutex>(m);
+        return std::lock_guard(m);
     }
 
     void createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry);
@@ -157,6 +171,8 @@ public:
     Int64 incrRefCount(const PageVersionType & ver);
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
+
+    std::optional<PageEntryV3> getLastEntry() const;
 
     /**
      * If there are entries point to file in `blob_ids`, take out the <page_id, ver, entry> and
@@ -237,6 +253,7 @@ public:
             being_ref_count,
             entries.size());
     }
+    friend class PageStorageControl;
 
 private:
     mutable std::mutex m;
@@ -270,28 +287,36 @@ using PageDirectoryPtr = std::unique_ptr<PageDirectory>;
 class PageDirectory
 {
 public:
-    explicit PageDirectory(WALStorePtr && wal);
+    explicit PageDirectory(String storage_name, WALStorePtr && wal, UInt64 max_persisted_log_files_ = MAX_PERSISTED_LOG_FILES);
 
-    PageDirectorySnapshotPtr createSnapshot() const;
+    PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
 
-    std::tuple<size_t, double, unsigned> getSnapshotsStat() const;
+    SnapshotsStatistics getSnapshotsStat() const;
 
-    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
+    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
     PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return get(page_id, toConcreteSnapshot(snap));
+        return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true);
+    }
+    PageIDAndEntryV3 getOrNull(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
-    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap) const;
+    std::pair<PageIDAndEntriesV3, PageIds> get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
     PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return get(page_ids, toConcreteSnapshot(snap));
+        return std::get<0>(get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true));
+    }
+    std::pair<PageIDAndEntriesV3, PageIds> getOrNull(PageIdV3Internals page_ids, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
-    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
-    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
+    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const;
+    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap, bool throw_on_not_exist) const
     {
-        return getNormalPageId(page_id, toConcreteSnapshot(snap));
+        return getNormalPageId(page_id, toConcreteSnapshot(snap), throw_on_not_exist);
     }
 #ifndef NDEBUG
     // Just for tests, refactor them out later
@@ -305,11 +330,11 @@ public:
     }
     PageIdV3Internal getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const
     {
-        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap);
+        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap, /*throw_on_not_exist*/ true);
     }
     PageIdV3Internal getNormalPageId(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
+        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap), /*throw_on_not_exist*/ true);
     }
 #endif
 
@@ -338,14 +363,11 @@ public:
         return mvcc_table_directory.size();
     }
 
-    // No copying
-    PageDirectory(const PageDirectory &) = delete;
-    PageDirectory & operator=(const PageDirectory &) = delete;
-    // No moving
-    PageDirectory(PageDirectory && rhs) = delete;
-    PageDirectory & operator=(PageDirectory && rhs) = delete;
+    // No copying and no moving
+    DISALLOW_COPY_AND_MOVE(PageDirectory);
 
     friend class PageDirectoryFactory;
+    friend class PageStorageControl;
 
 private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
@@ -377,8 +399,8 @@ private:
     mutable std::list<std::weak_ptr<PageIdV3Internal>> external_ids;
 
     WALStorePtr wal;
-
-    LogWithPrefixPtr log;
+    const UInt64 max_persisted_log_files;
+    LoggerPtr log;
 };
 
 } // namespace DB::PS::V3

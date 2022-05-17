@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 
 namespace ProfileEvents
@@ -246,7 +260,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             }
 
             // Let's calculate gc_hint_version
-            gc_hint_version = UINT64_MAX;
+            gc_hint_version = std::numeric_limits<UInt64>::max();
             {
                 UInt8 * filter_pos = filter.data();
                 size_t handle_pos = 0;
@@ -366,7 +380,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         else
         {
             Block res;
-            for (auto & c : header)
+            for (const auto & c : header)
             {
                 auto & column = cur_raw_block.getByName(c.name);
                 column.column = column.column->filter(filter, passed_count);

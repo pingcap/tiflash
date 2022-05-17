@@ -1,10 +1,23 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/materializeBlock.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/Set.h>
 #include <Storages/IStorage.h>
@@ -28,12 +41,10 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const BlockInputStreamPtr & input,
     std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
     const SizeLimits & network_transfer_limits,
-    const MPPTaskId & mpp_task_id_,
-    const LogWithPrefixPtr & log_)
+    const String & req_id)
     : subqueries_for_sets_list(std::move(subqueries_for_sets_list_))
     , network_transfer_limits(network_transfer_limits)
-    , mpp_task_id(mpp_task_id_)
-    , log(getMPPTaskLog(log_, name, mpp_task_id))
+    , log(Logger::get(name, req_id))
 {
     init(input);
 }
@@ -42,9 +53,9 @@ CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const BlockInputStreamPtr & input,
     const SubqueriesForSets & subqueries_for_sets,
     const SizeLimits & network_transfer_limits,
-    const LogWithPrefixPtr & log_)
+    const String & req_id)
     : network_transfer_limits(network_transfer_limits)
-    , log(getMPPTaskLog(log_, name, mpp_task_id))
+    , log(Logger::get(name, req_id))
 {
     subqueries_for_sets_list.push_back(subqueries_for_sets);
     init(input);
@@ -132,10 +143,17 @@ void CreatingSetsBlockInputStream::createAll()
 
         if (!exception_from_workers.empty())
         {
-            LOG_FMT_ERROR(log, "Creating all tasks of {} takes {} sec with exception and rethrow the first of total {} exceptions", mpp_task_id.toString(), watch.elapsedSeconds(), exception_from_workers.size());
+            LOG_FMT_ERROR(
+                log,
+                "Creating all tasks takes {} sec with exception and rethrow the first of total {} exceptions",
+                watch.elapsedSeconds(),
+                exception_from_workers.size());
             std::rethrow_exception(exception_from_workers.front());
         }
-        LOG_FMT_DEBUG(log, "Creating all tasks of {} takes {} sec. ", mpp_task_id.toString(), watch.elapsedSeconds());
+        LOG_FMT_DEBUG(
+            log,
+            "Creating all tasks takes {} sec. ",
+            watch.elapsedSeconds());
 
         created = true;
     }
@@ -143,15 +161,19 @@ void CreatingSetsBlockInputStream::createAll()
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
-    auto log_msg = fmt::format("{} for task {}",
-                               subquery.set ? "Creating set. " : subquery.join ? "Creating join. "
-                                   : subquery.table                            ? "Filling temporary table. "
-                                                                               : "null subquery",
-                               mpp_task_id.toString());
+    auto gen_log_msg = [&subquery] {
+        if (subquery.set)
+            return "Creating set. ";
+        if (subquery.join)
+            return "Creating join. ";
+        if (subquery.table)
+            return "Filling temporary table. ";
+        return "null subquery";
+    };
     Stopwatch watch;
     try
     {
-        LOG_FMT_DEBUG(log, "{}", log_msg);
+        LOG_FMT_DEBUG(log, "{}", gen_log_msg());
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
@@ -238,34 +260,37 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
         if (head_rows != 0)
         {
-            std::stringstream msg;
-            msg << std::fixed << std::setprecision(3);
-            msg << "Created. ";
+            // avoid generate log message when log level > DEBUG.
+            auto gen_debug_log_msg = [&] {
+                FmtBuffer msg;
+                msg.append("Created. ");
 
-            if (subquery.set)
-                msg << "Set with " << subquery.set->getTotalRowCount() << " entries from " << head_rows << " rows. ";
-            if (subquery.join)
-                msg << "Join with " << subquery.join->getTotalRowCount() << " entries from " << head_rows << " rows. ";
-            if (subquery.table)
-                msg << "Table with " << head_rows << " rows. ";
+                if (subquery.set)
+                    msg.fmtAppend("Set with {} entries from {} rows. ", subquery.set->getTotalRowCount(), head_rows);
+                if (subquery.join)
+                    msg.fmtAppend("Join with {} entries from {} rows. ", subquery.join->getTotalRowCount(), head_rows);
+                if (subquery.table)
+                    msg.fmtAppend("Table with {} rows. ", head_rows);
 
-            msg << "In " << watch.elapsedSeconds() << " sec. ";
-            msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
+                msg.fmtAppend("In {.3f} sec. ", watch.elapsedSeconds());
+                msg.fmtAppend("using {} threads.", subquery.join ? subquery.join->getBuildConcurrency() : 1);
+                return msg.toString();
+            };
 
-            LOG_FMT_DEBUG(log, "{}", msg.rdbuf()->str());
+            LOG_FMT_DEBUG(log, "{}", gen_debug_log_msg());
         }
         else
         {
-            LOG_FMT_DEBUG(log, "Subquery has empty result for task {}. ", mpp_task_id.toString());
+            LOG_FMT_DEBUG(log, "Subquery has empty result.");
         }
     }
     catch (...)
     {
-        std::unique_lock<std::mutex> lock(exception_mutex);
+        std::unique_lock lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
         if (subquery.join)
             subquery.join->setBuildTableState(Join::BuildTableState::FAILED);
-        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", log_msg, getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
+        LOG_FMT_ERROR(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), getCurrentExceptionMessage(false, true), watch.elapsedSeconds());
     }
 }
 

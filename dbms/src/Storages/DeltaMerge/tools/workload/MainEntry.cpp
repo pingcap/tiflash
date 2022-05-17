@@ -1,3 +1,19 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
 #include <Storages/DeltaMerge/tools/workload/Handle.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
@@ -16,6 +32,19 @@ using namespace DB::DM::tests;
 
 std::ofstream log_ofs;
 
+void initWorkDirs(const std::vector<std::string> & dirs)
+{
+    for (const auto & dir : dirs)
+    {
+        Poco::File d(dir);
+        if (d.exists())
+        {
+            d.remove(true);
+        }
+        d.createDirectories();
+    }
+}
+
 void init(WorkloadOptions & opts)
 {
     log_ofs.open(opts.log_file, std::ios_base::out | std::ios_base::app);
@@ -27,123 +56,90 @@ void init(WorkloadOptions & opts)
     opts.initFailpoints();
 }
 
-void finish()
-{
-    log_ofs.close();
-}
-
-void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
-{
-    for (const auto & dir : data_dirs)
-    {
-        auto cmd = fmt::format("rm -rf {}", dir);
-        LOG_ERROR(log, cmd);
-        [[maybe_unused]] int ret = system(cmd.c_str());
-    }
-}
-
-struct BasicStatistics
-{
-    double init_sec = 0.0;
-    uint64_t write_count = 0;
-    double write_sec = 0.0;
-    uint64_t read_count = 0;
-    double read_sec = 0.0;
-
-    BasicStatistics(const DTWorkload::Statistics & stat)
-    {
-        init_sec = stat.init_store_sec;
-        for (const auto & t : stat.write_stats)
-        {
-            write_count += t.write_count;
-            write_sec += t.total_do_write_sec;
-        }
-        read_count = stat.total_read_count.load(std::memory_order_relaxed);
-        read_sec = stat.total_read_usec.load(std::memory_order_relaxed) / 1000000.0;
-    }
-
-    BasicStatistics() {}
-};
-
-void print(Poco::Logger * log, uint64_t i, const BasicStatistics & stat, WorkloadOptions & opts)
-{
-    auto s = fmt::format("No {} Workload {} InitSec {} WriteCount {} WriteSec {} ReadCount {} ReadSec {}",
-                         i,
-                         opts.write_key_distribution,
-                         stat.init_sec,
-                         stat.write_count,
-                         stat.write_sec,
-                         stat.read_count,
-                         stat.read_sec);
-    LOG_INFO(log, s);
-}
-
 void outputResultHeader()
 {
     std::cout << "Date,Table Schema,Workload,Init Seconds,Write Speed(rows count),Read Speed(rows count)" << std::endl;
 }
 
-void outputResult(Poco::Logger * log, const std::vector<BasicStatistics> & stats, WorkloadOptions & opts)
+uint64_t average(const std::vector<uint64_t> & v)
 {
-    BasicStatistics total_stat;
-    for (const auto & stat : stats)
+    if (v.empty())
     {
-        total_stat.init_sec = std::max(stat.init_sec, total_stat.init_sec);
-        total_stat.write_count += stat.write_count;
-        total_stat.write_sec += stat.write_sec;
-        total_stat.read_count += stat.read_count;
-        total_stat.read_sec += stat.read_sec;
+        return 0;
     }
+    size_t ignore_element_count = v.size() * 0.1;
+    auto begin = v.begin() + ignore_element_count; // Ignore small elements.
+    auto end = v.end() - ignore_element_count; // Ignore large elements.
+    auto count = end - begin;
+    return std::accumulate(begin, end, 0ul) / count;
+}
+
+void outputResult(Poco::Logger * log, const std::vector<Statistics> & stats, WorkloadOptions & opts)
+{
+    if (stats.empty())
+    {
+        return;
+    }
+
+    uint64_t max_init_ms = 0;
+    std::vector<uint64_t> write_per_seconds, read_per_seconds;
+    for_each(stats.begin(), stats.end(), [&](const Statistics & stat) {
+        max_init_ms = std::max(max_init_ms, stat.initMS());
+        write_per_seconds.push_back(stat.writePerSecond());
+        read_per_seconds.push_back(stat.readPerSecond());
+    });
+
+    std::sort(write_per_seconds.begin(), write_per_seconds.end());
+    std::sort(read_per_seconds.begin(), read_per_seconds.end());
+
+    auto avg_write_per_second = average(write_per_seconds);
+    auto avg_read_per_second = average(read_per_seconds);
+
     // Date, Table Schema, Workload, Init Seconds, Write Speed(rows count), Read Speed(rows count)
-    auto s = fmt::format("{},{},{},{:.2f},{:.2f},{:.2f}", localDate(), opts.table, opts.write_key_distribution, total_stat.init_sec, total_stat.write_count / total_stat.write_sec, total_stat.read_count / total_stat.read_sec);
+    auto s = fmt::format("{},{},{},{:.2f},{},{}",
+                         localDate(),
+                         opts.table,
+                         opts.write_key_distribution,
+                         max_init_ms / 1000.0,
+                         avg_write_per_second,
+                         avg_read_per_second);
     LOG_INFO(log, s);
     std::cout << s << std::endl;
 }
 
 std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
 {
-    return opts.verification ? std::make_unique<SharedHandleTable>() : nullptr;
+    return opts.verification ? std::make_unique<SharedHandleTable>(opts.max_key_count) : nullptr;
 }
 
 void run(WorkloadOptions & opts)
 {
-    init(opts);
     auto * log = &Poco::Logger::get("DTWorkload_main");
-    LOG_INFO(log, opts.toString());
-    auto data_dirs = DB::tests::TiFlashTestEnv::getGlobalContext().getPathPool().listPaths();
-    std::vector<BasicStatistics> basic_stats;
+    LOG_FMT_INFO(log, "{}", opts.toString());
+    std::vector<Statistics> stats;
     try
     {
         // HandleTable is a unordered_map that stores handle->timestamp for data verified.
         auto handle_table = createHandleTable(opts);
         // Table Schema
         auto table_gen = TableGenerator::create(opts);
-        auto table_info = table_gen->get();
+        auto table_info = table_gen->get(opts.table_id, opts.table_name);
         // In this for loop, destory DeltaMergeStore gracefully and recreate it.
         for (uint64_t i = 0; i < opts.verify_round; i++)
         {
             DTWorkload workload(opts, handle_table, table_info);
             workload.run(i);
-            basic_stats.emplace_back(workload.getStat());
-            print(log, i, basic_stats.back(), opts);
+            stats.push_back(workload.getStat());
+            LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
         }
-        removeData(log, data_dirs);
-    }
-    catch (const DB::Exception & e)
-    {
-        LOG_ERROR(log, e.message());
-    }
-    catch (const std::exception & e)
-    {
-        LOG_ERROR(log, e.what());
     }
     catch (...)
     {
-        LOG_ERROR(log, "Unknow Exception");
+        DB::tryLogCurrentException("exception thrown");
+        std::abort(); // Finish testing if some error happened.
     }
 
-    outputResult(log, basic_stats, opts);
-    finish();
+    outputResult(log, stats, opts);
 }
 
 void randomKill(WorkloadOptions & opts, pid_t pid)
@@ -218,9 +214,11 @@ void dailyPerformanceTest(WorkloadOptions & opts)
 {
     outputResultHeader();
     std::vector<std::string> workloads{"uniform", "normal", "incremental"};
-    for (const auto & w : workloads)
+    for (size_t i = 0; i < workloads.size(); i++)
     {
-        opts.write_key_distribution = w;
+        opts.write_key_distribution = workloads[i];
+        opts.table_id = i;
+        opts.table_name = workloads[i];
         ::run(opts);
     }
 }
@@ -248,7 +246,15 @@ int DTWorkload::mainEntry(int argc, char ** argv)
         return -1;
     }
 
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs);
+    // Log file is created in the first directory of `opts.work_dirs` by default.
+    // So create these work_dirs before logger initialization.
+    // Attention: This function will remove directory first if `work_dirs` exists.
+    initWorkDirs(opts.work_dirs);
+    // need to init logger before creating global context,
+    // or the logging in global context won't be output to
+    // the log file
+    init(opts);
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.enable_ps_v3);
 
     if (opts.testing_type == "daily_perf")
     {

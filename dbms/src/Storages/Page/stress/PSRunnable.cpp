@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/MemoryTracker.h>
 #include <Common/formatReadable.h>
 #include <Encryption/MockKeyManager.h>
@@ -23,7 +37,7 @@ try
     }
     auto peak = current_memory_tracker->getPeak();
     current_memory_tracker = nullptr;
-    LOG_INFO(StressEnv::logger, description() << " exit with peak memory usage: " << formatReadableSizeWithBinarySuffix(peak));
+    LOG_FMT_INFO(StressEnv::logger, "{} exit with peak memory usage: {}", description(), formatReadableSizeWithBinarySuffix(peak));
 }
 catch (...)
 {
@@ -43,7 +57,7 @@ size_t PSRunnable::getPagesUsed() const
 size_t PSWriter::approx_page_mb = 2;
 void PSWriter::setApproxPageSize(size_t size_mb)
 {
-    LOG_INFO(StressEnv::logger, fmt::format("Page approx size is set to {} MB", size_mb));
+    LOG_FMT_INFO(StressEnv::logger, "Page approx size is set to {} MB", size_mb);
     approx_page_mb = size_mb;
 }
 
@@ -101,7 +115,7 @@ void PSWriter::fillAllPages(const PSPtr & ps)
         wb.putPage(page_id, 0, buff, buff->buffer().size());
         ps->write(std::move(wb));
         if (page_id % 100 == 0)
-            LOG_INFO(StressEnv::logger, fmt::format("writer wrote page {}", page_id));
+            LOG_FMT_INFO(StressEnv::logger, "writer wrote page {}", page_id);
     }
 }
 
@@ -290,7 +304,7 @@ std::mutex page_id_mutex;
 
 DB::PageId PSWindowWriter::genRandomPageId()
 {
-    std::lock_guard<std::mutex> page_id_lock(page_id_mutex);
+    std::lock_guard page_id_lock(page_id_mutex);
     if (pageid_boundary < (window_size / 2))
     {
         writing_page[index] = pageid_boundary++;
@@ -376,7 +390,7 @@ DB::PageIds PSWindowReader::genRandomPageIds()
 
 bool PSSnapshotReader::runImpl()
 {
-    snapshots.emplace_back(ps->getSnapshot());
+    snapshots.emplace_back(ps->getSnapshot(""));
     usleep(snapshot_get_interval_ms * 1000);
     return true;
 }

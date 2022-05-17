@@ -1,3 +1,18 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/nocopyable.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <Storages/DeltaMerge/tools/workload/Options.h>
@@ -30,10 +45,7 @@ std::vector<std::string> TableInfo::toStrings() const
 class TablePkType
 {
 public:
-    TablePkType(const TablePkType &) = delete;
-    TablePkType(TablePkType &&) = delete;
-    TablePkType & operator=(const TablePkType &) = delete;
-    TablePkType && operator=(TablePkType &&) = delete;
+    DISALLOW_COPY_AND_MOVE(TablePkType);
 
     static TablePkType & instance()
     {
@@ -225,13 +237,13 @@ public:
         , rand_gen(std::random_device()())
     {}
 
-    virtual TableInfo get() override
+    virtual TableInfo get(int64_t table_id, std::string table_name) override
     {
         TableInfo table_info;
 
-        table_info.table_id = rand_gen();
+        table_info.table_id = table_id < 0 ? rand_gen() : table_id;
+        table_info.table_name = table_name.empty() ? fmt::format("t_{}", table_info.table_id) : table_name;
         table_info.db_name = "workload";
-        table_info.table_name = fmt::format("random_table_{}", table_info.table_id);
 
         auto type = getPkType();
         table_info.columns = TablePkType::getDefaultColumns(type);
@@ -281,13 +293,13 @@ private:
 
 class ConstantTableGenerator : public TableGenerator
 {
-    virtual TableInfo get() override
+    virtual TableInfo get(int64_t table_id, std::string table_name) override
     {
         TableInfo table_info;
 
-        table_info.table_id = 0;
+        table_info.table_id = table_id < 0 ? 0 : table_id;
+        table_info.table_name = table_name.empty() ? "constant" : table_name;
         table_info.db_name = "workload";
-        table_info.table_name = "constant";
 
         table_info.columns = TablePkType::getDefaultColumns();
 

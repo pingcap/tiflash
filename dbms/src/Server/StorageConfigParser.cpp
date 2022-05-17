@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function
 #if !__clang__
 #pragma GCC diagnostic push
@@ -183,10 +197,22 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
         format_version = *version;
     }
 
-    if (auto lazily_init = table->get_qualified_as<Int32>("lazily_init_store"); lazily_init)
-    {
-        lazily_init_store = (*lazily_init != 0);
-    }
+    auto get_bool_config_or_default = [&](const String & name, bool default_value) {
+        if (auto value = table->get_qualified_as<Int32>(name); value)
+        {
+            return (*value != 0);
+        }
+        else if (auto value_b = table->get_qualified_as<bool>(name); value_b)
+        {
+            return *value_b;
+        }
+        else
+        {
+            return default_value;
+        }
+    };
+
+    lazily_init_store = get_bool_config_or_default("lazily_init_store", lazily_init_store);
 
     LOG_FMT_INFO(log, "format_version {} lazily_init_store {}", format_version, lazily_init_store);
 }

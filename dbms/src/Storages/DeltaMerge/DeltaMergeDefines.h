@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Allocator.h>
@@ -143,17 +157,8 @@ inline const ColumnDefine & getExtraTableIDColumnDefine()
     return EXTRA_TABLE_ID_COLUMN_DEFINE_;
 }
 
-static constexpr UInt64 MIN_UINT64 = std::numeric_limits<UInt64>::min();
-static constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
-
-static constexpr Int64 MIN_INT64 = std::numeric_limits<Int64>::min();
-static constexpr Int64 MAX_INT64 = std::numeric_limits<Int64>::max();
-
-static constexpr Handle N_INF_HANDLE = MIN_INT64; // Used in range, indicating negative infinity.
-static constexpr Handle P_INF_HANDLE = MAX_INT64; // Used in range, indicating positive infinity.
-
-static_assert(static_cast<Int64>(static_cast<UInt64>(MIN_INT64)) == MIN_INT64, "Unsupported compiler!");
-static_assert(static_cast<Int64>(static_cast<UInt64>(MAX_INT64)) == MAX_INT64, "Unsupported compiler!");
+static_assert(static_cast<Int64>(static_cast<UInt64>(std::numeric_limits<Int64>::min())) == std::numeric_limits<Int64>::min(), "Unsupported compiler!");
+static_assert(static_cast<Int64>(static_cast<UInt64>(std::numeric_limits<Int64>::max())) == std::numeric_limits<Int64>::max(), "Unsupported compiler!");
 
 static constexpr bool DM_RUN_CHECK = true;
 

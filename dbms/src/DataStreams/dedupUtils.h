@@ -1,19 +1,30 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Storages/MutableSupport.h>
-#include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnFixedString.h>
-#include <DataStreams/IBlockInputStream.h>
-
-#include <Core/SortDescription.h>
-#include <Core/SortCursor.h>
-
+#include <Columns/ColumnsNumber.h>
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Core/SortCursor.h>
+#include <Core/SortDescription.h>
+#include <DataStreams/IBlockInputStream.h>
+#include <Storages/MutableSupport.h>
 
 
 namespace DB
 {
-
 inline void deleteRows(Block & block, const IColumn::Filter & filter)
 {
     for (size_t i = 0; i < block.columns(); i++)
@@ -43,7 +54,7 @@ inline size_t setFilterByDelMarkColumn(const Block & block, IColumn::Filter & fi
     if (!block.has(MutableSupport::delmark_column_name))
         return 0;
 
-    const ColumnWithTypeAndName & delmark_column =  block.getByName(MutableSupport::delmark_column_name);
+    const ColumnWithTypeAndName & delmark_column = block.getByName(MutableSupport::delmark_column_name);
     const ColumnUInt8 * column = typeid_cast<const ColumnUInt8 *>(delmark_column.column.get());
     if (!column)
         throw("Del-mark column should be type ColumnUInt8.");
@@ -70,7 +81,8 @@ inline size_t setFilterByDelMarkColumn(const Block & block, IColumn::Filter & fi
 class VersionColumn
 {
 public:
-    VersionColumn(const Block & block) : column(0)
+    VersionColumn(const Block & block)
+        : column(0)
     {
         if (!block.has(MutableSupport::version_column_name))
             return;
@@ -78,7 +90,7 @@ public:
         column = typeid_cast<const ColumnUInt64 *>(version_column.column.get());
     }
 
-    UInt64 operator [] (size_t row) const
+    UInt64 operator[](size_t row) const
     {
         return column->getElement(row);
     }
@@ -92,22 +104,25 @@ class DedupingBlock
 {
 private:
     DedupingBlock(const DedupingBlock &);
-    DedupingBlock & operator = (const DedupingBlock &);
+    DedupingBlock & operator=(const DedupingBlock &);
 
 public:
     DedupingBlock(const Block & block_, const size_t stream_position_, bool set_deleted_rows)
-        : stream_position(stream_position_), block(block_), filter(block_.rows(), 1), deleted_rows(0)
+        : stream_position(stream_position_)
+        , block(block_)
+        , filter(block_.rows(), 1)
+        , deleted_rows(0)
     {
         if (set_deleted_rows)
             deleted_rows = setFilterByDelMarkColumn(block, filter);
     }
 
-    operator bool ()
+    operator bool()
     {
         return bool(block);
     }
 
-    operator const Block & ()
+    operator const Block &()
     {
         return block;
     }
@@ -145,7 +160,6 @@ public:
 
     String str()
     {
-
         std::stringstream ostr;
         ostr << "#";
         if (stream_position == size_t(-1))
@@ -160,7 +174,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupingBlock & self)
+    friend std::ostream & operator<<(std::ostream & out, DedupingBlock & self)
     {
         return out << self.str();
     }
@@ -185,7 +199,9 @@ class SmallObjectFifo : public ConcurrentBoundedQueue<T>
     using Self = ConcurrentBoundedQueue<T>;
 
 public:
-    SmallObjectFifo(size_t size) : Self(size) {}
+    SmallObjectFifo(size_t size)
+        : Self(size)
+    {}
 
     T pop()
     {
@@ -203,7 +219,9 @@ class FifoPtrs : public std::vector<std::shared_ptr<Fifo>>
     using FifoPtr = std::shared_ptr<Fifo>;
 
 public:
-    FifoPtrs(size_t size, size_t queue_max_) : Self(size), queue_max(queue_max_)
+    FifoPtrs(size_t size, size_t queue_max_)
+        : Self(size)
+        , queue_max(queue_max_)
     {
         for (size_t i = 0; i < Self::size(); ++i)
             Self::operator[](i) = std::make_shared<Fifo>(queue_max_);
@@ -218,7 +236,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, FifoPtrs & self)
+    friend std::ostream & operator<<(std::ostream & out, FifoPtrs & self)
     {
         return out << self.str();
     }
@@ -233,12 +251,14 @@ class BlocksFifo : public SmallObjectFifo<DedupingBlockPtr>
     using Self = SmallObjectFifo<DedupingBlockPtr>;
 
 public:
-    BlocksFifo(size_t size) : Self(size) {}
+    BlocksFifo(size_t size)
+        : Self(size)
+    {}
 
     // Auto finished: return empty blocks when finished.
     DedupingBlockPtr pop()
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         if (last)
             return last;
         DedupingBlockPtr block = Self::pop();
@@ -264,13 +284,15 @@ class DedupCursor
 public:
     DedupCursor() {}
 
-    DedupCursor(const DedupCursor & rhs) : block(rhs.block), cursor(rhs.cursor)
+    DedupCursor(const DedupCursor & rhs)
+        : block(rhs.block)
+        , cursor(rhs.cursor)
     {
         if (block)
             cursor.order = block->versions()[cursor.pos];
     }
 
-    DedupCursor & operator = (const DedupCursor & rhs)
+    DedupCursor & operator=(const DedupCursor & rhs)
     {
         block = rhs.block;
         cursor = rhs.cursor;
@@ -280,12 +302,13 @@ public:
     }
 
     DedupCursor(const SortCursorImpl & cursor_, const DedupingBlockPtr & block_)
-        : block(block_), cursor(cursor_)
+        : block(block_)
+        , cursor(cursor_)
     {
         cursor.order = block->versions()[cursor.pos];
     }
 
-    operator bool ()
+    operator bool()
     {
         return bool(block) && block->rows();
     }
@@ -376,7 +399,7 @@ public:
         return cursor.isLast();
     }
 
-    operator Block ()
+    operator Block()
     {
         return (Block)*block;
     }
@@ -410,11 +433,11 @@ public:
         SortCursorImpl * rc = const_cast<SortCursorImpl *>(&rhs.cursor);
         if (!lc || !rc)
             throw("SortCursorImpl const_cast Failed!");
-         return SortCursor(lc).equalIgnOrder(SortCursor(rc));
+        return SortCursor(lc).equalIgnOrder(SortCursor(rc));
     }
 
     // Inverst for pririoty queue
-    bool operator < (const DedupCursor & rhs) const
+    bool operator<(const DedupCursor & rhs) const
     {
         return const_cast<DedupCursor *>(this)->greater(rhs);
     }
@@ -434,7 +457,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupCursor & self)
+    friend std::ostream & operator<<(std::ostream & out, DedupCursor & self)
     {
         return out << self.str();
     }
@@ -452,31 +475,35 @@ struct CursorPlainPtr
 {
     DedupCursor * ptr;
 
-    CursorPlainPtr() : ptr(0) {}
+    CursorPlainPtr()
+        : ptr(0)
+    {}
 
-    CursorPlainPtr(DedupCursor * ptr_) : ptr(ptr_) {}
+    CursorPlainPtr(DedupCursor * ptr_)
+        : ptr(ptr_)
+    {}
 
-    operator bool () const
+    operator bool() const
     {
         return ptr != 0;
     }
 
-    DedupCursor & operator * ()
+    DedupCursor & operator*()
     {
         return *ptr;
     }
 
-    DedupCursor * operator -> ()
+    DedupCursor * operator->()
     {
         return ptr;
     }
 
-    bool operator < (const CursorPlainPtr & rhs) const
+    bool operator<(const CursorPlainPtr & rhs) const
     {
         return (*ptr) < (*rhs.ptr);
     }
 
-    friend std::ostream & operator << (std::ostream & out, CursorPlainPtr & self)
+    friend std::ostream & operator<<(std::ostream & out, CursorPlainPtr & self)
     {
         return (self.ptr == 0) ? (out << "null") : (out << (*self.ptr));
     }
@@ -501,7 +528,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, CursorQueue & self)
+    friend std::ostream & operator<<(std::ostream & out, CursorQueue & self)
     {
         return out << self.str();
     }
@@ -512,12 +539,20 @@ struct DedupBound : public DedupCursor
 {
     bool is_bottom;
 
-    DedupBound() : DedupCursor(), is_bottom(false) {}
+    DedupBound()
+        : DedupCursor()
+        , is_bottom(false)
+    {}
 
-    DedupBound(const DedupCursor & rhs) : DedupCursor(rhs), is_bottom(false) {}
+    DedupBound(const DedupCursor & rhs)
+        : DedupCursor(rhs)
+        , is_bottom(false)
+    {}
 
     DedupBound(const SortCursorImpl & cursor_, const DedupingBlockPtr & block_)
-        : DedupCursor(cursor_, block_), is_bottom(false) {}
+        : DedupCursor(cursor_, block_)
+        , is_bottom(false)
+    {}
 
     void setToBottom()
     {
@@ -547,7 +582,7 @@ struct DedupBound : public DedupCursor
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, DedupBound & self)
+    friend std::ostream & operator<<(std::ostream & out, DedupBound & self)
     {
         return out << self.str();
     }
@@ -574,7 +609,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, BoundQueue & self)
+    friend std::ostream & operator<<(std::ostream & out, BoundQueue & self)
     {
         return out << self.str();
     }
@@ -589,7 +624,10 @@ class StreamMasks
 public:
     using Data = BoolVec;
 
-    StreamMasks(size_t size = 0) : data(size, 0), sum(0) {}
+    StreamMasks(size_t size = 0)
+        : data(size, 0)
+        , sum(0)
+    {}
 
     void assign(const Data & data_)
     {
@@ -626,7 +664,7 @@ public:
         return ostr.str();
     }
 
-    friend std::ostream & operator << (std::ostream & out, StreamMasks & self)
+    friend std::ostream & operator<<(std::ostream & out, StreamMasks & self)
     {
         return out << self.str();
     }
@@ -640,14 +678,16 @@ private:
 class IdGen
 {
 public:
-    IdGen(size_t begin = 10000) : id(begin) {}
+    IdGen(size_t begin = 10000)
+        : id(begin)
+    {}
 
     void reset(size_t begin = 10000)
     {
         id = begin;
     }
 
-    size_t operator ++ (int)
+    size_t operator++(int)
     {
         return id++;
     }
@@ -861,4 +901,4 @@ private:
     }
 };
 
-}
+} // namespace DB

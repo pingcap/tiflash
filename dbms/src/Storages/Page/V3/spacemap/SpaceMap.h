@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #include <Core/Types.h>
 #include <common/logger_useful.h>
@@ -24,7 +38,8 @@ public:
     {
         SMAP64_INVALID = 0,
         SMAP64_RBTREE = 1,
-        SMAP64_STD_MAP = 2
+        SMAP64_STD_MAP = 2,
+        SMAP64_BIG = 3 // support for writebatch bigger than blobstore.config.file_limit_size
     };
 
     /**
@@ -59,6 +74,7 @@ public:
 
     /**
      * Check a span [offset, offset + length) has been used or not.
+     * Only used in tests
      * 
      * ret value:
      *   true: This span is used, or some sub span is used
@@ -72,16 +88,21 @@ public:
      * It will mark that span to be used and also return a hint of the max capacity available in this SpaceMap. 
      * 
      * return value is <insert_offset, max_cap>:
-     *  insert_offset : start offset for the inserted space
-     *  max_cap : A hint of the largest available space this SpaceMap can hold. 
+     *  insert_offset: start offset for the inserted space
+     *  max_cap: A hint of the largest available space this SpaceMap can hold. 
+     *  is_expansion: Whether it is an expansion span
      */
-    virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
+    virtual std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) = 0;
 
     /**
      * Get the offset of the last free block. `[margin_offset, +∞)` is not used at all.
      */
     virtual UInt64 getRightMargin() = 0;
 
+    /**
+     * Get the accurate max capacity of the space map.
+     */
+    virtual UInt64 updateAccurateMaxCapacity() = 0;
 
     /**
      * Return the size of file and the size contains valid data.
@@ -100,7 +121,12 @@ public:
     /**
      * Log the status of space map
      */
-    void logStats();
+    void logDebugString();
+
+    /**
+     * return the status of space map
+     */
+    virtual String toDebugString() = 0;
 
     SpaceMapType getType() const
     {
@@ -115,6 +141,8 @@ public:
             return "RB-Tree";
         case SMAP64_STD_MAP:
             return "STD Map";
+        case SMAP64_BIG:
+            return "STD Big";
         default:
             return "Invalid";
         }
@@ -124,9 +152,6 @@ protected:
     SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_);
 
     virtual ~SpaceMap() = default;
-
-    /* Print space maps status  */
-    virtual void smapStats() = 0;
 
     // Return true if space [offset, offset+size) are all free
     virtual bool isMarkUnused(UInt64 offset, size_t size) = 0;

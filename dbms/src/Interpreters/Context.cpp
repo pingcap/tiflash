@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
@@ -16,7 +30,6 @@
 #include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
-#include <Interpreters/Compiler.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ExternalDictionaries.h>
@@ -39,8 +52,10 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
+#include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -66,6 +81,7 @@ namespace CurrentMetrics
 {
 extern const Metric ContextLockWait;
 extern const Metric MemoryTrackingForMerges;
+extern const Metric GlobalStorageRunMode;
 } // namespace CurrentMetrics
 
 
@@ -138,7 +154,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr blockable_background_pool; /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    std::unique_ptr<Compiler> compiler; /// Used for dynamic compilation of queries' parts if it necessary.
     size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
@@ -147,6 +162,8 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
+    PageStorageRunMode storage_run_mode;
+    DM::GlobalStoragePoolPtr global_storage_pool;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
     class SessionKeyHash
@@ -311,13 +328,6 @@ Databases Context::getDatabases() const
     return shared->databases;
 }
 
-Databases Context::getDatabases()
-{
-    auto lock = getLock();
-    return shared->databases;
-}
-
-
 Context::SessionKey Context::getSessionKey(const String & session_id) const
 {
     const auto & user_name = client_info.current_user;
@@ -443,25 +453,7 @@ DatabasePtr Context::getDatabase(const String & database_name) const
     return shared->databases[db];
 }
 
-DatabasePtr Context::getDatabase(const String & database_name)
-{
-    auto lock = getLock();
-    String db = resolveDatabase(database_name, current_database);
-    assertDatabaseExists(db);
-    return shared->databases[db];
-}
-
 DatabasePtr Context::tryGetDatabase(const String & database_name) const
-{
-    auto lock = getLock();
-    String db = resolveDatabase(database_name, current_database);
-    auto it = shared->databases.find(db);
-    if (it == shared->databases.end())
-        return {};
-    return it->second;
-}
-
-DatabasePtr Context::tryGetDatabase(const String & database_name)
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
@@ -947,13 +939,13 @@ DDLGuard::DDLGuard(Map & map_, std::mutex & mutex_, std::unique_lock<std::mutex>
 
 DDLGuard::~DDLGuard()
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     map.erase(it);
 }
 
 std::unique_ptr<DDLGuard> Context::getDDLGuard(const String & database, const String & table, const String & message) const
 {
-    std::unique_lock<std::mutex> lock(shared->ddl_guards_mutex);
+    std::unique_lock lock(shared->ddl_guards_mutex);
     return std::make_unique<DDLGuard>(shared->ddl_guards[database], shared->ddl_guards_mutex, std::move(lock), table, message);
 }
 
@@ -1219,7 +1211,7 @@ ExternalModels & Context::getExternalModels()
 
 EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->embedded_dictionaries_mutex);
+    std::lock_guard lock(shared->embedded_dictionaries_mutex);
 
     if (!shared->embedded_dictionaries)
     {
@@ -1237,7 +1229,7 @@ EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_
 
 ExternalDictionaries & Context::getExternalDictionariesImpl(const bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->external_dictionaries_mutex);
+    std::lock_guard lock(shared->external_dictionaries_mutex);
 
     if (!shared->external_dictionaries)
     {
@@ -1257,7 +1249,7 @@ ExternalDictionaries & Context::getExternalDictionariesImpl(const bool throw_on_
 
 ExternalModels & Context::getExternalModelsImpl(bool throw_on_error) const
 {
-    std::lock_guard<std::mutex> lock(shared->external_models_mutex);
+    std::lock_guard lock(shared->external_models_mutex);
 
     if (!shared->external_models)
     {
@@ -1533,11 +1525,11 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeRateLimiter(Poco::Util::AbstractConfiguration & config)
+void Context::initializeRateLimiter(Poco::Util::AbstractConfiguration & config, BackgroundProcessingPool & bg_pool, BackgroundProcessingPool & blockable_bg_pool) const
 {
     getIORateLimiter().init(config);
-    auto tids = getBackgroundPool().getThreadIds();
-    auto blockable_tids = getBlockableBackgroundPool().getThreadIds();
+    auto tids = bg_pool.getThreadIds();
+    auto blockable_tids = blockable_bg_pool.getThreadIds();
     tids.insert(tids.end(), blockable_tids.begin(), blockable_tids.end());
     getIORateLimiter().setBackgroundThreadIds(tids);
 }
@@ -1557,23 +1549,144 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
+
+static bool isPageStorageV2Existed(const PathPool & path_pool)
+{
+    for (const auto & path : path_pool.listKVStorePaths())
+    {
+        Poco::File dir(path);
+        if (!dir.exists())
+            continue;
+
+        std::vector<std::string> files;
+        dir.list(files);
+        if (!files.empty())
+        {
+            for (const auto & file_name : files)
+            {
+                const auto & find_index = file_name.find("page");
+                if (find_index != std::string::npos)
+                {
+                    return true;
+                }
+            }
+            // KVStore is not empty, but can't find any of v2 data in it.
+        }
+    }
+
+    // If not data in KVStore. It means V2 data must not existed.
+    return false;
+}
+
+static bool isPageStorageV3Existed(const PathPool & path_pool)
+{
+    for (const auto & path : path_pool.listGlobalPagePaths())
+    {
+        Poco::File dir(path);
+        if (!dir.exists())
+            continue;
+
+        std::vector<std::string> files;
+        dir.list(files);
+        if (!files.empty())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 storage_page_format_version)
+{
+    auto lock = getLock();
+
+    /**
+     * PageFormat::V2 + isPageStorageV3Existed is false + whatever isPageStorageV2Existed true or false = ONLY_V2
+     * PageFormat::V2 + isPageStorageV3Existed is true  + whatever isPageStorageV2Existed true or false = ERROR Config
+     * PageFormat::V3 + isPageStorageV2Existed is true  + whatever isPageStorageV3Existed true or false = MIX_MODE
+     * PageFormat::V3 + isPageStorageV2Existed is false + whatever isPageStorageV3Existed true or false = ONLY_V3
+     */
+
+    switch (storage_page_format_version)
+    {
+    case PageFormat::V1:
+    case PageFormat::V2:
+    {
+        if (isPageStorageV3Existed(path_pool))
+        {
+            throw Exception("Invalid config `storage.format_version`, Current page V3 data exist. But using the PageFormat::V2."
+                            "If you are downgrading the format_version for this TiFlash node, you need to rebuild the data from scratch.",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+        // not exist V3
+        shared->storage_run_mode = PageStorageRunMode::ONLY_V2;
+        return;
+    }
+    case PageFormat::V3:
+    {
+        shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
+        return;
+    }
+    default:
+        throw Exception(fmt::format("Can't detect the format version of Page [page_version={}]", storage_page_format_version),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+PageStorageRunMode Context::getPageStorageRunMode() const
+{
+    auto lock = getLock();
+    return shared->storage_run_mode;
+}
+
+void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
+{
+    auto lock = getLock();
+    shared->storage_run_mode = run_mode;
+}
+
+bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
+{
+    auto lock = getLock();
+    if (shared->global_storage_pool)
+    {
+        // GlobalStoragePool may be initialized many times in some test cases for restore.
+        LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
+    }
+    CurrentMetrics::set(CurrentMetrics::GlobalStorageRunMode, static_cast<UInt8>(shared->storage_run_mode));
+    if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
+    {
+        try
+        {
+            shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
+            shared->global_storage_pool->restore();
+            return true;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
+        }
+    }
+    else
+    {
+        shared->global_storage_pool = nullptr;
+        return false;
+    }
+}
+
+DM::GlobalStoragePoolPtr Context::getGlobalStoragePool() const
+{
+    auto lock = getLock();
+    return shared->global_storage_pool;
+}
+
 UInt16 Context::getTCPPort() const
 {
     auto lock = getLock();
 
     auto & config = getConfigRef();
     return config.getInt("tcp_port");
-}
-
-
-Compiler & Context::getCompiler()
-{
-    auto lock = getLock();
-
-    if (!shared->compiler)
-        shared->compiler = std::make_unique<Compiler>(shared->path + "build/", 1);
-
-    return *shared->compiler;
 }
 
 
@@ -1770,7 +1883,7 @@ SessionCleaner::~SessionCleaner()
     try
     {
         {
-            std::lock_guard<std::mutex> lock{mutex};
+            std::lock_guard lock{mutex};
             quit = true;
         }
 
@@ -1788,7 +1901,7 @@ void SessionCleaner::run()
 {
     setThreadName("SessionCleaner");
 
-    std::unique_lock<std::mutex> lock{mutex};
+    std::unique_lock lock{mutex};
 
     while (true)
     {

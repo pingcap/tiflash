@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
@@ -164,14 +178,14 @@ RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const D
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -180,16 +194,16 @@ RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const D
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -221,14 +235,14 @@ RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -237,16 +251,16 @@ RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreater<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -278,14 +292,14 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeDate::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
-        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeDateTime::FieldType>(value, type, min, max);
@@ -294,16 +308,16 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
         // Check `struct MyTimeBase` for more details.
-        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        const auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     if (typeid_cast<const DataTypeString *>(raw_type))
     {
-        auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
-        auto & chars = string_column->getChars();
-        auto & offsets = string_column->getOffsets();
+        const auto * string_column = checkAndGetColumn<ColumnString>(minmaxes.get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
         size_t pos = pack_index * 2;
         size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
         // todo use StringRef instead of String
@@ -316,7 +330,7 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
     return RSResult::Some;
 }
 
-String MinMaxIndex::toString() const
+String MinMaxIndex::toString()
 {
     return "";
 }

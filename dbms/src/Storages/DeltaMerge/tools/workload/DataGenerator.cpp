@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataTypes/DataTypeEnum.h>
 #include <Storages/DeltaMerge/tools/workload/DataGenerator.h>
 #include <Storages/DeltaMerge/tools/workload/KeyGenerator.h>
@@ -13,9 +27,8 @@ namespace DB::DM::tests
 class RandomDataGenerator : public DataGenerator
 {
 public:
-    RandomDataGenerator(const WorkloadOptions & opts_, const TableInfo & table_info_, TimestampGenerator & ts_gen_)
-        : opts(opts_)
-        , table_info(table_info_)
+    RandomDataGenerator(const TableInfo & table_info_, TimestampGenerator & ts_gen_)
+        : table_info(table_info_)
         , ts_gen(ts_gen_)
         , rand_gen(std::random_device()())
     {}
@@ -94,7 +107,7 @@ public:
                 continue;
             }
             auto & col_def = (*table_info.columns)[i];
-            if (col_def.id == table_info.handle.id)
+            if (col_def.id == table_info.handle.id || col_def.id == VERSION_COLUMN_ID || col_def.id == TAG_COLUMN_ID)
             {
                 continue;
             }
@@ -132,15 +145,15 @@ private:
         }
         else if (family_name == "Enum8")
         {
-            auto dt = dynamic_cast<const DataTypeEnum8 *>(data_type.get());
-            auto & values = dt->getValues();
+            const auto * dt = dynamic_cast<const DataTypeEnum8 *>(data_type.get());
+            const auto & values = dt->getValues();
             Field f = static_cast<int64_t>(values[rand_gen() % values.size()].second);
             mut_col->insert(f);
         }
         else if (family_name == "Enum16")
         {
-            auto dt = dynamic_cast<const DataTypeEnum16 *>(data_type.get());
-            auto & values = dt->getValues();
+            const auto * dt = dynamic_cast<const DataTypeEnum16 *>(data_type.get());
+            const auto & values = dt->getValues();
             Field f = static_cast<int64_t>(values[rand_gen() % values.size()].second);
             mut_col->insert(f);
         }
@@ -224,14 +237,12 @@ private:
 
     std::string randomString()
     {
-        static constexpr int max_size = 1024; // 1KB
-        int size = rand_gen() % max_size + 1;
+        constexpr int size = 128;
         std::string str(size, 0);
         std::generate_n(str.begin(), str.size(), [this]() { return charset[rand_gen() % charset.size()]; });
         return str;
     }
 
-    const WorkloadOptions & opts;
     const TableInfo & table_info;
     TimestampGenerator & ts_gen;
     std::mt19937_64 rand_gen;
@@ -241,7 +252,7 @@ private:
 
 std::unique_ptr<DataGenerator> DataGenerator::create([[maybe_unused]] const WorkloadOptions & opts, const TableInfo & table_info, TimestampGenerator & ts_gen)
 {
-    return std::make_unique<RandomDataGenerator>(opts, table_info, ts_gen);
+    return std::make_unique<RandomDataGenerator>(table_info, ts_gen);
 }
 
 } // namespace DB::DM::tests

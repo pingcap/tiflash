@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
@@ -62,10 +76,10 @@ public:
 
     virtual void deleteRows(const Context &, size_t /*rows*/) { throw Exception("Unsupported"); }
 
-    // `limit` is the max number of segments to gc, return value is the number of segments gced
+    /// `limit` is the max number of segments to gc, return value is the number of segments gced
     virtual UInt64 onSyncGc(Int64 /*limit*/) { throw Exception("Unsupported"); }
 
-    // Return true is data dir exist
+    /// Return true is data dir exist
     virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }
 
     virtual void mergeDelta(const Context &) { throw Exception("Unsupported"); }
@@ -76,7 +90,7 @@ public:
 
     virtual String getDatabaseName() const = 0;
 
-    // Update tidb table info in memory.
+    /// Update tidb table info in memory.
     virtual void setTableInfo(const TiDB::TableInfo & table_info_) = 0;
 
     virtual const TiDB::TableInfo & getTableInfo() const = 0;
@@ -85,8 +99,8 @@ public:
     Timestamp getTombstone() const { return tombstone; }
     void setTombstone(Timestamp tombstone_) { IManageableStorage::tombstone = tombstone_; }
 
-    // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    // Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
+    /// Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
+    /// Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
     virtual void alterFromTiDB(
         const TableLockHolder &,
         const AlterCommands & commands,
@@ -96,16 +110,14 @@ public:
         const Context & context)
         = 0;
 
-    /** Rename the table.
-      *
-      * Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
-      * Different from `IStorage::rename`, storage's data path do not contain database name, nothing to do with data path, `new_path_to_db` is ignored.
-      * But `getDatabaseName` and `getTableInfo` means we usally store database name / TiDB table info as member in storage,
-      * we need to update database name with `new_database_name`, and table name in tidb table info with `new_display_table_name`.
-      *
-      * Called when the table structure is locked for write.
-      * TODO: For TiFlash, we can rename without any lock on data?
-      */
+    /// Rename the table.
+    ///
+    /// Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
+    /// Different from `IStorage::rename`, storage's data path do not contain database name, nothing to do with data path, `new_path_to_db` is ignored.
+    /// But `getDatabaseName` and `getTableInfo` means we usually store database name / TiDB table info as member in storage,
+    /// we need to update database name with `new_database_name`, and table name in tidb table info with `new_display_table_name`.
+    ///
+    /// Called when the table structure is locked for write.
     virtual void rename(
         const String & new_path_to_db,
         const String & new_database_name,
@@ -146,9 +158,9 @@ public:
 
     virtual size_t getRowKeyColumnSize() const { return 1; }
 
-    // when `need_block` is true, it will try return a cached block corresponding to DecodingStorageSchemaSnapshotConstPtr,
-    //     and `releaseDecodingBlock` need to be called when the block is free
-    // when `need_block` is false, it will just return an nullptr
+    /// when `need_block` is true, it will try return a cached block corresponding to DecodingStorageSchemaSnapshotConstPtr,
+    ///     and `releaseDecodingBlock` need to be called when the block is free
+    /// when `need_block` is false, it will just return an nullptr
     virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);

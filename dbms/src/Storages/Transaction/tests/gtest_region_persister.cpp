@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
@@ -254,7 +268,7 @@ try
             auto new_iter = new_regions.find(i);
             if (new_iter == new_regions.end())
             {
-                LOG_ERROR(&Poco::Logger::get("RegionPersister_test"), "Region missed, id=" << i);
+                LOG_FMT_ERROR(&Poco::Logger::get("RegionPersister_test"), "Region missed, id={}", i);
                 ++num_regions_missed;
             }
             else
@@ -295,7 +309,8 @@ try
         // Force to run in compatible mode
         FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
         persister.restore(nullptr, config);
-        ASSERT_EQ(persister.page_storage, nullptr);
+        ASSERT_EQ(persister.page_writer, nullptr);
+        ASSERT_EQ(persister.page_reader, nullptr);
         ASSERT_NE(persister.stable_page_storage, nullptr);
 
         for (size_t i = 0; i < region_num; ++i)
@@ -316,7 +331,8 @@ try
         RegionPersister persister(ctx, region_manager);
         // restore normally, should run in compatible mode.
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_EQ(persister.page_storage, nullptr);
+        ASSERT_EQ(persister.page_writer, nullptr);
+        ASSERT_EQ(persister.page_reader, nullptr);
         ASSERT_NE(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num; ++i)
@@ -335,7 +351,8 @@ try
         // Force to run in normal mode
         FailPointHelper::enableFailPoint(FailPoints::force_disable_region_persister_compatible_mode);
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_NE(persister.page_storage, nullptr);
+        ASSERT_NE(persister.page_writer, nullptr);
+        ASSERT_NE(persister.page_reader, nullptr);
         ASSERT_EQ(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num; ++i)
@@ -365,7 +382,8 @@ try
         RegionPersister persister(ctx, region_manager);
         // Restore normally, should run in normal mode.
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_NE(persister.page_storage, nullptr);
+        ASSERT_NE(persister.page_writer, nullptr);
+        ASSERT_NE(persister.page_reader, nullptr);
         ASSERT_EQ(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num + region_num_under_nromal_mode; ++i)
@@ -509,8 +527,7 @@ void RegionPersister_test::runTest(const String & path, bool sync_on_write)
     }
 
     auto seconds = watch.elapsedSeconds();
-    LOG_INFO(&Poco::Logger::get("RegionPersister_test"), //
-             "[sync_on_write=" << sync_on_write << "], [time=" << DB::toString(seconds, 4) << "s]");
+    LOG_FMT_INFO(&Poco::Logger::get("RegionPersister_test"), "[sync_on_write={}], [time={:.4f}s]", sync_on_write, seconds);
 }
 
 // This test takes about 10 minutes. Disable by default

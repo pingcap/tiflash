@@ -1,9 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
@@ -38,6 +53,8 @@ public:
     String getTableName() const override;
     String getDatabaseName() const override;
 
+    void clearData() override;
+
     void drop() override;
 
     BlockInputStreams read(
@@ -57,6 +74,9 @@ public:
 
     void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush) override;
 
+    /// Merge delta into the stable layer for all segments.
+    ///
+    /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
     void mergeDelta(const Context & context) override;
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
@@ -164,7 +184,10 @@ private:
     DataTypePtr getPKTypeImpl() const override;
 
     DM::DeltaMergeStorePtr & getAndMaybeInitStore();
-    bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
+    bool storeInited() const
+    {
+        return store_inited.load(std::memory_order_acquire);
+    }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
@@ -221,7 +244,7 @@ private:
 
     Context & global_context;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 

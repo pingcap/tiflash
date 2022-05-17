@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Flash/Coprocessor/RegionInfo.h>
@@ -48,6 +62,14 @@ public:
     {
         return mpp_req_rsp;
     }
+    const std::vector<int32_t> & getReqIDVec() const
+    {
+        return req_id_vec;
+    }
+    bool continueWhenError() const
+    {
+        return continue_when_error;
+    }
     static void clean(Context & context);
 
 private:
@@ -83,6 +105,8 @@ private:
     Poco::Logger * log;
     LoadedTableMap tables;
     TableIDVec table_ids;
+    bool continue_when_error = false;
+    std::vector<int32_t> req_id_vec;
     ReqRspVec req_rsp;
     BatchReqRspVec batch_req_rsp;
     MPPReqRspVec mpp_req_rsp;

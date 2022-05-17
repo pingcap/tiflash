@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/CurrentMetrics.h>
@@ -41,7 +55,8 @@ struct DMContext;
 struct WriteBatches;
 class StoragePool;
 
-class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>
+class DeltaValueSpace
+    : public std::enable_shared_from_this<DeltaValueSpace>
     , private boost::noncopyable
 {
 public:
@@ -152,7 +167,7 @@ public:
         // Other thread is doing structure update, just return.
         if (!is_updating.compare_exchange_strong(v, true))
         {
-            LOG_DEBUG(log, simpleInfo() << " Stop create snapshot because updating");
+            LOG_FMT_DEBUG(log, "{} Stop create snapshot because updating", simpleInfo());
             return false;
         }
         return true;
@@ -163,7 +178,7 @@ public:
         bool v = true;
         if (!is_updating.compare_exchange_strong(v, false))
         {
-            LOG_ERROR(log, "!!!=========================delta [" << getId() << "] is expected to be updating=========================!!!");
+            LOG_FMT_ERROR(log, "!!!=========================delta [{}] is expected to be updating=========================!!!", getId());
             return false;
         }
         else
@@ -219,7 +234,9 @@ public:
     /// Flush the data of column files which haven't write to disk yet, and also save the metadata of column files.
     bool flush(DMContext & context);
 
-    /// Compacts fragment column files into bigger one, to save some IOPS during reading.
+    /// Compact fragment column files in the delta layer into bigger column files, to save some IOPS during reading.
+    /// It does not merge the delta into stable layer.
+    /// a.k.a. minor compaction.
     bool compact(DMContext & context);
 
     /// Create a constant snapshot for read.
@@ -228,7 +245,8 @@ public:
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 };
 
-class DeltaValueSnapshot : public std::enable_shared_from_this<DeltaValueSnapshot>
+class DeltaValueSnapshot
+    : public std::enable_shared_from_this<DeltaValueSnapshot>
     , private boost::noncopyable
 {
     friend class DeltaValueSpace;
@@ -246,7 +264,7 @@ private:
     // We need a reference to original delta object, to release the "is_updating" lock.
     DeltaValueSpacePtr _delta;
 
-    CurrentMetrics::Metric type;
+    const CurrentMetrics::Metric type;
 
 public:
     DeltaSnapshotPtr clone()
@@ -266,8 +284,8 @@ public:
     }
 
     explicit DeltaValueSnapshot(CurrentMetrics::Metric type_)
+        : type(type_)
     {
-        type = type_;
         CurrentMetrics::add(type);
     }
 
@@ -301,7 +319,6 @@ public:
 
     RowKeyRange getSquashDeleteRange() const;
 
-    const auto & getStorageSnapshot() { return persisted_files_snap->getStorageSnapshot(); }
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
 };
 

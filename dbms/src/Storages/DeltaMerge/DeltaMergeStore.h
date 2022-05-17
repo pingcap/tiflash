@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -18,6 +32,9 @@
 
 namespace DB
 {
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+
 namespace DM
 {
 class Segment;
@@ -104,6 +121,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_stable_num_snapshots = 0;
     Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_stable_oldest_snapshot_thread_id = 0;
+    String storage_stable_oldest_snapshot_tracing_id;
     UInt64 storage_stable_num_pages = 0;
     UInt64 storage_stable_num_normal_pages = 0;
     UInt64 storage_stable_max_page_id = 0;
@@ -111,6 +129,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_delta_num_snapshots = 0;
     Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_delta_oldest_snapshot_thread_id = 0;
+    String storage_delta_oldest_snapshot_tracing_id;
     UInt64 storage_delta_num_pages = 0;
     UInt64 storage_delta_num_normal_pages = 0;
     UInt64 storage_delta_max_page_id = 0;
@@ -118,6 +137,7 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_num_snapshots = 0;
     Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
     UInt64 storage_meta_oldest_snapshot_thread_id = 0;
+    String storage_meta_oldest_snapshot_tracing_id;
     UInt64 storage_meta_num_pages = 0;
     UInt64 storage_meta_num_normal_pages = 0;
     UInt64 storage_meta_max_page_id = 0;
@@ -267,22 +287,21 @@ public:
 
         // first element of return value means whether task is added or not
         // second element of return value means whether task is heavy or not
-        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, Poco::Logger * log_);
+        std::pair<bool, bool> tryAddTask(const BackgroundTask & task, const ThreadType & whom, size_t max_task_num, const LoggerPtr & log_);
 
-        BackgroundTask nextTask(bool is_heavy, Poco::Logger * log_);
+        BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
     };
 
     DeltaMergeStore(Context & db_context, //
                     bool data_path_contains_database_name,
                     const String & db_name,
                     const String & table_name_,
-                    TableID table_id_,
+                    TableID physical_table_id_,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
                     size_t rowkey_column_size_,
-                    const Settings & settings_ = EMPTY_SETTINGS,
-                    const TableID physical_table_id = 0);
+                    const Settings & settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -291,6 +310,8 @@ public:
     const String & getTableName() const { return table_name; }
 
     void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
+
+    void clearData();
 
     void drop();
 
@@ -309,13 +330,13 @@ public:
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range);
 
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
@@ -339,6 +360,7 @@ public:
                            size_t num_streams,
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
+                           const String & tracing_id,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
@@ -352,10 +374,14 @@ public:
 
     void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
 
-    /// Do merge delta for all segments. Only used for debug.
+    /// Merge delta into the stable layer for all segments.
+    ///
+    /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
     void mergeDeltaAll(const Context & context);
 
-    /// Compact fregment packs into bigger one.
+
+    /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
+    /// This is a minor compaction as it does not merge the delta into stable layer.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -395,17 +421,40 @@ public:
 private:
 #endif
 
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & query_id = "");
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
 
-    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    static bool pkIsHandle(const ColumnDefine & handle_define)
+    {
+        return handle_define.id != EXTRA_HANDLE_COLUMN_ID;
+    }
 
+    /// Try to stall the writing. It will suspend the current thread if flow control is necessary.
+    /// There are roughly two flow control mechanisms:
+    /// - Force Merge (1 GB by default, see force_merge_delta_rows|size): Wait for a small amount of time at most.
+    /// - Stop Write (2 GB by default, see stop_write_delta_rows|size): Wait until delta is merged.
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
+
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
+    /// Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
+    /// If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
+    /// See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
+    ///
+    /// This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
+    /// A `thread_type` should be specified indicating the type of the thread calling this function.
+    /// Depend on the thread type, the "update" to do may be varied.
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
+    /// Split the segment into two.
+    /// After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+
+    /// Merge two segments into one.
+    /// After merging, both segments will be abandoned (with `segment->hasAbandoned() == true`).
     void segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
+
+    /// Merge the delta (major compaction) in the segment.
+    /// After delta-merging, the segment will be abandoned (with `segment->hasAbandoned() == true`) and a new segment will be returned.
     SegmentPtr segmentMergeDelta(
         DMContext & dm_context,
         const SegmentPtr & segment,
@@ -417,8 +466,14 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
-    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    {
+        return doIsSegmentValid(segment);
+    }
+    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    {
+        return doIsSegmentValid(segment);
+    }
     bool doIsSegmentValid(const SegmentPtr & segment);
 
     void restoreStableFiles();
@@ -428,15 +483,19 @@ private:
                                           size_t expected_tasks_count = 1,
                                           const SegmentIdSet & read_segments = {});
 
+private:
+    void dropAllSegments(bool keep_first_segment);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
 #endif
 
     Context & global_context;
     StoragePathPool path_pool;
     Settings settings;
-    StoragePool storage_pool;
-    PageIdGenerator page_id_generator;
+    StoragePoolPtr storage_pool;
 
     String db_name;
     String table_name;
@@ -457,7 +516,6 @@ private:
     std::atomic<bool> shutdown_called{false};
 
     BackgroundProcessingPool & background_pool;
-    BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     BackgroundProcessingPool & blockable_background_pool;
@@ -479,7 +537,7 @@ private:
 
     UInt64 hash_salt;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 }; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;

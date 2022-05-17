@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
@@ -18,7 +32,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
     MPPTaskId id{meta.start_ts(), meta.task_id()};
     std::unordered_map<MPPTaskId, MPPTaskPtr>::iterator it;
     bool cancelled = false;
-    std::unique_lock<std::mutex> lock(mu);
+    std::unique_lock lock(mu);
     auto ret = cv.wait_for(lock, timeout, [&] {
         auto query_it = mpp_query_map.find(id.start_ts);
         // TODO: how about the query has been cancelled in advance?
@@ -56,13 +70,13 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         /// cancel task may take a long time, so first
         /// set a flag, so we can cancel task one by
         /// one without holding the lock
-        std::lock_guard<std::mutex> lock(mu);
+        std::lock_guard lock(mu);
         auto it = mpp_query_map.find(query_id);
         if (it == mpp_query_map.end() || it->second->to_be_cancelled)
             return;
         it->second->to_be_cancelled = true;
         task_set = it->second;
-        scheduler->deleteCancelledQuery(query_id, *this);
+        scheduler->deleteQuery(query_id, *this, true);
         cv.notify_all();
     }
     LOG_WARNING(log, fmt::format("Begin cancel query: {}", query_id));
@@ -83,7 +97,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     }
     MPPQueryTaskSetPtr canceled_task_set;
     {
-        std::lock_guard<std::mutex> lock(mu);
+        std::lock_guard lock(mu);
         /// just to double check the query still exists
         auto it = mpp_query_map.find(query_id);
         if (it != mpp_query_map.end())
@@ -91,7 +105,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
             /// `mu` of MPPTaskManager, otherwise it might cause deadlock
             canceled_task_set = it->second;
-            scheduler->deleteThenSchedule(query_id, *this);
             mpp_query_map.erase(it);
         }
     }
@@ -100,7 +113,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
 
 bool MPPTaskManager::registerTask(MPPTaskPtr task)
 {
-    std::unique_lock<std::mutex> lock(mu);
+    std::unique_lock lock(mu);
     const auto & it = mpp_query_map.find(task->id.start_ts);
     if (it != mpp_query_map.end() && it->second->to_be_cancelled)
     {
@@ -129,7 +142,7 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
 
 void MPPTaskManager::unregisterTask(MPPTask * task)
 {
-    std::unique_lock<std::mutex> lock(mu);
+    std::unique_lock lock(mu);
     auto it = mpp_query_map.find(task->id.start_ts);
     if (it != mpp_query_map.end())
     {
@@ -142,7 +155,7 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
             if (it->second->task_map.empty())
             {
                 /// remove query task map if the task is the last one
-                scheduler->deleteThenSchedule(task->id.start_ts, *this);
+                scheduler->deleteQuery(task->id.start_ts, *this, false);
                 mpp_query_map.erase(it);
             }
             return;
@@ -154,7 +167,7 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
 std::vector<UInt64> MPPTaskManager::getCurrentQueries()
 {
     std::vector<UInt64> ret;
-    std::lock_guard<std::mutex> lock(mu);
+    std::lock_guard lock(mu);
     for (auto & it : mpp_query_map)
     {
         ret.push_back(it.first);
@@ -165,7 +178,7 @@ std::vector<UInt64> MPPTaskManager::getCurrentQueries()
 std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
 {
     std::vector<MPPTaskPtr> ret;
-    std::lock_guard<std::mutex> lock(mu);
+    std::lock_guard lock(mu);
     const auto & it = mpp_query_map.find(query_id);
     if (it == mpp_query_map.end() || it->second->to_be_cancelled)
         return ret;
@@ -176,7 +189,7 @@ std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
 
 String MPPTaskManager::toString()
 {
-    std::lock_guard<std::mutex> lock(mu);
+    std::lock_guard lock(mu);
     String res("(");
     for (auto & query_it : mpp_query_map)
     {
@@ -196,6 +209,12 @@ bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
 {
     std::lock_guard lock(mu);
     return scheduler->tryToSchedule(task, *this);
+}
+
+void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
+{
+    std::lock_guard lock(mu);
+    scheduler->releaseThreadsThenSchedule(needed_threads, *this);
 }
 
 } // namespace DB

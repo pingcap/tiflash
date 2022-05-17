@@ -1,8 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Mpp/getMPPTaskLog.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -38,7 +51,7 @@ public:
         bool do_range_filter_for_raw_,
         const int extra_table_id_index,
         const TableID physical_table_id,
-        const LogWithPrefixPtr & log_)
+        const String & req_id)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
         , after_segment_read(after_segment_read_)
@@ -51,7 +64,7 @@ public:
         , do_range_filter_for_raw(do_range_filter_for_raw_)
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
-        , log(getMPPTaskLog(log_, NAME))
+        , log(Logger::get(NAME, req_id))
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -124,7 +137,10 @@ protected:
                 if (!res.rows())
                     continue;
                 else
+                {
+                    total_rows += res.rows();
                     return res;
+                }
             }
             else
             {
@@ -134,6 +150,11 @@ protected:
                 cur_stream = {};
             }
         }
+    }
+
+    void readSuffixImpl() override
+    {
+        LOG_FMT_DEBUG(log, "finish read {} rows from storage", total_rows);
     }
 
 private:
@@ -157,7 +178,8 @@ private:
     SegmentPtr cur_segment;
     TableID physical_table_id;
 
-    LogWithPrefixPtr log;
+    LoggerPtr log;
+    size_t total_rows = 0;
 };
 
 } // namespace DM

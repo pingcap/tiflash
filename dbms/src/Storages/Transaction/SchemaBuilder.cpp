@@ -1,4 +1,19 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
@@ -317,22 +332,24 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         return;
     }
 
-    std::stringstream ss;
-    ss << "Detected schema changes: " << name_mapper.debugCanonicalName(*db_info, *table_info) << ": ";
-    for (const auto & schema_change : schema_changes)
-        for (const auto & command : schema_change.first)
-        {
-            if (command.type == AlterCommand::ADD_COLUMN)
-                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-            else if (command.type == AlterCommand::DROP_COLUMN)
-                ss << "DROP COLUMN " << command.column_name << ", ";
-            else if (command.type == AlterCommand::MODIFY_COLUMN)
-                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-            else if (command.type == AlterCommand::RENAME_COLUMN)
-                ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
-        }
-
-    LOG_FMT_DEBUG(log, "{} : {}", __PRETTY_FUNCTION__, ss.str());
+    auto log_str = [&]() {
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend("Detected schema changes: {}: ", name_mapper.debugCanonicalName(*db_info, *table_info));
+        for (const auto & schema_change : schema_changes)
+            for (const auto & command : schema_change.first)
+            {
+                if (command.type == AlterCommand::ADD_COLUMN)
+                    fmt_buf.fmtAppend("ADD COLUMN {} {},", command.column_name, command.data_type->getName());
+                else if (command.type == AlterCommand::DROP_COLUMN)
+                    fmt_buf.fmtAppend("DROP COLUMN {}, ", command.column_name);
+                else if (command.type == AlterCommand::MODIFY_COLUMN)
+                    fmt_buf.fmtAppend("MODIFY COLUMN {} {}, ", command.column_name, command.data_type->getName());
+                else if (command.type == AlterCommand::RENAME_COLUMN)
+                    fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
+            }
+        return fmt_buf.toString();
+    };
+    LOG_DEBUG(log, log_str());
 
     /// Update metadata, through calling alterFromTiDB.
     // Using original table info with updated columns instead of using new_table_info directly,
@@ -432,6 +449,18 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
+    if (diff.type == SchemaActionType::RenameTables)
+    {
+        for (auto && opt : diff.affected_opts)
+        {
+            auto db_info = getter.getDatabase(opt.schema_id);
+            if (db_info == nullptr)
+                throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::StaleSchema);
+            applyRenameTable(db_info, opt.table_id);
+        }
+        return;
+    }
+
     auto db_info = getter.getDatabase(diff.schema_id);
     if (db_info == nullptr)
     {
@@ -492,11 +521,6 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::SetTiFlashReplica:
     {
         applySetTiFlashReplica(db_info, diff.table_id);
-        break;
-    }
-    case SchemaActionType::RenameTables:
-    {
-        LOG_FMT_WARNING(log, "change type RenameTables is not supported");
         break;
     }
     default:

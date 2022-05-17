@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/NamesAndTypes.h>
@@ -39,7 +53,6 @@ class ExternalDictionaries;
 class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
-class Compiler;
 class MarkCache;
 class UncompressedCache;
 class DBGInvoker;
@@ -86,10 +99,13 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
+enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
 class DeltaIndexManager;
+class GlobalStoragePool;
+using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 } // namespace DM
 
 /// (database name, table name)
@@ -279,12 +295,8 @@ public:
     ASTPtr getCreateDatabaseQuery(const String & database_name) const;
 
     DatabasePtr getDatabase(const String & database_name) const;
-    DatabasePtr getDatabase(const String & database_name);
     DatabasePtr tryGetDatabase(const String & database_name) const;
-    DatabasePtr tryGetDatabase(const String & database_name);
-
     Databases getDatabases() const;
-    Databases getDatabases();
 
     std::shared_ptr<Context> acquireSession(
         const String & session_id,
@@ -389,12 +401,16 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(Poco::Util::AbstractConfiguration & config);
+    void initializeRateLimiter(Poco::Util::AbstractConfiguration & config, BackgroundProcessingPool & bg_pool, BackgroundProcessingPool & blockable_bg_pool) const;
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    Compiler & getCompiler();
+    void initializePageStorageMode(const PathPool & path_pool, UInt64 storage_page_format_version);
+    void setPageStorageRunMode(PageStorageRunMode run_mode) const;
+    PageStorageRunMode getPageStorageRunMode() const;
+    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
+    DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();

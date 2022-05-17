@@ -1,6 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/FlashService.h>
@@ -28,6 +42,12 @@
 
 namespace DB
 {
+namespace tests
+{
+class MPPTunnelTest;
+class TestMPPTunnelBase;
+} // namespace tests
+
 class EstablishCallData;
 
 /**
@@ -68,8 +88,8 @@ public:
         std::chrono::seconds timeout_,
         int input_steams_num_,
         bool is_local_,
-        bool is_async_ = false,
-        const LogWithPrefixPtr & log_ = nullptr);
+        bool is_async_,
+        const String & req_id);
 
     ~MPPTunnelBase();
 
@@ -97,7 +117,7 @@ public:
 
     bool isLocal() const { return is_local; }
 
-    const LogWithPrefixPtr & getLogger() const { return log; }
+    const LoggerPtr & getLogger() const { return log; }
 
     // do finish work for consumer, if need_lock is false, it means it has been protected by a mutex lock.
     void consumerFinish(const String & err_msg, bool need_lock = true);
@@ -109,6 +129,17 @@ public:
     void sendJob(bool need_lock = true);
 
 private:
+    friend class tests::MPPTunnelTest;
+    friend class tests::TestMPPTunnelBase;
+    // For gtest usage
+    MPPTunnelBase(
+        const String & tunnel_id_,
+        std::chrono::seconds timeout_,
+        int input_steams_num_,
+        bool is_local_,
+        bool is_async_,
+        const String & req_id);
+
     void finishSendQueue();
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
@@ -159,17 +190,24 @@ private:
         void setError(const String & err_msg)
         {
             promise.set_value(err_msg);
+            err_has_set = true;
+        }
+
+        bool errHasSet() const
+        {
+            return err_has_set.load();
         }
 
     private:
         std::promise<String> promise;
         std::shared_future<String> future;
+        std::atomic<bool> err_has_set{false};
     };
     ConsumerState consumer_state;
 
     ConnectionProfileInfo connection_profile_info;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 };
 
 class MPPTunnel : public MPPTunnelBase<PacketWriter>

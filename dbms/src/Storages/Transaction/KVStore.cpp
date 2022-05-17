@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -13,6 +27,7 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <common/likely.h>
 
 namespace DB
 {
@@ -115,35 +130,33 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
 
 void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log)
 {
-    if (tmt.isBgFlushDisabled())
+    auto table_id = region.getMappedTableID();
+    auto storage = tmt.getStorages().get(table_id);
+    if (unlikely(storage == nullptr))
     {
-        auto table_id = region.getMappedTableID();
-        auto storage = tmt.getStorages().get(table_id);
-        if (storage == nullptr)
-        {
-            LOG_WARNING(log,
-                        "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
-                            + " with table id: " + DB::toString(table_id) + ", ignored");
-            return;
-        }
+        LOG_FMT_WARNING(log,
+                        "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
+                        region.toString(),
+                        table_id);
+        return;
+    }
 
-        try
-        {
-            // Acquire `drop_lock` so that no other threads can drop the storage during `flushCache`. `alter_lock` is not required.
-            auto storage_lock = storage->lockForShare(getThreadName());
-            auto rowkey_range = DM::RowKeyRange::fromRegionRange(
-                region.getRange(),
-                region.getRange()->getMappedTableID(),
-                storage->isCommonHandle(),
-                storage->getRowKeyColumnSize());
-            storage->flushCache(tmt.getContext(), rowkey_range);
-        }
-        catch (DB::Exception & e)
-        {
-            // We can ignore if storage is already dropped.
-            if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
-                throw;
-        }
+    try
+    {
+        // Acquire `drop_lock` so that no other threads can drop the storage during `flushCache`. `alter_lock` is not required.
+        auto storage_lock = storage->lockForShare(getThreadName());
+        auto rowkey_range = DM::RowKeyRange::fromRegionRange(
+            region.getRange(),
+            region.getRange()->getMappedTableID(),
+            storage->isCommonHandle(),
+            storage->getRowKeyColumnSize());
+        storage->flushCache(tmt.getContext(), rowkey_range);
+    }
+    catch (DB::Exception & e)
+    {
+        // We can ignore if storage is already dropped.
+        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+            throw;
     }
 }
 
@@ -162,7 +175,7 @@ void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
 {
     {
         decltype(bg_gc_region_data) tmp;
-        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+        std::lock_guard lock(bg_gc_region_data_mutex);
         tmp.swap(bg_gc_region_data);
     }
     Timepoint now = Clock::now();
@@ -283,7 +296,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_FMT_INFO(log, "{}: [region {}] is not found, might be removed already", __PRETTY_FUNCTION__, region_id);
+        LOG_FMT_INFO(log, "[region {}] is not found, might be removed already", region_id);
         return;
     }
     LOG_FMT_INFO(log, "Handle destroy {}", region->toString());
@@ -409,8 +422,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         if (curr_region_ptr == nullptr)
         {
             LOG_FMT_WARNING(log,
-                            "{}: [region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
-                            __PRETTY_FUNCTION__,
+                            "[region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
                             curr_region_id,
                             term,
                             index,
@@ -431,21 +443,13 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         // After region split / merge, try to flush it
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
-            if (tmt.isBgFlushDisabled())
+            try
             {
-                try
-                {
-                    tmt.getRegionTable().tryFlushRegion(region, false);
-                }
-                catch (const Exception & e)
-                {
-                    tryLogCurrentException(__PRETTY_FUNCTION__);
-                }
+                tmt.getRegionTable().tryFlushRegion(region, false);
             }
-            else
+            catch (...)
             {
-                if (region->writeCFCount() >= 8192)
-                    tmt.getBackgroundService().addRegionToFlush(region);
+                tryLogCurrentException(__PRETTY_FUNCTION__);
             }
         };
 

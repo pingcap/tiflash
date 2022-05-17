@@ -1,45 +1,46 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/typeid_cast.h>
 #include <Interpreters/InterpreterAlterQuery.h>
-#include <Interpreters/InterpreterCheckQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDBGInvokeQuery.h>
-#include <Interpreters/InterpreterDeleteQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterInsertQuery.h>
-#include <Interpreters/InterpreterKillQueryQuery.h>
 #include <Interpreters/InterpreterManageQuery.h>
-#include <Interpreters/InterpreterOptimizeQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSetQuery.h>
-#include <Interpreters/InterpreterShowCreateQuery.h>
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
-#include <Interpreters/InterpreterSystemQuery.h>
-#include <Interpreters/InterpreterTruncateQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDBGInvokeQuery.h>
-#include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTInsertQuery.h>
-#include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/ASTManageQuery.h>
-#include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
-#include <Parsers/ASTSystemQuery.h>
-#include <Parsers/ASTTruncateQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 
@@ -112,22 +113,9 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
         /// readonly is checked inside InterpreterSetQuery
         return std::make_unique<InterpreterSetQuery>(query, context);
     }
-    else if (typeid_cast<ASTOptimizeQuery *>(query.get()))
-    {
-        throwIfReadOnly(context);
-        return std::make_unique<InterpreterOptimizeQuery>(query, context);
-    }
     else if (typeid_cast<ASTExistsQuery *>(query.get()))
     {
         return std::make_unique<InterpreterExistsQuery>(query, context);
-    }
-    else if (typeid_cast<ASTShowCreateTableQuery *>(query.get()))
-    {
-        return std::make_unique<InterpreterShowCreateQuery>(query, context);
-    }
-    else if (typeid_cast<ASTShowCreateDatabaseQuery *>(query.get()))
-    {
-        return std::make_unique<InterpreterShowCreateQuery>(query, context);
     }
     else if (typeid_cast<ASTDescribeQuery *>(query.get()))
     {
@@ -142,33 +130,11 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
         throwIfReadOnly(context);
         return std::make_unique<InterpreterAlterQuery>(query, context);
     }
-    else if (typeid_cast<ASTCheckQuery *>(query.get()))
-    {
-        return std::make_unique<InterpreterCheckQuery>(query, context);
-    }
-    else if (typeid_cast<ASTKillQueryQuery *>(query.get()))
-    {
-        return std::make_unique<InterpreterKillQueryQuery>(query, context);
-    }
-    else if (typeid_cast<ASTDeleteQuery *>(query.get()))
-    {
-        bool allow_materialized = static_cast<bool>(context.getSettingsRef().insert_allow_materialized_columns);
-        return std::make_unique<InterpreterDeleteQuery>(query, context, allow_materialized);
-    }
     else if (typeid_cast<ASTDBGInvokeQuery *>(query.get()))
     {
         return std::make_unique<InterpreterDBGInvokeQuery>(query, context);
     }
-    else if (typeid_cast<ASTSystemQuery *>(query.get()))
-    {
-        throwIfReadOnly(context);
-        return std::make_unique<InterpreterSystemQuery>(query, context);
-    }
-    else if (typeid_cast<ASTTruncateQuery *>(query.get()))
-    {
-        throwIfReadOnly(context);
-        return std::make_unique<InterpreterTruncateQuery>(query, context);
-    }
+
     else if (typeid_cast<ASTManageQuery *>(query.get()))
     {
         throwIfReadOnly(context);

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
@@ -66,29 +80,6 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
             res.engine = ::TiDB::StorageEngine::DT;
         else
             res.engine = DEFAULT_ENGINE;
-    }
-
-    /// "tmt" engine ONLY support disable_bg_flush = false.
-    /// "dt" engine ONLY support disable_bg_flush = true.
-
-    String disable_bg_flush_conf = "raft.disable_bg_flush";
-    if (res.engine == ::TiDB::StorageEngine::TMT)
-    {
-        if (config.has(disable_bg_flush_conf) && config.getBool(disable_bg_flush_conf))
-            throw Exception(
-                fmt::format("Illegal arguments: disable background flush while using engine {}", MutableSupport::txn_storage_name),
-                ErrorCodes::INVALID_CONFIG_PARAMETER);
-        res.disable_bg_flush = false;
-    }
-    else if (res.engine == ::TiDB::StorageEngine::DT)
-    {
-        /// If background flush is enabled, read will not triggle schema sync.
-        /// Which means that we may get the wrong result with outdated schema.
-        if (config.has(disable_bg_flush_conf) && !config.getBool(disable_bg_flush_conf))
-            throw Exception(
-                fmt::format("Illegal arguments: enable background flush while using engine {}", MutableSupport::delta_tree_storage_name),
-                ErrorCodes::INVALID_CONFIG_PARAMETER);
-        res.disable_bg_flush = true;
     }
 
     // just for test

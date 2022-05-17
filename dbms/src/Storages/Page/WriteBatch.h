@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <IO/ReadBuffer.h>
@@ -85,10 +99,16 @@ public:
             off += data_sz;
         }
         if (unlikely(!data_sizes.empty() && off != size))
-            throw Exception("Try to put Page" + DB::toString(page_id) + " with " + DB::toString(data_sizes.size())
-                                + " fields, but page size and filelds total size not match, page_size: " + DB::toString(size)
-                                + ", all fields size: " + DB::toString(off),
+        {
+            throw Exception(fmt::format(
+                                "Try to put Page with fields, but page size and fields total size not match "
+                                "[page_id={}] [num_fields={}] [page_size={}] [all_fields_size={}]",
+                                page_id,
+                                data_sizes.size(),
+                                size,
+                                off),
                             ErrorCodes::LOGICAL_ERROR);
+        }
 
         Write w{WriteType::PUT, page_id, tag, read_buffer, size, 0, std::move(offsets), 0, 0, {}};
         total_data_size += size;
@@ -116,8 +136,8 @@ public:
         total_data_size += size;
     }
 
-    // Upsering a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and
-    // only used for checkpoint. That page will be overwriten by WriteBatch with larger sequence,
+    // Upserting a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and
+    // only used for checkpoint. That page will be overwritten by WriteBatch with larger sequence,
     // so we don't need to write page's data.
     void upsertPage(PageId page_id,
                     UInt64 tag,
@@ -164,6 +184,19 @@ public:
         std::swap(o.sequence, sequence);
     }
 
+    void copyWrite(const Write write)
+    {
+        writes.emplace_back(write);
+    }
+
+    void copyWrites(const Writes & writes_)
+    {
+        for (const auto & write_ : writes_)
+        {
+            copyWrite(write_);
+        }
+    }
+
     void clear()
     {
         Writes tmp;
@@ -183,21 +216,35 @@ public:
 
     String toString() const
     {
-        String str;
-        for (const auto & w : writes)
-        {
-            if (w.type == WriteType::PUT)
-                str += DB::toString(w.page_id) + ",";
-            else if (w.type == WriteType::REF)
-                str += DB::toString(w.page_id) + ">" + DB::toString(w.ori_page_id) + ",";
-            else if (w.type == WriteType::DEL)
-                str += "X" + DB::toString(w.page_id) + ",";
-            else if (w.type == WriteType::UPSERT)
-                str += "U" + DB::toString(w.page_id) + ",";
-        }
-        if (!str.empty())
-            str.erase(str.size() - 1);
-        return str;
+        FmtBuffer fmt_buffer;
+        fmt_buffer.joinStr(
+            writes.begin(),
+            writes.end(),
+            [this](const auto w, FmtBuffer & fb) {
+                switch (w.type)
+                {
+                case WriteType::PUT:
+                    fb.fmtAppend("{}.{}", namespace_id, w.page_id);
+                    break;
+                case WriteType::REF:
+                    fb.fmtAppend("{}.{} > {}.{}", namespace_id, w.page_id, namespace_id, w.ori_page_id);
+                    break;
+                case WriteType::DEL:
+                    fb.fmtAppend("X{}.{}", namespace_id, w.page_id);
+                    break;
+                case WriteType::UPSERT:
+                    fb.fmtAppend("U{}.{}", namespace_id, w.page_id);
+                    break;
+                case WriteType::PUT_EXTERNAL:
+                    fb.fmtAppend("E{}.{}", namespace_id, w.page_id);
+                    break;
+                default:
+                    fb.fmtAppend("Unknow {}.{}", namespace_id, w.page_id);
+                    break;
+                };
+            },
+            ",");
+        return fmt_buffer.toString();
     }
 
 private:

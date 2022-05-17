@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/MPMCQueue.h>
@@ -31,7 +45,13 @@ public:
     // it reacts base on current state. The completion queue "cq" and "notify_cq"
     // used for asynchronous communication with the gRPC runtime.
     // "notify_cq" gets the tag back indicating a call has started. All subsequent operations (reads, writes, etc) on that call report back to "cq".
-    EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
+    EstablishCallData(
+        AsyncFlashService * service,
+        grpc::ServerCompletionQueue * cq,
+        grpc::ServerCompletionQueue * notify_cq,
+        const std::shared_ptr<std::atomic<bool>> & is_shutdown);
+
+    ~EstablishCallData();
 
     bool write(const mpp::MPPDataPacket & packet) override;
 
@@ -50,12 +70,20 @@ public:
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
     // EstablishCallData will handle its lifecycle by itself.
-    static EstablishCallData * spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq);
+    static EstablishCallData * spawn(
+        AsyncFlashService * service,
+        grpc::ServerCompletionQueue * cq,
+        grpc::ServerCompletionQueue * notify_cq,
+        const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
 private:
     void notifyReady();
 
     void initRpc();
+
+    void finishTunnelAndResponder();
+
+    void responderFinish(const grpc::Status & status);
 
     std::mutex mu;
     // server instance
@@ -64,6 +92,7 @@ private:
     // The producer-consumer queue where for asynchronous server notifications.
     ::grpc::ServerCompletionQueue * cq;
     ::grpc::ServerCompletionQueue * notify_cq;
+    std::shared_ptr<std::atomic<bool>> is_shutdown;
     ::grpc::ServerContext ctx;
     ::grpc::Status err_status;
 

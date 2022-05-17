@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <common/types.h>
@@ -130,6 +144,11 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
         return collectForAgg(output_field_types, executor.aggregation());
+    case tipb::ExecType::TypeWindow:
+        // Window will only be pushed down in mpp mode.
+        // In mpp mode, ExchangeSender or Sender will return output_field_types directly.
+        // If not in mpp mode, window executor type is invalid.
+        throw TiFlashException("Window executor type is invalid in non-mpp mode, should not reach here.", Errors::Coprocessor::Internal);
     case tipb::ExecType::TypeExchangeReceiver:
         return collectForReceiver(output_field_types, executor.exchange_receiver());
     case tipb::ExecType::TypeTableScan:

@@ -1,7 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -52,7 +66,18 @@ public:
 
     int getNeededThreads();
 
-    void scheduleThisTask();
+    enum class ScheduleState
+    {
+        WAITING,
+        SCHEDULED,
+        FAILED,
+        EXCEEDED,
+        COMPLETED
+    };
+
+    void scheduleThisTask(ScheduleState state);
+
+    bool isScheduled();
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -103,7 +128,7 @@ private:
 
     MPPTaskManager * manager = nullptr;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 
@@ -115,7 +140,7 @@ private:
 
     std::mutex schedule_mu;
     std::condition_variable schedule_cv;
-    bool scheduled;
+    ScheduleState schedule_state;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

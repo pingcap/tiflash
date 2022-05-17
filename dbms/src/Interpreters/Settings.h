@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Checksum.h>
@@ -35,7 +49,7 @@ struct Settings
     M(SettingBool, group_by_collation_sensitive, false, "do group by with collation info.")                                                                                                                                             \
     M(SettingUInt64, read_tso, DEFAULT_MAX_READ_TSO, "tmt read tso.")                                                                                                                                                                   \
     M(SettingInt64, dag_records_per_chunk, DEFAULT_DAG_RECORDS_PER_CHUNK, "default chunk size of a DAG response.")                                                                                                                      \
-    M(SettingInt64, batch_send_min_limit, DEFAULT_BATCH_SEND_MIN_LIMIT, "default minial chunk size of exchanging data among TiFlash.")                                                                                                  \
+    M(SettingInt64, batch_send_min_limit, DEFAULT_BATCH_SEND_MIN_LIMIT, "default minimal chunk size of exchanging data among TiFlash.")                                                                                                 \
     M(SettingInt64, schema_version, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, "tmt schema version.")                                                                                                                                          \
     M(SettingUInt64, mpp_task_timeout, DEFAULT_MPP_TASK_TIMEOUT, "mpp task max endurable time.")                                                                                                                                        \
     M(SettingUInt64, mpp_task_running_timeout, DEFAULT_MPP_TASK_RUNNING_TIMEOUT, "mpp task max time that running without any progress.")                                                                                                \
@@ -258,8 +272,8 @@ struct Settings
     M(SettingUInt64, dt_segment_delta_small_column_file_size, 8388608, "Determine whether a column file in delta is small or not. 8MB by default.")                                                                                     \
     M(SettingUInt64, dt_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaTree Engine.")                                                                                                           \
     M(SettingFloat, dt_segment_wait_duration_factor, 1, "The factor of wait duration in a write stall.")                                                                                                                                \
-    M(SettingUInt64, dt_bg_gc_check_interval, 5, "Background gc thread check interval, the unit is second.")                                                                                                                          \
-    M(SettingInt64, dt_bg_gc_max_segments_to_check_every_round, 100, "Max segments to check in every gc round, value less than or equal to 0 means gc no segments.")                                                                     \
+    M(SettingUInt64, dt_bg_gc_check_interval, 5, "Background gc thread check interval, the unit is second.")                                                                                                                            \
+    M(SettingInt64, dt_bg_gc_max_segments_to_check_every_round, 100, "Max segments to check in every gc round, value less than or equal to 0 means gc no segments.")                                                                    \
     M(SettingFloat, dt_bg_gc_ratio_threhold_to_trigger_gc, 1.2, "Trigger segment's gc when the ratio of invalid version exceed this threhold. Values smaller than or equal to 1.0 means gc all "                                        \
                                                                 "segments")                                                                                                                                                             \
     M(SettingFloat, dt_bg_gc_delta_delete_ratio_to_trigger_gc, 0.3, "Trigger segment's gc when the ratio of delta delete range to stable exceeds this ratio.")                                                                          \
@@ -268,7 +282,7 @@ struct Settings
     M(SettingBool, dt_raw_filter_range, true, "Do range filter or not when read data in raw mode in DeltaTree Engine.")                                                                                                                 \
     M(SettingBool, dt_read_delta_only, false, "Only read delta data in DeltaTree Engine.")                                                                                                                                              \
     M(SettingBool, dt_read_stable_only, false, "Only read stable data in DeltaTree Engine.")                                                                                                                                            \
-    M(SettingBool, dt_enable_logical_split, false, "Enable logical split or not in DeltaTree Engine.")                                                                                                                                   \
+    M(SettingBool, dt_enable_logical_split, false, "Enable logical split or not in DeltaTree Engine.")                                                                                                                                  \
     M(SettingBool, dt_flush_after_write, false, "Flush cache or not after write in DeltaTree Engine.")                                                                                                                                  \
     M(SettingBool, dt_enable_relevant_place, false, "Enable relevant place or not in DeltaTree Engine.")                                                                                                                                \
     M(SettingBool, dt_enable_skippable_place, true, "Enable skippable place or not in DeltaTree Engine.")                                                                                                                               \
@@ -280,28 +294,30 @@ struct Settings
                                                         "`dt_stroage_num_max_expect_legacy_files`")                                                                                                                                     \
     M(SettingFloat, dt_page_gc_low_write_prob, 0.10, "Probability to run gc when write there is few writes.")                                                                                                                           \
                                                                                                                                                                                                                                         \
+                                                                                                                                                                                                                                        \
     M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.")                                                                                                                             \
     M(SettingUInt64, dt_storage_pool_log_gc_min_file_num, 10, "Min number of page files to compact")                                                                                                                                    \
     M(SettingUInt64, dt_storage_pool_log_gc_min_legacy_num, 3, "Min number of legacy page files to compact")                                                                                                                            \
     M(SettingUInt64, dt_storage_pool_log_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact")                                                                                                                         \
     M(SettingFloat, dt_storage_pool_log_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact")                                                                                                               \
-    M(SettingDouble, dt_storage_pool_log_gc_force_hardlink_rate, 2, "Max valid rate of deciding a page file can do hardlink")                                                                                                           \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data.")                                                                                                                           \
     M(SettingUInt64, dt_storage_pool_data_gc_min_file_num, 10, "Min number of page files to compact")                                                                                                                                   \
     M(SettingUInt64, dt_storage_pool_data_gc_min_legacy_num, 3, "Min number of legacy page files to compact")                                                                                                                           \
     M(SettingUInt64, dt_storage_pool_data_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact")                                                                                                                        \
     M(SettingFloat, dt_storage_pool_data_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact")                                                                                                              \
-    M(SettingDouble, dt_storage_pool_data_gc_force_hardlink_rate, 2, "Max valid rate of deciding a page file can do hardlink")                                                                                                          \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta.")                                                                                                                           \
     M(SettingUInt64, dt_storage_pool_meta_gc_min_file_num, 10, "Min number of page files to compact")                                                                                                                                   \
     M(SettingUInt64, dt_storage_pool_meta_gc_min_legacy_num, 3, "Min number of legacy page files to compact")                                                                                                                           \
     M(SettingUInt64, dt_storage_pool_meta_gc_min_bytes, 128 * Constant::MB, "Min bytes of page data to compact")                                                                                                                        \
     M(SettingFloat, dt_storage_pool_meta_gc_max_valid_rate, 0.35, "Max valid rate of deciding a page file can be compact")                                                                                                              \
-    M(SettingDouble, dt_storage_pool_meta_gc_force_hardlink_rate, 2, "Max valid rate of deciding a page file can do hardlink")                                                                                                          \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_checksum_frame_size, DBMS_DEFAULT_BUFFER_SIZE, "Frame size for delta tree stable storage")                                                                                                                      \
+                                                                                                                                                                                                                                        \
+    M(SettingDouble, dt_storage_blob_heavy_gc_valid_rate, 0.2, "Max valid rate of deciding a blob can be compact")                                                                                                                      \
+    M(SettingDouble, dt_storage_blob_block_alignment_bytes, 0, "Blob IO alignment size")                                                                                                                                                \
+                                                                                                                                                                                                                                        \
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
     M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                                          \
     M(SettingInt64, dt_compression_level, 1, "The compression level.")                                                                                                                                                                  \
@@ -339,8 +355,10 @@ struct Settings
     M(SettingUInt64, elastic_threadpool_init_cap, 400, "The size of elastic thread pool.")                                                                                                                                              \
     M(SettingUInt64, elastic_threadpool_shrink_period_ms, 300000, "The shrink period(ms) of elastic thread pool.")                                                                                                                      \
     M(SettingBool, enable_local_tunnel, true, "Enable local data transfer between local MPP tasks.")                                                                                                                                    \
+    M(SettingBool, enable_async_grpc_client, true, "Enable async grpc in MPP.")                                                                                                                                                                \
+    M(SettingUInt64, grpc_completion_queue_pool_size, 0, "The size of gRPC completion queue pool. 0 means using hardware_concurrency.")\
     M(SettingBool, enable_async_server, true, "Enable async rpc server.")                                                                                                                                                               \
-    M(SettingUInt64, async_pollers_per_cq, 100, "grpc async pollers per cqs")                                                                                                                                                           \
+    M(SettingUInt64, async_pollers_per_cq, 200, "grpc async pollers per cqs")                                                                                                                                                           \
     M(SettingUInt64, async_cqs, 1, "grpc async cqs")                                                                                                                                                                                    \
     M(SettingUInt64, preallocated_request_count_per_poller, 20, "grpc preallocated_request_count_per_poller")
 

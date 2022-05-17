@@ -1,6 +1,23 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
+#include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
@@ -116,9 +133,64 @@ TEST(WALSeriTest, Upserts)
     EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
 }
 
+TEST(WALSeriTest, RefExternalAndEntry)
+{
+    PageVersionType ver1_0(/*seq=*/1, /*epoch*/ 0);
+    PageVersionType ver2_0(/*seq=*/2, /*epoch*/ 0);
+    PageVersionType ver3_0(/*seq=*/3, /*epoch*/ 0);
+    {
+        PageEntriesEdit edit;
+        edit.varExternal(1, ver1_0, 2);
+        edit.varDel(1, ver2_0);
+        edit.varRef(2, ver3_0, 1);
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 3);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, EditRecordType::VAR_EXTERNAL);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver1_0);
+        EXPECT_EQ(iter->being_ref_count, 2);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_DELETE);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver2_0);
+        EXPECT_EQ(iter->being_ref_count, 1);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
+        EXPECT_EQ(iter->page_id.low, 2);
+        EXPECT_EQ(iter->version, ver3_0);
+    }
+
+    {
+        PageEntriesEdit edit;
+        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        edit.varEntry(1, ver1_0, entry_p1_2, 2);
+        edit.varDel(1, ver2_0);
+        edit.varRef(2, ver3_0, 1);
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 3);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, EditRecordType::VAR_ENTRY);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver1_0);
+        EXPECT_EQ(iter->being_ref_count, 2);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_DELETE);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver2_0);
+        EXPECT_EQ(iter->being_ref_count, 1);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
+        EXPECT_EQ(iter->page_id.low, 2);
+        EXPECT_EQ(iter->version, ver3_0);
+    }
+}
+
 TEST(WALLognameTest, parsing)
 {
-    Poco::Logger * log = &Poco::Logger::get("WALLognameTest");
+    LoggerPtr log = Logger::get("WALLognameTest");
     const String parent_path("/data1");
 
     {
@@ -164,7 +236,7 @@ TEST(WALLognameTest, parsing)
 
 TEST(WALLognameSetTest, ordering)
 {
-    Poco::Logger * log = &Poco::Logger::get("WALLognameTest");
+    LoggerPtr log = Logger::get("WALLognameTest");
     const String parent_path("/data1");
 
     LogFilenameSet filenames;
@@ -197,24 +269,49 @@ TEST(WALLognameSetTest, ordering)
 }
 
 
-class WALStoreTest : public DB::base::TiFlashStorageTestBasic
+class WALStoreTest
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<bool>
 {
+public:
+    WALStoreTest()
+        : multi_paths(GetParam())
+        , log(Logger::get("WALStoreTest"))
+    {
+    }
+
     void SetUp() override
     {
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
 
-        // TODO: multi-path
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(getTemporaryPath());
+        if (!multi_paths)
+        {
+            delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(getTemporaryPath());
+        }
+        else
+        {
+            // mock 8 dirs for multi-paths
+            Strings paths;
+            for (size_t i = 0; i < 8; ++i)
+            {
+                paths.emplace_back(fmt::format("{}/path_{}", path, i));
+            }
+            delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(paths);
+        }
     }
+
+private:
+    const bool multi_paths;
 
 protected:
     PSDiskDelegatorPtr delegator;
+    WALStore::Config config;
+    LoggerPtr log;
 };
 
-TEST_F(WALStoreTest, FindCheckpointFile)
+TEST_P(WALStoreTest, FindCheckpointFile)
 {
-    Poco::Logger * log = &Poco::Logger::get("WALStoreTest");
     auto path = getTemporaryPath();
 
     {
@@ -262,13 +359,13 @@ TEST_F(WALStoreTest, FindCheckpointFile)
     }
 }
 
-TEST_F(WALStoreTest, Empty)
+TEST_P(WALStoreTest, Empty)
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
     auto provider = ctx.getFileProvider();
     auto path = getTemporaryPath();
     size_t num_callback_called = 0;
-    auto [wal, reader] = WALStore::create(provider, delegator);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
     ASSERT_NE(wal, nullptr);
     while (reader->remained())
     {
@@ -285,7 +382,7 @@ TEST_F(WALStoreTest, Empty)
     ASSERT_EQ(num_callback_called, 0);
 }
 
-TEST_F(WALStoreTest, ReadWriteRestore)
+TEST_P(WALStoreTest, ReadWriteRestore)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
@@ -294,10 +391,10 @@ try
 
     // Stage 1. empty
     std::vector<size_t> size_each_edit;
-    auto [wal, reader] = WALStore::create(provider, delegator);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
     {
         size_t num_applied_edit = 0;
-        auto reader = WALStoreReader::create(provider, delegator);
+        auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         for (; reader->remained(); reader->next())
         {
             num_applied_edit += 1;
@@ -322,7 +419,7 @@ try
     wal.reset();
     reader.reset();
 
-    std::tie(wal, reader) = WALStore::create(provider, delegator);
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
     {
         size_t num_applied_edit = 0;
         while (reader->remained())
@@ -354,7 +451,7 @@ try
     wal.reset();
     reader.reset();
 
-    std::tie(wal, reader) = WALStore::create(provider, delegator);
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
     {
         size_t num_applied_edit = 0;
         while (reader->remained())
@@ -390,7 +487,7 @@ try
 
     {
         size_t num_applied_edit = 0;
-        auto reader = WALStoreReader::create(provider, delegator);
+        auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
@@ -405,14 +502,14 @@ try
 }
 CATCH
 
-TEST_F(WALStoreTest, ReadWriteRestore2)
+TEST_P(WALStoreTest, ReadWriteRestore2)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
     auto provider = ctx.getFileProvider();
     auto path = getTemporaryPath();
 
-    auto [wal, reader] = WALStore::create(provider, delegator);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
     ASSERT_NE(wal, nullptr);
 
     std::vector<size_t> size_each_edit;
@@ -461,7 +558,7 @@ try
 
     {
         size_t num_applied_edit = 0;
-        auto reader = WALStoreReader::create(provider, delegator);
+        auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
             const auto & [ok, edit] = reader->next();
@@ -476,7 +573,7 @@ try
 
     {
         size_t num_applied_edit = 0;
-        std::tie(wal, reader) = WALStore::create(provider, delegator);
+        std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
             auto [ok, edit] = reader->next();
@@ -495,7 +592,7 @@ try
 }
 CATCH
 
-TEST_F(WALStoreTest, ManyEdits)
+TEST_P(WALStoreTest, ManyEdits)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
@@ -503,11 +600,11 @@ try
     auto path = getTemporaryPath();
 
     // Stage 1. empty
-    auto [wal, reader] = WALStore::create(provider, delegator);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
     ASSERT_NE(wal, nullptr);
 
     std::mt19937 rd;
-    std::uniform_int_distribution<> d(0, 20);
+    std::uniform_int_distribution<> d_20(0, 20);
 
     // Stage 2. insert many edits
     constexpr size_t num_edits_test = 100000;
@@ -519,7 +616,7 @@ try
     {
         PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         PageEntriesEdit edit;
-        const size_t num_pages_put = d(rd);
+        const size_t num_pages_put = d_20(rd);
         for (size_t p = 0; p < num_pages_put; ++p)
         {
             page_id += 1;
@@ -536,7 +633,7 @@ try
 
     size_t num_edits_read = 0;
     size_t num_pages_read = 0;
-    std::tie(wal, reader) = WALStore::create(provider, delegator);
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
     while (reader->remained())
     {
         auto [ok, edit] = reader->next();
@@ -555,24 +652,57 @@ try
 
     LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 
-    // Stage 3. compact logs and verify
-    // wal->compactLogs();
-    // wal.reset();
+    // Test for save snapshot (with encryption)
+    auto enc_key_manager = std::make_shared<MockKeyManager>(/*encryption_enabled_=*/true);
+    auto enc_provider = std::make_shared<FileProvider>(enc_key_manager, true);
+    LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, log);
+    WALStore::FilesSnapshot file_snap{.current_writting_log_num = 100, // just a fake value
+                                      .persisted_log_files = persisted_log_files};
 
-    // // After logs compacted, they should be written as one edit.
-    // num_edits_read = 0;
-    // num_pages_read = 0;
-    // wal = WALStore::create(
-    //     [&](PageEntriesEdit && edit) {
-    //         num_pages_read += edit.size();
-    //         EXPECT_EQ(page_id, edit.size()) << fmt::format("at idx={}", num_edits_read);
-    //         num_edits_read += 1;
-    //     },
-    //     provider,
-    //     delegator);
-    // EXPECT_EQ(num_edits_read, 1);
-    // EXPECT_EQ(num_pages_read, page_id);
+    PageEntriesEdit snap_edit;
+    PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    std::uniform_int_distribution<> d_10000(0, 10000);
+    // just fill in some random entry
+    for (size_t i = 0; i < 70; ++i)
+    {
+        snap_edit.varEntry(d_10000(rd), PageVersionType(345, 22), entry, 1);
+    }
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
+    bool done = wal->saveSnapshot(std::move(file_snap), std::move(snap_edit));
+    ASSERT_TRUE(done);
+    wal.reset();
+    reader.reset();
+
+    // After logs compacted, they should be written as one edit.
+    num_edits_read = 0;
+    num_pages_read = 0;
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
+    while (reader->remained())
+    {
+        auto [ok, edit] = reader->next();
+        if (!ok)
+        {
+            reader->throwIfError();
+            // else it just run to the end of file.
+            break;
+        }
+        num_pages_read += edit.size();
+        num_edits_read += 1;
+    }
+    EXPECT_EQ(num_edits_read, 1);
+    EXPECT_EQ(num_pages_read, 70);
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(
+    Disks,
+    WALStoreTest,
+    ::testing::Bool(),
+    [](const ::testing::TestParamInfo<WALStoreTest::ParamType> & info) -> String {
+        const auto multi_path = info.param;
+        if (multi_path)
+            return "multi_disks";
+        return "single_disk";
+    });
 
 } // namespace DB::PS::V3::tests

@@ -1,10 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/Logger.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
-#include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -17,22 +31,26 @@ namespace DB::PS::V3
 {
 LogFilenameSet WALStoreReader::listAllFiles(
     const PSDiskDelegatorPtr & delegator,
-    Poco::Logger * logger)
+    LoggerPtr logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
     std::vector<std::pair<String, Strings>> all_filenames;
     Strings filenames;
-    for (const auto & p : delegator->listPaths())
+    for (const auto & parent_path : delegator->listPaths())
     {
-        Poco::File directory(p);
+        String wal_parent_path = parent_path + WALStore::wal_folder_prefix;
+        Poco::File directory(wal_parent_path);
         if (!directory.exists())
+        {
             directory.createDirectories();
+            continue;
+        }
+
         filenames.clear();
         directory.list(filenames);
-        all_filenames.emplace_back(std::make_pair(p, std::move(filenames)));
+        all_filenames.emplace_back(std::make_pair(wal_parent_path, std::move(filenames)));
         filenames.clear();
     }
-    assert(all_filenames.size() == 1); // TODO: multi-path
 
     LogFilenameSet log_files;
     for (const auto & [parent_path, filenames] : all_filenames)
@@ -101,29 +119,43 @@ WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
     return {latest_checkpoint, std::move(all_files)};
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(String storage_name,
+                                         FileProviderPtr & provider,
+                                         LogFilenameSet files,
+                                         WALRecoveryMode recovery_mode_,
+                                         const ReadLimiterPtr & read_limiter)
 {
     auto [checkpoint, files_to_read] = findCheckpoint(std::move(files));
-    auto reader = std::make_shared<WALStoreReader>(provider, checkpoint, std::move(files_to_read), read_limiter);
+    auto reader = std::make_shared<WALStoreReader>(storage_name, provider, checkpoint, std::move(files_to_read), recovery_mode_, read_limiter);
     reader->openNextFile();
     return reader;
 }
 
-WALStoreReaderPtr WALStoreReader::create(FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter)
+WALStoreReaderPtr WALStoreReader::create(
+    String storage_name,
+    FileProviderPtr & provider,
+    PSDiskDelegatorPtr & delegator,
+    WALRecoveryMode recovery_mode_,
+    const ReadLimiterPtr & read_limiter)
 {
-    Poco::Logger * logger = &Poco::Logger::get("WALStore");
-    LogFilenameSet log_files = listAllFiles(delegator, logger);
-    return create(provider, std::move(log_files), read_limiter);
+    LogFilenameSet log_files = listAllFiles(delegator, Logger::get("WALStore", storage_name));
+    return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
-WALStoreReader::WALStoreReader(FileProviderPtr & provider_, std::optional<LogFilename> checkpoint, LogFilenameSet && files_, const ReadLimiterPtr & read_limiter_)
+WALStoreReader::WALStoreReader(String storage_name,
+                               FileProviderPtr & provider_,
+                               std::optional<LogFilename> checkpoint,
+                               LogFilenameSet && files_,
+                               WALRecoveryMode recovery_mode_,
+                               const ReadLimiterPtr & read_limiter_)
     : provider(provider_)
     , read_limiter(read_limiter_)
     , checkpoint_read_done(!checkpoint.has_value())
     , checkpoint_file(checkpoint)
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
-    , logger(&Poco::Logger::get("LogReader"))
+    , recovery_mode(recovery_mode_)
+    , logger(Logger::get("WALStore", std::move(storage_name)))
 {}
 
 bool WALStoreReader::remained() const
@@ -167,17 +199,15 @@ bool WALStoreReader::openNextFile()
     }
 
     auto do_open = [this](const LogFilename & next_file) {
-        const auto & parent_path = next_file.parent_path;
         const auto log_num = next_file.log_num;
-        const auto level_num = next_file.level_num;
-        const auto filename = fmt::format("log_{}_{}", log_num, level_num);
-        const auto fullname = fmt::format("{}/{}", parent_path, filename);
+        const auto filename = next_file.filename(next_file.stage);
+        const auto fullname = next_file.fullname(next_file.stage);
         LOG_FMT_DEBUG(logger, "Open log file for reading [file={}]", fullname);
 
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,
             fullname,
-            EncryptionPath{parent_path, filename},
+            EncryptionPath{fullname, ""},
             /*estimated_size*/ Format::BLOCK_SIZE,
             /*aio_threshold*/ 0,
             /*read_limiter*/ read_limiter,
@@ -188,8 +218,7 @@ bool WALStoreReader::openNextFile()
             &reporter,
             /*verify_checksum*/ true,
             log_num,
-            WALRecoveryMode::TolerateCorruptedTailRecords,
-            logger);
+            recovery_mode);
     };
 
     if (!checkpoint_read_done)

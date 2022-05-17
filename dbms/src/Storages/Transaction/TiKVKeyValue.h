@@ -1,6 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/RedactHelpers.h>
+#include <Common/nocopyable.h>
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
 
@@ -32,7 +47,7 @@ public:
     {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
 
-    StringObject & operator=(const StringObject & a) = delete;
+    DISALLOW_COPY(StringObject);
     StringObject & operator=(StringObject && a)
     {
         if (this == &a)
@@ -59,7 +74,6 @@ private:
     StringObject(const Base & str_)
         : Base(str_)
     {}
-    StringObject(const StringObject & obj) = delete;
     size_t size() const = delete;
 };
 

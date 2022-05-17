@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 => DBGInvoke __clean_up_region()
 => DBGInvoke __enable_schema_sync_service('false')
 
@@ -80,19 +94,20 @@
 │            0 │
 └──────────────┘
 
-=> DBGInvoke __rename_tidb_table(default, test, test1)
-=> DBGInvoke __refresh_schemas()
-=> select count(*) from default.test1_9997
-┌─count()─┐
-│       2 │ 
-└─────────┘
+# FIXME: No support rename after PR 4850 (PageStorage V3)
+# => DBGInvoke __rename_tidb_table(default, test, test1)
+# => DBGInvoke __refresh_schemas()
+# => select count(*) from default.test1_9997
+# ┌─count()─┐
+# │       2 │ 
+# └─────────┘
 
-=> DBGInvoke __drop_tidb_table(default, test1)
-=> DBGInvoke __refresh_schemas()
-=> DBGInvoke is_tombstone(default, test1_9999)
-┌─is_tombstone(default, test_9999)─┐
-│ true                             │
-└──────────────────────────────────┘
+# => DBGInvoke __drop_tidb_table(default, test1)
+# => DBGInvoke __refresh_schemas()
+# => DBGInvoke is_tombstone(default, test1_9999)
+# ┌─is_tombstone(default, test_9999)─┐
+# │ true                             │
+# └──────────────────────────────────┘
 
 => drop table if exists default.test
 => drop table if exists default.test1

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FieldVisitors.h>
 #include <Functions/FunctionsConversion.h>
 #include <IO/ReadBufferFromMemory.h>
@@ -24,8 +38,6 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
 {
     std::function<Field(const Field &, const DataTypePtr &)> cast_default_value; // for lazy bind
     cast_default_value = [&](const Field & value, const DataTypePtr & type) -> Field {
-        if (value.isNull())
-            return value;
         switch (type->getTypeId())
         {
         case TypeIndex::Float32:
@@ -170,7 +182,9 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
         }
         catch (const Poco::Exception & e)
         {
-            throw DB::Exception(e, fmt::format("(in setColumnDefineDefaultValue for default_expression: {})", astToDebugString(command.default_expression.get())));
+            DB::Exception ex(e);
+            ex.addMessage(fmt::format("(in setColumnDefineDefaultValue for default_expression: {})", astToDebugString(command.default_expression.get())));
+            throw ex; // NOLINT
         }
         catch (std::exception & e)
         {
@@ -288,7 +302,7 @@ void applyAlter(ColumnDefines & table_columns,
     }
     else
     {
-        LOG_FMT_WARNING(log, "{} receive unknown alter command, type: {}", __PRETTY_FUNCTION__, static_cast<Int32>(command.type));
+        LOG_FMT_WARNING(log, "receive unknown alter command, type: {}", static_cast<Int32>(command.type));
     }
 }
 

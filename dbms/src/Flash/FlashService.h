@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
@@ -35,9 +49,6 @@ public:
         const coprocessor::Request * request,
         coprocessor::Response * response) override;
 
-    grpc::Status BatchCommands(grpc::ServerContext * grpc_context,
-                               grpc::ServerReaderWriter<tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream) override;
-
     ::grpc::Status BatchCoprocessor(::grpc::ServerContext * context,
                                     const ::coprocessor::BatchRequest * request,
                                     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer) override;
@@ -52,11 +63,11 @@ public:
         const ::mpp::IsAliveRequest * request,
         ::mpp::IsAliveResponse * response) override;
 
-    ::grpc::Status EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, EstablishCallData * calldata);
+    ::grpc::Status establishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, EstablishCallData * calldata);
 
     ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer) override
     {
-        return EstablishMPPConnectionSyncOrAsync(context, request, sync_writer, nullptr);
+        return establishMPPConnectionSyncOrAsync(context, request, sync_writer, nullptr);
     }
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
@@ -68,6 +79,9 @@ protected:
     IServer & server;
     const TiFlashSecurityConfig & security_config;
     Poco::Logger * log;
+    bool is_async = false;
+    bool enable_local_tunnel = false;
+    bool enable_async_grpc_client = false;
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
@@ -83,6 +97,7 @@ public:
     explicit AsyncFlashService(IServer & server)
         : FlashService(server)
     {
+        is_async = true;
         ::grpc::Service::MarkMethodAsync(EstablishMPPConnectionApiID);
     }
 
@@ -92,8 +107,7 @@ public:
         abort();
         return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-
-    void RequestEstablishMPPConnection(::grpc::ServerContext * context, ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> * writer, ::grpc::CompletionQueue * new_call_cq, ::grpc::ServerCompletionQueue * notification_cq, void * tag)
+    void requestEstablishMPPConnection(::grpc::ServerContext * context, ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> * writer, ::grpc::CompletionQueue * new_call_cq, ::grpc::ServerCompletionQueue * notification_cq, void * tag)
     {
         ::grpc::Service::RequestAsyncServerStreaming(EstablishMPPConnectionApiID, context, request, writer, new_call_cq, notification_cq, tag);
     }

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Field.h>
@@ -9,6 +23,11 @@ namespace DB
 {
 struct MyTimeBase
 {
+    static constexpr Int64 SECOND_IN_ONE_DAY = 86400;
+    static constexpr Int64 SECOND_IN_ONE_HOUR = 3600;
+    static constexpr Int64 SECOND_IN_ONE_MINUTE = 60;
+
+
     // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
     // Core time bit fields.
     static const UInt64 YEAR_BIT_FIELD_OFFSET = 50, YEAR_BIT_FIELD_WIDTH = 14;
@@ -177,6 +196,9 @@ std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt
 
 int calcDayNum(int year, int month, int day);
 
+// returns seconds since '0000-00-00'
+UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second);
+
 size_t maxFormattedDateTimeStringLength(const String & format);
 
 inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
@@ -208,5 +230,9 @@ inline UInt8 getLastDay(UInt16 year, UInt8 month)
         last_day = 29;
     return last_day;
 }
+
+UInt64 addSeconds(UInt64 t, Int64 delta);
+void addDays(MyDateTime & t, Int64 days);
+void addMonths(MyDateTime & t, Int64 months);
 
 } // namespace DB

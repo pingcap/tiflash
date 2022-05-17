@@ -1,6 +1,21 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Checksum.h>
+#include <Interpreters/SettingsCommon.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
@@ -68,12 +83,21 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class WALStore
 {
 public:
-    using ChecksumClass = Digest::CRC64;
+    struct Config
+    {
+        SettingUInt64 roll_size = PAGE_META_ROLL_SIZE;
+        SettingUInt64 wal_recover_mode = 0;
+        SettingUInt64 max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
+    };
+
+    constexpr static const char * wal_folder_prefix = "/wal";
 
     static std::pair<WALStorePtr, WALStoreReaderPtr>
     create(
+        String storage_name,
         FileProviderPtr & provider,
-        PSDiskDelegatorPtr & delegator);
+        PSDiskDelegatorPtr & delegator,
+        WALStore::Config config);
 
     void apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter = nullptr);
     void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
@@ -83,10 +107,10 @@ public:
         Format::LogNumberType current_writting_log_num;
         LogFilenameSet persisted_log_files;
 
-        bool needSave() const
+        bool needSave(const size_t & max_size) const
         {
             // TODO: Make it configurable and check the reasonable of this number
-            return persisted_log_files.size() > 4;
+            return persisted_log_files.size() > max_size;
         }
     };
 
@@ -99,25 +123,28 @@ public:
 
 private:
     WALStore(
+        String storage_name,
         const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
-        Format::LogNumberType last_log_num_);
+        Format::LogNumberType last_log_num_,
+        WALStore::Config config);
 
-    static std::tuple<std::unique_ptr<LogWriter>, LogFilename>
+    std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
-        PSDiskDelegatorPtr delegator,
-        const FileProviderPtr & provider,
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
-        Poco::Logger * logger,
         bool manual_flush);
 
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
     mutable std::mutex log_file_mutex;
     Format::LogNumberType last_log_num;
+    // select next path for creating new logfile
+    UInt32 wal_paths_index;
     std::unique_ptr<LogWriter> log_file;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
+
+    WALStore::Config config;
 };
 
 } // namespace PS::V3

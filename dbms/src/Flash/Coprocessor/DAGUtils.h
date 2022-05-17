@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
@@ -8,6 +22,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
+#include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
 #include <unordered_map>
@@ -21,10 +36,17 @@ Field decodeLiteral(const tipb::Expr & expr);
 bool isFunctionExpr(const tipb::Expr & expr);
 bool isScalarFunctionExpr(const tipb::Expr & expr);
 bool isAggFunctionExpr(const tipb::Expr & expr);
+bool isWindowFunctionExpr(const tipb::Expr & expr);
 const String & getFunctionName(const tipb::Expr & expr);
 const String & getAggFunctionName(const tipb::Expr & expr);
+const String & getWindowFunctionName(const tipb::Expr & expr);
+String getExchangeTypeName(const tipb::ExchangeType & tp);
+String getJoinTypeName(const tipb::JoinType & tp);
+String getFieldTypeName(Int32 tp);
+String getJoinExecTypeName(const tipb::JoinExecType & tp);
 bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
+NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 bool exprHasValidFieldType(const tipb::Expr & expr);

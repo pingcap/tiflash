@@ -1,10 +1,30 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Storages/MutableSupport.h>
 
 namespace DB
 {
-RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGContext & dag_context, const TiDBTableScan & table_scan, const TiDB::TableInfo & table_info, const tipb::Executor * selection, LogWithPrefixPtr & log)
+RemoteRequest RemoteRequest::build(
+    const RegionRetryList & retry_regions,
+    DAGContext & dag_context,
+    const TiDBTableScan & table_scan,
+    const TiDB::TableInfo & table_info,
+    const PushDownFilter & push_down_filter,
+    const LoggerPtr & log)
 {
     auto print_retry_regions = [&retry_regions, &table_info] {
         FmtBuffer buffer;
@@ -21,16 +41,7 @@ RemoteRequest RemoteRequest::build(const RegionRetryList & retry_regions, DAGCon
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;
-    auto * executor = dag_req.mutable_root_executor();
-    if (selection != nullptr)
-    {
-        executor->set_tp(tipb::ExecType::TypeSelection);
-        executor->set_executor_id(selection->executor_id());
-        auto * new_selection = executor->mutable_selection();
-        for (const auto & condition : selection->selection().conditions())
-            *new_selection->add_conditions() = condition;
-        executor = new_selection->mutable_child();
-    }
+    auto * executor = push_down_filter.constructSelectionForRemoteRead(dag_req.mutable_root_executor());
 
     {
         tipb::Executor * ts_exec = executor;

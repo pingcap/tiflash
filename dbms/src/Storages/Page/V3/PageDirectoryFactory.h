@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/Page/PageDefines.h>
@@ -32,16 +46,29 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
 
     // just for test
-    PageDirectoryPtr createFromEdit(FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+    PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
+
+    // just for test
+    PageDirectoryFactory & setBlobStats(BlobStore::BlobStats & blob_stats_)
+    {
+        blob_stats = &blob_stats_;
+        return *this;
+    }
+
+    std::map<NamespaceId, PageId> getMaxApplyPageIds() const
+    {
+        return max_apply_page_ids;
+    }
 
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
 
     BlobStore::BlobStats * blob_stats = nullptr;
+    std::map<NamespaceId, PageId> max_apply_page_ids;
 };
 
 } // namespace PS::V3
