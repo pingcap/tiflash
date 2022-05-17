@@ -14,5 +14,5 @@
 
 #pragma once
 
-/// Get number of CPU cores without hyper-threading.
+/// Get number of logical CPU cores
 unsigned getNumberOfLogicalCPUCores();

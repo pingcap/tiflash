@@ -154,13 +154,13 @@ static unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
             if (cpu_str_idx != std::string::npos)
             {
                 line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
-                if (enabled_v2) 
+                if (enabled_v2)
                 {
                     // update the cpu count from the cgroup file cpuset.cpus
                     default_cpu_count = read_cpu_count_from(fmt::format("/sys/fs/cgroup/{}/cpuset.cpus", line).c_str(), -1);
                     // read the quota and period from the cgroup file cpu.max
                     auto [cgroup_quota, cgroup_period] = read_quota_and_period_from(fmt::format("/sys/fs/cgroup/{}/cpu.max", line).c_str());
-                    
+
                     return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
                 }
                 else
