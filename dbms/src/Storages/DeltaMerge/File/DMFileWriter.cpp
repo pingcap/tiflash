@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Common/assert_cast.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 
@@ -128,7 +129,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
 
-    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
+    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : assert_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
 
     for (auto & cd : write_columns)
     {

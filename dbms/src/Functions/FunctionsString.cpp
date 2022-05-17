@@ -4524,8 +4524,8 @@ class FormatImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit FormatImpl(const Context & context)
-        : context(context)
+    explicit FormatImpl(const Context & context_)
+        : context(context_)
     {}
 
     static FunctionPtr create(const Context & context_)
