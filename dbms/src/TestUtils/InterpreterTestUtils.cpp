@@ -12,72 +12,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Interpreters/executeQuery.h>
 #include <TestUtils/InterpreterTestUtils.h>
-
+#include <TestUtils/executorSerializer.h>
 namespace DB::tests
 {
-namespace
+DAGContext & InterpreterTest::getDAGContext()
 {
-String toTreeString(const tipb::Executor & root_executor, size_t level = 0);
+    assert(dag_context_ptr != nullptr);
+    return *dag_context_ptr;
+}
 
-// serialize tipb::DAGRequest, print the executor name in a Tree format.
-String toTreeString(std::shared_ptr<tipb::DAGRequest> dag_request)
+void InterpreterTest::initializeContext()
 {
-    assert((dag_request->executors_size() > 0) != dag_request->has_root_executor());
-    if (dag_request->has_root_executor())
+    dag_context_ptr = std::make_unique<DAGContext>(1024);
+    context = MockDAGRequestContext(TiFlashTestEnv::getContext());
+    dag_context_ptr->log = Logger::get("interpreterTest");
+}
+
+void InterpreterTest::SetUpTestCase()
+{
+    try
     {
-        return toTreeString(dag_request->root_executor());
+        DB::registerFunctions();
+        DB::registerAggregateFunctions();
     }
-    else
+    catch (DB::Exception &)
     {
-        FmtBuffer buffer;
-        String prefix;
-        traverseExecutors(dag_request.get(), [&buffer, &prefix](const tipb::Executor & executor) {
-            assert(executor.has_executor_id());
-            buffer.fmtAppend("{}{}\n", prefix, executor.executor_id());
-            prefix.append(" ");
-            return true;
-        });
-        return buffer.toString();
+        // Maybe another test has already registered, ignore exception here.
     }
 }
 
-String toTreeString(const tipb::Executor & root_executor, size_t level)
+void InterpreterTest::initializeClientInfo()
 {
-    FmtBuffer buffer;
-
-    auto append_str = [&buffer, &level](const tipb::Executor & executor) {
-        assert(executor.has_executor_id());
-
-        buffer.append(String(level, ' '));
-        buffer.append(executor.executor_id()).append("\n");
-    };
-
-    traverseExecutorTree(root_executor, [&](const tipb::Executor & executor) {
-        if (executor.has_join())
-        {
-            append_str(executor);
-            ++level;
-            for (const auto & child : executor.join().children())
-                buffer.append(toTreeString(child, level));
-            return false;
-        }
-        else
-        {
-            append_str(executor);
-            ++level;
-            return true;
-        }
-    });
-
-    return buffer.toString();
+    context.context.setCurrentQueryId("test");
+    ClientInfo & client_info = context.context.getClientInfo();
+    client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+    client_info.interface = ClientInfo::Interface::GRPC;
 }
-} // namespace
 
-void dagRequestEqual(String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
+void InterpreterTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
-    String actual_string = toTreeString(actual);
-    ASSERT_EQ(Poco::trimInPlace(expected_string), Poco::trimInPlace(actual_string));
+    DAGContext dag_context(*request, "interpreter_test", concurrency);
+    context.context.setDAGContext(&dag_context);
+    // Currently, don't care about regions information in interpreter tests.
+    DAGQuerySource dag(context.context);
+    auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
+    FmtBuffer fb;
+    res.in->dumpTree(fb);
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
+}
+
+void InterpreterTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
+{
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
 }
 
 } // namespace DB::tests

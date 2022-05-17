@@ -14,11 +14,18 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
+#include <Storages/Page/V3/WALStore.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int CORRUPTED_DATA;
+}
+
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 
@@ -27,10 +34,11 @@ namespace PS::V3
 class ReportCollector : public LogReader::Reporter
 {
 public:
-    void corruption(size_t /*bytes*/, const String & /*msg*/) override
+    void corruption(size_t /*bytes*/, const String & msg) override
     {
         error_happened = true;
         // FIXME: store the reason of corruption
+        throw Exception(msg, ErrorCodes::CORRUPTED_DATA);
     }
 
     bool hasError() const
@@ -49,9 +57,17 @@ public:
     static std::tuple<std::optional<LogFilename>, LogFilenameSet>
     findCheckpoint(LogFilenameSet && all_files);
 
-    static WALStoreReaderPtr create(String storage_name, FileProviderPtr & provider, LogFilenameSet files, const ReadLimiterPtr & read_limiter = nullptr);
+    static WALStoreReaderPtr create(String storage_name,
+                                    FileProviderPtr & provider,
+                                    LogFilenameSet files,
+                                    WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
+                                    const ReadLimiterPtr & read_limiter = nullptr);
 
-    static WALStoreReaderPtr create(String storage_name, FileProviderPtr & provider, PSDiskDelegatorPtr & delegator, const ReadLimiterPtr & read_limiter = nullptr);
+    static WALStoreReaderPtr create(String storage_name,
+                                    FileProviderPtr & provider,
+                                    PSDiskDelegatorPtr & delegator,
+                                    WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
+                                    const ReadLimiterPtr & read_limiter = nullptr);
 
     bool remained() const;
 
@@ -79,10 +95,10 @@ public:
         FileProviderPtr & provider_,
         std::optional<LogFilename> checkpoint,
         LogFilenameSet && files_,
+        WALRecoveryMode recovery_mode_,
         const ReadLimiterPtr & read_limiter_);
 
-    WALStoreReader(const WALStoreReader &) = delete;
-    WALStoreReader & operator=(const WALStoreReader &) = delete;
+    DISALLOW_COPY(WALStoreReader);
 
 private:
     bool openNextFile();
@@ -97,6 +113,7 @@ private:
     LogFilenameSet::const_iterator next_reading_file;
     std::unique_ptr<LogReader> reader;
 
+    WALRecoveryMode recovery_mode;
     LoggerPtr logger;
 };
 

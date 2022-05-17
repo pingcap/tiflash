@@ -24,6 +24,9 @@ namespace DB
 struct MyTimeBase
 {
     static constexpr Int64 SECOND_IN_ONE_DAY = 86400;
+    static constexpr Int64 SECOND_IN_ONE_HOUR = 3600;
+    static constexpr Int64 SECOND_IN_ONE_MINUTE = 60;
+
 
     // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
     // Core time bit fields.
@@ -192,6 +195,9 @@ MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64
 std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp);
 
 int calcDayNum(int year, int month, int day);
+
+// returns seconds since '0000-00-00'
+UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second);
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 

@@ -134,7 +134,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     char * data_pos = data_buffer;
 
     PageUtil::put(meta_pos, meta_write_bytes);
-    PageUtil::put(meta_pos, STORAGE_FORMAT_CURRENT.page);
+    PageUtil::put(meta_pos, PageFormat::V2);
     PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
@@ -999,7 +999,6 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
     for (auto & [page_id, entry, fields] : to_read)
     {
         (void)page_id;
-        (void)entry;
         // Sort fields to get better read on disk
         std::sort(fields.begin(), fields.end());
         for (const auto field_index : fields)
@@ -1068,6 +1067,75 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
     last_read_time = Clock::now();
 
     return page_map;
+}
+
+Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read_limiter)
+{
+    ProfileEvents::increment(ProfileEvents::PSMReadPages, 1);
+
+    size_t buf_size = 0;
+
+    std::sort(to_read.fields.begin(), to_read.fields.end());
+    for (const auto field_index : to_read.fields)
+    {
+        buf_size += to_read.entry.getFieldSize(field_index);
+    }
+
+    char * data_buf = static_cast<char *>(alloc(buf_size));
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
+
+    Page page_rc;
+    std::set<Page::FieldOffset> fields_offset_in_page;
+
+    size_t read_size_this_entry = 0;
+    char * write_offset = data_buf;
+
+    for (const auto field_index : to_read.fields)
+    {
+        // TODO: Continuously fields can read by one system call.
+        const auto [beg_offset, end_offset] = to_read.entry.getFieldOffsets(field_index);
+        const auto size_to_read = end_offset - beg_offset;
+        PageUtil::readFile(data_file, to_read.entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+        fields_offset_in_page.emplace(field_index, read_size_this_entry);
+
+        if constexpr (PAGE_CHECKSUM_ON_READ)
+        {
+            auto expect_checksum = to_read.entry.field_offsets[field_index].second;
+            auto field_checksum = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
+            if (unlikely(to_read.entry.size != 0 && field_checksum != expect_checksum))
+            {
+                throw Exception(fmt::format("Page [{}] field [{}], entry offset [{}], entry size[{}], checksum not match, "
+                                            "broken file: {},  expected: 0x{:X}, but: 0x{:X}",
+                                            to_read.page_id,
+                                            field_index,
+                                            to_read.entry.offset,
+                                            to_read.entry.size,
+                                            data_file_path,
+                                            expect_checksum,
+                                            field_checksum),
+                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            }
+
+            read_size_this_entry += size_to_read;
+            write_offset += size_to_read;
+        }
+    }
+
+    Page page;
+    page.page_id = to_read.page_id;
+    page.data = ByteBuffer(data_buf, write_offset);
+    page.mem_holder = mem_holder;
+    page.field_offsets.swap(fields_offset_in_page);
+
+    if (unlikely(write_offset != data_buf + buf_size))
+    {
+        throw Exception(fmt::format("Pos not match, expect to read {} bytes, but only {}.", buf_size, write_offset - data_buf),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
+    last_read_time = Clock::now();
+
+    return page;
 }
 
 bool PageFile::Reader::isIdle(const Seconds & max_idle_time)

@@ -78,7 +78,12 @@
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \
-    M(IOLimiterPendingFgReadReq)
+    M(IOLimiterPendingFgReadReq)                \
+    M(StoragePoolV2Only)                        \
+    M(StoragePoolV3Only)                        \
+    M(StoragePoolMixMode)                       \
+    M(RegionPersisterRunMode)                   \
+    M(GlobalStorageRunMode)
 
 namespace CurrentMetrics
 {

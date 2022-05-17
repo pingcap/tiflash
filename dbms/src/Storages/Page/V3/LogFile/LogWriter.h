@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <common/types.h>
@@ -80,8 +81,7 @@ public:
         bool recycle_log_files_,
         bool manual_flush_ = false);
 
-    LogWriter(const LogWriter &) = delete;
-    LogWriter & operator=(const LogWriter &) = delete;
+    DISALLOW_COPY(LogWriter);
 
     ~LogWriter();
 
