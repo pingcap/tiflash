@@ -1,6 +1,7 @@
 # Architecture Of Storage Engine - PageStorage
 
 - Authors(order by last name): [JaySon-Huang](https://github.com/JaySon-Huang), [flowbehappy](https://github.com/flowbehappy), [Jiaqi Zhou](https://github.com/jiaqizho)
+- Technical Writer: [shichun-0415](https://github.com/shichun-0415) , [Jiaqi Zhou](https://github.com/jiaqizho)
 
 ## Introduction
 
