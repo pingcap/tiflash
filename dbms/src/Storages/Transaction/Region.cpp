@@ -707,12 +707,9 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
         // If transfer-leader happened during ingest-sst, there might be illegal data.
         if (0 != cmds.len)
         {
-            if (tmt.isBgFlushDisabled())
-            {
-                /// Flush data right after they are committed.
-                RegionDataReadInfoList data_list_to_remove;
-                RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
-            }
+            /// Flush data right after they are committed.
+            RegionDataReadInfoList data_list_to_remove;
+            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
         }
 
         meta.setApplied(index, term);
