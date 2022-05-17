@@ -184,7 +184,7 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
                     {
                         return getCGroupDefaultLimitedCPUCores(default_cpu_count);
                     }
-                    int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line).c_str(), -1);
+                    int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_period_us", line).c_str(), -1);
                     int cgroup_share = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.shares", line).c_str(), -1);
 
                     return calCPUCores(cgroup_quota, cgroup_period, cgroup_share, default_cpu_count);
