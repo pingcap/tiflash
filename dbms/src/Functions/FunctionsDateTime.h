@@ -3352,7 +3352,7 @@ struct TiDBToDaysTransformerImpl
 class FunctionTiDBFromDays : public IFunction
 {
 public:
-    static constexpr auto name = "tidbConcat";
+    static constexpr auto name = "tidbFromDays";
 
     explicit FunctionTiDBFromDays(const Context &){}
 
@@ -3360,17 +3360,12 @@ public:
 
     String getName() const override { return name; }
     bool isVariadic() const override { return false; }
-    size_t getNumberOfArguments() const override { return 0; }
+    size_t getNumberOfArguments() const override { return 1; }
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
-            throw Exception(
-                    fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1", getName(), arguments.size()),
-                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
         const auto & arg = arguments[0].get();
         if (!arg->isInteger())
             throw Exception(
