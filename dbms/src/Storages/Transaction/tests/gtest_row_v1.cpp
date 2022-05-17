@@ -14,7 +14,7 @@
 
 #include <gtest/gtest.h>
 
-#include "RowCodecTestUtils.h"
+#include <TIDB/Codec/tests/RowCodecTestUtils.h>
 
 namespace DB::tests
 {

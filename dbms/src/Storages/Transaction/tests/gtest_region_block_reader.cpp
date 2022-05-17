@@ -16,7 +16,7 @@
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <gtest/gtest.h>
 
-#include "RowCodecTestUtils.h"
+#include <TIDB/Codec/tests/RowCodecTestUtils.h>
 
 using TableInfo = TiDB::TableInfo;
 
