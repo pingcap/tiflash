@@ -67,6 +67,70 @@ const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const Co
     }
 }
 
+class FunctionTiDBFromDays : public IFunction
+{
+public:
+    static constexpr auto name = "tidbFromDays";
+
+    explicit FunctionTiDBFromDays(const Context &){}
+
+    static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBFromDays>(context); }
+
+    String getName() const override { return name; }
+    bool isVariadic() const override { return false; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        const auto & arg = arguments[0].get();
+        if (!arg->isInteger())
+            throw Exception(
+                fmt::format("Illegal argument type {} of function {}, should be integer", arg->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeMyDate>();
+    }
+
+    template <typename IntType>
+    void dispatch(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        size_t rows = block.rows();
+        const auto * col_from = checkAndGetColumn<ColumnVector<IntType>>(block.getByPosition(arguments[0]).column.get());
+        const auto & vec_from = col_from->getData();
+        auto col_to = ColumnVector<DataTypeMyDate::FieldType>::create(rows);
+        auto & vec_to = col_to->getData();
+
+        for (size_t i = 0; i < rows; ++i)
+        {
+            IntType val = vec_from[i];
+            MyDateTime date(0);
+            fromDayNum(date, val);
+            vec_to[i] = date.toPackedUInt();
+        }
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
+    {
+        TypeIndex type_index = block.getByPosition(arguments[0]).type->getTypeId();
+        switch (type_index)
+        {
+        case TypeIndex::UInt8: dispatch<UInt8>(block, arguments, result); break;
+        case TypeIndex::UInt16: dispatch<UInt16>(block, arguments, result); break;
+        case TypeIndex::UInt32: dispatch<UInt32>(block, arguments, result); break;
+        case TypeIndex::UInt64: dispatch<UInt64>(block, arguments, result); break;
+        case TypeIndex::Int8: dispatch<Int8>(block, arguments, result); break;
+        case TypeIndex::Int16: dispatch<Int16>(block, arguments, result); break;
+        case TypeIndex::Int32: dispatch<Int32>(block, arguments, result); break;
+        case TypeIndex::Int64: dispatch<Int64>(block, arguments, result); break;
+        default:
+            throw Exception(fmt::format("argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        };
+    }
+};
+
 void registerFunctionsDateTime(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionMyTimeZoneConverter<true>>();
@@ -144,5 +208,8 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionToTimeZone>();
     factory.registerFunction<FunctionToLastDay>();
 }
+
+
+
 
 } // namespace DB

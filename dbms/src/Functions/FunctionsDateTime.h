@@ -3349,52 +3349,6 @@ struct TiDBToDaysTransformerImpl
     }
 };
 
-class FunctionTiDBFromDays : public IFunction
-{
-public:
-    static constexpr auto name = "tidbFromDays";
-
-    explicit FunctionTiDBFromDays(const Context &){}
-
-    static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBFromDays>(context); }
-
-    String getName() const override { return name; }
-    bool isVariadic() const override { return false; }
-    size_t getNumberOfArguments() const override { return 1; }
-    bool useDefaultImplementationForNulls() const override { return true; }
-    bool useDefaultImplementationForConstants() const override { return true; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        const auto & arg = arguments[0].get();
-        if (!arg->isInteger())
-            throw Exception(
-                    fmt::format("Illegal argument type {} of function {}, should be integer", arg->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        return std::make_shared<DataTypeMyDate>();
-    }
-
-    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
-    {
-        size_t rows = block.rows();
-
-        const auto * col_from = checkAndGetColumn<ColumnVector<Int64>>(block.getByPosition(arguments[0]).column.get());
-        const auto & vec_from = col_from->getData();
-        auto col_to = ColumnVector<DataTypeMyDate::FieldType>::create(rows);
-        auto & vec_to = col_to->getData();
-
-        for (size_t i = 0; i < rows; ++i)
-        {
-            Int64 val = vec_from[i];
-            MyDateTime date(0);
-            fromDayNum(date, val);
-            vec_to[i] = date.toPackedUInt();
-        }
-        block.getByPosition(result).column = std::move(col_to);
-    }
-};
-
 // Similar to FunctionDateOrDateTimeToSomething, but also handle nullable result and mysql sql mode.
 template <typename ToDataType, template <typename> class Transformer, bool return_nullable>
 class FunctionMyDateOrMyDateTimeToSomething : public IFunction
