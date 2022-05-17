@@ -160,7 +160,7 @@ static unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
                     default_cpu_count = read_cpu_count_from(fmt::format("/sys/fs/cgroup/{}/cpuset.cpus", line).c_str(), -1);
                     // read the quota and period from the cgroup file cpu.max
                     auto [cgroup_quota, cgroup_period] = read_quota_and_period_from(fmt::format("/sys/fs/cgroup/{}/cpu.max", line).c_str());
-                    // the number of cores = cpu count * quota / period
+                    
                     return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
                 }
                 else
