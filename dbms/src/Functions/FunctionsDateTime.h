@@ -3351,14 +3351,11 @@ struct TiDBToDaysTransformerImpl
 
 class FunctionTiDBFromDays : public IFunction
 {
-private:
-    const Context & context;
 public:
     static constexpr auto name = "tidbConcat";
 
-    explicit FunctionTiDBFromDays(const Context & context)
-            : context(context)
-    {}
+    explicit FunctionTiDBFromDays(const Context &){}
+
     static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBFromDays>(context); }
 
     String getName() const override { return name; }
@@ -3380,7 +3377,7 @@ public:
                     fmt::format("Illegal argument type {} of function {}, should be integer", arg->getName(), getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeMyDateTime>();
+        return std::make_shared<DataTypeMyDate>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
@@ -3389,7 +3386,7 @@ public:
 
         const auto * col_from = checkAndGetColumn<ColumnVector<Int64>>(block.getByPosition(arguments[0]).column.get());
         const auto & vec_from = col_from->getData();
-        auto col_to = ColumnVector<MyDateTime>::create(rows);
+        auto col_to = ColumnVector<DataTypeMyDate::FieldType>::create(rows);
         auto & vec_to = col_to->getData();
 
         for (size_t i = 0; i < rows; ++i)
@@ -3397,9 +3394,8 @@ public:
             Int64 val = vec_from[i];
             MyDateTime date(0);
             fromDayNum(date, val);
-            vec_to[i] = date;
+            vec_to[i] = date.toPackedUInt();
         }
-        void fromDayNum(MyDateTime & t, int day_num);
         block.getByPosition(result).column = std::move(col_to);
     }
 };
