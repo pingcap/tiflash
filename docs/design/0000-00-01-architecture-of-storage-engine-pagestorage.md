@@ -5,9 +5,7 @@
 
 ## Introduction
 
-`PageStorage` is the place where DT(DeltaTree Engine) actually stores data into. The latest data (i.e. delta data), the metadata in the engine are serialized directly into Pages. While the main data, i.e. stable data, is written in DTFiles format and managed as `ExternalPage`s in PS.
-
-PageStorage needs to handle a large amount of delta data read and write, this part of the data is hot data. And a small amount of DT meta information needs to be persisted, this part is cold data. The data of delta  will eventually be merged into the `stable part`(In DT). The `stable part` of DT can be referred to dmf file.
+`PageStorage` is the place where DT(DeltaTree Engine) actually stores data into. The latest data (i.e. delta data), the metadata in the engine are serialized directly into Pages. While the main data, i.e. stable data, is written in DTFiles format and managed as `ExternalPage`s in PageStorage.
 
 You can see the picture below. Described in the picture is the design of the DT. PageStorage stored `delta`, the delta part of data always be updated. After `delta merge` happend, the delta in PageStorage will be merge to the stable part(in picture, it named stable value space).
 
