@@ -82,26 +82,21 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
 }
 
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
-    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-    log_storage(PageStorage::create("__global__.log",
-                                    path_pool.getPSDiskDelegatorGlobalMulti("log"),
-                                    extractConfig(settings, StorageType::Log),
-                                    global_ctx.getFileProvider(),
-                                    true))
-    ,
-    // The iops in data_storage is low, only use the first disk for storing data
-    data_storage(PageStorage::create("__global__.data",
-                                     path_pool.getPSDiskDelegatorGlobalSingle("data"),
-                                     extractConfig(settings, StorageType::Data),
-                                     global_ctx.getFileProvider(),
-                                     true))
-    ,
-    // The iops in meta_storage is relatively high, use multi-disks if possible
-    meta_storage(PageStorage::create("__global__.meta",
-                                     path_pool.getPSDiskDelegatorGlobalMulti("meta"),
-                                     extractConfig(settings, StorageType::Meta),
-                                     global_ctx.getFileProvider(),
-                                     true))
+    : log_storage(PageStorage::create("__global__.log",
+                                      path_pool.getPSDiskDelegatorGlobalMulti("log"),
+                                      extractConfig(settings, StorageType::Log),
+                                      global_ctx.getFileProvider(),
+                                      true))
+    , data_storage(PageStorage::create("__global__.data",
+                                       path_pool.getPSDiskDelegatorGlobalMulti("data"),
+                                       extractConfig(settings, StorageType::Data),
+                                       global_ctx.getFileProvider(),
+                                       true))
+    , meta_storage(PageStorage::create("__global__.meta",
+                                       path_pool.getPSDiskDelegatorGlobalMulti("meta"),
+                                       extractConfig(settings, StorageType::Meta),
+                                       global_ctx.getFileProvider(),
+                                       true))
     , global_context(global_ctx)
 {
 }
@@ -181,7 +176,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
                                              global_context.getFileProvider());
         data_storage_v2 = PageStorage::create(name + ".data",
-                                              storage_path_pool.getPSDiskDelegatorSingle("data"),
+                                              storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed 
                                               extractConfig(global_context.getSettingsRef(), StorageType::Data),
                                               global_ctx.getFileProvider());
         meta_storage_v2 = PageStorage::create(name + ".meta",
