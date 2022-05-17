@@ -30,6 +30,8 @@ extern const int CPUID_ERROR;
 
 #if defined(__linux__)
 // Try to look at cgroups limit if it is available.
+
+// read int a value from file
 static inline int read_int_from(const char * filename, int default_value)
 {
     std::ifstream infile(filename);
@@ -112,7 +114,7 @@ static std::pair<int, int> read_quota_and_period_from(const char * filename)
     }
 }
 
-unsigned calCPUCores(int cgroup_quota, int cgroup_period, int cgroup_share, unsigned default_cpu_count)
+static unsigned calCPUCores(int cgroup_quota, int cgroup_period, unsigned default_cpu_count)
 {
     unsigned quota_count = default_cpu_count;
 
@@ -121,33 +123,20 @@ unsigned calCPUCores(int cgroup_quota, int cgroup_period, int cgroup_share, unsi
         quota_count = ceil(static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period));
     }
 
-    // Convert 1024 to no shares setup
-    if (cgroup_share == 1024)
-        cgroup_share = -1;
-
-#define PER_CPU_SHARES 1024
-    unsigned share_count = default_cpu_count;
-    if (cgroup_share > -1)
-    {
-        share_count = ceil(static_cast<float>(cgroup_share) / static_cast<float>(PER_CPU_SHARES));
-    }
-
-    return std::min(default_cpu_count, std::min(share_count, quota_count));
+    return std::min(default_cpu_count, quota_count);
 }
 
-unsigned getCGroupDefaultLimitedCPUCores(unsigned default_cpu_count)
+static unsigned getCGroupDefaultLimitedCPUCores(unsigned default_cpu_count)
 {
     // Return the number of milliseconds per period process is guaranteed to run.
     // -1 for no quota
     int cgroup_quota = read_int_from("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", -1);
     int cgroup_period = read_int_from("/sys/fs/cgroup/cpu/cpu.cfs_period_us", -1);
-    // Share number (typically a number relative to 1024) (2048 typically expresses 2 CPUs worth of processing)
-    int cgroup_share = read_int_from("/sys/fs/cgroup/cpu/cpu.shares", -1);
 
-    return calCPUCores(cgroup_quota, cgroup_period, cgroup_share, default_cpu_count);
+    return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
 }
 
-unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
+static unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
 {
     std::string cgroup_controllers = "/sys/fs/cgroup/cgroup.controllers";
     std::ifstream cgroup_controllers_info(cgroup_controllers);
@@ -167,12 +156,12 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
                 line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
                 if (enabled_v2) 
                 {
-                    // read the cpu count from the cgroup file cpuset.cpus
-                    int cpu_count = read_cpu_count_from(fmt::format("/sys/fs/cgroup/{}/cpuset.cpus", line).c_str(), -1);
+                    // update the cpu count from the cgroup file cpuset.cpus
+                    default_cpu_count = read_cpu_count_from(fmt::format("/sys/fs/cgroup/{}/cpuset.cpus", line).c_str(), -1);
                     // read the quota and period from the cgroup file cpu.max
                     auto [cgroup_quota, cgroup_period] = read_quota_and_period_from(fmt::format("/sys/fs/cgroup/{}/cpu.max", line).c_str());
                     // the number of cores = cpu count * quota / period
-                    return ceil(static_cast<float>(cpu_count) * static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period));
+                    return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
                 }
                 else
                 {
@@ -185,9 +174,8 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
                         return getCGroupDefaultLimitedCPUCores(default_cpu_count);
                     }
                     int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_period_us", line).c_str(), -1);
-                    int cgroup_share = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.shares", line).c_str(), -1);
 
-                    return calCPUCores(cgroup_quota, cgroup_period, cgroup_share, default_cpu_count);
+                    return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
                 }
             }
         }
