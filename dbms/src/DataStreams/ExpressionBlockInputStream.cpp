@@ -53,4 +53,5 @@ Block ExpressionBlockInputStream::readImpl()
     expression->execute(res);
     return res;
 }
+
 } // namespace DB

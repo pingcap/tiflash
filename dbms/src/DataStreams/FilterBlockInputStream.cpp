@@ -16,11 +16,10 @@
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
+#include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <Interpreters/ExpressionActions.h>
-
-#include "Common/FmtUtils.h"
 
 namespace DB
 {
@@ -235,8 +234,6 @@ void FilterBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t mul
         },
         ", ");
     buffer.append("}");
-    // ostr << "}]";
 }
-
 
 } // namespace DB

@@ -45,7 +45,6 @@ public:
 
 protected:
     Block readImpl() override;
-    // void print(FmtBuffer & buffer, size_t indent, size_t multiplier) const override;
 
 private:
     ExpressionActionsPtr expression;
