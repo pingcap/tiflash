@@ -196,7 +196,7 @@ toConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
     return assert_cast<PageStorage::ConcreteSnapshotRawPtr>(ptr.get());
 }
 
-std::map<NamespaceId, PageId> PageStorage::restore()
+void PageStorage::restore()
 {
     LOG_FMT_INFO(log, "{} begin to restore data from disk. [path={}] [num_writers={}]", storage_name, delegator->defaultPath(), write_files.size());
 
@@ -353,9 +353,12 @@ std::map<NamespaceId, PageId> PageStorage::restore()
     auto snapshot = getConcreteSnapshot();
     size_t num_pages = snapshot->version()->numPages();
     LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
+}
 
-    // Fixed namespace id 0
-    return {{0, snapshot->version()->maxId()}};
+PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
+{
+    std::lock_guard write_lock(write_mutex);
+    return versioned_page_entries.getSnapshot("")->version()->maxId();
 }
 
 PageId PageStorage::getNormalPageIdImpl(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
