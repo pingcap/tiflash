@@ -572,7 +572,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SecToTime, "cast"},
     //{tipb::ScalarFuncSig::TimeToSec, "cast"},
     //{tipb::ScalarFuncSig::TimestampAdd, "cast"},
-    //{tipb::ScalarFuncSig::ToDays, "cast"},
+    {tipb::ScalarFuncSig::ToDays, "tidbToDays"},
     {tipb::ScalarFuncSig::ToSeconds, "tidbToSeconds"},
     //{tipb::ScalarFuncSig::UTCTimeWithArg, "cast"},
     //{tipb::ScalarFuncSig::UTCTimestampWithoutArg, "cast"},
@@ -607,7 +607,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateDatetimeString, "cast"},
     {tipb::ScalarFuncSig::SubDateDatetimeInt, "date_sub"},
 
-    //{tipb::ScalarFuncSig::FromDays, "cast"},
+    {tipb::ScalarFuncSig::FromDays, "tidbFromDays"},
     //{tipb::ScalarFuncSig::TimeFormat, "cast"},
     {tipb::ScalarFuncSig::TimestampDiff, "tidbTimestampDiff"},
 
