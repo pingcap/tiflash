@@ -373,7 +373,7 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const;
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor) const;
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
 private:
     std::unique_ptr<PageReaderImpl> impl;
@@ -394,9 +394,10 @@ public:
 
     friend class RegionPersister;
 
-private:
+    // Only used for META and KVStore write del.
     void writeIntoV2(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
+private:
     void writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
     void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;

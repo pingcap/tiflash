@@ -81,6 +81,7 @@ namespace CurrentMetrics
 {
 extern const Metric ContextLockWait;
 extern const Metric MemoryTrackingForMerges;
+extern const Metric GlobalStorageRunMode;
 } // namespace CurrentMetrics
 
 
@@ -1652,7 +1653,7 @@ bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
         // GlobalStoragePool may be initialized many times in some test cases for restore.
         LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
     }
-
+    CurrentMetrics::set(CurrentMetrics::GlobalStorageRunMode, static_cast<UInt8>(shared->storage_run_mode));
     if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
     {
         try
