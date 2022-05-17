@@ -176,7 +176,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
                                              global_context.getFileProvider());
         data_storage_v2 = PageStorage::create(name + ".data",
-                                              storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed 
+                                              storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed
                                               extractConfig(global_context.getSettingsRef(), StorageType::Data),
                                               global_ctx.getFileProvider());
         meta_storage_v2 = PageStorage::create(name + ".meta",
