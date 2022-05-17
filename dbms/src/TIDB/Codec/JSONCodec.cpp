@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <TIDB/Codec/JSONCodec.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/JSONCodec.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

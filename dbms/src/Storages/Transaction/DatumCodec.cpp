@@ -15,9 +15,9 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <IO/Operators.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/JSONCodec.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
+#include <TIDB/Codec/JSONCodec.h>
 
 namespace DB
 {
