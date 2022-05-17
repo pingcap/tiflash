@@ -44,7 +44,7 @@ Besides these three problems, we also changed the `lock` implements and the `CRC
 
 ![tiflash-ps-v3-architecture](./images/tiflash-ps-v3-architecture.png)
 
-The V3 version of PageStorage consists of two main components, one is `WALStore` and the other is `BlobStore`.
+The V3 version of PageStorage is composed of three main components, `PageDirectory`, `WALStore`, and `BlobStore`.
 
 - WALStore(Write Ahead Log Store): Using the write ahead log file format to manager the meta part.
 - PageDirectory: Provides the function of MVCC. Smaller memory usage and faster speed than V2.
@@ -52,21 +52,20 @@ The V3 version of PageStorage consists of two main components, one is `WALStore`
 
 #### WALStore
 
-WALStore using the fixed block space to manager the meta.
-
 ![tiflash-ps-v3-walstore](./images/tiflash-ps-v3-wal-store.png)
 
-WALStore used fixed size of a block to manage meta part.
+WALStore used a fixed size of a block to manage the meta part.
 
 - A block contains multiple meta records.
-- If a block has some space unused, Also unused space size less than a meta record size. Then using a `padding` to full the unused space.
+- If a block has some space unused, and the unused space size is less than a meta record size. Then the unused space is filled by "padding".
 
-If crc and meta size are broken at the same time. It is only need to discard the data in a single block, and the neighboring block(the prev block or next block) will be preserved. Because WALStore will read meta from single block, If single block got fault won't effect others. Also more convenient to troubleshoot the cause of meta errors.
+This file format is convenient to detect disk failure. If a disk failure happens, we can stop TiFlash from startup and returning wrong results. In the worst case when CRC and the length of a meta record are broken at the same time, we can try to discard the broken data by the fixed-length block, other blocks can be preserved and try to recover some data.
 
-WALStore provider two main interfaces:
 
-- **apply**: After `apply`, the meta info will be serialized on disks. This happens after writing datas.
-- **read**: Read serialized meta info from disks. This will happen after `PageStorage` restored.
+WALStore provides two main interfaces:
+
+- **apply**: After `apply`, the meta info will be atomicity serialized on disks. This happens after writing data to BlobStore.
+- **read**: Read serialized meta info from disks. This will happen when `PageStorage` is being restored.
 
 In addition, WALStore also needs GC. Although the overall read/write sizes is not large(about 4-6 mb read and write), But WALStore still need sort out some invalid meta information on disks.
 
@@ -145,32 +144,6 @@ The page id in V3 is is a 128bit unsigned integer replace the 64bit(in v2). Beca
 
 Multi of meta info will be conbimed into a block. So it is different with V2, WALStore added a WAL format to pack the meta struction. 
 
-Legacy record format:
-
-```
-+--------------+-----------+-----------+--- ... ---+
-|CheckSum (8B) | Size (2B) | Type (1B) | Payload   |
-+--------------+-----------+-----------+--- ... ---+
-```
-
-- CheckSum: 64bit hash computed over the record type and payload using checksum algo (CRC64)
-- Size: Length of the payload data
-- Type: Type of record(ZeroType, FullType, FirstType, LastType, MiddleType)
-  - The type is used to group a bunch of records together to represent
-  - blocks that are larger than kBlockSize
-- Payload: Byte stream as long as specified by the payload size
-
-Recyclable record format:
-
-```
-+--------------+-----------+-----------+----------------+--- ... ---+
-|CheckSum (8B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
-+--------------+-----------+-----------+----------------+--- ... ---+
-```
-
-Same as above, with the addition of
-
-- Log number: 32bit log file number, so that WALStore can distinguish between records written by the most recent log writer vs a previous one.
 
 
 #### PageDirectory
