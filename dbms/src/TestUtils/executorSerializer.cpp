@@ -204,6 +204,18 @@ void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeR
     buf.append("}\n");
 }
 
+// ywq todo
+void serializeWindow(const String & executor_id, const tipb::Window & window [[maybe_unused]], FmtBuffer & buf)
+{
+    buf.fmtAppend("{}\n", executor_id);
+}
+
+// ywq todo
+void serializeSort(const String & executor_id, const tipb::Sort & sort [[maybe_unused]], FmtBuffer & buf)
+{
+    buf.fmtAppend("{}\n", executor_id);
+}
+
 void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t level)
 {
     auto append_str = [&level, this](const tipb::Executor & executor) {
@@ -248,9 +260,11 @@ void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t 
             serializeExchangeSender(executor.executor_id(), executor.exchange_sender(), buf);
             break;
         case tipb::ExecType::TypeSort:
-            throw TiFlashException("Sort executor is not supported", Errors::Coprocessor::Unimplemented); // todo support sort executor.
+            serializeSort(executor.executor_id(), executor.sort(), buf);
+            break;
         case tipb::ExecType::TypeWindow:
-            throw TiFlashException("Window executor is not supported", Errors::Coprocessor::Unimplemented); // todo support window executor.
+            serializeWindow(executor.executor_id(), executor.window(), buf);
+            break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
         }

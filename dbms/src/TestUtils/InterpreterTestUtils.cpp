@@ -38,6 +38,7 @@ void InterpreterTest::SetUpTestCase()
     {
         DB::registerFunctions();
         DB::registerAggregateFunctions();
+        DB::registerWindowFunctions();
     }
     catch (DB::Exception &)
     {

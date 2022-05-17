@@ -249,6 +249,31 @@ CreatingSets
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
+    request = context.scan("test_db", "test_table").window(RowNumber(), {"s1", true}, {"s2", false}).build(context);
+    {
+        String expected = R"(
+CreatingSets
+ Union
+  HashJoinBuildBlockInputStream x 10
+   Expression
+    Expression
+     MockTableScan
+ Union x 2
+  HashJoinBuildBlockInputStream x 10
+   Expression
+    Expression
+     Expression
+      HashJoinProbe
+       Expression
+        MockTableScan
+ Union
+  Expression x 10
+   Expression
+    HashJoinProbe
+     Expression
+      MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
 }
 CATCH
 

@@ -24,6 +24,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
+#include <WindowFunctions/registerWindowFunctions.h>
 namespace DB::tests
 {
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);

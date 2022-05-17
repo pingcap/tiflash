@@ -252,5 +252,17 @@ try
 }
 CATCH
 
+TEST_F(MockDAGRequestTest, MockWindow)
+try
+{
+    // ywq todo
+    auto request = context.scan("test_db", "test_table").window(RowNumber(), {"s1", true}, {"s2", false}).build(context);
+    {
+        String expected = "table_scan_0 | {<0, String>, <1, String>}\n";
+        ASSERT_DAGREQUEST_EQAUL(expected, request);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

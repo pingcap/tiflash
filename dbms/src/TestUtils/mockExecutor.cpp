@@ -23,6 +23,8 @@
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
 
+#include <cassert>
+
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -271,6 +273,15 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
 {
     assert(root);
     root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItem order_by, MockOrderByItem partition_by)
+{
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    window_func_list->children.push_back(window_func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList({partition_by}), buildOrderByItemList({order_by}));
     return *this;
 }
 

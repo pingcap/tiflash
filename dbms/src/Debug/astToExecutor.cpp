@@ -29,6 +29,13 @@
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
 
+#include <memory>
+
+#include "Parsers/ASTPartition.h"
+#include "Storages/Transaction/TiDB.h"
+#include "tipb/executor.pb.h"
+#include "tipb/expression.pb.h"
+
 namespace DB
 {
 namespace
@@ -1323,6 +1330,79 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
     exchange_map[left_exchange_receiver->name] = std::make_pair(left_exchange_receiver, left_exchange_sender);
     exchange_map[right_exchange_receiver->name] = std::make_pair(right_exchange_receiver, right_exchange_sender);
 }
+
+
+bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+{
+    tipb_executor->set_tp(tipb::ExecType::TypeWindow);
+    tipb_executor->set_executor_id(name);
+    tipb::Window * window = tipb_executor->mutable_window();
+    /* "funcDesc":[{
+        "tp":"RowNumber",
+        "sig":"Unspecified","
+        fieldType":{"tp":8,"flag":128,"flen":21,"decimal":-1,"collate":63,"charset":"binary"},"hasDistinct":false}],
+    */
+    auto & input_schema = children[0]->output_schema;
+    // ywq todo
+    std::cout << "ywq reach 1" << std::endl;
+    for (const auto & expr : func_descs)
+    {
+        tipb::Expr * window_expr = window->add_func_desc();
+        const ASTFunction * window_func = typeid_cast<const ASTFunction *>(expr.get());
+        for (const auto & arg : window_func->arguments->children)
+        {
+            tipb::Expr * func = window_expr->add_children();
+            astToPB(input_schema, arg, func, collator_id, context);
+        }
+        window_expr->set_tp(tipb::ExprType::RowNumber);
+        auto * ft = window_expr->mutable_field_type();
+        // todo
+        ft->set_tp(TiDB::TypeLongLong);
+        ft->set_flag(TiDB::ColumnFlagBinary);
+        ft->set_collate(collator_id);
+        ft->set_decimal(-1);
+        // ft->set_decimal(window_expr->children(0).field_type().decimal());
+    }
+    std::cout << "ywq reach 2" << std::endl;
+
+    for (const auto & child : order_by_exprs)
+    {
+        ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        if (!elem)
+            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+        tipb::ByItem * by = window->add_order_by();
+        // by->set_desc(true); // ywq todo
+        by->set_desc(elem->direction < 0); // todo
+        tipb::Expr * expr = by->mutable_expr();
+        astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
+    }
+    std::cout << "pae: " << partition_by_exprs.size() << std::endl;
+    for (const auto & child : partition_by_exprs)
+    {
+        // ywq todo build order by in mock..
+        ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        if (!elem)
+            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+        tipb::ByItem * by = window->add_partition_by();
+        by->set_desc(elem->direction < 0); // todo
+        // by->set_desc(true);
+        tipb::Expr * expr = by->mutable_expr();
+        astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
+    }
+    // ywq todo mock frame
+    std::cout << "ywq reach 3" << std::endl;
+    tipb::WindowFrame * frame = window->mutable_frame();
+    google::protobuf::util::JsonStringToMessage(R"({"frame":{"type":"Rows","start":{"type":"CurrentRow","unbounded":false,"offset":"0"}})", frame);
+    auto * children_executor = window->mutable_child();
+    return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
+}
+
+void Window::columnPrune(std::unordered_set<String> & used_columns)
+{
+    children[0]->columnPrune(used_columns);
+    /// update output schema after column prune
+    output_schema = children[0]->output_schema;
+}
 } // namespace mock
 
 ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, String & table_alias, bool append_pk_column)
@@ -1548,5 +1628,65 @@ ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
 }
 
 
+// ywq todo
+ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list)
+{
+    std::vector<ASTPtr> window_exprs;
+    std::vector<ASTPtr> order_columns;
+    std::vector<ASTPtr> partition_columns;
+    DAGSchema output_schema;
+
+    if (func_desc_list != nullptr)
+    {
+        for (const auto & expr : func_desc_list->children)
+        {
+            const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+            window_exprs.push_back(expr);
+            std::vector<TiDB::ColumnInfo> children_ci;
+            for (const auto & arg : func->arguments->children)
+            {
+                children_ci.push_back(compileExpr(input->output_schema, arg));
+            }
+            // ywq todo add more window function related..
+            TiDB::ColumnInfo ci;
+            if (func->name == "RowNumber")
+            {
+                ci.tp = TiDB::TypeLongLong;
+                ci.flag = TiDB::ColumnFlagBinary;
+            }
+            else
+            {
+                throw Exception("Unsupported window function " + func->name, ErrorCodes::LOGICAL_ERROR);
+            }
+
+            output_schema.emplace_back(std::make_pair(func->getColumnName(), ci));
+        }
+    }
+    if (partition_by_expr_list != nullptr)
+    {
+        for (const auto & child : partition_by_expr_list->children)
+        {
+            ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+            if (!elem)
+                throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+            partition_columns.push_back(child);
+            compileExpr(input->output_schema, elem->children[0]);
+        }
+    }
+    if (order_by_expr_list != nullptr)
+    {
+        for (const auto & child : partition_by_expr_list->children)
+        {
+            ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+            if (!elem)
+                throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+            order_columns.push_back(child);
+            compileExpr(input->output_schema, elem->children[0]);
+        }
+    }
+    ExecutorPtr window = std::make_shared<mock::Window>(executor_index, output_schema, window_exprs, std::move(partition_columns), std::move(order_columns));
+    window->children.push_back(input);
+    return window;
+}
 
 } // namespace DB

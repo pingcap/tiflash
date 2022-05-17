@@ -95,6 +95,9 @@ public:
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
     DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
 
+    // window ywq todo
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockOrderByItem partition_by);
+
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
@@ -158,5 +161,7 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr1), (expr2))
 #define Max(expr) makeASTFunction("max", expr)
+// ywq todo more window functions
+#define RowNumber() makeASTFunction("RowNumber")
 
 } // namespace DB::tests
