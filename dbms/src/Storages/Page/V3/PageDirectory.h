@@ -149,13 +149,13 @@ public:
         return std::lock_guard(m);
     }
 
-    void createNewEntry(const PageVersionType & ver, const PageEntryV3 & entry);
+    void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
-    bool createNewRef(const PageVersionType & ver, PageIdV3Internal ori_page_id);
+    bool createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id);
 
-    std::shared_ptr<PageIdV3Internal> createNewExternal(const PageVersionType & ver);
+    std::shared_ptr<PageIdV3Internal> createNewExternal(const PageVersion & ver);
 
-    void createDelete(const PageVersionType & ver);
+    void createDelete(const PageVersion & ver);
 
     std::shared_ptr<PageIdV3Internal> fromRestored(const PageEntriesEdit::EditRecord & rec);
 
@@ -165,10 +165,10 @@ public:
         RESOLVE_TO_REF,
         RESOLVE_TO_NORMAL,
     };
-    std::tuple<ResolveResult, PageIdV3Internal, PageVersionType>
+    std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
     resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry);
 
-    Int64 incrRefCount(const PageVersionType & ver);
+    Int64 incrRefCount(const PageVersion & ver);
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
@@ -222,13 +222,13 @@ public:
      */
     bool cleanOutdatedEntries(
         UInt64 lowest_seq,
-        std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> * normal_entries_to_deref,
+        std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
         PageEntriesV3 & entries_removed,
         const PageLock & page_lock);
     bool derefAndClean(
         UInt64 lowest_seq,
         PageIdV3Internal page_id,
-        const PageVersionType & deref_ver,
+        const PageVersion & deref_ver,
         Int64 deref_count,
         PageEntriesV3 & entries_removed);
 
@@ -270,11 +270,11 @@ private:
     // Has been deleted, valid when type == VAR_REF/VAR_EXTERNAL
     bool is_deleted;
     // Entries sorted by version, valid when type == VAR_ENTRY
-    std::multimap<PageVersionType, EntryOrDelete> entries;
+    std::multimap<PageVersion, EntryOrDelete> entries;
     // The created version, valid when type == VAR_REF/VAR_EXTERNAL
-    PageVersionType create_ver;
+    PageVersion create_ver;
     // The deleted version, valid when type == VAR_REF/VAR_EXTERNAL && is_deleted = true
-    PageVersionType delete_ver;
+    PageVersion delete_ver;
     // Original page id, valid when type == VAR_REF
     PageIdV3Internal ori_page_id;
     // Being ref counter, valid when type == VAR_EXTERNAL
@@ -387,7 +387,7 @@ private:
         MVCCMapType & mvcc_table_directory,
         const VersionedPageEntriesPtr & version_list,
         const PageEntriesEdit::EditRecord & rec,
-        const PageVersionType & version);
+        const PageVersion & version);
 
     static inline PageDirectorySnapshotPtr
     toConcreteSnapshot(const DB::PageStorageSnapshotPtr & ptr)

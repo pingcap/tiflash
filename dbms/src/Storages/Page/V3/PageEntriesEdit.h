@@ -27,45 +27,45 @@ namespace DB::PS::V3
 // `PageDirectory::apply` with create a version={directory.sequence, epoch=0}.
 // After data compaction and page entries need to be updated, will create
 // some entries with a version={old_sequence, epoch=old_epoch+1}.
-struct PageVersionType
+struct PageVersion
 {
     UInt64 sequence; // The write sequence
     UInt64 epoch; // The GC epoch
 
-    explicit PageVersionType(UInt64 seq)
+    explicit PageVersion(UInt64 seq)
         : sequence(seq)
         , epoch(0)
     {}
 
-    PageVersionType(UInt64 seq, UInt64 epoch_)
+    PageVersion(UInt64 seq, UInt64 epoch_)
         : sequence(seq)
         , epoch(epoch_)
     {}
 
-    PageVersionType()
-        : PageVersionType(0)
+    PageVersion()
+        : PageVersion(0)
     {}
 
-    bool operator<(const PageVersionType & rhs) const
+    bool operator<(const PageVersion & rhs) const
     {
         if (sequence == rhs.sequence)
             return epoch < rhs.epoch;
         return sequence < rhs.sequence;
     }
 
-    bool operator==(const PageVersionType & rhs) const
+    bool operator==(const PageVersion & rhs) const
     {
         return (sequence == rhs.sequence) && (epoch == rhs.epoch);
     }
 
-    bool operator<=(const PageVersionType & rhs) const
+    bool operator<=(const PageVersion & rhs) const
     {
         if (sequence == rhs.sequence)
             return epoch <= rhs.epoch;
         return sequence <= rhs.sequence;
     }
 };
-using VersionedEntry = std::pair<PageVersionType, PageEntryV3>;
+using VersionedEntry = std::pair<PageVersion, PageEntryV3>;
 using VersionedEntries = std::vector<VersionedEntry>;
 
 enum class EditRecordType
@@ -139,7 +139,7 @@ public:
         records.emplace_back(record);
     }
 
-    void upsertPage(PageIdV3Internal page_id, const PageVersionType & ver, const PageEntryV3 & entry)
+    void upsertPage(PageIdV3Internal page_id, const PageVersion & ver, const PageEntryV3 & entry)
     {
         EditRecord record{};
         record.type = EditRecordType::UPSERT;
@@ -166,7 +166,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varRef(PageIdV3Internal ref_id, const PageVersionType & ver, PageIdV3Internal ori_page_id)
+    void varRef(PageIdV3Internal ref_id, const PageVersion & ver, PageIdV3Internal ori_page_id)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_REF;
@@ -176,7 +176,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varExternal(PageIdV3Internal page_id, const PageVersionType & create_ver, Int64 being_ref_count)
+    void varExternal(PageIdV3Internal page_id, const PageVersion & create_ver, Int64 being_ref_count)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_EXTERNAL;
@@ -186,7 +186,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varEntry(PageIdV3Internal page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count)
+    void varEntry(PageIdV3Internal page_id, const PageVersion & ver, const PageEntryV3 & entry, Int64 being_ref_count)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_ENTRY;
@@ -197,7 +197,7 @@ public:
         records.emplace_back(record);
     }
 
-    void varDel(PageIdV3Internal page_id, const PageVersionType & delete_ver)
+    void varDel(PageIdV3Internal page_id, const PageVersion & delete_ver)
     {
         EditRecord record{};
         record.type = EditRecordType::VAR_DELETE;
@@ -217,7 +217,7 @@ public:
         EditRecordType type;
         PageIdV3Internal page_id;
         PageIdV3Internal ori_page_id;
-        PageVersionType version;
+        PageVersion version;
         PageEntryV3 entry;
         Int64 being_ref_count;
 
@@ -260,7 +260,7 @@ public:
     {
         putExternal(buildV3Id(TEST_NAMESPACE_ID, page_id));
     }
-    void upsertPage(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry)
+    void upsertPage(PageId page_id, const PageVersion & ver, const PageEntryV3 & entry)
     {
         upsertPage(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry);
     }
@@ -272,19 +272,19 @@ public:
     {
         ref(buildV3Id(TEST_NAMESPACE_ID, ref_id), buildV3Id(TEST_NAMESPACE_ID, page_id));
     }
-    void varRef(PageId ref_id, const PageVersionType & ver, PageId ori_page_id)
+    void varRef(PageId ref_id, const PageVersion & ver, PageId ori_page_id)
     {
         varRef(buildV3Id(TEST_NAMESPACE_ID, ref_id), ver, buildV3Id(TEST_NAMESPACE_ID, ori_page_id));
     }
-    void varExternal(PageId page_id, const PageVersionType & create_ver, Int64 being_ref_count)
+    void varExternal(PageId page_id, const PageVersion & create_ver, Int64 being_ref_count)
     {
         varExternal(buildV3Id(TEST_NAMESPACE_ID, page_id), create_ver, being_ref_count);
     }
-    void varEntry(PageId page_id, const PageVersionType & ver, const PageEntryV3 & entry, Int64 being_ref_count)
+    void varEntry(PageId page_id, const PageVersion & ver, const PageEntryV3 & entry, Int64 being_ref_count)
     {
         varEntry(buildV3Id(TEST_NAMESPACE_ID, page_id), ver, entry, being_ref_count);
     }
-    void varDel(PageId page_id, const PageVersionType & delete_ver)
+    void varDel(PageId page_id, const PageVersion & delete_ver)
     {
         varDel(buildV3Id(TEST_NAMESPACE_ID, page_id), delete_ver);
     }
@@ -316,7 +316,7 @@ public:
 
 /// See https://fmt.dev/latest/api.html#formatting-user-defined-types
 template <>
-struct fmt::formatter<DB::PS::V3::PageVersionType>
+struct fmt::formatter<DB::PS::V3::PageVersion>
 {
     static constexpr auto parse(format_parse_context & ctx)
     {
@@ -331,7 +331,7 @@ struct fmt::formatter<DB::PS::V3::PageVersionType>
     }
 
     template <typename FormatContext>
-    auto format(const DB::PS::V3::PageVersionType & ver, FormatContext & ctx)
+    auto format(const DB::PS::V3::PageVersion & ver, FormatContext & ctx)
     {
         return format_to(ctx.out(), "<{},{}>", ver.sequence, ver.epoch);
     }

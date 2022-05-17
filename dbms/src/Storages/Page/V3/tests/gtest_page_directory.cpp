@@ -625,16 +625,16 @@ CATCH
 
 #define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                             \
     PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
-    entries.createNewEntry(PageVersionType(VERSION), entry_v##VERSION);
+    entries.createNewEntry(PageVersion(VERSION), entry_v##VERSION);
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
 #define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                        \
     PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = 100 * (VERSION) + (EPOCH), .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
-    entries.createNewEntry(PageVersionType((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
+    entries.createNewEntry(PageVersion((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
 
 class VersionedEntriesTest : public ::testing::Test
 {
 public:
-    using DerefCounter = std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>>;
+    using DerefCounter = std::map<PageIdV3Internal, std::pair<PageVersion, Int64>>;
     std::tuple<bool, PageEntriesV3, DerefCounter> runClean(UInt64 seq)
     {
         DerefCounter deref_counter;
@@ -643,7 +643,7 @@ public:
         return {all_removed, removed_entries, deref_counter};
     }
 
-    std::tuple<bool, PageEntriesV3> runDeref(UInt64 seq, PageVersionType ver, Int64 decrease_num)
+    std::tuple<bool, PageEntriesV3> runDeref(UInt64 seq, PageVersion ver, Int64 decrease_num)
     {
         PageEntriesV3 removed_entries;
         bool all_removed = entries.derefAndClean(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), ver, decrease_num, removed_entries);
@@ -694,7 +694,7 @@ TEST_F(VersionedEntriesTest, InsertGet)
 
     // Insert delete. Can not get entry with seq >= delete_version.
     // But it won't affect reading with old seq.
-    entries.createDelete(PageVersionType(15));
+    entries.createDelete(PageVersion(15));
     ASSERT_FALSE(entries.getEntry(1).has_value());
     ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_gc_v2_1);
     ASSERT_SAME_ENTRY(*entries.getEntry(3), entry_gc_v2_1);
@@ -744,7 +744,7 @@ try
     ASSERT_TRUE(entries.isVisible(6));
 
     // insert delete
-    entries.createDelete(PageVersionType(6));
+    entries.createDelete(PageVersion(6));
 
     ASSERT_FALSE(entries.isVisible(1));
     ASSERT_TRUE(entries.isVisible(2));
@@ -778,14 +778,14 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert some entries
-    entries.createNewExternal(PageVersionType(2));
+    entries.createNewExternal(PageVersion(2));
 
     ASSERT_FALSE(entries.isVisible(1));
     ASSERT_TRUE(entries.isVisible(2));
     ASSERT_TRUE(entries.isVisible(10000));
 
     // insert delete
-    entries.createDelete(PageVersionType(6));
+    entries.createDelete(PageVersion(6));
 
     ASSERT_FALSE(entries.isVisible(1));
     ASSERT_TRUE(entries.isVisible(2));
@@ -796,7 +796,7 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert entry after delete
-    entries.createNewExternal(PageVersionType(7));
+    entries.createNewExternal(PageVersion(7));
 
     // after re-create external page, the visible for 1~5 has changed
     ASSERT_FALSE(entries.isVisible(6));
@@ -815,14 +815,14 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert some entries
-    entries.createNewRef(PageVersionType(2), buildV3Id(TEST_NAMESPACE_ID, 2));
+    entries.createNewRef(PageVersion(2), buildV3Id(TEST_NAMESPACE_ID, 2));
 
     ASSERT_FALSE(entries.isVisible(1));
     ASSERT_TRUE(entries.isVisible(2));
     ASSERT_TRUE(entries.isVisible(10000));
 
     // insert delete
-    entries.createDelete(PageVersionType(6));
+    entries.createDelete(PageVersion(6));
 
     ASSERT_FALSE(entries.isVisible(1));
     ASSERT_TRUE(entries.isVisible(2));
@@ -833,7 +833,7 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert entry after delete
-    entries.createNewRef(PageVersionType(7), buildV3Id(TEST_NAMESPACE_ID, 2));
+    entries.createNewRef(PageVersion(7), buildV3Id(TEST_NAMESPACE_ID, 2));
 
     // after re-create ref page, the visible for 1~5 has changed
     ASSERT_FALSE(entries.isVisible(6));
@@ -852,7 +852,7 @@ try
     INSERT_GC_ENTRY(5, 2);
     INSERT_ENTRY(10);
     INSERT_ENTRY(11);
-    entries.createDelete(PageVersionType(15));
+    entries.createDelete(PageVersion(15));
 
     // noting to be removed
     auto [all_removed, removed_entries, deref_counter] = runClean(1);
@@ -905,15 +905,15 @@ CATCH
 TEST_F(VersionedEntriesTest, DeleteMultiTime)
 try
 {
-    entries.createDelete(PageVersionType(1));
+    entries.createDelete(PageVersion(1));
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
-    entries.createDelete(PageVersionType(15));
-    entries.createDelete(PageVersionType(17));
-    entries.createDelete(PageVersionType(16));
+    entries.createDelete(PageVersion(15));
+    entries.createDelete(PageVersion(17));
+    entries.createDelete(PageVersion(16));
 
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     // <2,0> get removed.
@@ -938,13 +938,13 @@ TEST_F(VersionedEntriesTest, DontCleanWhenBeingRef)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersionType(2));
-    entries.incrRefCount(PageVersionType(2));
-    entries.createDelete(PageVersionType(5));
+    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2));
+    entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(4));
@@ -958,13 +958,13 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // decrease 1 ref counting
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 1);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 1);
     ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_FALSE(all_removed); // should not remove this chain
     ASSERT_FALSE(entries.getEntry(5));
 
     // clear all
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 1);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 1);
     ASSERT_EQ(removed_entries.size(), 1);
     ASSERT_SAME_ENTRY(removed_entries[0], entry_v2);
     ASSERT_TRUE(all_removed); // should remove this chain
@@ -976,13 +976,13 @@ TEST_F(VersionedEntriesTest, DontCleanWhenBeingRef2)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersionType(2));
-    entries.incrRefCount(PageVersionType(2));
-    entries.createDelete(PageVersionType(5));
+    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2));
+    entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(4));
@@ -996,7 +996,7 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 2);
     ASSERT_EQ(removed_entries.size(), 1);
     ASSERT_SAME_ENTRY(removed_entries[0], entry_v2);
     ASSERT_TRUE(all_removed); // should remove this chain
@@ -1008,12 +1008,12 @@ TEST_F(VersionedEntriesTest, CleanDuplicatedWhenBeingRefAndAppliedUpsert)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersionType(2));
-    entries.incrRefCount(PageVersionType(2));
+    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
 
@@ -1030,7 +1030,7 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 2);
     ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_FALSE(all_removed); // should not remove this chain
     ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
@@ -1041,15 +1041,15 @@ TEST_F(VersionedEntriesTest, CleanDuplicatedWhenBeingRefAndAppliedUpsert2)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersionType(2));
-    entries.incrRefCount(PageVersionType(2));
+    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
-    entries.createDelete(PageVersionType(5));
+    entries.createDelete(PageVersion(5));
 
     // <2, 2> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
@@ -1065,7 +1065,7 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 2);
     ASSERT_EQ(removed_entries.size(), 1);
     ASSERT_SAME_ENTRY(removed_entries[0], entry_gc_v2_2);
     ASSERT_TRUE(all_removed); // should remove this chain
@@ -1077,7 +1077,7 @@ TEST_F(VersionedEntriesTest, ReadAfterGcApplied)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
