@@ -69,7 +69,7 @@ WALStore::WALStore(
 {
 }
 
-void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter)
+void WALStore::apply(PageEntriesEdit & edit, const PageVersion & version, const WriteLimiterPtr & write_limiter)
 {
     for (auto & r : edit.getMutRecords())
     {
