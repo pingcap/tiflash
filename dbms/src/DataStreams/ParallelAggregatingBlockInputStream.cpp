@@ -277,19 +277,19 @@ void ParallelAggregatingBlockInputStream::execute()
             threads_data[0].local_delta_memory,
             no_more_keys);
 }
+
 // ywq todo
-// add aggregate keys.
 void ParallelAggregatingBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
 {
     IProfilingBlockInputStream::print(buffer, indent, multiplier);
-    buffer.fmtAppend(": max_threads: {}, final: {}", max_threads, final ? "true" : "false");
-    // const auto & aggregates = params.aggregates;
-    // buffer.joinStr(
-    //     aggregates.cbegin(),
-    //     aggregates.cend(),
-    //     [](const auto & agg, FmtBuffer & fb) { fb.append(agg.column_name); },
-    //     ", ");
-    // buffer.append("}");
+    buffer.fmtAppend(", max_threads: {}, final: {}, columns: {{", max_threads, final ? "true" : "false");
+    const auto & aggregates = params.aggregates;
+    buffer.joinStr(
+        aggregates.cbegin(),
+        aggregates.cend(),
+        [](const auto & agg, FmtBuffer & fb) { fb.append(agg.column_name); },
+        ", ");
+    buffer.append("}");
 }
 
 } // namespace DB

@@ -49,16 +49,16 @@ try
         String expected = R"(
 Union
  SharedQuery x 10
-  Expression
-   MergeSorting
+  Expression: <final projection>
+   MergeSorting, limit = 10, columns {<mock_table_scan_1, ASC>}
     Union
-     PartialSorting x 10
-      Expression
-       Filter
+     PartialSorting x 10: limit = 10, columns {<mock_table_scan_1, ASC>}
+      Expression: <before order and select>
+       Filter: <execute having>: {equals}
         SharedQuery
-         ParallelAggregating
-          Expression x 10
-           Filter
+         ParallelAggregating, max_threads: 10, final: true, columns: {max(mock_table_scan_0)_collator_0 }
+          Expression x 10: <before aggregation>
+           Filter: <execute where>: {equals}
             MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -74,16 +74,16 @@ Union
         String expected = R"(
 Union
  SharedQuery x 10
-  Limit
+  Limit, limit = 10 always_read_till_end = false
    Union
-    Limit x 10
-     Expression
-      Expression
-       Filter
+    Limit x 10, limit = 10 always_read_till_end = false
+     Expression: <final projection>
+      Expression: <before order and select>
+       Filter: <execute having>: {equals}
         SharedQuery
-         ParallelAggregating
-          Expression x 10
-           Filter
+         ParallelAggregating, max_threads: 10, final: true, columns: {max(mock_table_scan_0)_collator_0 }
+          Expression x 10: <before aggregation>
+           Filter: <execute where>: {equals}
             MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -101,16 +101,16 @@ try
     {
         String expected = R"(
 Union
- Expression x 10
+ Expression x 10: <final projection>
   Expression
-   Expression
-    Expression
+   Expression: <before project>
+    Expression: <final projection>
      Expression
-      Expression
-       Expression
+      Expression: <before project>
+       Expression: <final projection>
         Expression
-         Expression
-          Expression
+         Expression: <before project>
+          Expression: <final projection>
            MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -123,17 +123,17 @@ Union
     {
         String expected = R"(
 Union
- Expression x 10
+ Expression x 10: <final projection>
   Expression
-   Expression
+   Expression: <before project>
     SharedQuery
-     Expression
-      MergeSorting
+     Expression: <final projection>
+      MergeSorting, limit = 10, columns {<__QB_3_mock_table_scan_0, DESC>, <__QB_3_mock_table_scan_1, ASC>}
        Union
-        PartialSorting x 10
+        PartialSorting x 10: limit = 10, columns {<__QB_3_mock_table_scan_0, DESC>, <__QB_3_mock_table_scan_1, ASC>}
          Expression
-          Expression
-           Expression
+          Expression: <before project>
+           Expression: <final projection>
             MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -148,23 +148,23 @@ Union
     {
         String expected = R"(
 Union
- Expression x 10
+ Expression x 10: <final projection>
   Expression
-   Expression
-    Expression
+   Expression: <before project>
+    Expression: <final projection>
      SharedQuery
-      ParallelAggregating
-       Expression x 10
+      ParallelAggregating, max_threads: 10, final: true, columns: {max(__QB_3___QB_4_mock_table_scan_0)_collator_0 }
+       Expression x 10: <before aggregation>
         Expression
-         Expression
+         Expression: <before project>
           SharedQuery
-           Expression
-            MergeSorting
+           Expression: <final projection>
+            MergeSorting, limit = 10, columns {<__QB_4_mock_table_scan_0, DESC>, <__QB_4_mock_table_scan_1, ASC>}
              Union
-              PartialSorting x 10
+              PartialSorting x 10: limit = 10, columns {<__QB_4_mock_table_scan_0, DESC>, <__QB_4_mock_table_scan_1, ASC>}
                Expression
-                Expression
-                 Expression
+                Expression: <before project>
+                 Expression: <final projection>
                   MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -183,31 +183,31 @@ Union
         String expected = R"(
 Union
  SharedQuery x 10
-  Limit
+  Limit, limit = 10 always_read_till_end = false
    Union
-    Limit x 10
-     Expression
+    Limit x 10, limit = 10 always_read_till_end = false
+     Expression: <final projection>
       Expression
-       Expression
-        Expression
-         Expression
-          Filter
+       Expression: <before project>
+        Expression: <final projection>
+         Expression: <before order and select>
+          Filter: <execute where>: {equals}
            Expression
-            Expression
-             Expression
+            Expression: <before project>
+             Expression: <final projection>
               SharedQuery
-               ParallelAggregating
-                Expression x 10
+               ParallelAggregating, max_threads: 10, final: true, columns: {max(__QB_4___QB_5_mock_table_scan_0)_collator_0 }
+                Expression x 10: <before aggregation>
                  Expression
-                  Expression
+                  Expression: <before project>
                    SharedQuery
-                    Expression
-                     MergeSorting
+                    Expression: <final projection>
+                     MergeSorting, limit = 10, columns {<__QB_5_mock_table_scan_0, DESC>, <__QB_5_mock_table_scan_1, ASC>}
                       Union
-                       PartialSorting x 10
+                       PartialSorting x 10: limit = 10, columns {<__QB_5_mock_table_scan_0, DESC>, <__QB_5_mock_table_scan_1, ASC>}
                         Expression
-                         Expression
-                          Expression
+                         Expression: <before project>
+                          Expression: <final projection>
                            MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -231,24 +231,24 @@ Union
     {
         String expected = R"(
 CreatingSets
- Union
-  HashJoinBuildBlockInputStream x 10
-   Expression
-    Expression
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 10: <Right join build>, build_concurrency{10}, join_kind{Left}
+   Expression: <Append Join key and join Filters>
+    Expression: <final projection>
      MockTableScan
- Union x 2
-  HashJoinBuildBlockInputStream x 10
-   Expression
-    Expression
-     Expression
+ Union x 2: <for join>
+  HashJoinBuildBlockInputStream x 10: <Right join build>, build_concurrency{10}, join_kind{Left}
+   Expression: <Append Join key and join Filters>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
       HashJoinProbe
-       Expression
+       Expression: <final projection>
         MockTableScan
  Union
-  Expression x 10
-   Expression
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
     HashJoinProbe
-     Expression
+     Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -261,16 +261,16 @@ CreatingSets
     {
         String expected = R"(
 Union
- Expression x 10
+ Expression x 10: <final projection>
   Expression
-   Expression
-    Expression
+   Expression: <before project>
+    Expression: <final projection>
      Expression
-      Expression
-       Expression
+      Expression: <before project>
+       Expression: <final projection>
         Expression
-         Expression
-          Expression
+         Expression: <before project>
+          Expression: <final projection>
            MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -285,16 +285,16 @@ Union
         String expected = R"(
 Union
  MockExchangeSender x 10
-  Expression
+  Expression: <final projection>
    Expression
-    Expression
-     Expression
+    Expression: <before project>
+     Expression: <final projection>
       Expression
-       Expression
-        Expression
+       Expression: <before project>
+        Expression: <final projection>
          Expression
-          Expression
-           Expression
+          Expression: <before project>
+           Expression: <final projection>
             MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -318,24 +318,24 @@ Union
     {
         String expected = R"(
 CreatingSets
- Union
-  HashJoinBuildBlockInputStream x 10
-   Expression
-    Expression
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 10: <Right join build>, build_concurrency{10}, join_kind{Left}
+   Expression: <Append Join key and join Filters>
+    Expression: <final projection>
      MockExchangeReceiver
- Union x 2
-  HashJoinBuildBlockInputStream x 10
-   Expression
-    Expression
-     Expression
+ Union x 2: <for join>
+  HashJoinBuildBlockInputStream x 10: <Right join build>, build_concurrency{10}, join_kind{Left}
+   Expression: <Append Join key and join Filters>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
       HashJoinProbe
-       Expression
+       Expression: <final projection>
         MockExchangeReceiver
  Union
-  Expression x 10
-   Expression
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
     HashJoinProbe
-     Expression
+     Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -360,25 +360,25 @@ CreatingSets
     {
         String expected = R"(
 CreatingSets
- Union
-  HashJoinBuildBlockInputStream x 10
-   Expression
-    Expression
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 10: <Right join build>, build_concurrency{10}, join_kind{Left}
+   Expression: <Append Join key and join Filters>
+    Expression: <final projection>
      MockExchangeReceiver
- Union x 2
-  HashJoinBuildBlockInputStream x 10
-   Expression
-    Expression
-     Expression
+ Union x 2: <for join>
+  HashJoinBuildBlockInputStream x 10: <Right join build>, build_concurrency{10}, join_kind{Left}
+   Expression: <Append Join key and join Filters>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
       HashJoinProbe
-       Expression
+       Expression: <final projection>
         MockExchangeReceiver
  Union
   MockExchangeSender x 10
-   Expression
-    Expression
+   Expression: <final projection>
+    Expression: <remove useless column after join>
      HashJoinProbe
-      Expression
+      Expression: <final projection>
        MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }

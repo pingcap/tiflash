@@ -43,6 +43,6 @@ void HashJoinBuildBlockInputStream::print(FmtBuffer & buffer, size_t indent, siz
     auto join_type_it = join_type_map.find(join->getKind());
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type", Errors::Coprocessor::Internal);
-    buffer.fmtAppend(": build_concurrency{{{}}}, join_kind{{{}}}", join->getBuildConcurrency(), join_type_it->second);
+    buffer.fmtAppend(", build_concurrency{{{}}}, join_kind{{{}}}", join->getBuildConcurrency(), join_type_it->second);
 }
 } // namespace DB

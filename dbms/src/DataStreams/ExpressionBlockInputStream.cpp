@@ -53,11 +53,4 @@ Block ExpressionBlockInputStream::readImpl()
     expression->execute(res);
     return res;
 }
-
-void ExpressionBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
-{
-    IProfilingBlockInputStream::print(buffer, indent, multiplier);
-    buffer.append(": ");
-    expression->dumpActions(buffer);
-}
 } // namespace DB

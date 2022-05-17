@@ -85,12 +85,11 @@ void IBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multipli
         getName(),
         multiplier > 1 ? fmt::format(" x {}", multiplier) : "");
     if (!extra_info.empty())
-        buffer.fmtAppend(": {}", extra_info);
+        buffer.fmtAppend(": <{}>", extra_info);
 }
 
 void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multiplier)
 {
-    // todo append getHeader().dumpStructure()
     print(buffer, indent, multiplier);
     buffer.append("\n");
     ++indent;
