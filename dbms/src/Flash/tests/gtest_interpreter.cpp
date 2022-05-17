@@ -251,5 +251,7 @@ CreatingSets
     }
 }
 CATCH
+
+
 } // namespace tests
 } // namespace DB

@@ -43,7 +43,7 @@ PageStorageImpl::PageStorageImpl(
 
 PageStorageImpl::~PageStorageImpl() = default;
 
-void PageStorageImpl::restore()
+std::map<NamespaceId, PageId> PageStorageImpl::restore()
 {
     // TODO: clean up blobstore.
     // TODO: Speedup restoring
@@ -53,17 +53,12 @@ void PageStorageImpl::restore()
     page_directory = factory
                          .setBlobStore(blob_store)
                          .create(storage_name, file_provider, delegator, parseWALConfig(config));
-    // factory.max_applied_page_id // TODO: return it to outer function
+    return factory.getMaxApplyPageIds();
 }
 
 void PageStorageImpl::drop()
 {
     throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
-}
-
-PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
-{
-    return page_directory->getMaxId(ns_id);
 }
 
 PageId PageStorageImpl::getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist)
@@ -89,6 +84,11 @@ SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
 size_t PageStorageImpl::getNumberOfPages()
 {
     return page_directory->numPages();
+}
+
+std::set<PageId> PageStorageImpl::getAliveExternalPageIds(NamespaceId ns_id)
+{
+    return page_directory->getAliveExternalIds(ns_id);
 }
 
 void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
@@ -139,13 +139,6 @@ DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageId page_id, const Read
     }
 
     auto page_entry = throw_on_not_exist ? page_directory->get(buildV3Id(ns_id, page_id), snapshot) : page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
-    if (!page_entry.second.isValid())
-    {
-        Page page_not_found;
-        page_not_found.page_id = INVALID_PAGE_ID;
-        return page_not_found;
-    }
-
     return blob_store.read(page_entry, read_limiter);
 }
 
@@ -158,7 +151,9 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
 
     PageIdV3Internals page_id_v3s;
     for (auto p_id : page_ids)
+    {
         page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
+    }
 
     if (throw_on_not_exist)
     {
@@ -168,7 +163,8 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
     else
     {
         auto [page_entries, page_ids_not_found] = page_directory->getOrNull(page_id_v3s, snapshot);
-        auto page_map = blob_store.read(page_entries, read_limiter);
+        PageMap page_map = blob_store.read(page_entries, read_limiter);
+
         for (const auto & page_id_not_found : page_ids_not_found)
         {
             Page page_not_found;
@@ -216,6 +212,7 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
     for (const auto & [page_id, field_indices] : page_fields)
     {
         const auto & [id, entry] = throw_on_not_exist ? page_directory->get(buildV3Id(ns_id, page_id), snapshot) : page_directory->getOrNull(buildV3Id(ns_id, page_id), snapshot);
+
         if (entry.isValid())
         {
             auto info = BlobStore::FieldReadInfo(buildV3Id(ns_id, page_id), entry, field_indices);
@@ -226,8 +223,8 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
             page_ids_not_found.emplace_back(id);
         }
     }
+    PageMap page_map = blob_store.read(read_infos, read_limiter);
 
-    auto page_map = blob_store.read(read_infos, read_limiter);
     for (const auto & page_id_not_found : page_ids_not_found)
     {
         Page page_not_found;
@@ -280,7 +277,7 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
             for (const auto & [ns_id, callbacks] : callbacks_container)
             {
                 auto pending_external_pages = callbacks.scanner();
-                auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
+                auto alive_external_ids = getAliveExternalPageIds(ns_id);
                 callbacks.remover(pending_external_pages, alive_external_ids);
             }
         }

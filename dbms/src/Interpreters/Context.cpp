@@ -81,6 +81,7 @@ namespace CurrentMetrics
 {
 extern const Metric ContextLockWait;
 extern const Metric MemoryTrackingForMerges;
+extern const Metric GlobalStorageRunMode;
 } // namespace CurrentMetrics
 
 
@@ -161,6 +162,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
+    PageStorageRunMode storage_run_mode;
     DM::GlobalStoragePoolPtr global_storage_pool;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1547,23 +1549,9 @@ ReadLimiterPtr Context::getReadLimiter() const
     return getIORateLimiter().getReadLimiter();
 }
 
-static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
+
+static bool isPageStorageV2Existed(const PathPool & path_pool)
 {
-    // Check whether v3 is already enabled
-    for (const auto & path : path_pool.listGlobalPagePaths())
-    {
-        if (PS::V3::PageStorageImpl::isManifestsFileExists(path))
-        {
-            return true;
-        }
-    }
-
-    // Check whether v3 on new node is enabled in the config, if not, no need to check anymore
-    if (!enable_ps_v3)
-        return false;
-
-    // Check whether there are any files in kvstore path, if exists, then this is not a new node.
-    // If it's a new node, then we enable v3. Otherwise, we use v2.
     for (const auto & path : path_pool.listKVStorePaths())
     {
         Poco::File dir(path);
@@ -1574,23 +1562,102 @@ static bool isUsingPageStorageV3(const PathPool & path_pool, bool enable_ps_v3)
         dir.list(files);
         if (!files.empty())
         {
-            return false;
+            for (const auto & file_name : files)
+            {
+                const auto & find_index = file_name.find("page");
+                if (find_index != std::string::npos)
+                {
+                    return true;
+                }
+            }
+            // KVStore is not empty, but can't find any of v2 data in it.
         }
     }
-    return true;
+
+    // If not data in KVStore. It means V2 data must not existed.
+    return false;
 }
 
-bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3)
+static bool isPageStorageV3Existed(const PathPool & path_pool)
+{
+    for (const auto & path : path_pool.listGlobalPagePaths())
+    {
+        Poco::File dir(path);
+        if (!dir.exists())
+            continue;
+
+        std::vector<std::string> files;
+        dir.list(files);
+        if (!files.empty())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Context::initializePageStorageMode(const PathPool & path_pool, UInt64 storage_page_format_version)
 {
     auto lock = getLock();
-    if (isUsingPageStorageV3(path_pool, enable_ps_v3))
+
+    /**
+     * PageFormat::V2 + isPageStorageV3Existed is false + whatever isPageStorageV2Existed true or false = ONLY_V2
+     * PageFormat::V2 + isPageStorageV3Existed is true  + whatever isPageStorageV2Existed true or false = ERROR Config
+     * PageFormat::V3 + isPageStorageV2Existed is true  + whatever isPageStorageV3Existed true or false = MIX_MODE
+     * PageFormat::V3 + isPageStorageV2Existed is false + whatever isPageStorageV3Existed true or false = ONLY_V3
+     */
+
+    switch (storage_page_format_version)
+    {
+    case PageFormat::V1:
+    case PageFormat::V2:
+    {
+        if (isPageStorageV3Existed(path_pool))
+        {
+            throw Exception("Invalid config `storage.format_version`, Current page V3 data exist. But using the PageFormat::V2."
+                            "If you are downgrading the format_version for this TiFlash node, you need to rebuild the data from scratch.",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+        // not exist V3
+        shared->storage_run_mode = PageStorageRunMode::ONLY_V2;
+        return;
+    }
+    case PageFormat::V3:
+    {
+        shared->storage_run_mode = isPageStorageV2Existed(path_pool) ? PageStorageRunMode::MIX_MODE : PageStorageRunMode::ONLY_V3;
+        return;
+    }
+    default:
+        throw Exception(fmt::format("Can't detect the format version of Page [page_version={}]", storage_page_format_version),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+PageStorageRunMode Context::getPageStorageRunMode() const
+{
+    auto lock = getLock();
+    return shared->storage_run_mode;
+}
+
+void Context::setPageStorageRunMode(PageStorageRunMode run_mode) const
+{
+    auto lock = getLock();
+    shared->storage_run_mode = run_mode;
+}
+
+bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
+{
+    auto lock = getLock();
+    if (shared->global_storage_pool)
+    {
+        // GlobalStoragePool may be initialized many times in some test cases for restore.
+        LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
+    }
+    CurrentMetrics::set(CurrentMetrics::GlobalStorageRunMode, static_cast<UInt8>(shared->storage_run_mode));
+    if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
     {
         try
         {
-            // create manifests file before initialize GlobalStoragePool
-            for (const auto & path : path_pool.listGlobalPagePaths())
-                PS::V3::PageStorageImpl::createManifestsFileIfNeed(path);
-
             shared->global_storage_pool = std::make_shared<DM::GlobalStoragePool>(path_pool, *this, settings);
             shared->global_storage_pool->restore();
             return true;

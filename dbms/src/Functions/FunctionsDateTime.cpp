@@ -137,6 +137,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionToTiDBDayOfWeek>();
     factory.registerFunction<FunctionToTiDBDayOfYear>();
     factory.registerFunction<FunctionToTiDBWeekOfYear>();
+    factory.registerFunction<FunctionToTiDBToSeconds>();
 
     factory.registerFunction<FunctionToTimeZone>();
     factory.registerFunction<FunctionToLastDay>();

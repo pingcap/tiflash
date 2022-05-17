@@ -12,21 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Parsers/IParserBase.h>
-
+#include <Encryption/RateLimiter.h>
 
 namespace DB
 {
-
-/** Query USE db
-  */
-class ParserTruncateQuery : public IParserBase
+class MockReadLimiter final : public ReadLimiter
 {
+public:
+    MockReadLimiter(
+        std::function<Int64()> getIOStatistic_,
+        Int64 rate_limit_per_sec_,
+        LimiterType type_ = LimiterType::UNKNOW,
+        Int64 get_io_stat_period_us = 2000,
+        UInt64 refill_period_ms_ = 100)
+        : ReadLimiter(getIOStatistic_, rate_limit_per_sec_, type_, get_io_stat_period_us, refill_period_ms_)
+    {
+    }
+
 protected:
-  const char * getName() const { return "TRUNCATE query"; }
-  bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
+    void consumeBytes(Int64 bytes) override
+    {
+        // Need soft limit here.
+        WriteLimiter::consumeBytes(bytes);
+    }
 };
 
-}
+} // namespace DB

@@ -166,6 +166,7 @@ dt_segment_limit_rows = 1000005
 dt_enable_rough_set_filter = 0
 max_memory_usage = 102000
 dt_storage_blob_heavy_gc_valid_rate = 0.2
+dt_storage_blob_block_alignment_bytes = 0
 dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
 dt_storage_pool_data_gc_min_bytes = 256
@@ -223,6 +224,7 @@ dt_compression_level = 1
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_legacy_num, 2);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_blob_heavy_gc_valid_rate, 0.2);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_blob_block_alignment_bytes, 0);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_column_file_size, 8388608);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_delta_small_column_file_rows, 2048);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_segment_limit_size, 536870912);
@@ -277,6 +279,7 @@ max_rows_in_set = 455
 dt_segment_limit_rows = 1000005
 dt_enable_rough_set_filter = 0
 dt_storage_blob_heavy_gc_valid_rate = 0.3
+dt_storage_blob_block_alignment_bytes = 4096
 max_memory_usage = 102000
 dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
@@ -293,23 +296,24 @@ dt_page_gc_low_write_prob = 0.2
     auto verify_persister_reload_config = [&global_ctx](RegionPersister & persister) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        auto cfg = persister.page_storage->getSettings();
+        auto cfg = persister.getPageStorageSettings();
         EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
         EXPECT_NE(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_blob_heavy_gc_valid_rate);
+        EXPECT_NE(cfg.blob_block_alignment_bytes, settings.dt_storage_blob_block_alignment_bytes);
         EXPECT_NE(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
         persister.gc();
 
-        cfg = persister.page_storage->getSettings();
-
+        cfg = persister.getPageStorageSettings();
         EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
         EXPECT_EQ(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_blob_heavy_gc_valid_rate);
+        EXPECT_EQ(cfg.blob_block_alignment_bytes, settings.dt_storage_blob_block_alignment_bytes);
         EXPECT_EQ(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_EQ(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
@@ -333,6 +337,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
         ASSERT_DOUBLE_EQ(global_ctx.getSettingsRef().dt_storage_blob_heavy_gc_valid_rate, 0.3);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_blob_block_alignment_bytes, 4096);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_open_file_max_idle_seconds, 20);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_page_gc_low_write_prob, 0.2);
         verify_persister_reload_config(persister);
@@ -353,6 +358,7 @@ dt_segment_limit_rows = 1000005
 dt_enable_rough_set_filter = 0
 max_memory_usage = 102000
 dt_storage_blob_heavy_gc_valid_rate = 0.3
+dt_storage_blob_block_alignment_bytes = 4096
 dt_storage_pool_data_gc_min_file_num = 8
 dt_storage_pool_data_gc_min_legacy_num = 2
 dt_storage_pool_data_gc_min_bytes = 256
@@ -363,28 +369,30 @@ dt_page_gc_low_write_prob = 0.2
 
     auto & global_ctx = TiFlashTestEnv::getGlobalContext();
     std::unique_ptr<StoragePathPool> path_pool = std::make_unique<StoragePathPool>(global_ctx.getPathPool().withTable("test", "t1", false));
-    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>("test.t1", /*table_id*/ 100, *path_pool, global_ctx, global_ctx.getSettingsRef());
+    std::unique_ptr<DM::StoragePool> storage_pool = std::make_unique<DM::StoragePool>(global_ctx, /*ns_id*/ 100, *path_pool, "test.t1");
 
     auto verify_storage_pool_reload_config = [&global_ctx](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        auto cfg = storage_pool->data()->getSettings();
+        auto cfg = storage_pool->data_storage_v2->getSettings();
         EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_NE(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
         EXPECT_NE(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_blob_heavy_gc_valid_rate);
+        EXPECT_NE(cfg.blob_block_alignment_bytes, settings.dt_storage_blob_block_alignment_bytes);
         EXPECT_NE(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_NE(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
 
         storage_pool->gc(settings, DM::StoragePool::Seconds(0));
 
-        cfg = storage_pool->data()->getSettings();
+        cfg = storage_pool->data_storage_v2->getSettings();
         EXPECT_EQ(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_EQ(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_EQ(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
         EXPECT_DOUBLE_EQ(cfg.gc_max_valid_rate, settings.dt_storage_pool_data_gc_max_valid_rate);
         EXPECT_DOUBLE_EQ(cfg.blob_heavy_gc_valid_rate, settings.dt_storage_blob_heavy_gc_valid_rate);
+        EXPECT_EQ(cfg.blob_block_alignment_bytes, settings.dt_storage_blob_block_alignment_bytes);
         EXPECT_EQ(cfg.open_file_max_idle_time, settings.dt_open_file_max_idle_seconds);
         EXPECT_EQ(cfg.prob_do_gc_when_write_is_low, settings.dt_page_gc_low_write_prob * 1000);
     };
@@ -408,6 +416,7 @@ dt_page_gc_low_write_prob = 0.2
         ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_min_bytes, 256);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_storage_pool_data_gc_max_valid_rate, 0.5);
         ASSERT_DOUBLE_EQ(global_ctx.getSettingsRef().dt_storage_blob_heavy_gc_valid_rate, 0.3);
+        ASSERT_EQ(global_ctx.getSettingsRef().dt_storage_blob_block_alignment_bytes, 4096);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_open_file_max_idle_seconds, 20);
         ASSERT_FLOAT_EQ(global_ctx.getSettingsRef().dt_page_gc_low_write_prob, 0.2);
         verify_storage_pool_reload_config(storage_pool);

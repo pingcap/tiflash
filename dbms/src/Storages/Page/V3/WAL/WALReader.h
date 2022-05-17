@@ -14,12 +14,18 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/WALStore.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int CORRUPTED_DATA;
+}
+
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 
@@ -28,10 +34,11 @@ namespace PS::V3
 class ReportCollector : public LogReader::Reporter
 {
 public:
-    void corruption(size_t /*bytes*/, const String & /*msg*/) override
+    void corruption(size_t /*bytes*/, const String & msg) override
     {
         error_happened = true;
         // FIXME: store the reason of corruption
+        throw Exception(msg, ErrorCodes::CORRUPTED_DATA);
     }
 
     bool hasError() const
@@ -91,8 +98,7 @@ public:
         WALRecoveryMode recovery_mode_,
         const ReadLimiterPtr & read_limiter_);
 
-    WALStoreReader(const WALStoreReader &) = delete;
-    WALStoreReader & operator=(const WALStoreReader &) = delete;
+    DISALLOW_COPY(WALStoreReader);
 
 private:
     bool openNextFile();

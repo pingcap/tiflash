@@ -113,6 +113,10 @@ protected:
 
     UInt64 getRightMargin() override
     {
+        if (free_map.empty())
+        {
+            return end - start;
+        }
         return free_map.rbegin()->first;
     }
 
@@ -181,9 +185,9 @@ protected:
         return true;
     }
 
-    std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override
+    std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) override
     {
-        UInt64 offset = UINT64_MAX;
+        UInt64 offset = UINT64_MAX, last_offset = UINT64_MAX;
         UInt64 max_cap = 0;
         // The biggest free block capacity and its start offset
         UInt64 scan_biggest_cap = 0;
@@ -193,8 +197,11 @@ protected:
         {
             LOG_FMT_ERROR(log, "Current space map is full");
             hint_biggest_cap = 0;
-            return std::make_pair(offset, hint_biggest_cap);
+            return std::make_tuple(offset, hint_biggest_cap, false);
         }
+
+        auto r_it = free_map.rbegin();
+        last_offset = (r_it->first + r_it->second == end) ? r_it->first : UINT64_MAX;
 
         auto it = free_map.begin();
         for (; it != free_map.end(); it++)
@@ -214,11 +221,17 @@ protected:
         // No enough space for insert
         if (it == free_map.end())
         {
-            LOG_FMT_ERROR(log, "Not sure why can't found any place to insert. [size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", size, hint_biggest_offset, hint_biggest_cap, scan_biggest_offset, scan_biggest_cap);
+            LOG_FMT_ERROR(log, "Not sure why can't found any place to insert."
+                               "[size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", //
+                          size,
+                          hint_biggest_offset,
+                          hint_biggest_cap,
+                          scan_biggest_offset,
+                          scan_biggest_cap);
             hint_biggest_offset = scan_biggest_offset;
             hint_biggest_cap = scan_biggest_cap;
 
-            return std::make_pair(offset, hint_biggest_cap);
+            return std::make_tuple(offset, hint_biggest_cap, false);
         }
 
         // Update return start
@@ -231,7 +244,7 @@ protected:
             {
                 free_map.erase(it);
                 max_cap = hint_biggest_cap;
-                return std::make_pair(offset, max_cap);
+                return std::make_tuple(offset, max_cap, last_offset == offset);
             }
 
             // It is champion, need to update `scan_biggest_cap`, `scan_biggest_offset`
@@ -251,7 +264,7 @@ protected:
             if (k - size != hint_biggest_offset)
             {
                 max_cap = hint_biggest_cap;
-                return std::make_pair(offset, max_cap);
+                return std::make_tuple(offset, max_cap, last_offset == offset);
             }
 
             // It is champion, need to update `scan_biggest_cap`, `scan_biggest_offset`
@@ -274,7 +287,7 @@ protected:
         hint_biggest_offset = scan_biggest_offset;
         hint_biggest_cap = scan_biggest_cap;
 
-        return std::make_pair(offset, hint_biggest_cap);
+        return std::make_tuple(offset, hint_biggest_cap, last_offset == offset);
     }
 
     UInt64 updateAccurateMaxCapacity() override

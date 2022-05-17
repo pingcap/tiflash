@@ -14,18 +14,14 @@
 
 #pragma once
 
-#include <Parsers/ParserQueryWithOutput.h>
+#define DISALLOW_COPY(ClassName)           \
+    ClassName(const ClassName &) = delete; \
+    ClassName & operator=(const ClassName &) = delete
 
-namespace DB
-{
-/** Query of form
- * CHECK [TABLE] [database.]table
- */
-class ParserCheckQuery : public IParserBase
-{
-protected:
-    const char * getName() const { return "ALTER query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-};
+#define DISALLOW_MOVE(ClassName)      \
+    ClassName(ClassName &&) = delete; \
+    ClassName & operator=(ClassName &&) = delete
 
-}
+#define DISALLOW_COPY_AND_MOVE(ClassName) \
+    DISALLOW_COPY(ClassName);             \
+    DISALLOW_MOVE(ClassName)

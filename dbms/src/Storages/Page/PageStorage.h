@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/FormatVersion.h>
@@ -23,16 +24,19 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/WriteBatch.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <condition_variable>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <queue>
 #include <set>
 #include <shared_mutex>
 #include <type_traits>
 #include <unordered_map>
+
 
 namespace DB
 {
@@ -45,6 +49,20 @@ using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 class Context;
 class PageStorage;
 using PageStoragePtr = std::shared_ptr<PageStorage>;
+class RegionPersister;
+
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
+
+enum class PageStorageRunMode : UInt8
+{
+    ONLY_V2 = 1,
+    ONLY_V3 = 2,
+    MIX_MODE = 3,
+};
 
 struct ExternalPageCallbacks
 {
@@ -119,6 +137,7 @@ public:
         SettingUInt64 blob_spacemap_type = 2;
         SettingUInt64 blob_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
         SettingDouble blob_heavy_gc_valid_rate = 0.2;
+        SettingUInt64 blob_block_alignment_bytes = 0;
 
         SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
         SettingUInt64 wal_recover_mode = 0;
@@ -143,6 +162,8 @@ public:
             blob_spacemap_type = rhs.blob_spacemap_type;
             blob_cached_fd_size = rhs.blob_cached_fd_size;
             blob_heavy_gc_valid_rate = rhs.blob_heavy_gc_valid_rate;
+            blob_block_alignment_bytes = rhs.blob_block_alignment_bytes;
+
             wal_roll_size = rhs.wal_roll_size;
             wal_recover_mode = rhs.wal_recover_mode;
             wal_max_persisted_log_files = rhs.wal_max_persisted_log_files;
@@ -170,12 +191,13 @@ public:
             return fmt::format(
                 "PageStorage::Config V3 {{"
                 "blob_file_limit_size: {}, blob_spacemap_type: {}, "
-                "blob_cached_fd_size: {}, blob_heavy_gc_valid_rate: {:.3f}, "
+                "blob_cached_fd_size: {}, blob_heavy_gc_valid_rate: {:.3f}, blob_block_alignment_bytes: {}, "
                 "wal_roll_size: {}, wal_recover_mode: {}, wal_max_persisted_log_files: {}}}",
                 blob_file_limit_size.get(),
                 blob_spacemap_type.get(),
                 blob_cached_fd_size.get(),
                 blob_heavy_gc_valid_rate.get(),
+                blob_block_alignment_bytes.get(),
                 wal_roll_size.get(),
                 wal_recover_mode.get(),
                 wal_max_persisted_log_files.get());
@@ -207,11 +229,15 @@ public:
 
     virtual ~PageStorage() = default;
 
-    virtual void restore() = 0;
+    // Return the map[ns_id, max_page_id]
+    // The caller should ensure that it only allocate new id that is larger than `max_page_id`. Reusing the
+    // same ID for different kind of write (put/ref/put_external) would make PageStorage run into unexpected error.
+    //
+    // Note that for V2, we always return a map with only one element: <ns_id=0, max_id> cause V2 have no
+    // idea about ns_id.
+    virtual std::map<NamespaceId, PageId> restore() = 0;
 
     virtual void drop() = 0;
-
-    virtual PageId getMaxId(NamespaceId ns_id) = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 
@@ -219,6 +245,8 @@ public:
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
     virtual size_t getNumberOfPages() = 0;
+
+    virtual std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) = 0;
 
     void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
     {
@@ -313,77 +341,82 @@ protected:
     FileProviderPtr file_provider;
 };
 
-
+// An impl class to hide the details for PageReaderImplMixed
+class PageReaderImpl;
+// A class to wrap read with a specify snapshot
 class PageReader : private boost::noncopyable
 {
 public:
     /// Not snapshot read.
-    explicit PageReader(NamespaceId ns_id_, PageStoragePtr storage_, ReadLimiterPtr read_limiter_)
-        : ns_id(ns_id_)
-        , storage(storage_)
-        , read_limiter(read_limiter_)
-    {}
+    explicit PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, ReadLimiterPtr read_limiter_);
+
     /// Snapshot read.
-    PageReader(NamespaceId ns_id_, PageStoragePtr storage_, const PageStorage::SnapshotPtr & snap_, ReadLimiterPtr read_limiter_)
-        : ns_id(ns_id_)
-        , storage(storage_)
-        , snap(snap_)
-        , read_limiter(read_limiter_)
-    {}
-    PageReader(NamespaceId ns_id_, PageStoragePtr storage_, PageStorage::SnapshotPtr && snap_, ReadLimiterPtr read_limiter_)
-        : ns_id(ns_id_)
-        , storage(storage_)
-        , snap(std::move(snap_))
-        , read_limiter(read_limiter_)
-    {}
+    PageReader(const PageStorageRunMode & run_mode_, NamespaceId ns_id_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_, PageStorage::SnapshotPtr snap_, ReadLimiterPtr read_limiter_);
 
-    DB::Page read(PageId page_id) const
-    {
-        return storage->read(ns_id, page_id, read_limiter, snap);
-    }
+    ~PageReader();
 
-    PageMap read(const std::vector<PageId> & page_ids) const
-    {
-        return storage->read(ns_id, page_ids, read_limiter, snap);
-    }
+    DB::Page read(PageId page_id) const;
 
-    void read(const std::vector<PageId> & page_ids, PageHandler & handler) const
-    {
-        storage->read(ns_id, page_ids, handler, read_limiter, snap);
-    }
+    PageMap read(const PageIds & page_ids) const;
+
+    void read(const PageIds & page_ids, PageHandler & handler) const;
 
     using PageReadFields = PageStorage::PageReadFields;
-    PageMap read(const std::vector<PageReadFields> & page_fields) const
-    {
-        return storage->read(ns_id, page_fields, read_limiter, snap);
-    }
+    PageMap read(const std::vector<PageReadFields> & page_fields) const;
 
-    PageId getMaxId() const
-    {
-        return storage->getMaxId(ns_id);
-    }
+    PageId getNormalPageId(PageId page_id) const;
 
-    PageId getNormalPageId(PageId page_id) const
-    {
-        return storage->getNormalPageId(ns_id, page_id, snap);
-    }
+    PageEntry getPageEntry(PageId page_id) const;
 
-    UInt64 getPageChecksum(PageId page_id) const
-    {
-        return storage->getEntry(ns_id, page_id, snap).checksum;
-    }
+    PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const;
 
-    PageEntry getPageEntry(PageId page_id) const
-    {
-        return storage->getEntry(ns_id, page_id, snap);
-    }
+    // Get some statistics of all living snapshots and the oldest living snapshot.
+    SnapshotsStatistics getSnapshotsStat() const;
+
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
 private:
-    NamespaceId ns_id;
-    PageStoragePtr storage;
-    PageStorage::SnapshotPtr snap;
-    ReadLimiterPtr read_limiter;
+    std::unique_ptr<PageReaderImpl> impl;
 };
+using PageReaderPtr = std::shared_ptr<PageReader>;
+
+class PageWriter : private boost::noncopyable
+{
+public:
+    PageWriter(PageStorageRunMode run_mode_, PageStoragePtr storage_v2_, PageStoragePtr storage_v3_)
+        : run_mode(run_mode_)
+        , storage_v2(storage_v2_)
+        , storage_v3(storage_v3_)
+    {
+    }
+
+    void write(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
+
+    friend class RegionPersister;
+
+    // Only used for META and KVStore write del.
+    void writeIntoV2(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
+
+private:
+    void writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
+
+    void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
+
+    // A wrap of getSettings only used for `RegionPersister::gc`
+    PageStorage::Config getSettings() const;
+
+    // A wrap of reloadSettings only used for `RegionPersister::gc`
+    void reloadSettings(const PageStorage::Config & new_config) const;
+
+    // A wrap of gc only used for `RegionPersister::gc`
+    bool gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) const;
+
+private:
+    PageStorageRunMode run_mode;
+    PageStoragePtr storage_v2;
+    PageStoragePtr storage_v3;
+};
+using PageWriterPtr = std::shared_ptr<PageWriter>;
 
 
 } // namespace DB

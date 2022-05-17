@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V1/Page.h>
 #include <Storages/Page/V1/WriteBatch.h>
@@ -82,8 +83,7 @@ private:
 
 public:
     // No copying allowed
-    PageEntriesEdit(const PageEntriesEdit &) = delete;
-    PageEntriesEdit & operator=(const PageEntriesEdit &) = delete;
+    DISALLOW_COPY(PageEntriesEdit);
     // Only move allowed
     PageEntriesEdit(PageEntriesEdit && rhs) noexcept
         : PageEntriesEdit()

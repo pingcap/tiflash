@@ -44,6 +44,7 @@ public:
         blob_config.cached_fd_size = config.blob_cached_fd_size;
         blob_config.spacemap_type = config.blob_spacemap_type;
         blob_config.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate;
+        blob_config.block_alignment_bytes = config.blob_block_alignment_bytes;
 
         return blob_config;
     }
@@ -59,11 +60,10 @@ public:
         return wal_config;
     }
 
-    void restore() override;
+    std::map<NamespaceId, PageId> restore() override;
 
     void drop() override;
 
-    PageId getMaxId(NamespaceId ns_id) override;
 
     PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
@@ -72,6 +72,8 @@ public:
     SnapshotsStatistics getSnapshotsStat() const override;
 
     size_t getNumberOfPages() override;
+
+    std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) override;
 
     void writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) override;
 
