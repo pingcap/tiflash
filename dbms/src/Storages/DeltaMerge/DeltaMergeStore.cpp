@@ -1028,12 +1028,7 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key)
 {
     auto dm_context = newDMContext(context, context.getSettingsRef(), /*tracing_id*/ "mergeDeltaBySegment");
-    if (start_key.is_common_handle != dm_context->is_common_handle)
-    {
-        return std::nullopt;
-    }
 
-    // TODO: Is it a good idea not to retry?
     while (true)
     {
         SegmentPtr segment;

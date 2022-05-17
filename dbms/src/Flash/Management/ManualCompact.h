@@ -14,6 +14,7 @@
 #pragma once
 
 #include <Interpreters/Context.h>
+#include <Interpreters/Settings.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push
@@ -45,7 +46,7 @@ namespace Management
 class ManualCompactManager : private boost::noncopyable
 {
 public:
-    explicit ManualCompactManager(const Context & db_context_);
+    explicit ManualCompactManager(const Context & global_context_, const Settings & settings_);
 
     ~ManualCompactManager() = default;
 
@@ -86,7 +87,8 @@ private:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    const Context & db_context;
+    const Context & global_context;
+    const Settings & settings;
     Poco::Logger * log;
 
     /// Placed last to be destroyed first.

@@ -33,11 +33,11 @@ extern const char pause_before_server_merge_one_delta[];
 namespace Management
 {
 
-ManualCompactManager::ManualCompactManager(const Context & db_context_)
-    : db_context(db_context_)
+ManualCompactManager::ManualCompactManager(const Context & global_context_, const Settings & settings_)
+    : global_context(global_context_.getGlobalContext())
+    , settings(settings_)
     , log(&Poco::Logger::get("ManualCompactManager"))
 {
-    const auto & settings = db_context_.getSettingsRef();
     worker_pool = std::make_unique<ThreadPool>(static_cast<size_t>(settings.manual_compact_pool_size), [] { setThreadName("m-compact-pool"); });
 }
 
@@ -104,18 +104,21 @@ grpc::Status ManualCompactManager::doWorkWithCatch(const ::kvrpcpb::CompactReque
 
 grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
 {
-    const auto & tmt_context = db_context.getTMTContext();
+    const auto & tmt_context = global_context.getTMTContext();
     auto storage = tmt_context.getStorages().get(request->physical_table_id());
-
     if (storage == nullptr)
     {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, fmt::format("Physical table (id={}) not found", request->physical_table_id()));
+        response->mutable_error()->mutable_err_physical_table_not_exist();
+        response->set_has_remaining(false);
+        return grpc::Status::OK;
     }
 
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
     if (dm_storage == nullptr)
     {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, fmt::format("Physical table (id={}) is not a DeltaTree table", request->physical_table_id()));
+        response->mutable_error()->mutable_err_physical_table_not_exist();
+        response->set_has_remaining(false);
+        return grpc::Status::OK;
     }
 
     DM::RowKeyValue start_key;
@@ -141,10 +144,19 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
             // This will cause OOM.
             // Also it is not a good idea to use Try-Catch for this scenario.
             start_key = DM::RowKeyValue::deserialize(buf);
+
+            if (start_key.is_common_handle != dm_storage->isCommonHandle())
+            {
+                response->mutable_error()->mutable_err_invalid_start_key();
+                response->set_has_remaining(false);
+                return grpc::Status::OK;
+            }
         }
         catch (...)
         {
-            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Invalid start key");
+            response->mutable_error()->mutable_err_invalid_start_key();
+            response->set_has_remaining(false);
+            return grpc::Status::OK;
         }
     }
 
@@ -159,7 +171,7 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
     while (true)
     {
         FAIL_POINT_PAUSE(FailPoints::pause_before_server_merge_one_delta);
-        auto compacted_range = dm_storage->mergeDeltaBySegment(db_context, start_key);
+        auto compacted_range = dm_storage->mergeDeltaBySegment(global_context, start_key);
 
         if (compacted_range == std::nullopt)
         {
@@ -212,13 +224,13 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
 
 uint64_t ManualCompactManager::getSettingCompactMoreUntilMs() const
 {
-    return db_context.getSettingsRef().manual_compact_more_until_ms.get();
+    return settings.manual_compact_more_until_ms.get();
 }
 
 uint64_t ManualCompactManager::getSettingMaxConcurrency() const
 {
     auto current_thread_size = worker_pool->size();
-    auto val = db_context.getSettingsRef().manual_compact_max_concurrency.get();
+    auto val = settings.manual_compact_max_concurrency.get();
     return std::max(val, current_thread_size);
 }
 

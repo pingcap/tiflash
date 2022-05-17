@@ -48,7 +48,9 @@ FlashService::FlashService(IServer & server_)
     : server(server_)
     , security_config(server_.securityConfig())
     , log(&Poco::Logger::get("FlashService"))
-    , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(server_.context().getGlobalContext()))
+    , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(
+          server_.context().getGlobalContext(),
+          server_.context().getGlobalContext().getSettingsRef()))
 {
     auto settings = server_.context().getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;

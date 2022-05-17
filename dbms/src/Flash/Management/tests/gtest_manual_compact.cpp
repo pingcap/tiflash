@@ -59,7 +59,7 @@ public:
         {
             TiFlashStorageTestBasic::SetUp();
 
-            manager = std::make_unique<DB::Management::ManualCompactManager>(*db_context);
+            manager = std::make_unique<DB::Management::ManualCompactManager>(*db_context, db_context->getSettingsRef());
 
             setupStorage();
 
@@ -140,7 +140,9 @@ try
     auto request = ::kvrpcpb::CompactRequest();
     auto response = ::kvrpcpb::CompactResponse();
     auto status_code = manager->handleRequest(&request, &response);
-    ASSERT_EQ(status_code.error_code(), grpc::StatusCode::INVALID_ARGUMENT);
+    ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+    ASSERT_TRUE(response.has_error());
+    ASSERT_TRUE(response.error().has_err_physical_table_not_exist());
 }
 CATCH
 
@@ -152,7 +154,9 @@ try
     request.set_physical_table_id(9999);
     auto response = ::kvrpcpb::CompactResponse();
     auto status_code = manager->handleRequest(&request, &response);
-    ASSERT_EQ(status_code.error_code(), grpc::StatusCode::INVALID_ARGUMENT);
+    ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+    ASSERT_TRUE(response.has_error());
+    ASSERT_TRUE(response.error().has_err_physical_table_not_exist());
 }
 CATCH
 
@@ -165,7 +169,41 @@ try
     request.set_start_key("abcd");
     auto response = ::kvrpcpb::CompactResponse();
     auto status_code = manager->handleRequest(&request, &response);
-    ASSERT_EQ(status_code.error_code(), grpc::StatusCode::INVALID_ARGUMENT);
+    ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+    ASSERT_TRUE(response.has_error());
+    ASSERT_TRUE(response.error().has_err_invalid_start_key());
+}
+CATCH
+
+
+TEST_P(BasicManualCompactTest, MalformedStartKey)
+try
+{
+    // Specify an int key for common handle table, and vise versa.
+    DM::RowKeyValue malformed_start_key;
+    switch (pk_type)
+    {
+    case DM::tests::DMTestEnv::PkType::HiddenTiDBRowID:
+    case DM::tests::DMTestEnv::PkType::PkIsHandleInt64:
+        malformed_start_key = DM::RowKeyValue::COMMON_HANDLE_MIN_KEY;
+        break;
+    case DM::tests::DMTestEnv::PkType::CommonHandle:
+        malformed_start_key = DM::RowKeyValue::INT_HANDLE_MIN_KEY;
+        break;
+    default:
+        throw Exception("Unknown pk type for test");
+    }
+
+    auto request = ::kvrpcpb::CompactRequest();
+    request.set_physical_table_id(TABLE_ID);
+    WriteBufferFromOwnString wb;
+    malformed_start_key.serialize(wb);
+    request.set_start_key(wb.releaseStr());
+    auto response = ::kvrpcpb::CompactResponse();
+    auto status_code = manager->handleRequest(&request, &response);
+    ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+    ASSERT_TRUE(response.has_error());
+    ASSERT_TRUE(response.error().has_err_invalid_start_key());
 }
 CATCH
 
@@ -180,6 +218,7 @@ try
     auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
     ASSERT_FALSE(response.has_error());
+    ASSERT_TRUE(response.has_remaining());
 
     helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
     helper->expected_delta_rows[0] = 0;
@@ -199,6 +238,7 @@ try
     auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
     ASSERT_FALSE(response.has_error());
+    ASSERT_TRUE(response.has_remaining());
 
     helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
     helper->expected_delta_rows[0] = 0;
@@ -227,6 +267,7 @@ try
     auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
     ASSERT_FALSE(response.has_error());
+    ASSERT_TRUE(response.has_remaining());
 
     helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
     helper->expected_delta_rows[1] = 0;
@@ -247,6 +288,7 @@ try
         auto status_code = manager->handleRequest(&request, &response);
         ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
         ASSERT_FALSE(response.has_error());
+        ASSERT_TRUE(response.has_remaining());
 
         helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
         helper->expected_delta_rows[0] = 0;
@@ -261,6 +303,7 @@ try
         auto status_code = manager->handleRequest(&request, &response);
         ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
         ASSERT_FALSE(response.has_error());
+        ASSERT_TRUE(response.has_remaining());
 
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
         helper->expected_delta_rows[1] = 0;
@@ -281,6 +324,7 @@ try
     auto status_code = manager->handleRequest(&request, &response);
     ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
     ASSERT_FALSE(response.has_error());
+    ASSERT_FALSE(response.has_remaining());
 
     // All segments should be compacted.
     for (size_t i = 0; i < 4; ++i)

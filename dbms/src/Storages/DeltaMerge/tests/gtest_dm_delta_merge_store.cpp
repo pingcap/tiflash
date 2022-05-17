@@ -3449,22 +3449,14 @@ try
     }
     if (store->isCommonHandle())
     {
-        // For common handle, give int handle key and have a try
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
+        // Specifies MAX_KEY. nullopt should be returned.
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY);
         ASSERT_EQ(result, std::nullopt);
     }
     else
     {
-        // For int handle, give common handle key and have a try
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
-        ASSERT_EQ(result, std::nullopt);
-    }
-    {
-        // Try with max key, should also fail
+        // Specifies MAX_KEY. nullopt should be returned.
         auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY);
-        ASSERT_EQ(result, std::nullopt);
-
-        result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY);
         ASSERT_EQ(result, std::nullopt);
     }
     std::optional<RowKeyRange> result_1;
@@ -3506,6 +3498,23 @@ try
     }
 }
 CATCH
+
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, InvalidKey)
+{
+    // Expect exceptions when invalid key is given.
+    EXPECT_ANY_THROW({
+        if (store->isCommonHandle())
+        {
+            // For common handle, give int handle key and have a try
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
+        }
+        else
+        {
+            // For int handle, give common handle key and have a try
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
+        }
+    });
+}
 
 
 // Give the last segment key.
