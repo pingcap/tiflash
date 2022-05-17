@@ -23,10 +23,10 @@
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <TIDB/Codec/RowCodec.h>
 
 #include <random>
 

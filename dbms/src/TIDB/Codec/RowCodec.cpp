@@ -17,7 +17,7 @@
 #include <IO/Operators.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/RowCodec.h>
+#include <TIDB/Codec/RowCodec.h>
 
 
 namespace DB

@@ -22,7 +22,7 @@
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
-#include <Storages/Transaction/RowCodec.h>
+#include <TIDB/Codec/RowCodec.h>
 
 namespace TiDB
 {

@@ -19,8 +19,8 @@
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiDB.h>
+#include <TIDB/Codec/RowCodec.h>
 
 namespace DB
 {
