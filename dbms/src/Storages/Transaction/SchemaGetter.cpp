@@ -13,9 +13,10 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/SchemaGetter.h>
 #include <pingcap/kv/Scanner.h>
+
+#include <TIDB/Codec/DatumCodec.h>
 
 namespace DB
 {

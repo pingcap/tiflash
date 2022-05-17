@@ -18,8 +18,6 @@
 #include <Core/Types.h>
 #include <IO/Endian.h>
 #include <IO/WriteBufferFromString.h>
-#include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVVarInt.h>
@@ -27,6 +25,9 @@
 #include <common/likely.h>
 
 #include <sstream>
+
+#include <TIDB/Codec/Datum.h>
+#include <TIDB/Codec/DatumCodec.h>
 
 namespace DB
 {

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <TIDB/Codec/JSONCodec.h>
-#include <Storages/Transaction/DatumCodec.h>
+#include <TIDB/Codec/DatumCodec.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

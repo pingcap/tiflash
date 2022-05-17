@@ -14,10 +14,10 @@
 
 #include <DataTypes/DataTypeDecimal.h>
 #include <IO/Operators.h>
-#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <TIDB/Codec/JSONCodec.h>
+#include <TIDB/Codec/DatumCodec.h>
 
 namespace DB
 {

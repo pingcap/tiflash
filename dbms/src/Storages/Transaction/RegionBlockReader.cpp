@@ -15,12 +15,12 @@
 #include <Columns/ColumnsNumber.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TIDB/Codec/RowCodec.h>
+#include <TIDB/Codec/Datum.h>
+#include <TIDB/Codec/DatumCodec.h>
 
 namespace DB
 {

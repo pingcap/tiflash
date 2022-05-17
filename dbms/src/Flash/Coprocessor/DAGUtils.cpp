@@ -22,11 +22,12 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
+
+#include <TIDB/Codec/Datum.h>
 namespace DB
 {
 namespace ErrorCodes
