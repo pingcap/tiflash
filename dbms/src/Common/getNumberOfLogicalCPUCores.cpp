@@ -55,7 +55,7 @@ static int read_cpu_count_from(const char * filename, int default_value)
     // 0-4,6,8-10
 
     // An empty value indicates that the cgroup is using the same setting as the nearest cgroup ancestor with a non-empty "cpuset.cpus" or all the available CPUs if none is found.
-    // The value of "cpuset.cpus" stays constant until the next update and won’t be affected by any CPU hotplug events.
+    // The value of "cpuset.cpus" stays constant until the next update and won't be affected by any CPU hotplug events.
     std::ifstream infile(filename);
     if (!infile.is_open())
     {
@@ -88,7 +88,7 @@ static std::pair<int, int> read_quota_and_period_from(const char * filename)
 {
     // cpu.max
     // A read-write two value file which exists on non-root cgroups. The default is "max 100000".
-    // The maximum bandwidth limit. It’s in the following format:
+    // The maximum bandwidth limit. It's in the following format:
 
     // $MAX $PERIOD
 
