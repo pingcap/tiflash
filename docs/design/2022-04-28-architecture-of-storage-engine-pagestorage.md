@@ -5,9 +5,9 @@
 
 ## Introduction
 
-`PageStorage` is the place where DT(DeltaTree Engine) actually stores data into. The latest data (i.e. delta data), the metadata in the engine are serialized directly into Pages. While the main data, i.e. stable data, is written in DTFiles format and managed as `ExternalPage`s in PageStorage.
+`PageStorage` is the place where DT(DeltaTree Engine) actually stores data into. The latest data (i.e. delta data), and the metadata in the engine are serialized directly into Pages. While the main data (i.e. stable data), is written in DTFiles format and managed as `ExternalPage`s in PageStorage.
 
-You can see the picture below. Described in the picture is the design of the DT. PageStorage stored `delta`, the delta part of data always be updated. After `delta merge` happend, the delta in PageStorage will be merge to the stable part(in picture, it named stable value space).
+The below picture describes the "Delta ValueSpace" and "Stable ValueSpace" of DT. The data in "Delta ValueSpace" is continuously updated. After `delta merge` happened, the delta data in PageStorage will be read and compacted into the "Stable ValueSpace".
 
 ![tiflash-dt-architecture](./images/tiflash-dt-architecture.png)
 
@@ -28,9 +28,7 @@ PageStorage supported:
 
 ## Design
 
-Currently there are three versions of PageStorage (V1, V2, V3). The V1 version is no longer used by DT. Due to compatibility considerations, it's still used in some components, we considered to remove it the future. It won't be covered too much in this article.
-
-At present, most of our customers use the V2 version. Due to design issues, the V2 version has some problems that cannot be improved(will be introduced below), so we propose the V3 version.
+Currently, there are three versions of PageStorage (V1, V2, V3). We won't describe the details of the V1/V2 in this article. The V2 design and implementation lead to high write amplification and CPU usage under some scenarios, so we propose the V3 version.
 
 ### V3 version
 
