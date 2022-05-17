@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/getNumberOfLogicalCPUCores.h>
+#include <common/likely.h>
 
 #include <thread>
 
@@ -153,20 +154,19 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
     // If cgroup.controllers is open, we assume we are running on a system with cgroups v2
     // Otherwise v1
     bool enabled_v2 = cgroup_controllers_info.is_open();
-
-    if (enabled_v2)
+    std::string cpu_filter = enabled_v2 ? "0::" : "cpuset:";
+    std::ifstream cgroup_cpu_info("/proc/self/cgroup");
+    if (cgroup_cpu_info.is_open())
     {
-        std::string cpu_filter = "0::";
-        std::ifstream cgroup_cpu_info("/proc/self/cgroup");
-        if (cgroup_cpu_info.is_open())
+        std::string line;
+        while (std::getline(cgroup_cpu_info, line))
         {
-            std::string line;
-            while (std::getline(cgroup_cpu_info, line))
+            std::string::size_type cpu_str_idx = line.find(cpu_filter);
+            if (cpu_str_idx != std::string::npos)
             {
-                std::string::size_type cpu_str_idx = line.find(cpu_filter);
-                if (cpu_str_idx != std::string::npos)
+                line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
+                if (enabled_v2) 
                 {
-                    line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
                     // read the cpu count from the cgroup file cpuset.cpus
                     int cpu_count = read_cpu_count_from(fmt::format("/sys/fs/cgroup/{}/cpuset.cpus", line).c_str(), -1);
                     // read the quota and period from the cgroup file cpu.max
@@ -174,21 +174,8 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
                     // the number of cores = cpu count * quota / period
                     return ceil(static_cast<float>(cpu_count) * static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period));
                 }
-            }
-        }
-    }
-    else {
-        std::string cpu_filter = "cpuset:";
-        std::ifstream cgroup_cpu_info("/proc/self/cgroup");
-        if (cgroup_cpu_info.is_open())
-        {
-            std::string line;
-            while (std::getline(cgroup_cpu_info, line))
-            {
-                std::string::size_type cpu_str_idx = line.find(cpu_filter);
-                if (cpu_str_idx != std::string::npos)
+                else
                 {
-                    line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
                     int cgroup_quota = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line).c_str(), -2);
 
                     // If can't read cgroup_quota here
@@ -212,7 +199,7 @@ unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
 unsigned getNumberOfLogicalCPUCores()
 {
     unsigned logical_cpu_count = std::thread::hardware_concurrency();
-    if (logical_cpu_count == 0)
+    if (unlikely(logical_cpu_count == 0))
     {
         throw DB::Exception("Failed to get number of logical CPU cores", DB::ErrorCodes::CPUID_ERROR);
     }
