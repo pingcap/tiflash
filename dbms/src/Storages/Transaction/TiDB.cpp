@@ -2,7 +2,6 @@
 #include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
 #include <Poco/Base64Decoder.h>
-#include <Poco/MemoryStream.h>
 #include <Poco/NumberParser.h>
 #include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
