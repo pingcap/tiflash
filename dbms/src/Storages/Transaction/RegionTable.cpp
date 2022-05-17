@@ -117,14 +117,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
 {
     auto & tmt = context->getTMTContext();
 
-    if (tmt.isBgFlushDisabled())
-    {
-        LOG_FMT_TRACE(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
-    }
-    else
-    {
-        LOG_FMT_INFO(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
-    }
+    LOG_FMT_TRACE(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
 
     /// Write region data into corresponding storage.
     RegionDataReadInfoList data_list_to_remove;
@@ -144,14 +137,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
             }
         }
 
-        if (tmt.isBgFlushDisabled())
-        {
-            LOG_FMT_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
-        }
-        else
-        {
-            LOG_FMT_INFO(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
-        }
+        LOG_FMT_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
     }
 
     return data_list_to_remove;

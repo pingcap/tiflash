@@ -342,23 +342,23 @@ PageStorageRunMode StoragePool::restore()
         // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
-            // TODO: when `compaction` happend
-            // 1. Will rewrite meta into V3 by DT.
-            // 2. Need `DEL` meta in V2.
-            // 3. Need drop V2 in disk and check.
-            LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", static_cast<UInt8>(PageStorageRunMode::MIX_MODE), static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
+            // TODO: Need drop V2 in disk and check.
+            LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", //
+                         static_cast<UInt8>(PageStorageRunMode::MIX_MODE),
+                         static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
 
             log_storage_v2 = nullptr;
             data_storage_v2 = nullptr;
             meta_storage_v2 = nullptr;
 
-            log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
-            data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
-            meta_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
+            // Must init by PageStorageRunMode::ONLY_V3
+            log_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, log_storage_v3, nullptr);
+            data_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, data_storage_v3, nullptr);
+            meta_storage_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, meta_storage_v3, nullptr);
 
-            log_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, log_storage_v3);
-            data_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, data_storage_v3);
-            meta_storage_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, meta_storage_v3);
+            log_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, log_storage_v3);
+            data_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, data_storage_v3);
+            meta_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, meta_storage_v3);
 
             max_log_page_id = log_storage_v3->getMaxId(ns_id);
             max_data_page_id = data_storage_v3->getMaxId(ns_id);
