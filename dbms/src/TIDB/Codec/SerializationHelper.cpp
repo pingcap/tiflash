@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/SerializationHelper.h>
+#include <TIDB/Codec/SerializationHelper.h>
 
 namespace DB
 {

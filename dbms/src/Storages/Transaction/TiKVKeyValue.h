@@ -15,8 +15,9 @@
 #pragma once
 
 #include <Common/RedactHelpers.h>
-#include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
+
+#include <TIDB/Codec/SerializationHelper.h>
 
 namespace DB
 {
