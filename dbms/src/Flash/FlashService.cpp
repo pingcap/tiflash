@@ -434,12 +434,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
 
-    //    auto [context, status] = createDBContext(grpc_context);
-    //    if (!status.ok())
-    //    {
-    //        return status;
-    //    }
-
     return manual_compact_manager->handleRequest(request, response);
 }
 

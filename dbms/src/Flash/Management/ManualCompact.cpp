@@ -167,6 +167,8 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
 
     Stopwatch timer;
 
+    LOG_FMT_INFO(log, "Manual compaction begin for table {}, start_key = {}", request->physical_table_id(), start_key.toDebugString());
+
     // Repeatedly merge multiple segments as much as possible.
     while (true)
     {
@@ -203,6 +205,8 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
         LOG_FMT_ERROR(log, "Assert failed: has_remaining && (compacted_start_key == std::nullopt || compacted_end_key == std::nullopt || compacted_segments == 0)");
         throw Exception("Assert failed", ErrorCodes::LOGICAL_ERROR);
     }
+
+    LOG_FMT_INFO(log, "Manual compaction finished for table {}, compacted_start_key = {}, compacted_end_key = {}, has_remaining = {}, compacted_segments = {}, elapsed_ms = {}", request->physical_table_id(), compacted_start_key ? compacted_start_key->toDebugString() : "(null)", compacted_end_key ? compacted_end_key->toDebugString() : "(null)", has_remaining, compacted_segments, timer.elapsedMilliseconds());
 
     response->clear_error();
     response->set_has_remaining(has_remaining);
