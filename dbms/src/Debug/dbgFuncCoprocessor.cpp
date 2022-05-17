@@ -51,11 +51,10 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <TIDB/Codec/Datum.h>
 #include <tipb/select.pb.h>
 
 #include <utility>
-
-#include <TIDB/Codec/Datum.h>
 
 namespace DB
 {

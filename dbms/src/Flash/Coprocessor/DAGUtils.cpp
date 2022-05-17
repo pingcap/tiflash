@@ -24,10 +24,9 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <TIDB/Codec/Datum.h>
 
 #include <unordered_map>
-
-#include <TIDB/Codec/Datum.h>
 namespace DB
 {
 namespace ErrorCodes

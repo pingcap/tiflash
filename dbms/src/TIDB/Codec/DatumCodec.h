@@ -75,7 +75,10 @@ inline std::enable_if_t<std::is_unsigned_v<T>, void> EncodeUInt(T u, WriteBuffer
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
 }
 
-inline void EncodeInt64(Int64 i, WriteBuffer & ss) { EncodeUInt<UInt64>(static_cast<UInt64>(i) ^ SIGN_MASK, ss); }
+inline void EncodeInt64(Int64 i, WriteBuffer & ss)
+{
+    EncodeUInt<UInt64>(static_cast<UInt64>(i) ^ SIGN_MASK, ss);
+}
 
 void EncodeFloat64(Float64 num, WriteBuffer & ss);
 

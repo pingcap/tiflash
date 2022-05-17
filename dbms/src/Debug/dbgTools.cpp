@@ -25,11 +25,10 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <TIDB/Codec/DatumCodec.h>
+#include <TIDB/Codec/RowCodec.h>
 
 #include <random>
-
-#include <TIDB/Codec/RowCodec.h>
-#include <TIDB/Codec/DatumCodec.h>
 
 namespace DB
 {

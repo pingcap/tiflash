@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <optional>
-
 #include <Core/Field.h>
 #include <Storages/Transaction/TiDB.h>
+
+#include <optional>
 
 namespace TiDB
 {
@@ -30,7 +30,10 @@ namespace TiDB
 class DatumBase
 {
 protected:
-    DatumBase(const DB::Field & field, TP tp_) : orig(field), tp(tp_) {}
+    DatumBase(const DB::Field & field, TP tp_)
+        : orig(field)
+        , tp(tp_)
+    {}
 
 public:
     const DB::Field & field() const { return copy ? *copy : orig; }
