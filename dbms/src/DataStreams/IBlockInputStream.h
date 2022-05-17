@@ -135,6 +135,8 @@ public:
       */
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
+    void setExtraInfo(String info) { extra_info = info; }
+
 
     template <typename F>
     void forEachChild(F && f)
@@ -188,6 +190,9 @@ private:
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
     mutable std::mutex tree_id_mutex;
     mutable String tree_id;
+
+    /// The info that hints why the inputStream is needed to run.
+    String extra_info;
 
     /// Get text with names of this source and the entire subtree, this function should only be called after the
     /// InputStream tree is constructed.

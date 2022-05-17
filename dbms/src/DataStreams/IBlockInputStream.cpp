@@ -84,6 +84,8 @@ void IBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multipli
         String(indent, ' '),
         getName(),
         multiplier > 1 ? fmt::format(" x {}", multiplier) : "");
+    if (!extra_info.empty())
+        buffer.fmtAppend(": {}", extra_info);
 }
 
 void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multiplier)

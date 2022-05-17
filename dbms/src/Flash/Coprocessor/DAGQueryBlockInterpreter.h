@@ -79,8 +79,8 @@ private:
         std::vector<NameAndTypePair> & source_columns,
         String & filter_column_for_other_condition,
         String & filter_column_for_other_eq_condition);
-    void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
-    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
+    void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column, String extra_info = "");
+    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String extra_info = "");
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
     void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
     void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
@@ -95,7 +95,7 @@ private:
         const TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions,
         bool is_final_agg);
-    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
+    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, String extra_info = "");
     void handleExchangeSender(DAGPipeline & pipeline);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);

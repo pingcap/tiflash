@@ -62,7 +62,8 @@ void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
     const LoggerPtr & log,
-    bool ignore_block)
+    bool ignore_block,
+    String extra_info)
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
         return;
@@ -73,6 +74,7 @@ void executeUnion(
             pipeline.firstStream() = std::make_shared<UnionWithoutBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
         else
             pipeline.firstStream() = std::make_shared<UnionWithBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
+        pipeline.firstStream()->setExtraInfo(extra_info);
         pipeline.streams.resize(1);
     }
     else if (non_joined_data_stream != nullptr)

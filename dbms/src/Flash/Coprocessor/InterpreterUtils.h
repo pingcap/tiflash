@@ -37,7 +37,8 @@ void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
     const LoggerPtr & log,
-    bool ignore_block = false);
+    bool ignore_block = false,
+    String extra_info = "");
 
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
