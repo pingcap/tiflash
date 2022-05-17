@@ -19,6 +19,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/MemoryStream.h>
+#include <Poco/NumberParser.h>
 #include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
@@ -110,14 +111,19 @@ Field ColumnInfo::defaultValueToField() const
     }
     switch (tp)
     {
-    // TODO: Consider unsigned?
     // Integer Type.
     case TypeTiny:
     case TypeShort:
     case TypeLong:
     case TypeLongLong:
     case TypeInt24:
-        return value.convert<Int64>();
+    {
+        try {
+            return value.convert<Int64>();
+        } catch (...) {
+            return static_cast<Int64>(std::stoull(value.convert<String>()));
+        }
+    }
     case TypeBit:
     {
         // TODO: We shall use something like `orig_default_bit`, which will never change once created,
