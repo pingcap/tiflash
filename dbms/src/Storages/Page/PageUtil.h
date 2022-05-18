@@ -152,7 +152,9 @@ void ftruncateFile(T & file, off_t length)
         DB::throwFromErrno(fmt::format("Cannot truncate file: {}. ", file->getFileName()), ErrorCodes::CANNOT_FTRUNCATE);
 }
 
-
+// TODO: split current api into V2 and V3.
+// Too many args in this function.
+// Also split read
 template <typename T>
 void writeFile(
     T & file,
