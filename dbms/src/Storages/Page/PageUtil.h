@@ -193,10 +193,9 @@ void writeFile(
                 ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
                 auto saved_errno = errno;
 
-                DB::throwFromErrno(fmt::format("Cannot write to file {},[truncate_res = {}],[errno_after_truncate = {}],"
+                DB::throwFromErrno(fmt::format("Cannot write to file {},[errno_after_truncate = {}],"
                                                "[bytes_written={},to_write={},offset = {}]",
                                                file->getFileName(),
-                                               truncate_res,
                                                strerror(errno),
                                                bytes_written,
                                                to_write,
