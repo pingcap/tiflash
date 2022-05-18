@@ -117,9 +117,12 @@ Field ColumnInfo::defaultValueToField() const
     case TypeLongLong:
     case TypeInt24:
     {
-        try {
+        try
+        {
             return value.convert<Int64>();
-        } catch (...) {
+        }
+        catch (...)
+        {
             return static_cast<Int64>(std::stoull(value.convert<String>()));
         }
     }
