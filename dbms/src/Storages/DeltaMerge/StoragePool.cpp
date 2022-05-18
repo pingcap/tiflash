@@ -82,26 +82,21 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
 }
 
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
-    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-    log_storage(PageStorage::create("__global__.log",
-                                    path_pool.getPSDiskDelegatorGlobalMulti("log"),
-                                    extractConfig(settings, StorageType::Log),
-                                    global_ctx.getFileProvider(),
-                                    true))
-    ,
-    // The iops in data_storage is low, only use the first disk for storing data
-    data_storage(PageStorage::create("__global__.data",
-                                     path_pool.getPSDiskDelegatorGlobalSingle("data"),
-                                     extractConfig(settings, StorageType::Data),
-                                     global_ctx.getFileProvider(),
-                                     true))
-    ,
-    // The iops in meta_storage is relatively high, use multi-disks if possible
-    meta_storage(PageStorage::create("__global__.meta",
-                                     path_pool.getPSDiskDelegatorGlobalMulti("meta"),
-                                     extractConfig(settings, StorageType::Meta),
-                                     global_ctx.getFileProvider(),
-                                     true))
+    : log_storage(PageStorage::create("__global__.log",
+                                      path_pool.getPSDiskDelegatorGlobalMulti("log"),
+                                      extractConfig(settings, StorageType::Log),
+                                      global_ctx.getFileProvider(),
+                                      true))
+    , data_storage(PageStorage::create("__global__.data",
+                                       path_pool.getPSDiskDelegatorGlobalMulti("data"),
+                                       extractConfig(settings, StorageType::Data),
+                                       global_ctx.getFileProvider(),
+                                       true))
+    , meta_storage(PageStorage::create("__global__.meta",
+                                       path_pool.getPSDiskDelegatorGlobalMulti("meta"),
+                                       extractConfig(settings, StorageType::Meta),
+                                       global_ctx.getFileProvider(),
+                                       true))
     , global_context(global_ctx)
 {
 }
@@ -118,9 +113,9 @@ GlobalStoragePool::~GlobalStoragePool()
 
 void GlobalStoragePool::restore()
 {
-    log_max_ids = log_storage->restore();
-    data_max_ids = data_storage->restore();
-    meta_max_ids = meta_storage->restore();
+    log_storage->restore();
+    data_storage->restore();
+    meta_storage->restore();
 
     gc_handle = global_context.getBackgroundPool().addTask(
         [this] {
@@ -181,7 +176,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
                                              global_context.getFileProvider());
         data_storage_v2 = PageStorage::create(name + ".data",
-                                              storage_path_pool.getPSDiskDelegatorSingle("data"),
+                                              storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed
                                               extractConfig(global_context.getSettingsRef(), StorageType::Data),
                                               global_ctx.getFileProvider());
         meta_storage_v2 = PageStorage::create(name + ".meta",
@@ -295,41 +290,35 @@ void StoragePool::forceTransformMetaV2toV3()
 
 PageStorageRunMode StoragePool::restore()
 {
-    const auto & global_storage_pool = global_context.getGlobalStoragePool();
-
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
     {
-        auto log_max_ids = log_storage_v2->restore();
-        auto data_max_ids = data_storage_v2->restore();
-        auto meta_max_ids = meta_storage_v2->restore();
+        log_storage_v2->restore();
+        data_storage_v2->restore();
+        meta_storage_v2->restore();
 
-        assert(log_max_ids.size() == 1);
-        assert(data_max_ids.size() == 1);
-        assert(meta_max_ids.size() == 1);
-
-        max_log_page_id = log_max_ids[0];
-        max_data_page_id = data_max_ids[0];
-        max_meta_page_id = meta_max_ids[0];
+        max_log_page_id = log_storage_v2->getMaxId(ns_id);
+        max_data_page_id = data_storage_v2->getMaxId(ns_id);
+        max_meta_page_id = meta_storage_v2->getMaxId(ns_id);
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV2Only};
         break;
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        max_log_page_id = global_storage_pool->getLogMaxId(ns_id);
-        max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
-        max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
+        max_log_page_id = log_storage_v3->getMaxId(ns_id);
+        max_data_page_id = data_storage_v3->getMaxId(ns_id);
+        max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         break;
     }
     case PageStorageRunMode::MIX_MODE:
     {
-        auto v2_log_max_ids = log_storage_v2->restore();
-        auto v2_data_max_ids = data_storage_v2->restore();
-        auto v2_meta_max_ids = meta_storage_v2->restore();
+        log_storage_v2->restore();
+        data_storage_v2->restore();
+        meta_storage_v2->restore();
 
         // The pages on data and log can be rewritten to V3 and the old pages on V2 are deleted by `delta merge`.
         // However, the pages on meta V2 can not be deleted. As the pages in meta are small, we perform a forceTransformMetaV2toV3 to convert pages before all.
@@ -348,10 +337,6 @@ PageStorageRunMode StoragePool::restore()
         {
             LOG_FMT_INFO(logger, "Current meta translate already done before restored.[ns_id={}] ", ns_id);
         }
-
-        assert(v2_log_max_ids.size() == 1);
-        assert(v2_data_max_ids.size() == 1);
-        assert(v2_meta_max_ids.size() == 1);
 
         // Check number of valid pages in v2
         // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
@@ -375,18 +360,18 @@ PageStorageRunMode StoragePool::restore()
             data_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, data_storage_v3);
             meta_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, meta_storage_v3);
 
-            max_log_page_id = global_storage_pool->getLogMaxId(ns_id);
-            max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
-            max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
+            max_log_page_id = log_storage_v3->getMaxId(ns_id);
+            max_data_page_id = data_storage_v3->getMaxId(ns_id);
+            max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
 
             run_mode = PageStorageRunMode::ONLY_V3;
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         }
         else // Still running Mix Mode
         {
-            max_log_page_id = std::max(v2_log_max_ids[0], global_storage_pool->getLogMaxId(ns_id));
-            max_data_page_id = std::max(v2_data_max_ids[0], global_storage_pool->getDataMaxId(ns_id));
-            max_meta_page_id = std::max(v2_meta_max_ids[0], global_storage_pool->getMetaMaxId(ns_id));
+            max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), log_storage_v3->getMaxId(ns_id));
+            max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), data_storage_v3->getMaxId(ns_id));
+            max_meta_page_id = std::max(meta_storage_v2->getMaxId(ns_id), meta_storage_v3->getMaxId(ns_id));
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolMixMode};
         }
         break;

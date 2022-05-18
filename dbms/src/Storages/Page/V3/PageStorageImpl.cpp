@@ -43,7 +43,7 @@ PageStorageImpl::PageStorageImpl(
 
 PageStorageImpl::~PageStorageImpl() = default;
 
-std::map<NamespaceId, PageId> PageStorageImpl::restore()
+void PageStorageImpl::restore()
 {
     // TODO: clean up blobstore.
     // TODO: Speedup restoring
@@ -53,7 +53,11 @@ std::map<NamespaceId, PageId> PageStorageImpl::restore()
     page_directory = factory
                          .setBlobStore(blob_store)
                          .create(storage_name, file_provider, delegator, parseWALConfig(config));
-    return factory.getMaxApplyPageIds();
+}
+
+PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
+{
+    return page_directory->getMaxId(ns_id);
 }
 
 void PageStorageImpl::drop()
