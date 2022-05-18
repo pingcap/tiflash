@@ -195,6 +195,7 @@ void writeFile(
                 auto saved_errno = errno;
 
                 int truncate_res = 0;
+                // If write failed in V3, Don't do truncate
                 if (truncate_if_failed)
                 {
                     // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
