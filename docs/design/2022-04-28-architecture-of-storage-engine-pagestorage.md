@@ -57,7 +57,7 @@ Instead of storing data with append write, BlobStore uses a data structure calle
 
 The design is inspired by [Space Maps in Ext4 filesystem](https://www.kernel.org/doc/ols/2010/ols2010-pages-121-132.pdf). Each node in RB-tree has a space that is represented by (offset, size). The difference is that bitmap uses a node to record used locations, but BlobStore uses a node to record free locations. Recording free locations is a better way to find a free space by the data size.
 
-We represent the `BlobStat` by a SpaceMap to reuse the space after being reclaimed, thereby reducing write amplification. 
+`BlobStat` is represented by a SpaceMap to reuse the space after being reclaimed, thereby reducing write amplification. 
 
 In order to avoid getting some simple statistics by traversing the full SpaceMap, BlobStat provides external statistical status, such as the valid rate of the current BlobFile, the maximum capacity, and so on. These statistics are useful for:
 
