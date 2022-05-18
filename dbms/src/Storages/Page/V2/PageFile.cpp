@@ -411,7 +411,7 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
 
             if (binary_version == PageFormat::V2)
             {
-                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                const auto num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
@@ -649,7 +649,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 
             if (binary_version == PageFormat::V2)
             {
-                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                const auto num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
