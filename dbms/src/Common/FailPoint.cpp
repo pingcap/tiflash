@@ -65,7 +65,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_when_read_from_log)                               \
     M(exception_mpp_hash_build)                                   \
     M(exception_before_drop_segment)                              \
-    M(exception_after_drop_segment)
+    M(exception_after_drop_segment)                               \
+    M(force_change_all_blobs_to_read_only_once)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(force_set_page_file_write_errno)                       \
