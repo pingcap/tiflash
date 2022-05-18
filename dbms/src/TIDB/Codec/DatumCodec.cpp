@@ -577,7 +577,7 @@ void EncodeDecimalForRow(const Field & field, WriteBuffer & ss, const ColumnInfo
     }
     else if (field.getType() == Field::Types::Decimal256)
     {
-        const auto& decimal_field = field.get<DecimalField<Decimal256>>();
+        const auto & decimal_field = field.get<DecimalField<Decimal256>>();
         return EncodeDecimalImpl(decimal_field.getValue(), column_info.flen, column_info.decimal, ss);
     }
     else
@@ -605,7 +605,7 @@ void EncodeDecimal(const Field & field, WriteBuffer & ss)
     }
     else if (field.getType() == Field::Types::Decimal256)
     {
-        const auto& decimal_field = field.get<DecimalField<Decimal256>>();
+        const auto & decimal_field = field.get<DecimalField<Decimal256>>();
         return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
     }
     else

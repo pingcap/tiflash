@@ -245,7 +245,7 @@ std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
 {
     std::vector<TiDB::DBInfoPtr> res;
     auto pairs = TxnStructure::hGetAll(snap, DBs);
-    for (const auto& pair : pairs)
+    for (const auto & pair : pairs)
     {
         auto db_info = std::make_shared<TiDB::DBInfo>(pair.second);
         res.push_back(db_info);
@@ -271,7 +271,7 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
 
     auto kv_pairs = TxnStructure::hGetAll(snap, db_key);
 
-    for (const auto& kv_pair : kv_pairs)
+    for (const auto & kv_pair : kv_pairs)
     {
         const String & key = kv_pair.first;
         if (key.rfind(TablePrefix, 0) != 0)
