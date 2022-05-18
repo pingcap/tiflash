@@ -41,7 +41,7 @@ TEST(PageUtils_test, ReadWriteFile)
         buff_write[i] = i % 0xFF;
     }
     WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
-    PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, /*write_limiter*/ nullptr, /*background*/ false, /*enable_failpoint*/ true);
+    PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, /*write_limiter*/ nullptr, /*background*/ false, /*truncate_if_failed*/ true, /*enable_failpoint*/ true);
     PageUtil::syncFile(file_for_write);
     file_for_write->close();
 
@@ -78,7 +78,7 @@ TEST(PageUtils_test, BigReadWriteFile)
             buff_write[i] = i % 0xFF;
         }
 
-        PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, /*background*/ false, /*enable_failpoint*/ false);
+        PageUtil::writeFile(file_for_write, 0, buff_write, buff_size, nullptr, /*background*/ false, /*truncate_if_failed*/ true, /*enable_failpoint*/ false);
         PageUtil::syncFile(file_for_write);
         file_for_write->close();
 

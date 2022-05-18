@@ -161,6 +161,7 @@ void writeFile(
     size_t to_write,
     const WriteLimiterPtr & write_limiter = nullptr,
     const bool background = false,
+    const bool truncate_if_failed = true,
     [[maybe_unused]] bool enable_failpoint = false)
 {
     if (write_limiter)
@@ -193,9 +194,19 @@ void writeFile(
                 ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
                 auto saved_errno = errno;
 
-                DB::throwFromErrno(fmt::format("Cannot write to file {},[errno_after_truncate = {}],"
+                int truncate_res = 0;
+                if (truncate_if_failed)
+                {
+                    // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
+                    // Note that the result of this ftruncate is ignored, there is nothing we can do to
+                    // handle ftruncate error. The errno may change after ftruncate called.
+                    truncate_res = ::ftruncate(file->getFd(), offset);
+                }
+
+                DB::throwFromErrno(fmt::format("Cannot write to file {},[truncate_res = {}],[errno_after_truncate = {}],"
                                                "[bytes_written={},to_write={},offset = {}]",
                                                file->getFileName(),
+                                               truncate_if_failed ? DB::toString(truncate_res) : "no need truncate",
                                                strerror(errno),
                                                bytes_written,
                                                to_write,
