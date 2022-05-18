@@ -128,7 +128,7 @@ Bits                | Name             | Description.          |
 16:144              | Page Id          | The combine of namespace id and page id       |
 144:272             | Version          | The combine of sequence and epoch             |
 272:336             | Ref count        | The page being ref count  |
-272:N				| Page entry       | The page entry  |
+272:N               | Page entry       | The page entry            |
 
 Page entry
 
@@ -140,7 +140,7 @@ Bits                | Name             | Description.          |
 160:224             | Checksum         | The Page Entry checksum |
 224:288             | Tag         	   | The Page tag |
 288:352             | Field offsets length    | The length of field offset      |
-352:N 				| Field offsets    | The length field offsets      |
+352:N               | Field offsets    | The length field offsets      |
 
 Field offsets 
 
