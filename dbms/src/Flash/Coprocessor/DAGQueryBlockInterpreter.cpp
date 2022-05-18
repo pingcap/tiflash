@@ -624,7 +624,6 @@ void DAGQueryBlockInterpreter::executeAggregation(
 
 void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String extra_info)
 {
-    // std::cout << "ywq test--------------------------------------- " << extra_info << std::endl;
     if (!expressionActionsPtr->getActions().empty())
     {
         pipeline.transform([&](auto & stream) {

@@ -88,5 +88,4 @@ void LimitBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t mult
     IProfilingBlockInputStream::print(buffer, indent, multiplier);
     buffer.fmtAppend(", limit = {} always_read_till_end = {}", limit, always_read_till_end);
 }
-
 } // namespace DB

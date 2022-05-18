@@ -19,7 +19,6 @@
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
-#include <Interpreters/Aggregator.h>
 
 namespace DB
 {

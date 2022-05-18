@@ -137,7 +137,6 @@ public:
 
     void setExtraInfo(String info) { extra_info = info; }
 
-
     template <typename F>
     void forEachChild(F && f)
     {

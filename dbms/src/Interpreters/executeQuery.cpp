@@ -187,7 +187,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     }
     catch (...)
     {
-        if (!internal)
+        if (!internal && !context.getDAGContext()->isTest())
         {
             /// Anyway log the query.
             String str = query_src.str(max_query_size);
@@ -202,7 +202,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     try
     {
-        if (!internal)
+        if (!internal && !context.getDAGContext()->isTest())
             logQuery(query.substr(0, settings.log_queries_cut_to_length), context, execute_query_logger);
 
         /// Check the limits.
@@ -384,7 +384,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
             };
 
-            if (!internal && res.in)
+            if (!internal && res.in && !context.getDAGContext()->isTest())
             {
                 auto pipeline_log_str = [&res]() {
                     FmtBuffer log_buffer;
