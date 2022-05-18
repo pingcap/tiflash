@@ -14,8 +14,8 @@
 
 mysql> drop table if exists test.t;
 mysql> create table test.t (a int);
-mysql> insert into t values (null),(-100),(0),(1),(365),(366),(367),(730850);
-mysql> insert into t values (3652424),(3652425),(3652499),(3652500),(3652501);
+mysql> insert into test.t values (null),(-100),(0),(1),(365),(366),(367),(730850);
+mysql> insert into test.t values (3652424),(3652425),(3652499),(3652500),(3652501);
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
@@ -31,7 +31,7 @@ mysql> set tidb_enforce_mpp=1; select a, from_days(a), to_days(from_days(a)) fro
 |     365 | 0000-00-00   |                  NULL |
 |     366 | 0001-01-01   |                   366 |
 |     367 | 0001-01-02   |                   367 |
-|  730850 | 2000-04-05   |                730850 |
+|  730850 | 2000-12-31   |                730850 |
 | 3652424 | 9999-12-31   |               3652424 |
 | 3652425 | NULL         |                  NULL |
 | 3652499 | NULL         |                  NULL |
@@ -50,11 +50,10 @@ mysql> set tidb_allow_mpp=0; select a, from_days(a), to_days(from_days(a)) from 
 |     365 | 0000-00-00   |                  NULL |
 |     366 | 0001-01-01   |                   366 |
 |     367 | 0001-01-02   |                   367 |
-|  730850 | 2000-04-05   |                730850 |
+|  730850 | 2000-12-31   |                730850 |
 | 3652424 | 9999-12-31   |               3652424 |
 | 3652425 | 10000-01-01  |               3652425 |
 | 3652499 | 10000-03-15  |               3652499 |
 | 3652500 | 0000-00-00   |                  NULL |
 | 3652501 | 0000-00-00   |                  NULL |
 +---------+--------------+-----------------------+
-13 rows in set, 6 warnings (0.02 sec)
