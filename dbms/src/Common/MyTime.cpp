@@ -876,7 +876,7 @@ String MyDateTime::toString(int fsp) const
 //TODO: we can use modern c++ api instead.
 MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezoneInfo, UInt8 fsp)
 {
-    struct timespec ts;
+    struct timespec ts; // NOLINT(cppcoreguidelines-pro-type-member-init)
     clock_gettime(CLOCK_REALTIME, &ts);
 
     time_t second = ts.tv_sec;
@@ -1257,7 +1257,7 @@ void addMonths(MyDateTime & t, Int64 months)
     Int64 current_month = t.month - 1;
     current_month += months;
     Int64 current_year = 0;
-    Int64 year = static_cast<Int64>(t.year);
+    auto year = static_cast<Int64>(t.year);
     if (current_month >= 0)
     {
         current_year = current_month / 12;
