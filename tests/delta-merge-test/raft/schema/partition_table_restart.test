@@ -31,12 +31,11 @@
 => DBGInvoke __mock_tidb_partition(default, test, 9998)
 => DBGInvoke __mock_tidb_partition(default, test, 9997)
 => DBGInvoke __refresh_schemas()
+
 => drop table default.test_9997
 # schema syncer guarantees logical table creation at last, so there won't be cases that logical table exists whereas physical table not.
 => drop table default.test
 => DBGInvoke __reset_schemas()
-# remove obsolete entry left by previous dropped table
-=> DBGInvoke __gc_global_storage_pool()
 
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 Nullable(Int8)')
 => DBGInvoke __rename_tidb_table(default, test, test1)
