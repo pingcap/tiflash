@@ -209,7 +209,4 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionToLastDay>();
 }
 
-
-
-
 } // namespace DB
