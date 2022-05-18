@@ -26,12 +26,11 @@ PageStorage supported:
 - GC
 
 
-## Design
+## Background
 
 Currently, there are three versions of PageStorage (V1, V2, V3). We won't describe the details of the V1/V2 in this article. The V2 design and implementation lead to high write amplification and CPU usage under some scenarios, so we propose the V3 version.
 
 
-### Background
 We found some problems with the V2 version in the actual production environment.
 
 1. **There is a risk of data loss in the meta part**. As long as the `checksum` and `buffer size` fields in a single meta buffer are damaged at the same time, the subsequent buffers will be unavailable. This situation may happen when the disk failure happens or the meta part is changed by an unexpected operation.
@@ -40,38 +39,61 @@ We found some problems with the V2 version in the actual production environment.
 
 Besides these three problems, we also changed the `lock` implements and the `CRC` implements.
 
-### V3 version
+## Design
 
 ![tiflash-ps-v3-architecture](./images/tiflash-ps-v3-architecture.png)
 
 The V3 version of PageStorage is composed of three main components, `PageDirectory`, `WALStore`, and `BlobStore`.
 
-- WALStore(Write Ahead Log Store): Using the write ahead log file format to manager the meta part.
-- PageDirectory: Provides the function of MVCC. Smaller memory usage and faster speed than V2.
 - BlobStore: Provides an spaces management. Using the address multiplexing to manage the data part.
+- PageDirectory: Provides the function of MVCC. Smaller memory usage and faster speed than V2.
+- WALStore(Write Ahead Log Store): Using the write ahead log file format to manager the meta part.
 
-#### WALStore
 
-![tiflash-ps-v3-walstore](./images/tiflash-ps-v3-wal-store.png)
+#### PageDirectory
 
-WALStore used a fixed size of a block to manage the meta part.
+PageDirectory supports the function of MVCC, providing a read-only snapshot that does not block writes. It is mainly composed of an RB-tree map with the key is `page id` and the value is the `version chain`.
 
-- A block contains multiple meta records.
-- If a block has some space unused, and the unused space size is less than a meta record size. Then the unused space is filled by "padding".
+The `version chain` is another RB-tree map with key `PageVersion` and value `PageEntry`. `PageEntry` represents the location of the data in `BlobStore` and is sorted by `PageVersion`(`<sequence, epoch>`) in the `version chain`. `PageVersion` is used for filtering by a read-only snapshot. PageDirectory will increase the `sequence` in serial when applying WriteBatches. The page entries created in the same WriteBatch use the same `sequence`, and the epoch is initialized to 0. After we applied "full GC" that moves the data into another location, we will create page entries with the same sequence but the epoch is last epoch + 1.
 
-This file format is convenient to detect disk failure. If a disk failure happens, we can stop TiFlash from startup and returning wrong results. In the worst case when CRC and the length of a meta record are broken at the same time, we can try to discard the broken data by the fixed-length block, other blocks can be preserved and try to recover some data.
+Creating a snapshot for PageStorage is simply atomically getting the `sequence id` from PageDirectory. And the `sequence id` in the snapshot will be used to filter the result and provide an immutable result from PageDirectory. PageDirectory always return the latest entry version that is less than `sequence id + 1`.
 
+Here is a example:
+
+```
+page id 1 : {[(seq 1, epoch 0), entry 1], [(seq 2, epoch 0), entry 2], [(seq 3, epoch 1), entry 3]}
+page id 2 : {[(seq 1, epoch 0), entry 4], [(seq 2, epoch 0), entry 5], [(seq 5, epoch 0), entry 6]}
+page id 100 : {[(seq 1, epoch 0), entry 7], [(seq 10, epoch 2), entry 8]}
+```
+
+In this example, PageDirectory have 3 page with different id. Page 1 has 3 different versions corresponding to 3 entries. page 100 has 2 different versions corresponding to 2 entries. If caller get a entry for page id 2 with a snapshot that sequence is 2, PageDirectory will return the entry 5.
+
+
+### WALStore
 
 WALStore provides two main interfaces:
 
-- **apply**: After `apply`, the meta info will be atomicity serialized on disks. This happens after writing data to BlobStore.
+- **apply**: After `apply`, the WriteBatch info will be atomicity serialized on disks. This happens after writing data to BlobStore.
 - **read**: Read serialized meta info from disks. This will happen when `PageStorage` is being restored.
 
-In addition, WALStore also needs GC. Although the overall read/write sizes is not large(about 4-6 mb read and write), But WALStore still need sort out some invalid meta information on disks.
+In order to control the time of restoring WriteBatches and reconstruct the PageDirectory while startups, PageDirectory will dump its snapshot into WALStore and clear the old log files by the snapshot.
 
-The sturction of meta similar with V2:
+#### File format
+![tiflash-ps-v3-walstore](./images/tiflash-ps-v3-wal-store.png)
 
-buffer(operate:put/upsert)
+WALStore builds upon its serialized write batches (the meta part) base on log file format. The log file format is similar to the log file format as rocksdb [Write Ahead Log File Format](https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log-File-Format#log-file-format).
+
+This log file format is convenient to detect disk failure. If a disk failure happens, we can stop TiFlash from startup and returning wrong results. In the worst case when CRC and the length of a meta record are broken at the same time, we can try to discard the broken data by the fixed-length block, other blocks can be preserved and try to recover some data.
+
+WALStore serializes the WriteBatch into an atomic record and writes it to the log file upon on "log file format". As the log file reader ensure we can get a complete record from the log file format, we don't need to serialize the byte length of the WriteBatch into record. The serialize structure of WriteBatch:
+
+buffer(WriteBatch)
+Bits                | Name              | Description.          |
+--------------------|-------------------|-----------------------|
+0:32                | WriteBatch version| Write batch version   |
+32:N                | Operations        | A series of operations|
+
+buffer(operate:put)
 
 Bits                | Name             | Description.          |
 --------------------|------------------|-----------------------|
@@ -80,9 +102,9 @@ Bits                | Name             | Description.          |
 16:144              | Page Id          | The combine of namespace id and page id       |
 144:272             | Version          | The combine of sequence and epoch             |
 272:336             | Ref count        | The page be ref count  |
-272:N					| page entry       | The page entry  |
+272:N				| Page entry       | The page entry  |
 
-page entry
+Page entry
 
 Bits                | Name             | Description.          |
 --------------------|------------------|-----------------------|
@@ -92,8 +114,7 @@ Bits                | Name             | Description.          |
 160:224             | Checksum         | The Page Entry checksum |
 224:288             | Tag         	   | The Page tag |
 288:352             | Field offsets length    | The length of field offset      |
-352:N 					| Field offsets    | The length field offsets      |
-
+352:N 				| Field offsets    | The length field offsets      |
 
 Field offsets 
 
@@ -102,7 +123,7 @@ Bits                | Name             | Description.          |
 0:64                | Field Offset       | The field offset |
 64:128              | Field Checksum | The field checksum |
 
-buffer(operate:put/upsert)
+buffer(operate:put)
 
 Bits                | Name             | Description.          |
 --------------------|------------------|-----------------------|
@@ -111,8 +132,7 @@ Bits                | Name             | Description.          |
 16:144              | Page Id          | The combine of namespace id and page id       |
 144:272             | Version          | The combine of sequence and epoch             |
 272:336             | Ref count        | The page be ref count  |
-272:N					| page entry       | The page entry  |
-
+272:N				| Page entry       | The page entry  |
 
 buffer(operate:ref)
 
@@ -140,36 +160,6 @@ Bits                | Name             | Description.          |
 8:132               | Page Id          | The combine of namespace id and page id       |
 132:260             | Version          | The combine of sequence and epoch             |
 
-The page id in V3 is is a 128bit unsigned integer replace the 64bit(in v2). Because instead of generating three instances(meta/data/log) of PageStorage for each table, there are only four instances of PageStorage globally(log/data/meta/KVStore). So PageStorage need additional 64bit space (ie. namespace id) to distinguish different tables.
-
-Multi of meta info will be conbimed into a block. So it is different with V2, WALStore added a WAL format to pack the meta struction. 
-
-
-
-#### PageDirectory
-
-PageDirectory supports the function of PageDirectory MVCC. Its main component is a hashmap. The key in map is `page id` and the value in map is the `version chian`.
-
-The `version chain` consists of `[seq|epoch]` and `page entry`, sequence + epoch determines the position of the page entry in the chain, `page entry` have similar implementation with V2, It is the embodiment of the page in memory, recording the location of the data.
-
-Here is a PageDirectory example:
-
-```
-page id 1 : {[seq 1 + epoch 0, entry 1], [seq 2 + epoch 0, entry 2], [seq 3 + epoch 1, entry 3]}
-page id 2 : {[seq 1 + epoch 0, entry 4], [seq 2 + epoch 0, entry 5], [seq 5 + epoch 0, entry 6]}
-page id 100 : {[seq 1 + epoch 0, entry 7], [seq 10 + epoch 2, entry 8]}
-```
-
-In this example, MVCC have 3 page with differe id. 
-
-- page 1 has 3 different versions corresponding to 3 entries. page 100 has 2 different versions corresponding to 2 entries.
-- The seq will increase If MVCC have a corresponding new page written.
-- The epoch will be increase If current entry have been full GC.
-
-`getSnapshot()` in V3 is very different from V2, In V2, MVCC actually generate snapshots, there are some copies of memory. But in V3, Snapshot only contains a `sequence id` which can filter the right pages from the PageDirectory.
-
-In upper example. If sequence in snapshot is 2 and query page id is 2. Then MVCC will return 
-the entry 5.
 
 
 #### BlobStore
