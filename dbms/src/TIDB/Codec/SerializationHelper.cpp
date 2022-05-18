@@ -19,9 +19,9 @@ namespace DB
 
 size_t writeBinary2(const metapb::Peer & peer, WriteBuffer & buf)
 {
-    writeIntBinary((UInt64)peer.id(), buf);
-    writeIntBinary((UInt64)peer.store_id(), buf);
-    writeIntBinary((UInt8)peer.role(), buf);
+    writeIntBinary(static_cast<UInt64>(peer.id()), buf);
+    writeIntBinary(static_cast<UInt64>(peer.store_id()), buf);
+    writeIntBinary(static_cast<UInt8>(peer.role()), buf);
     return sizeof(UInt64) + sizeof(UInt64) + sizeof(bool);
 }
 
@@ -37,12 +37,12 @@ metapb::Peer readPeer(ReadBuffer & buf)
 size_t writeBinary2(const metapb::Region & region, WriteBuffer & buf)
 {
     size_t size = 0;
-    size += writeBinary2((UInt64)region.id(), buf);
+    size += writeBinary2(static_cast<UInt64>(region.id()), buf);
     size += writeBinary2(region.start_key(), buf);
     size += writeBinary2(region.end_key(), buf);
 
-    size += writeBinary2((UInt64)region.region_epoch().conf_ver(), buf);
-    size += writeBinary2((UInt64)region.region_epoch().version(), buf);
+    size += writeBinary2(static_cast<UInt64>(region.region_epoch().conf_ver()), buf);
+    size += writeBinary2(static_cast<UInt64>(region.region_epoch().version()), buf);
 
     size += writeBinary2(region.peers_size(), buf);
     for (const auto & peer : region.peers())
@@ -84,7 +84,7 @@ raft_serverpb::RegionLocalState readRegionLocalState(ReadBuffer & buf)
 {
     raft_serverpb::RegionLocalState region_state;
     *region_state.mutable_region() = readRegion(buf);
-    region_state.set_state((raft_serverpb::PeerState)readBinary2<Int32>(buf));
+    region_state.set_state(static_cast<raft_serverpb::PeerState>(readBinary2<Int32>(buf)));
     bool has_merge_state = readBinary2<bool>(buf);
     if (has_merge_state)
     {
@@ -96,9 +96,9 @@ raft_serverpb::RegionLocalState readRegionLocalState(ReadBuffer & buf)
 size_t writeBinary2(const raft_serverpb::RaftApplyState & state, WriteBuffer & buf)
 {
     size_t size = 0;
-    size += writeBinary2((UInt64)state.applied_index(), buf);
-    size += writeBinary2((UInt64)state.truncated_state().index(), buf);
-    size += writeBinary2((UInt64)state.truncated_state().term(), buf);
+    size += writeBinary2(static_cast<UInt64>(state.applied_index()), buf);
+    size += writeBinary2(static_cast<UInt64>(state.truncated_state().index()), buf);
+    size += writeBinary2(static_cast<UInt64>(state.truncated_state().term()), buf);
     return size;
 }
 
@@ -115,7 +115,7 @@ size_t writeBinary2(const raft_serverpb::RegionLocalState & region_state, WriteB
 {
     size_t size = 0;
     size += writeBinary2(region_state.region(), buf);
-    size += writeBinary2((Int32)region_state.state(), buf);
+    size += writeBinary2(static_cast<Int32>(region_state.state()), buf);
 
     if (region_state.has_merge_state())
     {

@@ -93,7 +93,7 @@ struct TxnStructure
         String decode_key = DecodeBytes(idx, key);
 
         UInt64 tp = DecodeUInt<UInt64>(idx, key);
-        if (char(tp) != HashData)
+        if (static_cast<char>(tp) != HashData)
         {
             throw TiFlashException("invalid encoded hash data key flag:" + std::to_string(tp), Errors::Table::SyncError);
         }
@@ -103,14 +103,14 @@ struct TxnStructure
     }
 
 public:
-    static String Get(pingcap::kv::Snapshot & snap, const String & key)
+    static String get(pingcap::kv::Snapshot & snap, const String & key)
     {
         String encode_key = encodeStringDataKey(key);
         String value = snap.Get(encode_key);
         return value;
     }
 
-    static String HGet(pingcap::kv::Snapshot & snap, const String & key, const String & field)
+    static String hGet(pingcap::kv::Snapshot & snap, const String & key, const String & field)
     {
         String encode_key = encodeHashDataKey(key, field);
         String value = snap.Get(encode_key);
@@ -118,7 +118,7 @@ public:
     }
 
     // For convinient, we only return values.
-    static std::vector<std::pair<String, String>> HGetAll(pingcap::kv::Snapshot & snap, const String & key)
+    static std::vector<std::pair<String, String>> hGetAll(pingcap::kv::Snapshot & snap, const String & key)
     {
         auto tikv_key_prefix = hashDataKeyPrefix(key);
         String tikv_key_end = pingcap::kv::prefixNext(tikv_key_prefix);
@@ -178,8 +178,8 @@ void SchemaDiff::deserialize(const String & data)
 
 Int64 SchemaGetter::getVersion()
 {
-    String ver = TxnStructure::Get(snap, schemaVersionKey);
-    if (ver == "")
+    String ver = TxnStructure::get(snap, schemaVersionKey);
+    if (ver.empty())
         return 0;
     return std::stoll(ver);
 }
@@ -192,8 +192,8 @@ String SchemaGetter::getSchemaDiffKey(Int64 ver)
 SchemaDiff SchemaGetter::getSchemaDiff(Int64 ver)
 {
     String key = getSchemaDiffKey(ver);
-    String data = TxnStructure::Get(snap, key);
-    if (data == "")
+    String data = TxnStructure::get(snap, key);
+    if (data.empty())
     {
         throw TiFlashException("cannot find schema diff for version: " + std::to_string(ver), Errors::Table::SyncError);
     }
@@ -215,9 +215,9 @@ String SchemaGetter::getTableKey(TableID table_id)
 TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
 {
     String key = getDBKey(db_id);
-    String json = TxnStructure::HGet(snap, DBs, key);
+    String json = TxnStructure::hGet(snap, DBs, key);
 
-    if (json == "")
+    if (json.empty())
         return nullptr;
 
     LOG_DEBUG(log, "Get DB Info from TiKV : " + json);
@@ -233,8 +233,8 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
         throw Exception();
     }
     String table_key = getTableKey(table_id);
-    String table_info_json = TxnStructure::HGet(snap, db_key, table_key);
-    if (table_info_json == "")
+    String table_info_json = TxnStructure::hGet(snap, db_key, table_key);
+    if (table_info_json.empty())
         return nullptr;
     LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json);
@@ -244,8 +244,8 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
 std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
 {
     std::vector<TiDB::DBInfoPtr> res;
-    auto pairs = TxnStructure::HGetAll(snap, DBs);
-    for (auto pair : pairs)
+    auto pairs = TxnStructure::hGetAll(snap, DBs);
+    for (const auto& pair : pairs)
     {
         auto db_info = std::make_shared<TiDB::DBInfo>(pair.second);
         res.push_back(db_info);
@@ -255,8 +255,8 @@ std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
 
 bool SchemaGetter::checkDBExists(const String & key)
 {
-    String value = TxnStructure::HGet(snap, DBs, key);
-    return value.size() > 0;
+    String value = TxnStructure::hGet(snap, DBs, key);
+    return !value.empty();
 }
 
 std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
@@ -269,9 +269,9 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
 
     std::vector<TiDB::TableInfoPtr> res;
 
-    auto kv_pairs = TxnStructure::HGetAll(snap, db_key);
+    auto kv_pairs = TxnStructure::hGetAll(snap, db_key);
 
-    for (auto kv_pair : kv_pairs)
+    for (const auto& kv_pair : kv_pairs)
     {
         const String & key = kv_pair.first;
         if (key.rfind(TablePrefix, 0) != 0)
