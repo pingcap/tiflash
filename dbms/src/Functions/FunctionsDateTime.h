@@ -3340,8 +3340,8 @@ struct TiDBToDaysTransformerImpl
         if (val.month == 0 || val.day == 0)
         {
             context.getDAGContext()->handleInvalidTime(
-                    fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
-                    Errors::Types::WrongValue);
+                fmt::format("Invalid time value: month({}) or day({}) is zero", val.month, val.day),
+                Errors::Types::WrongValue);
             is_null = true;
             return 0;
         }

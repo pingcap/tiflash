@@ -72,7 +72,7 @@ class FunctionTiDBFromDays : public IFunction
 public:
     static constexpr auto name = "tidbFromDays";
 
-    explicit FunctionTiDBFromDays(const Context &){}
+    explicit FunctionTiDBFromDays(const Context &) {}
 
     static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBFromDays>(context); }
 
@@ -117,14 +117,30 @@ public:
         TypeIndex type_index = block.getByPosition(arguments[0]).type->getTypeId();
         switch (type_index)
         {
-        case TypeIndex::UInt8: dispatch<UInt8>(block, arguments, result); break;
-        case TypeIndex::UInt16: dispatch<UInt16>(block, arguments, result); break;
-        case TypeIndex::UInt32: dispatch<UInt32>(block, arguments, result); break;
-        case TypeIndex::UInt64: dispatch<UInt64>(block, arguments, result); break;
-        case TypeIndex::Int8: dispatch<Int8>(block, arguments, result); break;
-        case TypeIndex::Int16: dispatch<Int16>(block, arguments, result); break;
-        case TypeIndex::Int32: dispatch<Int32>(block, arguments, result); break;
-        case TypeIndex::Int64: dispatch<Int64>(block, arguments, result); break;
+        case TypeIndex::UInt8:
+            dispatch<UInt8>(block, arguments, result);
+            break;
+        case TypeIndex::UInt16:
+            dispatch<UInt16>(block, arguments, result);
+            break;
+        case TypeIndex::UInt32:
+            dispatch<UInt32>(block, arguments, result);
+            break;
+        case TypeIndex::UInt64:
+            dispatch<UInt64>(block, arguments, result);
+            break;
+        case TypeIndex::Int8:
+            dispatch<Int8>(block, arguments, result);
+            break;
+        case TypeIndex::Int16:
+            dispatch<Int16>(block, arguments, result);
+            break;
+        case TypeIndex::Int32:
+            dispatch<Int32>(block, arguments, result);
+            break;
+        case TypeIndex::Int64:
+            dispatch<Int64>(block, arguments, result);
+            break;
         default:
             throw Exception(fmt::format("argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         };
