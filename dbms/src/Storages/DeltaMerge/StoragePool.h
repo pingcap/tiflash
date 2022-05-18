@@ -28,6 +28,7 @@ struct Settings;
 class Context;
 class StoragePathPool;
 class StableDiskDelegator;
+class AsynchronousMetrics;
 
 namespace DM
 {
@@ -50,6 +51,7 @@ public:
     void restore();
 
     friend class StoragePool;
+    friend class ::DB::AsynchronousMetrics;
 
     // GC immediately
     // Only used on dbgFuncMisc

@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/LRUCache.h>
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V3/BlobFile.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -110,12 +111,17 @@ public:
             double sm_valid_rate = 1.0;
 
         public:
-            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_, BlobStatType type_ = BlobStatType::NORMAL)
+            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
                 : id(id_)
-                , type(type_)
+                , type(BlobStatType::NORMAL)
                 , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , sm_max_caps(sm_max_caps_)
             {
+                if (sm_type == SpaceMap::SpaceMapType::SMAP64_BIG)
+                {
+                    type = BlobStatType::BIG_BLOB;
+                }
+
                 // Won't create read-only blob by default.
                 assert(type != BlobStatType::READ_ONLY);
             }
@@ -246,9 +252,11 @@ public:
         std::map<String, std::list<BlobStatPtr>> stats_map;
     };
 
-    BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
+    BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobStore::Config & config);
 
     void registerPaths();
+
+    FileUsageStatistics getFileUsageStatistics() const;
 
     std::vector<BlobFileId> getGCStats();
 
