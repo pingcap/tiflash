@@ -1031,7 +1031,7 @@
         },
         {
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The cpu counts per TiFlash instance.",
+          "description": "The logical cpu cores per TiFlash instance.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -1081,7 +1081,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_CPUCores{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_system_current_metric_LogicalCPUCores{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -1090,12 +1090,12 @@
               "step": 10
             }
           ],
-          "title": "Cpu counts",
+          "title": "Logical Cpu Cores",
           "type": "stat"
         },
         {
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The main memory amount per TiFlash instance.\n",
+          "description": "The memory capacity per TiFlash instance.\n",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -1145,7 +1145,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_MainMemoryAmount{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance) / (1024 * 1024 * 1024)",
+              "expr": "sum(tiflash_system_current_metric_MemoryCapacity{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance) / (1024 * 1024 * 1024)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -1160,7 +1160,7 @@
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Main Memory Amount",
+          "title": "Memory Capacity",
           "type": "stat"
         }
       ],
