@@ -84,7 +84,7 @@ TEST_F(TestFromDays, ConversionFromDaysAndDate)
 try
 {
     ASSERT_EQ(calcDayNum(9999, 12, 31), 3652424);
-    for (int i=366; i<=3652424; ++i)
+    for (int i = 366; i <= 3652424; ++i)
     {
         MyDateTime tmp(0);
         fromDayNum(tmp, i);
@@ -94,41 +94,37 @@ try
 }
 CATCH
 
-bool isValid(int year, int month, int day)
-{
-    bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
-    int max_day_for_year[] = {31,28,31,30,31,30,31,31,30,31,30,31};
-    int max_day_for_leap_year[] = {31,29,31,30,31,30,31,31,30,31,30,31};
-    if (is_leap_year)
-    {
-        return max_day_for_leap_year[month-1] >= day;
-    }
-    else
-    {
-        return max_day_for_year[month-1] >= day;
-    }
-}
-
 TEST_F(TestFromDays, ConversionFromDateAndDays)
-try {
-    for(int year = 1; year <= 2037; year++)
-    {
-        for(int month = 1; month <= 12; month++)
-            for(int day = 1; day <= 31; day++)
+try
+{
+    auto is_valid_date = [](int year, int month, int day) {
+        bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+        constexpr int max_day_for_year[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        constexpr int max_day_for_leap_year[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        if (is_leap_year)
+        {
+            return max_day_for_leap_year[month - 1] >= day;
+        }
+        else
+        {
+            return max_day_for_year[month - 1] >= day;
+        }
+    };
+
+    for (int year = 1; year <= 2037; year++)
+        for (int month = 1; month <= 12; month++)
+            for (int day = 1; day <= 31; day++)
             {
-                if (isValid(year, month, day))
+                if (is_valid_date(year, month, day))
                 {
                     auto day_num = calcDayNum(year, month, day);
                     MyDateTime t(0);
                     fromDayNum(t, day_num);
-//                    std::cout<< "test for " << year << "-" << month << "-" << day << std::endl;
-                    if (t.year != year || t.month != month || t.day != day)
-                    {
-                        throw Exception("Should not reach here");
-                    }
+                    ASSERT_EQ(t.year, year);
+                    ASSERT_EQ(t.month, month);
+                    ASSERT_EQ(t.day, day);
                 }
             }
-    }
 }
 CATCH
 

@@ -1220,7 +1220,8 @@ void fromDayNum(MyDateTime & t, int day_num)
         // can not use day_num % DAY_NUM_PER_YEARS
         day_num = day_num - (num_of_years * DAY_NUM_PER_YEARS);
 
-        if (num_of_years == 4) {
+        if (num_of_years == 4)
+        {
             num_of_years = 3;
             day_num = DAY_NUM_PER_YEARS;
         }
