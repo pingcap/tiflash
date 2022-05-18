@@ -195,6 +195,7 @@ MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64
 std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp);
 
 int calcDayNum(int year, int month, int day);
+void fromDayNum(MyDateTime & t, int day_num);
 
 // returns seconds since '0000-00-00'
 UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second);
