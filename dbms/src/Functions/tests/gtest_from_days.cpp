@@ -41,7 +41,7 @@ try
                                 {}, // Null
                                 0, // Zero date
                                 MyDate(1969, 1, 2).toPackedUInt(),
-                                MyDate(2001, 1, 1).toPackedUInt(),
+                                MyDate(2000, 12, 31).toPackedUInt(),
                                 MyDate(2022, 3, 13).toPackedUInt(),
                             })
                             .column;
@@ -54,7 +54,7 @@ try
                        {
                            MyDate(0, 0, 0).toPackedUInt(),
                            MyDate(1969, 1, 2).toPackedUInt(),
-                           MyDate(2001, 01, 01).toPackedUInt(),
+                           MyDate(2000, 12, 31).toPackedUInt(),
                            MyDate(2022, 3, 13).toPackedUInt(),
                        })
                        .column;
@@ -81,16 +81,18 @@ try
 CATCH
 
 
-//TEST_F(TestFromDays, ConversionFromDaysAndDate)
-//try
-//{
-//    for (int i=366; i<100000; ++i) {
-//        MyDateTime tmp(0);
-//        fromDayNum(tmp, i);
-//        int calced_daynum = calcDayNum(tmp.year, tmp.month, tmp.day);
-//        ASSERT_EQ(i, calced_daynum);
-//    }
-//}
-//CATCH
+TEST_F(TestFromDays, ConversionFromDaysAndDate)
+try
+{
+
+    for (int i=0; i<=3652424; ++i)
+    {
+        MyDateTime tmp(0);
+        fromDayNum(tmp, i);
+        int calced_daynum = calcDayNum(tmp.year, tmp.month, tmp.day);
+        ASSERT_EQ(i, calced_daynum);
+    }
+}
+CATCH
 
 } // namespace DB::tests

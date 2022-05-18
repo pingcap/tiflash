@@ -1186,9 +1186,13 @@ void fillMonthAndDay(int day_num, int & month, int & day, const int * accumulate
 
 void fromDayNum(MyDateTime & t, int day_num)
 {
-    // day_num is the days from 0000-01-01
-    if (day_num < 0)
-        throw Exception("MyDate/MyDateTime only support date after 0000-01-01");
+    if (day_num <= 365)
+    {
+        t.year = 0;
+        t.month = 0;
+        t.day = 0;
+        return;
+    }
     int year = 0, month = 0, day = 0;
     if (likely(day_num >= 366))
     {
@@ -1202,6 +1206,11 @@ void fromDayNum(MyDateTime & t, int day_num)
         // the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
         // so can not use day_num % DAY_NUM_PER_100_YEARS
         day_num = day_num - (num_of_100_years * DAY_NUM_PER_100_YEARS);
+        if (num_of_100_years == 4)
+        {
+            num_of_100_years = 3;
+            day_num = DAY_NUM_PER_100_YEARS;
+        }
 
         int num_of_4_years = day_num / DAY_NUM_PER_4_YEARS;
         // can not use day_num % DAY_NUM_PER_4_YEARS
@@ -1211,17 +1220,18 @@ void fromDayNum(MyDateTime & t, int day_num)
         // can not use day_num % DAY_NUM_PER_YEARS
         day_num = day_num - (num_of_years * DAY_NUM_PER_YEARS);
 
+        if (num_of_years == 4) {
+            num_of_years = 3;
+            day_num = DAY_NUM_PER_YEARS;
+        }
+
         year = 1 + num_of_400_years * 400 + num_of_100_years * 100 + num_of_4_years * 4 + num_of_years;
     }
     static const int ACCUMULATED_DAYS_PER_MONTH[] = {30, 58, 89, 119, 150, 180, 211, 242, 272, 303, 333, 364};
     static const int ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR[] = {30, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
     bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
     fillMonthAndDay(day_num, month, day, is_leap_year ? ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR : ACCUMULATED_DAYS_PER_MONTH);
-    if (year < 0 || year > 9999)
-    {
-        throw Exception("datetime overflow");
-    }
-    else if (year == 0)
+    if (year <= 0 || year > 9999)
     {
         t.year = 0;
         t.month = 0;
