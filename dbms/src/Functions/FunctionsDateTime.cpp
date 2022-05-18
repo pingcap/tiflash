@@ -90,7 +90,7 @@ public:
                 fmt::format("Illegal argument type {} of function {}, should be integer", arg->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeMyDate>();
+        return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeMyDate>());
     }
 
     template <typename IntType>
@@ -103,7 +103,7 @@ public:
         auto result_null_map = ColumnUInt8::create(rows, 0);
         ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
 
-        auto col_from = block.getByPosition(arguments[1]).column;
+        auto col_from = block.getByPosition(arguments[0]).column;
         if (block.getByPosition(arguments[0]).type->isNullable())
         {
             Block temporary_block = createBlockWithNestedColumns(block, arguments, result);
