@@ -228,9 +228,9 @@ private:
     DM::DeltaMergeStorePtr _store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
-    bool is_common_handle;
-    bool pk_is_handle;
-    size_t rowkey_column_size;
+    bool is_common_handle = false;
+    bool pk_is_handle = false;
+    size_t rowkey_column_size = 0;
     OrderedNameSet hidden_columns;
 
     // The table schema synced from TiDB

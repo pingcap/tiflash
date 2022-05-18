@@ -88,8 +88,6 @@ StorageDeltaMerge::StorageDeltaMerge(
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
 
-    is_common_handle = false;
-    pk_is_handle = false;
     // save schema from TiDB
     if (table_info_)
     {
