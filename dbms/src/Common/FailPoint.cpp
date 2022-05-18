@@ -68,6 +68,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_after_drop_segment)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
+    M(skip_check_segment_update)                             \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
@@ -99,7 +100,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_when_writing_to_dt_store)        \
     M(pause_when_ingesting_to_dt_store)      \
     M(pause_when_altering_dt_store)          \
-    M(pause_after_copr_streams_acquired)
+    M(pause_after_copr_streams_acquired)     \
+    M(pause_before_server_merge_one_delta)
 
 namespace FailPoints
 {

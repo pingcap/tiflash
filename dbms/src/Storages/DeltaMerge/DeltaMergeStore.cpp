@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnVector.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
-#include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
@@ -31,7 +29,6 @@
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
@@ -84,6 +81,7 @@ extern const int LOGICAL_ERROR;
 
 namespace FailPoints
 {
+extern const char skip_check_segment_update[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char pause_when_writing_to_dt_store[];
@@ -1028,6 +1026,40 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     }
 }
 
+std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key, const TaskRunThread run_thread)
+{
+    updateGCSafePoint();
+    auto dm_context = newDMContext(context, context.getSettingsRef(),
+                                   /*tracing_id*/ fmt::format("mergeDeltaBySegment_{}", latest_gc_safe_point.load(std::memory_order_relaxed)));
+
+    while (true)
+    {
+        SegmentPtr segment;
+        {
+            std::shared_lock lock(read_write_mutex);
+            const auto segment_it = segments.upper_bound(start_key.toRowKeyValueRef());
+            if (segment_it == segments.end())
+            {
+                return std::nullopt;
+            }
+            segment = segment_it->second;
+        }
+
+        const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
+        if (new_segment)
+        {
+            const auto segment_end = new_segment->getRowKeyRange().end;
+            if (unlikely(*segment_end.value <= *start_key.value))
+            {
+                // The next start key must be > current start key
+                LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
+                throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
+            }
+            return new_segment->getRowKeyRange();
+        }
+    }
+}
+
 void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & range)
 {
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef(), /*tracing_id*/ "compact");
@@ -1259,6 +1291,8 @@ void DeltaMergeStore::waitForDeleteRange(const DB::DM::DMContextPtr &, const DB:
 
 void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const SegmentPtr & segment, ThreadType thread_type)
 {
+    fiu_do_on(FailPoints::skip_check_segment_update, { return; });
+
     if (segment->hasAbandoned())
         return;
     const auto & delta = segment->getDelta();
@@ -2076,6 +2110,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     case TaskRunThread::Foreground:
         GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
         break;
+    case TaskRunThread::ForegroundRPC:
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg_rpc).Increment();
+        break;
     case TaskRunThread::BackgroundGCThread:
         GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
         break;
@@ -2092,6 +2129,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
             break;
         case TaskRunThread::Foreground:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg).Observe(watch_delta_merge.elapsedSeconds());
+            break;
+        case TaskRunThread::ForegroundRPC:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg_rpc).Observe(watch_delta_merge.elapsedSeconds());
             break;
         case TaskRunThread::BackgroundGCThread:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc).Observe(watch_delta_merge.elapsedSeconds());
