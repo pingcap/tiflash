@@ -192,10 +192,6 @@ void writeFile(
             {
                 ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
                 auto saved_errno = errno;
-                // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
-                // Note that the result of this ftruncate is ignored, there is nothing we can do to
-                // handle ftruncate error. The errno may change after ftruncate called.
-                int truncate_res = ::ftruncate(file->getFd(), offset);
 
                 DB::throwFromErrno(fmt::format("Cannot write to file {},[truncate_res = {}],[errno_after_truncate = {}],"
                                                "[bytes_written={},to_write={},offset = {}]",
