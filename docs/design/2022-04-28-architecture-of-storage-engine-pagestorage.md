@@ -39,10 +39,9 @@ Besides these three problems, we also changed the `lock` implements and the `CRC
 
 The V3 version of PageStorage is composed of three main components, `PageDirectory`, `WALStore`, and `BlobStore`.
 
-- BlobStore: Provides an spaces management. Using the address multiplexing to manage the data part.
-- PageDirectory: Provides the function of MVCC. Smaller memory usage and faster speed than V2.
-- WALStore(Write Ahead Log Store): Using the write ahead log file format to manager the meta part.
-
+- BlobStore: provides space management by using address multiplexing to manage the data part.
+- PageDirectory: provides the function of MVCC. It features smaller memory usage and faster speed than V2.
+- WALStore (Write Ahead Log Store): uses the write-ahead log file format to manage the meta part.
 
 ### BlobStore
 
