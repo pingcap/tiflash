@@ -80,12 +80,11 @@ try
 }
 CATCH
 
-
 TEST_F(TestFromDays, ConversionFromDaysAndDate)
 try
 {
-
-    for (int i=0; i<=3652424; ++i)
+    ASSERT_EQ(calcDayNum(9999, 12, 31), 3652424);
+    for (int i=366; i<=3652424; ++i)
     {
         MyDateTime tmp(0);
         fromDayNum(tmp, i);
