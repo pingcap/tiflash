@@ -1028,7 +1028,9 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key, const TaskRunThread run_thread)
 {
-    auto dm_context = newDMContext(context, context.getSettingsRef(), /*tracing_id*/ "mergeDeltaBySegment");
+    updateGCSafePoint();
+    auto dm_context = newDMContext(context, context.getSettingsRef(),
+                                   /*tracing_id*/ fmt::format("mergeDeltaBySegment_{}", latest_gc_safe_point.load(std::memory_order_relaxed)));
 
     while (true)
     {
