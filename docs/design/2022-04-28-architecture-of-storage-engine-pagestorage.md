@@ -51,7 +51,7 @@ BlobStore's name is earthy, but apt indicating that it mainly stores blob data. 
 - **BlobStat**: A space manager used to find/allocate/free space in BlobFile. It has one-to-one mapping with the BlobFile.
 - **BlobStats**: Manage all BlobStat. It is used to schedule all write requests.
 
-Instead of storing data with append write, BlobStore uses a data structure called SpaceMap to manage the free spaces and perform random write in BlobFile.
+Instead of storing data with append write, BlobStore uses a data structure called SpaceMap to manage the free space and perform random write in BlobFile.
 
 ![tiflash-ps-v3-freemap](./images/tiflash-ps-v3-freemap.png)
 
