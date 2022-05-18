@@ -1025,7 +1025,7 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     }
 }
 
-std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key)
+std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key, const TaskRunThread run_thread)
 {
     auto dm_context = newDMContext(context, context.getSettingsRef(), /*tracing_id*/ "mergeDeltaBySegment");
 
@@ -1042,7 +1042,7 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
             segment = segment_it->second;
         }
 
-        const auto new_segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
         if (new_segment)
         {
             const auto segment_end = new_segment->getRowKeyRange().end;
@@ -2107,6 +2107,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     case TaskRunThread::Foreground:
         GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
         break;
+    case TaskRunThread::ForegroundRPC:
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg_rpc).Increment();
+        break;
     case TaskRunThread::BackgroundGCThread:
         GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
         break;
@@ -2123,6 +2126,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
             break;
         case TaskRunThread::Foreground:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg).Observe(watch_delta_merge.elapsedSeconds());
+            break;
+        case TaskRunThread::ForegroundRPC:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg_rpc).Observe(watch_delta_merge.elapsedSeconds());
             break;
         case TaskRunThread::BackgroundGCThread:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc).Observe(watch_delta_merge.elapsedSeconds());

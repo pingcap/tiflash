@@ -3450,13 +3450,13 @@ try
     if (store->isCommonHandle())
     {
         // Specifies MAX_KEY. nullopt should be returned.
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY);
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
         ASSERT_EQ(result, std::nullopt);
     }
     else
     {
         // Specifies MAX_KEY. nullopt should be returned.
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY);
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
         ASSERT_EQ(result, std::nullopt);
     }
     std::optional<RowKeyRange> result_1;
@@ -3464,11 +3464,11 @@ try
         // Specifies MIN_KEY. In this case, the first segment should be processed.
         if (store->isCommonHandle())
         {
-            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
         }
         else
         {
-            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
         }
         // The returned range is the same as first segment's range.
         ASSERT_NE(result_1, std::nullopt);
@@ -3480,7 +3480,7 @@ try
     }
     {
         // Compact the first segment again, nothing should change.
-        auto result = store->mergeDeltaBySegment(*db_context, result_1->start);
+        auto result = store->mergeDeltaBySegment(*db_context, result_1->start, DeltaMergeStore::TaskRunThread::Foreground);
         ASSERT_EQ(*result, *result_1);
 
         helper->verifyExpectedRowsForAllSegments();
@@ -3488,7 +3488,7 @@ try
     std::optional<RowKeyRange> result_2;
     {
         // Compact again using the end key just returned. The second segment should be processed.
-        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end);
+        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end, DeltaMergeStore::TaskRunThread::Foreground);
         ASSERT_NE(result_2, std::nullopt);
         ASSERT_EQ(*result_2, std::next(store->segments.begin())->second->getRowKeyRange());
 
@@ -3506,12 +3506,12 @@ TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, InvalidKey)
         if (store->isCommonHandle())
         {
             // For common handle, give int handle key and have a try
-            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
         }
         else
         {
             // For int handle, give common handle key and have a try
-            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
         }
     });
 }
@@ -3527,13 +3527,13 @@ try
         ASSERT_NE(it, store->segments.end());
         auto seg = it->second;
 
-        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start);
+        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
         ASSERT_NE(result, std::nullopt);
         helper->verifyExpectedRowsForAllSegments();
     }
     {
         // As we are the last segment, compact "next segment" should result in failure. A nullopt is returned.
-        auto result2 = store->mergeDeltaBySegment(*db_context, result->end);
+        auto result2 = store->mergeDeltaBySegment(*db_context, result->end, DeltaMergeStore::TaskRunThread::Foreground);
         ASSERT_EQ(result2, std::nullopt);
         helper->verifyExpectedRowsForAllSegments();
     }
@@ -3562,7 +3562,7 @@ try
         auto range = std::next(store->segments.begin())->second->getRowKeyRange();
         auto compact_key = range.start.toPrefixNext();
 
-        auto result = store->mergeDeltaBySegment(*db_context, compact_key);
+        auto result = store->mergeDeltaBySegment(*db_context, compact_key, DeltaMergeStore::TaskRunThread::Foreground);
         ASSERT_NE(result, std::nullopt);
 
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];

@@ -173,7 +173,7 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
     while (true)
     {
         FAIL_POINT_PAUSE(FailPoints::pause_before_server_merge_one_delta);
-        auto compacted_range = dm_storage->mergeDeltaBySegment(global_context, start_key);
+        auto compacted_range = dm_storage->mergeDeltaBySegment(global_context, start_key, DM::DeltaMergeStore::TaskRunThread::ForegroundRPC);
 
         if (compacted_range == std::nullopt)
         {
