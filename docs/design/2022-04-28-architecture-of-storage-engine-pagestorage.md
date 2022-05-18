@@ -1,31 +1,25 @@
 # Architecture Of Storage Engine - PageStorage
 
-- Authors(order by last name): [JaySon-Huang](https://github.com/JaySon-Huang), [flowbehappy](https://github.com/flowbehappy), [Jiaqi Zhou](https://github.com/jiaqizho)
-- Technical Writer: [shichun-0415](https://github.com/shichun-0415) , [Jiaqi Zhou](https://github.com/jiaqizho)
+- Authors (order by last name): [JaySon-Huang](https://github.com/JaySon-Huang), [flowbehappy](https://github.com/flowbehappy), [Jiaqi Zhou](https://github.com/jiaqizho)
+- Editorial reviewer: [shichun-0415](https://github.com/shichun-0415)
 
 ## Introduction
 
-`PageStorage` is the place where DT(DeltaTree Engine) actually stores data into. The latest data (i.e. delta data), and the metadata in the engine are serialized directly into Pages. While the main data (i.e. stable data), is written in DTFiles format and managed as `ExternalPage`s in PageStorage.
+`PageStorage` is where Delta Tree (DT) engine actually stores data. The latest data (i.e. delta data), and the metadata in the engine are serialized into Pages. The main data (i.e. stable data), is written in DTFiles format and managed as `ExternalPage`s in PageStorage.
 
-The below picture describes the "Delta ValueSpace" and "Stable ValueSpace" of DT. The data in "Delta ValueSpace" is continuously updated. After `delta merge` happened, the delta data in PageStorage will be read and compacted into the "Stable ValueSpace".
+The following figure describes the "Delta ValueSpace" and "Stable ValueSpace" of DT. The data in "Delta ValueSpace" is continuously updated. After `delta merge` occurs, the delta data in PageStorage will be read and compacted into the "Stable ValueSpace".
 
 ![tiflash-dt-architecture](./images/tiflash-dt-architecture.png)
-
-
-As one of the important components of DT, PageStorage mainly provides a KV storage service which also support MVCC. Unlike other KV services, the KV interface provided by PageStorage is limited. Key is limited to uint64_t, Value is limited to a buffer or a array of buffer(we called it fields) or null.
-
-
+As one of the important components of DT, PageStorage mainly provides a KV storage service that also supports MVCC. Unlike other KV services, the KV interface provided by PageStorage is limited. Specifically, Key is limited to uint64_t, and Value is limited to a buffer or an array of buffers (also called fields) or null.
 ## Capability
 
-PageStorage supported: 
+PageStorage supports: 
 
 - Disk-based store
 - Write/Read operation atomicity
 - Full MVCC function 
 - KV store function
 - GC
-
-
 ## Background
 
 Currently, there are three versions of PageStorage (V1, V2, V3). We won't describe the details of the V1/V2 in this article. The V2 design and implementation lead to high write amplification and CPU usage under some scenarios, so we propose the V3 version.
