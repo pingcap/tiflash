@@ -65,8 +65,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_when_read_from_log)                               \
     M(exception_mpp_hash_build)                                   \
     M(exception_before_drop_segment)                              \
-    M(exception_after_drop_segment)                               \
-    M(force_change_all_blobs_to_read_only_once)
+    M(exception_after_drop_segment)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(force_set_page_file_write_errno)                       \
@@ -83,7 +82,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_no_local_region_for_mpp_task)                    \
     M(force_remote_read_for_batch_cop)                       \
     M(force_context_path)                                    \
-    M(force_slow_page_storage_snapshot_release)
+    M(force_slow_page_storage_snapshot_release)              \
+    M(force_change_all_blobs_to_read_only)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_with_alter_locks_acquired)            \

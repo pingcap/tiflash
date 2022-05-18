@@ -51,7 +51,7 @@ extern const int CHECKSUM_DOESNT_MATCH;
 
 namespace FailPoints
 {
-extern const char force_change_all_blobs_to_read_only_once[];
+extern const char force_change_all_blobs_to_read_only[];
 } // namespace FailPoints
 
 namespace PS::V3
@@ -876,7 +876,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     std::vector<BlobFileId> blob_need_gc;
     BlobStoreGCInfo blobstore_gc_info;
 
-    fiu_do_on(FailPoints::force_change_all_blobs_to_read_only_once,
+    fiu_do_on(FailPoints::force_change_all_blobs_to_read_only,
               {
                   for (const auto & [path, stats] : stats_list)
                   {
@@ -886,7 +886,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                           stat->changeToReadOnly();
                       }
                   }
-                  LOG_FMT_WARNING(log, "enabled force_change_all_blobs_to_read_only_once. All of BlobStat turn to READ-ONLY");
+                  LOG_FMT_WARNING(log, "enabled force_change_all_blobs_to_read_only. All of BlobStat turn to READ-ONLY");
               });
 
     for (const auto & [path, stats] : stats_list)
