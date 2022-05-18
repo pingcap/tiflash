@@ -220,7 +220,6 @@ Block FilterBlockInputStream::readImpl()
     }
 }
 
-// ywq todo complicate...
 void FilterBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
 {
     IProfilingBlockInputStream::print(buffer, indent, multiplier);

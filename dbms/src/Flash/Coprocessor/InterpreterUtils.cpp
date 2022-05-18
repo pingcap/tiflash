@@ -34,6 +34,7 @@ void restoreConcurrency(
     {
         BlockInputStreamPtr shared_query_block_input_stream
             = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log->identifier());
+        shared_query_block_input_stream->setExtraInfo("restore concurrency");
         pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
 }
@@ -46,13 +47,22 @@ BlockInputStreamPtr combinedNonJoinedDataStream(
 {
     BlockInputStreamPtr ret = nullptr;
     if (pipeline.streams_with_non_joined_data.size() == 1)
+    {
         ret = pipeline.streams_with_non_joined_data.at(0);
+        ret->setExtraInfo("non joined data");
+    }
     else if (pipeline.streams_with_non_joined_data.size() > 1)
     {
         if (ignore_block)
+        {
             ret = std::make_shared<UnionWithoutBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log->identifier());
+            ret->setExtraInfo("combine non joined(ignore block)");
+        }
         else
+        {
             ret = std::make_shared<UnionWithBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log->identifier());
+            ret->setExtraInfo("combine non joined");
+        }
     }
     pipeline.streams_with_non_joined_data.clear();
     return ret;

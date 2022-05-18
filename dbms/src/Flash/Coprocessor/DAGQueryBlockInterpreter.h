@@ -60,7 +60,7 @@ private:
     void executeImpl(DAGPipeline & pipeline);
     void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
-    void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
+    void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, const String & executor_id);
     void prepareJoin(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
         const DataTypes & key_types,
