@@ -79,12 +79,12 @@ public:
     String getName() const override { return name; }
     bool isVariadic() const override { return false; }
     size_t getNumberOfArguments() const override { return 1; }
-    bool useDefaultImplementationForNulls() const override { return true; }
+    bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        const auto & arg = arguments[0].get();
+        const auto * arg = removeNullable(arguments[0]).get();
         if (!arg->isInteger())
             throw Exception(
                 fmt::format("Illegal argument type {} of function {}, should be integer", arg->getName(), getName()),
@@ -97,24 +97,58 @@ public:
     void dispatch(Block & block, const ColumnNumbers & arguments, const size_t result) const
     {
         size_t rows = block.rows();
-        const auto * col_from = checkAndGetColumn<ColumnVector<IntType>>(block.getByPosition(arguments[0]).column.get());
-        const auto & vec_from = col_from->getData();
+
         auto col_to = ColumnVector<DataTypeMyDate::FieldType>::create(rows);
         auto & vec_to = col_to->getData();
+        auto result_null_map = ColumnUInt8::create(rows, 0);
+        ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
+
+        auto col_from = block.getByPosition(arguments[1]).column;
+        if (block.getByPosition(arguments[0]).type->isNullable())
+        {
+            Block temporary_block = createBlockWithNestedColumns(block, arguments, result);
+            col_from = temporary_block.getByPosition(arguments[0]).column;
+        }
+        const auto & vec_from = checkAndGetColumn<ColumnVector<IntType>>(col_from.get())->getData();
 
         for (size_t i = 0; i < rows; ++i)
         {
-            IntType val = vec_from[i];
-            MyDateTime date(0);
-            fromDayNum(date, val);
-            vec_to[i] = date.toPackedUInt();
+            try
+            {
+                IntType val = vec_from[i];
+                MyDateTime date(0);
+                if (val >= 0)
+                {
+                    fromDayNum(date, val);
+                }
+                vec_to[i] = date.toPackedUInt();
+            }
+            catch (const Exception &)
+            {
+                vec_result_null_map[i] = 1;
+            }
         }
-        block.getByPosition(result).column = std::move(col_to);
+
+        if (block.getByPosition(arguments[0]).type->isNullable())
+        {
+            auto column = block.getByPosition(arguments[0]).column;
+            for (size_t i = 0; i < rows; i++)
+            {
+                vec_result_null_map[i] |= column->isNullAt(i);
+            }
+        }
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(result_null_map));
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        TypeIndex type_index = block.getByPosition(arguments[0]).type->getTypeId();
+        if (block.getByPosition(arguments[0]).type->onlyNull())
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        auto type_index = removeNullable(block.getByPosition(arguments[0]).type)->getTypeId();
         switch (type_index)
         {
         case TypeIndex::UInt8:

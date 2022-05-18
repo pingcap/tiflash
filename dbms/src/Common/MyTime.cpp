@@ -1186,13 +1186,9 @@ void fillMonthAndDay(int day_num, int & month, int & day, const int * accumulate
 
 void fromDayNum(MyDateTime & t, int day_num)
 {
-    if (day_num <= 365)
-    {
-        t.year = 0;
-        t.month = 0;
-        t.day = 0;
-        return;
-    }
+    // day_num is the days from 0000-01-01
+    if (day_num < 0)
+        throw Exception("MyDate/MyDateTime only support date after 0000-01-01");
     int year = 0, month = 0, day = 0;
     if (likely(day_num >= 366))
     {
@@ -1232,7 +1228,11 @@ void fromDayNum(MyDateTime & t, int day_num)
     static const int ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR[] = {30, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
     bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
     fillMonthAndDay(day_num, month, day, is_leap_year ? ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR : ACCUMULATED_DAYS_PER_MONTH);
-    if (year <= 0 || year > 9999)
+    if (year < 0 || year > 9999)
+    {
+        throw Exception("datetime overflow");
+    }
+    else if (year == 0)
     {
         t.year = 0;
         t.month = 0;
