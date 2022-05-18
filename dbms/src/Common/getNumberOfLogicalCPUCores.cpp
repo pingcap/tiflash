@@ -99,18 +99,18 @@ static std::pair<int, int> read_quota_and_period_from(const char * filename)
     std::ifstream infile(filename);
     if (!infile.is_open())
     {
-        return std::make_pair(1, 1);
+        return {1, 1};
     }
     std::string quota;
     int period;
     infile >> quota >> period;
     if (quota == "max")
     {
-        return std::make_pair(period, period);
+        return {period, period};
     }
     else
     {
-        return std::make_pair(std::stoi(quota), period);
+        return {std::stoi(quota), period};
     }
 }
 
