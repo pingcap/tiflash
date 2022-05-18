@@ -58,7 +58,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1652858564254,
+  "iteration": 1652859600759,
   "links": [],
   "panels": [
     {
@@ -5492,7 +5492,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 120
+            "y": 78
           },
           "height": "",
           "hiddenSeries": false,
@@ -5629,7 +5629,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 129
+            "y": 87
           },
           "hiddenSeries": false,
           "id": 62,
@@ -5741,7 +5741,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 137
+            "y": 95
           },
           "height": "",
           "hiddenSeries": false,
@@ -5863,7 +5863,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 146
+            "y": 104
           },
           "hiddenSeries": false,
           "id": 90,
@@ -6869,7 +6869,7 @@
           "fillGradient": 0,
           "gridPos": {
             "h": 7,
-            "w": 12,
+            "w": 24,
             "x": 0,
             "y": 42
           },
@@ -6984,8 +6984,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 12,
-            "y": 42
+            "x": 0,
+            "y": 49
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7008,76 +7008,6 @@
           "timeFrom": null,
           "timeShift": null,
           "title": "Snapshot Flush Duration",
-          "tooltip": {
-            "show": true,
-            "showHistogram": true
-          },
-          "type": "heatmap",
-          "xAxis": {
-            "show": true
-          },
-          "xBucketNumber": null,
-          "xBucketSize": null,
-          "yAxis": {
-            "decimals": 0,
-            "format": "s",
-            "logBase": 1,
-            "max": null,
-            "min": null,
-            "show": true,
-            "splitFactor": null
-          },
-          "yBucketBound": "upper",
-          "yBucketNumber": null,
-          "yBucketSize": null
-        },
-        {
-          "cards": {
-            "cardPadding": null,
-            "cardRound": null
-          },
-          "color": {
-            "cardColor": "#b4ff00",
-            "colorScale": "sqrt",
-            "colorScheme": "interpolateSpectral",
-            "exponent": 0.5,
-            "min": 0,
-            "mode": "spectrum"
-          },
-          "dataFormat": "tsbuckets",
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "Duration of decoding Region data into blocks when writing Region data to the storage layer. (Mixed with \"write logs\" and \"apply Snapshot\" operations)",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 49
-          },
-          "heatmap": {},
-          "hideZeroBuckets": true,
-          "highlightCards": true,
-          "id": 76,
-          "legend": {
-            "show": true
-          },
-          "links": [],
-          "reverseYBuckets": false,
-          "targets": [
-            {
-              "expr": "sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"decode\"}[1m])) by (le)",
-              "format": "heatmap",
-              "intervalFactor": 2,
-              "legendFormat": "{{le}}",
-              "refId": "B"
-            }
-          ],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Region write Duration (decode)",
           "tooltip": {
             "show": true,
             "showHistogram": true
@@ -7185,7 +7115,7 @@
           },
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "Latency that TiKV sends raft log to TiFlash.",
+          "description": "Duration of decoding Region data into blocks when writing Region data to the storage layer. (Mixed with \"write logs\" and \"apply Snapshot\" operations)",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -7199,7 +7129,7 @@
           "heatmap": {},
           "hideZeroBuckets": true,
           "highlightCards": true,
-          "id": 92,
+          "id": 76,
           "legend": {
             "show": true
           },
@@ -7207,7 +7137,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"decode\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -7216,7 +7146,7 @@
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Upstream Latency [Heatmap]",
+          "title": "Region write Duration (decode)",
           "tooltip": {
             "show": true,
             "showHistogram": true
@@ -7311,6 +7241,76 @@
           "yBucketSize": null
         },
         {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Latency that TiKV sends raft log to TiFlash.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 63
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 92,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "expr": "sum(delta(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le)",
+              "format": "heatmap",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Upstream Latency [Heatmap]",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "s",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
@@ -7329,7 +7329,7 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
+            "x": 12,
             "y": 63
           },
           "hiddenSeries": false,
@@ -7473,7 +7473,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 8
+            "y": 80
           },
           "hiddenSeries": false,
           "id": 99,
@@ -7626,7 +7626,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 8
+            "y": 80
           },
           "heatmap": {},
           "hideZeroBuckets": true,
