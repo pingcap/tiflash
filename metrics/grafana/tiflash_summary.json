@@ -58,7 +58,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1652859600759,
+  "iteration": 1652861766192,
   "links": [],
   "panels": [
     {
@@ -5387,7 +5387,7 @@
               "yaxis": 1
             },
             {
-              "alias": "/^BlobReusedRate/",
+              "alias": "/^BlobExpandRate/",
               "yaxis": 2
             }
           ],
@@ -5407,12 +5407,12 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) / (rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) + rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (instance)",
+              "expr": "sum(rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) / (rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) + rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (instance)",
               "format": "time_series",
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "BlobReusedRate-{{instance}}",
+              "legendFormat": "BlobExpandRate-{{instance}}",
               "refId": "B"
             }
           ],
@@ -5492,7 +5492,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 78
+            "y": 6
           },
           "height": "",
           "hiddenSeries": false,
@@ -5629,7 +5629,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 87
+            "y": 15
           },
           "hiddenSeries": false,
           "id": 62,
@@ -5741,7 +5741,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 95
+            "y": 23
           },
           "height": "",
           "hiddenSeries": false,
@@ -5863,7 +5863,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 104
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 90,
