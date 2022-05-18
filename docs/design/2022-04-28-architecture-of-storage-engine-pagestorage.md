@@ -124,10 +124,10 @@ buffer(operate:put)
 Bits                | Name             | Description.          |
 --------------------|------------------|-----------------------|
 0:8                 | Write Type       | Write batch operation type |
-8:16                | Flag             | The page Flag decide page detach or not       |
+8:16                | Flag             | A preserved flag           |
 16:144              | Page Id          | The combine of namespace id and page id       |
 144:272             | Version          | The combine of sequence and epoch             |
-272:336             | Ref count        | The page be ref count  |
+272:336             | Ref count        | The page being ref count  |
 272:N				| Page entry       | The page entry  |
 
 Page entry
@@ -146,19 +146,8 @@ Field offsets
 
 Bits                | Name             | Description.          |
 --------------------|------------------|-----------------------|
-0:64                | Field Offset       | The field offset |
-64:128              | Field Checksum | The field checksum |
-
-buffer(operate:put)
-
-Bits                | Name             | Description.          |
---------------------|------------------|-----------------------|
-0:8                 | Write Type       | Write batch operation type |
-8:16                | Flag             | The page Flag decide page detach or not       |
-16:144              | Page Id          | The combine of namespace id and page id       |
-144:272             | Version          | The combine of sequence and epoch             |
-272:336             | Ref count        | The page be ref count  |
-272:N				| Page entry       | The page entry  |
+0:64                | Field Offset     | The field offset |
+64:128              | Field Checksum   | The field checksum |
 
 buffer(operate:ref)
 
@@ -176,7 +165,7 @@ Bits                | Name             | Description.          |
 0:8                 | Write Type       | Write batch operation type |
 8:132               | Page Id          | The combine of namespace id and page id       |
 132:260             | Version          | The combine of sequence and epoch             |
-260:324             | Ref count        | The page be ref count  |
+260:324             | Ref count        | The page being ref count  |
 
 buffer(operate:del)
 
