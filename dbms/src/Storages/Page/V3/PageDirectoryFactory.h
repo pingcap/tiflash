@@ -37,7 +37,7 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class PageDirectoryFactory
 {
 public:
-    PageVersionType max_applied_ver;
+    PageVersion max_applied_ver;
     PageIdV3Internal max_applied_page_id;
 
     PageDirectoryFactory & setBlobStore(BlobStore & blob_store)
@@ -46,7 +46,7 @@ public:
         return *this;
     }
 
-    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
 
     // just for test
     PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
@@ -61,6 +61,10 @@ public:
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
+    static bool applyRecord(
+        const PageDirectoryPtr & dir,
+        const PageEntriesEdit::EditRecord & r,
+        bool throw_on_error);
 
     BlobStore::BlobStats * blob_stats = nullptr;
 };

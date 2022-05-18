@@ -53,7 +53,6 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
               context.getSettingsRef().task_scheduler_thread_soft_limit,
               context.getSettingsRef().task_scheduler_thread_hard_limit)))
     , engine(raft_config.engine)
-    , disable_bg_flush(raft_config.disable_bg_flush)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)

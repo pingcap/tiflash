@@ -17,7 +17,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/RWLock.h>
 #include <Common/Stopwatch.h>
-
+#include <Common/nocopyable.h>
 
 namespace ProfileEvents
 {
@@ -59,8 +59,7 @@ class RWLock::LockHolderImpl
     GroupsContainer::iterator it_group;
 
 public:
-    LockHolderImpl(const LockHolderImpl & other) = delete;
-    LockHolderImpl & operator=(const LockHolderImpl & other) = delete;
+    DISALLOW_COPY(LockHolderImpl);
 
     /// Implicit memory allocation for query_id is done here
     LockHolderImpl(const String & query_id_, Type type)

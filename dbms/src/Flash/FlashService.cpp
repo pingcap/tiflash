@@ -18,7 +18,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Core/Types.h>
-#include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -213,7 +212,7 @@ grpc::Status FlashService::Coprocessor(
     return status;
 }
 
-::grpc::Status FlashService::EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
+::grpc::Status FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
                                                                const ::mpp::EstablishMPPConnectionRequest * request,
                                                                ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
                                                                EstablishCallData * calldata)
@@ -345,71 +344,11 @@ grpc::Status FlashService::Coprocessor(
     return grpc::Status::OK;
 }
 
-// This function is deprecated.
-grpc::Status FlashService::BatchCommands(
-    grpc::ServerContext * grpc_context,
-    grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
-{
-    CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
-
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
-
-    tikvpb::BatchCommandsRequest request;
-    while (stream->Read(&request))
-    {
-        tikvpb::BatchCommandsResponse response;
-        GET_METRIC(tiflash_coprocessor_request_count, type_batch).Increment();
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Increment();
-        SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Decrement(); });
-        auto start_time = std::chrono::system_clock::now();
-        SCOPE_EXIT({
-            std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_batch).Observe(duration_sec.count());
-            GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
-        });
-
-        LOG_FMT_DEBUG(log, "Handling batch commands: {}", request.DebugString());
-
-        BatchCommandsContext batch_commands_context(
-            *context,
-            [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
-            *grpc_context);
-        BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
-        auto ret = batch_commands_handler.execute();
-        if (!ret.ok())
-        {
-            LOG_FMT_DEBUG(
-                log,
-                "Handle batch commands request done: {}, {}",
-                ret.error_code(),
-                ret.error_message());
-            return ret;
-        }
-
-        if (!stream->Write(response))
-        {
-            LOG_FMT_DEBUG(log, "Write response failed for unknown reason.");
-            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
-        }
-
-        LOG_FMT_DEBUG(log, "Handle batch commands request done: {}, {}", ret.error_code(), ret.error_message());
-    }
-
-    return grpc::Status::OK;
-}
-
 String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
 {
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
-        return it->second.data();
+        return String(it->second.data(), it->second.size());
+
     return default_val;
 }
 
@@ -449,6 +388,14 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         {
             context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
+
+        String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
+        if (!max_threads.empty())
+        {
+            context->setSetting("max_threads", max_threads);
+            LOG_FMT_INFO(log, "set context setting max_threads to {}", max_threads);
+        }
+
         context->setSetting("enable_async_server", is_async ? "true" : "false");
         context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
         context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");

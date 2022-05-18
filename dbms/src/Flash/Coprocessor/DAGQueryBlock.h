@@ -67,10 +67,7 @@ public:
     const tipb::Executor * root;
     String qb_column_prefix;
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
-
-    // only meaningful for root query block.
-    std::vector<tipb::FieldType> output_field_types;
-    std::vector<Int32> output_offsets;
+    bool can_restore_pipeline_concurrency = true;
 
     bool isRootQueryBlock() const { return id == 1; };
     bool isTableScanSource() const { return source->tp() == tipb::ExecType::TypeTableScan || source->tp() == tipb::ExecType::TypePartitionTableScan; }

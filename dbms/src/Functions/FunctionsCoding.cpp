@@ -30,7 +30,6 @@ struct NameFunctionIPv4NumToStringClassC
 void registerFunctionsCoding(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionToStringCutToZero>();
-    factory.registerFunction<FunctionIPv6NumToString>();
     factory.registerFunction<FunctionCutIPv6>();
     factory.registerFunction<FunctionIPv6StringToNum>();
     factory.registerFunction<FunctionIPv4NumToString<0, NameFunctionIPv4NumToString>>();

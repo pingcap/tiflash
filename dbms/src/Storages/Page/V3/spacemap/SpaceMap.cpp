@@ -15,6 +15,7 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
+#include <Storages/Page/V3/spacemap/SpaceMapBig.h>
 #include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <common/likely.h>
@@ -42,13 +43,16 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
     case SMAP64_STD_MAP:
         smap = STDMapSpaceMap::create(start, end);
         break;
+    case SMAP64_BIG:
+        smap = BigSpaceMap::create(start, end);
+        break;
     default:
-        throw Exception("Invalid type to create spaceMap", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Invalid [type={}] to create spaceMap", static_cast<UInt8>(type)), ErrorCodes::LOGICAL_ERROR);
     }
 
     if (!smap)
     {
-        throw Exception("Failed create SpaceMap [type=" + typeToString(type) + "]", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Failed create SpaceMap [type={}]", typeToString(type)), ErrorCodes::LOGICAL_ERROR);
     }
 
     return smap;
@@ -56,20 +60,24 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
 
 bool SpaceMap::checkSpace(UInt64 offset, size_t size) const
 {
+    // If we used `SMAP64_BIG`, we won't check the space.
+    if (type == SMAP64_BIG)
+    {
+        return false;
+    }
     return (offset < start) || (offset > end) || (offset + size - 1 > end);
 }
 
-void SpaceMap::logStats()
+void SpaceMap::logDebugString()
 {
-    smapStats();
+    LOG_DEBUG(log, toDebugString());
 }
 
 bool SpaceMap::markFree(UInt64 offset, size_t length)
 {
     if (checkSpace(offset, length))
     {
-        throw Exception("Unmark space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
+        throw Exception(fmt::format("Unmark space out of the limit space.[type={}] [block={}], [size={}]", typeToString(getType()), offset, length),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -80,8 +88,7 @@ bool SpaceMap::markUsed(UInt64 offset, size_t length)
 {
     if (checkSpace(offset, length))
     {
-        throw Exception("Mark space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
+        throw Exception(fmt::format("Mark space out of the limit space.[type={}] [block={}], [size={}]", typeToString(getType()), offset, length),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -92,8 +99,7 @@ bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
 {
     if (checkSpace(offset, length))
     {
-        throw Exception("Test space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
+        throw Exception(fmt::format("Test space out of the limit space.[type={}] [block={}], [size={}]", typeToString(getType()), offset, length),
                         ErrorCodes::LOGICAL_ERROR);
     }
 

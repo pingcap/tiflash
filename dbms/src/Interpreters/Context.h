@@ -99,6 +99,7 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
+enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
@@ -294,12 +295,8 @@ public:
     ASTPtr getCreateDatabaseQuery(const String & database_name) const;
 
     DatabasePtr getDatabase(const String & database_name) const;
-    DatabasePtr getDatabase(const String & database_name);
     DatabasePtr tryGetDatabase(const String & database_name) const;
-    DatabasePtr tryGetDatabase(const String & database_name);
-
     Databases getDatabases() const;
-    Databases getDatabases();
 
     std::shared_ptr<Context> acquireSession(
         const String & session_id,
@@ -404,13 +401,15 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(Poco::Util::AbstractConfiguration & config);
+    void initializeRateLimiter(Poco::Util::AbstractConfiguration & config, BackgroundProcessingPool & bg_pool, BackgroundProcessingPool & blockable_bg_pool) const;
     WriteLimiterPtr getWriteLimiter() const;
     ReadLimiterPtr getReadLimiter() const;
     IORateLimiter & getIORateLimiter() const;
 
-    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool, bool enable_ps_v3);
-
+    void initializePageStorageMode(const PathPool & path_pool, UInt64 storage_page_format_version);
+    void setPageStorageRunMode(PageStorageRunMode run_mode) const;
+    PageStorageRunMode getPageStorageRunMode() const;
+    bool initializeGlobalStoragePoolIfNeed(const PathPool & path_pool);
     DM::GlobalStoragePoolPtr getGlobalStoragePool() const;
 
     /// Call after initialization before using system logs. Call for global context.
