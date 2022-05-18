@@ -10,6 +10,7 @@
 The following figure describes the "Delta ValueSpace" and "Stable ValueSpace" of DT. The data in "Delta ValueSpace" is continuously updated. After `delta merge` occurs, the delta data in PageStorage will be read and compacted into the "Stable ValueSpace".
 
 ![tiflash-dt-architecture](./images/tiflash-dt-architecture.png)
+
 As one of the important components of DT, PageStorage mainly provides a KV storage service that also supports MVCC. Unlike other KV services, the KV interface provided by PageStorage is limited. Specifically, Key is limited to uint64_t, and Value is limited to a buffer or an array of buffers (also called fields) or null.
 ## Capability
 
