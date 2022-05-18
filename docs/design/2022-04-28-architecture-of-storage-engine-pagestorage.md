@@ -22,14 +22,14 @@ PageStorage supports:
 - GC
 ## Background
 
-Currently, there are three versions of PageStorage (V1, V2, V3). We won't describe the details of the V1/V2 in this article. The V2 design and implementation lead to high write amplification and CPU usage under some scenarios, so we propose the V3 version.
+Currently, there are three versions of PageStorage (V1, V2, V3). This document does not cover the details of the V1/V2 versions. The V3 version is recommended because the V2 design and implementation might lead to high write amplification and CPU usage in some scenarios.
 
 
-We found some problems with the V2 version in the actual production environment.
+The following are problems of V2 in a production environment:
 
-1. **There is a risk of data loss in the meta part**. As long as the `checksum` and `buffer size` fields in a single meta buffer are damaged at the same time, the subsequent buffers will be unavailable. This situation may happen when the disk failure happens or the meta part is changed by an unexpected operation.
-2. **The snapshot of MVCC needs to be optimized**. First, the CPU usage occupied by the snapshot should be reduced. Secondly, the implementation of MVCC structure is too complex to be understood and maintained.
-3. **The GC write amplification in the data part is high and the GC task is too heavy**. Since the data part is composed of append write, `compact gc` is frequently triggered. Besides, the meta part is bound to a data part by "PageFile", meaning that we have to apply `compact gc` to compact the small data in the meta part. The `compact gc` means PageStorage need read all of the valid data from the disk, then rewrite it into a new file. Each round of GC brings additional read and write overhead.
+- **There is a risk of data loss in the meta part**. As long as the `checksum` and `buffer size` fields in a single meta buffer are damaged at the same time, the subsequent buffers will be unavailable. This situation may occur upon a disk failure or the meta part is changed by an unexpected operation.
+- **The snapshot of MVCC needs to be optimized**. First, the CPU usage occupied by the snapshot should be reduced. Second, the implementation of the MVCC structure is too complex to be understood and maintained.
+- **The GC write amplification in the data part is high and the GC task is too heavy**. Because the data part is composed of append write, `compact gc` is frequently triggered. Besides, the meta part is bound to a data part by "PageFile", meaning that we have to apply `compact gc` to compact the small data in the meta part. `compact gc` means that PageStorage needs to read all the valid data from the disk, then rewrite the data into a new file. Each round of GC brings additional read and write overhead.
 
 Besides these three problems, we also changed the `lock` implements and the `CRC` implements.
 
