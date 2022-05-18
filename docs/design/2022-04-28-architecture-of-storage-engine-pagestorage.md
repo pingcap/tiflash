@@ -50,7 +50,7 @@ The V3 version of PageStorage is composed of three main components, `PageDirecto
 - WALStore(Write Ahead Log Store): Using the write ahead log file format to manager the meta part.
 
 
-#### BlobStore
+### BlobStore
 
 BlobStore's name is earthy, but apt indicating that it mainly stores blob data. BlobStore consists of three parts
 
@@ -76,7 +76,7 @@ In order to avoid getting some simple statistics by traversing the full SpaceMap
 What's more, when a write request happens, BlobStore will ask BlobStats for unused space from BlobStats. Since all disk spaces are scheduled by BlobStats and happen in memory, once the location is allocated from BlobStats, all actual write operations to the disk can be parallelized. So BlobStore allows maximum IO parallelism to utilise disk bandwidth.
 
 
-#### PageDirectory
+### PageDirectory
 
 PageDirectory supports the function of MVCC, providing a read-only snapshot that does not block writes. It is mainly composed of an RB-tree map with the key is `page id` and the value is the `version chain`.
 
@@ -188,13 +188,11 @@ Bits                | Name             | Description.          |
 
 
 
-#### GC
+### The GC routine of PageStorage
 
-The GC of V3 will be more complicated, but compared with V2, the GC of V3 is faster. The IO from V3 GC will be much less.
+In the beginning, in order to control the time of restoring WriteBatches and reconstructing the PageDirectory while startups, PageStorage needs to apply GC on WALStore. When the log files of WALStore reach a certain number, PageDirectory will serialize the latest version of entries and dump the entries as a record into a new log file. After that, the log files generated before the PageDirectory snapshot (except the log file is being written) will be removed. Usually, this part is lightweight since we traverse the PageDirectory will small lock granularity. And the PageDirectory's snapshot size dumped to disk is relatively small.
+After that, PageStorage applies GC on PageDirectory. It will clean up the expired snapshot and expired page entries. Those expired page entries will be marked as removed from BlobStore. All related space maps in BlobStore will be updated.
+After the space maps are updated, BlobStore will check all BlobStat to find out whether there are BlobFiles with a low valid rate. In order to reduce the space amplification brought by those low valid rate BlobFiles, PageStorage will perform "full GC" on those BlobFiles. The full GC will copy the valid data to the new BlobFile(s).
+If "full GC" does happen in BlobStore, then BlobStore informs PageDirectory that some pages have been migrated and where are the new locations of those pages. PageDirectory applies the changes from BlobStore.
 
-1. Begin to GC, PageStorage need do WALStore GC, this part is lightweight. When the meta file recorded by wal reach a certain level, WALStore will dump it and update it.
-2. After that, PageStorage need do MVCC GC, MVCC will cleanup the expired snapshot in PageDirectory, also these expired page entry from expired snapshot will be mark clean in BlobStore. This means that all of SpaceMap in BlobStore will be updated.
-3. Some of space in BlobStore be free after MVCC GC, Then BlobStore will check all BlobStat, find out if there is a blob with a low valid rate, and perform full gc on it.The full GC simliar with V2, it will copy the valid data ,and store it to other blob. 
-4. If There do have full GC happend in BlobStore(from step 3), Then BlobStore need to tell PageDirectory that some of data has been migrated and where is the new location. PageDirectory will apply the change from BlobStore.
-
-Although this looks complicated, in practice, the probability of BlobStore triggering full gc is very low, which means that we will not generate too many read and write IO during the GC process.
+In practice, the probability of BlobStore triggering "full GC" is very low, which means that we will not generate too many read and write IO during the GC process.
