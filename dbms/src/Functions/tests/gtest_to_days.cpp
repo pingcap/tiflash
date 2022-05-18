@@ -48,7 +48,7 @@ try
                             })
                             .column;
     auto input_col = ColumnWithTypeAndName(data_col_ptr, nullable_datetime_type_ptr, "input");
-    auto output_col = createColumn<Nullable<UInt64>>({{}, {}, 86400, 62135773261ULL, 63145476610ULL, 63814370828ULL});
+    auto output_col = createColumn<Nullable<UInt32>>({{}, {}, 1, 719164, 730850, 738592});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// ColumnVector(non-null)
@@ -61,22 +61,22 @@ try
                        })
                        .column;
     input_col = ColumnWithTypeAndName(data_col_ptr, datetime_type_ptr, "input");
-    output_col = createColumn<Nullable<UInt64>>({{}, 62135773261ULL, 63145476610ULL, 63814370828ULL});
+    output_col = createColumn<Nullable<UInt32>>({{}, 719164, 730850, 738592});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// ColumnConst(non-null)
     input_col = ColumnWithTypeAndName(createConstColumn<DataTypeMyDateTime::FieldType>(1, MyDateTime(2022, 3, 13, 6, 7, 8, 9).toPackedUInt()).column, datetime_type_ptr, "input");
-    output_col = createConstColumn<Nullable<UInt64>>(1, {63814370828ULL});
+    output_col = createConstColumn<Nullable<UInt32>>(1, {738592});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// ColumnConst(nullable)
     input_col = ColumnWithTypeAndName(createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(1, MyDateTime(2022, 3, 13, 6, 7, 8, 9).toPackedUInt()).column, nullable_datetime_type_ptr, "input");
-    output_col = createConstColumn<Nullable<UInt64>>(1, {63814370828ULL});
+    output_col = createConstColumn<Nullable<UInt32>>(1, {738592});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// ColumnConst(nullable(null))
     input_col = ColumnWithTypeAndName(createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(1, {}).column, nullable_datetime_type_ptr, "input");
-    output_col = createConstColumn<Nullable<UInt64>>(1, {});
+    output_col = createConstColumn<Nullable<UInt32>>(1, {});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     /// MyDate ColumnVector(non-null)
@@ -90,7 +90,7 @@ try
                        })
                        .column;
     input_col = ColumnWithTypeAndName(data_col_ptr, date_type_ptr, "input");
-    output_col = createColumn<Nullable<UInt64>>({{}, 86400, 62135683200ULL, 63142848000ULL, 63814435200ULL});
+    output_col = createColumn<Nullable<UInt32>>({{}, 1, 719163, 730820, 738593});
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
     dag_context->setFlags(ori_flags);
 }
