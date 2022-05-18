@@ -55,7 +55,7 @@ Instead of storing data with append write, BlobStore uses a data structure calle
 
 ![tiflash-ps-v3-freemap](./images/tiflash-ps-v3-freemap.png)
 
-This idea comes from [Space Maps in Ext4 filesystem](https://www.kernel.org/doc/ols/2010/ols2010-pages-121-132.pdf). Each node in RB-tree has a space that is represented by (offset, size). The difference is that bitmap uses the node to record used locations, but BlobStore used the node to record free locations. Because recording free locations is better to find a free space by the data size.
+The design is inspired by [Space Maps in Ext4 filesystem](https://www.kernel.org/doc/ols/2010/ols2010-pages-121-132.pdf). Each node in RB-tree has a space that is represented by (offset, size). The difference is that bitmap uses a node to record used locations, but BlobStore uses a node to record free locations. Recording free locations is a better way to find a free space by the data size.
 
 We represent the `BlobStat` by a SpaceMap to reuse the space after being reclaimed, thereby reducing write amplification. 
 
