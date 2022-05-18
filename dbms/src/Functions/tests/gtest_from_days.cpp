@@ -80,4 +80,17 @@ try
 }
 CATCH
 
+
+//TEST_F(TestFromDays, ConversionFromDaysAndDate)
+//try
+//{
+//    for (int i=366; i<100000; ++i) {
+//        MyDateTime tmp(0);
+//        fromDayNum(tmp, i);
+//        int calced_daynum = calcDayNum(tmp.year, tmp.month, tmp.day);
+//        ASSERT_EQ(i, calced_daynum);
+//    }
+//}
+//CATCH
+
 } // namespace DB::tests
