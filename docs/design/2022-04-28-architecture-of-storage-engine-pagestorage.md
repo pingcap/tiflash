@@ -45,7 +45,7 @@ The V3 version of PageStorage is composed of three main components, `PageDirecto
 
 ### BlobStore
 
-BlobStore's name is earthy, but apt indicating that it mainly stores blob data. BlobStore consists of three parts
+BlobStore's name is earthy, but apt indicating that it mainly stores blob data. BlobStore consists of three parts:
 
 1. **BlobFile**: The file stores blob data.
 2. **BlobStat**: A space manager that is used to find/allocate/free spaces in BlobFile. It corresponds one-to-one with the BlobFile.
