@@ -792,7 +792,15 @@ size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, cons
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, background, enable_failpoint);
+        PageUtil::writeFile(
+            file,
+            offset,
+            buf.begin(),
+            buf.size(),
+            write_limiter,
+            background,
+            /*truncate_if_failed=*/true,
+            /*enable_failpoint=*/enable_failpoint);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };

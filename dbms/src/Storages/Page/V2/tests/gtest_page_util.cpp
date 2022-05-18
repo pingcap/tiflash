@@ -29,7 +29,7 @@ namespace tests
 {
 static const std::string FileName = "page_util_test";
 
-TEST(PageUtils_test, ReadWriteFile)
+TEST(PageUtilsTest, ReadWriteFile)
 {
     ::remove(FileName.c_str());
 
@@ -53,7 +53,7 @@ TEST(PageUtils_test, ReadWriteFile)
     ::remove(FileName.c_str());
 }
 
-TEST(PageUtils_test, FileNotExists)
+TEST(PageUtilsTest, FileNotExists)
 {
     ::remove(FileName.c_str());
 
@@ -61,7 +61,7 @@ TEST(PageUtils_test, FileNotExists)
     ASSERT_EQ(fd, 0);
 }
 
-TEST(PageUtils_test, BigReadWriteFile)
+TEST(PageUtilsTest, BigReadWriteFile)
 {
     ::remove(FileName.c_str());
 
