@@ -63,7 +63,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_legacy_or_checkpoint_page_file_exists)                \
     M(exception_in_creating_set_input_stream)                     \
     M(exception_when_read_from_log)                               \
-    M(exception_mpp_hash_build)
+    M(exception_mpp_hash_build)                                   \
+    M(exception_before_drop_segment)                              \
+    M(exception_after_drop_segment)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(force_set_page_file_write_errno)                       \
@@ -89,7 +91,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_until_dt_background_delta_merge)      \
     M(pause_before_apply_raft_cmd)                \
     M(pause_before_apply_raft_snapshot)           \
-    M(pause_until_apply_raft_snapshot)
+    M(pause_until_apply_raft_snapshot)            \
+    M(pause_after_copr_streams_acquired_once)
 
 #define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) \
     M(pause_when_reading_from_dt_stream)     \

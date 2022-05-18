@@ -287,13 +287,20 @@ void StorageDeltaMerge::updateTableColumnInfo()
     rowkey_column_size = rowkey_column_defines.size();
 }
 
+void StorageDeltaMerge::clearData()
+{
+    shutdown();
+    // init the store so it can clear data
+    auto & store = getAndMaybeInitStore();
+    store->clearData();
+}
+
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    if (storeInited())
-    {
-        _store->drop();
-    }
+    // init the store so it can do the drop work
+    auto & store = getAndMaybeInitStore();
+    store->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
@@ -407,6 +414,10 @@ public:
     void write(const Block & block) override
     try
     {
+        // When dt_insert_max_rows (Max rows of insert blocks when write into DeltaTree Engine, default = 0) is specified,
+        // the insert block will be splited into multiples.
+        // Currently dt_insert_max_rows is only used for performance tests.
+
         if (db_settings.dt_insert_max_rows == 0)
         {
             Block to_write = decorator(block);
@@ -460,6 +471,7 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
 #ifndef NDEBUG
     {
         // Do some check under DEBUG mode to ensure all block are written with column id properly set.
+        // In this way we can catch the case that upstream raft log contains problematic data written from TiDB.
         auto header = store->getHeader();
         bool ok = true;
         String name;

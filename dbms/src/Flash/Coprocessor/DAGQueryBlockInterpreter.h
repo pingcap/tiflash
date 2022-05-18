@@ -62,6 +62,7 @@ private:
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void handleExchangeReceiver(DAGPipeline & pipeline);
+    void handleMockExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
@@ -69,7 +70,7 @@ private:
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
     void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
-    void executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns);
+    void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeWindow(
         DAGPipeline & pipeline,
@@ -83,6 +84,7 @@ private:
         bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
     void handleExchangeSender(DAGPipeline & pipeline);
+    void handleMockExchangeSender(DAGPipeline & pipeline);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 

@@ -113,6 +113,10 @@ protected:
 
     UInt64 getRightMargin() override
     {
+        if (free_map.empty())
+        {
+            return end - start;
+        }
         return free_map.rbegin()->first;
     }
 

@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
+#include <Core/NamesAndTypes.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
@@ -23,6 +24,8 @@
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/MockExchangeReceiverInputStream.h>
+#include <DataStreams/MockExchangeSenderInputStream.h>
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
@@ -47,6 +50,7 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TiDB.h>
+
 
 namespace DB
 {
@@ -169,7 +173,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
 
 void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    const auto push_down_filter = PushDownFilter::toPushDownFilter(query_block.selection);
+    const auto push_down_filter = PushDownFilter::toPushDownFilter(query_block.selection_name, query_block.selection);
 
     DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
     storage_interpreter.execute(pipeline);
@@ -409,7 +413,7 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
     orderStreams(pipeline, sort_desc, 0);
 }
 
-void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const std::vector<NameAndTypePair> & order_columns)
+void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
     orderStreams(pipeline, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit);
@@ -465,25 +469,39 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         pipeline.streams.push_back(stream);
     }
-    std::vector<NameAndTypePair> source_columns;
-    Block block = pipeline.firstStream()->getHeader();
-    for (const auto & col : block.getColumnsWithTypeAndName())
+    NamesAndTypes source_columns;
+    for (const auto & col : pipeline.firstStream()->getHeader())
     {
-        source_columns.emplace_back(NameAndTypePair(col.name, col.type));
+        source_columns.emplace_back(col.name, col.type);
+    }
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+}
+
+void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
+{
+    for (size_t i = 0; i < max_streams; ++i)
+    {
+        // use max_block_size / 10 to determine the mock block's size
+        pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(query_block.source->exchange_receiver(), context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
+    }
+    NamesAndTypes source_columns;
+    for (const auto & col : pipeline.firstStream()->getHeader())
+    {
+        source_columns.emplace_back(col.name, col.type);
     }
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
 void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection)
 {
-    std::vector<NameAndTypePair> input_columns;
+    NamesAndTypes input_columns;
     pipeline.streams = input_streams_vec[0];
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
     ExpressionActionsChain chain;
     auto & last_step = dag_analyzer.initAndGetLastStep(chain);
-    std::vector<NameAndTypePair> output_columns;
+    NamesAndTypes output_columns;
     NamesWithAliases project_cols;
     UniqueNameGenerator unique_name_generator;
     for (const auto & expr : projection.exprs())
@@ -550,7 +568,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        handleExchangeReceiver(pipeline);
+        if (unlikely(dagContext().isTest()))
+            handleMockExchangeReceiver(pipeline);
+        else
+            handleExchangeReceiver(pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
@@ -561,7 +582,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.isTableScanSource())
     {
         TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
-        if (dagContext().isTest())
+        if (unlikely(dagContext().isTest()))
             handleMockTableScan(table_scan, pipeline);
         else
             handleTableScan(table_scan, pipeline);
@@ -642,7 +663,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // execute exchange_sender
     if (query_block.exchange_sender)
     {
-        handleExchangeSender(pipeline);
+        if (unlikely(dagContext().isTest()))
+            handleMockExchangeSender(pipeline);
+        else
+            handleExchangeSender(pipeline);
         recordProfileStreams(pipeline, query_block.exchange_sender_name);
     }
 }
@@ -690,6 +714,13 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dagContext());
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+    });
+}
+
+void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline)
+{
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<MockExchangeSenderInputStream>(stream, log->identifier());
     });
 }
 

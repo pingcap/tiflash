@@ -23,13 +23,13 @@
 
 namespace DB::PS::V3::ser
 {
-inline void serializeVersionTo(const PageVersionType & version, WriteBuffer & buf)
+inline void serializeVersionTo(const PageVersion & version, WriteBuffer & buf)
 {
     writeIntBinary(version.sequence, buf);
     writeIntBinary(version.epoch, buf);
 }
 
-inline void deserializeVersionFrom(ReadBuffer & buf, PageVersionType & version)
+inline void deserializeVersionFrom(ReadBuffer & buf, PageVersion & version)
 {
     readIntBinary(version.sequence, buf);
     readIntBinary(version.epoch, buf);
@@ -100,7 +100,6 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     UInt32 flags = 0;
     readIntBinary(flags, buf);
 
-    // All consider as put
     PageEntriesEdit::EditRecord rec;
     rec.type = record_type;
     readIntBinary(rec.page_id, buf);
@@ -152,7 +151,7 @@ void deserializePutExternalFrom([[maybe_unused]] const EditRecordType record_typ
     assert(record_type == EditRecordType::PUT_EXTERNAL || record_type == EditRecordType::VAR_EXTERNAL);
 
     PageEntriesEdit::EditRecord rec;
-    rec.type = EditRecordType::PUT_EXTERNAL;
+    rec.type = record_type;
     readIntBinary(rec.page_id, buf);
     deserializeVersionFrom(buf, rec.version);
     readIntBinary(rec.being_ref_count, buf);
@@ -175,7 +174,7 @@ void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 
     PageIdV3Internal page_id;
     readIntBinary(page_id, buf);
-    PageVersionType version;
+    PageVersion version;
     deserializeVersionFrom(buf, version);
 
     PageEntriesEdit::EditRecord rec;

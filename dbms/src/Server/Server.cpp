@@ -1112,13 +1112,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    // must initialize before the following operation:
-    //   1. load data from disk(because this process may depend on the initialization of global StoragePool)
-    //   2. initialize KVStore service
-    //     1) because we need to check whether this is the first startup of this node, and we judge it based on whether there are any files in kvstore directory
-    //     2) KVStore service also choose its data format based on whether the GlobalStoragePool is initialized
-    if (global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), storage_config.enable_ps_v3))
-        LOG_FMT_INFO(log, "PageStorage V3 enabled.");
+
+    global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
+    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.

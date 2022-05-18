@@ -34,7 +34,7 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-using PageIdAndVersionedEntries = std::vector<std::tuple<PageIdV3Internal, PageVersionType, PageEntryV3>>;
+using PageIdAndVersionedEntries = std::vector<std::tuple<PageIdV3Internal, PageVersion, PageEntryV3>>;
 
 class BlobStore : private Allocator<false>
 {
@@ -71,7 +71,11 @@ public:
             // Read Only.
             // Only after heavy GC, BlobFile will change to READ_ONLY type.
             // After GC remove, empty files will be removed.
-            READ_ONLY = 2
+            READ_ONLY = 2,
+
+            // Big Blob file
+            // Only used to page size > config.file_limit_size
+            BIG_BLOB = 3
         };
 
         static String blobTypeToString(BlobStatType type)
@@ -82,6 +86,8 @@ public:
                 return "normal";
             case BlobStatType::READ_ONLY:
                 return "read only";
+            case BlobStatType::BIG_BLOB:
+                return "big blob";
             }
             return "Invalid";
         }
@@ -104,16 +110,24 @@ public:
             double sm_valid_rate = 1.0;
 
         public:
-            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
+            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_, BlobStatType type_ = BlobStatType::NORMAL)
                 : id(id_)
-                , type(BlobStatType::NORMAL)
+                , type(type_)
                 , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
                 , sm_max_caps(sm_max_caps_)
-            {}
+            {
+                // Won't create read-only blob by default.
+                assert(type != BlobStatType::READ_ONLY);
+            }
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()
             {
                 return std::lock_guard(sm_lock);
+            }
+
+            bool isNormal() const
+            {
+                return type.load() == BlobStatType::NORMAL;
             }
 
             bool isReadOnly() const
@@ -124,6 +138,11 @@ public:
             void changeToReadOnly()
             {
                 type.store(BlobStatType::READ_ONLY);
+            }
+
+            bool isBigBlob() const
+            {
+                return type.load() == BlobStatType::BIG_BLOB;
             }
 
             BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
@@ -168,7 +187,11 @@ public:
 
         BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard);
+
+        BlobStatPtr createBigPageStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+
+        BlobStatPtr createBigStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard);
 
         void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 
@@ -190,6 +213,8 @@ public:
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
+        BlobFileId chooseBigStat(const std::lock_guard<std::mutex> &) const;
+
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
         std::map<String, std::list<BlobStatPtr>> getStats() const
@@ -197,8 +222,6 @@ public:
             auto guard = lock();
             return stats_map;
         }
-
-        std::set<BlobFileId> getBlobIdsFromDisk(String path) const;
 
         static std::pair<BlobFileId, String> getBlobIdFromName(String blob_name);
 
@@ -262,6 +285,8 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+
+    PageEntriesEdit handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 

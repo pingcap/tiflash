@@ -82,29 +82,6 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
             res.engine = DEFAULT_ENGINE;
     }
 
-    /// "tmt" engine ONLY support disable_bg_flush = false.
-    /// "dt" engine ONLY support disable_bg_flush = true.
-
-    String disable_bg_flush_conf = "raft.disable_bg_flush";
-    if (res.engine == ::TiDB::StorageEngine::TMT)
-    {
-        if (config.has(disable_bg_flush_conf) && config.getBool(disable_bg_flush_conf))
-            throw Exception(
-                fmt::format("Illegal arguments: disable background flush while using engine {}", MutableSupport::txn_storage_name),
-                ErrorCodes::INVALID_CONFIG_PARAMETER);
-        res.disable_bg_flush = false;
-    }
-    else if (res.engine == ::TiDB::StorageEngine::DT)
-    {
-        /// If background flush is enabled, read will not triggle schema sync.
-        /// Which means that we may get the wrong result with outdated schema.
-        if (config.has(disable_bg_flush_conf) && !config.getBool(disable_bg_flush_conf))
-            throw Exception(
-                fmt::format("Illegal arguments: enable background flush while using engine {}", MutableSupport::delta_tree_storage_name),
-                ErrorCodes::INVALID_CONFIG_PARAMETER);
-        res.disable_bg_flush = true;
-    }
-
     // just for test
     if (config.has("raft.enable_compatible_mode"))
     {

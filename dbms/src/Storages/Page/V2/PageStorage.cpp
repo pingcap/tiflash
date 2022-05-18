@@ -349,11 +349,10 @@ void PageStorage::restore()
 #endif
 
     statistics = restore_info;
-    {
-        auto snapshot = getConcreteSnapshot();
-        size_t num_pages = snapshot->version()->numPages();
-        LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
-    }
+
+    auto snapshot = getConcreteSnapshot();
+    size_t num_pages = snapshot->version()->numPages();
+    LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
 }
 
 PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
@@ -604,6 +603,19 @@ size_t PageStorage::getNumberOfPages()
     if (concrete_snap)
     {
         return concrete_snap->version()->numPages();
+    }
+    else
+    {
+        throw Exception("Can't get concrete snapshot", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+std::set<PageId> PageStorage::getAliveExternalPageIds(NamespaceId /*ns_id*/)
+{
+    const auto & concrete_snap = getConcreteSnapshot();
+    if (concrete_snap)
+    {
+        return concrete_snap->version()->validNormalPageIds();
     }
     else
     {

@@ -36,7 +36,7 @@ TEST(WALSeriTest, AllPuts)
 {
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20(/*seq=*/20);
+    PageVersion ver20(/*seq=*/20);
     PageEntriesEdit edit;
     edit.put(1, entry_p1);
     edit.put(2, entry_p2);
@@ -58,7 +58,7 @@ try
 {
     PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver21(/*seq=*/21);
+    PageVersion ver21(/*seq=*/21);
     PageEntriesEdit edit;
     edit.put(3, entry_p3);
     edit.ref(4, 3);
@@ -107,8 +107,8 @@ TEST(WALSeriTest, Upserts)
     PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
-    PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
+    PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
+    PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     PageEntriesEdit edit;
     edit.upsertPage(1, ver20_1, entry_p1_2);
     edit.upsertPage(3, ver21_1, entry_p3_2);
@@ -131,6 +131,61 @@ TEST(WALSeriTest, Upserts)
     EXPECT_EQ(iter->page_id.low, 5);
     EXPECT_EQ(iter->version, ver21_1);
     EXPECT_SAME_ENTRY(iter->entry, entry_p5_2);
+}
+
+TEST(WALSeriTest, RefExternalAndEntry)
+{
+    PageVersion ver1_0(/*seq=*/1, /*epoch*/ 0);
+    PageVersion ver2_0(/*seq=*/2, /*epoch*/ 0);
+    PageVersion ver3_0(/*seq=*/3, /*epoch*/ 0);
+    {
+        PageEntriesEdit edit;
+        edit.varExternal(1, ver1_0, 2);
+        edit.varDel(1, ver2_0);
+        edit.varRef(2, ver3_0, 1);
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 3);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, EditRecordType::VAR_EXTERNAL);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver1_0);
+        EXPECT_EQ(iter->being_ref_count, 2);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_DELETE);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver2_0);
+        EXPECT_EQ(iter->being_ref_count, 1);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
+        EXPECT_EQ(iter->page_id.low, 2);
+        EXPECT_EQ(iter->version, ver3_0);
+    }
+
+    {
+        PageEntriesEdit edit;
+        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        edit.varEntry(1, ver1_0, entry_p1_2, 2);
+        edit.varDel(1, ver2_0);
+        edit.varRef(2, ver3_0, 1);
+
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        ASSERT_EQ(deseri_edit.size(), 3);
+        auto iter = deseri_edit.getRecords().begin();
+        EXPECT_EQ(iter->type, EditRecordType::VAR_ENTRY);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver1_0);
+        EXPECT_EQ(iter->being_ref_count, 2);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_DELETE);
+        EXPECT_EQ(iter->page_id.low, 1);
+        EXPECT_EQ(iter->version, ver2_0);
+        EXPECT_EQ(iter->being_ref_count, 1);
+        iter++;
+        EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
+        EXPECT_EQ(iter->page_id.low, 2);
+        EXPECT_EQ(iter->version, ver3_0);
+    }
 }
 
 TEST(WALLognameTest, parsing)
@@ -352,7 +407,7 @@ try
     // Stage 2. Apply with only puts
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20(/*seq=*/20);
+    PageVersion ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
         edit.put(1, entry_p1);
@@ -382,7 +437,7 @@ try
     // Stage 3. Apply with puts and refs
     PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver21(/*seq=*/21);
+    PageVersion ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
@@ -416,8 +471,8 @@ try
     PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
-    PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
+    PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
+    PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
         PageEntriesEdit edit;
         edit.upsertPage(1, ver20_1, entry_p1_2);
@@ -461,7 +516,7 @@ try
     // Stage 1. Apply with only puts
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20(/*seq=*/20);
+    PageVersion ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
         edit.put(1, entry_p1);
@@ -473,7 +528,7 @@ try
     // Stage 2. Apply with puts and refs
     PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver21(/*seq=*/21);
+    PageVersion ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
@@ -488,8 +543,8 @@ try
     PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
-    PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
+    PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
+    PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
         PageEntriesEdit edit;
         edit.upsertPage(1, ver20_1, entry_p1_2);
@@ -556,7 +611,7 @@ try
     PageId page_id = 0;
     std::vector<size_t> size_each_edit;
     size_each_edit.reserve(num_edits_test);
-    PageVersionType ver(/*seq*/ 32);
+    PageVersion ver(/*seq*/ 32);
     for (size_t i = 0; i < num_edits_test; ++i)
     {
         PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
@@ -610,7 +665,7 @@ try
     // just fill in some random entry
     for (size_t i = 0; i < 70; ++i)
     {
-        snap_edit.varEntry(d_10000(rd), PageVersionType(345, 22), entry, 1);
+        snap_edit.varEntry(d_10000(rd), PageVersion(345, 22), entry, 1);
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     bool done = wal->saveSnapshot(std::move(file_snap), std::move(snap_edit));
