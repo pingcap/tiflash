@@ -51,39 +51,6 @@ public:
 
     friend class StoragePool;
 
-    PageId getLogMaxId(NamespaceId ns_id) const
-    {
-        PageId max_log_page_id = 0;
-        if (const auto & it = log_max_ids.find(ns_id); it != log_max_ids.end())
-        {
-            max_log_page_id = it->second;
-        }
-
-        return max_log_page_id;
-    }
-
-    PageId getDataMaxId(NamespaceId ns_id) const
-    {
-        PageId max_data_page_id = 0;
-        if (const auto & it = data_max_ids.find(ns_id); it != data_max_ids.end())
-        {
-            max_data_page_id = it->second;
-        }
-
-        return max_data_page_id;
-    }
-
-    PageId getMetaMaxId(NamespaceId ns_id) const
-    {
-        PageId max_meta_page_id = 0;
-        if (const auto & it = meta_max_ids.find(ns_id); it != meta_max_ids.end())
-        {
-            max_meta_page_id = it->second;
-        }
-
-        return max_meta_page_id;
-    }
-
     // GC immediately
     // Only used on dbgFuncMisc
     bool gc();
@@ -95,10 +62,6 @@ private:
     PageStoragePtr log_storage;
     PageStoragePtr data_storage;
     PageStoragePtr meta_storage;
-
-    std::map<NamespaceId, PageId> log_max_ids;
-    std::map<NamespaceId, PageId> data_max_ids;
-    std::map<NamespaceId, PageId> meta_max_ids;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
@@ -195,6 +158,9 @@ public:
 private:
 #endif
     bool doV2Gc(const Settings & settings);
+
+    void forceTransformMetaV2toV3();
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -232,6 +198,8 @@ private:
     std::atomic<PageId> max_meta_page_id = 0;
 
     BackgroundProcessingPool::TaskHandle gc_handle = nullptr;
+
+    CurrentMetrics::Increment storage_pool_metrics;
 };
 
 struct StorageSnapshot : private boost::noncopyable

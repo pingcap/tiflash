@@ -99,7 +99,7 @@ public:
         PSDiskDelegatorPtr & delegator,
         WALStore::Config config);
 
-    void apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter = nullptr);
+    void apply(PageEntriesEdit & edit, const PageVersion & version, const WriteLimiterPtr & write_limiter = nullptr);
     void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     struct FilesSnapshot

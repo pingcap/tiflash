@@ -39,20 +39,13 @@ public:
 
     ~BackgroundService();
 
-    void addRegionToFlush(const RegionPtr & region);
-
 private:
     TMTContext & tmt;
     BackgroundProcessingPool & background_pool;
 
     Poco::Logger * log;
 
-    std::mutex region_mutex;
-    RegionMap regions_to_flush;
-
     BackgroundProcessingPool::TaskHandle single_thread_task_handle;
-    BackgroundProcessingPool::TaskHandle table_flush_handle;
-    BackgroundProcessingPool::TaskHandle region_handle;
     BackgroundProcessingPool::TaskHandle storage_gc_handle;
 };
 

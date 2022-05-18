@@ -229,15 +229,11 @@ public:
 
     virtual ~PageStorage() = default;
 
-    // Return the map[ns_id, max_page_id]
-    // The caller should ensure that it only allocate new id that is larger than `max_page_id`. Reusing the
-    // same ID for different kind of write (put/ref/put_external) would make PageStorage run into unexpected error.
-    //
-    // Note that for V2, we always return a map with only one element: <ns_id=0, max_id> cause V2 have no
-    // idea about ns_id.
-    virtual std::map<NamespaceId, PageId> restore() = 0;
+    virtual void restore() = 0;
 
     virtual void drop() = 0;
+
+    virtual PageId getMaxId(NamespaceId ns_id) = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 
@@ -373,7 +369,7 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const;
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor) const;
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
 private:
     std::unique_ptr<PageReaderImpl> impl;
@@ -394,9 +390,10 @@ public:
 
     friend class RegionPersister;
 
-private:
+    // Only used for META and KVStore write del.
     void writeIntoV2(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
+private:
     void writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
     void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;

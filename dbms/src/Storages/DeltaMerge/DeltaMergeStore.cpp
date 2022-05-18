@@ -243,7 +243,8 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     try
     {
         page_storage_run_mode = storage_pool->restore(); // restore from disk
-        if (!storage_pool->maxMetaPageId())
+        if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
+            !first_segment_entry.isValid())
         {
             // Create the first segment.
             auto segment_id = storage_pool->newMetaPageId();
@@ -578,7 +579,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     const auto bytes = block.bytes();
 
     {
-        // Sort by handle & version in ascending order.
+        // Sort the block by handle & version in ascending order.
         SortDescription sort;
         sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
         sort.emplace_back(VERSION_COLUMN_NAME, 1, 0);
@@ -594,6 +595,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     const auto handle_column = block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
     auto rowkey_column = RowKeyColumnContainer(handle_column, is_common_handle);
 
+    // Write block by segments
     while (offset != rows)
     {
         RowKeyValueRef start_key = rowkey_column.getRowKeyValue(offset);
@@ -604,6 +606,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         // Keep trying until succeeded.
         while (true)
         {
+            // Find the segment according to current start_key
             SegmentPtr segment;
             {
                 std::shared_lock lock(read_write_mutex);
@@ -618,12 +621,16 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             }
 
             FAIL_POINT_PAUSE(FailPoints::pause_when_writing_to_dt_store);
+
+            // Do force merge or stop write if necessary.
             waitForWrite(dm_context, segment);
             if (segment->hasAbandoned())
                 continue;
 
             const auto & rowkey_range = segment->getRowKeyRange();
 
+            // The [offset, rows - offset] can be exceeding the Segment's rowkey_range. Cut the range
+            // to fit the segment.
             auto [cur_offset, cur_limit] = rowkey_range.getPosRange(handle_column, offset, rows - offset);
             if (unlikely(cur_offset != offset))
                 throw Exception("cur_offset does not equal to offset", ErrorCodes::LOGICAL_ERROR);
@@ -632,8 +639,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             auto alloc_bytes = block.bytes(offset, limit);
 
             bool is_small = limit < dm_context->delta_cache_limit_rows / 4 && alloc_bytes < dm_context->delta_cache_limit_bytes / 4;
-            // Small column files are appended to Delta Cache, then flushed later.
-            // While large column files are directly written to PageStorage.
+            // For small column files, data is appended to MemTableSet, then flushed later.
+            // For large column files, data is directly written to PageStorage, while the ColumnFile entry is appended to MemTableSet.
             if (is_small)
             {
                 if (segment->writeToCache(*dm_context, block, offset, limit))
@@ -651,6 +658,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                     wbs.rollbackWrittenLogAndData();
                     wbs.clear();
 
+                    // In this case we will construct a ColumnFile that does not contain block data in the memory.
+                    // The block data has been written to PageStorage in wbs.
                     write_column_file = ColumnFileTiny::writeColumnFile(*dm_context, block, offset, limit, wbs);
                     wbs.writeLogAndData();
                     write_range = rowkey_range;
@@ -1200,6 +1209,7 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     size_t delta_rows = segment->getDelta()->getRows();
     size_t delta_bytes = segment->getDelta()->getBytes();
 
+    // No need to stall the write stall if not exceeding the threshold of force merge.
     if (delta_rows < forceMergeDeltaRows(dm_context) && delta_bytes < forceMergeDeltaBytes(dm_context))
         return;
 
@@ -1216,16 +1226,23 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
 
     size_t sleep_ms;
     if (delta_rows >= stop_write_delta_rows || delta_bytes >= stop_write_delta_bytes)
+    {
+        // For stop write (hard limit), wait until segment is updated (e.g. delta is merged).
         sleep_ms = std::numeric_limits<size_t>::max();
+    }
     else
+    {
+        // For force merge (soft limit), wait for a reasonable amount of time.
+        // It is possible that the segment is still not updated after the wait.
         sleep_ms = static_cast<double>(segment_bytes) / k10mb * 1000 * wait_duration_factor;
+    }
 
     // checkSegmentUpdate could do foreground merge delta, so call it before sleep.
     checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 
     size_t sleep_step = 50;
-    // The delta will be merged, only after this segment got abandoned.
-    // Because merge delta will replace the segment instance.
+    // Wait at most `sleep_ms` until the delta is merged.
+    // Merge delta will replace the segment instance, causing `segment->hasAbandoned() == true`.
     while (!segment->hasAbandoned() && sleep_ms > 0)
     {
         size_t ms = std::min(sleep_ms, sleep_step);
