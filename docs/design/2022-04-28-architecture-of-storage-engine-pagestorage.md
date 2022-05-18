@@ -47,9 +47,9 @@ The V3 version of PageStorage is composed of three main components, `PageDirecto
 
 BlobStore's name is earthy, but apt indicating that it mainly stores blob data. BlobStore consists of three parts:
 
-1. **BlobFile**: The file stores blob data.
-2. **BlobStat**: A space manager that is used to find/allocate/free spaces in BlobFile. It corresponds one-to-one with the BlobFile.
-3. **BlobStats**: Manage all BlobStat. Used to schedule all write requests.
+- **BlobFile**: The file that stores blob data.
+- **BlobStat**: A space manager used to find/allocate/free space in BlobFile. It has one-to-one mapping with the BlobFile.
+- **BlobStats**: Manage all BlobStat. It is used to schedule all write requests.
 
 Instead of storing data with append write, BlobStore uses a data structure called SpaceMap to manage the free spaces and perform random write in BlobFile.
 
