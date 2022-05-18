@@ -50,6 +50,32 @@ The V3 version of PageStorage is composed of three main components, `PageDirecto
 - WALStore(Write Ahead Log Store): Using the write ahead log file format to manager the meta part.
 
 
+#### BlobStore
+
+BlobStore's name is earthy, but apt indicating that it mainly stores blob data. BlobStore consists of three parts
+
+1. **BlobFile**: The file stores blob data.
+2. **BlobStat**: A space manager that is used to find/allocate/free spaces in BlobFile. It corresponds one-to-one with the BlobFile.
+3. **BlobStats**: Manage all BlobStat. Used to schedule all write requests.
+
+Instead of storing data with append write, BlobStore uses a data structure called SpaceMap to manage the free spaces and perform random write in BlobFile.
+
+![tiflash-ps-v3-freemap](./images/tiflash-ps-v3-freemap.png)
+
+This idea comes from [Space Maps in Ext4 filesystem](https://www.kernel.org/doc/ols/2010/ols2010-pages-121-132.pdf). Each node in RB-tree has a space that is represented by (offset, size). The difference is that bitmap uses the node to record used locations, but BlobStore used the node to record free locations. Because recording free locations is better to find a free space by the data size.
+
+We represent the `BlobStat` by a SpaceMap to reuse the space after being reclaimed, thereby reducing write amplification. 
+
+In order to avoid getting some simple statistics by traversing the full SpaceMap, BlobStat provides external statistical status, such as the valid rate of the current BlobFile, the maximum capacity, and so on. These statistics are useful for:
+
+1. BlobStats can determine whether to create a new Blobfile or reuse the old one.
+2. BlobStats choose the lowest valid rate among all BlobFile to reuse the reclaimed space whenever possible, avoid creating new BlobFiles
+3. GC routine can use these statistics to quickly determine whether the current BlobFile needs to perform `compact GC` to avoid severe space amplification
+4. GC routine can perform truncate to free the spaces at the end of BlobFiles on disk. Reducing space amplification 
+
+What's more, when a write request happens, BlobStore will ask BlobStats for unused space from BlobStats. Since all disk spaces are scheduled by BlobStats and happen in memory, once the location is allocated from BlobStats, all actual write operations to the disk can be parallelized. So BlobStore allows maximum IO parallelism to utilise disk bandwidth.
+
+
 #### PageDirectory
 
 PageDirectory supports the function of MVCC, providing a read-only snapshot that does not block writes. It is mainly composed of an RB-tree map with the key is `page id` and the value is the `version chain`.
@@ -161,34 +187,6 @@ Bits                | Name             | Description.          |
 132:260             | Version          | The combine of sequence and epoch             |
 
 
-
-#### BlobStore
-
-BlobStore's name is earthy, but apt. It mainly stores `Blob`, which consists of three parts
-
-1. **BlobFile**: Blob stored file, used to write and read.
-2. **BlobStat**: A space manager, one-to-one correspondence with blobfile. used to find/alloc/free spaces in BlobFile.
-3. **BlobStats**: Manage all BlobStat. Used to schedule all write requests.
-
-Different to V2 design, we decided to abandon the append write mode. Instead, a data structure called SpaceMap used to manage the file spaces.
-
-![tiflash-ps-v3-freemap](./images/tiflash-ps-v3-freemap.png)
-
-
-This idea come form a rb-tree bitmap implements. Every node in `rb-tree`(red black tree) have a space which conbime with offset + size. But the difference is that bitmap uses `rb-node`(the node from red black tree) to record used locations, BlobStore used `rb-node` to record free locations. Because record free locations better to find a free space which used to store a buffer of data.
-
-The SpaceMap inside `BlobStat`, BlobStat can use it to reuse the reclaimed space, thereby reducing write amplification. 
-
-In addition, BlobStat also needs to provide external statistical status, such as the valid rate of the current BlobFile, the maximum capacity of the current SpaceMap, and so on. These data must be calculated when inserting and removing, otherwise BlobStat have to traverse the SpaceMap to get the data we need.
-
-The statistical status from BlobStat is very necessary and useful. 
-
-1. Provide it to BlobStats so that BlobStats can determine whether to create a new Blobfile or reuse the old one.
-2. When BlobStats selects BlobFile to write, it will write according to the BlobFile with the lowest valid rate.
-3. When GC occurs, it can quickly determine whether the current BlobFile needs to be `full GC`(similar with `compact GC`).
-4. Because the release of the file space may cause invalid data to be stored at the end of the BlobFile, the truncate operation can also be performed in time during GC to reduce space enlargement.
-
-Finally, from the description of BlobStat, it is not difficult to find that BlobStats is used to schedule all write IO. Then write request happend, BlobStore will ask a unused space from BlobStats, Then BlobStore can put the buffer into that disk space. These operate all happend in memory, So BlobStore can maximize IO parallelization.
 
 #### GC
 
