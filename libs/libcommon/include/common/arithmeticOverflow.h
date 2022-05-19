@@ -99,7 +99,7 @@ inline bool mulOverflow(__int128 x, __int128 y, __int128 & res)
     if (!x || !y)
         return false;
 
-    return res/x != y; /// whether overflow int128
+    return res / x != y; /// whether overflow int128
 }
 
 /// Int256 doesn't use the complement representation to express negative values, but uses an extra bit to express the sign flag,
