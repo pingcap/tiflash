@@ -492,7 +492,7 @@ try
 CATCH
 
 
-TEST_F(PageStorageMixedTest, RefDelPage)
+TEST_F(PageStorageMixedTest, MockDTIngest)
 try
 {
     {
@@ -526,6 +526,10 @@ try
         batch.putRefPage(2012, 2001);
         ASSERT_NO_THROW(page_writer_mix->write(std::move(batch), nullptr));
     }
+
+    // check 2012 -> 2001 => 2021 -> 1999
+    ASSERT_EQ(page_reader_mix->getNormalPageId(2012), 1999);
+
     {
         // Revert v3
         WriteBatch batch;
@@ -552,7 +556,8 @@ try
     {
         WriteBatch batch;
         batch.putRefPage(102, 101);
-        page_writer_mix->write(std::move(batch), nullptr);
+        // Should not run into this case after we introduce `StoragePool::forceTransformDataV2toV3`
+        ASSERT_ANY_THROW(page_writer_mix->write(std::move(batch), nullptr););
     }
     {
         // Revert v3
