@@ -18,6 +18,10 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/Snapshot.h>
+#include <Storages/Page/V2/PageStorage.h>
 #include <fmt/format.h>
 
 
@@ -244,6 +248,8 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
 
 void StoragePool::forceTransformMetaV2toV3()
 {
+    if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
+        throw Exception(fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
     assert(meta_storage_v2 != nullptr);
     assert(meta_storage_v3 != nullptr);
     auto meta_transform_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, meta_storage_v3);
@@ -288,6 +294,80 @@ void StoragePool::forceTransformMetaV2toV3()
     meta_transform_storage_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
 }
 
+static inline DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *
+toV2ConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
+{
+    return dynamic_cast<DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *>(ptr.get());
+}
+
+void StoragePool::forceTransformDataV2toV3()
+{
+    if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
+        throw Exception(fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
+    assert(data_storage_v2 != nullptr);
+    assert(data_storage_v3 != nullptr);
+    auto data_transform_storage_writer = std::make_shared<PageWriter>(run_mode, data_storage_v2, data_storage_v3);
+
+    auto snapshot = data_storage_v2->getSnapshot("transformDataV2toV3");
+    auto * v2_snap = toV2ConcreteSnapshot(snapshot);
+    if (!snapshot || !v2_snap)
+    {
+        throw Exception("Can not allocate snapshot from pool.data v2", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    // Example
+    // 100 -> 100
+    // 102 -> 100
+    // 105 -> 100
+    // 200 -> 200
+    // 305 -> 300
+    // Migration steps:
+    // collect v2 valid page id: 100, 102, 105, 200, 305
+    // v3 put external 100, 200, 300; put ref 102, 105, 305
+    // mark some id as deleted: v3 del 300
+    // v2 delete 100, 102, 105, 200, 305
+
+    // The page ids that can be accessed by DeltaTree
+    const auto all_page_ids = v2_snap->view.validPageIds();
+
+    WriteBatch write_batch_transform{ns_id};
+    WriteBatch write_batch_del_v2{ns_id};
+
+    std::set<PageId> created_dt_file_id;
+    for (const auto page_id : all_page_ids)
+    {
+        // resolve the page_id into dtfile id
+        const auto resolved_file_id = v2_snap->view.resolveRefId(page_id);
+        if (auto ins_result = created_dt_file_id.insert(resolved_file_id); /*created=*/ins_result.second)
+        {
+            // first see this file id, migrate to v3
+            write_batch_transform.putExternal(resolved_file_id, 0);
+        }
+        // migrate the reference for v3
+        if (page_id != resolved_file_id)
+        {
+            write_batch_transform.putRefPage(page_id, resolved_file_id);
+        }
+        // record del for V2
+        write_batch_del_v2.delPage(page_id);
+    }
+    // If the file id is not existed in `all_page_ids`, it means the file id
+    // itself has been deleted.
+    for (const auto dt_file_id : created_dt_file_id)
+    {
+        if (all_page_ids.count(dt_file_id) == 0)
+        {
+            write_batch_transform.delPage(dt_file_id);
+        }
+    }
+
+    // Will rewrite into V3.
+    data_transform_storage_writer->writeIntoV3(std::move(write_batch_transform), nullptr);
+
+    // DEL must call after rewrite.
+    data_transform_storage_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
+}
+
 PageStorageRunMode StoragePool::restore()
 {
     switch (run_mode)
@@ -324,10 +404,10 @@ PageStorageRunMode StoragePool::restore()
         // However, the pages on meta V2 can not be deleted. As the pages in meta are small, we perform a forceTransformMetaV2toV3 to convert pages before all.
         if (const auto & meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
         {
-            LOG_FMT_INFO(logger, "Current meta transform to V3 begin, [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
+            LOG_FMT_INFO(logger, "Current pool.meta transform to V3 begin [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
             forceTransformMetaV2toV3();
             const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
-            LOG_FMT_INFO(logger, "Current meta transform to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
+            LOG_FMT_INFO(logger, "Current pool.meta transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
                          ns_id,
                          meta_remain_pages_after_transform == 0,
                          meta_remain_pages,
@@ -335,7 +415,23 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current meta translate already done before restored.[ns_id={}] ", ns_id);
+            LOG_FMT_INFO(logger, "Current pool.meta translate already done before restored [ns_id={}] ", ns_id);
+        }
+
+        if (const auto & data_remain_pages = data_storage_v2->getNumberOfPages(); data_remain_pages != 0)
+        {
+            LOG_FMT_INFO(logger, "Current pool.data transform to V3 begin [ns_id={}] [pages_before_transform={}]", ns_id, data_remain_pages);
+            forceTransformDataV2toV3();
+            const auto & data_remain_pages_after_transform = data_storage_v2->getNumberOfPages();
+            LOG_FMT_INFO(logger, "Current pool.data transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
+                         ns_id,
+                         data_remain_pages_after_transform == 0,
+                         data_remain_pages,
+                         data_remain_pages_after_transform);
+        }
+        else
+        {
+            LOG_FMT_INFO(logger, "Current pool.data translate already done before restored [ns_id={}] ", ns_id);
         }
 
         // Check number of valid pages in v2

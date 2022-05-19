@@ -326,6 +326,7 @@ public:
     {
         return getNormalPageId(page_id, toConcreteSnapshot(snap), throw_on_not_exist);
     }
+
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const

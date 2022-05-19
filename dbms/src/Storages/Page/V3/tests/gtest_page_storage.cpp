@@ -1301,5 +1301,33 @@ try
 }
 CATCH
 
+
+TEST_F(PageStorageTest, putExternalAfterRestore)
+try
+{
+    {
+        WriteBatch batch;
+        batch.putExternal(1999, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    auto alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 1);
+    ASSERT_EQ(*alive_ids.begin(), 1999);
+
+    {
+        WriteBatch batch;
+        batch.putExternal(1999, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 1);
+    ASSERT_EQ(*alive_ids.begin(), 1999);
+}
+CATCH
+
 } // namespace PS::V3::tests
 } // namespace DB
