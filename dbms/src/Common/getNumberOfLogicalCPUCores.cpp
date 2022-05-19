@@ -3,7 +3,6 @@
 #include <common/likely.h>
 
 #include <thread>
-#include "common/logger_useful.h"
 
 #if defined(__linux__)
 #include <cmath>
@@ -182,6 +181,10 @@ static unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
 unsigned getNumberOfLogicalCPUCores()
 {
     unsigned logical_cpu_count = std::thread::hardware_concurrency();
+    if (unlikely(logical_cpu_count == 0))
+    {
+        throw DB::Exception("Failed to get number of logical CPU cores", DB::ErrorCodes::CPUID_ERROR);
+    }
 #if defined(__linux__)
     logical_cpu_count = getCGroupLimitedCPUCores(logical_cpu_count);
 #endif // __linux__
