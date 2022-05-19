@@ -35,8 +35,6 @@
 #include <Parsers/parseQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/SchemaBuilder-internal.h>
-#include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -44,6 +42,9 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include <tuple>
+
+#include <TIDB/Schema/SchemaBuilder-internal.h>
+#include <TIDB/Schema/SchemaBuilder.h>
 
 namespace DB
 {

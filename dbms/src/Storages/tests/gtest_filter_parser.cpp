@@ -25,7 +25,6 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
-#include <Storages/Transaction/SchemaBuilder-internal.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -33,6 +32,8 @@
 
 #include <optional>
 #include <regex>
+
+#include <TIDB/Schema/SchemaBuilder-internal.h>
 
 namespace DB
 {
