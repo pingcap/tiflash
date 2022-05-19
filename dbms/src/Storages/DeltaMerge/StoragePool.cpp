@@ -248,7 +248,8 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
 
 void StoragePool::forceTransformMetaV2toV3()
 {
-    assert(run_mode == PageStorageRunMode::MIX_MODE);
+    if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
+        throw Exception(fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
     assert(meta_storage_v2 != nullptr);
     assert(meta_storage_v3 != nullptr);
     auto meta_transform_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, meta_storage_v3);
@@ -301,7 +302,8 @@ toV2ConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
 
 void StoragePool::forceTransformDataV2toV3()
 {
-    assert(run_mode == PageStorageRunMode::MIX_MODE);
+    if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
+        throw Exception(fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
     assert(data_storage_v2 != nullptr);
     assert(data_storage_v3 != nullptr);
     auto data_transform_storage_writer = std::make_shared<PageWriter>(run_mode, data_storage_v2, data_storage_v3);
