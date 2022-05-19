@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <TIDB/Schema/SchemaGetter.h>
 #include <Common/TiFlashException.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/SchemaGetter.h>
 #include <pingcap/kv/Scanner.h>
 
 namespace DB

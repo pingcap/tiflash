@@ -44,7 +44,6 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -53,6 +52,8 @@
 #include <common/logger_useful.h>
 
 #include <random>
+
+#include <TIDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {

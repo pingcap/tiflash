@@ -15,7 +15,8 @@
 #pragma once
 
 #include <Debug/MockTiDB.h>
-#include <Storages/Transaction/SchemaGetter.h>
+
+#include <TIDB/Schema/SchemaGetter.h>
 
 namespace DB
 {

@@ -25,15 +25,15 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TIDB/Schema/SchemaBuilder-internal.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
 #include <optional>
 #include <regex>
 
-#include <TIDB/Schema/SchemaBuilder-internal.h>
+#include <TIDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {

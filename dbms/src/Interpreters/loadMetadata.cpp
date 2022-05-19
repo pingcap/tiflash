@@ -26,7 +26,6 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/FileStream.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/ThreadPool.h>
@@ -34,6 +33,8 @@
 #include <future>
 #include <iomanip>
 #include <thread>
+
+#include <TIDB/Schema/SchemaNameMapper.h>
 
 
 namespace DB
