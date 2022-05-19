@@ -316,8 +316,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                 if (valid_ids.count(id))
                     continue;
 
-                // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, DMFile::ReadMetaMode::none());
+                // Note that page_id is useless here.
+                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
                 if (dmfile->canGC())
                 {
                     delegate.removeDTFile(dmfile->fileId());
@@ -822,14 +822,14 @@ void DeltaMergeStore::ingestFiles(
                 /// Generate DMFile instance with a new ref_id pointed to the file_id.
                 auto file_id = file->fileId();
                 const auto & file_parent_path = file->parentPath();
-                auto ref_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+                auto page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-                auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
+                auto ref_file = DMFile::restore(file_provider, file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
                 auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
                 if (column_file->getRows() != 0)
                 {
                     column_files.emplace_back(std::move(column_file));
-                    wbs.data.putRefPage(ref_id, file_id);
+                    wbs.data.putRefPage(page_id, file->pageId());
                 }
             }
 
@@ -2303,7 +2303,7 @@ void DeltaMergeStore::restoreStableFiles()
     {
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
+            auto dmfile = DMFile::restore(file_provider, file_id, /* page_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }

@@ -216,14 +216,14 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
         else if (auto * b_file = column_file->tryToBigFile(); b_file)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
-            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto new_page_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
             // Note that the file id may has already been mark as deleted. We must
             // create a reference to the page id itself instead of create a reference
             // to the file id.
-            wbs.data.putRefPage(new_ref_id, b_file->getDataPageId());
+            wbs.data.putRefPage(new_page_id, b_file->getDataPageId());
             auto file_id = b_file->getFile()->fileId();
             auto file_parent_path = delegator.getDTFilePath(file_id);
-            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* ref_id= */ new_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
+            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* page_id= */ new_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 
             auto new_big_file = b_file->cloneWith(context, new_file, target_range);
             cloned_tail.push_back(new_big_file);

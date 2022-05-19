@@ -67,7 +67,7 @@ public:
 
     auto getFile() const { return file; }
 
-    PageId getDataPageId() { return file->refId(); }
+    PageId getDataPageId() { return file->pageId(); }
 
     size_t getRows() const override { return valid_rows; }
     size_t getBytes() const override { return valid_bytes; };
@@ -77,7 +77,7 @@ public:
         // Here we remove the ref id instead of file_id.
         // Because a dmfile could be used in serveral places, and only after all ref_ids are removed,
         // then the file_id got removed.
-        wbs.removed_data.delPage(file->refId());
+        wbs.removed_data.delPage(file->pageId());
     }
 
     ColumnFileReaderPtr
