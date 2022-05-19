@@ -497,7 +497,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         case WriteBatch::WriteType::REF:
         {
             // 1. Check external page exist or not.
-            if (storage_v3->isExternalPageIdExist(ns_id, write.ori_page_id, /*snapshot*/ nullptr))
+            if (storage_v3->isPageIdExist(ns_id, write.ori_page_id, /*snapshot*/ nullptr))
             {
                 break;
             }
@@ -535,63 +535,65 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
 
             // 4. Check ori_page_id in V2
             const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
-            if (entry_for_put.isValid())
-            {
-                // If the origin page size is 0.
-                // That means origin page in V2 is a external page id.
-                // Then we no need put page but put external for create ref in V3.
-                if (entry_for_put.size == 0)
-                {
-                    wb_for_put_v3.putExternal(write.ori_page_id, entry_for_put.tag);
-                    LOG_FMT_INFO(
-                        Logger::get("PageWriter"),
-                        "Can't find the origin page in v3. Origin page size is 0 that means it's a external id."
-                        "Migrate a new being ref page into V3 [page_id={}] [origin_id={}]",
-                        write.page_id,
-                        write.ori_page_id,
-                        entry_for_put.field_offsets.size());
-                }
-                else
-                {
-                    auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
 
-                    // Keep the mem hold, no need create new one.
-                    mem_holders.emplace_back(page_for_put.mem_holder);
-                    assert(entry_for_put.size == page_for_put.data.size());
-
-                    // Page with fields
-                    if (!entry_for_put.field_offsets.empty())
-                    {
-                        wb_for_put_v3.putPage(write.ori_page_id, //
-                                              entry_for_put.tag,
-                                              std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
-                                              page_for_put.data.size(),
-                                              Page::fieldOffsetsToSizes(entry_for_put.field_offsets, entry_for_put.size));
-                    }
-                    else
-                    { // Normal page with fields
-                        wb_for_put_v3.putPage(write.ori_page_id, //
-                                              entry_for_put.tag,
-                                              std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(),
-                                                                                     page_for_put.data.size()),
-                                              page_for_put.data.size());
-                    }
-
-                    LOG_FMT_INFO(
-                        Logger::get("PageWriter"),
-                        "Can't find the origin page in v3, migrate a new being ref page into V3 [page_id={}] [origin_id={}] [field_offsets={}]",
-                        write.page_id,
-                        write.ori_page_id,
-                        entry_for_put.field_offsets.size());
-                }
-            }
-            else
+            // If we can't find origin id in V3, must exist in V2.
+            if (!entry_for_put.isValid())
             {
                 throw Exception(fmt::format("Can't find origin entry in V2 and V3, [ns_id={}, ori_page_id={}]",
                                             ns_id,
                                             write.ori_page_id),
                                 ErrorCodes::LOGICAL_ERROR);
             }
+
+            // If the origin page size is 0.
+            // That means origin page in V2 is a external page id.
+            // Then we no need put page but put external for create ref in V3.
+            if (entry_for_put.size == 0)
+            {
+                wb_for_put_v3.putExternal(write.ori_page_id, entry_for_put.tag);
+                LOG_FMT_INFO(
+                    Logger::get("PageWriter"),
+                    "Can't find the origin page in v3. Origin page size is 0 that means it's a external id."
+                    "Migrate a new being ref page into V3 [page_id={}] [origin_id={}]",
+                    write.page_id,
+                    write.ori_page_id,
+                    entry_for_put.field_offsets.size());
+                break;
+            }
+
+            // Find out origin page is a normal page in V2
+
+            auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
+
+            // Keep the mem hold, no need create new one.
+            mem_holders.emplace_back(page_for_put.mem_holder);
+            assert(entry_for_put.size == page_for_put.data.size());
+
+            // Page with fields
+            if (!entry_for_put.field_offsets.empty())
+            {
+                wb_for_put_v3.putPage(write.ori_page_id, //
+                                      entry_for_put.tag,
+                                      std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
+                                      page_for_put.data.size(),
+                                      Page::fieldOffsetsToSizes(entry_for_put.field_offsets, entry_for_put.size));
+            }
+            else
+            { // Normal page with fields
+                wb_for_put_v3.putPage(write.ori_page_id, //
+                                      entry_for_put.tag,
+                                      std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(),
+                                                                             page_for_put.data.size()),
+                                      page_for_put.data.size());
+            }
+
+            LOG_FMT_INFO(
+                Logger::get("PageWriter"),
+                "Can't find the origin page in v3, migrate a new being ref page into V3 [page_id={}] [origin_id={}] [field_offsets={}]",
+                write.page_id,
+                write.ori_page_id,
+                entry_for_put.field_offsets.size());
+
             break;
         }
         default:
