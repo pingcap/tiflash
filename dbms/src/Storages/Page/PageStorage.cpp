@@ -528,21 +528,18 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
                                 ErrorCodes::LOGICAL_ERROR);
             }
 
-            // If the origin page size is 0.
-            // That means origin page in V2 is a external page id.
-            // Then we need to put external for create ref in V3.
-            // Should not run into here after we introduce `StoragePool::forceTransformDataV2toV3`
             if (entry_for_put.size == 0)
             {
-                wb_for_put_v3.putExternal(write.ori_page_id, entry_for_put.tag);
-                LOG_FMT_ERROR(
-                    Logger::get("PageWriter"),
-                    "Can't find the origin page in v3. Origin page in v2 size is 0, meaning it's a external id."
-                    "Migrate a new being ref page into V3 [page_id={}] [origin_id={}]",
-                    write.page_id,
-                    write.ori_page_id,
-                    entry_for_put.field_offsets.size());
-                break;
+                // If the origin page size is 0.
+                // That means origin page in V2 is a external page id.
+                // Should not run into here after we introduce `StoragePool::forceTransformDataV2toV3`
+                throw Exception(fmt::format(
+                                    "Can't find the origin page in v3. Origin page in v2 size is 0, meaning it's a external id."
+                                    "Migrate a new being ref page into V3 [page_id={}] [origin_id={}]",
+                                    write.page_id,
+                                    write.ori_page_id,
+                                    entry_for_put.field_offsets.size()),
+                                ErrorCodes::LOGICAL_ERROR);
             }
 
             // Else find out origin page is a normal page in V2
