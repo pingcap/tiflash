@@ -926,7 +926,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         auto my_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
         auto other_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-        // Note that the file id may has already been mark as deleted. We must 
+        // Note that the file id may has already been mark as deleted. We must
         // create a reference to the page id itself instead of create a reference
         // to the file id.
         wbs.data.putRefPage(my_dmfile_id, ori_ref_id);
