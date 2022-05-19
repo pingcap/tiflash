@@ -168,7 +168,6 @@ static unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
                     {
                         return getCGroupDefaultLimitedCPUCores(default_cpu_count);
                     }
-                    // LOG_FMT_DEBUG(, message)
                     int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup{}/cpu.cfs_period_us", line).c_str(), -2);
                     default_cpu_count = read_cpuset_count_from(fmt::format("/sys/fs/cgroup/cpuset{}/cpuset.cpus", line).c_str(), default_cpu_count);
                     return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
