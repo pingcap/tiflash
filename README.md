@@ -1,4 +1,5 @@
 # TiFlash
+
 ![tiflash-architecture](tiflash-architecture.png)
 
 [TiFlash](https://docs.pingcap.com/tidb/stable/tiflash-overview) is a columnar storage component of [TiDB](https://docs.pingcap.com/tidb/stable). It mainly plays the role of Analytical Processing (AP) in the Hybrid Transactional/Analytical Processing (HTAP) architecture of TiDB.
@@ -10,12 +11,14 @@ TiFlash repository is based on [ClickHouse](https://github.com/ClickHouse/ClickH
 ## Build TiFlash
 
 TiFlash supports building on the following hardware architectures:
-* x86-64/amd64
-* aarch64
+
+- x86-64/amd64
+- aarch64
 
 And the following operating systems:
-* Linux
-* MacOS
+
+- Linux
+- MacOS
 
 ### 1. Checkout Source Code
 
@@ -23,7 +26,7 @@ Assume `$WORKSPACE` to be the directory under which the TiFlash repo is placed.
 
 ```shell
 cd $WORKSPACE
-git clone --recursive https://github.com/pingcap/tiflash.git
+git clone https://github.com/pingcap/tiflash.git --recursive -j 20
 ```
 
 ### 2. Prepare Prerequisites
@@ -44,18 +47,19 @@ The following packages are needed for all platforms:
 - Ninja or GNU Make
 
 The following are platform-specific prerequisites. Click to expand details:
+
 <details>
 <summary><b>Linux specific prerequisites</b></summary>
 
-  TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
-  > But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
+TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
+
+> But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
 
 - LLVM 13.0.0+
 
   TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default. You can use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
 
   Click sections below to see detailed instructions:
-
 
   <details>
   <summary><b>Set up LLVM via package managers in Debian/Ubuntu</b></summary>
@@ -212,13 +216,13 @@ To generate unit test executables with sanitizer enabled:
 cd $BUILD
 cmake $WORKSPACE/tiflash -GNinja -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=ASan # or TSan
 ninja gtests_dbms
-ninja gtests_libcommon
 ninja gtests_libdaemon
+ninja gtests_libcommon
 ```
 
 There are known false positives reported from leak sanitizer (which is included in address sanitizer). To suppress these errors, set the following environment variables before running the executables:
 
-```
+```shell
 LSAN_OPTIONS=suppressions=$WORKSPACE/tiflash/test/sanitize/asan.suppression
 ```
 
