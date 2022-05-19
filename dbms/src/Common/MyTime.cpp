@@ -429,7 +429,7 @@ std::tuple<int, int> MyTimeBase::calcWeek(UInt32 mode) const
 
     if (week_year && days >= 52 * 7)
     {
-        week_day = (week_day + calcDaysInYear(year)) % 7;
+        week_day = (week_day + calcDaysInYear(ret_year)) % 7;
         if ((!first_week_day && week_day < 4) || (first_week_day && week_day == 0))
         {
             ret_year++;
