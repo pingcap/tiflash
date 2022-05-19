@@ -22,10 +22,11 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <pingcap/pd/MockPDClient.h>
+
+#include <TIDB/Schema/SchemaSyncer.h>
+#include <TIDB/Schema/TiDBSchemaSyncer.h>
 
 namespace DB
 {

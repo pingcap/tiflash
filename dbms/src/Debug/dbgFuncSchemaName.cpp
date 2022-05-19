@@ -20,13 +20,13 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TIDB/Schema/SchemaNameMapper.h>
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/replace.hpp>
 
-#include <TIDB/Schema/SchemaNameMapper.h>
+#include <TIDB/Schema/SchemaSyncer.h>
 
 namespace DB
 {

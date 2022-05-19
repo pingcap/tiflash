@@ -22,10 +22,11 @@
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <ext/scope_guard.h>
+
+#include <TIDB/Schema/SchemaSyncer.h>
 
 namespace DB
 {

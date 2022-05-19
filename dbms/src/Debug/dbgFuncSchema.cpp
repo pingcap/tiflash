@@ -22,14 +22,14 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
+#include <TIDB/Schema/SchemaSyncService.h>
 #include <fmt/core.h>
 
 #include <ext/singleton.h>
 
-#include <TIDB/Schema/SchemaSyncService.h>
+#include <TIDB/Schema/SchemaSyncer.h>
 
 namespace DB
 {

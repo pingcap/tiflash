@@ -18,10 +18,11 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/Logger.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <TIDB/Schema/SchemaSyncer.h>
 
 
 using TableInfo = TiDB::TableInfo;

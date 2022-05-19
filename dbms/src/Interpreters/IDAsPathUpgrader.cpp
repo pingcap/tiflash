@@ -35,11 +35,11 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiDBSchemaSyncer.h>
+#include <TIDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
-#include <TIDB/Schema/SchemaNameMapper.h>
+#include <TIDB/Schema/TiDBSchemaSyncer.h>
 
 namespace DB
 {

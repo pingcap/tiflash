@@ -33,7 +33,8 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/SchemaSyncer.h>
+
+#include <TIDB/Schema/SchemaSyncer.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
