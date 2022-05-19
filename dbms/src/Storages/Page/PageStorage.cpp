@@ -496,33 +496,27 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         }
         case WriteBatch::WriteType::REF:
         {
-            // 1. Check external page exist or not.
-            if (storage_v3->isPageIdExist(ns_id, write.ori_page_id, /*snapshot*/ nullptr))
-            {
-                break;
-            }
-
-            // 2. Try to resolve normal page id
+            // 1. Try to resolve normal page id
             PageId resolved_page_id = storage_v3->getNormalPageId(ns_id,
                                                                   write.ori_page_id,
                                                                   /*snapshot*/ nullptr,
                                                                   false);
 
-            // If the normal id is not found in v3, read from v2 and create a new put + ref
+            // If the origin id is found in V3, then just apply the ref to v3
             if (resolved_page_id != INVALID_PAGE_ID)
             {
-                // V3 found the origin one.
-                // Then just break;
                 break;
             }
 
-            // 3. Check ori_page_id in current writebatch
+            // 2. Check ori_page_id in current writebatch
             if (page_ids_before_ref.count(write.ori_page_id) > 0)
             {
                 break;
             }
 
-            // 4. Check ori_page_id in V2
+            // Else the normal id is not found in v3, read from v2 and create a new put + ref
+
+            // 3. Check ori_page_id in V2
             const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
 
             // If we can't find origin id in V3, must exist in V2.
@@ -536,13 +530,14 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
 
             // If the origin page size is 0.
             // That means origin page in V2 is a external page id.
-            // Then we no need put page but put external for create ref in V3.
+            // Then we need to put external for create ref in V3.
+            // Should not run into here after we introduce `StoragePool::forceTransformDataV2toV3`
             if (entry_for_put.size == 0)
             {
                 wb_for_put_v3.putExternal(write.ori_page_id, entry_for_put.tag);
-                LOG_FMT_INFO(
+                LOG_FMT_ERROR(
                     Logger::get("PageWriter"),
-                    "Can't find the origin page in v3. Origin page size is 0 that means it's a external id."
+                    "Can't find the origin page in v3. Origin page in v2 size is 0, meaning it's a external id."
                     "Migrate a new being ref page into V3 [page_id={}] [origin_id={}]",
                     write.page_id,
                     write.ori_page_id,
@@ -550,8 +545,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
                 break;
             }
 
-            // Find out origin page is a normal page in V2
-
+            // Else find out origin page is a normal page in V2
             auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
 
             // Keep the mem holder for later write
@@ -568,7 +562,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
                                       Page::fieldOffsetsToSizes(entry_for_put.field_offsets, entry_for_put.size));
             }
             else
-            { // Normal page with fields
+            { // Normal page without fields
                 wb_for_put_v3.putPage(write.ori_page_id, //
                                       entry_for_put.tag,
                                       std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(),

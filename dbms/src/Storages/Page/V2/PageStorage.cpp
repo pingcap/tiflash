@@ -377,11 +377,6 @@ PageId PageStorage::getNormalPageIdImpl(NamespaceId /*ns_id*/, PageId page_id, S
     return is_ref_id ? normal_page_id : page_id;
 }
 
-bool PageStorage::isPageIdExistImpl(NamespaceId /*ns_id*/, PageId /*page_id*/, SnapshotPtr /*snapshot*/)
-{
-    throw Exception("Not implements isPageIdExist on V2", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 DB::PageEntry PageStorage::getEntryImpl(NamespaceId /*ns_id*/, PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)

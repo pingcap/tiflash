@@ -19,6 +19,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include "gtest/gtest.h"
 
 namespace DB
 {
@@ -502,6 +503,9 @@ try
 
     ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
     {
+        // create dmf_1999
+        // ingest to segment, create ref 2001 -> 1999
+        // after ingest done, del 1999
         WriteBatch batch;
         batch.putExternal(1999, 0);
         batch.putRefPage(2001, 1999);
@@ -510,11 +514,18 @@ try
     }
 
     {
+        // mock that create ref by dtfile id, should fail
         WriteBatch batch;
-        batch.putRefPage(2012, 1999);
-        ASSERT_NO_THROW(page_writer_mix->write(std::move(batch), nullptr));
+        batch.putRefPage(2012, 1999); 
+        ASSERT_ANY_THROW(page_writer_mix->write(std::move(batch), nullptr));
     }
 
+    {
+        // mock that create ref by page id of dtfile, should be ok
+        WriteBatch batch;
+        batch.putRefPage(2012, 2001);
+        ASSERT_NO_THROW(page_writer_mix->write(std::move(batch), nullptr));
+    }
     {
         // Revert v3
         WriteBatch batch;

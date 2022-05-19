@@ -923,45 +923,6 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
     }
 }
 
-bool PageDirectory::isPageIdExist(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const
-{
-    PageIdV3Internal id_to_resolve = page_id;
-    PageVersion ver_to_resolve(snap->sequence, 0);
-    bool keep_resolve = true;
-    while (keep_resolve)
-    {
-        MVCCMapType::const_iterator iter;
-        {
-            std::shared_lock read_lock(table_rw_mutex);
-            iter = mvcc_table_directory.find(id_to_resolve);
-            if (iter == mvcc_table_directory.end())
-            {
-                return false;
-            }
-        }
-        auto [need_collapse, next_id_to_resolve, next_ver_to_resolve]
-            = iter->second->resolveToPageId(ver_to_resolve.sequence, true, nullptr);
-
-        switch (need_collapse)
-        {
-        case VersionedPageEntries::RESOLVE_TO_NORMAL:
-            return true;
-        case VersionedPageEntries::RESOLVE_FAIL:
-            return false;
-        case VersionedPageEntries::RESOLVE_TO_REF:
-            if (id_to_resolve == next_id_to_resolve)
-            {
-                return false;
-            }
-            id_to_resolve = next_id_to_resolve;
-            ver_to_resolve = next_ver_to_resolve;
-            break; // continue the resolving
-        }
-    }
-
-    throw Exception("Should not reach here.", ErrorCodes::LOGICAL_ERROR);
-}
-
 PageId PageDirectory::getMaxId(NamespaceId ns_id) const
 {
     std::shared_lock read_lock(table_rw_mutex);

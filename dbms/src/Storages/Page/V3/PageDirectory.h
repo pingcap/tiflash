@@ -327,12 +327,6 @@ public:
         return getNormalPageId(page_id, toConcreteSnapshot(snap), throw_on_not_exist);
     }
 
-    bool isPageIdExist(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap) const;
-    bool isPageIdExist(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
-    {
-        return isPageIdExist(page_id, toConcreteSnapshot(snap));
-    }
-
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const

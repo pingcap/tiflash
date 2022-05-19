@@ -75,16 +75,6 @@ PageId PageStorageImpl::getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, S
     return page_directory->getNormalPageId(buildV3Id(ns_id, page_id), snapshot, throw_on_not_exist).low;
 }
 
-bool PageStorageImpl::isPageIdExistImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot)
-{
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot("");
-    }
-
-    return page_directory->isPageIdExist(buildV3Id(ns_id, page_id), snapshot);
-}
-
 DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing_id)
 {
     return page_directory->createSnapshot(tracing_id);
