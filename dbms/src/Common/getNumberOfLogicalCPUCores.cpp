@@ -1,22 +1,9 @@
-// Copyright 2022 PingCAP, Ltd.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #include <Common/Exception.h>
 #include <Common/getNumberOfLogicalCPUCores.h>
 #include <common/likely.h>
 
 #include <thread>
+#include "common/logger_useful.h"
 
 #if defined(__linux__)
 #include <cmath>
@@ -41,12 +28,29 @@ static inline int read_int_from(const char * filename, int default_value)
     }
     int idata;
     if (infile >> idata)
+    {
         return idata;
+    }
     else
+    {
         return default_value;
+    }
 }
 
-static int read_cpu_count_from(const char * filename, int default_value)
+// logical_cpu_cores = min(cpuset.cpus, quota/period)
+static unsigned calCPUCores(int cgroup_quota, int cgroup_period, unsigned cpuset_count)
+{
+    unsigned quota_count = cpuset_count;
+
+    if (cgroup_quota > -1 && cgroup_period > 0)
+    {
+        quota_count = ceil(static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period));
+    }
+
+    return std::min(cpuset_count, quota_count);
+}
+
+static unsigned read_cpuset_count_from(const char * filename, unsigned default_value)
 {
     // cpuset.cpus
     // A read-write multiple values file which exists on non-root cpuset-enabled cgroups.
@@ -65,14 +69,21 @@ static int read_cpu_count_from(const char * filename, int default_value)
     }
     std::string line;
     std::getline(infile, line);
-    int cpu_count = 0;
-    for (std::string::size_type first = 0, i = 0; i != std::string::npos; i = line.find(','))
+    unsigned cpu_count = 0;
+    size_t first = 0;
+    while (first < line.size())
     {
-        std::string cpu_set = line.substr(first, i);
-        if (cpu_set.find('-') != std::string::npos)
+        size_t last = line.find(',', first);
+        if (last == std::string::npos)
         {
-            std::string start_str = cpu_set.substr(0, cpu_set.find('-'));
-            std::string end_str = cpu_set.substr(cpu_set.find('-') + 1);
+            last = line.size();
+        }
+        std::string cpu_set = line.substr(first, last - first);
+        size_t dash = cpu_set.find('-');
+        if (dash != std::string::npos)
+        {
+            std::string start_str = cpu_set.substr(0, dash);
+            std::string end_str = cpu_set.substr(dash + 1);
             int start = std::stoi(start_str);
             int end = std::stoi(end_str);
             cpu_count += end - start + 1;
@@ -81,12 +92,12 @@ static int read_cpu_count_from(const char * filename, int default_value)
         {
             cpu_count++;
         }
-        first = i + 1;
+        first = last + 1;
     }
     return cpu_count;
 }
 
-static std::pair<int, int> read_quota_and_period_from(const char * filename)
+static std::pair<int, int> read_quota_and_period_v2(const char * filename)
 {
     // cpu.max
     // A read-write two value file which exists on non-root cgroups. The default is "max 100000".
@@ -99,35 +110,19 @@ static std::pair<int, int> read_quota_and_period_from(const char * filename)
     std::ifstream infile(filename);
     if (!infile.is_open())
     {
-        return {1, 1};
+        return {-2, -2};
     }
     std::string quota;
     int period;
     infile >> quota >> period;
-    if (quota == "max")
-    {
-        return {period, period};
-    }
-    else
-    {
-        return {std::stoi(quota), period};
-    }
+    return {((quota == "max") ? period : std::stoi(quota)), period};
 }
 
-static unsigned calCPUCores(int cgroup_quota, int cgroup_period, unsigned default_cpu_count)
-{
-    unsigned quota_count = default_cpu_count;
-
-    if (cgroup_quota > -1 && cgroup_period > 0)
-    {
-        quota_count = ceil(static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period));
-    }
-
-    return std::min(default_cpu_count, quota_count);
-}
 
 static unsigned getCGroupDefaultLimitedCPUCores(unsigned default_cpu_count)
 {
+    // update default cpu count to the count of cpuset.cpus
+    default_cpu_count = read_cpuset_count_from("/sys/fs/cgroup/cpuset/cpuset.cpus", default_cpu_count);
     // Return the number of milliseconds per period process is guaranteed to run.
     // -1 for no quota
     int cgroup_quota = read_int_from("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", -1);
@@ -156,25 +151,26 @@ static unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
                 line = line.substr(cpu_str_idx + cpu_filter.length(), line.length());
                 if (enabled_v2)
                 {
-                    // update the cpu count from the cgroup file cpuset.cpus
-                    default_cpu_count = read_cpu_count_from(fmt::format("/sys/fs/cgroup/{}/cpuset.cpus", line).c_str(), -1);
-                    // read the quota and period from the cgroup file cpu.max
-                    auto [cgroup_quota, cgroup_period] = read_quota_and_period_from(fmt::format("/sys/fs/cgroup/{}/cpu.max", line).c_str());
-
-                    return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
-                }
-                else
-                {
-                    int cgroup_quota = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_quota_us", line).c_str(), -2);
-
-                    // If can't read cgroup_quota here
-                    // It means current process may in docker
+                    auto [cgroup_quota, cgroup_period] = read_quota_and_period_v2(fmt::format("/sys/fs/cgroup{}/cpu.max", line).c_str());
+                    // If can't read cgroup_quota here, it means current process may in docker
                     if (cgroup_quota == -2)
                     {
                         return getCGroupDefaultLimitedCPUCores(default_cpu_count);
                     }
-                    int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup/cpu{}/cpu.cfs_period_us", line).c_str(), -1);
-
+                    default_cpu_count = read_cpuset_count_from(fmt::format("/sys/fs/cgroup{}/cpuset/cpuset.cpus", line).c_str(), default_cpu_count);
+                    return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
+                }
+                else
+                {
+                    int cgroup_quota = read_int_from(fmt::format("/sys/fs/cgroup{}/cpu.cfs_quota_us", line).c_str(), -2);
+                    // If can't read cgroup_quota here, it means current process may in docker
+                    if (cgroup_quota == -2)
+                    {
+                        return getCGroupDefaultLimitedCPUCores(default_cpu_count);
+                    }
+                    // LOG_FMT_DEBUG(, message)
+                    int cgroup_period = read_int_from(fmt::format("/sys/fs/cgroup{}/cpu.cfs_period_us", line).c_str(), -2);
+                    default_cpu_count = read_cpuset_count_from(fmt::format("/sys/fs/cgroup/cpuset{}/cpuset.cpus", line).c_str(), default_cpu_count);
                     return calCPUCores(cgroup_quota, cgroup_period, default_cpu_count);
                 }
             }
@@ -187,10 +183,6 @@ static unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
 unsigned getNumberOfLogicalCPUCores()
 {
     unsigned logical_cpu_count = std::thread::hardware_concurrency();
-    if (unlikely(logical_cpu_count == 0))
-    {
-        throw DB::Exception("Failed to get number of logical CPU cores", DB::ErrorCodes::CPUID_ERROR);
-    }
 #if defined(__linux__)
     logical_cpu_count = getCGroupLimitedCPUCores(logical_cpu_count);
 #endif // __linux__
