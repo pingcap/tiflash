@@ -8,7 +8,17 @@ TiFlash stores data in columnar format and synchronizes data updates in real-tim
 
 TiFlash repository is based on [ClickHouse](https://github.com/ClickHouse/ClickHouse). We appreciate the excellent work of the ClickHouse team.
 
-You can explore TiFlash with [a free trial of TiDB Cloud](https://tidbcloud.com/signup).
+## Quick start
+
+### Start with TiDB Cloud
+
+Quickly explore TiFlash with [a free trial of TiDB Cloud](https://tidbcloud.com/signup).
+
+See [TiDB Cloud Quick Start Guide](https://docs.pingcap.com/tidbcloud/tidb-cloud-quickstart).
+
+### Start with TiDB
+
+See [Quick start with HTAP](https://docs.pingcap.com/tidb/stable/quick-start-with-htap) and [Use TiFlash](https://docs.pingcap.com/tidb/stable/use-tiflash).
 
 ## Build TiFlash
 
