@@ -334,7 +334,7 @@ protected:
 
     virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
-    virtual bool isPageIdExistImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {}) = 0;
+    virtual bool isPageIdExistImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) = 0;
 
     virtual bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) = 0;
 
@@ -400,9 +400,10 @@ public:
     // Only used for META and KVStore write del.
     void writeIntoV2(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
-private:
+    // Only used for DATA transform data
     void writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
+private:
     void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
     // A wrap of getSettings only used for `RegionPersister::gc`
