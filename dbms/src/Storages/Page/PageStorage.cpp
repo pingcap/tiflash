@@ -475,6 +475,8 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
     // We need hold mem from V2 pages after write.
     std::list<MemHolder> mem_holders;
 
+    PageIds page_ids_before_ref;
+
     for (const auto & write : write_batch.getWrites())
     {
         switch (write.type)
@@ -483,6 +485,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::PUT_EXTERNAL:
         {
+            page_ids_before_ref.emplace_back(write.page_id);
             break;
         }
         // Both need del in v2 and v3
@@ -493,15 +496,62 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         }
         case WriteBatch::WriteType::REF:
         {
+            // 1. Check external page exist or not.
+            if (storage_v3->isExternalPageIdExist(ns_id, write.ori_page_id, /*snapshot*/ nullptr))
+            {
+                break;
+            }
+
+            // 2. Try to resolve normal page id
             PageId resolved_page_id = storage_v3->getNormalPageId(ns_id,
                                                                   write.ori_page_id,
                                                                   /*snapshot*/ nullptr,
                                                                   false);
+
             // If the normal id is not found in v3, read from v2 and create a new put + ref
-            if (resolved_page_id == INVALID_PAGE_ID)
+            if (resolved_page_id != INVALID_PAGE_ID)
             {
-                const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
-                if (entry_for_put.isValid())
+                // V3 found the origin one.
+                // Then just break;
+                break;
+            }
+
+            // 3. Check ori_page_id in current writebatch
+            const auto check_page_id_in_current_wb = [page_ids_before_ref, write] {
+                for (const auto & id_before_ref : page_ids_before_ref)
+                {
+                    if (id_before_ref == write.ori_page_id)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            if (check_page_id_in_current_wb())
+            {
+                break;
+            }
+
+            // 4. Check ori_page_id in V2
+            const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
+            if (entry_for_put.isValid())
+            {
+                // If the origin page size is 0.
+                // That means origin page in V2 is a external page id.
+                // Then we no need put page but put external for create ref in V3.
+                if (entry_for_put.size == 0)
+                {
+                    wb_for_put_v3.putExternal(write.ori_page_id, entry_for_put.tag);
+                    LOG_FMT_INFO(
+                        Logger::get("PageWriter"),
+                        "Can't find the origin page in v3. Origin page size is 0 that means it's a external id."
+                        "Migrate a new being ref page into V3 [page_id={}] [origin_id={}]",
+                        write.page_id,
+                        write.ori_page_id,
+                        entry_for_put.field_offsets.size());
+                }
+                else
                 {
                     auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
 
@@ -534,16 +584,14 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
                         write.ori_page_id,
                         entry_for_put.field_offsets.size());
                 }
-                else
-                {
-                    throw Exception(fmt::format("Can't find origin entry in V2 and V3, [ns_id={}, ori_page_id={}]",
-                                                ns_id,
-                                                write.ori_page_id),
-                                    ErrorCodes::LOGICAL_ERROR);
-                }
             }
-            // else V3 found the origin one.
-            // Then do nothing.
+            else
+            {
+                throw Exception(fmt::format("Can't find origin entry in V2 and V3, [ns_id={}, ori_page_id={}]",
+                                            ns_id,
+                                            write.ori_page_id),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
             break;
         }
         default:

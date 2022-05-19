@@ -99,6 +99,8 @@ public:
 
     PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
+    bool isPageIdExistImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot) override;
+
     DB::PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) override;
 
     using ConcreteSnapshotRawPtr = VersionedPageEntries::Snapshot *;

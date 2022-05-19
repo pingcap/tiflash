@@ -298,6 +298,11 @@ public:
         return getNormalPageIdImpl(ns_id, page_id, snapshot, throw_on_not_exist);
     }
 
+    bool isPageIdExist(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {})
+    {
+        return isPageIdExistImpl(ns_id, page_id, snapshot);
+    }
+
     // We may skip the GC to reduce useless reading by default.
     bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr)
     {
@@ -328,6 +333,8 @@ protected:
     virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
 
     virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
+
+    virtual bool isPageIdExistImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot = {}) = 0;
 
     virtual bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) = 0;
 

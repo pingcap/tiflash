@@ -490,5 +490,68 @@ try
 }
 CATCH
 
+
+TEST_F(PageStorageMixedTest, RefDelPage)
+try
+{
+    {
+        WriteBatch batch;
+        batch.putExternal(100, 0);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+    {
+        WriteBatch batch;
+        batch.putExternal(1999, 0);
+        batch.putRefPage(2001, 1999);
+        batch.delPage(1999);
+        ASSERT_NO_THROW(page_writer_mix->write(std::move(batch), nullptr));
+    }
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2012, 1999);
+        ASSERT_NO_THROW(page_writer_mix->write(std::move(batch), nullptr));
+    }
+
+    {
+        // Revert v3
+        WriteBatch batch;
+        batch.delPage(2012);
+        batch.delPage(2001);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+}
+CATCH
+
+
+TEST_F(PageStorageMixedTest, RefV2External)
+try
+{
+    {
+        WriteBatch batch;
+        batch.putExternal(100, 0);
+        batch.putRefPage(101, 100);
+        batch.delPage(100);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+    {
+        WriteBatch batch;
+        batch.putRefPage(102, 101);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+    {
+        // Revert v3
+        WriteBatch batch;
+        batch.delPage(102);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+}
+CATCH
+
+
 } // namespace PS::V3::tests
 } // namespace DB
