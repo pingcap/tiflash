@@ -59,7 +59,6 @@
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
-#include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
@@ -70,6 +69,8 @@
 #include <map>
 #include <pcg_random.hpp>
 #include <set>
+
+#include <TIDB/Schema/SchemaSyncService.h>
 
 
 namespace ProfileEvents
