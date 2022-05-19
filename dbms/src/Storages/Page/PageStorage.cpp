@@ -475,7 +475,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
     // We need hold mem from V2 pages after write.
     std::list<MemHolder> mem_holders;
 
-    PageIds page_ids_before_ref;
+    std::set<PageId> page_ids_before_ref;
 
     for (const auto & write : write_batch.getWrites())
     {
@@ -485,7 +485,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::PUT_EXTERNAL:
         {
-            page_ids_before_ref.emplace_back(write.page_id);
+            page_ids_before_ref.insert(write.page_id);
             break;
         }
         // Both need del in v2 and v3
@@ -517,18 +517,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
             }
 
             // 3. Check ori_page_id in current writebatch
-            const auto check_page_id_in_current_wb = [page_ids_before_ref, write] {
-                for (const auto & id_before_ref : page_ids_before_ref)
-                {
-                    if (id_before_ref == write.ori_page_id)
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            };
-
-            if (check_page_id_in_current_wb())
+            if (page_ids_before_ref.count(write.ori_page_id) > 0)
             {
                 break;
             }
@@ -565,7 +554,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
 
             auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
 
-            // Keep the mem hold, no need create new one.
+            // Keep the mem holder for later write
             mem_holders.emplace_back(page_for_put.mem_holder);
             assert(entry_for_put.size == page_for_put.data.size());
 
