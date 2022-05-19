@@ -39,12 +39,11 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <TIDB/Schema/SchemaBuilder-internal.h>
 #include <TIDB/Schema/SchemaBuilder.h>
+#include <TIDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <tuple>
-
-#include <TIDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {

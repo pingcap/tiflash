@@ -29,9 +29,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/Utils.h>
-#include <common/logger_useful.h>
-
 #include <TIDB/Schema/SchemaSyncer.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {

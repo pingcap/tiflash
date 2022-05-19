@@ -67,6 +67,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
+#include <TIDB/Schema/SchemaSyncer.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
@@ -86,7 +87,6 @@
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
-#include <TIDB/Schema/SchemaSyncer.h>
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>

@@ -24,12 +24,12 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTSegments.h>
 #include <Storages/Transaction/Types.h>
-
 #include <TIDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {
-StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : name(name_)
+StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
+    : name(name_)
 {
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
@@ -62,11 +62,11 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : na
 }
 
 BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
-    const SelectQueryInfo &,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+                                                const SelectQueryInfo &,
+                                                const Context & context,
+                                                QueryProcessingStage::Enum & processed_stage,
+                                                const size_t /*max_block_size*/,
+                                                const unsigned /*num_streams*/)
 {
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;

@@ -22,7 +22,6 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
-
 #include <TIDB/Schema/SchemaSyncer.h>
 
 namespace DB

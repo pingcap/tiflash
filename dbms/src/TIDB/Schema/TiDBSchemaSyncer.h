@@ -20,12 +20,11 @@
 #include <Debug/MockSchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
+#include <TIDB/Schema/SchemaBuilder.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
 
 #include <ext/scope_guard.h>
-
-#include <TIDB/Schema/SchemaBuilder.h>
 
 namespace DB
 {

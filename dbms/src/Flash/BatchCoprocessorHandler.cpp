@@ -19,10 +19,9 @@
 #include <Flash/ServiceUtils.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TIDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
-
-#include <TIDB/Schema/SchemaSyncer.h>
 
 namespace DB
 {

@@ -16,7 +16,6 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTStorages.h>
-
 #include <TIDB/Schema/SchemaGetter.h>
 
 namespace DB

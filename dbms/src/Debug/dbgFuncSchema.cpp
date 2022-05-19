@@ -25,11 +25,10 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TIDB/Schema/SchemaSyncService.h>
+#include <TIDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
 
 #include <ext/singleton.h>
-
-#include <TIDB/Schema/SchemaSyncer.h>
 
 namespace DB
 {

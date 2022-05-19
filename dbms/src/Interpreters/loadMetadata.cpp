@@ -28,13 +28,12 @@
 #include <Poco/FileStream.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TIDB/Schema/SchemaNameMapper.h>
+#include <TIDB/Schema/SchemaSyncer.h>
 #include <common/ThreadPool.h>
 
 #include <future>
 #include <iomanip>
 #include <thread>
-
-#include <TIDB/Schema/SchemaSyncer.h>
 
 
 namespace DB

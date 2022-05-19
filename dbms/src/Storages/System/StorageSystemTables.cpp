@@ -30,7 +30,6 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/VirtualColumnUtils.h>
-
 #include <TIDB/Schema/SchemaNameMapper.h>
 
 namespace DB
@@ -72,7 +71,8 @@ NameAndTypePair tryGetColumn(const ColumnsWithTypeAndName & columns, const Strin
 struct VirtualColumnsProcessor
 {
     explicit VirtualColumnsProcessor(const ColumnsWithTypeAndName & all_virtual_columns_)
-        : all_virtual_columns(all_virtual_columns_), virtual_columns_mask(all_virtual_columns_.size(), 0)
+        : all_virtual_columns(all_virtual_columns_)
+        , virtual_columns_mask(all_virtual_columns_.size(), 0)
     {}
 
     /// Separates real and virtual column names, returns real ones
@@ -132,7 +132,8 @@ protected:
 } // namespace
 
 
-StorageSystemTables::StorageSystemTables(const std::string & name_) : name(name_)
+StorageSystemTables::StorageSystemTables(const std::string & name_)
+    : name(name_)
 {
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
@@ -148,7 +149,8 @@ StorageSystemTables::StorageSystemTables(const std::string & name_) : name(name_
     }));
 
     virtual_columns = {{std::make_shared<DataTypeDateTime>(), "metadata_modification_time"},
-        {std::make_shared<DataTypeString>(), "create_table_query"}, {std::make_shared<DataTypeString>(), "engine_full"}};
+                       {std::make_shared<DataTypeString>(), "create_table_query"},
+                       {std::make_shared<DataTypeString>(), "engine_full"}};
 }
 
 
@@ -165,11 +167,11 @@ static ColumnPtr getFilteredDatabases(const ASTPtr & query, const Context & cont
 
 
 BlockInputStreams StorageSystemTables::read(const Names & column_names,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+                                            const SelectQueryInfo & query_info,
+                                            const Context & context,
+                                            QueryProcessingStage::Enum & processed_stage,
+                                            const size_t /*max_block_size*/,
+                                            const unsigned /*num_streams*/)
 {
     processed_stage = QueryProcessingStage::FetchColumns;
 

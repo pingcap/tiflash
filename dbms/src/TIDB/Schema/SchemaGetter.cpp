@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TIDB/Schema/SchemaGetter.h>
 #include <Common/TiFlashException.h>
 #include <Storages/Transaction/DatumCodec.h>
+#include <TIDB/Schema/SchemaGetter.h>
 #include <pingcap/kv/Scanner.h>
 
 namespace DB
@@ -137,7 +137,10 @@ public:
     }
 };
 
-AffectedOption::AffectedOption(Poco::JSON::Object::Ptr json) { deserialize(json); }
+AffectedOption::AffectedOption(Poco::JSON::Object::Ptr json)
+{
+    deserialize(json);
+}
 
 void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)
 {
@@ -181,7 +184,10 @@ Int64 SchemaGetter::getVersion()
     return std::stoll(ver);
 }
 
-String SchemaGetter::getSchemaDiffKey(Int64 ver) { return std::string(schemaDiffPrefix) + ":" + std::to_string(ver); }
+String SchemaGetter::getSchemaDiffKey(Int64 ver)
+{
+    return std::string(schemaDiffPrefix) + ":" + std::to_string(ver);
+}
 
 SchemaDiff SchemaGetter::getSchemaDiff(Int64 ver)
 {
@@ -196,9 +202,15 @@ SchemaDiff SchemaGetter::getSchemaDiff(Int64 ver)
     return diff;
 }
 
-String SchemaGetter::getDBKey(DatabaseID db_id) { return String(DBPrefix) + ":" + std::to_string(db_id); }
+String SchemaGetter::getDBKey(DatabaseID db_id)
+{
+    return String(DBPrefix) + ":" + std::to_string(db_id);
+}
 
-String SchemaGetter::getTableKey(TableID table_id) { return String(TablePrefix) + ":" + std::to_string(table_id); }
+String SchemaGetter::getTableKey(TableID table_id)
+{
+    return String(TablePrefix) + ":" + std::to_string(table_id);
+}
 
 TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
 {
