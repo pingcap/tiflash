@@ -556,7 +556,7 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
         DB::readIntBinary(footer.sub_file_num, buf);
         // initialize sub file state
         buf.seek(footer.sub_file_stat_offset, SEEK_SET);
-        SubFileStat sub_file_stat;
+        SubFileStat sub_file_stat{};
         for (UInt32 i = 0; i < footer.sub_file_num; i++)
         {
             String name;

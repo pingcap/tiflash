@@ -141,7 +141,9 @@ public:
 
     struct SubFileStat
     {
-        SubFileStat() = default;
+        SubFileStat()
+            : SubFileStat(0, 0)
+        {}
         SubFileStat(UInt64 offset_, UInt64 size_)
             : offset{offset_}
             , size{size_}

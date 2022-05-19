@@ -33,8 +33,8 @@ class ColumnFileBig : public ColumnFilePersisted
 
 private:
     DMFilePtr file;
-    size_t valid_rows;
-    size_t valid_bytes;
+    size_t valid_rows = 0;
+    size_t valid_bytes = 0;
 
     RowKeyRange segment_range;
 
