@@ -19,7 +19,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -516,7 +516,7 @@ try
     {
         // mock that create ref by dtfile id, should fail
         WriteBatch batch;
-        batch.putRefPage(2012, 1999); 
+        batch.putRefPage(2012, 1999);
         ASSERT_ANY_THROW(page_writer_mix->write(std::move(batch), nullptr));
     }
 
