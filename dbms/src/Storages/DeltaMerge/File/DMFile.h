@@ -397,8 +397,10 @@ private:
     void initializeIndices();
 
 private:
+    // The id to construct the file path on disk.
     UInt64 file_id;
-    UInt64 page_id; // It is a reference to file_id, could be the same.
+    // It is the page_id that represent this file in the PageStorage. It could be the same as file id.
+    UInt64 page_id;
     String parent_path;
 
     PackStats pack_stats;
