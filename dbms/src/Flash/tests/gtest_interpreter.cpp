@@ -54,11 +54,11 @@ Union: <for mpp>
     Union: <for order>
      PartialSorting x 10: limit = 10
       Expression: <before order and select>
-       Filter: <execute having>: {equals}
+       Filter: <execute having>: {equals->Nullable(UInt8)}
         SharedQuery: <restore concurrency>
          ParallelAggregating, max_threads: 10, final: true
           Expression x 10: <before aggregation>
-           Filter: <execute where>: {equals}
+           Filter: <execute where>: {equals->Nullable(UInt8)}
             MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -79,11 +79,11 @@ Union: <for mpp>
     Limit x 10, limit = 10 always_read_till_end = false
      Expression: <final projection>
       Expression: <before order and select>
-       Filter: <execute having>: {equals}
+       Filter: <execute having>: {equals->Nullable(UInt8)}
         SharedQuery: <restore concurrency>
          ParallelAggregating, max_threads: 10, final: true
           Expression x 10: <before aggregation>
-           Filter: <execute where>: {equals}
+           Filter: <execute where>: {equals->Nullable(UInt8)}
             MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -191,7 +191,7 @@ Union: <for mpp>
        Expression: <before projection>
         Expression: <final projection>
          Expression: <before order and select>
-          Filter: <execute where>: {equals}
+          Filter: <execute where>: {equals->Nullable(UInt8)}
            Expression: <projection>
             Expression: <before projection>
              Expression: <final projection>

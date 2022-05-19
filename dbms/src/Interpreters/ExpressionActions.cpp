@@ -463,29 +463,8 @@ void ExpressionAction::executeOnTotals(Block & block) const
 
 void ExpressionAction::dumpAction(FmtBuffer & fb) const
 {
-    switch (type)
-    {
-    case ADD_COLUMN:
-        fb.append("Add column");
-        break;
-    case REMOVE_COLUMN:
-        fb.append("Remove column");
-        break;
-    case COPY_COLUMN:
-        fb.append("Copy column");
-        break;
-    case APPLY_FUNCTION:
-        fb.fmtAppend("{}", (function ? function->getName() : "(no function)"));
-        break;
-    case JOIN:
-        fb.append("join");
-        break;
-    case PROJECT:
-        fb.append("project");
-        break;
-    default:
-        break;
-    }
+    if (type == APPLY_FUNCTION)
+        fb.fmtAppend("{}{}", (function ? function->getName() : "(no function)"), (result_type ? "->" + result_type->getName() : ""));
 }
 
 String ExpressionAction::toString() const
