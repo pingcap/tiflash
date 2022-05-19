@@ -315,6 +315,18 @@ void StoragePool::forceTransformDataV2toV3()
         throw Exception("Can not allocate snapshot from pool.data v2", ErrorCodes::LOGICAL_ERROR);
     }
 
+    // Example
+    // 100 -> 100
+    // 102 -> 100
+    // 105 -> 100
+    // 200 -> 200
+    // 305 -> 300
+    // Migration steps:
+    // collect v2 valid page id: 100, 102, 105, 200, 305
+    // v3 put external 100, 200, 300; put ref 102, 105, 305
+    // mark some id as deleted: v3 del 300
+    // v2 delete 100, 102, 105, 200, 305
+
     // The page ids that can be accessed by DeltaTree
     const auto all_page_ids = v2_snap->view.validPageIds();
 
