@@ -74,8 +74,8 @@ public:
 
     void removeData(WriteBatches & wbs) const override
     {
-        // Here we remove the ref id instead of file_id.
-        // Because a dmfile could be used in serveral places, and only after all ref_ids are removed,
+        // Here we remove the data id instead of file_id.
+        // Because a dmfile could be used in several places, and only after all page ids are removed,
         // then the file_id got removed.
         wbs.removed_data.delPage(file->pageId());
     }
