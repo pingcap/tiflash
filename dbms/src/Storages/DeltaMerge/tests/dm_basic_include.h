@@ -21,6 +21,7 @@
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -107,6 +108,8 @@ public:
 
     static constexpr const char * PK_NAME_PK_IS_HANDLE = "id";
 
+    static constexpr ColId PK_ID_PK_IS_HANDLE = 2;
+
     enum class PkType
     {
         // If the primary key is composed of multiple columns and non-clustered-index,
@@ -150,10 +153,10 @@ public:
             columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/true));
             break;
         case PkType::PkIsHandleInt64:
-            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE});
+            columns->emplace_back(ColumnDefine{PK_ID_PK_IS_HANDLE, PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE});
             break;
         case PkType::PkIsHandleInt32:
-            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, DataTypeFactory::instance().get("Int32")});
+            columns->emplace_back(ColumnDefine{PK_ID_PK_IS_HANDLE, PK_NAME_PK_IS_HANDLE, DataTypeFactory::instance().get("Int32")});
             break;
         default:
             throw Exception("Unknown pk type for test");
@@ -161,6 +164,96 @@ public:
         columns->emplace_back(getVersionColumnDefine());
         columns->emplace_back(getTagColumnDefine());
         return columns;
+    }
+
+    /// Returns a NamesAndTypesList that can be used to construct StorageDeltaMerge.
+    static NamesAndTypesList getDefaultTableColumns(PkType pk_type = PkType::HiddenTiDBRowID)
+    {
+        NamesAndTypesList columns;
+        switch (pk_type)
+        {
+        case PkType::HiddenTiDBRowID:
+            columns.push_back({EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE});
+            break;
+        case PkType::CommonHandle:
+            columns.push_back({PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_STRING_TYPE}); // For common handle, there must be a user-given primary key.
+            columns.push_back({EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_STRING_TYPE}); // For common handle, a _tidb_rowid is also constructed.
+            break;
+        case PkType::PkIsHandleInt64:
+            columns.emplace_back(PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE);
+            break;
+        case PkType::PkIsHandleInt32:
+            throw Exception("PkIsHandleInt32 is unsupported");
+        default:
+            throw Exception("Unknown pk type for test");
+        }
+        return columns;
+    }
+
+    /// Returns a TableInfo that can be used to construct StorageDeltaMerge.
+    static TiDB::TableInfo getMinimalTableInfo(TableID table_id, PkType pk_type = PkType::HiddenTiDBRowID)
+    {
+        TiDB::TableInfo table_info;
+        table_info.id = table_id;
+        switch (pk_type)
+        {
+        case PkType::HiddenTiDBRowID:
+            table_info.is_common_handle = false;
+            table_info.pk_is_handle = false;
+            break;
+        case PkType::CommonHandle:
+        {
+            table_info.is_common_handle = true;
+            table_info.pk_is_handle = false;
+            ColumnInfo pk_column; // For common handle, there must be a user-given primary key.
+            pk_column.id = PK_ID_PK_IS_HANDLE;
+            pk_column.name = PK_NAME_PK_IS_HANDLE;
+            pk_column.setPriKeyFlag();
+            table_info.columns.push_back(pk_column);
+            break;
+        }
+        case PkType::PkIsHandleInt64:
+        {
+            table_info.is_common_handle = false;
+            table_info.pk_is_handle = true;
+            ColumnInfo pk_column;
+            pk_column.id = PK_ID_PK_IS_HANDLE;
+            pk_column.name = PK_NAME_PK_IS_HANDLE;
+            pk_column.setPriKeyFlag();
+            table_info.columns.push_back(pk_column);
+            break;
+        }
+        case PkType::PkIsHandleInt32:
+            throw Exception("PkIsHandleInt32 is unsupported");
+        default:
+            throw Exception("Unknown pk type for test");
+        }
+        return table_info;
+    }
+
+    /// Return a ASTPtr that can be used to construct StorageDeltaMerge.
+    static ASTPtr getPrimaryKeyExpr(const String & table_name, PkType pk_type = PkType::HiddenTiDBRowID)
+    {
+        ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        String name;
+        switch (pk_type)
+        {
+        case PkType::HiddenTiDBRowID:
+            name = EXTRA_HANDLE_COLUMN_NAME;
+            break;
+        case PkType::CommonHandle:
+            name = EXTRA_HANDLE_COLUMN_NAME;
+            break;
+        case PkType::PkIsHandleInt64:
+            name = PK_NAME_PK_IS_HANDLE;
+            break;
+        case PkType::PkIsHandleInt32:
+            throw Exception("PkIsHandleInt32 is unsupported");
+        default:
+            throw Exception("Unknown pk type for test");
+        }
+        astptr->children.emplace_back(new ASTIdentifier(name));
+        return astptr;
     }
 
     /**
@@ -179,7 +272,8 @@ public:
                                          ColumnID pk_col_id = EXTRA_HANDLE_COLUMN_ID,
                                          DataTypePtr pk_type = EXTRA_HANDLE_COLUMN_INT_TYPE,
                                          bool is_common_handle = false,
-                                         size_t rowkey_column_size = 1)
+                                         size_t rowkey_column_size = 1,
+                                         bool with_internal_columns = true)
     {
         Block block;
         const size_t num_rows = (end - beg);
@@ -221,17 +315,51 @@ public:
                     EXTRA_HANDLE_COLUMN_ID});
             }
         }
-        // version_col
-        block.insert(DB::tests::createColumn<UInt64>(
-            std::vector<UInt64>(num_rows, tso),
-            VERSION_COLUMN_NAME,
-            VERSION_COLUMN_ID));
-        // tag_col
-        block.insert(DB::tests::createColumn<UInt8>(
-            std::vector<UInt64>(num_rows, 0),
-            TAG_COLUMN_NAME,
-            TAG_COLUMN_ID));
+        if (with_internal_columns)
+        {
+            // version_col
+            block.insert(DB::tests::createColumn<UInt64>(
+                std::vector<UInt64>(num_rows, tso),
+                VERSION_COLUMN_NAME,
+                VERSION_COLUMN_ID));
+            // tag_col
+            block.insert(DB::tests::createColumn<UInt8>(
+                std::vector<UInt64>(num_rows, 0),
+                TAG_COLUMN_NAME,
+                TAG_COLUMN_ID));
+        }
         return block;
+    }
+
+    /**
+     * Create a simple block with 3 columns:
+     *   * `pk` - Int64 / `version` / `tag`
+     * @param beg       `pk`'s value begin
+     * @param end       `pk`'s value end (not included)
+     * @param reversed  increasing/decreasing insert `pk`'s value
+     * @return
+     */
+    static Block prepareSimpleWriteBlock(size_t beg,
+                                         size_t end,
+                                         bool reversed,
+                                         PkType pk_type,
+                                         UInt64 tso = 2,
+                                         bool with_internal_columns = true)
+    {
+        switch (pk_type)
+        {
+        case PkType::HiddenTiDBRowID:
+            return prepareSimpleWriteBlock(beg, end, reversed, tso, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_INT_TYPE, false, 1, with_internal_columns);
+        case PkType::CommonHandle:
+            return prepareSimpleWriteBlock(beg, end, reversed, tso, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_STRING_TYPE, true, 1, with_internal_columns);
+        case PkType::PkIsHandleInt64:
+            return prepareSimpleWriteBlock(beg, end, reversed, tso, PK_NAME_PK_IS_HANDLE, PK_ID_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE, false, 1, with_internal_columns);
+            break;
+        case PkType::PkIsHandleInt32:
+            throw Exception("PkIsHandleInt32 is unsupported");
+        default:
+            throw Exception("Unknown pk type for test");
+        }
     }
 
     /**
