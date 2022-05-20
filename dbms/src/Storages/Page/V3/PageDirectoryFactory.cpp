@@ -117,7 +117,7 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
         // and apply again to resolve the error.
         if (bool ok = applyRecord(dir, r, /*throw_on_error*/ false); unlikely(!ok))
         {
-            dir->sequence = max_applied_ver.sequence;
+            dir->sequence = max_applied_ver.sequence; // gcInMemEntries rely on this var
             dir->gcInMemEntries();
             applyRecord(dir, r, /*throw_on_error*/ true);
             LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "resolve from error status done, continue to restore");
