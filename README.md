@@ -139,6 +139,8 @@ cmake $WORKSPACE/tiflash
 make tiflash -j
 ```
 
+> **NOTE**: Option `-j` (defaults to your system CPU core count, otherwise you can optionally specify a number) is used to control the build parallelism. Higher parallelism consumes more memory. If you encounter compiler OOM or hang, try to lower the parallelism by specifying a reasonable number, e.g., half of your system CPU core count or even smaller, after `-j`, depending on the available memory in your system.
+
 After building, you can get TiFlash binary under `$BUILD/dbms/src/Server/tiflash`.
 
 ### Build Options
