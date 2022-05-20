@@ -244,11 +244,23 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
         if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
             !first_segment_entry.isValid())
         {
-            // Create the first segment.
+            auto segment_id = storage_pool->newMetaPageId();
+            if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
+            {
+                if (page_storage_run_mode == PageStorageRunMode::ONLY_V2)
+                {
+                    throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
+                }
+
+                // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
+                // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
+                segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+            }
+
             auto first_segment
-                = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), DELTA_MERGE_FIRST_SEGMENT_ID, 0);
+                = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
-            id_to_segment.emplace(DELTA_MERGE_FIRST_SEGMENT_ID, first_segment);
+            id_to_segment.emplace(segment_id, first_segment);
         }
         else
         {
