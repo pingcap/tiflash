@@ -893,9 +893,9 @@ void PageStorage::drop()
 struct GcContext
 {
     PageFileIdAndLevel min_file_id;
-    PageFile::Type min_file_type;
+    PageFile::Type min_file_type = PageFile::Type::Invalid;
     PageFileIdAndLevel max_file_id;
-    PageFile::Type max_file_type;
+    PageFile::Type max_file_type = PageFile::Type::Invalid;
     size_t num_page_files = 0;
     size_t num_legacy_files = 0;
 
