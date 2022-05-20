@@ -919,27 +919,30 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     auto delegate = dm_context.path_pool.getStableDiskDelegator();
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
-        auto ori_ref_id = dmfile->refId();
+        auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto my_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-        auto other_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto my_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto other_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-        wbs.data.putRefPage(my_dmfile_id, file_id);
-        wbs.data.putRefPage(other_dmfile_id, file_id);
-        wbs.removed_data.delPage(ori_ref_id);
+        // Note that the file id may has already been mark as deleted. We must
+        // create a reference to the page id itself instead of create a reference
+        // to the file id.
+        wbs.data.putRefPage(my_dmfile_page_id, ori_page_id);
+        wbs.data.putRefPage(other_dmfile_page_id, ori_page_id);
+        wbs.removed_data.delPage(ori_page_id);
 
         auto my_dmfile = DMFile::restore(
             dm_context.db_context.getFileProvider(),
             file_id,
-            /* ref_id= */ my_dmfile_id,
+            /* page_id= */ my_dmfile_page_id,
             file_parent_path,
             DMFile::ReadMetaMode::all());
         auto other_dmfile = DMFile::restore(
             dm_context.db_context.getFileProvider(),
             file_id,
-            /* ref_id= */ other_dmfile_id,
+            /* page_id= */ other_dmfile_page_id,
             file_parent_path,
             DMFile::ReadMetaMode::all());
 
@@ -1059,7 +1062,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     {
         // Here we should remove the ref id instead of file_id.
         // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
-        wbs.removed_data.delPage(file->refId());
+        wbs.removed_data.delPage(file->pageId());
     }
 
     LOG_FMT_INFO(log, "Segment [{}] prepare split physical done", segment_id);
