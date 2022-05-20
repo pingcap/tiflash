@@ -347,7 +347,7 @@ public:
     }
 #endif
 
-    PageId getMaxId(NamespaceId ns_id) const;
+    PageId getMaxId() const;
 
     std::set<PageIdV3Internal> getAllPageIds();
 
@@ -397,6 +397,7 @@ private:
     }
 
 private:
+    UInt64 max_page_id;
     std::atomic<UInt64> sequence;
     mutable std::shared_mutex table_rw_mutex;
     MVCCMapType mvcc_table_directory;

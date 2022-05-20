@@ -233,7 +233,7 @@ public:
 
     virtual void drop() = 0;
 
-    virtual PageId getMaxId(NamespaceId ns_id) = 0;
+    virtual PageId getMaxId() = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 

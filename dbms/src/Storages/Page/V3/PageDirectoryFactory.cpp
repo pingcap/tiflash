@@ -135,6 +135,11 @@ bool PageDirectoryFactory::applyRecord(
         iter->second = std::make_shared<VersionedPageEntries>();
     }
 
+    if (r.page_id.low > dir->max_page_id)
+    {
+        dir->max_page_id = r.page_id.low;
+    }
+
     const auto & version_list = iter->second;
     const auto & restored_version = r.version;
     try
