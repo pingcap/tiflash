@@ -355,7 +355,7 @@ void PageStorage::restore()
     LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
 }
 
-PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
+PageId PageStorage::getMaxId()
 {
     std::lock_guard write_lock(write_mutex);
     return versioned_page_entries.getSnapshot("")->version()->maxId();
