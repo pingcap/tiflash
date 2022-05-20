@@ -429,7 +429,7 @@ std::tuple<int, int> MyTimeBase::calcWeek(UInt32 mode) const
 
     if (week_year && days >= 52 * 7)
     {
-        week_day = (week_day + calcDaysInYear(year)) % 7;
+        week_day = (week_day + calcDaysInYear(ret_year)) % 7;
         if ((!first_week_day && week_day < 4) || (first_week_day && week_day == 0))
         {
             ret_year++;
@@ -876,7 +876,7 @@ String MyDateTime::toString(int fsp) const
 //TODO: we can use modern c++ api instead.
 MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezoneInfo, UInt8 fsp)
 {
-    struct timespec ts;
+    struct timespec ts; // NOLINT(cppcoreguidelines-pro-type-member-init)
     clock_gettime(CLOCK_REALTIME, &ts);
 
     time_t second = ts.tv_sec;
@@ -1202,6 +1202,11 @@ void fromDayNum(MyDateTime & t, int day_num)
         // the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
         // so can not use day_num % DAY_NUM_PER_100_YEARS
         day_num = day_num - (num_of_100_years * DAY_NUM_PER_100_YEARS);
+        if (num_of_100_years == 4)
+        {
+            num_of_100_years = 3;
+            day_num = DAY_NUM_PER_100_YEARS;
+        }
 
         int num_of_4_years = day_num / DAY_NUM_PER_4_YEARS;
         // can not use day_num % DAY_NUM_PER_4_YEARS
@@ -1210,6 +1215,12 @@ void fromDayNum(MyDateTime & t, int day_num)
         int num_of_years = day_num / DAY_NUM_PER_YEARS;
         // can not use day_num % DAY_NUM_PER_YEARS
         day_num = day_num - (num_of_years * DAY_NUM_PER_YEARS);
+
+        if (num_of_years == 4)
+        {
+            num_of_years = 3;
+            day_num = DAY_NUM_PER_YEARS;
+        }
 
         year = 1 + num_of_400_years * 400 + num_of_100_years * 100 + num_of_4_years * 4 + num_of_years;
     }
@@ -1246,7 +1257,7 @@ void addMonths(MyDateTime & t, Int64 months)
     Int64 current_month = t.month - 1;
     current_month += months;
     Int64 current_year = 0;
-    Int64 year = static_cast<Int64>(t.year);
+    auto year = static_cast<Int64>(t.year);
     if (current_month >= 0)
     {
         current_year = current_month / 12;
