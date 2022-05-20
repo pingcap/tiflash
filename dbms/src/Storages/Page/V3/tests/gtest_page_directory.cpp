@@ -2223,7 +2223,13 @@ try
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
+
+        auto deser_edit = ser::deserializeFrom(ser::serializeTo(edit));
+        for (auto & r : deser_edit.getMutRecords())
+        {
+            r.version.sequence = 20;
+        }
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deser_edit);
         return d;
     };
 
