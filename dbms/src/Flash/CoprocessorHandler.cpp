@@ -94,14 +94,19 @@ grpc::Status CoprocessorHandler::execute()
             const std::unordered_set<UInt64> bypass_lock_ts(
                 cop_context.kv_context.resolved_locks().begin(),
                 cop_context.kv_context.resolved_locks().end());
-            table_regions_info.local_regions.emplace(
-                cop_context.kv_context.region_id(),
-                RegionInfo(
-                    cop_context.kv_context.region_id(),
-                    cop_context.kv_context.region_epoch().version(),
-                    cop_context.kv_context.region_epoch().conf_ver(),
-                    GenCopKeyRange(cop_request->ranges()),
-                    &bypass_lock_ts));
+            RegionInfo region_info(cop_context.kv_context.region_id(),
+                                   cop_context.kv_context.region_epoch().version(),
+                                   cop_context.kv_context.region_epoch().conf_ver(),
+                                   GenCopKeyRange(cop_request->ranges()),
+                                   &bypass_lock_ts);
+            if (cop_context.db_context.getTMTContext().getRole() == TiDB::NodeRole::ReadNode)
+            {
+                table_regions_info.remote_regions.push_back(std::move(region_info));
+            }
+            else
+            {
+                table_regions_info.local_regions.emplace(cop_context.kv_context.region_id(), region_info);
+            }
 
             DAGContext dag_context(dag_request);
             dag_context.tables_regions_info = std::move(tables_regions_info);

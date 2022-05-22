@@ -16,8 +16,8 @@
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
