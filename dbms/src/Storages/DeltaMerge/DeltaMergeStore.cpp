@@ -1975,8 +1975,14 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     /// And only saved data in this segment will be filtered by the segment range in the merge process,
     /// unsaved data will be directly copied to the new segment.
     /// So we flush here to make sure that all potential data left by previous split operation is saved.
-    left->flushCache(dm_context);
-    right->flushCache(dm_context);
+    while (!left->flushCache(dm_context))
+    {
+        // keep flush until success
+    }
+    while (!right->flushCache(dm_context))
+    {
+        // keep flush until success
+    }
 
     SegmentSnapshotPtr left_snap;
     SegmentSnapshotPtr right_snap;
