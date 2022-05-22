@@ -1017,7 +1017,7 @@ try
 
     // delete rows in the right segment
     {
-        new_segment->write(dmContext(), new_segment->getRowKeyRange());
+        new_segment->write(dmContext(), /*delete_range*/ new_segment->getRowKeyRange());
         new_segment->flushCache(dmContext());
     }
 
