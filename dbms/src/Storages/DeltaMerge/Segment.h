@@ -144,7 +144,8 @@ public:
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
 
     /// For test only.
-    bool write(DMContext & dm_context, const Block & block);
+    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true);
+
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
     bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
