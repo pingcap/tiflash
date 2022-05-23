@@ -61,10 +61,9 @@ public:
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
-    static bool applyRecord(
+    static void applyRecord(
         const PageDirectoryPtr & dir,
-        const PageEntriesEdit::EditRecord & r,
-        bool throw_on_error);
+        const PageEntriesEdit::EditRecord & r);
 
     BlobStore::BlobStats * blob_stats = nullptr;
 };

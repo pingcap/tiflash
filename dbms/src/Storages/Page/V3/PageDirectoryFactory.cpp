@@ -113,22 +113,13 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
             max_applied_ver = r.version;
         max_applied_page_id = std::max(r.page_id, max_applied_page_id);
 
-        // We can not avoid page id from being reused under some corner situation. Try to do gcInMemEntries
-        // and apply again to resolve the error.
-        if (bool ok = applyRecord(dir, r, /*throw_on_error*/ false); unlikely(!ok))
-        {
-            dir->sequence = max_applied_ver.sequence; // gcInMemEntries rely on this var
-            dir->gcInMemEntries();
-            applyRecord(dir, r, /*throw_on_error*/ true);
-            LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "resolve from error status done, continue to restore");
-        }
+        applyRecord(dir, r);
     }
 }
 
-bool PageDirectoryFactory::applyRecord(
+void PageDirectoryFactory::applyRecord(
     const PageDirectoryPtr & dir,
-    const PageEntriesEdit::EditRecord & r,
-    bool throw_on_error)
+    const PageEntriesEdit::EditRecord & r)
 {
     auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
     if (created)
@@ -188,14 +179,8 @@ bool PageDirectoryFactory::applyRecord(
     catch (DB::Exception & e)
     {
         e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}]", r.type, r.page_id, restored_version));
-        if (throw_on_error || e.code() != ErrorCodes::PS_DIR_APPLY_INVALID_STATUS)
-        {
-            throw e;
-        }
-        LOG_FMT_WARNING(DB::Logger::get("PageDirectoryFactory"), "try to resolve error during restore: {}", e.message());
-        return false;
+        throw e;
     }
-    return true;
 }
 
 void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader)
