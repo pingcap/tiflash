@@ -40,7 +40,7 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     dir->gcInMemEntries();
-    LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "PageDirectory restored. [max_page_id={}]", dir->getMaxId());
+    LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
     if (blob_stats)
     {
