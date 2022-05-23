@@ -135,10 +135,10 @@ public:
     DMFilePtr restoreDMFile()
     {
         auto file_id = dm_file->fileId();
-        auto ref_id = dm_file->refId();
+        auto page_id = dm_file->pageId();
         auto parent_path = dm_file->parentPath();
         auto file_provider = dbContext().getFileProvider();
-        return DMFile::restore(file_provider, file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+        return DMFile::restore(file_provider, file_id, page_id, parent_path, DMFile::ReadMetaMode::all());
     }
 
 
