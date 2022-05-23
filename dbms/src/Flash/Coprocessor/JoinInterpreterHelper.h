@@ -38,7 +38,7 @@ struct TiFlashJoin
     const tipb::Join & join;
 
     ASTTableJoin::Kind kind;
-    size_t build_side_index;
+    size_t build_side_index = 0;
 
     DataTypes join_key_types;
     TiDB::TiDBCollators join_key_collators;

@@ -173,7 +173,7 @@ std::tuple<ExpressionActionsPtr, String, String> doGenJoinOtherConditionAction(
 }
 } // namespace
 
-TiFlashJoin::TiFlashJoin(const tipb::Join & join_)
+TiFlashJoin::TiFlashJoin(const tipb::Join & join_) // NOLINT(cppcoreguidelines-pro-type-member-init)
     : join(join_)
     , join_key_types(getJoinKeyTypes(join_))
     , join_key_collators(getJoinKeyCollators(join_, join_key_types))
