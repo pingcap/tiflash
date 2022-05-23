@@ -37,9 +37,9 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <TIDB/Schema/SchemaBuilder-internal.h>
-#include <TIDB/Schema/SchemaBuilder.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaBuilder-internal.h>
+#include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/join.hpp>

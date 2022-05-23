@@ -14,7 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <TIDB/Schema/SchemaGetter.h>
+#include <TiDB/Schema/SchemaGetter.h>
 #include <pingcap/kv/Scanner.h>
 
 namespace DB

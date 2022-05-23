@@ -20,9 +20,9 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
-#include <TIDB/Schema/SchemaSyncService.h>
-#include <TIDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
 
 namespace DB
