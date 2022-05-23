@@ -77,12 +77,10 @@ function wait_tiflash_env() {
 function set_branch() {
   # XYZ_BRANCH: pd/tikv/tidb hash, default to `master`
   # BRANCH:     hash short cut, default to `master`
-  if [ -n "$BRANCH" ]; then
-    [ -z "$PD_BRANCH" ] && export PD_BRANCH="$BRANCH"
-    [ -z "$TIKV_BRANCH" ] && export TIKV_BRANCH="$BRANCH"
-    [ -z "$TIDB_BRANCH" ] && export TIDB_BRANCH="$BRANCH"
-  fi
-  echo "use branch \`${BRANCH-master}\` for ci test"
+  export PD_BRANCH="release-5.4"
+  export TIKV_BRANCH="release-5.4"
+  export TIDB_BRANCH="release-5.4"
+  echo "use branch \`${PD_BRANCH}\` for ci test"
 }
 
 function clean_data_log() {
