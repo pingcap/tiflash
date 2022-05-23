@@ -17,12 +17,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char hang_in_execution[];
-extern const char exception_during_mpp_non_root_task_run[];
-extern const char exception_during_mpp_root_task_run[];
-} // namespace FailPoints
 
 Block ExchangeSenderBlockInputStream::readImpl()
 {

@@ -41,16 +41,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char pause_before_dt_background_delta_merge[];
-extern const char pause_until_dt_background_delta_merge[];
-extern const char force_triggle_background_merge_delta[];
-extern const char force_triggle_foreground_flush[];
-extern const char force_set_segment_ingest_packs_fail[];
-extern const char segment_merge_after_ingest_packs[];
-extern const char force_set_segment_physical_split[];
-} // namespace FailPoints
 
 namespace DM
 {

@@ -34,10 +34,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char skip_check_segment_update[];
-} // namespace FailPoints
 
 namespace DM
 {

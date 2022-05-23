@@ -31,10 +31,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char pause_before_server_merge_one_delta[];
-} // namespace FailPoints
 
 namespace tests
 {

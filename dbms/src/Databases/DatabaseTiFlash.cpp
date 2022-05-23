@@ -48,12 +48,6 @@ extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char exception_drop_table_during_remove_meta[];
-extern const char exception_before_rename_table_old_meta_removed[];
-} // namespace FailPoints
-
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
 
 DatabaseTiFlash::DatabaseTiFlash(String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, DatabaseTiFlash::Version version_, Timestamp tombstone_, const Context & context)

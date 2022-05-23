@@ -50,11 +50,6 @@
 
 using DB::tests::TiFlashTestEnv;
 
-namespace DB::FailPoints
-{
-extern const char exception_when_read_from_log[];
-}
-
 namespace DB::PS::V3::tests
 {
 // Construct a string of the specified length made out of the supplied

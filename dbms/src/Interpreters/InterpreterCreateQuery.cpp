@@ -59,11 +59,6 @@ extern const int DUPLICATE_COLUMN;
 extern const int READONLY;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char exception_between_create_database_meta_and_directory[];
-}
-
 
 InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Context & context_)
     : query_ptr(query_ptr_)

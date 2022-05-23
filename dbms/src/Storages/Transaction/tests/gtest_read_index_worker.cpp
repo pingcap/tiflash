@@ -22,10 +22,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-} // namespace FailPoints
-
 namespace tests
 {
 class ReadIndexTest : public ::testing::Test

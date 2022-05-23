@@ -34,13 +34,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char pause_before_apply_raft_cmd[];
-extern const char pause_before_apply_raft_snapshot[];
-extern const char force_set_safepoint_when_decode_block[];
-} // namespace FailPoints
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;

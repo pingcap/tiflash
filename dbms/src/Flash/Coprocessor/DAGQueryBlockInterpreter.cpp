@@ -57,10 +57,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char minimum_block_size_for_cross_join[];
-} // namespace FailPoints
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     Context & context_,

@@ -30,11 +30,6 @@ using DB::tests::TiFlashTestEnv;
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_formal_page_file_not_exists[];
-extern const char force_legacy_or_checkpoint_page_file_exists[];
-} // namespace FailPoints
 namespace PS::V2::tests
 {
 // #define GENERATE_TEST_DATA

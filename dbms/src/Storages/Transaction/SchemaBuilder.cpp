@@ -54,14 +54,7 @@ namespace ErrorCodes
 extern const int DDL_ERROR;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
-namespace FailPoints
-{
-extern const char exception_after_step_1_in_exchange_partition[];
-extern const char exception_before_step_2_rename_in_exchange_partition[];
-extern const char exception_after_step_2_in_exchange_partition[];
-extern const char exception_before_step_3_rename_in_exchange_partition[];
-extern const char exception_after_step_3_in_exchange_partition[];
-} // namespace FailPoints
+
 
 bool isReservedDatabase(Context & context, const String & database_name)
 {

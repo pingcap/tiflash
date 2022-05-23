@@ -29,11 +29,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_before_dmfile_remove_encryption[];
-extern const char exception_before_dmfile_remove_from_disk[];
-} // namespace FailPoints
 
 namespace DM
 {

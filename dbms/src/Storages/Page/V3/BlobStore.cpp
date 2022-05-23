@@ -49,11 +49,6 @@ extern const int LOGICAL_ERROR;
 extern const int CHECKSUM_DOESNT_MATCH;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char force_change_all_blobs_to_read_only[];
-} // namespace FailPoints
-
 namespace PS::V3
 {
 static constexpr bool BLOBSTORE_CHECKSUM_ON_READ = true;

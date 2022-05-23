@@ -39,11 +39,6 @@ extern const int READONLY;
 extern const int FAIL_POINT_ERROR;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char exception_between_drop_meta_and_data[];
-}
-
 InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, Context & context_)
     : query_ptr(query_ptr_)
     , context(context_)

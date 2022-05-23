@@ -23,10 +23,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char pause_when_reading_from_dt_stream[];
-} // namespace FailPoints
 
 namespace DM
 {

@@ -47,12 +47,6 @@ extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char exception_drop_table_during_remove_meta[];
-extern const char exception_between_rename_table_data_and_metadata[];
-} // namespace FailPoints
-
 static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;

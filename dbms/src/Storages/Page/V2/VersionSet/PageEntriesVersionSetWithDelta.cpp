@@ -44,11 +44,6 @@ extern const Metric PSMVCCSnapshotsList;
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char random_slow_page_storage_list_all_live_files[];
-extern const char random_slow_page_storage_remove_expired_snapshots[];
-} // namespace FailPoints
 
 namespace PS::V2
 {

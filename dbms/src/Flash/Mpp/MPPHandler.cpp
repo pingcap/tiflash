@@ -20,11 +20,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_before_mpp_non_root_task_run[];
-extern const char exception_before_mpp_root_task_run[];
-} // namespace FailPoints
 
 void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 {

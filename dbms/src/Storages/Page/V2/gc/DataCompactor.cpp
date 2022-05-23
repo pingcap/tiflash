@@ -23,10 +23,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_set_page_data_compact_batch[];
-} // namespace FailPoints
 
 namespace PS::V2
 {

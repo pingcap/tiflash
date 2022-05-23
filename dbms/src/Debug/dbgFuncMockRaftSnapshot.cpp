@@ -42,12 +42,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_set_sst_to_dtfile_block_size[];
-extern const char force_set_sst_decode_rand[];
-extern const char force_set_safepoint_when_decode_block[];
-} // namespace FailPoints
 
 namespace ErrorCodes
 {

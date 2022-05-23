@@ -18,10 +18,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_before_page_file_write_sync[];
-} // namespace FailPoints
 
 namespace PS::V3
 {

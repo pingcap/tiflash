@@ -44,11 +44,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_before_drop_segment[];
-extern const char exception_after_drop_segment[];
-} // namespace FailPoints
 namespace DM
 {
 namespace tests

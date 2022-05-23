@@ -35,12 +35,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_before_page_file_write_sync[];
-extern const char force_set_page_file_write_errno[];
-} // namespace FailPoints
-
 namespace PS::V3::tests
 {
 class PageStorageTest : public DB::base::TiFlashStorageTestBasic

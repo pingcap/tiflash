@@ -19,10 +19,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_no_local_region_for_mpp_task[];
-} // namespace FailPoints
 
 SingleTableRegions & TablesRegionsInfo::getOrCreateTableRegionInfoByTableID(Int64 table_id)
 {

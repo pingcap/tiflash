@@ -39,11 +39,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char force_set_dtfile_exist_when_acquire_id[];
-} // namespace FailPoints
-
 namespace DM
 {
 enum class StorageType

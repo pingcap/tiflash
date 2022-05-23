@@ -41,12 +41,6 @@ extern const Metric OpenFileForRead;
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_before_page_file_write_sync[];
-extern const char force_formal_page_file_not_exists[];
-extern const char force_legacy_or_checkpoint_page_file_exists[];
-} // namespace FailPoints
 
 static constexpr bool PAGE_CHECKSUM_ON_READ = true;
 

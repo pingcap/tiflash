@@ -79,24 +79,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char skip_check_segment_update[];
-extern const char pause_before_dt_background_delta_merge[];
-extern const char pause_until_dt_background_delta_merge[];
-extern const char pause_when_writing_to_dt_store[];
-extern const char pause_when_ingesting_to_dt_store[];
-extern const char pause_when_altering_dt_store[];
-extern const char force_triggle_background_merge_delta[];
-extern const char force_triggle_foreground_flush[];
-extern const char force_set_segment_ingest_packs_fail[];
-extern const char segment_merge_after_ingest_packs[];
-extern const char random_exception_after_dt_write_done[];
-extern const char force_slow_page_storage_snapshot_release[];
-extern const char exception_before_drop_segment[];
-extern const char exception_after_drop_segment[];
-} // namespace FailPoints
-
 namespace DM
 {
 // ================================================

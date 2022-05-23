@@ -75,12 +75,6 @@ extern const int FILE_SIZE_NOT_MATCH;
 } // namespace ErrorCodes
 
 
-namespace FailPoints
-{
-extern const char force_set_page_file_write_errno[];
-extern const char force_split_io_size_4k[];
-} // namespace FailPoints
-
 namespace PageUtil
 {
 // https://man7.org/linux/man-pages/man2/write.2.html pwrite() will call the write()

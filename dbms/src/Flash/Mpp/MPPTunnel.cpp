@@ -22,10 +22,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_during_mpp_close_tunnel[];
-} // namespace FailPoints
 
 template <typename Writer>
 MPPTunnelBase<Writer>::MPPTunnelBase(

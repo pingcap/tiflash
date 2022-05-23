@@ -40,12 +40,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char force_enable_region_persister_compatible_mode[];
-extern const char force_disable_region_persister_compatible_mode[];
-} // namespace FailPoints
-
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
     if (page_writer)

@@ -35,13 +35,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_set_sst_to_dtfile_block_size[];
-extern const char force_set_sst_decode_rand[];
-extern const char pause_until_apply_raft_snapshot[];
-} // namespace FailPoints
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;

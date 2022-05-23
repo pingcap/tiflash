@@ -25,11 +25,6 @@
 
 #include <type_traits>
 
-namespace DB::FailPoints
-{
-extern const char exception_when_read_from_log[];
-}
-
 namespace DB::PS::V3
 {
 LogReader::LogReader(

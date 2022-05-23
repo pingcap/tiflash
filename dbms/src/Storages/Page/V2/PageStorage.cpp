@@ -54,12 +54,6 @@ extern const int LOGICAL_ERROR;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char random_slow_page_storage_write[];
-extern const char random_exception_after_page_storage_sequence_acquired[];
-} // namespace FailPoints
-
 namespace PS::V2
 {
 void PageStorage::StatisticsInfo::mergeEdits(const PageEntriesEdit & edit)

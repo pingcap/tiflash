@@ -56,11 +56,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_during_write_to_storage[];
-} // namespace FailPoints
-
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;

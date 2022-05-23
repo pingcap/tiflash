@@ -30,12 +30,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_enable_region_persister_compatible_mode[];
-extern const char force_disable_region_persister_compatible_mode[];
-} // namespace FailPoints
-
 namespace tests
 {
 class RegionPersister_test : public ::testing::Test

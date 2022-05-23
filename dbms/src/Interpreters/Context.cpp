@@ -104,10 +104,6 @@ extern const int SESSION_NOT_FOUND;
 extern const int SESSION_IS_LOCKED;
 extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 } // namespace ErrorCodes
-namespace FailPoints
-{
-extern const char force_context_path[];
-} // namespace FailPoints
 
 
 /** Set of known objects (environment), that could be used in query.
