@@ -318,7 +318,11 @@ bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cach
     {
         if (flush_cache)
         {
-            flushCache(dm_context);
+            while (!flushCache(dm_context))
+            {
+                if (hasAbandoned())
+                    return false;
+            }
         }
         return true;
     }
