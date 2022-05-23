@@ -19,7 +19,7 @@
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 #include <common/logger_useful.h>
 
 #include <cassert>

@@ -26,7 +26,7 @@
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 
 namespace DB
 {

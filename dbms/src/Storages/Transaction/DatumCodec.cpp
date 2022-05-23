@@ -16,7 +16,7 @@
 #include <IO/Operators.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/JSONCodec.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 
 namespace DB

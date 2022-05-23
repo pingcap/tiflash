@@ -14,7 +14,7 @@
 
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTStorages.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 
 namespace DB
 {

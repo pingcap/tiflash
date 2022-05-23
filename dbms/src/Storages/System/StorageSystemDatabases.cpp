@@ -22,7 +22,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemDatabases.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 #include <Storages/Transaction/Types.h>
 
 

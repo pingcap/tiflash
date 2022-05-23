@@ -16,7 +16,7 @@
 
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 #include <pingcap/coprocessor/Client.h>
 
 #pragma GCC diagnostic push

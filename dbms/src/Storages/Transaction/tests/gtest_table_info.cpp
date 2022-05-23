@@ -19,7 +19,7 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/Logger.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 

@@ -19,7 +19,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/SortDescription.h>
 #include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
 #include <tipb/executor.pb.h>

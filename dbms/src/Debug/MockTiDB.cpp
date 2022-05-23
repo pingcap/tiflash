@@ -28,7 +28,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
+#include <src/TiDB/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
