@@ -2714,7 +2714,7 @@ void ExpressionAnalyzer::collectUsedColumns()
     NameSet required_joined_columns;
     getRequiredSourceColumnsImpl(ast, available_columns, required, ignored, available_joined_columns, required_joined_columns);
 
-    for (NamesAndTypesList::iterator it = columns_added_by_join.begin(); it != columns_added_by_join.end();)
+    for (auto it = columns_added_by_join.begin(); it != columns_added_by_join.end();)
     {
         if (required_joined_columns.count(it->name))
             ++it;
@@ -2737,7 +2737,7 @@ void ExpressionAnalyzer::collectUsedColumns()
 
     NameSet unknown_required_source_columns = required;
 
-    for (NamesAndTypesList::iterator it = source_columns.begin(); it != source_columns.end();)
+    for (auto it = source_columns.begin(); it != source_columns.end();)
     {
         unknown_required_source_columns.erase(it->name);
 
@@ -2847,7 +2847,7 @@ void ExpressionAnalyzer::getRequiredSourceColumnsImpl(const ASTPtr & ast,
       * - we put identifiers available from JOIN in required_joined_columns.
       */
 
-    if (ASTIdentifier * node = typeid_cast<ASTIdentifier *>(ast.get()))
+    if (auto * node = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         if (node->kind == ASTIdentifier::Column
             && !ignored_names.count(node->name)
