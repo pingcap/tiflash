@@ -155,7 +155,10 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         {
             auto task = query_task_set->waiting_tasks.front();
             if (!scheduleImp(current_query_id, query_task_set, task, true))
+            {
+                query_task_set->waiting_tasks.pop(); /// it should be pop from the waiting queue, as the task is scheduled as the exceeded state.
                 return;
+            }
             query_task_set->waiting_tasks.pop();
             GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
         }
