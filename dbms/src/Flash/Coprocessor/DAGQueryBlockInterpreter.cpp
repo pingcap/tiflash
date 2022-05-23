@@ -479,7 +479,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     };
     right_pipeline.transform([&](auto & stream) {
         stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
-        stream->setExtraInfo(fmt::format("Right join build, executor_id = {}", executor_id));
+        stream->setExtraInfo(
+            fmt::format("join build, root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
     });
     executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/true, "for join");
 
@@ -513,7 +514,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     for (auto & stream : pipeline.streams)
     {
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, chain.getLastActions(), log->identifier());
-        stream->setExtraInfo(fmt::format("executor_id = {}", executor_id));
+        stream->setExtraInfo(fmt::format("join probe, join_executor_id = {}", executor_id));
     }
 
     /// add a project to remove all the useless column
@@ -553,7 +554,7 @@ void DAGQueryBlockInterpreter::executeWindow(
     executeExpression(pipeline, window_description.before_window, "before window");
 
     /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log, false, "for window");
+    executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
     assert(pipeline.streams.size() == 1);
     pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
 }
@@ -661,7 +662,7 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
     });
 
     /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log, false, "for order");
+    executeUnion(pipeline, max_streams, log, false, "for partial order");
 
     /// Merge the sorted blocks.
     pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
@@ -692,7 +693,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
-        stream->setExtraInfo("after exchange receiver");
+        stream->setExtraInfo("squashing after exchange receiver");
         pipeline.streams.push_back(stream);
     }
     NamesAndTypes source_columns;
@@ -757,7 +758,7 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
     WindowDescription window_description = dag_analyzer.buildWindowDescription(window);
     executeWindow(pipeline, window_description);
-    executeExpression(pipeline, window_description.after_window, "after window");
+    executeExpression(pipeline, window_description.after_window, "cast after window");
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
 }
@@ -921,7 +922,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
     if (pipeline.hasMoreThanOneStream())
     {
-        executeUnion(pipeline, max_streams, log, false, "for limit");
+        executeUnion(pipeline, max_streams, log, false, "for partial limit");
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
     }
 }
@@ -968,7 +969,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     executeImpl(pipeline);
     if (!pipeline.streams_with_non_joined_data.empty())
     {
-        executeUnion(pipeline, max_streams, log, false, "final union");
+        executeUnion(pipeline, max_streams, log, false, "final union for non_joined_data");
         restorePipelineConcurrency(pipeline);
     }
 

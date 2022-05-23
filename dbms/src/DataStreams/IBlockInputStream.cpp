@@ -77,7 +77,7 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
     return res + 1;
 }
 
-void IBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multiplier)
 {
     buffer.fmtAppend(
         "{}{}{}",
@@ -86,11 +86,7 @@ void IBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multipli
         multiplier > 1 ? fmt::format(" x {}", multiplier) : "");
     if (!extra_info.empty())
         buffer.fmtAppend(": <{}>", extra_info);
-}
-
-void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multiplier)
-{
-    print(buffer, indent, multiplier);
+    appendInfo(buffer);
     buffer.append("\n");
     ++indent;
 

@@ -220,9 +220,9 @@ Block FilterBlockInputStream::readImpl()
     }
 }
 
-void FilterBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+
+void FilterBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    IProfilingBlockInputStream::print(buffer, indent, multiplier);
     buffer.append(": {");
     const auto & actions = expression->getActions();
     buffer.joinStr(

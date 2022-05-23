@@ -287,9 +287,8 @@ Block MergeSortingBlocksBlockInputStream::mergeImpl(std::priority_queue<TSortCur
     return blocks[0].cloneWithColumns(std::move(merged_columns));
 }
 
-void MergeSortingBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+void MergeSortingBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    IProfilingBlockInputStream::print(buffer, indent, multiplier);
     buffer.fmtAppend(", limit = {}", limit);
 }
 

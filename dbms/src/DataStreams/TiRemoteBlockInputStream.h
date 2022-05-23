@@ -225,12 +225,12 @@ public:
     bool isStreamingCall() const { return is_streaming_reader; }
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
 
-    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    void collectNewThreadCountOfThisLevel(int & cnt) override
     {
         remote_reader->collectNewThreadCount(cnt);
     }
 
-    virtual void resetNewThreadCountCompute() override
+    void resetNewThreadCountCompute() override
     {
         if (collected)
         {
@@ -240,15 +240,14 @@ public:
     }
 
 protected:
-    virtual void readSuffixImpl() override
+    void readSuffixImpl() override
     {
         LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
         remote_reader->close();
     }
 
-    void print(FmtBuffer & buffer, size_t indent, size_t multiplier) const override
+    void appendInfo(FmtBuffer & buffer) const override
     {
-        IProfilingBlockInputStream::print(buffer, indent, multiplier);
         buffer.append(": schema: {");
         buffer.joinStr(
             sample_block.begin(),

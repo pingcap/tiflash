@@ -51,7 +51,7 @@ Union: <for mpp>
  SharedQuery x 10: <restore concurrency>
   Expression: <final projection>
    MergeSorting, limit = 10
-    Union: <for order>
+    Union: <for partial order>
      PartialSorting x 10: limit = 10
       Expression: <before order and select>
        Filter: <execute having>: {equals->Nullable(UInt8)}
@@ -75,7 +75,7 @@ Union: <for mpp>
 Union: <for mpp>
  SharedQuery x 10: <restore concurrency>
   Limit, limit = 10 always_read_till_end = false
-   Union: <for limit>
+   Union: <for partial limit>
     Limit x 10, limit = 10 always_read_till_end = false
      Expression: <final projection>
       Expression: <before order and select>
@@ -129,7 +129,7 @@ Union: <for mpp>
     SharedQuery: <restore concurrency>
      Expression: <final projection>
       MergeSorting, limit = 10
-       Union: <for order>
+       Union: <for partial order>
         PartialSorting x 10: limit = 10
          Expression: <projection>
           Expression: <before projection>
@@ -160,7 +160,7 @@ Union: <for mpp>
           SharedQuery: <restore concurrency>
            Expression: <final projection>
             MergeSorting, limit = 10
-             Union: <for order>
+             Union: <for partial order>
               PartialSorting x 10: limit = 10
                Expression: <projection>
                 Expression: <before projection>
@@ -184,7 +184,7 @@ Union: <for mpp>
 Union: <for mpp>
  SharedQuery x 10: <restore concurrency>
   Limit, limit = 10 always_read_till_end = false
-   Union: <for limit>
+   Union: <for partial limit>
     Limit x 10, limit = 10 always_read_till_end = false
      Expression: <final projection>
       Expression: <projection>
@@ -203,7 +203,7 @@ Union: <for mpp>
                    SharedQuery: <restore concurrency>
                     Expression: <final projection>
                      MergeSorting, limit = 10
-                      Union: <for order>
+                      Union: <for partial order>
                        PartialSorting x 10: limit = 10
                         Expression: <projection>
                          Expression: <before projection>
@@ -232,22 +232,22 @@ Union: <for mpp>
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <Right join build, executor_id = Join_4>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = table_scan_3>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      MockTableScan
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <Right join build, executor_id = Join_5>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = Join_4>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockTableScan
  Union: <for mpp>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6>
      Expression: <final projection>
       MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -319,22 +319,22 @@ Union: <for mpp>
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <Right join build, executor_id = Join_4>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <Right join build, executor_id = Join_5>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = Join_4>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for mpp>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
-    HashJoinProbe: <executor_id = Join_6>
+    HashJoinProbe: <join probe, join_executor_id = Join_6>
      Expression: <final projection>
       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
@@ -361,23 +361,23 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <Right join build, executor_id = Join_4>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <Right join build, executor_id = Join_5>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = Join_4>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      Expression: <remove useless column after join>
-      HashJoinProbe: <executor_id = Join_4>
+      HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockExchangeReceiver
  Union: <for mpp>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>
-     HashJoinProbe: <executor_id = Join_6>
+     HashJoinProbe: <join probe, join_executor_id = Join_6>
       Expression: <final projection>
        MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);

@@ -177,11 +177,12 @@ public:
         }
     }
 
+    virtual void appendInfo(FmtBuffer & buffer [[maybe_unused]]) const {};
+
 protected:
     BlockInputStreams children;
     mutable std::shared_mutex children_mutex;
     bool collected = false; // a flag to avoid duplicated collecting, since some InputStream is shared by multiple inputStreams
-    virtual void print(FmtBuffer & buffer, size_t indent, size_t multiplier) const;
 
 private:
     TableLockHolders table_locks;

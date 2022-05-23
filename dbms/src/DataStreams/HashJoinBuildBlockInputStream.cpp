@@ -26,9 +26,8 @@ Block HashJoinBuildBlockInputStream::readImpl()
     return block;
 }
 
-void HashJoinBuildBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+void HashJoinBuildBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    IProfilingBlockInputStream::print(buffer, indent, multiplier);
     static const std::unordered_map<ASTTableJoin::Kind, String> join_type_map{
         {ASTTableJoin::Kind::Inner, "Inner"},
         {ASTTableJoin::Kind::Left, "Left"},

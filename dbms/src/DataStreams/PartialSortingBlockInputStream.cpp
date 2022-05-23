@@ -26,9 +26,8 @@ Block PartialSortingBlockInputStream::readImpl()
     return res;
 }
 
-void PartialSortingBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+void PartialSortingBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    IProfilingBlockInputStream::print(buffer, indent, multiplier);
     buffer.fmtAppend(": limit = {}", limit);
 }
 } // namespace DB

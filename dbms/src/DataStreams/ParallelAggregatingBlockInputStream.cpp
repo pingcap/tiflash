@@ -278,9 +278,8 @@ void ParallelAggregatingBlockInputStream::execute()
             no_more_keys);
 }
 
-void ParallelAggregatingBlockInputStream::print(FmtBuffer & buffer, size_t indent, size_t multiplier) const
+void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
 {
-    IProfilingBlockInputStream::print(buffer, indent, multiplier);
     buffer.fmtAppend(", max_threads: {}, final: {}", max_threads, final ? "true" : "false");
 }
 

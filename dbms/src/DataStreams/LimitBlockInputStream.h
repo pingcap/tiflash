@@ -43,7 +43,7 @@ public:
 
 protected:
     Block readImpl() override;
-    void print(FmtBuffer & buffer, size_t indent, size_t multiplier) const override;
+    void appendInfo(FmtBuffer & buffer) const override;
 
 private:
     size_t limit;

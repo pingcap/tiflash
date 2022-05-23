@@ -49,7 +49,6 @@ BlockInputStreamPtr combinedNonJoinedDataStream(
     if (pipeline.streams_with_non_joined_data.size() == 1)
     {
         ret = pipeline.streams_with_non_joined_data.at(0);
-        ret->setExtraInfo("non joined data");
     }
     else if (pipeline.streams_with_non_joined_data.size() > 1)
     {
