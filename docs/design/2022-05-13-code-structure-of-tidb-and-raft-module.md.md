@@ -27,7 +27,7 @@ Suggest breakdown "dbms/src/Storages/Transaction” into these modules:
 
 ```
 dbms / src
------- TIDB
+------ TiDB
     ------ Codec
     ------ Schema
     ------ Other components
@@ -38,7 +38,7 @@ dbms / src
 
 #### TiDB Module
 
-First, we need to create a new module -- dbms/src/TIDB to store:
+First, we need to create a new module -- dbms/src/TiDB to store:
 - Some data structures present in transaction/tidb.h: TableInfo / DBInfo etc..
 - TiFlashContext and ManagedStorages.
 - Module Codec: Decoding data from row to column (Block).
@@ -68,7 +68,6 @@ Schema module is used to place 'Syncing schema with TiDB', including:
 
 When the previous module is completed, the rest of the components in Transaction are basically related to Raft, so we can rename Transaction to Raft, and add the following folders:
 - Raft / Region: Used to place 'Region-related components', such as RegionMeta, RegionData, RegionTable, etc.
-- **Do we need to add more folder?**
 
 #### Region Module
 
