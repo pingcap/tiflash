@@ -20,8 +20,8 @@
 #include <Poco/Logger.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/registerStorages.h>
-#include <TiDB/Schema/SchemaSyncer.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 
 using TableInfo = TiDB::TableInfo;

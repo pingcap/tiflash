@@ -28,8 +28,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/registerStorages.h>
-#include <TiDB/Schema/SchemaNameMapper.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
