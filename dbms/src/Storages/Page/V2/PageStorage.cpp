@@ -349,7 +349,7 @@ void PageStorage::restore()
     LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
 }
 
-PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
+PageId PageStorage::getMaxId()
 {
     std::lock_guard write_lock(write_mutex);
     return versioned_page_entries.getSnapshot("")->version()->maxId();
@@ -887,9 +887,9 @@ void PageStorage::drop()
 struct GcContext
 {
     PageFileIdAndLevel min_file_id;
-    PageFile::Type min_file_type;
+    PageFile::Type min_file_type = PageFile::Type::Invalid;
     PageFileIdAndLevel max_file_id;
-    PageFile::Type max_file_type;
+    PageFile::Type max_file_type = PageFile::Type::Invalid;
     size_t num_page_files = 0;
     size_t num_legacy_files = 0;
 

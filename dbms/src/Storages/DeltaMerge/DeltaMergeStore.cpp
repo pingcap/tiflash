@@ -226,10 +226,19 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
         if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
             !first_segment_entry.isValid())
         {
-            // Create the first segment.
             auto segment_id = storage_pool->newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
-                throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
+            {
+                if (page_storage_run_mode == PageStorageRunMode::ONLY_V2)
+                {
+                    throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
+                }
+
+                // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
+                // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
+                segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+            }
+
             auto first_segment
                 = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
@@ -1952,6 +1961,29 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         left->info(),
         right->info(),
         dm_context.min_version);
+
+    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
+    /// And only saved data in this segment will be filtered by the segment range in the merge process,
+    /// unsaved data will be directly copied to the new segment.
+    /// So we flush here to make sure that all potential data left by previous split operation is saved.
+    while (!left->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (left->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return;
+        }
+    }
+    while (!right->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (right->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return;
+        }
+    }
 
     SegmentSnapshotPtr left_snap;
     SegmentSnapshotPtr right_snap;

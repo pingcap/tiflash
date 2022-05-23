@@ -681,7 +681,8 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal p
   *************************/
 
 PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 max_persisted_log_files_)
-    : sequence(0)
+    : max_page_id(0)
+    , sequence(0)
     , wal(std::move(wal_))
     , max_persisted_log_files(max_persisted_log_files_)
     , log(Logger::get("PageDirectory", std::move(storage_name)))
@@ -919,49 +920,10 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
     }
 }
 
-PageId PageDirectory::getMaxId(NamespaceId ns_id) const
+PageId PageDirectory::getMaxId() const
 {
     std::shared_lock read_lock(table_rw_mutex);
-    PageIdV3Internal upper_bound = buildV3Id(ns_id, UINT64_MAX);
-
-    auto iter = mvcc_table_directory.upper_bound(upper_bound);
-    if (iter == mvcc_table_directory.begin())
-    {
-        // The smallest page id is greater than the target page id or mvcc_table_directory is empty,
-        // and it means no page id is less than or equal to the target page id, return 0.
-        return 0;
-    }
-    else
-    {
-        // iter is not at the beginning and mvcc_table_directory is not empty,
-        // so iter-- must be a valid iterator, and it's the largest page id which is smaller than the target page id.
-        iter--;
-
-        do
-        {
-            // Can't find any entries in current ns_id
-            if (iter->first.high != ns_id)
-            {
-                break;
-            }
-
-            // Check and return whether this id is visible, otherwise continue to check the previous one.
-            if (iter->second->isVisible(UINT64_MAX - 1))
-            {
-                return iter->first.low;
-            }
-
-            // Current entry/ref/external is deleted and there are no entries before it.
-            if (iter == mvcc_table_directory.begin())
-            {
-                break;
-            }
-
-            iter--;
-        } while (true);
-
-        return 0;
-    }
+    return max_page_id;
 }
 
 std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
@@ -1065,6 +1027,9 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
     {
+        // Protected in write_lock
+        max_page_id = std::max(max_page_id, r.page_id.low);
+
         auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
         if (created)
         {
