@@ -97,7 +97,9 @@ void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manage
         {
             while (!query_task_set->waiting_tasks.empty())
             {
-                query_task_set->waiting_tasks.front()->scheduleThisTask(MPPTask::ScheduleState::FAILED);
+                auto task = query_task_set->task_map.find(query_task_set->waiting_tasks.front())->second;
+                if (task != nullptr)
+                    task->scheduleThisTask(MPPTask::ScheduleState::FAILED);
                 query_task_set->waiting_tasks.pop();
                 GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
             }
@@ -153,8 +155,8 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         /// schedule tasks one by one
         while (!query_task_set->waiting_tasks.empty())
         {
-            auto task = query_task_set->waiting_tasks.front();
-            if (!scheduleImp(current_query_id, query_task_set, task, true))
+            auto task = query_task_set->task_map.find(query_task_set->waiting_tasks.front())->second;
+            if (task != nullptr && !scheduleImp(current_query_id, query_task_set, task, true))
             {
                 query_task_set->waiting_tasks.pop(); /// it should be pop from the waiting queue, as the task is scheduled as the exceeded state.
                 return;
@@ -207,7 +209,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
         if (!isWaiting)
         {
             waiting_set.insert(tso);
-            query_task_set->waiting_tasks.push(task);
+            query_task_set->waiting_tasks.push(task->getId());
             GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
             GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Increment();
         }
