@@ -26,7 +26,6 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
-#include <common/logger_useful.h>
 
 #include "executeQuery.h"
 
