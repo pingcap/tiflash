@@ -27,8 +27,8 @@
 #include <Poco/DirectoryIterator.h>
 #include <Poco/FileStream.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
-#include <TIDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <common/ThreadPool.h>
 
 #include <future>

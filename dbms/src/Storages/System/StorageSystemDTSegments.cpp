@@ -24,7 +24,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTSegments.h>
 #include <Storages/Transaction/Types.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {

@@ -23,7 +23,7 @@
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <TIDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
 

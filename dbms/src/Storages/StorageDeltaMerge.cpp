@@ -47,7 +47,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>

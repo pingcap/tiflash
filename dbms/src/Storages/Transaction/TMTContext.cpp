@@ -23,8 +23,8 @@
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <TIDB/Schema/SchemaSyncer.h>
-#include <TIDB/Schema/TiDBSchemaSyncer.h>
+#include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <pingcap/pd/MockPDClient.h>
 
 namespace DB

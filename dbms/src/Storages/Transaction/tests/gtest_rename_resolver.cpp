@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TIDB/Schema/SchemaBuilder-internal.h>
-#include <TIDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/SchemaBuilder-internal.h>
+#include <TiDB/Schema/SchemaBuilder.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::tests

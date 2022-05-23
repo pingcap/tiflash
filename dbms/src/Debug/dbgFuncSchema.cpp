@@ -24,8 +24,8 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
-#include <TIDB/Schema/SchemaSyncService.h>
-#include <TIDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
 
 #include <ext/singleton.h>

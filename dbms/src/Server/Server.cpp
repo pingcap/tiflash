@@ -67,7 +67,7 @@
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
-#include <TIDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>

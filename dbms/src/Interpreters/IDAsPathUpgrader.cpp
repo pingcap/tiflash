@@ -35,8 +35,8 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
-#include <TIDB/Schema/TiDBSchemaSyncer.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 

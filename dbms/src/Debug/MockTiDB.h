@@ -17,8 +17,8 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
-#include <TIDB/Schema/SchemaGetter.h>
-#include <TIDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/SchemaGetter.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #include <atomic>
 

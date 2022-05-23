@@ -60,7 +60,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <TIDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/SchemaSyncService.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
 #include <fiu.h>

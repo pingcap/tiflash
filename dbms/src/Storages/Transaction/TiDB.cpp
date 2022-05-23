@@ -24,7 +24,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {

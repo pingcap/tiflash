@@ -26,8 +26,8 @@
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <TIDB/Schema/SchemaBuilder-internal.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaBuilder-internal.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 

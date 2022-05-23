@@ -20,7 +20,7 @@
 #include <Poco/Logger.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/registerStorages.h>
-#include <TIDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 

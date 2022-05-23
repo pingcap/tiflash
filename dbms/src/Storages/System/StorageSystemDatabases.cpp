@@ -23,7 +23,7 @@
 #include <Storages/System/StorageSystemDatabases.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 
 
 namespace DB

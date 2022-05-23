@@ -21,8 +21,8 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <TIDB/Schema/SchemaNameMapper.h>
-#include <TIDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/replace.hpp>
