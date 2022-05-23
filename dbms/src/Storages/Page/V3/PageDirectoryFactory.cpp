@@ -47,6 +47,22 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
     dir->gcInMemEntries();
     LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory", storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
+    // MVCC gc must do twice when restore
+    // Because the first time call MVCC GC may not clean the deleted entries if being reference.
+    // But it will clean up the deleted reference.
+    // ex.
+    //  P 1
+    //  R 2 -> 1
+    //  D 1
+    //  D 2
+    // First time call gcInMemEntries():
+    //  - P 1 entry 0 being_ref_count is not zero, won't be cleaned.
+    //  - R 2 entry 0 being_ref_count is zero, deref the P 1, make it being_ref_count is 0. Also R2 will be clean up.
+    //
+    // Second time call gcInMemEntries():
+    //  - P 1 being_ref_count is 0, it will be clean.
+    dir->gcInMemEntries();
+
     if (blob_stats)
     {
         // After all entries restored to `mvcc_table_directory`, only apply

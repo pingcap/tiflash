@@ -1380,5 +1380,34 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, testGCTwice)
+try
+{
+    // Make it in log_1_0
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    // Make it in log_2_0
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        batch.putRefPage(2, 1);
+        batch.delPage(1);
+        batch.delPage(2);
+        page_storage->write(std::move(batch));
+    }
+    page_storage = reopenWithConfig(config);
+
+    auto alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 0);
+}
+CATCH
+
+
 } // namespace PS::V3::tests
 } // namespace DB
