@@ -233,12 +233,16 @@ public:
 
     virtual void drop() = 0;
 
-    // Get the max id from PageStorage
-    // For V2, every table have three PageStorage(meta/data/log)
-    // So the Page id returned by calling getMaxId starts from 0
-    // For V3, PageStorage is global(distinguish single table with ns_id)
-    // So the Page id returned is not from 0.
-    // Page id 1 in each ns_id is special.
+    // Get the max id from PageStorage.
+    // 
+    // For V2, every table have its own three PageStorage (meta/data/log).
+    // So this function return the Page id starts from 0 and is continuously incremented to
+    // new pages.
+    // For V3, PageStorage is global(distinguish by ns_id for different table).
+    // Inorder to avoid Page id from being reused (and cause bugs while restoring WAL from disk),
+    // this function returns the global max id regardless of ns_id. This causes the ids in a table
+    // to not be continuously incremented.
+    // Note that Page id 1 in each ns_id is special.
     virtual PageId getMaxId() = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
