@@ -314,7 +314,7 @@ bool appendRowV2ToBlock(
     ColumnID pk_handle_id,
     bool force_decode)
 {
-    UInt8 row_flag = readLittleEndian<UInt8>(&raw_value[1]);
+    auto row_flag = readLittleEndian<UInt8>(&raw_value[1]);
     bool is_big = row_flag & RowV2::BigRowMask;
     return is_big ? appendRowV2ToBlockImpl<true>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode)
                   : appendRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode);

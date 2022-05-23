@@ -68,7 +68,7 @@ void DecodeBytes(size_t & cursor, const String & raw_value, StringStream & ss)
         size_t next_cursor = cursor + 9;
         if (next_cursor > raw_value.size())
             throw Exception("Wrong format, cursor over buffer size. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
-        UInt8 marker = static_cast<UInt8>(raw_value[cursor + 8]);
+        auto marker = static_cast<UInt8>(raw_value[cursor + 8]);
         UInt8 pad_size = ENC_MARKER - marker;
 
         if (pad_size > 8)
@@ -403,7 +403,7 @@ void SkipDatum(size_t & cursor, const String & raw_value)
 
 void EncodeFloat64(Float64 num, WriteBuffer & ss)
 {
-    UInt64 u = enforce_cast<UInt64>(num);
+    auto u = enforce_cast<UInt64>(num);
     if (u & SIGN_MASK)
         u = ~u;
     else

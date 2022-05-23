@@ -63,7 +63,7 @@ metapb::Region readRegion(ReadBuffer & buf)
     region.mutable_region_epoch()->set_conf_ver(readBinary2<UInt64>(buf));
     region.mutable_region_epoch()->set_version(readBinary2<UInt64>(buf));
 
-    Int32 peer_size = readBinary2<Int32>(buf);
+    auto peer_size = readBinary2<Int32>(buf);
     for (Int32 i = 0; i < peer_size; ++i)
     {
         *(region.mutable_peers()->Add()) = readPeer(buf);

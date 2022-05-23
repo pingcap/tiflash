@@ -120,7 +120,7 @@ inline T decodeNumeric(size_t & cursor, const String & raw_value)
 
 JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
 {
-    UInt32 element_count = decodeNumeric<UInt32>(cursor, raw_value);
+    auto element_count = decodeNumeric<UInt32>(cursor, raw_value);
     size_t size = decodeNumeric<UInt32>(cursor, raw_value);
     size_t base = cursor;
     JsonObjectPtr obj_ptr = new Poco::JSON::Object();
@@ -143,7 +143,7 @@ JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
 
 JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value)
 {
-    UInt32 element_count = decodeNumeric<UInt32>(cursor, raw_value);
+    auto element_count = decodeNumeric<UInt32>(cursor, raw_value);
     size_t size = decodeNumeric<UInt32>(cursor, raw_value);
 
     JsonArrayPtr array_ptr = new Poco::JSON::Array();
