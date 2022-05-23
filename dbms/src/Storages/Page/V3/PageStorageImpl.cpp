@@ -55,9 +55,9 @@ void PageStorageImpl::restore()
                          .create(storage_name, file_provider, delegator, parseWALConfig(config));
 }
 
-PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
+PageId PageStorageImpl::getMaxId()
 {
-    return page_directory->getMaxId(ns_id);
+    return page_directory->getMaxId();
 }
 
 void PageStorageImpl::drop()

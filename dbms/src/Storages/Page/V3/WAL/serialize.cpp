@@ -218,7 +218,7 @@ void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
             break;
         }
         default:
-            throw Exception(fmt::format("Unknown record type: {}", record_type));
+            throw Exception(fmt::format("Unknown record type: {}", record_type), ErrorCodes::LOGICAL_ERROR);
         }
     }
 }
@@ -261,7 +261,7 @@ PageEntriesEdit deserializeFrom(std::string_view record)
     UInt32 version = 0;
     readIntBinary(version, buf);
     if (version != 1)
-        throw Exception("");
+        throw Exception(fmt::format("Unknown version for PageEntriesEdit deser [version={}]", version), ErrorCodes::LOGICAL_ERROR);
 
     deserializeFrom(buf, edit);
     return edit;
