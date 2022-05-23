@@ -27,7 +27,7 @@
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
 
-#include "executeQuery.h"
+#include <Interpreters/executeQuery.h>
 
 
 namespace DB
