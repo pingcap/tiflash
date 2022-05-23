@@ -96,6 +96,11 @@ std::string getEnabledFeatures()
             "unwind",
 #endif
 #endif
+
+// THINLTO
+#if ENABLE_THINLTO
+            "thinlto",
+#endif
     };
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
 }
