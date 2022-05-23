@@ -233,6 +233,12 @@ public:
 
     virtual void drop() = 0;
 
+    // Get the max id from PageStorage
+    // For V2, every table have three PageStorage(meta/data/log)
+    // So the Page id returned by calling getMaxId starts from 0
+    // For V3, PageStorage is global(distinguish single table with ns_id)
+    // So the Page id returned is not from 0.
+    // Page id 1 in each ns_id is special.
     virtual PageId getMaxId() = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;

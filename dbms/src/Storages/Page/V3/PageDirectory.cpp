@@ -1032,10 +1032,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     for (const auto & r : edit.getRecords())
     {
         // Protected in write_lock
-        if (r.page_id.low > max_page_id)
-        {
-            max_page_id = r.page_id.low;
-        }
+        max_page_id = std::max(max_page_id, r.page_id.low);
 
         auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
         if (created)
