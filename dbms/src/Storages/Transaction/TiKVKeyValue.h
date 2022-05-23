@@ -47,7 +47,6 @@ public:
     {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
 
-    StringObject & operator=(const StringObject & a) = delete;
     StringObject & operator=(StringObject && a)
     {
         if (this == &a)
@@ -74,7 +73,7 @@ private:
     StringObject(const Base & str_)
         : Base(str_)
     {}
-    StringObject(const StringObject & obj) = delete;
+    DISALLOW_COPY(StringObject);
     size_t size() const = delete;
 };
 
