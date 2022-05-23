@@ -310,7 +310,7 @@ void insert( //
     // Parse the fields in the inserted row
     std::vector<Field> fields;
     {
-        for (ASTs::const_iterator it = values_begin; it != values_end; ++it)
+        for (auto it = values_begin; it != values_end; ++it)
         {
             auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
             fields.emplace_back(field);
