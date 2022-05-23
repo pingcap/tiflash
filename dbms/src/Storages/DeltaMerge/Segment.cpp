@@ -269,7 +269,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
     return delta->appendToCache(dm_context, block, offset, limit);
 }
 
-bool Segment::write(DMContext & dm_context, const Block & block)
+bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cache)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
     WriteBatches wbs(dm_context.storage_pool);
@@ -279,7 +279,14 @@ bool Segment::write(DMContext & dm_context, const Block & block)
 
     if (delta->appendPack(dm_context, pack))
     {
-        flushCache(dm_context);
+        if (flush_cache)
+        {
+            while (!flushCache(dm_context))
+            {
+                if (hasAbandoned())
+                    return false;
+            }
+        }
         return true;
     }
     else
@@ -1037,7 +1044,34 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
 
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
+<<<<<<< HEAD
     WriteBatches wbs(dm_context.storage_pool);
+=======
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
+    /// And only saved data in this segment will be filtered by the segment range in the merge process,
+    /// unsaved data will be directly copied to the new segment.
+    /// So we flush here to make sure that all potential data left by previous split operation is saved.
+    while (!left->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (left->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(left->log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return {};
+        }
+    }
+    while (!right->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (right->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(right->log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return {};
+        }
+    }
+
+>>>>>>> 94afb714ed (flush cache before segment merge (#4955))
 
     auto left_snap  = left->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
     auto right_snap = right->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
@@ -1058,9 +1092,19 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     return merged;
 }
 
+<<<<<<< HEAD
 StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context, //
                                           const ColumnDefinesPtr &   schema_snap,
                                           const SegmentPtr &         left,
+=======
+/// Segments may contain some rows that not belong to its range which is left by previous split operation.
+/// And only saved data in the segment will be filtered by the segment range in the merge process,
+/// unsaved data will be directly copied to the new segment.
+/// So remember to do a flush for the segments before merge.
+StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
+                                          const ColumnDefinesPtr & schema_snap,
+                                          const SegmentPtr & left,
+>>>>>>> 94afb714ed (flush cache before segment merge (#4955))
                                           const SegmentSnapshotPtr & left_snap,
                                           const SegmentPtr &         right,
                                           const SegmentSnapshotPtr & right_snap,
