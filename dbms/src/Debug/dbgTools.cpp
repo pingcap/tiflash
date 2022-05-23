@@ -25,8 +25,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <src/TiDB/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <src/TiDB/TiDB.h>
 
 #include <random>
 

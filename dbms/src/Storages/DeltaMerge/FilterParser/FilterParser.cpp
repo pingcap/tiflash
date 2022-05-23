@@ -19,8 +19,8 @@
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <src/TiDB/TiDB.h>
 #include <common/logger_useful.h>
+#include <src/TiDB/TiDB.h>
 
 #include <cassert>
 

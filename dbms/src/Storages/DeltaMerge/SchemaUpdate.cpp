@@ -18,8 +18,8 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
-#include <src/TiDB/TiDB.h>
 #include <common/logger_useful.h>
+#include <src/TiDB/TiDB.h>
 
 namespace DB
 {

@@ -28,8 +28,8 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <src/TiDB/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <src/TiDB/TiDB.h>
 
 namespace DB
 {

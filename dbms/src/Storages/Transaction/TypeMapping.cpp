@@ -31,8 +31,8 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Poco/StringTokenizer.h>
-#include <src/TiDB/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <src/TiDB/TiDB.h>
 
 #include <type_traits>
 

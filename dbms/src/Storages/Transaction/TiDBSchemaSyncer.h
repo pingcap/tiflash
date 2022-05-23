@@ -20,9 +20,9 @@
 #include <Debug/MockSchemaNameMapper.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <src/TiDB/TiDB.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
+#include <src/TiDB/TiDB.h>
 
 #include <ext/scope_guard.h>
 

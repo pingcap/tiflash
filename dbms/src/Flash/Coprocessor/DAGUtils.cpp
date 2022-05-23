@@ -23,8 +23,8 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
-#include <src/TiDB/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <src/TiDB/TiDB.h>
 
 #include <unordered_map>
 namespace DB
