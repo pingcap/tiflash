@@ -14,7 +14,7 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/RegionBlockReader.h>
-#include <TIDB/Codec/tests/RowCodecTestUtils.h>
+#include <TiDB/Codec/tests/RowCodecTestUtils.h>
 #include <gtest/gtest.h>
 
 using TableInfo = TiDB::TableInfo;

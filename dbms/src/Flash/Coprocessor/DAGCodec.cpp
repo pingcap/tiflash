@@ -14,7 +14,7 @@
 
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
-#include <TIDB/Codec/DatumCodec.h>
+#include <TiDB/Codec/DatumCodec.h>
 
 namespace DB
 {

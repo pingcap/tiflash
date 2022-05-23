@@ -22,8 +22,8 @@
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
-#include <TIDB/Codec/Datum.h>
-#include <TIDB/Codec/DatumCodec.h>
+#include <TiDB/Codec/Datum.h>
+#include <TiDB/Codec/DatumCodec.h>
 #include <common/likely.h>
 
 #include <sstream>

@@ -24,7 +24,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <TIDB/Codec/Datum.h>
+#include <TiDB/Codec/Datum.h>
 
 #include <unordered_map>
 namespace DB

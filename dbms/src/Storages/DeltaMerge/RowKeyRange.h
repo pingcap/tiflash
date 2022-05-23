@@ -24,7 +24,7 @@
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/Types.h>
-#include <TIDB/Codec/DatumCodec.h>
+#include <TiDB/Codec/DatumCodec.h>
 
 namespace DB::DM
 {
