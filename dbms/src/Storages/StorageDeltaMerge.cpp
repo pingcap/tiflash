@@ -88,8 +88,6 @@ StorageDeltaMerge::StorageDeltaMerge(
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
 
-    is_common_handle = false;
-    pk_is_handle = false;
     // save schema from TiDB
     if (table_info_)
     {
@@ -788,6 +786,11 @@ void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRang
 void StorageDeltaMerge::mergeDelta(const Context & context)
 {
     getAndMaybeInitStore()->mergeDeltaAll(context);
+}
+
+std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread)
+{
+    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key, run_thread);
 }
 
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)

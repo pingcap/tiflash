@@ -164,6 +164,22 @@ struct RowKeyValue
         return RowKeyValue(is_common_handle, prefix_value, prefix_int_value);
     }
 
+    void serialize(WriteBuffer & buf) const
+    {
+        writeBoolText(is_common_handle, buf);
+        writeStringBinary(*value, buf);
+    }
+
+    static RowKeyValue deserialize(ReadBuffer & buf)
+    {
+        bool is_common_handle;
+        String value;
+        readBoolText(is_common_handle, buf);
+        readStringBinary(value, buf);
+        HandleValuePtr start_ptr = std::make_shared<String>(value);
+        return RowKeyValue(is_common_handle, start_ptr);
+    }
+
     bool is_common_handle;
     /// In case of non common handle, the value field is redundant in most cases, except that int_value == Int64::max_value,
     /// because RowKeyValue is an end point of RowKeyRange, assuming that RowKeyRange = [start_value, end_value), since the

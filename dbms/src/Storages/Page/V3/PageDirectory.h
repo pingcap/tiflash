@@ -326,6 +326,7 @@ public:
     {
         return getNormalPageId(page_id, toConcreteSnapshot(snap), throw_on_not_exist);
     }
+
 #ifndef NDEBUG
     // Just for tests, refactor them out later
     PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
@@ -346,7 +347,7 @@ public:
     }
 #endif
 
-    PageId getMaxId(NamespaceId ns_id) const;
+    PageId getMaxId() const;
 
     std::set<PageIdV3Internal> getAllPageIds();
 
@@ -396,6 +397,7 @@ private:
     }
 
 private:
+    PageId max_page_id;
     std::atomic<UInt64> sequence;
     mutable std::shared_mutex table_rw_mutex;
     MVCCMapType mvcc_table_directory;

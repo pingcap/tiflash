@@ -14,6 +14,10 @@
 
 #pragma once
 
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V2/PageEntries.h>
+
 #include <optional>
 
 namespace DB::PS::V2
@@ -52,9 +56,9 @@ public:
     size_t numPages() const;
     size_t numNormalPages() const;
 
-private:
     PageId resolveRefId(PageId page_id) const;
 
+private:
     friend class DeltaVersionEditAcceptor;
 };
 
