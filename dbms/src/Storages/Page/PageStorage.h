@@ -233,7 +233,17 @@ public:
 
     virtual void drop() = 0;
 
-    virtual PageId getMaxId(NamespaceId ns_id) = 0;
+    // Get the max id from PageStorage.
+    //
+    // For V2, every table have its own three PageStorage (meta/data/log).
+    // So this function return the Page id starts from 0 and is continuously incremented to
+    // new pages.
+    // For V3, PageStorage is global(distinguish by ns_id for different table).
+    // In order to avoid Page id from being reused (and cause troubles while restoring WAL from disk),
+    // this function returns the global max id regardless of ns_id. This causes the ids in a table
+    // to not be continuously incremented.
+    // Note that Page id 1 in each ns_id is special.
+    virtual PageId getMaxId() = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 
@@ -393,9 +403,10 @@ public:
     // Only used for META and KVStore write del.
     void writeIntoV2(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
-private:
+    // Only used for DATA transform data
     void writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
+private:
     void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
     // A wrap of getSettings only used for `RegionPersister::gc`

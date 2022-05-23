@@ -22,11 +22,14 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/FlashService.h>
+#include <Flash/Management/ManualCompact.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 
@@ -45,29 +48,34 @@ FlashService::FlashService(IServer & server_)
     : server(server_)
     , security_config(server_.securityConfig())
     , log(&Poco::Logger::get("FlashService"))
+    , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(
+          server_.context().getGlobalContext(),
+          server_.context().getGlobalContext().getSettingsRef()))
 {
     auto settings = server_.context().getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
-    size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
+    auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
     cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
 
-    size_t batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
+    auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
 }
 
+FlashService::~FlashService() = default;
+
 // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
+grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()> job)
 {
     std::packaged_task<grpc::Status()> task(job);
     std::future<grpc::Status> future = task.get_future();
-    pool->schedule([&task] { task(); });
+    pool.schedule([&task] { task(); });
     return future.get();
 }
 
@@ -93,7 +101,7 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    grpc::Status ret = executeInThreadPool(cop_pool, [&] {
+    grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -127,7 +135,7 @@ grpc::Status FlashService::Coprocessor(
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    grpc::Status ret = executeInThreadPool(batch_cop_pool, [&] {
+    grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -416,6 +424,17 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         LOG_FMT_ERROR(log, "other exception");
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
     }
+}
+
+::grpc::Status FlashService::Compact(::grpc::ServerContext * grpc_context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+
+    return manual_compact_manager->handleRequest(request, response);
 }
 
 } // namespace DB

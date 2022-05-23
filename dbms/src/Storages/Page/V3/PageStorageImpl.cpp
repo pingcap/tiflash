@@ -55,9 +55,9 @@ void PageStorageImpl::restore()
                          .create(storage_name, file_provider, delegator, parseWALConfig(config));
 }
 
-PageId PageStorageImpl::getMaxId(NamespaceId ns_id)
+PageId PageStorageImpl::getMaxId()
 {
-    return page_directory->getMaxId(ns_id);
+    return page_directory->getMaxId();
 }
 
 void PageStorageImpl::drop()
@@ -254,8 +254,8 @@ void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & pag
     const auto & page_ids = page_directory->getAllPageIds();
     for (const auto & valid_page : page_ids)
     {
-        const auto & page_entries = page_directory->get(valid_page, snapshot);
-        acceptor(blob_store.read(page_entries));
+        const auto & page_id_and_entry = page_directory->get(valid_page, snapshot);
+        acceptor(blob_store.read(page_id_and_entry));
     }
 }
 
