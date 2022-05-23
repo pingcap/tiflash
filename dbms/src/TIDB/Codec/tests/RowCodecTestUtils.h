@@ -15,7 +15,7 @@
 #pragma once
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <TiDB/Codec/RowCodec.h>
+#include <TIDB/Codec/RowCodec.h>
 
 namespace DB::tests
 {

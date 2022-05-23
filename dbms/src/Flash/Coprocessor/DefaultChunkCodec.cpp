@@ -15,8 +15,8 @@
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <TiDB/Codec/Datum.h>
-#include <TiDB/Codec/DatumCodec.h>
+#include <TIDB/Codec/Datum.h>
+#include <TIDB/Codec/DatumCodec.h>
 
 using TiDB::DatumBumpy;
 using TiDB::DatumFlat;

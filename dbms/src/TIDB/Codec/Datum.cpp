@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TiDB/Codec/Datum.h>
+#include <TIDB/Codec/Datum.h>
 
 #include <ext/bit_cast.h>
 

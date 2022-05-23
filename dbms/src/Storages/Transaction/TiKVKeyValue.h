@@ -17,7 +17,7 @@
 #include <Common/RedactHelpers.h>
 #include <Common/nocopyable.h>
 #include <Storages/Transaction/Types.h>
-#include <TiDB/Codec/SerializationHelper.h>
+#include <TIDB/Codec/SerializationHelper.h>
 
 namespace DB
 {

@@ -21,8 +21,8 @@
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
-#include <TiDB/Codec/DatumCodec.h>
-#include <TiDB/Codec/RowCodec.h>
+#include <TIDB/Codec/DatumCodec.h>
+#include <TIDB/Codec/RowCodec.h>
 
 namespace TiDB
 {

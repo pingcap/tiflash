@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TiDB/Codec/tests/RowCodecTestUtils.h>
+#include <TIDB/Codec/tests/RowCodecTestUtils.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
