@@ -43,7 +43,7 @@ std::string extractTimeZoneNameFromFunctionArguments(const ColumnsWithTypeAndNam
             return {};
 
         /// If time zone is attached to an argument of type DateTime.
-        if (const DataTypeDateTime * type = checkAndGetDataType<DataTypeDateTime>(arguments[datetime_arg_num].type.get()))
+        if (const auto * type = checkAndGetDataType<DataTypeDateTime>(arguments[datetime_arg_num].type.get()))
             return type->getTimeZone().getTimeZone();
 
         return {};
@@ -60,12 +60,126 @@ const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const Co
             return DateLUT::instance();
 
         /// If time zone is attached to an argument of type DateTime.
-        if (const DataTypeDateTime * type = checkAndGetDataType<DataTypeDateTime>(block.getByPosition(arguments[datetime_arg_num]).type.get()))
+        if (const auto * type = checkAndGetDataType<DataTypeDateTime>(block.getByPosition(arguments[datetime_arg_num]).type.get()))
             return type->getTimeZone();
 
         return DateLUT::instance();
     }
 }
+
+class FunctionTiDBFromDays : public IFunction
+{
+public:
+    static constexpr auto name = "tidbFromDays";
+
+    explicit FunctionTiDBFromDays(const Context &) {}
+
+    static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBFromDays>(context); }
+
+    String getName() const override { return name; }
+    bool isVariadic() const override { return false; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        const auto * arg = removeNullable(arguments[0]).get();
+        if (!arg->isInteger())
+            throw Exception(
+                fmt::format("Illegal argument type {} of function {}, should be integer", arg->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeMyDate>());
+    }
+
+    template <typename IntType>
+    void dispatch(Block & block, const ColumnNumbers & arguments, const size_t result) const
+    {
+        size_t rows = block.rows();
+
+        auto col_to = ColumnVector<DataTypeMyDate::FieldType>::create(rows);
+        auto & vec_to = col_to->getData();
+        auto result_null_map = ColumnUInt8::create(rows, 0);
+        ColumnUInt8::Container & vec_result_null_map = result_null_map->getData();
+
+        auto col_from = block.getByPosition(arguments[0]).column;
+        if (block.getByPosition(arguments[0]).type->isNullable())
+        {
+            Block temporary_block = createBlockWithNestedColumns(block, arguments, result);
+            col_from = temporary_block.getByPosition(arguments[0]).column;
+        }
+        const auto & vec_from = checkAndGetColumn<ColumnVector<IntType>>(col_from.get())->getData();
+
+        for (size_t i = 0; i < rows; ++i)
+        {
+            try
+            {
+                IntType val = vec_from[i];
+                MyDateTime date(0);
+                if (val >= 0)
+                {
+                    fromDayNum(date, val);
+                }
+                vec_to[i] = date.toPackedUInt();
+            }
+            catch (const Exception &)
+            {
+                vec_result_null_map[i] = 1;
+            }
+        }
+
+        if (block.getByPosition(arguments[0]).type->isNullable())
+        {
+            auto column = block.getByPosition(arguments[0]).column;
+            for (size_t i = 0; i < rows; i++)
+            {
+                vec_result_null_map[i] |= column->isNullAt(i);
+            }
+        }
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(result_null_map));
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
+    {
+        if (block.getByPosition(arguments[0]).type->onlyNull())
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        auto type_index = removeNullable(block.getByPosition(arguments[0]).type)->getTypeId();
+        switch (type_index)
+        {
+        case TypeIndex::UInt8:
+            dispatch<UInt8>(block, arguments, result);
+            break;
+        case TypeIndex::UInt16:
+            dispatch<UInt16>(block, arguments, result);
+            break;
+        case TypeIndex::UInt32:
+            dispatch<UInt32>(block, arguments, result);
+            break;
+        case TypeIndex::UInt64:
+            dispatch<UInt64>(block, arguments, result);
+            break;
+        case TypeIndex::Int8:
+            dispatch<Int8>(block, arguments, result);
+            break;
+        case TypeIndex::Int16:
+            dispatch<Int16>(block, arguments, result);
+            break;
+        case TypeIndex::Int32:
+            dispatch<Int32>(block, arguments, result);
+            break;
+        case TypeIndex::Int64:
+            dispatch<Int64>(block, arguments, result);
+            break;
+        default:
+            throw Exception(fmt::format("argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        };
+    }
+};
 
 void registerFunctionsDateTime(FunctionFactory & factory)
 {
@@ -138,6 +252,8 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionToTiDBDayOfYear>();
     factory.registerFunction<FunctionToTiDBWeekOfYear>();
     factory.registerFunction<FunctionToTiDBToSeconds>();
+    factory.registerFunction<FunctionToTiDBToDays>();
+    factory.registerFunction<FunctionTiDBFromDays>();
 
     factory.registerFunction<FunctionToTimeZone>();
     factory.registerFunction<FunctionToLastDay>();
