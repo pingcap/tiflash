@@ -91,7 +91,7 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
-    bool is_final_agg;
+    bool is_final_agg{};
 };
 
 AnalysisResult analyzeExpressions(
