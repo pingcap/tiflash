@@ -223,12 +223,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     for (const auto & filename : files_snap.persisted_log_files)
     {
         const auto log_fullname = filename.fullname(LogFileStage::Normal);
-        if (auto f = Poco::File(log_fullname); f.exists())
-        {
-            f.remove();
-            // remove encryption path from provider
-            provider->deleteEncryptionInfo(EncryptionPath(log_fullname, ""));
-        }
+        provider->deleteRegularFile(log_fullname, EncryptionPath(log_fullname, ""));
     }
 
     FmtBuffer fmt_buf;
