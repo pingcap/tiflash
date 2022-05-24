@@ -40,6 +40,7 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     dir->gcInMemEntries();
+    LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
     // MVCC gc must do twice when restore
     // Because the first time call MVCC GC may not clean the deleted entries if being reference.
@@ -127,7 +128,6 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
     {
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
-        max_applied_page_id = std::max(r.page_id, max_applied_page_id);
 
         // We can not avoid page id from being reused under some corner situation. Try to do gcInMemEntries
         // and apply again to resolve the error.
@@ -150,6 +150,8 @@ bool PageDirectoryFactory::applyRecord(
     {
         iter->second = std::make_shared<VersionedPageEntries>();
     }
+
+    dir->max_page_id = std::max(dir->max_page_id, r.page_id.low);
 
     const auto & version_list = iter->second;
     const auto & restored_version = r.version;

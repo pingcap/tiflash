@@ -1330,6 +1330,57 @@ try
 CATCH
 
 
+TEST_F(PageStorageTest, GetMaxId)
+try
+{
+    NamespaceId small = 20;
+    NamespaceId medium = 50;
+    NamespaceId large = 100;
+
+    {
+        WriteBatch batch{small};
+        batch.putExternal(1, 0);
+        batch.putExternal(1999, 0);
+        batch.putExternal(2000, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        WriteBatch batch{medium};
+        batch.putExternal(1, 0);
+        batch.putExternal(100, 0);
+        batch.putExternal(200, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        WriteBatch batch{large};
+        batch.putExternal(1, 0);
+        batch.putExternal(20000, 0);
+        batch.putExternal(20001, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 20001);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 20001);
+    }
+}
+CATCH
+
 TEST_F(PageStorageTest, testGCTwice)
 try
 {
@@ -1357,7 +1408,6 @@ try
     ASSERT_EQ(alive_ids.size(), 0);
 }
 CATCH
-
 
 } // namespace PS::V3::tests
 } // namespace DB
