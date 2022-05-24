@@ -2272,7 +2272,7 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, testGCTwice)
+TEST_F(PageDirectoryGCTest, cleanAfterDecreaseRef)
 try
 {
     PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
@@ -2295,7 +2295,8 @@ try
         edit.ref(51, 50);
         edit.del(50);
         edit.del(51);
-        auto page_ids = restore_from_edit(edit)->getAllPageIds();
+        auto restored_dir = restore_from_edit(edit);
+        auto page_ids = restored_dir->getAllPageIds();
         ASSERT_EQ(page_ids.size(), 0);
     }
 }
