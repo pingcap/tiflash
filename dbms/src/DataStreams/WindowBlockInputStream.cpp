@@ -110,10 +110,10 @@ bool WindowBlockInputStream::isDifferentFromPrevPartition(UInt64 current_partiti
         if (window_description.partition_by[i].collator)
         {
             if (compared_column->compareAt(current_partition_row,
-                                                        prev_frame_start.row,
-                                                        *reference_column,
-                                                        1 /* nan_direction_hint */,
-                                                        *window_description.partition_by[i].collator)
+                                           prev_frame_start.row,
+                                           *reference_column,
+                                           1 /* nan_direction_hint */,
+                                           *window_description.partition_by[i].collator)
                 != 0)
             {
                 return true;
