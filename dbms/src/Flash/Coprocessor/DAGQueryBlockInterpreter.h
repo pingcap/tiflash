@@ -61,25 +61,11 @@ private:
     void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, const String & executor_id);
-    void prepareJoin(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types,
-        DAGPipeline & pipeline,
-        Names & key_names,
-        bool left,
-        bool is_right_out_join,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-        String & filter_column_name);
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleMockExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
-    ExpressionActionsPtr genJoinOtherConditionAction(
-        const tipb::Join & join,
-        NamesAndTypes & source_columns,
-        String & filter_column_for_other_condition,
-        String & filter_column_for_other_eq_condition);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column, String extra_info = "");
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String extra_info = "");
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
