@@ -2272,8 +2272,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-=======
 TEST_F(PageDirectoryGCTest, CleanAfterDecreaseRef)
 try
 {
@@ -2303,7 +2301,6 @@ try
     }
 }
 CATCH
->>>>>>> 1412c25201 (PageStorage: Fix the WAL snapshot dumped into file may contains invalid "being_ref_count" (#4987))
 
 #undef INSERT_ENTRY_TO
 #undef INSERT_ENTRY
