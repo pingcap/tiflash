@@ -19,6 +19,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
@@ -1191,15 +1192,25 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
-bool PageDirectory::tryDumpSnapshot(const WriteLimiterPtr & write_limiter)
+bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const WriteLimiterPtr & write_limiter)
 {
     bool done_any_io = false;
     // In order not to make read amplification too high, only apply compact logs when ...
     auto files_snap = wal->getFilesSnapshot();
     if (files_snap.needSave(max_persisted_log_files))
     {
+        // Read from `file_snap` to create an edit for snapshot.
+        assert(!files_snap.persisted_log_files.empty()); // should not be empty when `needSave` return true
+        auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
+        auto identifier = fmt::format("{}_dump_{}", wal->name(), log_num);
+        auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
+        PageDirectoryFactory factory;
+        PageDirectoryPtr collapsed_dir = factory.createFromReader(
+            identifier,
+            std::move(snapshot_reader),
+            /*wal=*/nullptr);
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
-        auto edit = dumpSnapshotToEdit();
+        auto edit = collapsed_dir->dumpSnapshotToEdit();
         done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit), write_limiter);
     }
     return done_any_io;

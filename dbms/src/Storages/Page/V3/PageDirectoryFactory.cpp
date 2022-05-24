@@ -31,7 +31,12 @@ namespace PS::V3
 PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config);
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal), config.max_persisted_log_files);
+    return createFromReader(storage_name, reader, std::move(wal));
+}
+
+PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal)
+{
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(storage_name, std::move(wal));
     loadFromDisk(dir, std::move(reader));
 
     // Reset the `sequence` to the maximum of persisted.
@@ -40,7 +45,7 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     dir->gcInMemEntries();
-    LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
+    LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory", storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
     if (blob_stats)
     {

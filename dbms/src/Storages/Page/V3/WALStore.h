@@ -88,16 +88,25 @@ public:
         SettingUInt64 roll_size = PAGE_META_ROLL_SIZE;
         SettingUInt64 wal_recover_mode = 0;
         SettingUInt64 max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
+
+        static WALRecoveryMode getRecoverMode()
+        {
+            // return static_cast<WALRecoveryMode>(wal_recover_mode.get());
+            // Now we only use this mode
+            return WALRecoveryMode::TolerateCorruptedTailRecords;
+        }
     };
 
     constexpr static const char * wal_folder_prefix = "/wal";
 
     static std::pair<WALStorePtr, WALStoreReaderPtr>
     create(
-        String storage_name,
+        String storage_name_,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator,
         WALStore::Config config);
+
+    WALStoreReaderPtr createReaderForFiles(const String & identifier, const LogFilenameSet & log_filenames, const ReadLimiterPtr & read_limiter);
 
     void apply(PageEntriesEdit & edit, const PageVersion & version, const WriteLimiterPtr & write_limiter = nullptr);
     void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
@@ -105,11 +114,15 @@ public:
     struct FilesSnapshot
     {
         Format::LogNumberType current_writting_log_num;
+        // The log files to generate snapshot from. Sorted by <log number, log level>.
+        // If the WAL log file is not inited, it is an empty set.
         LogFilenameSet persisted_log_files;
 
+        // Note that persisted_log_files should not be empty for needSave() == true,
+        // cause we get the largest log num from persisted_log_files as the new
+        // file name.
         bool needSave(const size_t & max_size) const
         {
-            // TODO: Make it configurable and check the reasonable of this number
             return persisted_log_files.size() > max_size;
         }
     };
@@ -120,6 +133,8 @@ public:
         FilesSnapshot && files_snap,
         PageEntriesEdit && directory_snap,
         const WriteLimiterPtr & write_limiter = nullptr);
+
+    const String & name() { return storage_name; }
 
 private:
     WALStore(
@@ -134,6 +149,8 @@ private:
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
         bool manual_flush);
 
+private:
+    const String storage_name;
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
     mutable std::mutex log_file_mutex;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
@@ -46,7 +47,7 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     auto reader = WALStoreReader::create(storage_name,
                                          provider,
                                          delegator,
-                                         static_cast<WALRecoveryMode>(config.wal_recover_mode.get()));
+                                         config.getRecoverMode());
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {
@@ -54,17 +55,23 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
         reader};
 }
 
+WALStoreReaderPtr WALStore::createReaderForFiles(const String & identifier, const LogFilenameSet & log_filenames, const ReadLimiterPtr & read_limiter)
+{
+    return WALStoreReader::create(identifier, provider, log_filenames, config.getRecoverMode(), read_limiter);
+}
+
 WALStore::WALStore(
-    String storage_name,
+    String storage_name_,
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
     Format::LogNumberType last_log_num_,
     WALStore::Config config_)
-    : delegator(delegator_)
+    : storage_name(std::move(storage_name_))
+    , delegator(delegator_)
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
-    , logger(Logger::get("WALStore", std::move(storage_name)))
+    , logger(Logger::get("WALStore", storage_name))
     , config(config_)
 {
 }
@@ -186,7 +193,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
 
     LOG_FMT_INFO(logger, "Saving directory snapshot");
 
-    // Use {largest_log_num + 1, 1} to save the `edit`
+    // Use {largest_log_num, 1} to save the `edit`
     const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
     // Create a temporary file for saving directory snapshot
     auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*manual_flush*/ true);
@@ -221,6 +228,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
         {
 #ifndef ARCHIVE_COMPACTED_LOGS
             f.remove();
+            // TODO: remove encryption path from provider
 #else
             const Poco::Path archive_path(delegator->defaultPath(), "archive");
             Poco::File archive_dir(archive_path);

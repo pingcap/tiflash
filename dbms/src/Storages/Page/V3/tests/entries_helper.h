@@ -25,6 +25,7 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -221,7 +222,9 @@ inline ::testing::AssertionResult getEntryNotExist(
     String error;
     try
     {
-        auto id_entry = dir->get(page_id, snap);
+        auto id_entry = dir->getOrNull(page_id, snap);
+        if (!id_entry.second.isValid())
+            return ::testing::AssertionSuccess();
         error = fmt::format(
             "Expect entry [id={}] from {} with snap{} not exist, but got <{}.{}, {}>",
             page_id_expr,
@@ -230,14 +233,6 @@ inline ::testing::AssertionResult getEntryNotExist(
             id_entry.first.high,
             id_entry.first.low,
             toDebugString(id_entry.second));
-    }
-    catch (DB::Exception & ex)
-    {
-        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS || ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
-            return ::testing::AssertionSuccess();
-        else
-            error = ex.displayText();
-        return ::testing::AssertionFailure(::testing::Message(error.c_str()));
     }
     catch (...)
     {
