@@ -464,7 +464,7 @@ private:
     }
 
     RunRaftStoreProxyParms parms;
-    pthread_t thread;
+    pthread_t thread{};
     Poco::Logger * log;
 };
 
