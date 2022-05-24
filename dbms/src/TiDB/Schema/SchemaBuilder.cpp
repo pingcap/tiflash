@@ -1078,7 +1078,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info->name, 0);
 
-    ASTCreateQuery * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
+    auto * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
     ast_create_query->attach = true;
     ast_create_query->if_not_exists = true;
     ast_create_query->database = name_mapper.mapDatabaseName(*db_info);
