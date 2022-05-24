@@ -219,27 +219,15 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
         true);
     LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
 
-    // #define ARCHIVE_COMPACTED_LOGS // keep for debug
-
     // Remove compacted log files.
     for (const auto & filename : files_snap.persisted_log_files)
     {
         const auto log_fullname = filename.fullname(LogFileStage::Normal);
         if (auto f = Poco::File(log_fullname); f.exists())
         {
-#ifndef ARCHIVE_COMPACTED_LOGS
             f.remove();
             // remove encryption path from provider
             provider->deleteEncryptionInfo(EncryptionPath(log_fullname, ""));
-#else
-            const Poco::Path archive_path(delegator->defaultPath(), "archive");
-            Poco::File archive_dir(archive_path);
-            if (!archive_dir.exists())
-                archive_dir.createDirectory();
-            auto dest = archive_path.toString() + "/" + filename.filename(LogFileStage::Normal);
-            f.moveTo(dest);
-            LOG_FMT_INFO(logger, "archive {} to {}", filename.fullname(LogFileStage::Normal), dest);
-#endif
         }
     }
 
