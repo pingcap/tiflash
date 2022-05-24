@@ -142,6 +142,10 @@ void FileProvider::deleteRegularFile(const String & file_path_, const Encryption
         {
             throw DB::TiFlashException("File: " + data_file.path() + " is not a regular file", Errors::Encryption::Internal);
         }
+        // Remove the file on disk before removing the encryption key. Or we may leave an encrypted file without the encryption key
+        // and the encrypted file can not be read.
+        // In the worst case that TiFlash crash between removing the file on disk and removing the encryption key, we may leave
+        // the encryption key not deleted. However, this is a rare case and won't cause serious problem.
         data_file.remove(false);
         key_manager->deleteFile(encryption_path_.full_path, true);
     }
