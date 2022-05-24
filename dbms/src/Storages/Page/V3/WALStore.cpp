@@ -224,11 +224,13 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     // Remove compacted log files.
     for (const auto & filename : files_snap.persisted_log_files)
     {
-        if (auto f = Poco::File(filename.fullname(LogFileStage::Normal)); f.exists())
+        const auto log_fullname = filename.fullname(LogFileStage::Normal);
+        if (auto f = Poco::File(log_fullname); f.exists())
         {
 #ifndef ARCHIVE_COMPACTED_LOGS
             f.remove();
-            // TODO: remove encryption path from provider
+            // remove encryption path from provider
+            provider->deleteEncryptionInfo(EncryptionPath(log_fullname, ""));
 #else
             const Poco::Path archive_path(delegator->defaultPath(), "archive");
             Poco::File archive_dir(archive_path);
