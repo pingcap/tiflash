@@ -134,7 +134,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     char * data_pos = data_buffer;
 
     PageUtil::put(meta_pos, meta_write_bytes);
-    PageUtil::put(meta_pos, STORAGE_FORMAT_CURRENT.page);
+    PageUtil::put(meta_pos, PageFormat::V2);
     PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
@@ -411,7 +411,7 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
 
             if (binary_version == PageFormat::V2)
             {
-                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                const auto num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
@@ -649,7 +649,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 
             if (binary_version == PageFormat::V2)
             {
-                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                const auto num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
@@ -792,7 +792,15 @@ size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, cons
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, background, enable_failpoint);
+        PageUtil::writeFile(
+            file,
+            offset,
+            buf.begin(),
+            buf.size(),
+            write_limiter,
+            background,
+            /*truncate_if_failed=*/true,
+            /*enable_failpoint=*/enable_failpoint);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };

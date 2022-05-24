@@ -20,7 +20,13 @@
 
 #include <memory>
 
-namespace DB::PS::V3
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int PS_DIR_APPLY_INVALID_STATUS;
+} // namespace ErrorCodes
+namespace PS::V3
 {
 PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
 {
@@ -34,6 +40,7 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     dir->gcInMemEntries();
+    LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
     if (blob_stats)
     {
@@ -101,79 +108,80 @@ PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileP
 
 void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit)
 {
-    PageDirectory::MVCCMapType & mvcc_table_directory = dir->mvcc_table_directory;
-
     for (const auto & r : edit.getRecords())
     {
-        if (auto it = max_apply_page_ids.find(r.page_id.high); it == max_apply_page_ids.end())
-        {
-            max_apply_page_ids[r.page_id.high] = r.page_id.low;
-        }
-        else
-        {
-            it->second = std::max(it->second, r.page_id.low);
-        }
-
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
-        max_applied_page_id = std::max(r.page_id, max_applied_page_id);
 
-        auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
-        if (created)
-        {
-            iter->second = std::make_shared<VersionedPageEntries>();
-        }
+        applyRecord(dir, r);
+    }
+}
 
-        const auto & version_list = iter->second;
-        const auto & restored_version = r.version;
-        try
+void PageDirectoryFactory::applyRecord(
+    const PageDirectoryPtr & dir,
+    const PageEntriesEdit::EditRecord & r)
+{
+    auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
+    if (created)
+    {
+        iter->second = std::make_shared<VersionedPageEntries>();
+    }
+
+    dir->max_page_id = std::max(dir->max_page_id, r.page_id.low);
+
+    const auto & version_list = iter->second;
+    const auto & restored_version = r.version;
+    try
+    {
+        switch (r.type)
         {
-            switch (r.type)
-            {
-            case EditRecordType::VAR_EXTERNAL:
-            case EditRecordType::VAR_REF:
-            {
-                auto holder = version_list->fromRestored(r);
-                if (holder)
-                {
-                    *holder = r.page_id;
-                    dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
-                }
-                break;
-            }
-            case EditRecordType::VAR_ENTRY:
-                version_list->fromRestored(r);
-                break;
-            case EditRecordType::PUT_EXTERNAL:
-            {
-                auto holder = version_list->createNewExternal(restored_version);
-                if (holder)
-                {
-                    *holder = r.page_id;
-                    dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
-                }
-                break;
-            }
-            case EditRecordType::PUT:
-                version_list->createNewEntry(restored_version, r.entry);
-                break;
-            case EditRecordType::DEL:
-            case EditRecordType::VAR_DELETE: // nothing different from `DEL`
-                version_list->createDelete(restored_version);
-                break;
-            case EditRecordType::REF:
-                PageDirectory::applyRefEditRecord(mvcc_table_directory, version_list, r, restored_version);
-                break;
-            case EditRecordType::UPSERT:
-                version_list->createNewEntry(restored_version, r.entry);
-                break;
-            }
-        }
-        catch (DB::Exception & e)
+        case EditRecordType::VAR_EXTERNAL:
+        case EditRecordType::VAR_REF:
         {
-            e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}]", r.type, r.page_id, restored_version));
-            throw e;
+            auto holder = version_list->fromRestored(r);
+            if (holder)
+            {
+                *holder = r.page_id;
+                dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
+            }
+            break;
         }
+        case EditRecordType::VAR_ENTRY:
+            version_list->fromRestored(r);
+            break;
+        case EditRecordType::PUT_EXTERNAL:
+        {
+            auto holder = version_list->createNewExternal(restored_version);
+            if (holder)
+            {
+                *holder = r.page_id;
+                dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
+            }
+            break;
+        }
+        case EditRecordType::PUT:
+            version_list->createNewEntry(restored_version, r.entry);
+            break;
+        case EditRecordType::DEL:
+        case EditRecordType::VAR_DELETE: // nothing different from `DEL`
+            version_list->createDelete(restored_version);
+            break;
+        case EditRecordType::REF:
+            PageDirectory::applyRefEditRecord(
+                dir->mvcc_table_directory,
+                version_list,
+                r,
+                restored_version);
+            break;
+        case EditRecordType::UPSERT:
+            version_list->createNewEntry(restored_version, r.entry);
+            break;
+        }
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}]", r.type, r.page_id, restored_version));
+        throw e;
     }
 }
 
@@ -196,4 +204,5 @@ void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreRe
         loadEdit(dir, edit);
     }
 }
-} // namespace DB::PS::V3
+} // namespace PS::V3
+} // namespace DB

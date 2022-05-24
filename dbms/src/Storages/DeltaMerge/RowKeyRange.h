@@ -63,6 +63,7 @@ struct RowKeyValueRef
     RowKeyValue toRowKeyValue() const;
 };
 
+/// Stores the raw bytes of the RowKey. Normally the RowKey will be stored in a column.
 struct RowKeyValue
 {
     RowKeyValue() = default;
@@ -112,7 +113,11 @@ struct RowKeyValue
     // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
     String toDebugString() const;
 
-    RowKeyValueRef toRowKeyValueRef() const { return RowKeyValueRef{is_common_handle, value->data(), value->size(), int_value}; }
+    inline RowKeyValueRef toRowKeyValueRef() const
+    {
+        return RowKeyValueRef{is_common_handle, value->data(), value->size(), int_value};
+    }
+
     DecodedTiKVKeyPtr toRegionKey(TableID table_id) const
     {
         // FIXME: move this to TiKVRecordFormat.h
@@ -159,6 +164,22 @@ struct RowKeyValue
         return RowKeyValue(is_common_handle, prefix_value, prefix_int_value);
     }
 
+    void serialize(WriteBuffer & buf) const
+    {
+        writeBoolText(is_common_handle, buf);
+        writeStringBinary(*value, buf);
+    }
+
+    static RowKeyValue deserialize(ReadBuffer & buf)
+    {
+        bool is_common_handle;
+        String value;
+        readBoolText(is_common_handle, buf);
+        readStringBinary(value, buf);
+        HandleValuePtr start_ptr = std::make_shared<String>(value);
+        return RowKeyValue(is_common_handle, start_ptr);
+    }
+
     bool is_common_handle;
     /// In case of non common handle, the value field is redundant in most cases, except that int_value == Int64::max_value,
     /// because RowKeyValue is an end point of RowKeyRange, assuming that RowKeyRange = [start_value, end_value), since the
@@ -177,6 +198,8 @@ struct RowKeyValue
 
 using RowKeyValues = std::vector<RowKeyValue>;
 
+/// An optimized implementation that will try to compare IntHandle via comparing Int values directly.
+/// For common handles, per-byte comparison will be still used.
 inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
     if (unlikely(a.is_common_handle != b.is_common_handle))
@@ -213,6 +236,9 @@ inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
         }
     }
 }
+
+// TODO (wenxuan): The following compare operators can be simplified using
+// boost::operator, or operator<=> when we upgrade to C++20.
 
 inline int compare(const StringRef & a, const RowKeyValueRef & b)
 {
@@ -353,12 +379,13 @@ size_t lowerBound(const RowKeyColumnContainer & rowkey_column, size_t first, siz
 }
 } // namespace
 
+/// A range denoted as [StartRowKey, EndRowKey).
 struct RowKeyRange
 {
-    // todo use template to refine is_common_handle
+    // TODO: use template to refine is_common_handle
     bool is_common_handle;
-    /// start and end in RowKeyRange are always meaningful
-    /// it is assumed that start value is included and end value is excluded.
+
+    // start and end in RowKeyRange are always meaningful.
     RowKeyValue start;
     RowKeyValue end;
     size_t rowkey_column_size;
@@ -440,6 +467,7 @@ struct RowKeyRange
         }
     }
 
+    /// Create a RowKeyRange that covers all key space.
     static RowKeyRange newAll(bool is_common_handle, size_t rowkey_column_size)
     {
         if (is_common_handle)
@@ -456,6 +484,7 @@ struct RowKeyRange
         }
     }
 
+    /// Create a RowKeyRange that covers no data at all.
     static RowKeyRange newNone(bool is_common_handle, size_t rowkey_column_size)
     {
         if (is_common_handle)
@@ -594,10 +623,13 @@ struct RowKeyRange
         return check(first) && check(last_include);
     }
 
+    /// Check whether thisRange.Start <= key
     inline bool checkStart(const RowKeyValueRef & value) const { return compare(getStart(), value) <= 0; }
 
+    /// Check whether key < thisRange.End
     inline bool checkEnd(const RowKeyValueRef & value) const { return compare(value, getEnd()) < 0; }
 
+    /// Check whether the key is included in this range.
     inline bool check(const RowKeyValueRef & value) const { return checkStart(value) && checkEnd(value); }
 
     inline RowKeyValueRef getStart() const { return start.toRowKeyValueRef(); }
@@ -625,7 +657,7 @@ struct RowKeyRange
         return {start_key, end_key};
     }
 
-    /// return <offset, limit>
+    /// Clip the <offset, limit> according to this range, and return the clipped <offset, limit>.
     std::pair<size_t, size_t> getPosRange(const ColumnPtr & column, const size_t offset, const size_t limit) const
     {
         RowKeyColumnContainer rowkey_column(column, is_common_handle);

@@ -14,19 +14,11 @@
 
 #pragma once
 
-#include <Parsers/IParserBase.h>
-
+#include <grpcpp/impl/codegen/status_code_enum.h>
 
 namespace DB
 {
 
-/** Query USE db
-  */
-class ParserTruncateQuery : public IParserBase
-{
-protected:
-  const char * getName() const { return "TRUNCATE query"; }
-  bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-};
+grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code);
 
-}
+} // namespace DB

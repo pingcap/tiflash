@@ -104,9 +104,7 @@ void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/,
     auto global_storage_pool = context.getGlobalStoragePool();
     if (global_storage_pool)
     {
-        global_storage_pool->meta()->gc();
-        global_storage_pool->log()->gc();
-        global_storage_pool->data()->gc();
+        global_storage_pool->gc();
     }
 }
 } // namespace DB

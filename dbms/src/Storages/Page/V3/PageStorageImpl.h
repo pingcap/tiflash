@@ -60,10 +60,11 @@ public:
         return wal_config;
     }
 
-    std::map<NamespaceId, PageId> restore() override;
+    void restore() override;
 
     void drop() override;
 
+    PageId getMaxId() override;
 
     PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
@@ -72,6 +73,8 @@ public:
     SnapshotsStatistics getSnapshotsStat() const override;
 
     size_t getNumberOfPages() override;
+
+    std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) override;
 
     void writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter) override;
 

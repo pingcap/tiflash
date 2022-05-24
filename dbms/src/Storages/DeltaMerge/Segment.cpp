@@ -236,7 +236,7 @@ SegmentPtr Segment::newSegment(
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 {
-    Page page = context.storage_pool.metaReader().read(segment_id); // not limit restore
+    Page page = context.storage_pool.metaReader()->read(segment_id); // not limit restore
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     SegmentFormat::Version version;
@@ -306,7 +306,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
     return delta->appendToCache(dm_context, block, offset, limit);
 }
 
-bool Segment::write(DMContext & dm_context, const Block & block)
+bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cache)
 {
     LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}", segment_id, block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
@@ -316,7 +316,14 @@ bool Segment::write(DMContext & dm_context, const Block & block)
 
     if (delta->appendColumnFile(dm_context, column_file))
     {
-        flushCache(dm_context);
+        if (flush_cache)
+        {
+            while (!flushCache(dm_context))
+            {
+                if (hasAbandoned())
+                    return false;
+            }
+        }
         return true;
     }
     else
@@ -919,27 +926,30 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     auto delegate = dm_context.path_pool.getStableDiskDelegator();
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
-        auto ori_ref_id = dmfile->refId();
+        auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto my_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-        auto other_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto my_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto other_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-        wbs.data.putRefPage(my_dmfile_id, file_id);
-        wbs.data.putRefPage(other_dmfile_id, file_id);
-        wbs.removed_data.delPage(ori_ref_id);
+        // Note that the file id may has already been mark as deleted. We must
+        // create a reference to the page id itself instead of create a reference
+        // to the file id.
+        wbs.data.putRefPage(my_dmfile_page_id, ori_page_id);
+        wbs.data.putRefPage(other_dmfile_page_id, ori_page_id);
+        wbs.removed_data.delPage(ori_page_id);
 
         auto my_dmfile = DMFile::restore(
             dm_context.db_context.getFileProvider(),
             file_id,
-            /* ref_id= */ my_dmfile_id,
+            /* page_id= */ my_dmfile_page_id,
             file_parent_path,
             DMFile::ReadMetaMode::all());
         auto other_dmfile = DMFile::restore(
             dm_context.db_context.getFileProvider(),
             file_id,
-            /* ref_id= */ other_dmfile_id,
+            /* page_id= */ other_dmfile_page_id,
             file_parent_path,
             DMFile::ReadMetaMode::all());
 
@@ -1059,7 +1069,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     {
         // Here we should remove the ref id instead of file_id.
         // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
-        wbs.removed_data.delPage(file->refId());
+        wbs.removed_data.delPage(file->pageId());
     }
 
     LOG_FMT_INFO(log, "Segment [{}] prepare split physical done", segment_id);
@@ -1126,6 +1136,29 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
+    /// And only saved data in this segment will be filtered by the segment range in the merge process,
+    /// unsaved data will be directly copied to the new segment.
+    /// So we flush here to make sure that all potential data left by previous split operation is saved.
+    while (!left->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (left->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(left->log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return {};
+        }
+    }
+    while (!right->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (right->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(right->log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return {};
+        }
+    }
+
 
     auto left_snap = left->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
     auto right_snap = right->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
@@ -1146,6 +1179,10 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     return merged;
 }
 
+/// Segments may contain some rows that not belong to its range which is left by previous split operation.
+/// And only saved data in the segment will be filtered by the segment range in the merge process,
+/// unsaved data will be directly copied to the new segment.
+/// So remember to do a flush for the segments before merge.
 StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
                                           const ColumnDefinesPtr & schema_snap,
                                           const SegmentPtr & left,
