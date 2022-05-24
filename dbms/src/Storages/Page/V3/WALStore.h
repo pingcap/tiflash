@@ -94,21 +94,19 @@ public:
     public:
         void setRecoverMode(UInt64 recover_mode)
         {
-            if (recover_mode != static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
-                && recover_mode != static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
-                && recover_mode != static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
-                && recover_mode != static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords))
+            if (unlikely(recover_mode != static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
+                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
+                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
+                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords)))
             {
                 throw Exception("Unknow recover mode [num={}]", recover_mode);
             }
             wal_recover_mode = recover_mode;
         }
 
-        static WALRecoveryMode getRecoverMode()
+        WALRecoveryMode getRecoverMode()
         {
-            // return static_cast<WALRecoveryMode>(wal_recover_mode.get());
-            // Now we only use this mode
-            return WALRecoveryMode::TolerateCorruptedTailRecords;
+            return static_cast<WALRecoveryMode>(wal_recover_mode.get());
         }
     };
 

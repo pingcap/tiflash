@@ -140,7 +140,7 @@ public:
         SettingUInt64 blob_block_alignment_bytes = 0;
 
         SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
-        SettingUInt64 wal_recover_mode = 0x00;
+        SettingUInt64 wal_recover_mode = 0x00; // WALRecoveryMode::TolerateCorruptedTailRecords
         SettingUInt64 wal_max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
 
         void reload(const Config & rhs)

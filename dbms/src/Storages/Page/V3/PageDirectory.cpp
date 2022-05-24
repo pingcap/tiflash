@@ -1199,7 +1199,10 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
     auto files_snap = wal->getFilesSnapshot();
     if (files_snap.needSave(max_persisted_log_files))
     {
-        // Read from `file_snap` to create an edit for snapshot.
+        // To prevent writes from affecting dumping snapshot (and vice versa), old log files
+        // are read from disk and a temporary PageDirectory is generated for dumping snapshot.
+        // The main reason write affect dumping snapshot is that we can not get a read-only
+        // `being_ref_count` by the function `createSnapshot()`.
         assert(!files_snap.persisted_log_files.empty()); // should not be empty when `needSave` return true
         auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
         auto identifier = fmt::format("{}_dump_{}", wal->name(), log_num);
