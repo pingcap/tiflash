@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -39,7 +53,7 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
+        storage_pool = std::make_unique<StoragePool>(*db_context, /*table_id*/ 100, *path_pool, "test.t1");
         storage_pool->restore();
         if (!cols)
             cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);

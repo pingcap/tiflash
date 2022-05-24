@@ -1,8 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
@@ -11,17 +27,8 @@
 #include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
-
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int NOT_IMPLEMENTED;
-extern const int UNKNOWN_USER;
-extern const int WRONG_PASSWORD;
-extern const int REQUIRED_PASSWORD;
-extern const int IP_ADDRESS_NOT_ALLOWED;
-} // namespace ErrorCodes
 
 const Int8 VAR_SIZE = 0;
 
@@ -29,6 +36,12 @@ extern const String uniq_raw_res_name;
 
 namespace
 {
+const std::unordered_map<tipb::ExprType, String> window_func_map({
+    {tipb::ExprType::Rank, "rank"},
+    {tipb::ExprType::DenseRank, "dense_rank"},
+    {tipb::ExprType::RowNumber, "row_number"},
+});
+
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
@@ -146,14 +159,14 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::GTDuration, "greater"},
     {tipb::ScalarFuncSig::GTJson, "greater"},
 
-    {tipb::ScalarFuncSig::GreatestInt, "greatest"},
-    {tipb::ScalarFuncSig::GreatestReal, "greatest"},
+    {tipb::ScalarFuncSig::GreatestInt, "tidbGreatest"},
+    {tipb::ScalarFuncSig::GreatestReal, "tidbGreatest"},
     {tipb::ScalarFuncSig::GreatestString, "greatest"},
     {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
     {tipb::ScalarFuncSig::GreatestTime, "greatest"},
 
-    {tipb::ScalarFuncSig::LeastInt, "least"},
-    {tipb::ScalarFuncSig::LeastReal, "least"},
+    {tipb::ScalarFuncSig::LeastInt, "tidbLeast"},
+    {tipb::ScalarFuncSig::LeastReal, "tidbLeast"},
     {tipb::ScalarFuncSig::LeastString, "least"},
     {tipb::ScalarFuncSig::LeastDecimal, "least"},
     {tipb::ScalarFuncSig::LeastTime, "least"},
@@ -306,12 +319,18 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::BitOrSig, "bitOr"},
     {tipb::ScalarFuncSig::BitXorSig, "bitXor"},
     {tipb::ScalarFuncSig::BitNegSig, "bitNot"},
-    //{tipb::ScalarFuncSig::IntIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::RealIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::DecimalIsTrue, "cast"},
-    //{tipb::ScalarFuncSig::IntIsFalse, "cast"},
-    //{tipb::ScalarFuncSig::RealIsFalse, "cast"},
-    //{tipb::ScalarFuncSig::DecimalIsFalse, "cast"},
+    {tipb::ScalarFuncSig::IntIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::IntIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::RealIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::RealIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::DecimalIsTrue, "isTrue"},
+    {tipb::ScalarFuncSig::DecimalIsTrueWithNull, "isTrueWithNull"},
+    {tipb::ScalarFuncSig::IntIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::IntIsFalseWithNull, "isFalseWithNull"},
+    {tipb::ScalarFuncSig::RealIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::RealIsFalseWithNull, "isFalseWithNull"},
+    {tipb::ScalarFuncSig::DecimalIsFalse, "isFalse"},
+    {tipb::ScalarFuncSig::DecimalIsFalseWithNull, "isFalseWithNull"},
 
     //{tipb::ScalarFuncSig::LeftShift, "cast"},
     //{tipb::ScalarFuncSig::RightShift, "cast"},
@@ -411,8 +430,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::UUID, "cast"},
 
     {tipb::ScalarFuncSig::LikeSig, "like3Args"},
-    //{tipb::ScalarFuncSig::RegexpSig, "cast"},
-    //{tipb::ScalarFuncSig::RegexpUTF8Sig, "cast"},
+    {tipb::ScalarFuncSig::RegexpSig, "regexp"},
+    {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
 
     //{tipb::ScalarFuncSig::JsonExtractSig, "cast"},
     //{tipb::ScalarFuncSig::JsonUnquoteSig, "cast"},
@@ -476,20 +495,20 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Second, "second"},
     {tipb::ScalarFuncSig::MicroSecond, "microSecond"},
     {tipb::ScalarFuncSig::Month, "toMonth"},
-    //{tipb::ScalarFuncSig::MonthName, "cast"},
+    {tipb::ScalarFuncSig::MonthName, "toMonthName"},
 
     //{tipb::ScalarFuncSig::NowWithArg, "cast"},
     //{tipb::ScalarFuncSig::NowWithoutArg, "cast"},
 
-    //{tipb::ScalarFuncSig::DayName, "cast"},
+    {tipb::ScalarFuncSig::DayName, "toDayName"},
     {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
-    //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
-    //{tipb::ScalarFuncSig::DayOfYear, "cast"},
+    {tipb::ScalarFuncSig::DayOfWeek, "tidbDayOfWeek"},
+    {tipb::ScalarFuncSig::DayOfYear, "tidbDayOfYear"},
 
     //{tipb::ScalarFuncSig::WeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::WeekWithoutMode, "cast"},
     //{tipb::ScalarFuncSig::WeekDay, "cast"},
-    //{tipb::ScalarFuncSig::WeekOfYear, "cast"},
+    {tipb::ScalarFuncSig::WeekOfYear, "tidbWeekOfYear"},
 
     {tipb::ScalarFuncSig::Year, "toYear"},
     //{tipb::ScalarFuncSig::YearWeekWithMode, "cast"},
@@ -545,15 +564,15 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SecToTime, "cast"},
     //{tipb::ScalarFuncSig::TimeToSec, "cast"},
     //{tipb::ScalarFuncSig::TimestampAdd, "cast"},
-    //{tipb::ScalarFuncSig::ToDays, "cast"},
-    //{tipb::ScalarFuncSig::ToSeconds, "cast"},
+    {tipb::ScalarFuncSig::ToDays, "tidbToDays"},
+    {tipb::ScalarFuncSig::ToSeconds, "tidbToSeconds"},
     //{tipb::ScalarFuncSig::UTCTimeWithArg, "cast"},
     //{tipb::ScalarFuncSig::UTCTimestampWithoutArg, "cast"},
     //{tipb::ScalarFuncSig::Timestamp1Arg, "cast"},
     //{tipb::ScalarFuncSig::Timestamp2Args, "cast"},
     //{tipb::ScalarFuncSig::TimestampLiteral, "cast"},
 
-    //{tipb::ScalarFuncSig::LastDay, "cast"},
+    {tipb::ScalarFuncSig::LastDay, "tidbLastDay"},
     {tipb::ScalarFuncSig::StrToDateDate, "strToDateDate"},
     {tipb::ScalarFuncSig::StrToDateDatetime, "strToDateDatetime"},
     // {tipb::ScalarFuncSig::StrToDateDuration, "cast"},
@@ -580,7 +599,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateDatetimeString, "cast"},
     {tipb::ScalarFuncSig::SubDateDatetimeInt, "date_sub"},
 
-    //{tipb::ScalarFuncSig::FromDays, "cast"},
+    {tipb::ScalarFuncSig::FromDays, "tidbFromDays"},
     //{tipb::ScalarFuncSig::TimeFormat, "cast"},
     {tipb::ScalarFuncSig::TimestampDiff, "tidbTimestampDiff"},
 
@@ -698,7 +717,7 @@ bool isScalarFunctionExpr(const tipb::Expr & expr)
 
 bool isFunctionExpr(const tipb::Expr & expr)
 {
-    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr);
+    return isScalarFunctionExpr(expr) || isAggFunctionExpr(expr) || isWindowFunctionExpr(expr);
 }
 
 const String & getAggFunctionName(const tipb::Expr & expr)
@@ -723,6 +742,19 @@ const String & getAggFunctionName(const tipb::Expr & expr)
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
+const String & getWindowFunctionName(const tipb::Expr & expr)
+{
+    auto it = window_func_map.find(expr.tp());
+    if (it != window_func_map.end())
+        return it->second;
+
+    const auto errmsg = fmt::format(
+        "{} is not supported.",
+        tipb::ExprType_Name(expr.tp()));
+    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
+}
+
+
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
@@ -738,9 +770,101 @@ const String & getFunctionName(const tipb::Expr & expr)
     }
 }
 
+String getExchangeTypeName(const tipb::ExchangeType & tp)
+{
+    switch (tp)
+    {
+    case tipb::ExchangeType::Broadcast:
+        return "Broadcast";
+    case tipb::ExchangeType::PassThrough:
+        return "PassThrough";
+    case tipb::ExchangeType::Hash:
+        return "Hash";
+    default:
+        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getJoinTypeName(const tipb::JoinType & tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinType::TypeAntiLeftOuterSemiJoin:
+        return "AntiLeftOuterSemiJoin";
+    case tipb::JoinType::TypeLeftOuterJoin:
+        return "LeftOuterJoin";
+    case tipb::JoinType::TypeRightOuterJoin:
+        return "RightOuterJoin";
+    case tipb::JoinType::TypeLeftOuterSemiJoin:
+        return "LeftOuterSemiJoin";
+    case tipb::JoinType::TypeAntiSemiJoin:
+        return "AntiSemiJoin";
+    case tipb::JoinType::TypeInnerJoin:
+        return "InnerJoin";
+    case tipb::JoinType::TypeSemiJoin:
+        return "SemiJoin";
+    default:
+        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getJoinExecTypeName(const tipb::JoinExecType & tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinExecType::TypeHashJoin:
+        return "HashJoin";
+    default:
+        throw TiFlashException(fmt::format("Not supported Join exectution type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getFieldTypeName(Int32 tp)
+{
+    switch (tp)
+    {
+    case TiDB::TypeTiny:
+        return "Tiny";
+    case TiDB::TypeShort:
+        return "Short";
+    case TiDB::TypeInt24:
+        return "Int24";
+    case TiDB::TypeLong:
+        return "Long";
+    case TiDB::TypeLongLong:
+        return "Longlong";
+    case TiDB::TypeYear:
+        return "Year";
+    case TiDB::TypeDouble:
+        return "Double";
+    case TiDB::TypeTime:
+        return "Time";
+    case TiDB::TypeDate:
+        return "Date";
+    case TiDB::TypeDatetime:
+        return "Datetime";
+    case TiDB::TypeNewDate:
+        return "NewDate";
+    case TiDB::TypeTimestamp:
+        return "Timestamp";
+    case TiDB::TypeFloat:
+        return "Float";
+    case TiDB::TypeDecimal:
+        return "Decimal";
+    case TiDB::TypeNewDecimal:
+        return "NewDecimal";
+    case TiDB::TypeVarchar:
+        return "Varchar";
+    case TiDB::TypeString:
+        return "String";
+    default:
+        throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
-    std::stringstream ss;
+    FmtBuffer fmt_buf;
     String func_name;
     Field f;
     switch (expr.tp())
@@ -817,35 +941,29 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     if (functionIsInOrGlobalInOperator(func_name))
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
-        ss << exprToString(expr.children(0), input_col) << " " << func_name << " (";
-        bool first = true;
-        for (int i = 1; i < expr.children_size(); i++)
-        {
-            String s = exprToString(expr.children(i), input_col);
-            if (first)
-                first = false;
-            else
-                ss << ", ";
-            ss << s;
-        }
-        ss << ")";
+        fmt_buf.fmtAppend("{} {} (", exprToString(expr.children(0), input_col), func_name);
+        fmt_buf.joinStr(
+            expr.children().begin() + 1,
+            expr.children().end(),
+            [input_col](const auto & arg, FmtBuffer & fb) {
+                fb.append(exprToString(arg, input_col));
+            },
+            ", ");
+        fmt_buf.append(")");
     }
     else
     {
-        ss << func_name << "(";
-        bool first = true;
-        for (const tipb::Expr & child : expr.children())
-        {
-            String s = exprToString(child, input_col);
-            if (first)
-                first = false;
-            else
-                ss << ", ";
-            ss << s;
-        }
-        ss << ")";
+        fmt_buf.fmtAppend("{}(", func_name);
+        fmt_buf.joinStr(
+            expr.children().begin(),
+            expr.children().end(),
+            [input_col](const auto & arg, FmtBuffer & fb) {
+                fb.append(exprToString(arg, input_col));
+            },
+            ", ");
+        fmt_buf.append(")");
     }
-    return ss.str();
+    return fmt_buf.toString();
 }
 
 const String & getTypeName(const tipb::Expr & expr)
@@ -877,6 +995,39 @@ bool isAggFunctionExpr(const tipb::Expr & expr)
     case tipb::ExprType::JsonArrayAgg:
     case tipb::ExprType::JsonObjectAgg:
     case tipb::ExprType::ApproxCountDistinct:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWindowFunctionExpr(const tipb::Expr & expr)
+{
+    switch (expr.tp())
+    {
+    case tipb::ExprType::RowNumber:
+    case tipb::ExprType::Rank:
+    case tipb::ExprType::DenseRank:
+    case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
+        //    case tipb::ExprType::CumeDist:
+        //    case tipb::ExprType::PercentRank:
+        //    case tipb::ExprType::Ntile:
+        //    case tipb::ExprType::FirstValue:
+        //    case tipb::ExprType::LastValue:
+        //    case tipb::ExprType::NthValue:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWindowLagOrLeadFunctionExpr(const tipb::Expr & expr)
+{
+    switch (expr.tp())
+    {
+    case tipb::ExprType::Lead:
+    case tipb::ExprType::Lag:
         return true;
     default:
         return false;
@@ -970,16 +1121,27 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     return input_col[column_index].name;
 }
 
+NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
+{
+    auto column_index = decodeDAGInt64(expr.val());
+    if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
+    {
+        throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
+    }
+    return input_col[column_index];
+}
+
 // For some historical or unknown reasons, TiDB might set an invalid
 // field type. This function checks if the expr has a valid field type.
 // So far the known invalid field types are:
 // 1. decimal type with scale == -1
 // 2. decimal type with precision == 0
+// 3. decimal type with precision == -1
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type()
         && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal
-             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0));
+             && (expr.field_type().decimal() == -1 || expr.field_type().flen() == 0 || expr.field_type().flen() == -1));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
@@ -1134,7 +1296,7 @@ tipb::Expr constructNULLLiteralTiExpr()
     return expr;
 }
 
-std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr)
+TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr)
 {
     if (expr.has_field_type())
         return getCollatorFromFieldType(expr.field_type());
@@ -1151,13 +1313,31 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
         int direction = by_items[i].desc() ? -1 : 1;
         // MySQL/TiDB treats NULL as "minimum".
         int nulls_direction = -1;
-        std::shared_ptr<ICollator> collator = nullptr;
+        TiDB::TiDBCollatorPtr collator = nullptr;
         if (removeNullable(order_columns[i].type)->isString())
             collator = getCollatorFromExpr(by_items[i].expr());
 
         order_descr.emplace_back(name, direction, nulls_direction, collator);
     }
     return order_descr;
+}
+
+String genFuncString(
+    const String & func_name,
+    const Names & argument_names,
+    const TiDB::TiDBCollators & collators)
+{
+    FmtBuffer buf;
+    buf.fmtAppend("{}({})_collator", func_name, fmt::join(argument_names.begin(), argument_names.end(), ", "));
+    for (const auto & collator : collators)
+    {
+        if (collator)
+            buf.fmtAppend("_{}", collator->getCollatorId());
+        else
+            buf.append("_0");
+    }
+    buf.append(" ");
+    return buf.toString();
 }
 
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type)
@@ -1170,17 +1350,6 @@ TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_typ
 bool hasUnsignedFlag(const tipb::FieldType & tp)
 {
     return tp.flag() & TiDB::ColumnFlagUnsigned;
-}
-
-grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
-{
-    /// do not use switch statement because ErrorCodes::XXXX is not a compile time constant
-    if (error_code == ErrorCodes::NOT_IMPLEMENTED)
-        return grpc::StatusCode::UNIMPLEMENTED;
-    if (error_code == ErrorCodes::UNKNOWN_USER || error_code == ErrorCodes::WRONG_PASSWORD || error_code == ErrorCodes::REQUIRED_PASSWORD
-        || error_code == ErrorCodes::IP_ADDRESS_NOT_ALLOWED)
-        return grpc::StatusCode::UNAUTHENTICATED;
-    return grpc::StatusCode::INTERNAL;
 }
 
 void assertBlockSchema(
@@ -1227,6 +1396,29 @@ tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s)
         }
     }
     return dag_req;
+}
+
+tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
+{
+    const tipb::DAGRequest & dag_request = *dag_context.dag_request;
+    const tipb::EncodeType encode_type = dag_request.encode_type();
+    if (dag_context.isMPPTask() && !dag_context.isRootMPPTask())
+    {
+        /// always use CHBlock encode type for data exchange between TiFlash nodes
+        return tipb::EncodeType::TypeCHBlock;
+    }
+    if (dag_request.has_force_encode_type() && dag_request.force_encode_type())
+    {
+        assert(encode_type == tipb::EncodeType::TypeCHBlock);
+        return encode_type;
+    }
+    if (isUnsupportedEncodeType(dag_context.result_field_types, encode_type))
+        return tipb::EncodeType::TypeDefault;
+    if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
+        && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
+        // todo support BigEndian encode for chunk encode type
+        return tipb::EncodeType::TypeDefault;
+    return encode_type;
 }
 
 } // namespace DB

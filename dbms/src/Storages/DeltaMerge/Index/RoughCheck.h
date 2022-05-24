@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/AccurateComparison.h>
@@ -10,18 +24,15 @@ namespace DM
 {
 namespace RoughCheck
 {
-static constexpr int TRUE = 1;
-static constexpr int FAILED = 0;
-
 template <template <typename, typename> class Op>
 using Cmp = ValueComparision<Op>;
 
-#define IS_LEGAL(lef_field, right_value) (Cmp<EqualsOp>::compare(lef_field, type, right_value) != FAILED)
-#define EQUAL(lef_field, right_value) (Cmp<EqualsOp>::compare(lef_field, type, right_value) == TRUE)
-#define LESS(lef_field, right_value) (Cmp<LessOp>::compare(lef_field, type, right_value) == TRUE)
-#define GREATER(lef_field, right_value) (Cmp<GreaterOp>::compare(lef_field, type, right_value) == TRUE)
-#define LESS_EQ(lef_field, right_value) (Cmp<LessOrEqualsOp>::compare(lef_field, type, right_value) == TRUE)
-#define GREATER_EQ(lef_field, right_value) (Cmp<GreaterOrEqualsOp>::compare(lef_field, type, right_value) == TRUE)
+#define IS_LEGAL(lef_field, right_value) (Cmp<EqualsOp>::compare(lef_field, type, right_value) != ValueCompareResult::CanNotCompare)
+#define EQUAL(lef_field, right_value) (Cmp<EqualsOp>::compare(lef_field, type, right_value) == ValueCompareResult::True)
+#define LESS(lef_field, right_value) (Cmp<LessOp>::compare(lef_field, type, right_value) == ValueCompareResult::True)
+#define GREATER(lef_field, right_value) (Cmp<GreaterOp>::compare(lef_field, type, right_value) == ValueCompareResult::True)
+#define LESS_EQ(lef_field, right_value) (Cmp<LessOrEqualsOp>::compare(lef_field, type, right_value) == ValueCompareResult::True)
+#define GREATER_EQ(lef_field, right_value) (Cmp<GreaterOrEqualsOp>::compare(lef_field, type, right_value) == ValueCompareResult::True)
 
 
 template <typename T>

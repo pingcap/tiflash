@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/AddingConstColumnBlockInputStream.h>
@@ -204,7 +218,7 @@ BlockInputStreams StorageMerge::read(
         auto & table_lock = it->second;
 
         /// If there are only virtual columns in query, you must request at least one other column.
-        if (real_column_names.size() == 0)
+        if (real_column_names.empty())
             real_column_names.push_back(ExpressionActions::getSmallestColumn(table->getColumns().getAllPhysical()));
 
         /// Substitute virtual column for its value when querying tables.
@@ -293,7 +307,7 @@ BlockInputStreams StorageMerge::read(
                     BlockInputStreamPtr stream = streams.size() > 1
                         ? std::make_shared<ConcatBlockInputStream>(
                             streams,
-                            context.getDAGContext() ? context.getDAGContext()->log : nullptr)
+                            context.getDAGContext() ? context.getDAGContext()->log->identifier() : /*req_id=*/"")
                         : streams[0];
 
                     if (has_table_virtual_column)
@@ -325,7 +339,7 @@ BlockInputStreams StorageMerge::read(
 }
 
 /// Construct a block consisting only of possible values of virtual columns
-Block StorageMerge::getBlockWithVirtualColumns(const StorageListWithLocks & selected_tables) const
+Block StorageMerge::getBlockWithVirtualColumns(const StorageListWithLocks & selected_tables)
 {
     auto column = ColumnString::create();
 

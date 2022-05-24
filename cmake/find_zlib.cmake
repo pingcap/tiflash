@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 option (USE_INTERNAL_ZLIB_LIBRARY "Set to FALSE to use system zlib library instead of bundled" ${NOT_UNBUNDLED})
 
 if (NOT USE_INTERNAL_ZLIB_LIBRARY)
@@ -9,22 +23,17 @@ if (NOT ZLIB_FOUND)
         set (INTERNAL_ZLIB_NAME "zlib-ng")
     else ()
         set (INTERNAL_ZLIB_NAME "zlib")
-        if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}")
-            message (WARNING "Will use standard zlib, please clone manually:\n git clone https://github.com/madler/zlib.git ${ClickHouse_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}")
+        if (NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}")
+            message (WARNING "Will use standard zlib, please clone manually:\n git clone https://github.com/madler/zlib.git ${TiFlash_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}")
         endif ()
     endif ()
 
     set (USE_INTERNAL_ZLIB_LIBRARY 1)
-    set (ZLIB_COMPAT 1) # for zlib-ng, also enables WITH_GZFILEOP
+    set (ZLIB_COMPAT 1)
+    set (ZLIB_ENABLE_TESTS 0)
     set (WITH_NATIVE_INSTRUCTIONS ${ARCHNATIVE})
-    if (ARCH_FREEBSD OR ARCH_I386)
-        set (WITH_OPTIM 0 CACHE INTERNAL "") # Bug in assembler
-    endif ()
-    if (ARCH_AARCH64)
-        set(WITH_NEON 1 CACHE INTERNAL "")
-        set(WITH_ACLE 1 CACHE INTERNAL "")
-    endif ()
-    set (ZLIB_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}" "${ClickHouse_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}") # generated zconf.h
+
+    set (ZLIB_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}" "${TiFlash_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}") # generated zconf.h
     set (ZLIB_INCLUDE_DIRS ${ZLIB_INCLUDE_DIR}) # for poco
     set (ZLIB_FOUND 1) # for poco
     if (USE_STATIC_LIBRARIES)

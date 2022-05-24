@@ -1,4 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
@@ -16,9 +32,11 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
+#include "MultiSegmentTestUtil.h"
 #include "dm_basic_include.h"
 
 namespace DB
@@ -45,7 +63,7 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
 namespace tests
 {
 // Simple test suit for DeltaMergeStore.
-class DeltaMergeStore_test : public DB::base::TiFlashStorageTestBasic
+class DeltaMergeStoreTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     void SetUp() override
@@ -69,7 +87,8 @@ public:
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
                                                                  false,
                                                                  "test",
-                                                                 "DeltaMergeStore_test",
+                                                                 "DeltaMergeStoreTest",
+                                                                 100,
                                                                  *cols,
                                                                  handle_column_define,
                                                                  is_common_handle,
@@ -111,12 +130,12 @@ String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 // Read write test suit for DeltaMergeStore.
 // We will instantiate test cases for different `TestMode`
 // to test with different pack types.
-class DeltaMergeStore_RWTest
+class DeltaMergeStoreRWTest
     : public DB::base::TiFlashStorageTestBasic
     , public testing::WithParamInterface<TestMode>
 {
 public:
-    void SetUp() override
+    DeltaMergeStoreRWTest()
     {
         mode = GetParam();
 
@@ -131,7 +150,10 @@ public:
             setStorageFormat(2);
             break;
         }
+    }
 
+    void SetUp() override
+    {
         TiFlashStorageTestBasic::SetUp();
         store = reload();
     }
@@ -151,7 +173,8 @@ public:
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
                                                                  false,
                                                                  "test",
-                                                                 "DeltaMergeStore_RWTest",
+                                                                 "DeltaMergeStoreRWTest",
+                                                                 101,
                                                                  *cols,
                                                                  handle_column_define,
                                                                  is_common_handle,
@@ -160,7 +183,7 @@ public:
         return s;
     }
 
-    std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
     {
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto [store_path, file_id] = store->preAllocateIngestFile();
@@ -190,9 +213,11 @@ public:
 protected:
     TestMode mode;
     DeltaMergeStorePtr store;
+
+    constexpr static const char * TRACING_NAME = "DeltaMergeStoreRWTest";
 };
 
-TEST_F(DeltaMergeStore_test, Create)
+TEST_F(DeltaMergeStoreTest, Create)
 try
 {
     // create table
@@ -200,21 +225,21 @@ try
 
     {
         // check handle column of store
-        auto & h = store->getHandle();
+        const auto & h = store->getHandle();
         ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
         ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
         ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_INT_TYPE));
     }
     {
         // check column structure of store
-        auto & cols = store->getTableColumns();
+        const auto & cols = store->getTableColumns();
         // version & tag column added
         ASSERT_EQ(cols.size(), 3UL);
     }
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, OpenWithExtraColumns)
+TEST_F(DeltaMergeStoreTest, OpenWithExtraColumns)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -242,10 +267,10 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, AddExtraColumn)
+TEST_F(DeltaMergeStoreTest, AddExtraColumn)
 try
 {
-    auto log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
+    auto * log = &Poco::Logger::get(GET_GTEST_FULL_NAME);
     for (const auto & pk_type : {
              DMTestEnv::PkType::HiddenTiDBRowID,
              DMTestEnv::PkType::CommonHandle,
@@ -253,7 +278,7 @@ try
              DMTestEnv::PkType::PkIsHandleInt32,
          })
     {
-        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " begin.");
+        LOG_FMT_INFO(log, "Test case for {} begin.", DMTestEnv::PkTypeToString(pk_type));
 
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
         store = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
@@ -316,13 +341,12 @@ try
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, nrows + nrows_2);
 
-        LOG_INFO(log, "Test case for " << DMTestEnv::PkTypeToString(pk_type) << " done.");
+        LOG_FMT_INFO(log, "Test case for {} done.", DMTestEnv::PkTypeToString(pk_type));
     }
 }
 CATCH
 
-
-TEST_P(DeltaMergeStore_RWTest, SimpleWriteRead)
+TEST_P(DeltaMergeStoreRWTest, SimpleWriteRead)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -398,6 +422,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -470,7 +495,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DeleteRead)
+TEST_P(DeltaMergeStoreRWTest, DeleteRead)
 try
 {
     const size_t num_rows_write = 128;
@@ -503,6 +528,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -539,6 +565,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -563,7 +590,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, WriteMultipleBlock)
+TEST_P(DeltaMergeStoreRWTest, WriteMultipleBlock)
 try
 {
     const size_t num_write_rows = 32;
@@ -623,6 +650,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -707,6 +735,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -737,6 +766,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -763,7 +793,7 @@ CATCH
 // DEPRECATED:
 //   This test case strongly depends on implementation of `shouldSplit()` and `shouldMerge()`.
 //   The machanism of them may be changed one day. So uncomment the test if need.
-TEST_P(DeltaMergeStore_RWTest, DISABLED_WriteLargeBlock)
+TEST_P(DeltaMergeStoreRWTest, DISABLED_WriteLargeBlock)
 try
 {
     DB::Settings settings = db_context->getSettings();
@@ -791,6 +821,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -829,6 +860,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         // block_num represents index of current segment
@@ -858,7 +890,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, ReadWithSpecifyTso)
+TEST_P(DeltaMergeStoreRWTest, ReadWithSpecifyTso)
 try
 {
     const UInt64 tso1 = 4;
@@ -887,6 +919,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -909,6 +942,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -931,6 +965,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -953,6 +988,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -967,7 +1003,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, Ingest)
+TEST_P(DeltaMergeStoreRWTest, Ingest)
 try
 {
     if (mode == TestMode::V1_BlockOnly)
@@ -1013,6 +1049,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1049,6 +1086,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1086,6 +1124,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso3 - 1,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1110,6 +1149,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1134,6 +1174,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1148,7 +1189,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, IngestWithFail)
+TEST_P(DeltaMergeStoreRWTest, IngestWithFail)
 try
 {
     if (mode == TestMode::V1_BlockOnly)
@@ -1194,6 +1235,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1230,6 +1272,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1267,6 +1310,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1281,7 +1325,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, IngestEmptyFileLists)
+TEST_P(DeltaMergeStoreRWTest, IngestEmptyFileLists)
 try
 {
     if (mode == TestMode::V1_BlockOnly)
@@ -1304,7 +1348,7 @@ try
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
 
-        std::vector<PageId> file_ids;
+        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
         store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
     }
@@ -1322,6 +1366,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1358,6 +1403,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1372,7 +1418,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, Split)
+TEST_P(DeltaMergeStoreRWTest, Split)
 try
 {
     // set some params to smaller threshold so that we can trigger split more frequently
@@ -1443,11 +1489,12 @@ try
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
+                                                TRACING_NAME,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1," << num_rows_write_in_total << "]");
+            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
 
             size_t num_rows_read = 0;
             in->readPrefix();
@@ -1476,7 +1523,7 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write_in_total);
 
-            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1," << num_rows_write_in_total << "]");
+            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
         // Reading with a large number of small DTFile ingested will greatly slow down the testing
@@ -1486,7 +1533,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLChangeInt8ToInt32)
+TEST_P(DeltaMergeStoreRWTest, DDLChangeInt8ToInt32)
 try
 {
     const String col_name_ddl = "i8";
@@ -1536,8 +1583,8 @@ try
             com.column_id = col_id_ddl;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _ignored = 0;
-        store->applyAlters(commands, std::nullopt, _ignored, *db_context);
+        ColumnID ignored = 0;
+        store->applyAlters(commands, std::nullopt, ignored, *db_context);
     }
 
     {
@@ -1550,6 +1597,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1593,7 +1641,7 @@ try
 CATCH
 
 
-TEST_P(DeltaMergeStore_RWTest, DDLDropColumn)
+TEST_P(DeltaMergeStoreRWTest, DDLDropColumn)
 try
 {
     const String col_name_to_drop = "i8";
@@ -1656,6 +1704,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1687,7 +1736,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumn)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumn)
 try
 {
     const String col_name_c1 = "i8";
@@ -1729,8 +1778,8 @@ try
             com.column_name = col_name_to_add;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     {
@@ -1743,6 +1792,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1795,7 +1845,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloat64)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloat64)
 try
 {
     const String col_name_to_add = "f64";
@@ -1823,7 +1873,7 @@ try
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field((Float64)1.123456));
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<Float64>(1.123456)));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -1832,8 +1882,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -1845,6 +1895,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -1870,7 +1921,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloatDecimal64)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloatDecimal64)
 try
 {
     const String col_name_to_add = "f64";
@@ -1907,8 +1958,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -1920,6 +1971,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -1945,7 +1997,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnFloat32)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnFloat32)
 try
 {
     const String col_name_to_add = "f32";
@@ -1982,8 +2034,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -1995,6 +2047,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2020,7 +2073,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnInt8)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnInt8)
 try
 {
     const String col_name_to_add = "Int8";
@@ -2048,7 +2101,7 @@ try
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field((Int64)1));
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<Int64>(1)));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -2057,8 +2110,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2070,6 +2123,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2095,7 +2149,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnUInt8)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnUInt8)
 try
 {
     const String col_name_to_add = "UInt8";
@@ -2123,7 +2177,7 @@ try
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field((UInt64)1));
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field(static_cast<UInt64>(1)));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -2132,8 +2186,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2145,6 +2199,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2170,7 +2225,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnMyDateTime)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnDateTime)
 try
 {
     const String col_name_to_add = "dt";
@@ -2205,8 +2260,8 @@ try
             );
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2218,6 +2273,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -2240,7 +2296,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLAddColumnString)
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnString)
 try
 {
     const String col_name_to_add = "string";
@@ -2268,7 +2324,7 @@ try
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name = "CAST";
-                ASTPtr arg = std::make_shared<ASTLiteral>(Field((String) "test_add_string_col"));
+                ASTPtr arg = std::make_shared<ASTLiteral>(Field(String("test_add_string_col")));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -2277,8 +2333,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2290,6 +2346,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2314,7 +2371,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDLRenameColumn)
+TEST_P(DeltaMergeStoreRWTest, DDLRenameColumn)
 try
 {
     const String col_name_before_ddl = "i8";
@@ -2365,8 +2422,8 @@ try
             com.column_id = col_id_ddl;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _ignored = 0;
-        store->applyAlters(commands, std::nullopt, _ignored, *db_context);
+        ColumnID ignored = 0;
+        store->applyAlters(commands, std::nullopt, ignored, *db_context);
     }
 
     {
@@ -2379,6 +2436,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2424,7 +2482,7 @@ try
 CATCH
 
 // Test rename pk column when pk_is_handle = true.
-TEST_P(DeltaMergeStore_RWTest, DDLRenamePKColumn)
+TEST_P(DeltaMergeStoreRWTest, DDLRenamePKColumn)
 try
 {
     const String col_name_before_ddl = "pk1";
@@ -2482,7 +2540,7 @@ try
             com.column_id = col_id_ddl;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _ignored = 0;
+        ColumnID ignored = 0;
         TiDB::TableInfo table_info;
         {
             static const String json_table_info = R"(
@@ -2491,7 +2549,7 @@ try
             table_info.deserialize(json_table_info);
             ASSERT_TRUE(table_info.pk_is_handle);
         }
-        store->applyAlters(commands, table_info, _ignored, *db_context);
+        store->applyAlters(commands, table_info, ignored, *db_context);
     }
 
     {
@@ -2512,6 +2570,7 @@ try
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
+                                            TRACING_NAME,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2572,6 +2631,7 @@ try
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
+                                                TRACING_NAME,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr & in = ins[0];
@@ -2611,7 +2671,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DDL_issue1341)
+TEST_P(DeltaMergeStoreRWTest, DDLIssue1341)
 try
 {
     // issue 1341: Background task may use a wrong schema to compact data
@@ -2657,8 +2717,8 @@ try
             com.default_expression = cast;
             commands.emplace_back(std::move(com));
         }
-        ColumnID _col_to_add = col_id_to_add;
-        store->applyAlters(commands, std::nullopt, _col_to_add, *db_context);
+        ColumnID col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, col_to_add, *db_context);
     }
 
     // try read
@@ -2670,6 +2730,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2722,6 +2783,7 @@ try
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
+                              TRACING_NAME,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2743,7 +2805,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, CreateWithCommonHandle)
+TEST_F(DeltaMergeStoreTest, CreateWithCommonHandle)
 try
 {
     auto table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
@@ -2765,7 +2827,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, SimpleWriteReadCommonHandle)
+TEST_P(DeltaMergeStoreRWTest, SimpleWriteReadCommonHandle)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -2837,6 +2899,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -2908,7 +2971,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, WriteMultipleBlockWithCommonHandle)
+TEST_P(DeltaMergeStoreRWTest, WriteMultipleBlockWithCommonHandle)
 try
 {
     const size_t num_write_rows = 32;
@@ -2965,6 +3028,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3038,6 +3102,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3068,6 +3133,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3091,7 +3157,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStore_RWTest, DeleteReadWithCommonHandle)
+TEST_P(DeltaMergeStoreRWTest, DeleteReadWithCommonHandle)
 try
 {
     const size_t num_rows_write = 128;
@@ -3125,6 +3191,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3174,6 +3241,7 @@ try
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
+                                             TRACING_NAME,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3201,10 +3269,309 @@ try
 }
 CATCH
 
-INSTANTIATE_TEST_CASE_P(TestMode, //
-                        DeltaMergeStore_RWTest,
-                        testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
-                        testModeToString);
+TEST_P(DeltaMergeStoreRWTest, DisableSmallColumnCache)
+try
+{
+    auto settings = db_context->getSettings();
+
+    size_t num_rows_write_in_total = 0;
+    const size_t num_rows_per_write = 5;
+    while (true)
+    {
+        {
+            // write to store
+            Block block = DMTestEnv::prepareSimpleWriteBlock(
+                num_rows_write_in_total + 1,
+                num_rows_write_in_total + 1 + num_rows_per_write,
+                false);
+
+            store->write(*db_context, settings, block);
+
+            store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+            num_rows_write_in_total += num_rows_per_write;
+            auto segment_stats = store->getSegmentStats();
+            size_t delta_cache_size = 0;
+            for (auto & stat : segment_stats)
+            {
+                delta_cache_size += stat.delta_cache_size;
+            }
+            EXPECT_EQ(delta_cache_size, 0);
+        }
+
+        {
+            // Let's reload the store to check the persistence system.
+            // Note: store must be released before load another, because some background task could be still running.
+            store.reset();
+            store = reload();
+
+            // read all columns from store
+            const auto & columns = store->getTableColumns();
+            BlockInputStreams ins = store->read(*db_context,
+                                                db_context->getSettingsRef(),
+                                                //                                                settings,
+                                                columns,
+                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                                /* num_streams= */ 1,
+                                                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                                EMPTY_FILTER,
+                                                TRACING_NAME,
+                                                /* expected_block_size= */ 1024);
+            ASSERT_EQ(ins.size(), 1UL);
+            BlockInputStreamPtr in = ins[0];
+
+            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            Int64 expected_row_pk = 1;
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+                for (auto && iter : block)
+                {
+                    auto c = iter.column;
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        for (size_t i = 0; i < c->size(); ++i)
+                        {
+                            auto expected = expected_row_pk++;
+                            auto value = c->getInt(i);
+                            if (value != expected)
+                            {
+                                // Convenient for debug.
+                                EXPECT_EQ(expected, value);
+                            }
+                        }
+                    }
+                }
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, num_rows_write_in_total);
+
+            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
+        }
+
+        // Reading with a large number of small DTFile ingested will greatly slow down the testing
+        if (num_rows_write_in_total >= 200)
+            break;
+    }
+}
+CATCH
+
+INSTANTIATE_TEST_CASE_P(
+    TestMode,
+    DeltaMergeStoreRWTest,
+    testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
+    testModeToString);
+
+
+class DeltaMergeStoreMergeDeltaBySegmentTest
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>>
+{
+public:
+    DeltaMergeStoreMergeDeltaBySegmentTest()
+    {
+        log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+        std::tie(ps_ver, pk_type) = GetParam();
+    }
+
+    void SetUp() override
+    {
+        try
+        {
+            setStorageFormat(ps_ver);
+            TiFlashStorageTestBasic::SetUp();
+
+            setupDMStore();
+
+            // Split into 4 segments.
+            helper = std::make_unique<MultiSegmentTestUtil>(*db_context);
+            helper->prepareSegments(store, 50, pk_type);
+        }
+        CATCH
+    }
+
+    void setupDMStore()
+    {
+        auto cols = DMTestEnv::getDefaultColumns(pk_type);
+        store = std::make_shared<DeltaMergeStore>(*db_context,
+                                                  false,
+                                                  "test",
+                                                  DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+                                                  101,
+                                                  *cols,
+                                                  (*cols)[0],
+                                                  pk_type == DMTestEnv::PkType::CommonHandle,
+                                                  1,
+                                                  DeltaMergeStore::Settings());
+        dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+    }
+
+protected:
+    std::unique_ptr<MultiSegmentTestUtil> helper;
+    DeltaMergeStorePtr store;
+    DMContextPtr dm_context;
+
+    UInt64 ps_ver;
+    DMTestEnv::PkType pk_type;
+
+    [[maybe_unused]] Poco::Logger * log;
+};
+
+INSTANTIATE_TEST_CASE_P(
+    ByPsVerAndPkType,
+    DeltaMergeStoreMergeDeltaBySegmentTest,
+    ::testing::Combine(
+        ::testing::Values(2, 3),
+        ::testing::Values(DMTestEnv::PkType::HiddenTiDBRowID, DMTestEnv::PkType::CommonHandle, DMTestEnv::PkType::PkIsHandleInt64)),
+    [](const testing::TestParamInfo<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>> & info) {
+        const auto [ps_ver, pk_type] = info.param;
+        return fmt::format("PsV{}_{}", ps_ver, DMTestEnv::PkTypeToString(pk_type));
+    });
+
+
+// The given key is the boundary of the segment.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, BoundaryKey)
+try
+{
+    {
+        // Write data to first 3 segments.
+        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+        helper->expected_delta_rows[0] += helper->rows_by_segments[0];
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    if (store->isCommonHandle())
+    {
+        // Specifies MAX_KEY. nullopt should be returned.
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_EQ(result, std::nullopt);
+    }
+    else
+    {
+        // Specifies MAX_KEY. nullopt should be returned.
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_EQ(result, std::nullopt);
+    }
+    std::optional<RowKeyRange> result_1;
+    {
+        // Specifies MIN_KEY. In this case, the first segment should be processed.
+        if (store->isCommonHandle())
+        {
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        }
+        else
+        {
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        }
+        // The returned range is the same as first segment's range.
+        ASSERT_NE(result_1, std::nullopt);
+        ASSERT_EQ(*result_1, store->segments.begin()->second->getRowKeyRange());
+
+        helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
+        helper->expected_delta_rows[0] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    {
+        // Compact the first segment again, nothing should change.
+        auto result = store->mergeDeltaBySegment(*db_context, result_1->start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_EQ(*result, *result_1);
+
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    std::optional<RowKeyRange> result_2;
+    {
+        // Compact again using the end key just returned. The second segment should be processed.
+        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result_2, std::nullopt);
+        ASSERT_EQ(*result_2, std::next(store->segments.begin())->second->getRowKeyRange());
+
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, InvalidKey)
+{
+    // Expect exceptions when invalid key is given.
+    EXPECT_ANY_THROW({
+        if (store->isCommonHandle())
+        {
+            // For common handle, give int handle key and have a try
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        }
+        else
+        {
+            // For int handle, give common handle key and have a try
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        }
+    });
+}
+
+
+// Give the last segment key.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, LastSegment)
+try
+{
+    std::optional<RowKeyRange> result;
+    {
+        auto it = std::next(store->segments.begin(), 3);
+        ASSERT_NE(it, store->segments.end());
+        auto seg = it->second;
+
+        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    {
+        // As we are the last segment, compact "next segment" should result in failure. A nullopt is returned.
+        auto result2 = store->mergeDeltaBySegment(*db_context, result->end, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_EQ(result2, std::nullopt);
+        helper->verifyExpectedRowsForAllSegments();
+    }
+}
+CATCH
+
+
+// The given key is not the boundary of the segment.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, NonBoundaryKey)
+try
+{
+    {
+        // Write data to first 3 segments.
+        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+        helper->expected_delta_rows[0] += helper->rows_by_segments[0];
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    {
+        // Compact segment[1] by giving a prefix-next key.
+        auto range = std::next(store->segments.begin())->second->getRowKeyRange();
+        auto compact_key = range.start.toPrefixNext();
+
+        auto result = store->mergeDeltaBySegment(*db_context, compact_key, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    }
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DM

@@ -1,5 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/collectOutputFieldTypes.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Statistics/traverseExecutors.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -11,91 +30,79 @@ extern const int DIVIDED_BY_ZERO;
 extern const int INVALID_TIME;
 } // namespace ErrorCodes
 
-namespace
-{
-enum Flag
-{
-    IGNORE_TRUNCATE = 1,
-    TRUNCATE_AS_WARNING = 1u << 1u,
-    PAD_CHAR_TO_FULL_LENGTH = 1u << 2u,
-    IN_INSERT_STMT = 1u << 3u,
-    IN_UPDATE_OR_DELETE_STMT = 1u << 4u,
-    IN_SELECT_STMT = 1u << 5u,
-    OVERFLOW_AS_WARNING = 1u << 6u,
-    IGNORE_ZERO_IN_DATE = 1u << 7u,
-    DIVIDED_BY_ZERO_AS_WARNING = 1u << 8u,
-    IN_LOAD_DATA_STMT = 1u << 10u,
-};
-
-enum SqlMode
-{
-    REAL_AS_FLOAT = 1ul,
-    PIPES_AS_CONCAT = 1ul << 1ul,
-    ANSI_QUOTES = 1ul << 2ul,
-    IGNORE_SPACE = 1ul << 3ul,
-    NOT_USED = 1ul << 4ul,
-    ONLY_FULL_GROUP_BY = 1ul << 5ul,
-    NO_UNSIGNED_SUBTRACTION = 1ul << 6ul,
-    NO_DIR_IN_CREATE = 1ul << 7ul,
-    POSTGRESQL = 1ul << 8ul,
-    ORACLE = 1ul << 9ul,
-    MSSQL = 1ul << 10ul,
-    DB2 = 1ul << 11ul,
-    MAXDB = 1ul << 12ul,
-    NO_KEY_OPTIONS = 1ul << 13ul,
-    NO_TABLE_OPTIONS = 1ul << 14ul,
-    NO_FIELD_OPTIONS = 1ul << 15ul,
-    MYSQL323 = 1ul << 16ul,
-    MYSQL40 = 1ul << 17ul,
-    ANSI = 1ul << 18ul,
-    NO_AUTO_VALUE_ON_ZERO = 1ul << 19ul,
-    NO_BACK_SLASH_ESCAPES = 1ul << 20ul,
-    STRICT_TRANS_TABLES = 1ul << 21ul,
-    STRICT_ALL_TABLES = 1ul << 22ul,
-    NO_ZERO_IN_DATE = 1ul << 23ul,
-    NO_ZERO_DATE = 1ul << 24ul,
-    INVALID_DATES = 1ul << 25ul,
-    ERROR_FOR_DIVISION_BY_ZERO = 1ul << 26ul,
-    TRADITIONAL = 1ul << 27ul,
-    NO_AUTO_CREATE_USER = 1ul << 28ul,
-    HIGH_NOT_PRECEDENCE = 1ul << 29ul,
-    NO_ENGINE_SUBSTITUTION = 1ul << 30ul,
-
-    // Duplicated with Flag::PAD_CHAR_TO_FULL_LENGTH
-    // PAD_CHAR_TO_FULL_LENGTH = 1ul << 31ul,
-
-    ALLOW_INVALID_DATES = 1ul << 32ul,
-};
-} // namespace
-
 bool strictSqlMode(UInt64 sql_mode)
 {
-    return sql_mode & SqlMode::STRICT_ALL_TABLES || sql_mode & SqlMode::STRICT_TRANS_TABLES;
+    return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
+}
+
+void DAGContext::initOutputInfo()
+{
+    output_field_types = collectOutputFieldTypes(*dag_request);
+    output_offsets.clear();
+    result_field_types.clear();
+    for (UInt32 i : dag_request->output_offsets())
+    {
+        output_offsets.push_back(i);
+        if (unlikely(i >= output_field_types.size()))
+            throw TiFlashException(
+                fmt::format("{}: Invalid output offset(schema has {} columns, access index {}", __PRETTY_FUNCTION__, output_field_types.size(), i),
+                Errors::Coprocessor::BadRequest);
+        result_field_types.push_back(output_field_types[i]);
+    }
+    encode_type = analyzeDAGEncodeType(*this);
+    keep_session_timezone_info = encode_type == tipb::EncodeType::TypeChunk || encode_type == tipb::EncodeType::TypeCHBlock;
 }
 
 bool DAGContext::allowZeroInDate() const
 {
-    return flags & Flag::IGNORE_ZERO_IN_DATE;
+    return flags & TiDBSQLFlags::IGNORE_ZERO_IN_DATE;
 }
 
 bool DAGContext::allowInvalidDate() const
 {
-    return sql_mode & SqlMode::ALLOW_INVALID_DATES;
+    return sql_mode & TiDBSQLMode::ALLOW_INVALID_DATES;
 }
 
-std::map<String, ProfileStreamsInfo> & DAGContext::getProfileStreamsMap()
+void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subquery)
+{
+    SubqueriesForSets subqueries_for_sets;
+    subqueries_for_sets[subquery_id] = std::move(subquery);
+    subqueries.push_back(std::move(subqueries_for_sets));
+}
+
+std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
 }
 
-std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMapForJoinBuildSide()
+void DAGContext::initExecutorIdToJoinIdMap()
 {
-    return profile_streams_map_for_join_build_side;
+    // only mpp task has join executor
+    // for mpp, all executor has executor id.
+    if (isMPPTask())
+    {
+        executor_id_to_join_id_map.clear();
+        traverseExecutorsReverse(dag_request, [&](const tipb::Executor & executor) {
+            std::vector<String> all_join_id;
+            // for mpp, dag_request.has_root_executor() == true, can call `getChildren` directly.
+            getChildren(executor).forEach([&](const tipb::Executor & child) {
+                assert(child.has_executor_id());
+                auto child_it = executor_id_to_join_id_map.find(child.executor_id());
+                if (child_it != executor_id_to_join_id_map.end())
+                    all_join_id.insert(all_join_id.end(), child_it->second.begin(), child_it->second.end());
+            });
+            assert(executor.has_executor_id());
+            if (executor.tp() == tipb::ExecType::TypeJoin)
+                all_join_id.push_back(executor.executor_id());
+            if (!all_join_id.empty())
+                executor_id_to_join_id_map[executor.executor_id()] = all_join_id;
+        });
+    }
 }
 
-std::unordered_map<UInt32, std::vector<String>> & DAGContext::getQBIdToJoinAliasMap()
+std::unordered_map<String, std::vector<String>> & DAGContext::getExecutorIdToJoinIdMap()
 {
-    return qb_id_to_join_alias_map;
+    return executor_id_to_join_id_map;
 }
 
 std::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap()
@@ -110,7 +117,7 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStr
 
 void DAGContext::handleTruncateError(const String & msg)
 {
-    if (!(flags & Flag::IGNORE_TRUNCATE || flags & Flag::TRUNCATE_AS_WARNING))
+    if (!(flags & TiDBSQLFlags::IGNORE_TRUNCATE || flags & TiDBSQLFlags::TRUNCATE_AS_WARNING))
     {
         throw TiFlashException("Truncate error " + msg, Errors::Types::Truncated);
     }
@@ -119,7 +126,7 @@ void DAGContext::handleTruncateError(const String & msg)
 
 void DAGContext::handleOverflowError(const String & msg, const TiFlashError & error)
 {
-    if (!(flags & Flag::OVERFLOW_AS_WARNING))
+    if (!(flags & TiDBSQLFlags::OVERFLOW_AS_WARNING))
     {
         throw TiFlashException("Overflow error: " + msg, error);
     }
@@ -128,11 +135,11 @@ void DAGContext::handleOverflowError(const String & msg, const TiFlashError & er
 
 void DAGContext::handleDivisionByZero()
 {
-    if (flags & Flag::IN_INSERT_STMT || flags & Flag::IN_UPDATE_OR_DELETE_STMT)
+    if (flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_UPDATE_OR_DELETE_STMT)
     {
-        if (!(sql_mode & SqlMode::ERROR_FOR_DIVISION_BY_ZERO))
+        if (!(sql_mode & TiDBSQLMode::ERROR_FOR_DIVISION_BY_ZERO))
             return;
-        if (strictSqlMode(sql_mode) && !(flags & Flag::DIVIDED_BY_ZERO_AS_WARNING))
+        if (strictSqlMode(sql_mode) && !(flags & TiDBSQLFlags::DIVIDED_BY_ZERO_AS_WARNING))
         {
             throw TiFlashException("Division by 0", Errors::Expression::DivisionByZero);
         }
@@ -147,7 +154,7 @@ void DAGContext::handleInvalidTime(const String & msg, const TiFlashError & erro
         throw TiFlashException(msg, error);
     }
     handleTruncateError(msg);
-    if (strictSqlMode(sql_mode) && (flags & Flag::IN_INSERT_STMT || flags & Flag::IN_UPDATE_OR_DELETE_STMT))
+    if (strictSqlMode(sql_mode) && (flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_UPDATE_OR_DELETE_STMT))
     {
         throw TiFlashException(msg, error);
     }
@@ -161,9 +168,9 @@ void DAGContext::appendWarning(const String & msg, int32_t code)
     appendWarning(warning);
 }
 
-bool DAGContext::shouldClipToZero()
+bool DAGContext::shouldClipToZero() const
 {
-    return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT;
+    return flags & TiDBSQLFlags::IN_INSERT_STMT || flags & TiDBSQLFlags::IN_LOAD_DATA_STMT;
 }
 
 std::pair<bool, double> DAGContext::getTableScanThroughput()
@@ -178,9 +185,9 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     {
         if (p.first == table_scan_executor_id)
         {
-            for (auto & streamPtr : p.second.input_streams)
+            for (auto & stream_ptr : p.second)
             {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
                 {
                     time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
                     num_produced_bytes += p_stream->getProfileInfo().bytes;
@@ -197,6 +204,71 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
 void DAGContext::attachBlockIO(const BlockIO & io_)
 {
     io = io_;
+}
+void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams)
+{
+    if (isMPPTask())
+    {
+        if (mpp_exchange_receiver_map_inited)
+            throw TiFlashException("Repeatedly initialize mpp_exchange_receiver_map", Errors::Coprocessor::Internal);
+        traverseExecutors(dag_request, [&](const tipb::Executor & executor) {
+            if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
+            {
+                assert(executor.has_executor_id());
+                const auto & executor_id = executor.executor_id();
+                // In order to distinguish different exchange receivers.
+                auto exchange_receiver = std::make_shared<ExchangeReceiver>(
+                    std::make_shared<GRPCReceiverContext>(
+                        executor.exchange_receiver(),
+                        getMPPTaskMeta(),
+                        context.getTMTContext().getKVCluster(),
+                        context.getTMTContext().getMPPTaskManager(),
+                        context.getSettingsRef().enable_local_tunnel,
+                        context.getSettingsRef().enable_async_grpc_client),
+                    executor.exchange_receiver().encoded_task_meta_size(),
+                    max_streams,
+                    log->identifier(),
+                    executor_id);
+                mpp_exchange_receiver_map[executor_id] = exchange_receiver;
+                new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
+            }
+            return true;
+        });
+        mpp_exchange_receiver_map_inited = true;
+    }
+}
+
+
+const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext::getMPPExchangeReceiverMap() const
+{
+    if (!isMPPTask())
+        throw TiFlashException("mpp_exchange_receiver_map is used in mpp only", Errors::Coprocessor::Internal);
+    if (!mpp_exchange_receiver_map_inited)
+        throw TiFlashException("mpp_exchange_receiver_map has not been initialized", Errors::Coprocessor::Internal);
+    return mpp_exchange_receiver_map;
+}
+
+void DAGContext::cancelAllExchangeReceiver()
+{
+    for (auto & it : mpp_exchange_receiver_map)
+    {
+        it.second->cancel();
+    }
+}
+
+int DAGContext::getNewThreadCountOfExchangeReceiver() const
+{
+    return new_thread_count_of_exchange_receiver;
+}
+
+bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
+{
+    return tables_regions_info.containsRegionsInfoForTable(table_id);
+}
+
+const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
+{
+    return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
 
 } // namespace DB

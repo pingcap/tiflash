@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -71,6 +85,8 @@ public:
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
+        , collected(false)
+        , concurrency_(concurrency)
     {
         resp_iter.open();
     }
@@ -78,6 +94,7 @@ public:
     const DAGSchema & getOutputSchema() const { return schema; }
 
     void cancel() { resp_iter.cancel(); }
+
 
     static DecodeDetail decodeChunks(
         const std::shared_ptr<tipb::SelectResponse> & resp,
@@ -154,5 +171,26 @@ public:
     }
 
     size_t getSourceNum() const { return 1; }
+
+    int computeNewThreadCount() const { return concurrency_; }
+
+    void collectNewThreadCount(int & cnt)
+    {
+        if (!collected)
+        {
+            collected = true;
+            cnt += computeNewThreadCount();
+        }
+    }
+
+    void resetNewThreadCountCompute()
+    {
+        collected = false;
+    }
+
+    void close() {}
+
+    bool collected = false;
+    int concurrency_;
 };
 } // namespace DB

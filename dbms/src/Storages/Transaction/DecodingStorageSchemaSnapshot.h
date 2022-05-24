@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -27,11 +42,12 @@ TMTPKType getTMTPKType(const IDataType & rhs);
 using SortedColumnIDWithPos = std::map<ColumnID, size_t>;
 using SortedColumnIDWithPosConstIter = SortedColumnIDWithPos::const_iterator;
 using TableInfo = TiDB::TableInfo;
-using ColumnInfos = std::vector<const TiDB::ColumnInfo *>;
+using ColumnInfo = TiDB::ColumnInfo;
+using ColumnInfos = std::vector<ColumnInfo>;
 struct DecodingStorageSchemaSnapshot
 {
     // There is a one-to-one correspondence between elements in `column_defines` and elements in `column_infos`
-    // Note that some columns(EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN) may be be a real column in tidb schema,
+    // Note that some columns(EXTRA_HANDLE_COLUMN, VERSION_COLUMN, TAG_COLUMN) may not be a real column in tidb schema,
     // so their corresponding elements in `column_infos` are just nullptr and won't be used when decoding.
     DM::ColumnDefinesPtr column_defines;
     ColumnInfos column_infos;
@@ -62,7 +78,7 @@ struct DecodingStorageSchemaSnapshot
         std::unordered_map<ColumnID, size_t> column_lut;
         for (size_t i = 0; i < table_info_.columns.size(); i++)
         {
-            auto & ci = table_info_.columns[i];
+            const auto & ci = table_info_.columns[i];
             column_lut.emplace(ci.id, i);
         }
         for (size_t i = 0; i < column_defines->size(); i++)
@@ -72,18 +88,18 @@ struct DecodingStorageSchemaSnapshot
             if (cd.id != TiDBPkColumnID && cd.id != VersionColumnID && cd.id != DelMarkColumnID)
             {
                 auto & columns = table_info_.columns;
-                column_infos.push_back(&columns[column_lut.at(cd.id)]);
+                column_infos.push_back(columns[column_lut.at(cd.id)]);
             }
             else
             {
-                column_infos.push_back(nullptr);
+                column_infos.push_back(ColumnInfo());
             }
         }
 
         // create pk related metadata if needed
         if (is_common_handle)
         {
-            auto & primary_index_info = table_info_.getPrimaryIndexInfo();
+            const auto & primary_index_info = table_info_.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
                 auto pk_column_id = table_info_.columns[primary_index_info.idx_cols[i].offset].id;
@@ -124,8 +140,7 @@ struct DecodingStorageSchemaSnapshot
         }
     }
 
-    DecodingStorageSchemaSnapshot(const DecodingStorageSchemaSnapshot &) = delete;
-    DecodingStorageSchemaSnapshot & operator=(const DecodingStorageSchemaSnapshot &) = delete;
+    DISALLOW_COPY(DecodingStorageSchemaSnapshot);
 
     DecodingStorageSchemaSnapshot(DecodingStorageSchemaSnapshot &&) = default;
 };

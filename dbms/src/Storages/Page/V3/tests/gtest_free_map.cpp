@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Exception.h>
 #include <Storages/Page/V3/spacemap/RBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
@@ -40,7 +54,7 @@ TEST_P(SpaceMapTest, InitAndDestory)
 {
     SpaceMapPtr smap = SpaceMap::createSpaceMap(test_type, 0, 100);
 
-    smap->logStats();
+    smap->logDebugString();
 }
 
 
@@ -242,11 +256,11 @@ TEST_P(SpaceMapTest, TestMargins2)
     // Right margin in marked used space
     // Left margin contain freed space
     ASSERT_FALSE(smap->markFree(49, 10));
-    smap->logStats();
+    smap->logDebugString();
     // Left margin align with marked used space left margin
     // But right margin contain freed space
     ASSERT_FALSE(smap->markFree(51, 20));
-    smap->logStats();
+    smap->logDebugString();
     // Right margin align with marked used space right margin
     // But left margin contain freed space
     ASSERT_FALSE(smap->markUsed(40, 19));
@@ -269,14 +283,18 @@ TEST_P(SpaceMapTest, TestSearch)
     auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
     UInt64 offset;
     UInt64 max_cap;
+    bool expansion = true;
+
     Range ranges[] = {{.start = 0,
                        .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges, 1), 1));
     ASSERT_TRUE(smap->markUsed(50, 10));
 
-    std::tie(offset, max_cap) = smap->searchInsertOffset(20);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
+
     ASSERT_EQ(offset, 0);
     ASSERT_EQ(max_cap, 40);
+    ASSERT_EQ(expansion, false);
 
     Range ranges1[] = {{.start = 20,
                         .end = 50},
@@ -290,9 +308,10 @@ TEST_P(SpaceMapTest, TestSearch)
     smap = SpaceMap::createSpaceMap(test_type, 0, 100);
     ASSERT_TRUE(smap->markUsed(50, 10));
 
-    std::tie(offset, max_cap) = smap->searchInsertOffset(5);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(5);
     ASSERT_EQ(offset, 0);
     ASSERT_EQ(max_cap, 45);
+    ASSERT_EQ(expansion, false);
 
     Range ranges2[] = {{.start = 5,
                         .end = 50},
@@ -303,9 +322,10 @@ TEST_P(SpaceMapTest, TestSearch)
     // Test margin
     smap = SpaceMap::createSpaceMap(test_type, 0, 100);
     ASSERT_TRUE(smap->markUsed(50, 10));
-    std::tie(offset, max_cap) = smap->searchInsertOffset(50);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(50);
     ASSERT_EQ(offset, 0);
     ASSERT_EQ(max_cap, 40);
+    ASSERT_EQ(expansion, false);
 
     Range ranges3[] = {{.start = 60,
                         .end = 100}};
@@ -314,9 +334,10 @@ TEST_P(SpaceMapTest, TestSearch)
     // Test invalid Size
     smap = SpaceMap::createSpaceMap(test_type, 0, 100);
     ASSERT_TRUE(smap->markUsed(50, 10));
-    std::tie(offset, max_cap) = smap->searchInsertOffset(100);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(100);
     ASSERT_EQ(offset, UINT64_MAX);
     ASSERT_EQ(max_cap, 50);
+    ASSERT_EQ(expansion, false);
 
     // No changed
     Range ranges4[] = {{.start = 0,
@@ -324,6 +345,86 @@ TEST_P(SpaceMapTest, TestSearch)
                        {.start = 60,
                         .end = 100}};
     ASSERT_TRUE(smap->check(genChecker(ranges4, 2), 2));
+
+    // Test expansion
+    smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(10);
+    ASSERT_EQ(offset, 0);
+    ASSERT_EQ(max_cap, 90);
+    ASSERT_EQ(expansion, true);
+
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(10);
+    ASSERT_EQ(offset, 10);
+    ASSERT_EQ(max_cap, 80);
+    ASSERT_EQ(expansion, true);
+}
+
+TEST_P(SpaceMapTest, TestSearchIsExpansion)
+{
+    auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+    UInt64 offset;
+    UInt64 max_cap;
+    bool expansion = true;
+
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
+    ASSERT_EQ(offset, 0);
+    ASSERT_EQ(max_cap, 80);
+    ASSERT_EQ(expansion, true);
+
+    ASSERT_TRUE(smap->markUsed(90, 10));
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
+    ASSERT_EQ(expansion, false);
+    std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
+    ASSERT_EQ(expansion, false);
+}
+
+
+TEST_P(SpaceMapTest, TestGetSizes)
+{
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(50, 10));
+        ASSERT_TRUE(smap->markUsed(80, 10));
+
+        const auto & [total_size, valid_data_size] = smap->getSizes();
+        ASSERT_EQ(total_size, 90);
+        ASSERT_EQ(valid_data_size, 20);
+    }
+
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(0, 100));
+        const auto & [total_size, valid_data_size] = smap->getSizes();
+        ASSERT_EQ(total_size, 100);
+        ASSERT_EQ(valid_data_size, 100);
+    }
+
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+
+        const auto & [total_size, valid_data_size] = smap->getSizes();
+        ASSERT_EQ(total_size, 0);
+        ASSERT_EQ(valid_data_size, 0);
+    }
+}
+
+
+TEST_P(SpaceMapTest, TestGetMaxCap)
+{
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(50, 10));
+        ASSERT_TRUE(smap->markUsed(80, 10));
+
+        ASSERT_EQ(smap->updateAccurateMaxCapacity(), 50);
+    }
+
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_TRUE(smap->markUsed(0, 100));
+
+        ASSERT_EQ(smap->updateAccurateMaxCapacity(), 0);
+    }
 }
 
 INSTANTIATE_TEST_CASE_P(

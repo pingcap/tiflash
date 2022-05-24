@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/SimpleIntrusiveNode.h>
@@ -51,6 +65,13 @@ public:
         : capacity(capacity_)
         , data(capacity * sizeof(T))
     {
+    }
+
+    ~MPMCQueue()
+    {
+        std::unique_lock lock(mu);
+        for (; read_pos < write_pos; ++read_pos)
+            destruct(getObj(read_pos));
     }
 
     /// Block util:
@@ -121,14 +142,30 @@ public:
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
     /// After `finish()` the queue can't be pushed any more while `pop` is allowed
     /// the queue is empty.
-    void finish()
+    /// Return true if the previous status is NORMAL.
+    bool finish()
     {
         std::unique_lock lock(mu);
         if (isNormal())
         {
             status = Status::FINISHED;
             notifyAll();
+            return true;
         }
+        else
+            return false;
+    }
+
+    bool isNextPopNonBlocking() const
+    {
+        std::unique_lock lock(mu);
+        return read_pos < write_pos || !isNormal();
+    }
+
+    bool isNextPushNonBlocking() const
+    {
+        std::unique_lock lock(mu);
+        return write_pos - read_pos < capacity || !isNormal();
     }
 
     MPMCQueueStatus getStatus() const
@@ -198,7 +235,11 @@ private:
 
     bool popObj(T & res, const TimePoint * deadline = nullptr)
     {
+#ifdef __APPLE__
+        WaitingNode node;
+#else
         thread_local WaitingNode node;
+#endif
         {
             /// read_pos < write_pos means the queue isn't empty
             auto pred = [&] {
@@ -234,7 +275,11 @@ private:
     template <typename F>
     bool assignObj(const TimePoint * deadline, F && assigner)
     {
+#ifdef __APPLE__
+        WaitingNode node;
+#else
         thread_local WaitingNode node;
+#endif
         auto pred = [&] {
             return write_pos - read_pos < capacity || !isNormal();
         };

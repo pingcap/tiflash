@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Only enable these tests under debug mode because we need some classes under `MockUtils.h`
 #ifndef NDEBUG
 
@@ -50,7 +64,6 @@ try
     PSDiskDelegatorPtr delegate = std::make_shared<DB::tests::MockDiskDelegatorMulti>(test_paths);
 
     PageStorage storage("data_compact_test", delegate, config, file_provider);
-
 #ifdef GENERATE_TEST_DATA
     // Codes to generate a directory of test data
     storage.restore();
@@ -164,25 +177,25 @@ try
         PageStorage ps("data_compact_test", delegate, config, file_provider);
         ps.restore();
         // Page 1, 2 have been migrated to PageFile_2_1
-        PageEntry entry = ps.getEntry(1);
+        PageEntry entry = ps.getEntry(1, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
 
-        entry = ps.getEntry(2);
+        entry = ps.getEntry(2, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
 
         // Page 5 -ref-> 2
-        auto entry5 = ps.getEntry(5);
+        auto entry5 = ps.getEntry(5, nullptr);
         EXPECT_EQ(entry5, entry);
 
         // Page 3, 4 are deleted
-        entry = ps.getEntry(3);
+        entry = ps.getEntry(3, nullptr);
         ASSERT_FALSE(entry.isValid());
 
-        entry = ps.getEntry(4);
+        entry = ps.getEntry(4, nullptr);
         ASSERT_FALSE(entry.isValid());
 
         // Page 6 have been migrated to PageFile_2_1
-        entry = ps.getEntry(6);
+        entry = ps.getEntry(6, nullptr);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
     }
 }

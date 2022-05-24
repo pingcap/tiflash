@@ -1,0 +1,171 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/collectOutputFieldTypes.h>
+#include <common/types.h>
+
+namespace DB
+{
+namespace
+{
+bool collectForSender(std::vector<tipb::FieldType> & output_field_types, const tipb::ExchangeSender & sender)
+{
+    if (!sender.all_field_types().empty())
+    {
+        for (const auto & field_type : sender.all_field_types())
+            output_field_types.push_back(field_type);
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
+bool collectForProject(std::vector<tipb::FieldType> & output_field_types, const tipb::Projection & project)
+{
+    for (const auto & expr : project.exprs())
+        output_field_types.push_back(expr.field_type());
+    return false;
+}
+
+bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb::Aggregation & agg)
+{
+    for (const auto & expr : agg.agg_func())
+    {
+        if (!exprHasValidFieldType(expr))
+            throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(expr.field_type());
+    }
+    for (const auto & expr : agg.group_by())
+    {
+        if (!exprHasValidFieldType(expr))
+            throw TiFlashException("Group by expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(expr.field_type());
+    }
+    return false;
+}
+
+bool collectForReceiver(std::vector<tipb::FieldType> & output_field_types, const tipb::ExchangeReceiver & receiver)
+{
+    for (const auto & field_type : receiver.field_types())
+        output_field_types.push_back(field_type);
+    return false;
+}
+
+template <typename TableScanType>
+bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, const TableScanType & tbl_scan)
+{
+    for (const auto & ci : tbl_scan.columns())
+    {
+        tipb::FieldType field_type;
+        field_type.set_tp(ci.tp());
+        field_type.set_flag(ci.flag());
+        field_type.set_flen(ci.columnlen());
+        field_type.set_decimal(ci.decimal());
+        for (const auto & elem : ci.elems())
+            field_type.add_elems(elem);
+        output_field_types.push_back(field_type);
+    }
+    return false;
+}
+
+bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
+bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
+{
+    // collect output_field_types of children
+    std::vector<std::vector<tipb::FieldType>> children_output_field_types;
+    children_output_field_types.resize(2);
+    size_t child_index = 0;
+    // for join, dag_request.has_root_executor() == true, can use getChildren and traverseExecutorTree directly.
+    getChildren(executor).forEach([&children_output_field_types, &child_index](const tipb::Executor & child) {
+        auto & child_output_field_types = children_output_field_types[child_index++];
+        traverseExecutorTree(child, [&child_output_field_types](const tipb::Executor & e) { return collectForExecutor(child_output_field_types, e); });
+    });
+    assert(child_index == 2);
+
+    // collect output_field_types for join self
+    for (auto & field_type : children_output_field_types[0])
+    {
+        if (executor.join().join_type() == tipb::JoinType::TypeRightOuterJoin)
+        {
+            /// the type of left column for right join is always nullable
+            auto updated_field_type = field_type;
+            updated_field_type.set_flag(static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+            output_field_types.push_back(updated_field_type);
+        }
+        else
+        {
+            output_field_types.push_back(field_type);
+        }
+    }
+    if (executor.join().join_type() != tipb::JoinType::TypeSemiJoin && executor.join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
+    {
+        /// for semi/anti semi join, the right table column is ignored
+        for (auto & field_type : children_output_field_types[1])
+        {
+            if (executor.join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
+            {
+                /// the type of right column for left join is always nullable
+                auto updated_field_type = field_type;
+                updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
+                output_field_types.push_back(updated_field_type);
+            }
+            else
+            {
+                output_field_types.push_back(field_type);
+            }
+        }
+    }
+    return false;
+}
+
+bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
+{
+    assert(output_field_types.empty());
+    switch (executor.tp())
+    {
+    case tipb::ExecType::TypeExchangeSender:
+        return collectForSender(output_field_types, executor.exchange_sender());
+    case tipb::ExecType::TypeProjection:
+        return collectForProject(output_field_types, executor.projection());
+    case tipb::ExecType::TypeAggregation:
+    case tipb::ExecType::TypeStreamAgg:
+        return collectForAgg(output_field_types, executor.aggregation());
+    case tipb::ExecType::TypeWindow:
+        // Window will only be pushed down in mpp mode.
+        // In mpp mode, ExchangeSender or Sender will return output_field_types directly.
+        // If not in mpp mode, window executor type is invalid.
+        throw TiFlashException("Window executor type is invalid in non-mpp mode, should not reach here.", Errors::Coprocessor::Internal);
+    case tipb::ExecType::TypeExchangeReceiver:
+        return collectForReceiver(output_field_types, executor.exchange_receiver());
+    case tipb::ExecType::TypeTableScan:
+        return collectForTableScan(output_field_types, executor.tbl_scan());
+    case tipb::ExecType::TypePartitionTableScan:
+        return collectForTableScan(output_field_types, executor.partition_table_scan());
+    case tipb::ExecType::TypeJoin:
+        return collectForJoin(output_field_types, executor);
+    default:
+        return true;
+    }
+}
+} // namespace
+std::vector<tipb::FieldType> collectOutputFieldTypes(const tipb::DAGRequest & dag_request)
+{
+    std::vector<tipb::FieldType> output_field_types;
+    traverseExecutors(&dag_request, [&output_field_types](const tipb::Executor & e) { return collectForExecutor(output_field_types, e); });
+    return output_field_types;
+}
+} // namespace DB

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnArray.h>
@@ -20,6 +34,7 @@
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/IFunction.h>
+#include <fmt/core.h>
 
 
 namespace DB
@@ -35,7 +50,7 @@ using namespace GatherUtils;
 template <typename A, typename B, typename ResultType>
 struct NumIfImpl
 {
-    static void vector_vector(
+    static void vectorVector(
         const PaddedPODArray<UInt8> & cond,
         const PaddedPODArray<A> & a,
         const PaddedPODArray<B> & b,
@@ -51,7 +66,7 @@ struct NumIfImpl
         block.getByPosition(result).column = std::move(col_res);
     }
 
-    static void vector_constant(
+    static void vectorConstant(
         const PaddedPODArray<UInt8> & cond,
         const PaddedPODArray<A> & a,
         B b,
@@ -67,7 +82,7 @@ struct NumIfImpl
         block.getByPosition(result).column = std::move(col_res);
     }
 
-    static void constant_vector(
+    static void constantVector(
         const PaddedPODArray<UInt8> & cond,
         A a,
         const PaddedPODArray<B> & b,
@@ -83,7 +98,7 @@ struct NumIfImpl
         block.getByPosition(result).column = std::move(col_res);
     }
 
-    static void constant_constant(
+    static void constantConstant(
         const PaddedPODArray<UInt8> & cond,
         A a,
         B b,
@@ -104,31 +119,31 @@ template <typename A, typename B>
 struct NumIfImpl<A, B, NumberTraits::Error>
 {
 private:
-    static void throw_error()
+    static void throwError()
     {
         throw Exception("Internal logic error: invalid types of arguments 2 and 3 of if", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
 public:
     template <typename... Args>
-    static void vector_vector(Args &&...)
+    static void vectorVector(Args &&...)
     {
-        throw_error();
+        throwError();
     }
     template <typename... Args>
-    static void vector_constant(Args &&...)
+    static void vectorConstant(Args &&...)
     {
-        throw_error();
+        throwError();
     }
     template <typename... Args>
-    static void constant_vector(Args &&...)
+    static void constantVector(Args &&...)
     {
-        throw_error();
+        throwError();
     }
     template <typename... Args>
-    static void constant_constant(Args &&...)
+    static void constantConstant(Args &&...)
     {
-        throw_error();
+        throwError();
     }
 };
 
@@ -157,9 +172,9 @@ private:
         using ResultType = typename NumberTraits::ResultOfIf<T0, T1>::Type;
 
         if (col_right_vec)
-            NumIfImpl<T0, T1, ResultType>::vector_vector(cond_col->getData(), col_left->getData(), col_right_vec->getData(), block, result);
+            NumIfImpl<T0, T1, ResultType>::vectorVector(cond_col->getData(), col_left->getData(), col_right_vec->getData(), block, result);
         else
-            NumIfImpl<T0, T1, ResultType>::vector_constant(cond_col->getData(), col_left->getData(), col_right_const->template getValue<T1>(), block, result);
+            NumIfImpl<T0, T1, ResultType>::vectorConstant(cond_col->getData(), col_left->getData(), col_right_const->template getValue<T1>(), block, result);
 
         return true;
     }
@@ -181,9 +196,9 @@ private:
         using ResultType = typename NumberTraits::ResultOfIf<T0, T1>::Type;
 
         if (col_right_vec)
-            NumIfImpl<T0, T1, ResultType>::constant_vector(cond_col->getData(), col_left->template getValue<T0>(), col_right_vec->getData(), block, result);
+            NumIfImpl<T0, T1, ResultType>::constantVector(cond_col->getData(), col_left->template getValue<T0>(), col_right_vec->getData(), block, result);
         else
-            NumIfImpl<T0, T1, ResultType>::constant_constant(cond_col->getData(), col_left->template getValue<T0>(), col_right_const->template getValue<T1>(), block, result);
+            NumIfImpl<T0, T1, ResultType>::constantConstant(cond_col->getData(), col_left->template getValue<T0>(), col_right_const->template getValue<T1>(), block, result);
 
         return true;
     }
@@ -348,9 +363,9 @@ private:
                 || executeRightType<T0, Float64>(cond_col, block, arguments, result, col_left))
                 return true;
             else
-                throw Exception("Illegal column " + block.getByPosition(arguments[2]).column->getName()
-                                    + " of third argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of third argument of function {}", block.getByPosition(arguments[2]).column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else if (col_const_left)
         {
@@ -366,9 +381,9 @@ private:
                 || executeConstRightType<T0, Float64>(cond_col, block, arguments, result, col_const_left))
                 return true;
             else
-                throw Exception("Illegal column " + block.getByPosition(arguments[2]).column->getName()
-                                    + " of third argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of third argument of function {}", block.getByPosition(arguments[2]).column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else if (col_arr_left && col_arr_left_elems)
         {
@@ -384,9 +399,9 @@ private:
                 || executeRightTypeArray<T0, Float64>(cond_col, block, arguments, result, col_arr_left))
                 return true;
             else
-                throw Exception("Illegal column " + block.getByPosition(arguments[2]).column->getName()
-                                    + " of third argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of third argument of function {}", block.getByPosition(arguments[2]).column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else if (col_const_arr_left && checkColumn<ColumnVector<T0>>(&static_cast<const ColumnArray &>(col_const_arr_left->getDataColumn()).getData()))
         {
@@ -402,15 +417,15 @@ private:
                 || executeConstRightTypeArray<T0, Float64>(cond_col, block, arguments, result, col_const_arr_left))
                 return true;
             else
-                throw Exception("Illegal column " + block.getByPosition(arguments[2]).column->getName()
-                                    + " of third argument of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of third argument of function {}", block.getByPosition(arguments[2]).column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
 
         return false;
     }
 
-    bool executeString(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result) const
+    static bool executeString(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result)
     {
         const IColumn * col_then_untyped = block.getByPosition(arguments[1]).column.get();
         const IColumn * col_else_untyped = block.getByPosition(arguments[2]).column.get();
@@ -488,7 +503,7 @@ private:
         return false;
     }
 
-    bool executeGenericArray(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result) const
+    static bool executeGenericArray(const ColumnUInt8 * cond_col, Block & block, const ColumnNumbers & arguments, size_t result)
     {
         /// For generic implementation, arrays must be of same type.
         if (!block.getByPosition(arguments[1]).type->equals(*block.getByPosition(arguments[2]).type))
@@ -509,7 +524,7 @@ private:
             && (col_arr_else || col_arr_else_const))
         {
             auto res = block.getByPosition(result).type->createColumn();
-            auto col_res = static_cast<ColumnArray *>(res.get());
+            auto * col_res = static_cast<ColumnArray *>(res.get());
 
             if (col_arr_then && col_arr_else)
                 conditional(GenericArraySource(*col_arr_then), GenericArraySource(*col_arr_else), GenericArraySink(*col_res, rows), cond_data);
@@ -769,9 +784,9 @@ private:
                     block.getByPosition(result).column = makeNullableColumnIfNot(arg_else.column);
             }
             else
-                throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                                    + ". Must be ColumnUInt8 or ColumnConstUInt8.",
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of first argument of function {}. Must be ColumnUInt8 or ColumnConstUInt8.", arg_cond.column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
             return true;
         }
 
@@ -781,7 +796,7 @@ private:
             if (cond_col)
             {
                 size_t size = block.rows();
-                auto & null_map_data = cond_col->getData();
+                const auto & null_map_data = cond_col->getData();
 
                 auto negated_null_map = ColumnUInt8::create();
                 auto & negated_null_map_data = negated_null_map->getData();
@@ -812,9 +827,9 @@ private:
                     block.getByPosition(result).column = block.getByPosition(result).type->createColumn()->cloneResized(block.rows());
             }
             else
-                throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                                    + ". Must be ColumnUInt8 or ColumnConstUInt8.",
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal column {} of first argument of function {}. Must be ColumnUInt8 or ColumnConstUInt8.", arg_cond.column->getName(), getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
             return true;
         }
 
@@ -841,8 +856,9 @@ public:
             return makeNullable(getReturnTypeImpl({removeNullable(arguments[0]), arguments[1], arguments[2]}));
 
         if (!checkDataType<DataTypeUInt8>(arguments[0].get()))
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument (condition) of function if. Must be UInt8.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of first argument (condition) of function if. Must be UInt8.", arguments[0]->getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return getLeastSupertype({arguments[1], arguments[2]});
     }
@@ -893,15 +909,17 @@ public:
                   || executeString(cond_col, block, arguments, result)
                   || executeGenericArray(cond_col, block, arguments, result)
                   || executeTuple(block, arguments, result)))
-                throw Exception("Illegal columns " + arg_then.column->getName()
-                                    + " and " + arg_else.column->getName()
-                                    + " of second (then) and third (else) arguments of function " + getName(),
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    fmt::format("Illegal columns {} and {} of second (then) and third (else) arguments of function {}",
+                                arg_then.column->getName(),
+                                arg_else.column->getName(),
+                                getName()),
+                    ErrorCodes::ILLEGAL_COLUMN);
         }
         else
-            throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                                + ". Must be ColumnUInt8 or ColumnConstUInt8.",
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(
+                fmt::format("Illegal column {} of first argument of function {}. Must be ColumnUInt8 or ColumnConstUInt8.", arg_cond.column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -926,7 +944,7 @@ class FunctionMultiIf final : public IFunction
 public:
     static constexpr auto name = "multiIf";
     static FunctionPtr create(const Context & context);
-    FunctionMultiIf(const Context & context)
+    explicit FunctionMultiIf(const Context & context)
         : context(context){};
 
 public:
@@ -951,7 +969,7 @@ public:
     static FunctionPtr create(const Context & context_);
 
 public:
-    FunctionCaseWithExpression(const Context & context_);
+    explicit FunctionCaseWithExpression(const Context & context_);
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     String getName() const override;

@@ -1,0 +1,107 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int)
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t (a) values (1);
+mysql> insert into test.t (a) values (1);
+
+#############
+# Alter year column
+mysql> alter table test.t add column b year not null;
+
+func> wait_table test t
+
+>> DBGInvoke __try_flush()
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+------+
+| a    | b    |
++------+------+
+|    1 | 0000 |
+|    1 | 0000 |
++------+------+
+
+mysql> alter table test.t add column c year not null;
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+------+------+
+| a    | b    | c    |
++------+------+------+
+|    1 | 0000 | 0000 |
+|    1 | 0000 | 0000 |
++------+------+------+
+
+mysql> alter table test.t drop column b;
+mysql> alter table test.t drop column c;
+
+#############
+# Alter varchar / enum column
+mysql> alter table test.t add s varchar(999) default 'sss'
+mysql> alter table test.t add e enum('unknown', 'male','female') default 'unknown'
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++---+-----+---------+
+| a | s   | e       |
++---+-----+---------+
+| 1 | sss | unknown |
+| 1 | sss | unknown |
++---+-----+---------+
+mysql> alter table test.t drop column s;
+mysql> alter table test.t drop column e;
+
+#############
+# Alter bit column
+mysql> alter table test.t add column b1 bit(1) not null;
+mysql> alter table test.t add column b2 bit(1) not null default b'0';
+mysql> alter table test.t add column b3 bit(32) default 0x010203;
+mysql> alter table test.t add column b4 bit(32) default b'000000010000001000000011';
+mysql> alter table test.t add column b5 bit(32) default b'000000010000001000000011';
+mysql> alter table test.t add column b6 bit(32) default b'000000010000001000000011';
+mysql> alter table test.t add column b7 bit(32) not null default b'000000010000001000000011';
+# TiDB is dumb, see https://github.com/pingcap/tidb/issues/17641 and https://github.com/pingcap/tidb/issues/17642
+# Cannot add the following lines, which are supposed to give us a little more coverage, until TiDB stops being dumb.
+# mysql> alter table test.t modify column b5 bit(32);
+# mysql> alter table test.t modify column b6 bit(64);
+# mysql> alter table test.t modify column b7 bit(32);
+
+# MySQL client will mess up the raw bit value output so use hex function.
+mysql> set session tidb_isolation_read_engines='tiflash'; select hex(b1), hex(b2), hex(b3), hex(b4), hex(b5), hex(b6), hex(b7) from test.t;
++---------+---------+---------+---------+---------+---------+---------+
+| hex(b1) | hex(b2) | hex(b3) | hex(b4) | hex(b5) | hex(b6) | hex(b7) |
++---------+---------+---------+---------+---------+---------+---------+
+| 0       | 0       | 10203   | 10203   | 10203   | 10203   | 10203   |
+| 0       | 0       | 10203   | 10203   | 10203   | 10203   | 10203   |
++---------+---------+---------+---------+---------+---------+---------+
+
+mysql> alter table test.t drop column b1;
+mysql> alter table test.t drop column b2;
+mysql> alter table test.t drop column b3;
+mysql> alter table test.t drop column b4;
+mysql> alter table test.t drop column b5;
+mysql> alter table test.t drop column b6;
+mysql> alter table test.t drop column b7;
+
+###########
+# Alter enum with unsupported collate
+mysql> alter table test.t add column e enum('Critical','Major','Minor','URGENT','High','Medium','Low','Unprioritized') COLLATE utf8mb4_0900_ai_ci DEFAULT 'Unprioritized';
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+---------------+
+| a    | e             |
++------+---------------+
+|    1 | Unprioritized |
+|    1 | Unprioritized |
++------+---------------+
+
+mysql> drop table if exists test.t

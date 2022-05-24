@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FileChecker.h>
 #include <Common/escapeForFileName.h>
 #include <IO/ReadBufferFromFile.h>
@@ -55,14 +69,14 @@ bool FileChecker::check() const
         Poco::File file(Poco::Path(files_info_path).parent().toString() + "/" + name_size.first);
         if (!file.exists())
         {
-            LOG_ERROR(log, "File " << file.path() << " doesn't exist");
+            LOG_FMT_ERROR(log, "File {} doesn't exist", file.path());
             return false;
         }
 
         size_t real_size = file.getSize();
         if (real_size != name_size.second)
         {
-            LOG_ERROR(log, "Size of " << file.path() << " is wrong. Size is " << real_size << " but should be " << name_size.second);
+            LOG_FMT_ERROR(log, "Size of {} is wrong. Size is {} but should be {}", file.path(), real_size, name_size.second);
             return false;
         }
     }

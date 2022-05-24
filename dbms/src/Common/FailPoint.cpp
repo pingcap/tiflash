@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 
 #include <boost/core/noncopyable.hpp>
@@ -48,9 +62,13 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_formal_page_file_not_exists)                          \
     M(force_legacy_or_checkpoint_page_file_exists)                \
     M(exception_in_creating_set_input_stream)                     \
-    M(exception_when_read_from_log)
+    M(exception_when_read_from_log)                               \
+    M(exception_mpp_hash_build)                                   \
+    M(exception_before_drop_segment)                              \
+    M(exception_after_drop_segment)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
+    M(skip_check_segment_update)                             \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
@@ -64,23 +82,27 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
     M(force_remote_read_for_batch_cop)                       \
-    M(force_context_path)
+    M(force_context_path)                                    \
+    M(force_slow_page_storage_snapshot_release)              \
+    M(force_change_all_blobs_to_read_only)
 
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
-    M(pause_after_learner_read)                   \
+    M(pause_with_alter_locks_acquired)            \
     M(hang_in_execution)                          \
     M(pause_before_dt_background_delta_merge)     \
     M(pause_until_dt_background_delta_merge)      \
     M(pause_before_apply_raft_cmd)                \
     M(pause_before_apply_raft_snapshot)           \
-    M(pause_until_apply_raft_snapshot)
+    M(pause_until_apply_raft_snapshot)            \
+    M(pause_after_copr_streams_acquired_once)
 
 #define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) \
     M(pause_when_reading_from_dt_stream)     \
     M(pause_when_writing_to_dt_store)        \
     M(pause_when_ingesting_to_dt_store)      \
     M(pause_when_altering_dt_store)          \
-    M(pause_after_copr_streams_acquired)
+    M(pause_after_copr_streams_acquired)     \
+    M(pause_before_server_merge_one_delta)
 
 namespace FailPoints
 {

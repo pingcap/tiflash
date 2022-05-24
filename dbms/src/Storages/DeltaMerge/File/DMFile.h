@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #pragma GCC diagnostic push
@@ -69,7 +83,7 @@ public:
         case DROPPED:
             return "DROPPED";
         default:
-            throw Exception("Unexpected status: " + DB::toString((int)status));
+            throw Exception("Unexpected status: " + DB::toString(static_cast<int>(status)));
         }
     }
 
@@ -84,7 +98,7 @@ public:
         size_t value;
 
     public:
-        ReadMetaMode(size_t value_)
+        explicit ReadMetaMode(size_t value_)
             : value(value_)
         {}
 
@@ -127,7 +141,9 @@ public:
 
     struct SubFileStat
     {
-        SubFileStat() = default;
+        SubFileStat()
+            : SubFileStat(0, 0)
+        {}
         SubFileStat(UInt64 offset_, UInt64 size_)
             : offset{offset_}
             , size{size_}
@@ -165,8 +181,7 @@ public:
         DMSingleFileFormatVersion file_format_version;
 
         Footer()
-            : meta_pack_info()
-            , sub_file_stat_offset(0)
+            : sub_file_stat_offset(0)
             , sub_file_num(0)
             , file_format_version(DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE)
         {}
@@ -182,7 +197,7 @@ public:
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
         UInt64 file_id,
-        UInt64 ref_id,
+        UInt64 page_id,
         const String & parent_path,
         const ReadMetaMode & read_meta_mode);
 
@@ -203,8 +218,10 @@ public:
     void enableGC();
     void remove(const FileProviderPtr & file_provider);
 
+    // The ID for locating DTFile on disk
     UInt64 fileId() const { return file_id; }
-    UInt64 refId() const { return ref_id; }
+    // The PageID for locating this object in the StoragePool.data
+    UInt64 pageId() const { return page_id; }
 
     String path() const;
 
@@ -213,7 +230,7 @@ public:
     size_t getRows() const
     {
         size_t rows = 0;
-        for (auto & s : pack_stats)
+        for (const auto & s : pack_stats)
             rows += s.rows;
         return rows;
     }
@@ -221,7 +238,7 @@ public:
     size_t getBytes() const
     {
         size_t bytes = 0;
-        for (auto & s : pack_stats)
+        for (const auto & s : pack_stats)
             bytes += s.bytes;
         return bytes;
     }
@@ -276,14 +293,14 @@ public:
 
 private:
     DMFile(UInt64 file_id_,
-           UInt64 ref_id_,
+           UInt64 page_id_,
            String parent_path_,
            Mode mode_,
            Status status_,
            Poco::Logger * log_,
            DMConfigurationOpt configuration_ = std::nullopt)
         : file_id(file_id_)
-        , ref_id(ref_id_)
+        , page_id(page_id_)
         , parent_path(std::move(parent_path_))
         , mode(mode_)
         , status(status_)
@@ -317,14 +334,14 @@ private:
 
     bool isColIndexExist(const ColId & col_id) const;
 
-    const String encryptionBasePath() const;
-    const EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
-    const EncryptionPath encryptionMetaPath() const;
-    const EncryptionPath encryptionPackStatPath() const;
-    const EncryptionPath encryptionPackPropertyPath() const;
-    const EncryptionPath encryptionConfigurationPath() const;
+    String encryptionBasePath() const;
+    EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionMetaPath() const;
+    EncryptionPath encryptionPackStatPath() const;
+    EncryptionPath encryptionPackPropertyPath() const;
+    EncryptionPath encryptionConfigurationPath() const;
 
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
     {
@@ -382,8 +399,10 @@ private:
     void initializeIndices();
 
 private:
+    // The id to construct the file path on disk.
     UInt64 file_id;
-    UInt64 ref_id; // It is a reference to file_id, could be the same.
+    // It is the page_id that represent this file in the PageStorage. It could be the same as file id.
+    UInt64 page_id;
     String parent_path;
 
     PackStats pack_stats;
@@ -402,6 +421,7 @@ private:
     friend class DMFileWriter;
     friend class DMFileReader;
     friend class DMFilePackFilter;
+    friend class DMFileBlockInputStreamBuilder;
     friend int ::DTTool::Migrate::migrateServiceMain(DB::Context & context, const ::DTTool::Migrate::MigrateArgs & args);
     friend bool ::DTTool::Migrate::isRecognizable(const DB::DM::DMFile & file, const std::string & target);
     friend bool ::DTTool::Migrate::needFrameMigration(const DB::DM::DMFile & file, const std::string & target);

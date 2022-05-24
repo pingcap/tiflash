@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <common/types.h>
@@ -17,6 +31,10 @@ inline UInt64 nanoseconds(clockid_t clock_type)
     struct timespec ts;
     clock_gettime(clock_type, &ts);
     return ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+inline UInt64 seconds(clockid_t clock_type)
+{
+    return nanoseconds(clock_type) / 1000000000ULL;
 }
 } // namespace StopWatchDetail
 
@@ -39,17 +57,21 @@ public:
     void start()
     {
         start_ns = nanoseconds();
+        last_ns = start_ns;
         is_running = true;
     }
+
     void stop()
     {
         stop_ns = nanoseconds();
         is_running = false;
     }
+
     void reset()
     {
         start_ns = 0;
         stop_ns = 0;
+        last_ns = 0;
         is_running = false;
     }
     void restart() { start(); }
@@ -57,9 +79,28 @@ public:
     UInt64 elapsedMilliseconds() const { return elapsed() / 1000000UL; }
     double elapsedSeconds() const { return static_cast<double>(elapsed()) / 1000000000ULL; }
 
+    UInt64 elapsedFromLastTime()
+    {
+        const auto now_ns = nanoseconds();
+        if (is_running)
+        {
+            auto rc = now_ns - last_ns;
+            last_ns = now_ns;
+            return rc;
+        }
+        else
+        {
+            return stop_ns - last_ns;
+        }
+    };
+
+    UInt64 elapsedMillisecondsFromLastTime() { return elapsedFromLastTime() / 1000000UL; }
+    UInt64 elapsedSecondsFromLastTime() { return elapsedFromLastTime() / 1000000UL; }
+
 private:
     UInt64 start_ns = 0;
     UInt64 stop_ns = 0;
+    UInt64 last_ns = 0;
     clockid_t clock_type;
     bool is_running = false;
 

@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
@@ -9,6 +24,7 @@
 namespace DB
 {
 class StoragePathPool;
+
 
 namespace DM
 {
@@ -51,10 +67,10 @@ struct DMContext : private boost::noncopyable
     const size_t delta_cache_limit_rows;
     // The size threshold of cache in delta.
     const size_t delta_cache_limit_bytes;
-    // Determine whether a pack is small or not in rows.
-    const size_t delta_small_pack_rows;
-    // Determine whether a pack is small or not in bytes.
-    const size_t delta_small_pack_bytes;
+    // Determine whether a column file is small or not in rows.
+    const size_t delta_small_column_file_rows;
+    // Determine whether a column file is small or not in bytes.
+    const size_t delta_small_column_file_bytes;
     // The expected stable pack rows.
     const size_t stable_pack_rows;
 
@@ -67,7 +83,7 @@ struct DMContext : private boost::noncopyable
     const bool enable_relevant_place;
     const bool enable_skippable_place;
 
-    const String query_id;
+    String tracing_id;
 
 public:
     DMContext(const Context & db_context_,
@@ -79,7 +95,7 @@ public:
               bool is_common_handle_,
               size_t rowkey_column_size_,
               const DB::Settings & settings,
-              const String & query_id_ = "")
+              const String & tracing_id_ = "")
         : db_context(db_context_)
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
@@ -95,15 +111,15 @@ public:
         , delta_limit_bytes(settings.dt_segment_delta_limit_size)
         , delta_cache_limit_rows(settings.dt_segment_delta_cache_limit_rows)
         , delta_cache_limit_bytes(settings.dt_segment_delta_cache_limit_size)
-        , delta_small_pack_rows(settings.dt_segment_delta_small_pack_rows)
-        , delta_small_pack_bytes(settings.dt_segment_delta_small_pack_size)
+        , delta_small_column_file_rows(settings.dt_segment_delta_small_column_file_rows)
+        , delta_small_column_file_bytes(settings.dt_segment_delta_small_column_file_size)
         , stable_pack_rows(settings.dt_segment_stable_pack_rows)
         , enable_logical_split(settings.dt_enable_logical_split)
         , read_delta_only(settings.dt_read_delta_only)
         , read_stable_only(settings.dt_read_stable_only)
         , enable_relevant_place(settings.dt_enable_relevant_place)
         , enable_skippable_place(settings.dt_enable_skippable_place)
-        , query_id(query_id_)
+        , tracing_id(tracing_id_)
     {
     }
 

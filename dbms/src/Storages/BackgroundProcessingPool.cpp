@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
@@ -15,6 +29,15 @@
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>
+inline static pid_t getTid()
+{
+    return syscall(SYS_gettid);
+}
+#else
+inline static pid_t getTid()
+{
+    return -1;
+}
 #endif
 
 namespace CurrentMetrics
@@ -42,7 +65,7 @@ void BackgroundProcessingPool::TaskInfo::wake()
     Poco::Timestamp current_time;
 
     {
-        std::unique_lock<std::mutex> lock(pool.tasks_mutex);
+        std::unique_lock lock(pool.tasks_mutex);
 
         auto next_time_to_execute = iterator->first;
         TaskHandle this_task_handle = iterator->second;
@@ -62,8 +85,9 @@ void BackgroundProcessingPool::TaskInfo::wake()
 
 BackgroundProcessingPool::BackgroundProcessingPool(int size_)
     : size(size_)
+    , thread_ids_counter(size_)
 {
-    LOG_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with " << size << " threads");
+    LOG_FMT_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with {} threads", size);
 
     threads.resize(size);
     for (auto & thread : threads)
@@ -78,7 +102,7 @@ BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(const Tas
     Poco::Timestamp current_time;
 
     {
-        std::unique_lock<std::mutex> lock(tasks_mutex);
+        std::unique_lock lock(tasks_mutex);
         res->iterator = tasks.emplace(current_time, res);
     }
 
@@ -98,7 +122,7 @@ void BackgroundProcessingPool::removeTask(const TaskHandle & task)
     }
 
     {
-        std::unique_lock<std::mutex> lock(tasks_mutex);
+        std::unique_lock lock(tasks_mutex);
         tasks.erase(task->iterator);
     }
 }
@@ -126,9 +150,7 @@ void BackgroundProcessingPool::threadFunction()
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
         is_background_thread = true;
-#ifdef __linux__
-        addThreadId(syscall(SYS_gettid));
-#endif
+        addThreadId(getTid());
     }
 
     MemoryTracker memory_tracker;
@@ -149,7 +171,7 @@ void BackgroundProcessingPool::threadFunction()
             Poco::Timestamp min_time;
 
             {
-                std::unique_lock<std::mutex> lock(tasks_mutex);
+                std::unique_lock lock(tasks_mutex);
 
                 if (!tasks.empty())
                 {
@@ -170,7 +192,7 @@ void BackgroundProcessingPool::threadFunction()
 
             if (!task)
             {
-                std::unique_lock<std::mutex> lock(tasks_mutex);
+                std::unique_lock lock(tasks_mutex);
                 wake_event.wait_for(lock,
                                     std::chrono::duration<double>(
                                         sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
@@ -181,7 +203,7 @@ void BackgroundProcessingPool::threadFunction()
             Poco::Timestamp current_time;
             if (min_time > current_time)
             {
-                std::unique_lock<std::mutex> lock(tasks_mutex);
+                std::unique_lock lock(tasks_mutex);
                 wake_event.wait_for(lock,
                                     std::chrono::microseconds(
                                         min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
@@ -243,7 +265,7 @@ void BackgroundProcessingPool::threadFunction()
         Poco::Timestamp next_time_to_execute = Poco::Timestamp() + next_sleep_time_span;
 
         {
-            std::unique_lock<std::mutex> lock(tasks_mutex);
+            std::unique_lock lock(tasks_mutex);
 
             if (task->removed)
                 continue;
@@ -258,14 +280,23 @@ void BackgroundProcessingPool::threadFunction()
 
 std::vector<pid_t> BackgroundProcessingPool::getThreadIds()
 {
+    thread_ids_counter.Wait();
     std::lock_guard lock(thread_ids_mtx);
+    if (thread_ids.size() != size)
+    {
+        LOG_FMT_ERROR(&Poco::Logger::get("BackgroundProcessingPool"), "thread_ids.size is {}, but {} is required", thread_ids.size(), size);
+        throw Exception("Background threads' number not match");
+    }
     return thread_ids;
 }
 
 void BackgroundProcessingPool::addThreadId(pid_t tid)
 {
-    std::lock_guard lock(thread_ids_mtx);
-    thread_ids.push_back(tid);
+    {
+        std::lock_guard lock(thread_ids_mtx);
+        thread_ids.push_back(tid);
+    }
+    thread_ids_counter.DecrementCount();
 }
 
 } // namespace DB

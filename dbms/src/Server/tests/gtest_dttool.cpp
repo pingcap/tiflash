@@ -1,4 +1,19 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Checksum.h>
+#include <Common/Logger.h>
 #include <Server/DTTool/DTTool.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -57,7 +72,7 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
             properties.push_back(property);
         }
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
+        auto storage_pool = std::make_unique<DB::DM::StoragePool>(*db_context, /*ns_id*/ 1, *path_pool, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,
@@ -218,20 +233,23 @@ TEST_F(DTToolTest, BlockwiseInvariant)
         stream->readSuffix();
     }
 
-    std::vector<std::tuple<size_t, DB::ChecksumAlgo, DB::CompressionMethod, int>> test_cases{
-        {2, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::LZ4, -1},
-        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::ZSTD, 1},
-        {2, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
-        {2, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
-        {1, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::NONE, -1}};
-    for (auto [version, algo, comp, level] : test_cases)
+    std::vector<std::tuple<size_t, size_t, DB::ChecksumAlgo, DB::CompressionMethod, int>> test_cases{
+        {2, DBMS_DEFAULT_BUFFER_SIZE, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::LZ4, -1},
+        {1, 64, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::ZSTD, 1},
+        {2, DBMS_DEFAULT_BUFFER_SIZE * 2, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
+        {2, DBMS_DEFAULT_BUFFER_SIZE * 4, DB::ChecksumAlgo::City128, DB::CompressionMethod::LZ4HC, 0},
+        {2, 4, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
+        {2, 13, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
+        {2, 5261, DB::ChecksumAlgo::CRC64, DB::CompressionMethod::ZSTD, 22},
+        {1, DBMS_DEFAULT_BUFFER_SIZE, DB::ChecksumAlgo::XXH3, DB::CompressionMethod::NONE, -1}};
+    for (auto [version, frame_size, algo, comp, level] : test_cases)
     {
         auto a = DTTool::Migrate::MigrateArgs{
             .no_keep = false,
             .dry_mode = false,
             .file_id = 1,
             .version = version,
-            .frame = DBMS_DEFAULT_BUFFER_SIZE,
+            .frame = frame_size,
             .algorithm = algo,
             .workdir = getTemporaryPath(),
             .compression_method = comp,
@@ -245,6 +263,10 @@ TEST_F(DTToolTest, BlockwiseInvariant)
             0,
             getTemporaryPath(),
             DB::DM::DMFile::ReadMetaMode::all());
+        if (version == 2)
+        {
+            EXPECT_EQ(refreshed_file->getConfiguration()->getChecksumFrameLength(), frame_size);
+        }
         auto stream = DB::DM::createSimpleBlockInputStream(*db_context, refreshed_file);
         auto size_iter = size_info.begin();
         auto prop_iter = dmfile->getPackProperties().property().begin();

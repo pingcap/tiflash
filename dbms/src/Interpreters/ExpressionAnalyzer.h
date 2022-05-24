@@ -1,8 +1,23 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Block.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Settings.h>
+#include <Interpreters/SubqueryForSet.h>
 
 
 namespace DB
@@ -12,46 +27,13 @@ class Context;
 class ExpressionActions;
 struct ExpressionActionsChain;
 
-class Join;
-using JoinPtr = std::shared_ptr<Join>;
-
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-
-class Set;
-using SetPtr = std::shared_ptr<Set>;
 using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
-class IBlockInputStream;
-using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
-
-class IStorage;
-using StoragePtr = std::shared_ptr<IStorage>;
 using Tables = std::map<String, StoragePtr>;
 
 class ASTFunction;
 class ASTExpressionList;
 class ASTSelectQuery;
-
-
-/** Information on what to do when executing a subquery in the [GLOBAL] IN/JOIN section.
-  */
-struct SubqueryForSet
-{
-    /// The source is obtained using the InterpreterSelectQuery subquery.
-    BlockInputStreamPtr source;
-
-    /// If set, build it from result.
-    SetPtr set;
-    JoinPtr join;
-
-    /// If set, put the result into the table.
-    /// This is a temporary table for transferring to remote servers for distributed query processing.
-    StoragePtr table;
-};
-
-/// ID of subquery -> what to do with it.
-using SubqueriesForSets = std::unordered_map<String, SubqueryForSet>;
 
 
 /** Transforms an expression from a syntax tree into a sequence of actions to execute it.
@@ -322,7 +304,7 @@ private:
       *  only one ("main") table is supported. Ambiguity is not detected or resolved.
       */
     void translateQualifiedNames();
-    void translateQualifiedNamesImpl(ASTPtr & node, const String & database_name, const String & table_name, const String & alias);
+    void translateQualifiedNamesImpl(ASTPtr & ast, const String & database_name, const String & table_name, const String & alias);
 
     /** Sometimes we have to calculate more columns in SELECT clause than will be returned from query.
       * This is the case when we have DISTINCT or arrayJoin: we require more columns in SELECT even if we need less columns in result.

@@ -1,18 +1,35 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CPUAffinityManager.h>
 #include <Common/Stopwatch.h>
+#include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Core/Types.h>
-#include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/FlashService.h>
+#include <Flash/Management/ManualCompact.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 
@@ -31,19 +48,35 @@ FlashService::FlashService(IServer & server_)
     : server(server_)
     , security_config(server_.securityConfig())
     , log(&Poco::Logger::get("FlashService"))
+    , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(
+          server_.context().getGlobalContext(),
+          server_.context().getGlobalContext().getSettingsRef()))
 {
     auto settings = server_.context().getSettingsRef();
+    enable_local_tunnel = settings.enable_local_tunnel;
+    enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
-    size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
+    auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
     cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
 
-    size_t batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
+    auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+}
+
+FlashService::~FlashService() = default;
+
+// Use executeInThreadPool to submit job to thread pool which return grpc::Status.
+grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()> job)
+{
+    std::packaged_task<grpc::Status()> task(job);
+    std::future<grpc::Status> future = task.get_future();
+    pool.schedule([&task] { task(); });
+    return future.get();
 }
 
 grpc::Status FlashService::Coprocessor(
@@ -52,7 +85,7 @@ grpc::Status FlashService::Coprocessor(
     coprocessor::Response * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "{}: Handling coprocessor request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -68,7 +101,7 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    grpc::Status ret = executeInThreadPool(cop_pool, [&] {
+    grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -79,14 +112,14 @@ grpc::Status FlashService::Coprocessor(
         return cop_handler.execute();
     });
 
-    LOG_FMT_DEBUG(log, "{}: Handle coprocessor request done: {}, {}", __PRETTY_FUNCTION__, ret.error_code(), ret.error_message());
+    LOG_FMT_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
 ::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "{}: Handling coprocessor request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -102,7 +135,7 @@ grpc::Status FlashService::Coprocessor(
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    grpc::Status ret = executeInThreadPool(batch_cop_pool, [&] {
+    grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -113,7 +146,7 @@ grpc::Status FlashService::Coprocessor(
         return cop_handler.execute();
     });
 
-    LOG_FMT_DEBUG(log, "{}: Handle coprocessor request done: {}, {}", __PRETTY_FUNCTION__, ret.error_code(), ret.error_message());
+    LOG_FMT_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
@@ -123,16 +156,25 @@ grpc::Status FlashService::Coprocessor(
     ::mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "{}: Handling mpp dispatch request: {}", __PRETTY_FUNCTION__, request->DebugString());
-
+    LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
+    GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Increment();
+    GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
+    if (!tryToResetMaxThreadsMetrics())
+    {
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Value()));
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Value(), GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value()));
+    }
+
     Stopwatch watch;
     SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Decrement();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_dispatch_mpp_task).Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
@@ -169,23 +211,42 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
-::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
-                                                    const ::mpp::EstablishMPPConnectionRequest * request,
-                                                    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+::grpc::Status returnStatus(EstablishCallData * calldata, const grpc::Status & status)
+{
+    if (calldata)
+    {
+        calldata->writeDone(status);
+    }
+    return status;
+}
+
+::grpc::Status FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
+                                                               const ::mpp::EstablishMPPConnectionRequest * request,
+                                                               ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
+                                                               EstablishCallData * calldata)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes has registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_FMT_DEBUG(log, "{}: Handling establish mpp connection request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+        return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
+    GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Increment();
+    if (!tryToResetMaxThreadsMetrics())
+    {
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
+        GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Value(), GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value()));
+    }
     Stopwatch watch;
     SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Decrement();
+        GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
@@ -194,7 +255,7 @@ grpc::Status FlashService::Coprocessor(
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
-        return status;
+        return returnStatus(calldata, status);
     }
 
     auto & tmt_context = context->getTMTContext();
@@ -210,23 +271,46 @@ grpc::Status FlashService::Coprocessor(
         }
         if (tunnel == nullptr)
         {
-            LOG_ERROR(log, err_msg);
-            if (writer->Write(getPacketWithError(err_msg)))
+            if (calldata)
             {
+                LOG_ERROR(log, err_msg);
+                // In Async version, writer::Write() return void.
+                // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
+                calldata->writeErr(getPacketWithError(err_msg));
                 return grpc::Status::OK;
             }
             else
             {
-                LOG_FMT_DEBUG(log, "{}: Write error message failed for unknown reason.", __PRETTY_FUNCTION__);
-                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                LOG_ERROR(log, err_msg);
+                if (sync_writer->Write(getPacketWithError(err_msg)))
+                {
+                    return grpc::Status::OK;
+                }
+                else
+                {
+                    LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
+                    return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                }
             }
         }
     }
     Stopwatch stopwatch;
-    tunnel->connect(writer);
-    LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
-    tunnel->waitForFinish();
-    LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
+    if (calldata)
+    {
+        calldata->attachTunnel(tunnel);
+        // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
+        tunnel->connect(calldata);
+        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
+    }
+    else
+    {
+        SyncPacketWriter writer(sync_writer);
+        tunnel->connect(&writer);
+        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
+        tunnel->waitForFinish();
+        LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
+    }
+
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;
@@ -239,7 +323,7 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_FMT_DEBUG(log, "{}: cancel mpp task request: {}", __PRETTY_FUNCTION__, request->DebugString());
+    LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
     {
@@ -268,81 +352,12 @@ grpc::Status FlashService::Coprocessor(
     return grpc::Status::OK;
 }
 
-// This function is deprecated.
-grpc::Status FlashService::BatchCommands(
-    grpc::ServerContext * grpc_context,
-    grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
-{
-    CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
-
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
-
-    tikvpb::BatchCommandsRequest request;
-    while (stream->Read(&request))
-    {
-        tikvpb::BatchCommandsResponse response;
-        GET_METRIC(tiflash_coprocessor_request_count, type_batch).Increment();
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Increment();
-        SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Decrement(); });
-        auto start_time = std::chrono::system_clock::now();
-        SCOPE_EXIT({
-            std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_batch).Observe(duration_sec.count());
-            GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
-        });
-
-        LOG_FMT_DEBUG(log, "{}: Handling batch commands: {}", __PRETTY_FUNCTION__, request.DebugString());
-
-        BatchCommandsContext batch_commands_context(
-            *context,
-            [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
-            *grpc_context);
-        BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
-        auto ret = batch_commands_handler.execute();
-        if (!ret.ok())
-        {
-            LOG_FMT_DEBUG(
-                log,
-                "{}: Handle batch commands request done: {}, {}",
-                __PRETTY_FUNCTION__,
-                ret.error_code(),
-                ret.error_message());
-            return ret;
-        }
-
-        if (!stream->Write(response))
-        {
-            LOG_FMT_DEBUG(log, "{}: Write response failed for unknown reason.", __PRETTY_FUNCTION__);
-            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
-        }
-
-        LOG_FMT_DEBUG(log, "{}: Handle batch commands request done: {}, {}", __PRETTY_FUNCTION__, ret.error_code(), ret.error_message());
-    }
-
-    return grpc::Status::OK;
-}
-
 String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
 {
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
-        return it->second.data();
-    return default_val;
-}
+        return String(it->second.data(), it->second.size());
 
-grpc::Status FlashService::executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
-{
-    std::packaged_task<grpc::Status()> task(job);
-    std::future<grpc::Status> future = task.get_future();
-    pool->schedule([&task] { task(); });
-    return future.get();
+    return default_val;
 }
 
 std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const
@@ -382,23 +397,44 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
             context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
 
+        String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
+        if (!max_threads.empty())
+        {
+            context->setSetting("max_threads", max_threads);
+            LOG_FMT_INFO(log, "set context setting max_threads to {}", max_threads);
+        }
+
+        context->setSetting("enable_async_server", is_async ? "true" : "false");
+        context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
+        context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
         return std::make_tuple(context, grpc::Status::OK);
     }
     catch (Exception & e)
     {
-        LOG_FMT_ERROR(log, "{}: DB Exception: {}", __PRETTY_FUNCTION__, e.message());
+        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
     }
     catch (const std::exception & e)
     {
-        LOG_FMT_ERROR(log, "{}: std exception: {}", __PRETTY_FUNCTION__, e.what());
+        LOG_FMT_ERROR(log, "std exception: {}", e.what());
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
     }
     catch (...)
     {
-        LOG_FMT_ERROR(log, "{}: other exception", __PRETTY_FUNCTION__);
+        LOG_FMT_ERROR(log, "other exception");
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
     }
+}
+
+::grpc::Status FlashService::Compact(::grpc::ServerContext * grpc_context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+
+    return manual_compact_manager->handleRequest(request, response);
 }
 
 } // namespace DB

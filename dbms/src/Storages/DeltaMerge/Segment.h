@@ -1,5 +1,20 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
@@ -91,9 +106,7 @@ public:
         StableValueSpacePtr other_stable;
     };
 
-    Segment(const Segment &) = delete;
-    Segment & operator=(const Segment &) = delete;
-    Segment & operator=(Segment &&) = delete;
+    DISALLOW_COPY_AND_MOVE(Segment);
 
     Segment(
         UInt64 epoch_,
@@ -122,11 +135,19 @@ public:
 
     void serialize(WriteBatch & wb);
 
-    bool writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack);
+    /// Attach a new ColumnFile into the Segment. The ColumnFile will be added to MemFileSet and flushed to disk later.
+    /// The block data of the passed in ColumnFile should be placed on disk before calling this function.
+    /// To write new block data, you can use `writeToCache`.
+    bool writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file);
+
+    /// Write a block of data into the MemTableSet part of the Segment. The data will be flushed to disk later.
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
-    bool write(DMContext & dm_context, const Block & block); // For test only
+
+    /// For test only.
+    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true);
+
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
-    bool ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
+    bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
@@ -144,7 +165,7 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter = {},
-        UInt64 max_version = MAX_UINT64,
+        UInt64 max_version = std::numeric_limits<UInt64>::max(),
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /// Return a stream which is suitable for exporting data.
@@ -206,7 +227,12 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & merged_stable);
 
+    /// Merge the delta (major compaction) and return the new segment.
+    ///
+    /// Note: This is only a shortcut function used in tests.
+    /// Normally you should call `prepareMergeDelta`, `applyMergeDelta` instead.
     SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+
     StableValueSpacePtr prepareMergeDelta(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
@@ -218,10 +244,14 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
+    SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
+
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
     void placeDeltaIndex(DMContext & dm_context);
 
+    /// Compact the delta layer, merging fragment column files into bigger column files.
+    /// It does not merge the delta into stable layer.
     bool compactDelta(DMContext & dm_context);
 
     size_t getEstimatedRows() const { return delta->getRows() + stable->getRows(); }
@@ -251,17 +281,24 @@ public:
         return lock;
     }
 
+    /// Marks this segment as abandoned.
+    /// Note: Segment member functions never abandon the segment itself.
+    /// The abandon state is usually triggered by the DeltaMergeStore.
     void abandon(DMContext & context)
     {
-        LOG_DEBUG(log, "Abandon segment [" << segment_id << "]");
+        LOG_FMT_DEBUG(log, "Abandon segment [{}]", segment_id);
         delta->abandon(context);
     }
+
+    /// Returns whether this segment has been marked as abandoned.
+    /// Note: Segment member functions never abandon the segment itself.
+    /// The abandon state is usually triggered by the DeltaMergeStore.
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
     bool isSplitForbidden() { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
 
-    void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
+    void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
 
     RowsAndBytes getRowsAndBytesInRange(
         DMContext & dm_context,
@@ -279,7 +316,7 @@ private:
         const ColumnDefines & read_columns,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
-        UInt64 max_version = MAX_UINT64) const;
+        UInt64 max_version = std::numeric_limits<UInt64>::max()) const;
 
     static ColumnDefinesPtr arrangeReadColumns(
         const ColumnDefine & handle,
@@ -297,7 +334,7 @@ private:
         const IndexIterator & delta_index_begin,
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
-        UInt64 max_version = MAX_UINT64);
+        UInt64 max_version = std::numeric_limits<UInt64>::max());
 
     /// Merge delta & stable, and then take the middle one.
     std::optional<RowKeyValue> getSplitPointSlow(
@@ -357,7 +394,9 @@ private:
         bool relevant_place) const;
 
 private:
-    const UInt64 epoch; // After split / merge / merge delta, epoch got increased by 1.
+    /// The version of this segment. After split / merge / merge delta, epoch got increased by 1.
+    const UInt64 epoch;
+
     RowKeyRange rowkey_range;
     bool is_common_handle;
     size_t rowkey_column_size;

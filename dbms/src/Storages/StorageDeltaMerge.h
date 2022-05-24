@@ -1,9 +1,25 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
@@ -38,6 +54,8 @@ public:
     String getTableName() const override;
     String getDatabaseName() const override;
 
+    void clearData() override;
+
     void drop() override;
 
     BlockInputStreams read(
@@ -57,7 +75,17 @@ public:
 
     void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush) override;
 
-    void mergeDelta(const Context & context) override;
+    /// Merge delta into the stable layer for all segments.
+    ///
+    /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
+    void mergeDelta(const Context & context);
+
+    /// Merge delta into the stable layer for one segment located by the specified start key.
+    /// Returns the range of the merged segment, which can be used to merge the remaining segments incrementally (new_start_key = old_end_key).
+    /// If there is no segment found by the start key, nullopt is returned.
+    ///
+    /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread);
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
@@ -164,10 +192,14 @@ private:
     DataTypePtr getPKTypeImpl() const override;
 
     DM::DeltaMergeStorePtr & getAndMaybeInitStore();
-    bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
+    bool storeInited() const
+    {
+        return store_inited.load(std::memory_order_acquire);
+    }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
+    void shutdownImpl();
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -196,9 +228,9 @@ private:
     DM::DeltaMergeStorePtr _store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
-    bool is_common_handle;
-    bool pk_is_handle;
-    size_t rowkey_column_size;
+    bool is_common_handle = false;
+    bool pk_is_handle = false;
+    size_t rowkey_column_size = 0;
     OrderedNameSet hidden_columns;
 
     // The table schema synced from TiDB
@@ -220,7 +252,7 @@ private:
 
     Context & global_context;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 

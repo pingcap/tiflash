@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/CurrentMetrics.h>
@@ -35,7 +49,9 @@ extern const Event FileOpenFailed;
 extern const Event PSMWritePages;
 extern const Event PSMWriteIOCalls;
 extern const Event PSMWriteBytes;
+extern const Event PSMBackgroundWriteBytes;
 extern const Event PSMReadPages;
+extern const Event PSMBackgroundReadBytes;
 extern const Event PSMReadIOCalls;
 extern const Event PSMReadBytes;
 extern const Event PSMWriteFailed;
@@ -73,7 +89,7 @@ namespace PageUtil
 // (2G - 4k) is the best value. The reason for subtracting 4k instead of 1byte is that both vfs and disks need to be aligned.
 #define MAX_IO_SIZE ((2ULL * 1024 * 1024 * 1024) - (1024 * 4))
 
-UInt32 randInt(const UInt32 min, const UInt32 max);
+UInt32 randInt(UInt32 min, UInt32 max);
 
 // =========================================================
 // Helper functions
@@ -105,7 +121,8 @@ int openFile(const std::string & path)
                 return 0;
             }
         }
-        DB::throwFromErrno("Cannot open file " + path, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
+        DB::throwFromErrno(fmt::format("Cannot open file {}. ", path),
+                           errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
 
     return fd;
@@ -118,24 +135,26 @@ inline void touchFile(const std::string & path)
     if (fd > 0)
         ::close(fd);
     else
-        throw Exception("Touch file failed: " + path);
+        throw Exception(fmt::format("Touch file failed: {}. ", path));
 }
 
 template <typename T>
 void syncFile(T & file)
 {
     if (-1 == file->fsync())
-        DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
+        DB::throwFromErrno(fmt::format("Cannot fsync file: {}. ", file->getFileName()), ErrorCodes::CANNOT_FSYNC);
 }
 
 template <typename T>
 void ftruncateFile(T & file, off_t length)
 {
     if (-1 == file->ftruncate(length))
-        DB::throwFromErrno("Cannot truncate file: " + file->getFileName(), ErrorCodes::CANNOT_FTRUNCATE);
+        DB::throwFromErrno(fmt::format("Cannot truncate file: {}. ", file->getFileName()), ErrorCodes::CANNOT_FTRUNCATE);
 }
 
-
+// TODO: split current api into V2 and V3.
+// Too many args in this function.
+// Also split read
 template <typename T>
 void writeFile(
     T & file,
@@ -143,10 +162,10 @@ void writeFile(
     char * data,
     size_t to_write,
     const WriteLimiterPtr & write_limiter = nullptr,
+    const bool background = false,
+    const bool truncate_if_failed = true,
     [[maybe_unused]] bool enable_failpoint = false)
 {
-    ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
-
     if (write_limiter)
         write_limiter->request(to_write);
 
@@ -176,15 +195,21 @@ void writeFile(
             {
                 ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
                 auto saved_errno = errno;
-                // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
-                // Note that the result of this ftruncate is ignored, there is nothing we can do to
-                // handle ftruncate error. The errno may change after ftruncate called.
-                int truncate_res = ::ftruncate(file->getFd(), offset);
+
+                int truncate_res = 0;
+                // If write failed in V3, Don't do truncate
+                if (truncate_if_failed)
+                {
+                    // If error occurs, apply `ftruncate` try to truncate the broken bytes we have written.
+                    // Note that the result of this ftruncate is ignored, there is nothing we can do to
+                    // handle ftruncate error. The errno may change after ftruncate called.
+                    truncate_res = ::ftruncate(file->getFd(), offset);
+                }
 
                 DB::throwFromErrno(fmt::format("Cannot write to file {},[truncate_res = {}],[errno_after_truncate = {}],"
                                                "[bytes_written={},to_write={},offset = {}]",
                                                file->getFileName(),
-                                               truncate_res,
+                                               truncate_if_failed ? DB::toString(truncate_res) : "no need truncate",
                                                strerror(errno),
                                                bytes_written,
                                                to_write,
@@ -198,6 +223,12 @@ void writeFile(
             bytes_written += res;
     }
     ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls, write_io_calls);
+    ProfileEvents::increment(ProfileEvents::PSMWriteBytes, bytes_written);
+
+    if (background)
+    {
+        ProfileEvents::increment(ProfileEvents::PSMBackgroundWriteBytes, bytes_written);
+    }
 }
 
 template <typename T>
@@ -205,7 +236,8 @@ void readFile(T & file,
               const off_t offset,
               const char * buf,
               size_t expected_bytes,
-              const ReadLimiterPtr & read_limiter = nullptr)
+              const ReadLimiterPtr & read_limiter = nullptr,
+              const bool background = false)
 {
     if (unlikely(expected_bytes == 0))
         return;
@@ -235,7 +267,7 @@ void readFile(T & file,
         if (-1 == res && errno != EINTR)
         {
             ProfileEvents::increment(ProfileEvents::PSMReadFailed);
-            DB::throwFromErrno("Cannot read from file " + file->getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+            DB::throwFromErrno(fmt::format("Cannot read from file {}.", file->getFileName()), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
         }
 
         if (res > 0)
@@ -243,9 +275,14 @@ void readFile(T & file,
     }
     ProfileEvents::increment(ProfileEvents::PSMReadIOCalls, read_io_calls);
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
+    if (background)
+    {
+        ProfileEvents::increment(ProfileEvents::PSMBackgroundReadBytes, bytes_read);
+    }
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::TiFlashException("Not enough data in file " + file->getFileName(), Errors::PageStorage::FileSizeNotMatch);
+        throw DB::TiFlashException(fmt::format("No enough data in file {}, read bytes: {} , expected bytes: {}", file->getFileName(), bytes_read, expected_bytes),
+                                   Errors::PageStorage::FileSizeNotMatch);
 }
 
 /// Write and advance sizeof(T) bytes.

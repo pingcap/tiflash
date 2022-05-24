@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -60,7 +74,7 @@ protected:
     {
         TiFlashStorageTestBasic::reload(std::move(db_settings));
         storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
+        storage_pool = std::make_unique<StoragePool>(*db_context, /*ns_id*/ 100, *storage_path_pool, "test.t1");
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
@@ -194,6 +208,43 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
         }
+    }
+}
+CATCH
+
+TEST_F(Segment_test, WriteRead2)
+try
+{
+    const size_t num_rows_write = dmContext().stable_pack_rows;
+    {
+        // write a block with rows all deleted
+        Block block = DMTestEnv::prepareBlockWithTso(2, 100, 100 + num_rows_write, false, true);
+        segment->write(dmContext(), block);
+        // write not deleted rows with larger pk
+        Block block2 = DMTestEnv::prepareBlockWithTso(3, 100, 100 + num_rows_write, false, false);
+        segment->write(dmContext(), block2);
+
+        // flush segment and make sure there is two packs in stable
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+    }
+
+    {
+        Block block = DMTestEnv::prepareBlockWithTso(1, 100, 100 + num_rows_write, false, false);
+        segment->write(dmContext(), block);
+    }
+
+    {
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        // only write two visible pks
+        ASSERT_EQ(num_rows_read, 2);
     }
 }
 CATCH
@@ -356,7 +407,7 @@ try
             snap,
             {RowKeyRange::newAll(false, 1)},
             {},
-            MAX_UINT64,
+            std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         int num_rows_read = 0;
         in->readPrefix();
@@ -898,11 +949,17 @@ CATCH
 TEST_F(Segment_test, Split)
 try
 {
-    const size_t num_rows_write = 100;
+    const size_t num_rows_write_per_batch = 100;
+    const size_t num_rows_write = num_rows_write_per_batch * 2;
     {
-        // write to segment
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(dmContext(), std::move(block));
+        // write to segment and flush
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write_per_batch, false);
+        segment->write(dmContext(), std::move(block), true);
+    }
+    {
+        // write to segment and don't flush
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write_per_batch, 2 * num_rows_write_per_batch, false);
+        segment->write(dmContext(), std::move(block), false);
     }
 
     {
@@ -938,7 +995,7 @@ try
     size_t num_rows_seg2 = 0;
     {
         {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -947,7 +1004,7 @@ try
             in->readSuffix();
         }
         {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = new_segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -958,9 +1015,13 @@ try
         ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
     }
 
+    // delete rows in the right segment
+    {
+        new_segment->write(dmContext(), /*delete_range*/ new_segment->getRowKeyRange());
+        new_segment->flushCache(dmContext());
+    }
+
     // merge segments
-    // TODO: enable merge test!
-    if (false)
     {
         segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
         {
@@ -979,7 +1040,7 @@ try
                 num_rows_read += block.rows();
             }
             in->readSuffix();
-            EXPECT_EQ(num_rows_read, num_rows_write);
+            EXPECT_EQ(num_rows_read, num_rows_seg1);
         }
     }
 }
@@ -1229,7 +1290,7 @@ public:
         Segment_test::SetUp();
     }
 
-    std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
     {
         auto delegator = context.path_pool.getStableDiskDelegator();
         auto file_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
@@ -1278,12 +1339,12 @@ try
                 auto file_id = file_ids[0];
                 auto file_parent_path = delegate.getDTFilePath(file_id);
                 auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto pack = std::make_shared<DeltaPackFile>(dmContext(), file, range);
+                auto column_file = std::make_shared<ColumnFileBig>(dmContext(), file, range);
                 WriteBatches wbs(*storage_pool);
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->ingestPacks(dmContext(), range, {pack}, false);
+                segment->ingestColumnFiles(dmContext(), range, {column_file}, false);
                 break;
             }
             default:
@@ -1755,10 +1816,10 @@ try
     }
 
     {
-        auto & stable = segment->getStable();
+        const auto & stable = segment->getStable();
         ASSERT_GT(stable->getDMFiles()[0]->getPacks(), (size_t)1);
         ASSERT_EQ(stable->getRows(), num_rows_write_every_round * write_round);
-        // caculate StableProperty
+        // calculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
         auto start = RowKeyValue::fromHandle(0);
         auto end = RowKeyValue::fromHandle(num_rows_write_every_round);
@@ -1766,8 +1827,8 @@ try
         // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
         stable->calculateStableProperty(dmContext(), range, false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
-        auto & property = stable->getStableProperty();
-        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
+        const auto & property = stable->getStableProperty();
+        ASSERT_EQ(property.gc_hint_version, std::numeric_limits<UInt64>::max());
         ASSERT_EQ(property.num_versions, num_rows_write_every_round);
         ASSERT_EQ(property.num_puts, num_rows_write_every_round);
         ASSERT_EQ(property.num_rows, num_rows_write_every_round);
@@ -1817,7 +1878,7 @@ try
         stable->calculateStableProperty(dmContext(), range, false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
         auto & property = stable->getStableProperty();
-        ASSERT_EQ(property.gc_hint_version, UINT64_MAX);
+        ASSERT_EQ(property.gc_hint_version, std::numeric_limits<UInt64>::max());
         ASSERT_EQ(property.num_versions, num_rows_write_every_round);
         ASSERT_EQ(property.num_puts, num_rows_write_every_round);
         ASSERT_EQ(property.num_rows, num_rows_write_every_round);

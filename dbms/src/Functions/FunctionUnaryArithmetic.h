@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnConst.h>
@@ -23,6 +37,7 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/ExpressionActions.h>
 #include <common/intExp.h>
+#include <fmt/core.h>
 
 #include <boost/integer/common_factor.hpp>
 #include <ext/range.h>
@@ -154,7 +169,6 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         DataTypePtr result;
-
         if (!(checkType<DataTypeUInt8>(arguments, result)
               || checkType<DataTypeUInt16>(arguments, result)
               || checkType<DataTypeUInt32>(arguments, result)
@@ -170,7 +184,7 @@ public:
               || checkType<DataTypeDecimal256>(arguments, result)
               || checkType<DataTypeFloat64>(arguments, result)))
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return result;
@@ -193,8 +207,7 @@ public:
               || executeType<Float32>(block, arguments, result)
               || executeType<Float64>(block, arguments, result)))
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                    + " of argument of function " + getName(),
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 

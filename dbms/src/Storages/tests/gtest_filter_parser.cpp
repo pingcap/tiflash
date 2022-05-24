@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
@@ -40,14 +54,14 @@ public:
     }
 
     FilterParserTest()
-        : log(&Poco::Logger::get("FilterParserTest"))
+        : log(Logger::get("FilterParserTest"))
         , ctx(TiFlashTestEnv::getContext())
     {
         default_timezone_info = ctx.getTimezoneInfo();
     }
 
 protected:
-    Poco::Logger * log;
+    LoggerPtr log;
     Context ctx;
     static TimezoneInfo default_timezone_info;
     DM::RSOperatorPtr generateRsOperator(String table_info_json, const String & query, TimezoneInfo & timezone_info);
@@ -84,7 +98,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     DM::ColumnDefines columns_to_read;
     {
         NamesAndTypes source_columns;
-        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info, log);
+        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info, log->getLog());
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
             DAGPreparedSets(),
@@ -356,24 +370,6 @@ try
 }
 CATCH
 
-static void setTimezoneByOffset(TimezoneInfo & timezone_info, Int64 offset)
-{
-    timezone_info.is_name_based = false;
-    timezone_info.timezone_offset = offset * 3600;
-    timezone_info.timezone = &DateLUT::instance("UTC");
-    timezone_info.timezone_name = "";
-    timezone_info.is_utc_timezone = offset == 0;
-}
-
-static void setTimezoneByName(TimezoneInfo & timezone_info, const String & name)
-{
-    timezone_info.is_name_based = true;
-    timezone_info.timezone_offset = 0;
-    timezone_info.timezone = &DateLUT::instance(name);
-    timezone_info.timezone_name = timezone_info.timezone->getTimeZone();
-    timezone_info.is_utc_timezone = timezone_info.timezone_name == "UTC";
-}
-
 // Test cases for date,datetime,timestamp column
 TEST_F(FilterParserTest, TimestampColumn)
 try
@@ -414,7 +410,7 @@ try
         // Greater between TimeStamp col and Datetime literal, use Chicago timezone
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx.getTimezoneInfo();
-        setTimezoneByName(timezone_info, "America/Chicago");
+        timezone_info.resetByTimezoneName("America/Chicago");
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
         auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);
@@ -429,7 +425,7 @@ try
         // Greater between TimeStamp col and Datetime literal, use Chicago timezone
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx.getTimezoneInfo();
-        setTimezoneByOffset(timezone_info, 28800);
+        timezone_info.resetByTimezoneOffset(28800);
         convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
 
         auto rs_operator = generateRsOperator(table_info_json, String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime + String("')"), timezone_info);

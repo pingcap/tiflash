@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Stopwatch.h>
 #include <Databases/DatabasesCommon.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
@@ -113,13 +127,13 @@ std::pair<String, StoragePtr> createTableFromDefinition(const String & definitio
 
 bool DatabaseWithOwnTablesBase::isTableExist(const Context & /*context*/, const String & table_name) const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return tables.find(table_name) != tables.end();
 }
 
 StoragePtr DatabaseWithOwnTablesBase::tryGetTable(const Context & /*context*/, const String & table_name) const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     auto it = tables.find(table_name);
     if (it == tables.end())
         return {};
@@ -128,13 +142,13 @@ StoragePtr DatabaseWithOwnTablesBase::tryGetTable(const Context & /*context*/, c
 
 DatabaseIteratorPtr DatabaseWithOwnTablesBase::getIterator(const Context & /*context*/)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return std::make_unique<DatabaseSnapshotIterator>(tables);
 }
 
 bool DatabaseWithOwnTablesBase::empty(const Context & /*context*/) const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     return tables.empty();
 }
 
@@ -142,7 +156,7 @@ StoragePtr DatabaseWithOwnTablesBase::detachTable(const String & table_name)
 {
     StoragePtr res;
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         auto it = tables.find(table_name);
         if (it == tables.end())
             throw Exception(fmt::format("Table {}.{} dosen't exist.", name, table_name), ErrorCodes::UNKNOWN_TABLE);
@@ -155,7 +169,7 @@ StoragePtr DatabaseWithOwnTablesBase::detachTable(const String & table_name)
 
 void DatabaseWithOwnTablesBase::attachTable(const String & table_name, const StoragePtr & table)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     if (!tables.emplace(table_name, table).second)
         throw Exception(fmt::format("Table {}.{} already exists.", name, table_name), ErrorCodes::TABLE_ALREADY_EXISTS);
 }
@@ -167,7 +181,7 @@ void DatabaseWithOwnTablesBase::shutdown()
 
     Tables tables_snapshot;
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
         tables_snapshot = tables;
     }
 
@@ -176,7 +190,7 @@ void DatabaseWithOwnTablesBase::shutdown()
         kv.second->shutdown();
     }
 
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
     tables.clear();
 }
 
@@ -184,7 +198,7 @@ DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
 {
     try
     {
-        shutdown();
+        DatabaseWithOwnTablesBase::shutdown();
     }
     catch (...)
     {
@@ -334,9 +348,9 @@ void cleanupTables(IDatabase & database, const String & db_name, const Tables & 
     if (tables.empty())
         return;
 
-    for (auto it = tables.begin(); it != tables.end(); ++it)
+    for (const auto & table : tables)
     {
-        const String & table_name = it->first;
+        const String & table_name = table.first;
         LOG_FMT_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", db_name, table_name);
         const String table_meta_path = database.getTableMetadataPath(table_name);
         if (!table_meta_path.empty())
@@ -404,7 +418,9 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
         else
             std::advance(end, bunch_size);
 
-        auto task = std::bind(task_function, begin, end);
+        auto task = [&task_function, begin, end] {
+            task_function(begin, end);
+        };
 
         if (thread_pool)
             thread_pool->schedule(task);

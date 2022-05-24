@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 ## abs()
 mysql> drop table if exists test.t;
 mysql> create table test.t (int_8 tinyint,uint_8 tinyint unsigned, int_16 smallint, uint_16 smallint unsigned,int_32 int, uint_32 int unsigned, int_64 bigint, uint_64 bigint unsigned, float_32 float, double_64 double, dec_3_2 decimal(3,2),dec_1_0 decimal(1,0), dec_65_30 decimal(65,30));
@@ -96,3 +110,25 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_al
 | NULL                 | NULL | NULL | NULL | NULL                 | NULL | NULL       |        2 |
 | 平凯xingchen公司     |      | 平   |      | 平凯xingchen公司     | NULL | NULL       |        1 |
 +----------------------+------+------+------+----------------------+------+------------+----------+
+
+## test overflow int128, uint128 or not.
+mysql> drop table if exists test.t;
+mysql> CREATE TABLE test.t (v1 decimal(20,20),v2 decimal(30,0));
+mysql> insert into test.t values (0.00000000000000000000 , 2585910611040796672),(0.00000000000000000000 , -1901644942657191936), (0.00000000000000000000 , -11901644942657191936),(0.00000000000000000000 , 25859106110407966722),(0.00000000000000000000 , 2585912),(0.00000000000000000000 , -190);
+mysql> alter table test.t set tiflash replica 1;
+
+mysql> analyze table test.t;
+
+func> wait_table test t
+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_enforce_mpp=1; select v1,v2,v1>v2,v1>=v2, v1<v2,v1<=v2 from test.t;
++------------------------+-----------------------+-------+--------+-------+--------+
+| v1                     | v2                    | v1>v2 | v1>=v2 | v1<v2 | v1<=v2 |
++------------------------+-----------------------+-------+--------+-------+--------+
+| 0.00000000000000000000 |   2585910611040796672 |     0 |      0 |     1 |      1 |
+| 0.00000000000000000000 |  -1901644942657191936 |     1 |      1 |     0 |      0 |
+| 0.00000000000000000000 | -11901644942657191936 |     1 |      1 |     0 |      0 |
+| 0.00000000000000000000 |  25859106110407966722 |     0 |      0 |     1 |      1 |
+| 0.00000000000000000000 |               2585912 |     0 |      0 |     1 |      1 |
+| 0.00000000000000000000 |                  -190 |     1 |      1 |     0 |      0 |
++------------------------+-----------------------+-------+--------+-------+--------+

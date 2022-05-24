@@ -1,9 +1,24 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
-#include <Poco/Logger.h>
+#include <Storages/Page/PageUtil.h>
+#include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -11,41 +26,70 @@
 namespace DB::PS::V3
 {
 LogWriter::LogWriter(
-    std::unique_ptr<WriteBufferFromFileBase> && dest_,
+    String path_,
+    const FileProviderPtr & file_provider_,
     Format::LogNumberType log_number_,
     bool recycle_log_files_,
     bool manual_flush_)
-    : dest(std::move(dest_))
+    : path(path_)
+    , file_provider(file_provider_)
     , block_offset(0)
     , log_number(log_number_)
     , recycle_log_files(recycle_log_files_)
     , manual_flush(manual_flush_)
+    , write_buffer(nullptr, 0)
 {
+    log_file = file_provider->newWritableFile(
+        path,
+        EncryptionPath(path, ""),
+        false,
+        /*create_new_encryption_info_*/ true);
+
+    buffer = static_cast<char *>(alloc(buffer_size));
+    write_buffer = WriteBuffer(buffer, buffer_size);
+}
+
+void LogWriter::resetBuffer()
+{
+    write_buffer = WriteBuffer(buffer, buffer_size);
 }
 
 LogWriter::~LogWriter()
 {
-    if (dest)
-    {
-        flush();
-    }
+    log_file->fsync();
+    log_file->close();
+
+    free(buffer, buffer_size);
 }
 
-void LogWriter::flush()
+size_t LogWriter::writtenBytes() const
 {
-    dest->sync();
+    return written_bytes;
+}
+
+void LogWriter::flush(const WriteLimiterPtr & write_limiter, const bool background)
+{
+    PageUtil::writeFile(log_file,
+                        written_bytes,
+                        write_buffer.buffer().begin(),
+                        write_buffer.offset(),
+                        write_limiter,
+                        /*background=*/background,
+                        /*truncate_if_failed=*/false,
+                        /*enable_failpoint=*/false);
+    log_file->fsync();
+    written_bytes += write_buffer.offset();
+
+    // reset the write_buffer
+    resetBuffer();
 }
 
 void LogWriter::close()
 {
-    if (dest)
-    {
-        dest->close();
-        dest.reset();
-    }
+    log_file->close();
 }
 
-void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
+void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const WriteLimiterPtr & write_limiter)
 {
     // Header size varies depending on whether we are recycling or not.
     const int header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
@@ -54,6 +98,17 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
     // we still want to iterate once to emit a single zero-length record.
     bool begin = true;
     size_t payload_left = payload_size;
+
+    size_t head_sizes = ((payload_size / Format::BLOCK_SIZE) + 1) * Format::RECYCLABLE_HEADER_SIZE;
+    if (payload_size + head_sizes >= buffer_size)
+    {
+        size_t new_buff_size = payload_size + ((head_sizes / Format::BLOCK_SIZE) + 1) * Format::BLOCK_SIZE;
+
+        buffer = static_cast<char *>(realloc(buffer, buffer_size, new_buff_size));
+        buffer_size = new_buff_size;
+        resetBuffer();
+    }
+
     do
     {
         const Int64 leftover = Format::BLOCK_SIZE - block_offset;
@@ -65,7 +120,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
             {
                 // Fill the trailer with all zero
                 static constexpr char MAX_ZERO_HEADER[Format::RECYCLABLE_HEADER_SIZE]{'\x00'};
-                writeString(MAX_ZERO_HEADER, leftover, *dest);
+                writeString(MAX_ZERO_HEADER, leftover, write_buffer);
             }
             block_offset = 0;
         }
@@ -91,7 +146,9 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size)
     } while (payload.hasPendingData());
 
     if (!manual_flush)
-        dest->sync();
+    {
+        flush(write_limiter, /* background */ false);
+    }
 }
 
 void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload, size_t length)
@@ -102,7 +159,7 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::CHECKSUM_FIELD_SIZE, "Header size must be greater than the checksum size");
     static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::HEADER_SIZE, "Ensure the min buffer size for physical record");
     constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - Format::CHECKSUM_FIELD_SIZE;
-    char buf[HEADER_BUFF_SIZE];
+    char buf[HEADER_BUFF_SIZE] = {0};
     WriteBuffer header_buff(buf, HEADER_BUFF_SIZE);
 
     // Format the header
@@ -140,9 +197,9 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     // Write the checksum, header and the payload
     digest.update(payload.position(), length);
     Format::ChecksumType checksum = digest.checksum();
-    writeIntBinary(checksum, *dest);
-    writeString(header_buff.buffer().begin(), header_buff.count(), *dest);
-    writeString(payload.position(), length, *dest);
+    writeIntBinary(checksum, write_buffer);
+    writeString(header_buff.buffer().begin(), header_buff.count(), write_buffer);
+    writeString(payload.position(), length, write_buffer);
 
     block_offset += header_size + length;
 }

@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>
@@ -22,12 +36,17 @@ class Context;
 bool isSourceNode(const tipb::Executor * root)
 {
     return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan
-        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection;
+        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection
+        || root->tp() == tipb::ExecType::TypePartitionTableScan
+        || root->tp() == tipb::ExecType::TypeWindow
+        || (root->tp() == tipb::ExecType::TypeSort && root->sort().ispartialsort());
 }
 
 const static String SOURCE_NAME("source");
 const static String SEL_NAME("selection");
 const static String AGG_NAME("aggregation");
+const static String WINDOW_NAME("window");
+const static String WINDOW_SORT_NAME("window_sort");
 const static String HAVING_NAME("having");
 const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
@@ -42,33 +61,12 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
     *to = from;
 }
 
-void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, const tipb::Aggregation & agg)
-{
-    for (const auto & expr : agg.agg_func())
-    {
-        if (!exprHasValidFieldType(expr))
-        {
-            throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
-        }
-        field_type.push_back(expr.field_type());
-    }
-    for (const auto & expr : agg.group_by())
-    {
-        if (!exprHasValidFieldType(expr))
-        {
-            throw TiFlashException("Group by expression without valid field type", Errors::Coprocessor::BadRequest);
-        }
-        field_type.push_back(expr.field_type());
-    }
-}
-
 /// construct DAGQueryBlock from a tree struct based executors, which is the
 /// format after supporting join in dag request
 DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator & id_generator)
     : id(id_generator.nextBlockID())
     , root(&root_)
     , qb_column_prefix("__QB_" + std::to_string(id) + "_")
-    , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
     while (!isSourceNode(current) && current->has_executor_id())
@@ -100,24 +98,23 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
             GET_METRIC(tiflash_coprocessor_executor_count, type_agg).Increment();
             assignOrThrowException(&aggregation, current, AGG_NAME);
             aggregation_name = current->executor_id();
-            collectOutPutFieldTypesFromAgg(output_field_types, current->aggregation());
             current = &current->aggregation().child();
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
-            assignOrThrowException(&limitOrTopN, current, LIMIT_NAME);
-            limitOrTopN_name = current->executor_id();
+            assignOrThrowException(&limit_or_topn, current, LIMIT_NAME);
+            limit_or_topn_name = current->executor_id();
             current = &current->limit().child();
             break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
-            assignOrThrowException(&limitOrTopN, current, TOPN_NAME);
-            limitOrTopN_name = current->executor_id();
+            assignOrThrowException(&limit_or_topn, current, TOPN_NAME);
+            limit_or_topn_name = current->executor_id();
             current = &current->topn().child();
             break;
         case tipb::ExecType::TypeExchangeSender:
             GET_METRIC(tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
-            assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
+            assignOrThrowException(&exchange_sender, current, EXCHANGE_SENDER_NAME);
             exchange_sender_name = current->executor_id();
             current = &current->exchange_sender().child();
             break;
@@ -154,7 +151,20 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
     }
-    fillOutputFieldTypes();
+    else if (current->tp() == tipb::ExecType::TypePartitionTableScan)
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
+    }
+    else if (current->tp() == tipb::ExecType::TypeWindow)
+    {
+        children.push_back(std::make_shared<DAGQueryBlock>(source->window().child(), id_generator));
+        GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
+    }
+    else if (current->tp() == tipb::ExecType::TypeSort && current->sort().ispartialsort())
+    {
+        children.push_back(std::make_shared<DAGQueryBlock>(source->sort().child(), id_generator));
+        GET_METRIC(tiflash_coprocessor_executor_count, type_window_sort).Increment();
+    }
 }
 
 /// construct DAGQueryBlock from a list struct based executors, which is the
@@ -163,7 +173,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     : id(id_)
     , root(nullptr)
     , qb_column_prefix("__QB_" + std::to_string(id_) + "_")
-    , qb_join_subquery_alias(qb_column_prefix + "join")
 {
     for (int i = executors.size() - 1; i >= 0; i--)
     {
@@ -197,23 +206,22 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 aggregation_name = executors[i].executor_id();
             else
                 aggregation_name = std::to_string(i) + "_aggregation";
-            collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
             break;
         case tipb::ExecType::TypeTopN:
             GET_METRIC(tiflash_coprocessor_executor_count, type_topn).Increment();
-            assignOrThrowException(&limitOrTopN, &executors[i], TOPN_NAME);
+            assignOrThrowException(&limit_or_topn, &executors[i], TOPN_NAME);
             if (executors[i].has_executor_id())
-                limitOrTopN_name = executors[i].executor_id();
+                limit_or_topn_name = executors[i].executor_id();
             else
-                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
+                limit_or_topn_name = std::to_string(i) + "_limitOrTopN";
             break;
         case tipb::ExecType::TypeLimit:
             GET_METRIC(tiflash_coprocessor_executor_count, type_limit).Increment();
-            assignOrThrowException(&limitOrTopN, &executors[i], LIMIT_NAME);
+            assignOrThrowException(&limit_or_topn, &executors[i], LIMIT_NAME);
             if (executors[i].has_executor_id())
-                limitOrTopN_name = executors[i].executor_id();
+                limit_or_topn_name = executors[i].executor_id();
             else
-                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
+                limit_or_topn_name = std::to_string(i) + "_limitOrTopN";
             break;
         default:
             throw TiFlashException(
@@ -221,103 +229,5 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 Errors::Coprocessor::Unimplemented);
         }
     }
-    fillOutputFieldTypes();
 }
-
-void DAGQueryBlock::fillOutputFieldTypes()
-{
-    /// the top block has exchangeSender, which decides the output fields, keeping the same with exchangeReceiver
-    if (exchangeSender != nullptr && exchangeSender->has_exchange_sender() && !exchangeSender->exchange_sender().all_field_types().empty())
-    {
-        output_field_types.clear();
-        for (auto & field_type : exchangeSender->exchange_sender().all_field_types())
-        {
-            output_field_types.push_back(field_type);
-        }
-        return;
-    }
-    /// the non-top block
-    if (!output_field_types.empty())
-    {
-        return;
-    }
-    if (source->tp() == tipb::ExecType::TypeJoin)
-    {
-        for (auto & field_type : children[0]->output_field_types)
-        {
-            if (source->join().join_type() == tipb::JoinType::TypeRightOuterJoin)
-            {
-                /// the type of left column for right join is always nullable
-                auto updated_field_type = field_type;
-                updated_field_type.set_flag(static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
-                output_field_types.push_back(updated_field_type);
-            }
-            else
-            {
-                output_field_types.push_back(field_type);
-            }
-        }
-        if (source->join().join_type() != tipb::JoinType::TypeSemiJoin && source->join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
-        {
-            /// for semi/anti semi join, the right table column is ignored
-            for (auto & field_type : children[1]->output_field_types)
-            {
-                if (source->join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
-                {
-                    /// the type of right column for left join is always nullable
-                    auto updated_field_type = field_type;
-                    updated_field_type.set_flag(updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
-                    output_field_types.push_back(updated_field_type);
-                }
-                else
-                {
-                    output_field_types.push_back(field_type);
-                }
-            }
-        }
-    }
-    else if (source->tp() == tipb::ExecType::TypeExchangeReceiver)
-    {
-        for (const auto & field_type : source->exchange_receiver().field_types())
-        {
-            output_field_types.push_back(field_type);
-        }
-    }
-    else if (source->tp() == tipb::ExecType::TypeProjection)
-    {
-        for (const auto & expr : source->projection().exprs())
-        {
-            output_field_types.push_back(expr.field_type());
-        }
-    }
-    else
-    {
-        for (const auto & ci : source->tbl_scan().columns())
-        {
-            tipb::FieldType field_type;
-            field_type.set_tp(ci.tp());
-            field_type.set_flag(ci.flag());
-            field_type.set_flen(ci.columnlen());
-            field_type.set_decimal(ci.decimal());
-            for (const auto & elem : ci.elems())
-            {
-                field_type.add_elems(elem);
-            }
-            output_field_types.push_back(field_type);
-        }
-    }
-}
-
-void DAGQueryBlock::collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result)
-{
-    std::vector<String> all_qb_join_subquery_alias;
-    for (auto & child : children)
-    {
-        child->collectAllPossibleChildrenJoinSubqueryAlias(result);
-        all_qb_join_subquery_alias.insert(all_qb_join_subquery_alias.end(), result[child->id].begin(), result[child->id].end());
-    }
-    all_qb_join_subquery_alias.push_back(qb_join_subquery_alias);
-    result[id] = all_qb_join_subquery_alias;
-}
-
 } // namespace DB

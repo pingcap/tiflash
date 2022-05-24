@@ -1,32 +1,47 @@
-#include <Storages/StorageJoin.h>
-#include <Storages/StorageFactory.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/typeid_cast.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Common/typeid_cast.h>
-
-#include <Poco/String.h>    /// toLower
+#include <Poco/String.h> /// toLower
+#include <Storages/StorageFactory.h>
+#include <Storages/StorageJoin.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int NO_SUCH_COLUMN_IN_TABLE;
-    extern const int INCOMPATIBLE_TYPE_OF_JOIN;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int NO_SUCH_COLUMN_IN_TABLE;
+extern const int INCOMPATIBLE_TYPE_OF_JOIN;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 StorageJoin::StorageJoin(
     const String & path_,
     const String & name_,
     const Names & key_names_,
-    ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_,
+    ASTTableJoin::Kind kind_,
+    ASTTableJoin::Strictness strictness_,
     const ColumnsDescription & columns_)
-    : StorageSetOrJoinBase{path_, name_, columns_},
-    key_names(key_names_), kind(kind_), strictness(strictness_)
+    : StorageSetOrJoinBase{path_, name_, columns_}
+    , key_names(key_names_)
+    , kind(kind_)
+    , strictness(strictness_)
 {
     for (const auto & key : key_names)
         if (!getColumns().hasPhysical(key))
@@ -36,7 +51,7 @@ StorageJoin::StorageJoin(
 
     /// NOTE StorageJoin doesn't use join_use_nulls setting.
 
-    join = std::make_shared<Join>(key_names, key_names, false /* use_nulls */, SizeLimits(), kind, strictness);
+    join = std::make_shared<Join>(key_names, key_names, false /* use_nulls */, SizeLimits(), kind, strictness, /*req_id=*/"");
     join->setSampleBlock(getSampleBlock().sortColumns());
     restore();
 }
@@ -50,14 +65,19 @@ void StorageJoin::assertCompatible(ASTTableJoin::Kind kind_, ASTTableJoin::Stric
 }
 
 
-void StorageJoin::insertBlock(const Block & block) { join->insertFromBlock(block); }
-size_t StorageJoin::getSize() const { return join->getTotalRowCount(); };
+void StorageJoin::insertBlock(const Block & block)
+{
+    join->insertFromBlock(block);
+}
+size_t StorageJoin::getSize() const
+{
+    return join->getTotalRowCount();
+};
 
 
 void registerStorageJoin(StorageFactory & factory)
 {
-    factory.registerStorage("Join", [](const StorageFactory::Arguments & args)
-    {
+    factory.registerStorage("Join", [](const StorageFactory::Arguments & args) {
         /// Join(ANY, LEFT, k1, k2, ...)
 
         ASTs & engine_args = args.engine_args;
@@ -109,10 +129,13 @@ void registerStorageJoin(StorageFactory & factory)
         }
 
         return StorageJoin::create(
-            args.data_path, args.table_name,
-            key_names, kind, strictness,
+            args.data_path,
+            args.table_name,
+            key_names,
+            kind,
+            strictness,
             args.columns);
     });
 }
 
-}
+} // namespace DB

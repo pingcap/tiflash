@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <AggregateFunctions/Helpers.h>
@@ -36,7 +50,7 @@ private:
     }
 
 public:
-    MinMaxIndex(const IDataType & type)
+    explicit MinMaxIndex(const IDataType & type)
         : has_null_marks(std::make_shared<PaddedPODArray<UInt8>>())
         , has_value_marks(std::make_shared<PaddedPODArray<UInt8>>())
         , minmaxes(type.createColumn())
@@ -51,6 +65,7 @@ public:
     void addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark);
 
     void write(const IDataType & type, WriteBuffer & buf);
+
     static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf, size_t bytes_limit);
 
     std::pair<Int64, Int64> getIntMinMax(size_t pack_index);
@@ -65,7 +80,7 @@ public:
     RSResult checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
     RSResult checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
 
-    String toString() const;
+    static String toString();
 };
 
 

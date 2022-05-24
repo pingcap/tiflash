@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Columns/ColumnAggregateFunction.h>
@@ -13,17 +27,16 @@
 #include <Common/HashTable/StringHashMap.h>
 #include <Common/HashTable/TwoLevelHashMap.h>
 #include <Common/HashTable/TwoLevelStringHashMap.h>
-#include <Common/LogWithPrefix.h>
+#include <Common/Logger.h>
+#include <Common/ThreadManager.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
 #include <Encryption/FileProvider.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
-#include <Interpreters/Compiler.h>
 #include <Poco/TemporaryFile.h>
 #include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
-#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <functional>
@@ -488,8 +501,14 @@ struct AggregatedDataVariants : private boost::noncopyable
         : aggregates_pools(1, std::make_shared<Arena>())
         , aggregates_pool(aggregates_pools.back().get())
     {}
-    bool empty() const { return type == Type::EMPTY; }
-    void invalidate() { type = Type::EMPTY; }
+    bool empty() const
+    {
+        return type == Type::EMPTY;
+    }
+    void invalidate()
+    {
+        type = Type::EMPTY;
+    }
 
     ~AggregatedDataVariants();
 
@@ -693,6 +712,7 @@ public:
         AggregateDescriptions aggregates;
         size_t keys_size;
         size_t aggregates_size;
+        Int64 local_delta_memory = 0;
 
         /// The settings of approximate calculation of GROUP BY.
         const bool overflow_row; /// Do we need to put into AggregatedDataVariants::without_key aggregates for keys that are not in max_rows_to_group_by.
@@ -775,7 +795,7 @@ public:
     };
 
 
-    explicit Aggregator(const Params & params_, const LogWithPrefixPtr & log_ = nullptr);
+    Aggregator(const Params & params_, const String & req_id);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
@@ -786,8 +806,14 @@ public:
     using AggregateFunctionsPlainPtrs = std::vector<IAggregateFunction *>;
 
     /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
-    bool executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider, ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-                        bool & no_more_keys);
+    bool executeOnBlock(
+        const Block & block,
+        AggregatedDataVariants & result,
+        const FileProviderPtr & file_provider,
+        ColumnRawPtrs & key_columns,
+        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
+        Int64 & local_delta_memory,
+        bool & no_more_keys);
 
     /** Convert the aggregation data structure into a block.
       * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
@@ -842,7 +868,7 @@ public:
 
         bool empty() const
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard lock(mutex);
             return files.empty();
         }
     };
@@ -893,9 +919,11 @@ protected:
     /// How many RAM were used to process the query before processing the first block.
     Int64 memory_usage_before_aggregation = 0;
 
+    std::atomic<Int64> local_memory_usage = 0;
+
     std::mutex mutex;
 
-    const LogWithPrefixPtr log;
+    const LoggerPtr log;
 
     /// Returns true if you can abort the current task.
     CancellationHook isCancelled;
@@ -939,11 +967,11 @@ protected:
         AggregateDataPtr overflow_row) const;
 
     /// For case when there are no keys (all aggregate into one row).
-    void executeWithoutKeyImpl(
+    static void executeWithoutKeyImpl(
         AggregatedDataWithoutKey & res,
         size_t rows,
         AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena) const;
+        Arena * arena);
 
     template <typename Method>
     void writeToTemporaryFileImpl(
@@ -1035,14 +1063,19 @@ protected:
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows) const;
     Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const;
-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const;
+    BlocksList prepareBlocksAndFillTwoLevel(
+        AggregatedDataVariants & data_variants,
+        bool final,
+        ThreadPoolManager * thread_pool,
+        size_t max_threads) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
         AggregatedDataVariants & data_variants,
         Method & method,
         bool final,
-        ThreadPool * thread_pool) const;
+        ThreadPoolManager * thread_pool,
+        size_t max_threads) const;
 
     template <bool no_more_keys, typename Method, typename Table>
     void mergeStreamsImplCase(

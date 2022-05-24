@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Storages/Transaction/RegionData.h>
@@ -15,6 +29,11 @@ class ReadIndexRequest;
 
 namespace DB
 {
+namespace tests
+{
+class RegionKVStoreTest;
+}
+
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
@@ -114,7 +133,7 @@ public:
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
-    std::string getDebugString(std::stringstream & ss) const;
+    std::string getDebugString() const;
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
@@ -142,12 +161,10 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
-    ReadIndexResult learnerRead(UInt64 start_ts);
-
     bool checkIndex(UInt64 index) const;
 
     // Return <WaitIndexResult, time cost(seconds)> for wait-index.
-    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const TMTContext & tmt);
+    std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running);
 
     UInt64 appliedIndex() const;
 
@@ -187,6 +204,7 @@ private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
     friend class RegionMockTest;
+    friend class tests::RegionKVStoreTest;
 
     // Private methods no need to lock mutex, normally
 
@@ -229,6 +247,8 @@ public:
     UInt64 appliedIndex();
 
 private:
+    friend class tests::RegionKVStoreTest;
+
     RegionRaftCommandDelegate() = delete;
 
     Regions execBatchSplit(

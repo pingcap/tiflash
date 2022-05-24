@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 namespace DB
 {
 namespace ErrorCodes
@@ -375,6 +389,7 @@ extern const int CANNOT_MPROTECT = 445;
 extern const int DECIMAL_OVERFLOW = 446;
 extern const int CANNOT_PARSE_BOOL = 447;
 extern const int CANNOT_FTRUNCATE = 448;
+extern const int UNKNOWN_WINDOW_FUNCTION = 449;
 
 extern const int KEEPER_EXCEPTION = 999;
 extern const int POCO_EXCEPTION = 1000;
@@ -409,6 +424,7 @@ extern const int DEADLOCK_AVOIDED = 10013;
 extern const int PTHREAD_ERROR = 10014;
 extern const int PS_ENTRY_NOT_EXISTS = 10015;
 extern const int PS_ENTRY_NO_VALID_VERSION = 10016;
+extern const int PS_DIR_APPLY_INVALID_STATUS = 10017;
 } // namespace ErrorCodes
 
 } // namespace DB

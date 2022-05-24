@@ -1,10 +1,25 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
-#include <Core/Row.h>
-#include <Core/ColumnNumbers.h>
-#include <DataStreams/MergingSortedBlockInputStream.h>
-#include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/IAggregateFunction.h>
+#include <Common/nocopyable.h>
+#include <Core/ColumnNumbers.h>
+#include <Core/Row.h>
+#include <DataStreams/MergingSortedBlockInputStream.h>
 
 
 namespace DB
@@ -12,7 +27,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 
@@ -107,7 +122,7 @@ private:
 
         AggregateDescription() = default;
         AggregateDescription(AggregateDescription &&) = default;
-        AggregateDescription(const AggregateDescription &) = delete;
+        DISALLOW_COPY(AggregateDescription);
     };
 
     /// Stores numbers of key-columns and value-columns.
@@ -120,14 +135,14 @@ private:
     std::vector<AggregateDescription> columns_to_aggregate;
     std::vector<MapDescription> maps_to_sum;
 
-    RowRef current_key;        /// The current primary key.
-    RowRef next_key;           /// The primary key of the next row.
+    RowRef current_key; /// The current primary key.
+    RowRef next_key; /// The primary key of the next row.
 
     Row current_row;
-    bool current_row_is_zero = true;    /// Are all summed columns zero (or empty)? It is updated incrementally.
+    bool current_row_is_zero = true; /// Are all summed columns zero (or empty)? It is updated incrementally.
 
-    bool output_is_non_empty = false;   /// Have we given out at least one row as a result.
-    size_t merged_rows = 0;             /// Number of rows merged into current result block
+    bool output_is_non_empty = false; /// Have we given out at least one row as a result.
+    size_t merged_rows = 0; /// Number of rows merged into current result block
 
     /** We support two different cursors - with Collation and without.
      *  Templates are used instead of polymorphic SortCursor and calls to virtual functions.
@@ -145,4 +160,4 @@ private:
     void addRow(SortCursor & cursor);
 };
 
-}
+} // namespace DB

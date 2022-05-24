@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Common/Exception.h>
@@ -15,7 +29,6 @@
 
 namespace DB
 {
-
 class Context;
 class IBlockInputStream;
 class IBlockOutputStream;
@@ -43,7 +56,9 @@ class AlterCommands;
   * - data storage structure (compression, etc.)
   * - concurrent access to data (locks, etc.)
   */
-class IStorage : public std::enable_shared_from_this<IStorage>, private boost::noncopyable, public ITableDeclaration
+class IStorage : public std::enable_shared_from_this<IStorage>
+    , private boost::noncopyable
+    , public ITableDeclaration
 {
 public:
     /// The main name of the table type (for example, StorageMergeTree).
@@ -86,7 +101,8 @@ public:
     /// won't be changed by this lock.
     /// After decoding done, we can release alter lock but keep drop lock for writing data.
     TableStructureLockHolder lockStructureForShare(
-        const String & query_id, const std::chrono::milliseconds & acquire_timeout = std::chrono::milliseconds(0));
+        const String & query_id,
+        const std::chrono::milliseconds & acquire_timeout = std::chrono::milliseconds(0));
 
     /// Lock table exclusively. This lock must be acquired if you want to be
     /// sure, that no other thread (SELECT, merge, ALTER, etc.) doing something
@@ -96,7 +112,8 @@ public:
     /// NOTE: You have to be 100% sure that you need this lock. It's extremely
     /// heavyweight and makes table irresponsive.
     TableExclusiveLockHolder lockExclusively(
-        const String & query_id, const std::chrono::milliseconds & acquire_timeout = std::chrono::milliseconds(0));
+        const String & query_id,
+        const std::chrono::milliseconds & acquire_timeout = std::chrono::milliseconds(0));
 
     /** Read a set of columns from the table.
       * Accepts a list of columns to read, as well as a description of the query,
@@ -119,11 +136,11 @@ public:
       * is guaranteed to be immutable once the input streams are returned.
       */
     virtual BlockInputStreams read(const Names & /*column_names*/,
-        const SelectQueryInfo & /*query_info*/,
-        const Context & /*context*/,
-        QueryProcessingStage::Enum & /*processed_stage*/,
-        size_t /*max_block_size*/,
-        unsigned /*num_streams*/)
+                                   const SelectQueryInfo & /*query_info*/,
+                                   const Context & /*context*/,
+                                   QueryProcessingStage::Enum & /*processed_stage*/,
+                                   size_t /*max_block_size*/,
+                                   unsigned /*num_streams*/)
     {
         throw Exception("Method read is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -138,6 +155,11 @@ public:
     {
         throw Exception("Method write is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
+
+    /** Clear the table data. Called before drop the metadata and data of this storage.
+      * The difference with `drop` is that after calling `clearData`, the storage must still be able to be restored.
+      */
+    virtual void clearData() {}
 
     /** Delete the table data. Called before deleting the directory with the data.
       * If you do not need any action other than deleting the directory with data, you can leave this method blank.
@@ -158,8 +180,7 @@ public:
       * This method must fully execute the ALTER query, taking care of the locks itself.
       * To update the table metadata on disk, this method should call InterpreterAlterQuery::updateMetadata.
       */
-    virtual void alter(const TableLockHolder &, const AlterCommands & /*params*/, const String & /*database_name*/,
-        const String & /*table_name*/, const Context & /*context*/)
+    virtual void alter(const TableLockHolder &, const AlterCommands & /*params*/, const String & /*database_name*/, const String & /*table_name*/, const Context & /*context*/)
     {
         throw Exception("Method alter is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -209,7 +230,11 @@ public:
       * Returns whether any work has been done.
       */
     virtual bool optimize(
-        const ASTPtr & /*query*/, const ASTPtr & /*partition*/, bool /*final*/, bool /*deduplicate*/, const Context & /*context*/)
+        const ASTPtr & /*query*/,
+        const ASTPtr & /*partition*/,
+        bool /*final*/,
+        bool /*deduplicate*/,
+        const Context & /*context*/)
     {
         throw Exception("Method optimize is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -259,7 +284,10 @@ protected:
 
 private:
     RWLock::LockHolder tryLockTimed(
-        const RWLockPtr & rwlock, RWLock::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const;
+        const RWLockPtr & rwlock,
+        RWLock::Type type,
+        const String & query_id,
+        const std::chrono::milliseconds & acquire_timeout) const;
 
     /// You always need to take the next two locks in this order.
 

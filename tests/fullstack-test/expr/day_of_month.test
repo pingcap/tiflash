@@ -1,0 +1,41 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t1;
+mysql> create table test.t1 (c_str varchar(100), c_datetime datetime(4), c_date date);
+mysql> insert into test.t1 values('', '1999-10-10 10:10:10.123', '1999-01-10'), ('200', '1999-02-10 10:10:10.123', '1999-11-10'), ('1999-30-10', '1999-10-10 10:10:10.123', '1999-01-10'), ('1999-01-10', '1999-10-10 10:10:10.123', '1999-01-10');
+mysql> alter table test.t1 set tiflash replica 1;
+func> wait_table test t1
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select dayofmonth();
+ERROR 1582 (42000) at line 1: Incorrect parameter count in the call to native function 'dayofmonth'
+
+# invalid input
+mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select dayofmonth(''), dayofmonth('1'), dayofmonth('1999-30-01'), dayofmonth(null);
++----------------+-----------------+--------------------------+------------------+
+| dayofmonth('') | dayofmonth('1') | dayofmonth('1999-30-01') | dayofmonth(null) |
++----------------+-----------------+--------------------------+------------------+
+|           NULL |            NULL |                     NULL |             NULL |
++----------------+-----------------+--------------------------+------------------+
+
+# got bug: https://github.com/pingcap/tics/issues/4186
+# mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; select dayofmonth(c_str), dayofmonth(c_datetime), dayofmonth(c_date) from test.t1 order by 1, 2, 3;
+# +-------------------+------------------------+--------------------+
+# | dayofmonth(c_str) | dayofmonth(c_datetime) | dayofmonth(c_date) |
+# +-------------------+------------------------+--------------------+
+# |              NULL |                     10 |                 10 |
+# |              NULL |                     10 |                 10 |
+# |              NULL |                     10 |                 10 |
+# |                10 |                     10 |                 10 |
+# +-------------------+------------------------+--------------------+

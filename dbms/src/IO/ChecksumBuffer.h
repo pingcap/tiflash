@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 #ifndef TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE
 #define TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE DBMS_DEFAULT_BUFFER_SIZE
@@ -11,20 +25,22 @@
 
 namespace ProfileEvents
 {
-extern const Event ChecksumBufferRead;
-extern const Event ChecksumBufferWrite;
-extern const Event ChecksumBufferReadBytes;
-extern const Event ChecksumBufferWriteBytes;
-extern const Event ChecksumBufferSeek;
+// no need to update sync, since write buffers inherit that directly from `WriteBufferFromFileDescriptor`
+extern const Event WriteBufferFromFileDescriptorWrite;
+extern const Event WriteBufferFromFileDescriptorWriteFailed;
+extern const Event WriteBufferFromFileDescriptorWriteBytes;
+extern const Event ReadBufferFromFileDescriptorRead;
+extern const Event ReadBufferFromFileDescriptorReadBytes;
+extern const Event ReadBufferFromFileDescriptorReadFailed;
 extern const Event Seek;
 } // namespace ProfileEvents
 
 namespace DB
 {
-/*
+/**
  * A frame consists of a header and a body that conforms the following structure:
  *
- *
+ * \code
  * ---------------------------------
  * | > header                      |
  * |   - bytes                     |
@@ -35,7 +51,7 @@ namespace DB
  * |             ...               |
  * |             ...               |
  * ---------------------------------
- *
+ * \endcode
  *
  * When writing a frame, we maintain the buffer than is of the exact size of the data part.
  * Whenever the buffer is full, we digest the whole buffer and update the header info, write back
@@ -46,6 +62,8 @@ namespace DB
  * The `FramedChecksumWriteBuffer` should be used directly on the file; the stream's ending has no
  * special mark: that is it ends when the file reaches EOF mark.
  *
+ * To keep `PositionInFile` information and make sure the whole file is seekable by offset, one should
+ * never invoke `sync/next` by hand unless one knows that it is at the end of frame.
  */
 
 
@@ -54,10 +72,20 @@ class FramedChecksumWriteBuffer : public WriteBufferFromFileDescriptor
 {
 private:
     WritableFilePtr out;
-    size_t current_frame = 0;
+    size_t materialized_bytes = 0;
+    size_t frame_count = 0;
     const size_t frame_size;
+#ifndef NDEBUG
+    bool has_incomplete_frame = false;
+#endif
     void nextImpl() override
     {
+#ifndef NDEBUG
+        if (offset() != this->working_buffer.size())
+        {
+            has_incomplete_frame = true;
+        }
+#endif
         size_t len = this->offset();
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
@@ -71,7 +99,7 @@ private:
 
         while (expected != 0)
         {
-            ProfileEvents::increment(ProfileEvents::ChecksumBufferWrite);
+            ProfileEvents::increment(ProfileEvents::WriteBufferFromFileDescriptorWrite);
 
             ssize_t count;
             {
@@ -79,6 +107,7 @@ private:
             }
             if (unlikely(count == -1))
             {
+                ProfileEvents::increment(ProfileEvents::WriteBufferFromFileDescriptorWriteFailed);
                 if (errno == EINTR)
                     continue;
                 else
@@ -88,17 +117,36 @@ private:
                 }
             }
             iter += count;
+            materialized_bytes += count;
             expected -= count;
         }
 
-        ProfileEvents::increment(ProfileEvents::ChecksumBufferWriteBytes, len + sizeof(ChecksumFrame<Backend>));
-
-        current_frame++;
+        ProfileEvents::increment(ProfileEvents::WriteBufferFromFileDescriptorWriteBytes, len + sizeof(ChecksumFrame<Backend>));
+        frame_count++;
     }
 
     off_t doSeek(off_t, int) override { throw Exception("framed file is not seekable in writing mode"); }
 
-    off_t getPositionInFile() override { return current_frame * frame_size + offset(); }
+    // For checksum buffer, this is the **faked** file size without checksum header.
+    // Statistics will be inaccurate after `sync/next` operation in the middle of a frame because it will
+    // generate a frame without a full length.
+    off_t getPositionInFile() override
+    {
+#ifndef NDEBUG
+        assert(has_incomplete_frame == false);
+#endif
+        return frame_count * frame_size + offset();
+    }
+
+    // For checksum buffer, this is the real bytes to be materialized to disk.
+    // We normally have `materialized bytes != position in file` in the sense that,
+    // materialized bytes are referring to the real files on disk whereas position
+    // in file are to make the underlying checksum implementation opaque to above layers
+    // so that above buffers can do seek/read without knowing the existence of frame headers
+    off_t getMaterializedBytes() override
+    {
+        return materialized_bytes + ((offset() != 0) ? (sizeof(ChecksumFrame<Backend>) + offset()) : 0);
+    }
 
 public:
     explicit FramedChecksumWriteBuffer(WritableFilePtr out_, size_t block_size_ = TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE)
@@ -175,7 +223,7 @@ public:
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail
 
-        auto readHeader = [&]() -> bool {
+        auto read_header = [&]() -> bool {
             auto header_length = expectRead(working_buffer.begin() - sizeof(ChecksumFrame<Backend>), sizeof(ChecksumFrame<Backend>));
             if (header_length == 0)
                 return false;
@@ -189,7 +237,7 @@ public:
             return true;
         };
 
-        auto readBody = [&]() {
+        auto read_body = [&]() {
             auto body_length = expectRead(buffer, frame.bytes);
             if (unlikely(body_length != frame.bytes))
             {
@@ -214,14 +262,14 @@ public:
         while (size >= frame_size)
         {
             // read the header to our own memory area
-            // if readHeader returns false, then we are at the end of file
-            if (!readHeader())
+            // if read_header returns false, then we are at the end of file
+            if (!read_header())
             {
                 return expected - size;
             }
 
             // read the body
-            readBody();
+            read_body();
 
             // check body
             if (!skip_checksum)
@@ -262,7 +310,7 @@ private:
         size_t expected = size;
         while (expected != 0)
         {
-            ProfileEvents::increment(ProfileEvents::ChecksumBufferRead);
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
             ssize_t count;
             {
                 count = in->read(pos, expected);
@@ -273,6 +321,7 @@ private:
             }
             if (unlikely(count < 0))
             {
+                ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
                 if (errno == EINTR)
                     continue;
                 else
@@ -284,7 +333,7 @@ private:
             expected -= count;
             pos += count;
         }
-        ProfileEvents::increment(ProfileEvents::ChecksumBufferReadBytes, size - expected);
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, size - expected);
         return size - expected;
     }
 
@@ -338,7 +387,6 @@ private:
     off_t doSeek(off_t offset, int whence) override
     {
         ProfileEvents::increment(ProfileEvents::Seek);
-        ProfileEvents::increment(ProfileEvents::ChecksumBufferSeek);
 
         auto & frame = reinterpret_cast<ChecksumFrame<Backend> &>(
             *(this->working_buffer.begin() - sizeof(ChecksumFrame<Backend>))); // align should not fail

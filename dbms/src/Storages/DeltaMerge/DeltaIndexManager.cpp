@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Segment.h>
 
@@ -24,7 +38,7 @@ void DeltaIndexManager::removeOverflow(std::vector<DeltaIndexPtr> & removed)
         const Holder & holder = it->second;
         if (auto p = holder.index.lock(); p)
         {
-            LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
+            LOG_FMT_TRACE(log, "Free DeltaIndex, [size {}]", p->getBytes());
 
             // We put the evicted index into removed list, and free them later.
             auto tmp = std::make_shared<DeltaIndex>();
@@ -78,9 +92,8 @@ void DeltaIndexManager::refreshRef(const DeltaIndexPtr & index)
         current_size += holder.size;
 
         removeOverflow(removed);
+        CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
     }
-
-    CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
 }
 
 void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
@@ -100,7 +113,7 @@ void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
         Holder & holder = it->second;
         if (auto p = holder.index.lock(); p)
         {
-            LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
+            LOG_FMT_TRACE(log, "Free DeltaIndex, [size {}]", p->getBytes());
 
             // Free it out of lock scope.
             p->swap(empty);
@@ -110,9 +123,8 @@ void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
         lru_queue.erase(holder.queue_it);
         // Remove it later
         index_map.erase(it);
+        CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
     }
-
-    CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
 }
 
 DeltaIndexPtr DeltaIndexManager::getRef(UInt64 index_id)

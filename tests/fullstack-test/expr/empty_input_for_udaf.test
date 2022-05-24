@@ -1,3 +1,17 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 mysql> drop table if exists test.t
 mysql> create table test.t(a int not null, b int, c int, d int, e int, f int)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
@@ -61,3 +75,79 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ max(1),max(a),max(b),max(d),m
 +--------+--------+--------+--------+-----------+
 |      1 |      1 |      2 |      1 |      NULL |
 +--------+--------+--------+--------+-----------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a int, b int)
+mysql> insert into test.t values(1,1)
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> split table test.t between (0) and (30000) regions 20;
++--------------------+----------------------+
+| TOTAL_SPLIT_REGION | SCATTER_FINISH_RATIO |
++--------------------+----------------------+
+|                 19 |                    1 |
++--------------------+----------------------+
+mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
+func> wait_table test t
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=2; select any_value(a), sum(b), count(*) from test.t where a = 2;
++--------------+--------+----------+
+| any_value(a) | sum(b) | count(*) |
++--------------+--------+----------+
+|         NULL |   NULL |        0 |
++--------------+--------+----------+
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=1; select any_value(a), sum(b), count(*) from test.t where a = 2;
++--------------+--------+----------+
+| any_value(a) | sum(b) | count(*) |
++--------------+--------+----------+
+|         NULL |   NULL |        0 |
++--------------+--------+----------+
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=0; select any_value(a), sum(b), count(*) from test.t where a = 2;
++--------------+--------+----------+
+| any_value(a) | sum(b) | count(*) |
++--------------+--------+----------+
+|         NULL |   NULL |        0 |
++--------------+--------+----------+
+mysql> set tidb_enforce_mpp=1; select any_value(a), sum(b), count(*) from test.t where a = 2;
++--------------+--------+----------+
+| any_value(a) | sum(b) | count(*) |
++--------------+--------+----------+
+|         NULL |   NULL |        0 |
++--------------+--------+----------+
+mysql> insert into test.t values(2,1)
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=2; select any_value(a), sum(b), count(*) from test.t where a = 2;
++--------------+--------+----------+
+| any_value(a) | sum(b) | count(*) |
++--------------+--------+----------+
+|            2 |      1 |        1 |
++--------------+--------+----------+
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=1; select any_value(a), sum(b), count(*) from test.t where a = 2;
++--------------+--------+----------+
+| any_value(a) | sum(b) | count(*) |
++--------------+--------+----------+
+|            2 |      1 |        1 |
++--------------+--------+----------+
+mysql> set tidb_allow_mpp=0; set tidb_allow_batch_cop=0; select any_value(a), sum(b), count(*) from test.t where a = 2;
++--------------+--------+----------+
+| any_value(a) | sum(b) | count(*) |
++--------------+--------+----------+
+|            2 |      1 |        1 |
++--------------+--------+----------+
+mysql> set tidb_enforce_mpp=1; select any_value(a), sum(b), count(*) from test.t where a = 2;
++--------------+--------+----------+
+| any_value(a) | sum(b) | count(*) |
++--------------+--------+----------+
+|            2 |      1 |        1 |
++--------------+--------+----------+

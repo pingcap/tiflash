@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Columns/ColumnArray.h>
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
@@ -16,6 +30,7 @@
 #include <Functions/castTypeToEither.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
+#include <fmt/core.h>
 #include <fmt/format.h>
 #include <fmt/printf.h>
 
@@ -53,12 +68,12 @@ struct EmptyImpl
     }
 
     /// Only make sense if is_fixed_to_constant.
-    static void vector_fixed_to_constant(const ColumnString::Chars_t & /*data*/, size_t /*n*/, UInt8 & /*res*/)
+    static void vectorFixedToConstant(const ColumnString::Chars_t & /*data*/, size_t /*n*/, UInt8 & /*res*/)
     {
         throw Exception("Logical error: 'vector_fixed_to_constant method' is called", ErrorCodes::LOGICAL_ERROR);
     }
 
-    static void vector_fixed_to_vector(const ColumnString::Chars_t & data, size_t n, PaddedPODArray<UInt8> & res)
+    static void vectorFixedToVector(const ColumnString::Chars_t & data, size_t n, PaddedPODArray<UInt8> & res)
     {
         std::vector<char> empty_chars(n);
         size_t size = data.size() / n;
@@ -93,12 +108,12 @@ struct LengthImpl
             res[i] = i == 0 ? (offsets[i] - 1) : (offsets[i] - 1 - offsets[i - 1]);
     }
 
-    static void vector_fixed_to_constant(const ColumnString::Chars_t & /*data*/, size_t n, UInt64 & res)
+    static void vectorFixedToConstant(const ColumnString::Chars_t & /*data*/, size_t n, UInt64 & res)
     {
         res = n;
     }
 
-    static void vector_fixed_to_vector(const ColumnString::Chars_t & /*data*/, size_t /*n*/, PaddedPODArray<UInt64> & /*res*/)
+    static void vectorFixedToVector(const ColumnString::Chars_t & /*data*/, size_t /*n*/, PaddedPODArray<UInt64> & /*res*/)
     {
     }
 
@@ -132,11 +147,11 @@ struct LengthUTF8Impl
         }
     }
 
-    static void vector_fixed_to_constant(const ColumnString::Chars_t & /*data*/, size_t /*n*/, UInt64 & /*res*/)
+    static void vectorFixedToConstant(const ColumnString::Chars_t & /*data*/, size_t /*n*/, UInt64 & /*res*/)
     {
     }
 
-    static void vector_fixed_to_vector(const ColumnString::Chars_t & data, size_t n, PaddedPODArray<UInt64> & res)
+    static void vectorFixedToVector(const ColumnString::Chars_t & data, size_t n, PaddedPODArray<UInt64> & res)
     {
         size_t size = data.size() / n;
 
@@ -210,7 +225,7 @@ struct LowerUpperImpl
         array(data.data(), data.data() + data.size(), res_data.data());
     }
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t /*n*/, ColumnString::Chars_t & res_data)
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t /*n*/, ColumnString::Chars_t & res_data)
     {
         res_data.resize(data.size());
         array(data.data(), data.data() + data.size(), res_data.data());
@@ -247,7 +262,7 @@ struct ReverseImpl
         }
     }
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data)
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data)
     {
         res_data.resize(data.size());
         size_t size = data.size() / n;
@@ -307,7 +322,7 @@ struct ReverseUTF8Impl
         }
     }
 
-    static void vector_fixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
+    static void vectorFixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
     {
         throw Exception("Cannot apply function reverseUTF8 to fixed string.", ErrorCodes::ILLEGAL_COLUMN);
     }
@@ -333,7 +348,7 @@ template <char not_case_lower_bound,
           char not_case_upper_bound,
           int to_case(int),
           void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::vector_fixed(
+void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::vectorFixed(
     const ColumnString::Chars_t & data,
     size_t /*n*/,
     ColumnString::Chars_t & res_data)
@@ -615,7 +630,7 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
 template <char not_case_lower_bound,
           char not_case_upper_bound,
           int to_case(int)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vector_fixed(
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vectorFixed(
     const ColumnString::Chars_t & data,
     size_t /*n*/,
     ColumnString::Chars_t & res_data)
@@ -674,13 +689,14 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
   */
 struct SubstringUTF8Impl
 {
-    static void vector(const ColumnString::Chars_t & data,
-                       const ColumnString::Offsets & offsets,
-                       Int64 original_start,
-                       size_t length,
-                       bool implicit_length,
-                       ColumnString::Chars_t & res_data,
-                       ColumnString::Offsets & res_offsets)
+    template <bool implicit_length, bool is_positive_start>
+    static void vectorConstConst(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t original_start_abs,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -690,90 +706,128 @@ struct SubstringUTF8Impl
         ColumnString::Offset res_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            ColumnString::Offset j = prev_offset;
-            ColumnString::Offset pos = 1;
-            ColumnString::Offset bytes_start = 0;
-            ColumnString::Offset bytes_length = 0;
-            size_t start = 0;
-            if (original_start >= 0)
-                start = original_start;
+            doSubstringUTF8<implicit_length, is_positive_start>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
+        }
+    }
+
+    template <bool implicit_length, typename StartFf, typename LengthFf>
+    static void vectorVectorVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        StartFf && start_func,
+        LengthFf && length_func,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto [is_positive, original_start_abs] = start_func(i);
+            size_t length = 0;
+            if constexpr (!implicit_length)
+                length = length_func(i);
+
+            if (is_positive)
+            {
+                doSubstringUTF8<implicit_length, true>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
+            }
             else
             {
-                // set the start as string_length - abs(original_start) + 1
-                std::vector<ColumnString::Offset> start_offsets;
-                ColumnString::Offset current = prev_offset;
-                while (current < offsets[i] - 1)
-                {
-                    start_offsets.push_back(current);
-                    if (data[current] < 0xBF)
-                        current += 1;
-                    else if (data[current] < 0xE0)
-                        current += 2;
-                    else if (data[current] < 0xF0)
-                        current += 3;
-                    else
-                        current += 1;
-                }
-                if (static_cast<size_t>(-original_start) > start_offsets.size())
-                {
-                    // return empty string
-                    res_data.resize(res_data.size() + 1);
-                    res_data[res_offset] = 0;
-                    res_offset++;
-                    res_offsets[i] = res_offset;
-                    continue;
-                }
-                start = start_offsets.size() + original_start + 1;
-                pos = start;
-                j = start_offsets[start - 1];
+                doSubstringUTF8<implicit_length, false>(i, data, offsets, original_start_abs, length, res_data, res_offsets, prev_offset, res_offset);
             }
-            while (j < offsets[i] - 1)
+        }
+    }
+
+private:
+    template <bool implicit_length, bool is_positive_start>
+    static void doSubstringUTF8(
+        size_t column_index,
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t original_start_abs,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets,
+        ColumnString::Offset & prev_offset,
+        ColumnString::Offset & res_offset)
+    {
+        ColumnString::Offset j = prev_offset;
+        ColumnString::Offset pos = 1;
+        ColumnString::Offset bytes_start = 0;
+        ColumnString::Offset bytes_length = 0;
+        size_t start = 0;
+        if constexpr (is_positive_start)
+            start = original_start_abs;
+        else
+        {
+            // set the start as string_length - abs(original_start) + 1
+            std::vector<ColumnString::Offset> start_offsets;
+            ColumnString::Offset current = prev_offset;
+            while (current < offsets[column_index] - 1)
             {
-                if (pos == start)
-                    bytes_start = j - prev_offset + 1;
-
-                if (data[j] < 0xBF)
-                    j += 1;
-                else if (data[j] < 0xE0)
-                    j += 2;
-                else if (data[j] < 0xF0)
-                    j += 3;
-                else
-                    j += 1;
-
-                if (implicit_length)
-                {
-                    // implicit_length means get the substring from start to the end of the string
-                    bytes_length = j - prev_offset + 1 - bytes_start;
-                }
-                else
-                {
-                    if (pos >= start && pos < start + length)
-                        bytes_length = j - prev_offset + 1 - bytes_start;
-                    else if (pos >= start + length)
-                        break;
-                }
-
-                ++pos;
+                start_offsets.push_back(current);
+                current += UTF8::seqLength(data[current]);
             }
-
-            if (bytes_start == 0)
+            if (original_start_abs > start_offsets.size())
             {
+                // return empty string
                 res_data.resize(res_data.size() + 1);
                 res_data[res_offset] = 0;
                 ++res_offset;
+                res_offsets[column_index] = res_offset;
+                return;
+            }
+            start = start_offsets.size() - original_start_abs + 1;
+            pos = start;
+            j = start_offsets[start - 1];
+        }
+        while (j < offsets[column_index] - 1)
+        {
+            if (pos == start)
+                bytes_start = j - prev_offset + 1;
+
+            j += UTF8::seqLength(data[j]);
+
+            if constexpr (implicit_length)
+            {
+                // implicit_length means get the substring from start to the end of the string
+                bytes_length = j - prev_offset + 1 - bytes_start;
             }
             else
             {
-                size_t bytes_to_copy = std::min(offsets[i] - prev_offset - bytes_start, bytes_length);
-                res_data.resize(res_data.size() + bytes_to_copy + 1);
-                memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[prev_offset + bytes_start - 1], bytes_to_copy);
-                res_offset += bytes_to_copy + 1;
-                res_data[res_offset - 1] = 0;
+                if (pos >= start)
+                {
+                    if (pos - start < length)
+                        bytes_length = j - prev_offset + 1 - bytes_start;
+                    else
+                        break;
+                }
             }
-            res_offsets[i] = res_offset;
-            prev_offset = offsets[i];
+
+            ++pos;
         }
+
+        if (bytes_start == 0)
+        {
+            res_data.resize(res_data.size() + 1);
+            res_data[res_offset] = 0;
+            ++res_offset;
+        }
+        else
+        {
+            size_t bytes_to_copy = std::min(offsets[column_index] - prev_offset - bytes_start, bytes_length);
+            res_data.resize(res_data.size() + bytes_to_copy + 1);
+            memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[prev_offset + bytes_start - 1], bytes_to_copy);
+            res_offset += bytes_to_copy + 1;
+            res_data[res_offset - 1] = 0;
+        }
+        res_offsets[column_index] = res_offset;
+        prev_offset = offsets[column_index];
     }
 };
 
@@ -783,11 +837,37 @@ struct SubstringUTF8Impl
   */
 struct RightUTF8Impl
 {
-    static void vector(const ColumnString::Chars_t & data,
-                       const ColumnString::Offsets & offsets,
-                       size_t length,
-                       ColumnString::Chars_t & res_data,
-                       ColumnString::Offsets & res_offsets)
+public:
+    template <typename FF>
+    static void constVector(
+        const size_t const_length_size,
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        FF && get_length_func,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(const_length_size * data.size());
+        res_offsets.resize(const_length_size);
+
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < const_length_size; ++i)
+        {
+            size_t length = get_length_func(i);
+            res_offset += (0 == length
+                               ? appendEmptyString(res_data, res_offset)
+                               : doRightUTF8(data, 0, offsets[0], length, res_data, res_offset));
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    // length should not be zero.
+    static void vectorConst(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(data.size());
         size_t size = offsets.size();
@@ -797,43 +877,81 @@ struct RightUTF8Impl
         ColumnString::Offset res_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            std::vector<ColumnString::Offset> start_offsets;
-            ColumnString::Offset current = prev_offset;
-            // TODO: break this loop in advance
-            // NOTE: data[offsets[i] -1] = 0, so ignore it
-            while (current < offsets[i] - 1)
-            {
-                start_offsets.push_back(current);
-                if (data[current] < 0xBF)
-                    current += 1;
-                else if (data[current] < 0xE0)
-                    current += 2;
-                else if (data[current] < 0xF0)
-                    current += 3;
-                else
-                    current += 1;
-            }
-            if (start_offsets.size() == 0)
-            {
-                // null
-                res_data.resize(res_data.size() + 1);
-                res_data[res_offset] = 0;
-                ++res_offset;
-            }
-            else
-            {
-                // not null
-                // if(string_length > length, string_length - length, 0)
-                auto start_index = start_offsets.size() > length ? start_offsets.size() - length : 0;
-                // copy data from start to end of this string
-                size_t bytes_to_copy = offsets[i] - start_offsets[start_index];
-                res_data.resize(res_data.size() + bytes_to_copy);
-                memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[start_offsets[start_index]], bytes_to_copy);
-                res_offset += bytes_to_copy;
-            }
+            res_offset += doRightUTF8(data, prev_offset, offsets[i], length, res_data, res_offset);
             res_offsets[i] = res_offset;
             prev_offset = offsets[i];
         }
+    }
+
+    template <typename FF>
+    static void vectorVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        FF && get_length_func,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t length = get_length_func(i);
+            res_offset += (0 == length
+                               ? appendEmptyString(res_data, res_offset)
+                               : doRightUTF8(data, prev_offset, offsets[i], length, res_data, res_offset));
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+
+private:
+    // length should not be zero.
+    // copy bytes from data to res_data and return bytes_to_copy.
+    static size_t doRightUTF8(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offset & start_offset,
+        const ColumnString::Offset & end_offset,
+        size_t length,
+        ColumnString::Chars_t & res_data,
+        const ColumnString::Offset & res_offset)
+    {
+        std::vector<ColumnString::Offset> start_offsets;
+        ColumnString::Offset current = start_offset;
+        // TODO: break this loop in advance
+        // NOTE: data[end_offset -1] = 0, so ignore it
+        auto end_flag = end_offset - 1;
+        while (current < end_flag)
+        {
+            start_offsets.push_back(current);
+            current += UTF8::seqLength(data[current]);
+        }
+        if (start_offsets.empty())
+        {
+            // null
+            return appendEmptyString(res_data, res_offset);
+        }
+        else
+        {
+            // not null
+            // if(string_length > length, string_length - length, 0)
+            auto start_index = start_offsets.size() > length ? start_offsets.size() - length : 0;
+            // copy data from start to end of this string
+            size_t bytes_to_copy = end_offset - start_offsets[start_index];
+            res_data.resize(res_data.size() + bytes_to_copy);
+            memcpySmallAllowReadWriteOverflow15(&res_data[res_offset], &data[start_offsets[start_index]], bytes_to_copy);
+            return bytes_to_copy;
+        }
+    }
+
+    static size_t appendEmptyString(ColumnString::Chars_t & res_data, const ColumnString::Offset & res_offset)
+    {
+        res_data.resize(res_data.size() + 1);
+        res_data[res_offset] = 0;
+        return 1;
     }
 };
 
@@ -863,7 +981,7 @@ public:
         if (!arguments[0]->isStringOrFixedString()
             && !checkDataType<DataTypeArray>(&*arguments[0]))
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeNumber<ResultType>>();
@@ -889,7 +1007,7 @@ public:
             if (Impl::is_fixed_to_constant)
             {
                 ResultType res = 0;
-                Impl::vector_fixed_to_constant(col->getChars(), col->getN(), res);
+                Impl::vectorFixedToConstant(col->getChars(), col->getN(), res);
 
                 block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col->size(), toField(res));
             }
@@ -899,7 +1017,7 @@ public:
 
                 typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
                 vec_res.resize(col->size());
-                Impl::vector_fixed_to_vector(col->getChars(), col->getN(), vec_res);
+                Impl::vectorFixedToVector(col->getChars(), col->getN(), vec_res);
 
                 block.getByPosition(result).column = std::move(col_res);
             }
@@ -916,7 +1034,7 @@ public:
         }
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
@@ -952,7 +1070,7 @@ public:
         if (!arguments[0]->isStringOrFixedString()
             && !checkDataType<DataTypeArray>(&*arguments[0]))
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return arguments[0];
@@ -972,7 +1090,7 @@ public:
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column.get()))
         {
             auto col_res = ColumnFixedString::create(col->getN());
-            ReverseImpl::vector_fixed(col->getChars(), col->getN(), col_res->getChars());
+            ReverseImpl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
         }
         else if (checkColumn<ColumnArray>(column.get()))
@@ -981,7 +1099,7 @@ public:
         }
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
@@ -1000,9 +1118,9 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!arguments[0]->isStringOrFixedString())
+        if (!arguments[0]->isString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeUInt64>();
@@ -1034,7 +1152,7 @@ public:
             block.getByPosition(result).column = std::move(col_res);
         }
         else
-            throw Exception("Illegal column " + column->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(fmt::format("Illegal column {} of argument of function {}", column->getName(), getName()), ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -1043,7 +1161,7 @@ class ConcatImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    ConcatImpl(const Context & context)
+    explicit ConcatImpl(const Context & context)
         : context(context)
     {}
     static FunctionPtr create(const Context & context)
@@ -1079,17 +1197,17 @@ public:
             return FunctionArrayConcat(context).getReturnTypeImpl(arguments);
 
         if (arguments.size() < 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = arguments[arg_idx].get();
-            if (!arg->isStringOrFixedString())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            const auto * arg = arguments[arg_idx].get();
+            if (!arg->isString())
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return std::make_shared<DataTypeString>();
@@ -1167,7 +1285,7 @@ private:
 
 public:
     static constexpr auto name = NameTiDBConcat::name;
-    FunctionTiDBConcat(const Context & context)
+    explicit FunctionTiDBConcat(const Context & context)
         : context(context)
     {}
     static FunctionPtr create(const Context & context)
@@ -1182,20 +1300,22 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return true; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() < 1)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be at least 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (arguments.empty())
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
             const auto & arg = arguments[arg_idx].get();
-            if (!arg->isStringOrFixedString())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            if (!arg->isString())
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), (arg_idx + 1), getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return std::make_shared<DataTypeString>();
@@ -1255,10 +1375,10 @@ public:
             if (!arguments[arg_idx]->onlyNull())
             {
                 const auto * arg = removeNullable(arguments[arg_idx]).get();
-                if (!arg->isStringOrFixedString())
-                    throw Exception{
-                        fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), (arg_idx + 1), getName()),
-                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                if (!arg->isString())
+                    throw Exception(
+                        fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }
 
@@ -1355,24 +1475,22 @@ public:
         size_t number_of_arguments = arguments.size();
 
         if (number_of_arguments < 2 || number_of_arguments > 3)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                                + toString(number_of_arguments) + ", should be 2 or 3",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2 or 3", getName(), number_of_arguments),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!arguments[0]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isNumber())
-            throw Exception("Illegal type " + arguments[1]->getName()
-                                + " of second argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (number_of_arguments == 3 && !arguments[2]->isNumber())
-            throw Exception("Illegal type " + arguments[2]->getName()
-                                + " of second argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -1464,7 +1582,7 @@ public:
             executeForSource(column_start, column_length, column_start_const, column_length_const, start_value, length_value, block, result, ConstSource<FixedStringSource>(*col));
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
+                fmt::format("Illegal column {} of first argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
@@ -1495,101 +1613,212 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         size_t arguments_size = arguments.size();
         if (arguments_size != 2 && arguments_size != 3)
-            throw Exception("Function " + getName()
-                                + " requires from 2 or 3 parameters: string, start, [length]. Passed "
-                                + toString(arguments.size()) + ".",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format(
+                    "Function {} requires from 2 or 3 parameters: string, start, [length]. Passed {}.",
+                    getName(),
+                    arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isNumber() || (arguments_size == 3 && !arguments[2]->isNumber()))
-            throw Exception("Illegal type " + (arguments[1]->isNumber() ? arguments[2]->getName() : arguments[1]->getName())
-                                + " of argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", (arguments[1]->isNumber() ? arguments[2]->getName() : arguments[1]->getName()), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
+        const ColumnPtr & column_string = block.getByPosition(arguments[0]).column;
 
-        const ColumnPtr column_start = block.getByPosition(arguments[1]).column;
-        if (!column_start->isColumnConst())
-            throw Exception("2nd arguments of function " + getName() + " must be constants.");
-        Field start_field = (*block.getByPosition(arguments[1]).column)[0];
-        if (start_field.getType() != Field::Types::UInt64 && start_field.getType() != Field::Types::Int64)
-            throw Exception("2nd argument of function " + getName() + " must have UInt/Int type.");
-        Int64 start;
-        if (start_field.getType() == Field::Types::Int64)
+        const ColumnPtr & column_start = block.getByPosition(arguments[1]).column;
+
+        bool implicit_length = (arguments.size() == 2);
+
+        bool is_start_type_valid = getNumberType(block.getByPosition(arguments[1]).type, [&](const auto & start_type, bool) {
+            using StartType = std::decay_t<decltype(start_type)>;
+            // Int64 / UInt64
+            using StartFieldType = typename StartType::FieldType;
+
+            // vector const const
+            if (!column_string->isColumnConst() && column_start->isColumnConst() && (implicit_length || block.getByPosition(arguments[2]).column->isColumnConst()))
+            {
+                auto [is_positive, start_abs] = getValueFromStartField<StartFieldType>((*block.getByPosition(arguments[1]).column)[0]);
+                UInt64 length = 0;
+                if (!implicit_length)
+                {
+                    bool is_length_type_valid = getNumberType(block.getByPosition(arguments[2]).type, [&](const auto & length_type, bool) {
+                        using LengthType = std::decay_t<decltype(length_type)>;
+                        // Int64 / UInt64
+                        using LengthFieldType = typename LengthType::FieldType;
+                        length = getValueFromLengthField<LengthFieldType>((*block.getByPosition(arguments[2]).column)[0]);
+                        return true;
+                    });
+
+                    if (!is_length_type_valid)
+                        throw Exception(fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
+                }
+
+                // for const zero start or const zero length, return const blank string.
+                if (start_abs == 0 || (!implicit_length && length == 0))
+                {
+                    block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
+                    return true;
+                }
+
+                const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get());
+                assert(col);
+                auto col_res = ColumnString::create();
+                getVectorConstConstFunc(implicit_length, is_positive)(col->getChars(), col->getOffsets(), start_abs, length, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+            }
+            else // all other cases are converted to vector vector vector
+            {
+                std::function<std::pair<bool, size_t>(size_t)> get_start_func;
+                if (column_start->isColumnConst())
+                {
+                    // func always return const value
+                    auto start_const = getValueFromStartField<StartFieldType>((*column_start)[0]);
+                    get_start_func = [start_const](size_t) {
+                        return start_const;
+                    };
+                }
+                else
+                {
+                    get_start_func = [&column_start](size_t i) {
+                        return getValueFromStartField<StartFieldType>((*column_start)[i]);
+                    };
+                }
+
+                // if implicit_length, get_length_func be nil is ok.
+                std::function<size_t(size_t)> get_length_func;
+                if (!implicit_length)
+                {
+                    const ColumnPtr & column_length = block.getByPosition(arguments[2]).column;
+                    bool is_length_type_valid = getNumberType(block.getByPosition(arguments[2]).type, [&](const auto & length_type, bool) {
+                        using LengthType = std::decay_t<decltype(length_type)>;
+                        // Int64 / UInt64
+                        using LengthFieldType = typename LengthType::FieldType;
+                        if (column_length->isColumnConst())
+                        {
+                            // func always return const value
+                            auto length_const = getValueFromLengthField<LengthFieldType>((*column_length)[0]);
+                            get_length_func = [length_const](size_t) {
+                                return length_const;
+                            };
+                        }
+                        else
+                        {
+                            get_length_func = [column_length](size_t i) {
+                                return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                            };
+                        }
+                        return true;
+                    });
+
+                    if (!is_length_type_valid)
+                        throw Exception(fmt::format("3nd argument of function {} must have UInt/Int type.", getName()));
+                }
+
+                // convert to vector if string is const.
+                ColumnPtr full_column_string = column_string->isColumnConst() ? column_string->convertToFullColumnIfConst() : column_string;
+                const ColumnString * col = checkAndGetColumn<ColumnString>(full_column_string.get());
+                assert(col);
+                auto col_res = ColumnString::create();
+                if (implicit_length)
+                {
+                    SubstringUTF8Impl::vectorVectorVector<true>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
+                }
+                else
+                {
+                    SubstringUTF8Impl::vectorVectorVector<false>(col->getChars(), col->getOffsets(), get_start_func, get_length_func, col_res->getChars(), col_res->getOffsets());
+                }
+                block.getByPosition(result).column = std::move(col_res);
+            }
+
+            return true;
+        });
+
+        if (!is_start_type_valid)
+            throw Exception(fmt::format("2nd argument of function {} must have UInt/Int type.", getName()));
+    }
+
+private:
+    using VectorConstConstFunc = std::function<void(
+        const ColumnString::Chars_t &,
+        const ColumnString::Offsets &,
+        size_t,
+        size_t,
+        ColumnString::Chars_t &,
+        ColumnString::Offsets &)>;
+
+    static VectorConstConstFunc getVectorConstConstFunc(bool implicit_length, bool is_positive_start)
+    {
+        if (implicit_length)
         {
-            start = start_field.get<Int64>();
+            return is_positive_start ? SubstringUTF8Impl::vectorConstConst<true, true> : SubstringUTF8Impl::vectorConstConst<true, false>;
         }
         else
         {
-            UInt64 u_start = start_field.get<UInt64>();
-            if (u_start >= 0x8000000000000000ULL)
-                throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-            start = (Int64)u_start;
+            return is_positive_start ? SubstringUTF8Impl::vectorConstConst<false, true> : SubstringUTF8Impl::vectorConstConst<false, false>;
         }
+    }
 
-        bool implicit_length = true;
-        UInt64 length = 0;
-        if (arguments.size() == 3)
+    template <typename Integer>
+    static size_t getValueFromLengthField(const Field & length_field)
+    {
+        if constexpr (std::is_same_v<Integer, Int64>)
         {
-            implicit_length = false;
-            const ColumnPtr column_length = block.getByPosition(arguments[2]).column;
-            if (!column_length->isColumnConst())
-                throw Exception("3rd arguments of function " + getName() + " must be constants.");
-            Field length_field = (*block.getByPosition(arguments[2]).column)[0];
-            // tidb will push the 3rd argument as signed int, so have to handle Int64 case
-            if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
-                throw Exception(
-                    "3rd argument of function " + getName() + " must have UInt/Int type.");
-            if (length_field.getType() == Field::Types::UInt64)
+            Int64 signed_length = length_field.get<Int64>();
+            return signed_length < 0 ? 0 : signed_length;
+        }
+        else
+        {
+            static_assert(std::is_same_v<Integer, UInt64>);
+            return length_field.get<UInt64>();
+        }
+    }
+
+    // return {is_positive, abs}
+    template <typename Integer>
+    static std::pair<bool, size_t> getValueFromStartField(const Field & start_field)
+    {
+        if constexpr (std::is_same_v<Integer, Int64>)
+        {
+            Int64 signed_length = start_field.get<Int64>();
+
+            if (signed_length < 0)
             {
-                length = length_field.get<UInt64>();
-                /// Otherwise may lead to overflow and pass bounds check inside inner loop.
-                if (length >= 0x8000000000000000ULL)
-                    throw Exception("Too large values of 3rd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                return {false, static_cast<size_t>(-signed_length)};
             }
             else
             {
-                Int64 signed_length = length_field.get<Int64>();
-                // according to mysql doc: "If len is less than 1, the result is the empty string."
-                if (signed_length < 0)
-                    length = 0;
-                else
-                    length = signed_length;
+                return {true, static_cast<size_t>(signed_length)};
             }
         }
-
-
-        if (start == 0 || (!implicit_length && length == 0))
-        {
-            block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
-            return;
-        }
-
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
-        {
-            auto col_res = ColumnString::create();
-            SubstringUTF8Impl::vector(col->getChars(), col->getOffsets(), start, length, implicit_length, col_res->getChars(), col_res->getOffsets());
-            block.getByPosition(result).column = std::move(col_res);
-        }
         else
-            throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+        {
+            static_assert(std::is_same_v<Integer, UInt64>);
+            return {true, start_field.get<UInt64>()};
+        }
+    }
+
+    template <typename F>
+    static bool getNumberType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeInt64,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
     }
 };
 
@@ -1614,26 +1843,17 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        size_t arguments_size = arguments.size();
-        if (arguments_size != 2)
-            throw Exception("Function " + getName()
-                                + " requires from 2 parameters: string, length. Passed "
-                                + toString(arguments.size()) + ".",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isString())
             throw Exception(
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
         if (!arguments[1]->isNumber())
-            throw Exception("Illegal type " + arguments[1]->getName()
-                                + " of argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -1641,42 +1861,87 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
-
         const ColumnPtr column_length = block.getByPosition(arguments[1]).column;
-        if (!column_length->isColumnConst())
-            throw Exception("2nd arguments of function " + getName() + " must be constants.");
-        Field length_field = (*block.getByPosition(arguments[1]).column)[0];
-        if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
-            throw Exception("2nd argument of function " + getName() + " must have UInt/Int type.");
-        Int64 length;
-        if (length_field.getType() == Field::Types::Int64)
-        {
-            length = length_field.get<Int64>();
-        }
-        else
-        {
-            UInt64 u_start = length_field.get<UInt64>();
-            if (u_start >= 0x8000000000000000ULL)
-                throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-            length = (Int64)u_start;
-        }
 
-        if (length <= 0)
-        {
-            block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
-            return;
-        }
+        bool is_length_type_valid = getLengthType(block.getByPosition(arguments[1]).type, [&](const auto & length_type, bool) {
+            using LengthType = std::decay_t<decltype(length_type)>;
+            // Int64 / UInt64
+            using LengthFieldType = typename LengthType::FieldType;
 
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
-        {
             auto col_res = ColumnString::create();
-            RightUTF8Impl::vector(col->getChars(), col->getOffsets(), length, col_res->getChars(), col_res->getOffsets());
+            if (const ColumnString * col_string = checkAndGetColumn<ColumnString>(column_string.get()))
+            {
+                if (column_length->isColumnConst())
+                {
+                    // vector const
+                    size_t length = getValueFromLengthField<LengthFieldType>((*column_length)[0]);
+
+                    // for const 0, return const blank string.
+                    if (0 == length)
+                    {
+                        block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
+                        return true;
+                    }
+
+                    RightUTF8Impl::vectorConst(col_string->getChars(), col_string->getOffsets(), length, col_res->getChars(), col_res->getOffsets());
+                }
+                else
+                {
+                    // vector vector
+                    auto get_length_func = [&column_length](size_t i) {
+                        return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                    };
+                    RightUTF8Impl::vectorVector(col_string->getChars(), col_string->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
+                }
+            }
+            else if (const ColumnConst * col_const_string = checkAndGetColumnConst<ColumnString>(column_string.get()))
+            {
+                // const vector
+                const ColumnString * col_string_from_const = checkAndGetColumn<ColumnString>(col_const_string->getDataColumnPtr().get());
+                assert(col_string_from_const);
+                // When useDefaultImplementationForConstants is true, string and length are not both constants
+                assert(!column_length->isColumnConst());
+                auto get_length_func = [&column_length](size_t i) {
+                    return getValueFromLengthField<LengthFieldType>((*column_length)[i]);
+                };
+                RightUTF8Impl::constVector(column_length->size(), col_string_from_const->getChars(), col_string_from_const->getOffsets(), get_length_func, col_res->getChars(), col_res->getOffsets());
+            }
+            else
+            {
+                // Impossible to reach here
+                return false;
+            }
             block.getByPosition(result).column = std::move(col_res);
+            return true;
+        });
+
+        if (!is_length_type_valid)
+            throw Exception(fmt::format("2nd argument of function {} must have UInt/Int type.", getName()));
+    }
+
+private:
+    template <typename F>
+    static bool
+    getLengthType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeInt64,
+            DataTypeUInt64>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename Integer>
+    static size_t getValueFromLengthField(const Field & length_field)
+    {
+        if constexpr (std::is_same_v<Integer, Int64>)
+        {
+            Int64 signed_length = length_field.get<Int64>();
+            return signed_length < 0 ? 0 : signed_length;
         }
         else
-            throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+        {
+            static_assert(std::is_same_v<Integer, UInt64>);
+            return length_field.get<UInt64>();
+        }
     }
 };
 
@@ -1705,14 +1970,14 @@ private:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!arguments[0]->isString())
-            throw Exception{
-                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!arguments[1]->isString())
-            throw Exception{
-                "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeString>();
     }
@@ -1726,14 +1991,14 @@ private:
         const auto & column_char = block.getByPosition(arguments[1]).column;
 
         if (!checkColumnConst<ColumnString>(column_char.get()))
-            throw Exception{"Second argument of function " + getName() + " must be a constant string", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(fmt::format("Second argument of function {} must be a constant string", getName()), ErrorCodes::ILLEGAL_COLUMN);
 
         String trailing_char_str = static_cast<const ColumnConst &>(*column_char).getValue<String>();
 
         if (trailing_char_str.size() != 1)
-            throw Exception{"Second argument of function " + getName() + " must be a one-character string", ErrorCodes::BAD_ARGUMENTS};
+            throw Exception(fmt::format("Second argument of function {} must be a one-character string", getName()), ErrorCodes::BAD_ARGUMENTS);
 
-        if (const auto col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_res = ColumnString::create();
 
@@ -1757,7 +2022,7 @@ private:
                 src_offset = src_offsets[i];
                 dst_offset += src_length;
 
-                if (src_length > 1 && dst_data[dst_offset - 2] != trailing_char_str.front())
+                if (src_length > 1 && dst_data[dst_offset - 2] != static_cast<unsigned char>(trailing_char_str.front()))
                 {
                     dst_data[dst_offset - 1] = trailing_char_str.front();
                     dst_data[dst_offset] = 0;
@@ -1771,9 +2036,9 @@ private:
             block.getByPosition(result).column = std::move(col_res);
         }
         else
-            throw Exception{
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
@@ -1783,7 +2048,7 @@ class TrimImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit TrimImpl() {}
+    explicit TrimImpl() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<TrimImpl>();
@@ -1804,17 +2069,17 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.empty() || arguments.size() > 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be 1 or 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1 or 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = arguments[arg_idx].get();
-            if (!arg->isStringOrFixedString())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            const auto * arg = arguments[arg_idx].get();
+            if (!arg->isString())
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return std::make_shared<DataTypeString>();
@@ -1827,9 +2092,9 @@ public:
         else if (arguments.size() == 2)
             executeTrimWs(block, arguments, result);
         else
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should beat least 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should beat least 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
 private:
@@ -1846,7 +2111,7 @@ private:
         else if (c0_const_string)
             trim<ltrim, rtrim, ConstSource<StringSource>, StringSink>(ConstSource<StringSource>(*c0_const_string), StringSink(*c_res, c0->size()));
         else
-            throw Exception{"Argument of function " + getName() + " must be string", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(fmt::format("Argument of function {} must be string", getName()), ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = std::move(c_res);
     }
@@ -1872,7 +2137,7 @@ private:
         else if (c0_const_string && c1_const_string)
             trim<ltrim, rtrim, ConstSource<StringSource>, ConstSource<StringSource>, StringSink>(ConstSource<StringSource>(*c0_const_string), ConstSource<StringSource>(*c1_const_string), StringSink(*c_res, c0->size()));
         else
-            throw Exception{"Argument of function " + getName() + " must be string", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(fmt::format("Argument of function {} must be string", getName()), ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = std::move(c_res);
     }
@@ -1884,7 +2149,7 @@ class TrimUTF8Impl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit TrimUTF8Impl() {}
+    explicit TrimUTF8Impl() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<TrimUTF8Impl>();
@@ -1906,18 +2171,16 @@ public:
     {
         if (arguments.empty() || arguments.size() > 2)
             throw Exception(
-                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                    + ", should be 1 or 2.",
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1 or 2.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = arguments[arg_idx].get();
-            if (!arg->isStringOrFixedString())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function "
-                        + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            const auto * arg = arguments[arg_idx].get();
+            if (!arg->isString())
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return std::make_shared<DataTypeString>();
@@ -1931,8 +2194,7 @@ public:
             executeTrimWs(block, arguments, result);
         else
             throw Exception(
-                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                    + ", should beat least 1.",
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should beat least 1.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
@@ -1949,11 +2211,11 @@ private:
             vector(c0_string->getChars(), c0_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (c0_const_string)
         {
-            auto c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
+            const auto * c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
             vector(c0_c_string->getChars(), c0_c_string->getOffsets(), c0_const_string->size(), c_res->getChars(), c_res->getOffsets());
         }
         else
-            throw Exception{"Argument of function " + getName() + " must be string", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(fmt::format("Argument of function {} must be string", getName()), ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = std::move(c_res);
     }
@@ -1966,7 +2228,7 @@ private:
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
         const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
         const ColumnConst * c1_const_string = checkAndGetColumnConst<ColumnString>(c1);
-        auto column_trim_string = checkAndGetColumn<ColumnString>(c1_const_string->getDataColumnPtr().get());
+        const auto * column_trim_string = checkAndGetColumn<ColumnString>(c1_const_string->getDataColumnPtr().get());
 
         auto c_res = ColumnString::create();
 
@@ -1974,11 +2236,11 @@ private:
             vectorWS(c0_string->getChars(), c0_string->getOffsets(), column_trim_string->getChars(), column_trim_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (c0_const_string)
         {
-            auto c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
+            const auto * c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
             vectorWS(c0_c_string->getChars(), c0_c_string->getOffsets(), c0_const_string->size(), column_trim_string->getChars(), column_trim_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         }
         else
-            throw Exception{"Argument of function " + getName() + " must be string", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(fmt::format("Argument of function {} must be string", getName()), ErrorCodes::ILLEGAL_COLUMN);
 
         block.getByPosition(result).column = std::move(c_res);
     }
@@ -2410,22 +2672,19 @@ public:
     {
         if (arguments.empty() || arguments.size() > 3)
             throw Exception(
-                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                    + ", should be 1, 2 or 3.",
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1, 2 or 3.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = arguments[arg_idx].get();
+            const auto * arg = arguments[arg_idx].get();
             if (arg_idx < 2 && !arg->isString())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function "
-                        + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             else if (arg_idx == 2 && !arg->isInteger())
-                throw Exception{
-                    "Illegal type " + arg->getName() + " of argument 3 of function "
-                        + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                throw Exception(
+                    fmt::format("Illegal type {} of argument 3 of function {}", arg->getName(), getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return std::make_shared<DataTypeString>();
@@ -2446,8 +2705,7 @@ public:
             break;
         default:
             throw Exception(
-                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                    + ", should beat least 1.",
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should beat least 1.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         }
     }
@@ -2460,8 +2718,9 @@ private:
 
         const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
-        static const std::string default_rem = " ";
-        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)default_rem.c_str(), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
+        static constexpr std::string_view default_rem = " ";
+        static const auto * remstr_ptr = reinterpret_cast<const UInt8 *>(default_rem.data());
+        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), remstr_ptr, default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
 
         block.getByPosition(result).column = std::move(res_col);
     }
@@ -2481,16 +2740,18 @@ private:
             const ColumnConst * data_col = checkAndGetColumnConst<ColumnString>(column_data.get());
             const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
 
-            std::string data = data_col->getValue<String>();
-            constVector(is_ltrim, is_rtrim, (UInt8 *)data.c_str(), data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
+            const std::string data = data_col->getValue<String>();
+            const auto * data_ptr = reinterpret_cast<const UInt8 *>(data.c_str());
+            constVector(is_ltrim, is_rtrim, data_ptr, data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
         }
         else if (remstr_const && !data_const)
         {
             const ColumnConst * remstr_col = checkAndGetColumnConst<ColumnString>(column_remstr.get());
             const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
-            std::string remstr = remstr_col->getValue<String>();
-            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)remstr.c_str(), remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
+            const std::string remstr = remstr_col->getValue<String>();
+            const auto * remstr_ptr = reinterpret_cast<const UInt8 *>(remstr.c_str());
+            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), remstr_ptr, remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
         }
         else
         {
@@ -2507,7 +2768,7 @@ private:
     {
         ColumnPtr & column_direction = block.getByPosition(arguments[2]).column;
         if (!column_direction->isColumnConst())
-            throw Exception("3nd argument of function " + getName() + " must be constant.");
+            throw Exception(fmt::format("3nd argument of function {} must be constant.", getName()));
         const ColumnConst * direction_col = checkAndGetColumn<ColumnConst>(column_direction.get());
 
         static constexpr Int64 trim_both_default = 0; // trims from both direction by default
@@ -2542,7 +2803,7 @@ private:
     {
         const UInt8 * left = data_begin;
         const UInt8 * right = data_begin + data_size - 1;
-        const long remstr_real_size = remstr_size - 1;
+        const Int64 remstr_real_size = remstr_size - 1;
 
         if (remstr_real_size > 0 && is_ltrim)
         {
@@ -2576,8 +2837,8 @@ private:
         bool is_rtrim,
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        UInt8 * remstr,
-        size_t remstr_size,
+        const UInt8 * remstr,
+        const size_t remstr_size,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -2599,8 +2860,8 @@ private:
     static void constVector(
         bool is_ltrim,
         bool is_rtrim,
-        UInt8 * data,
-        size_t data_size,
+        const UInt8 * data,
+        const size_t data_size,
         const ColumnString::Chars_t & remstr,
         const ColumnString::Offsets & remstr_offsets,
         ColumnString::Chars_t & res_data,
@@ -2660,7 +2921,7 @@ private:
     }
 };
 
-class tidbPadImpl
+class TidbPadImpl
 {
 public:
     template <typename IntType, bool IsUTF8, bool IsLeft>
@@ -2773,19 +3034,19 @@ public:
 
             if (is_padding_const && is_length_const)
             {
-                const_const<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                constantConstant<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (is_padding_const && !is_length_const)
             {
-                const_const<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                constantConstant<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (!is_padding_const && is_length_const)
             {
-                const_column<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                constantStringVector<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (!is_padding_const && !is_length_const)
             {
-                const_column<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                constantStringVector<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
         }
         else
@@ -2796,26 +3057,26 @@ public:
 
             if (is_padding_const && is_length_const)
             {
-                column_const<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                stringVectorConstant<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (is_padding_const && !is_length_const)
             {
-                column_const<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                stringVectorConstant<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (!is_padding_const && is_length_const)
             {
-                column_column<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                stringVectorStringVector<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (!is_padding_const && !is_length_const)
             {
-                column_column<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                stringVectorStringVector<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
         }
         block.getByPosition(result).column = ColumnNullable::create(std::move(column_result), std::move(result_null_map));
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void column_column(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void stringVectorStringVector(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
         ColumnString::Offset string_prev_offset = 0;
         ColumnString::Offset padding_prev_offset = 0;
@@ -2839,6 +3100,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             string_prev_offset = string_offsets[i];
             padding_prev_offset = (*padding_offsets)[i];
@@ -2847,7 +3114,7 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void column_const(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void stringVectorConstant(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
         ColumnString::Offset string_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
@@ -2870,6 +3137,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(&string_data[string_prev_offset], string_offsets[i] - string_prev_offset, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             string_prev_offset = string_offsets[i];
             result_offsets[i] = res_prev_offset;
@@ -2877,7 +3150,7 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void const_column(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void constantStringVector(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
         ColumnString::Offset padding_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
@@ -2900,6 +3173,12 @@ public:
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), &(*padding_data)[padding_prev_offset], (*padding_offsets)[i] - padding_prev_offset, result_data, res_prev_offset);
                 }
             }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
+            }
 
             padding_prev_offset = (*padding_offsets)[i];
             result_offsets[i] = res_prev_offset;
@@ -2907,7 +3186,7 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void const_const(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void constantConstant(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
         ColumnString::Offset res_prev_offset = 0;
 
@@ -2928,6 +3207,12 @@ public:
                 {
                     vec_result_null_map[i] = tidbPadOneRow<IsLeft>(reinterpret_cast<const UInt8 *>(str_val.c_str()), str_val.size() + 1, static_cast<int32_t>(target_len), padding, padding_size, result_data, res_prev_offset);
                 }
+            }
+            else
+            {
+                result_data.resize(result_data.size() + 1);
+                result_data[res_prev_offset] = '\0';
+                res_prev_offset++;
             }
 
             result_offsets[i] = res_prev_offset;
@@ -2965,9 +3250,9 @@ public:
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
                     --left;
                 }
-                // Including the tailing '\0'.
-                copyResult(res, res_offset, data, 0, data_size);
-                res_offset += data_size;
+                // The tailing '\0' will be handled later.
+                copyResult(res, res_offset, data, 0, data_size - 1);
+                res_offset += data_size - 1;
             }
             else
             {
@@ -2982,8 +3267,6 @@ public:
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
                     --left;
                 }
-                res[res_offset] = '\0';
-                res_offset++;
             }
         }
         else
@@ -2997,9 +3280,11 @@ public:
                 per_pad_offset += pad_bytes;
                 ++left;
             }
-            res[res_offset] = '\0';
-            res_offset++;
         }
+        // Add trailing zero.
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        res_offset++;
         return false;
     }
 
@@ -3035,9 +3320,9 @@ public:
                     ++res_offset;
                     --left;
                 }
-                // Including the tailing '\0'.
-                copyResult(res, res_offset, data, 0, data_size);
-                res_offset += data_size;
+                // The tailing '\0' will be handled later.
+                copyResult(res, res_offset, data, 0, data_size - 1);
+                res_offset += data_size - 1;
             }
             else
             {
@@ -3057,17 +3342,17 @@ public:
                     ++res_offset;
                     --left;
                 }
-                res[res_offset] = '\0';
-                res_offset++;
             }
         }
         else
         {
             copyResult(res, res_offset, data, 0, tmp_target_len);
             res_offset += tmp_target_len;
-            res[res_offset] = '\0';
-            res_offset++;
         }
+        // Add trailing zero.
+        res.resize(res.size() + 1);
+        res[res_offset] = '\0';
+        res_offset++;
         return false;
     }
 
@@ -3083,7 +3368,7 @@ class PadImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit PadImpl() {}
+    explicit PadImpl() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<PadImpl>();
@@ -3107,16 +3392,19 @@ public:
 
     {
         if (!removeNullable(arguments[0])->isString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[1])->isInteger())
-            throw Exception("Illegal type " + arguments[1]->getName()
-                                + " of second argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[2])->isString())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return makeNullable(std::make_shared<DataTypeString>());
     }
@@ -3142,11 +3430,13 @@ private:
         {
             length_value = column_length_const->getInt(0);
             if (length_value < 0)
-                throw Exception("Second argument provided for function " + getName() + " could not be negative.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                throw Exception(
+                    fmt::format("Second argument provided for function {} could not be negative.", getName()),
+                    ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
         if (column_padding_const == nullptr)
         {
-            throw Exception("Third argument provided for function " + getName() + " should be literal string.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Third argument provided for function {} should be literal string.", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         auto c_res = ColumnString::create();
@@ -3157,21 +3447,9 @@ private:
                 ConstSource<StringSource>(*column_padding_const),
                 StringSink(*c_res, col->size()),
                 length_value);
-        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_string.get()))
-            pad<is_left, FixedStringSource, ConstSource<StringSource>, StringSink>(
-                FixedStringSource(*col),
-                ConstSource<StringSource>(*column_padding_const),
-                StringSink(*c_res, col->size()),
-                length_value);
         else if (const ColumnConst * col = checkAndGetColumnConst<ColumnString>(column_string.get()))
             pad<is_left, ConstSource<StringSource>, ConstSource<StringSource>, StringSink>(
                 ConstSource<StringSource>(*col),
-                ConstSource<StringSource>(*column_padding_const),
-                StringSink(*c_res, col->size()),
-                length_value);
-        else if (const ColumnConst * col = checkAndGetColumnConst<ColumnFixedString>(column_string.get()))
-            pad<is_left, ConstSource<FixedStringSource>, ConstSource<StringSource>, StringSink>(
-                ConstSource<FixedStringSource>(*col),
                 ConstSource<StringSource>(*column_padding_const),
                 StringSink(*c_res, col->size()),
                 length_value);
@@ -3185,28 +3463,28 @@ private:
         switch (type_index)
         {
         case TypeIndex::UInt8:
-            tidbPadImpl::tidbExecutePadImpl<UInt8, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt8, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt16:
-            tidbPadImpl::tidbExecutePadImpl<UInt16, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt16, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt32:
-            tidbPadImpl::tidbExecutePadImpl<UInt32, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt32, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt64:
-            tidbPadImpl::tidbExecutePadImpl<UInt64, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt64, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int8:
-            tidbPadImpl::tidbExecutePadImpl<Int8, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int8, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int16:
-            tidbPadImpl::tidbExecutePadImpl<Int16, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int16, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int32:
-            tidbPadImpl::tidbExecutePadImpl<Int32, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int32, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int64:
-            tidbPadImpl::tidbExecutePadImpl<Int64, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int64, false, is_left>(block, arguments, result, getName());
             break;
         default:
             throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -3219,7 +3497,7 @@ class PadUTF8Impl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit PadUTF8Impl() {}
+    explicit PadUTF8Impl() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<PadUTF8Impl>();
@@ -3241,16 +3519,19 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!removeNullable(arguments[0])->isString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[1])->isInteger())
-            throw Exception("Illegal type " + arguments[1]->getName()
-                                + " of second argument of function "
-                                + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!removeNullable(arguments[2])->isString())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                fmt::format("Illegal type {} of third argument of function {}", arguments[2]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return makeNullable(std::make_shared<DataTypeString>());
     }
@@ -3276,42 +3557,30 @@ private:
         {
             length_value = column_length_const->getInt(0);
             if (length_value < 0)
-                throw Exception("Second argument provided for function " + getName() + " could not be negative.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                throw Exception(
+                    fmt::format("Second argument provided for function {} could not be negative.", getName()),
+                    ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
         if (column_padding_const == nullptr)
         {
-            throw Exception("Third argument provided for function " + getName() + " should be literal string.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Third argument provided for function {} should be literal string.", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         auto c_res = ColumnString::create();
-        auto column_padding_string = checkAndGetColumn<ColumnString>(column_padding_const->getDataColumnPtr().get());
+        const auto * column_padding_string = checkAndGetColumn<ColumnString>(column_padding_const->getDataColumnPtr().get());
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
             vector(col->getChars(), col->getOffsets(), length_value, column_padding_string->getChars(), column_padding_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
-        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_string.get()))
-            vector(col->getChars(), col->getN(), col->size(), length_value, column_padding_string->getChars(), column_padding_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (const ColumnConst * col = checkAndGetColumnConst<ColumnString>(column_string.get()))
         {
             const auto * col_string = checkAndGetColumn<ColumnString>(col->getDataColumnPtr().get());
-            vector_const(col_string->getChars(),
-                         col_string->getOffsets(),
-                         col->size(),
-                         length_value,
-                         column_padding_string->getChars(),
-                         column_padding_string->getOffsets(),
-                         c_res->getChars(),
-                         c_res->getOffsets());
-        }
-        else if (const ColumnConst * col = checkAndGetColumnConst<ColumnFixedString>(column_string.get()))
-        {
-            const auto * col_string = checkAndGetColumn<ColumnFixedString>(col->getDataColumnPtr().get());
-            vector_const(col_string->getChars(),
-                         col_string->getN(),
-                         col->size(),
-                         length_value,
-                         column_padding_string->getChars(),
-                         column_padding_string->getOffsets(),
-                         c_res->getChars(),
-                         c_res->getOffsets());
+            vectorConst(col_string->getChars(),
+                        col_string->getOffsets(),
+                        col->size(),
+                        length_value,
+                        column_padding_string->getChars(),
+                        column_padding_string->getOffsets(),
+                        c_res->getChars(),
+                        c_res->getOffsets());
         }
 
         block.getByPosition(result).column = std::move(c_res);
@@ -3552,14 +3821,14 @@ private:
         }
     }
 
-    static void vector_const(const ColumnString::Chars_t & data,
-                             const ColumnString::Offsets & offsets,
-                             size_t size, /// number of rows of const column
-                             size_t length,
-                             const ColumnString::Chars_t & pad_data,
-                             const ColumnString::Offsets & pad_offsets,
-                             ColumnString::Chars_t & res_data,
-                             ColumnString::Offsets & res_offsets)
+    static void vectorConst(const ColumnString::Chars_t & data,
+                            const ColumnString::Offsets & offsets,
+                            size_t size, /// number of rows of const column
+                            size_t length,
+                            const ColumnString::Chars_t & pad_data,
+                            const ColumnString::Offsets & pad_offsets,
+                            ColumnString::Chars_t & res_data,
+                            ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(3 * length * size);
         res_offsets.resize(size);
@@ -3665,14 +3934,14 @@ private:
         }
     }
 
-    static void vector_const(const ColumnString::Chars_t & data,
-                             size_t, /// length of fixed colomn
-                             size_t size, /// number of row
-                             size_t length,
-                             const ColumnString::Chars_t & pad_data,
-                             const ColumnString::Offsets & pad_offsets,
-                             ColumnString::Chars_t & res_data,
-                             ColumnString::Offsets & res_offsets)
+    static void vectorConst(const ColumnString::Chars_t & data,
+                            size_t, /// length of fixed colomn
+                            size_t size, /// number of row
+                            size_t length,
+                            const ColumnString::Chars_t & pad_data,
+                            const ColumnString::Offsets & pad_offsets,
+                            ColumnString::Chars_t & res_data,
+                            ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(3 * length * size);
         res_offsets.resize(size);
@@ -3789,28 +4058,28 @@ private:
         switch (type_index)
         {
         case TypeIndex::UInt8:
-            tidbPadImpl::tidbExecutePadImpl<UInt8, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt8, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt16:
-            tidbPadImpl::tidbExecutePadImpl<UInt16, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt16, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt32:
-            tidbPadImpl::tidbExecutePadImpl<UInt32, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt32, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt64:
-            tidbPadImpl::tidbExecutePadImpl<UInt64, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt64, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int8:
-            tidbPadImpl::tidbExecutePadImpl<Int8, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int8, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int16:
-            tidbPadImpl::tidbExecutePadImpl<Int16, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int16, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int32:
-            tidbPadImpl::tidbExecutePadImpl<Int32, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int32, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int64:
-            tidbPadImpl::tidbExecutePadImpl<Int64, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int64, true, is_left>(block, arguments, result, getName());
             break;
         default:
             throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -3822,13 +4091,11 @@ class FunctionASCII : public IFunction
 {
 public:
     static constexpr auto name = "ascii";
-    FunctionASCII(const Context & context)
-        : context(context)
-    {}
+    FunctionASCII() = default;
 
-    static FunctionPtr create(const Context & context)
+    static FunctionPtr create(const Context & /*context*/)
     {
-        return std::make_shared<FunctionASCII>(context);
+        return std::make_shared<FunctionASCII>();
     }
 
     std::string getName() const override { return name; }
@@ -3837,9 +4104,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 1)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -3849,20 +4116,19 @@ public:
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
 
         Field res_field;
         int val_num = c0_col->size();
         auto col_res = ColumnInt64::create();
         col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
-            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (c0_const == nullptr && c0_string == nullptr)
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         for (int i = 0; i < val_num; i++)
         {
             c0_col->get(i, res_field);
             String handled_str = res_field.get<String>();
-            Int64 res = handled_str.size() == 0 ? 0 : static_cast<Int64>(handled_str[0]);
+            Int64 res = handled_str.empty() ? 0 : static_cast<Int64>(handled_str[0]);
             col_res->insert(res);
         }
 
@@ -3870,20 +4136,17 @@ public:
     }
 
 private:
-    const Context & context;
 };
 
 class FunctionLength : public IFunction
 {
 public:
     static constexpr auto name = "length";
-    FunctionLength(const Context & context)
-        : context(context)
-    {}
+    FunctionLength() = default;
 
-    static FunctionPtr create(const Context & context)
+    static FunctionPtr create(const Context & /*context*/)
     {
-        return std::make_shared<FunctionLength>(context);
+        return std::make_shared<FunctionLength>();
     }
 
     std::string getName() const override { return name; }
@@ -3892,9 +4155,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 1)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be 1.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -3904,14 +4167,13 @@ public:
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
 
         Field res_field;
         int val_num = c0_col->size();
         auto col_res = ColumnInt64::create();
         col_res->reserve(val_num);
-        if (c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr)
-            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (c0_const == nullptr && c0_string == nullptr)
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         for (int i = 0; i < val_num; i++)
         {
@@ -3924,20 +4186,17 @@ public:
     }
 
 private:
-    const Context & context;
 };
 
 class FunctionPosition : public IFunction
 {
 public:
     static constexpr auto name = "position";
-    FunctionPosition(const Context & context)
-        : context(context)
-    {}
+    FunctionPosition() = default;
 
-    static FunctionPtr create(const Context & context)
+    static FunctionPtr create(const Context & /*context*/)
     {
-        return std::make_shared<FunctionPosition>(context);
+        return std::make_shared<FunctionPosition>();
     }
 
     std::string getName() const override { return name; }
@@ -3946,9 +4205,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 2)
-            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
-                                + ", should be 2.",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         return std::make_shared<DataTypeInt64>();
     }
@@ -3958,20 +4217,18 @@ public:
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        const ColumnFixedString * c0_fixed_string = checkAndGetColumn<ColumnFixedString>(c0_col);
         Field c0_field;
 
         const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
         const ColumnConst * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
         const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1_col);
-        const ColumnFixedString * c1_fixed_string = checkAndGetColumn<ColumnFixedString>(c1_col);
         Field c1_field;
 
-        if ((c0_const == nullptr && c0_string == nullptr && c0_fixed_string == nullptr) || (c1_const == nullptr && c1_string == nullptr && c1_fixed_string == nullptr))
-            throw Exception("Illegal argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (c0_col->size() != c1_col->size())
-            throw Exception("Function " + getName() + " column number is inconformity", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Function {} column number is inconformity", getName()), ErrorCodes::LOGICAL_ERROR);
 
         auto col_res = ColumnInt64::create();
         int val_num = c0_col->size();
@@ -3994,29 +4251,25 @@ public:
     }
 
 private:
-    Int64 getPositionUTF8(const String & c1_str, Int64 idx) const
+    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
     {
         if (idx == -1)
             return 0;
 
-        auto data = reinterpret_cast<const UInt8 *>(c1_str.data());
+        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
         return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
-
-    const Context & context;
 };
 
 class FunctionSubStringIndex : public IFunction
 {
 public:
     static constexpr auto name = "substringIndex";
-    explicit FunctionSubStringIndex(const Context & context_)
-        : context(context_)
-    {}
+    FunctionSubStringIndex() = default;
 
-    static FunctionPtr create(const Context & context)
+    static FunctionPtr create(const Context & /*context*/)
     {
-        return std::make_shared<FunctionSubStringIndex>(context);
+        return std::make_shared<FunctionSubStringIndex>();
     }
 
     std::string getName() const override { return name; }
@@ -4025,10 +4278,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 3)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be {}.", getName(), toString(arguments.size()), 3),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
@@ -4059,13 +4308,11 @@ public:
         }
         else
         {
-            throw Exception(fmt::format("Illegal argument of function  {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 
 private:
-    const Context & context;
-
     template <typename IntType>
     bool executeSubStringIndex(
         Block & block,

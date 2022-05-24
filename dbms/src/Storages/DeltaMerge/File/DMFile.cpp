@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <Common/FailPoint.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -103,7 +117,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     if (file.exists())
     {
         file.remove(true);
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << path);
+        LOG_FMT_WARNING(log, "Existing dmfile, removed: {}", path);
     }
     if (single_file_mode)
     {
@@ -132,7 +146,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
 DMFilePtr DMFile::restore(
     const FileProviderPtr & file_provider,
     UInt64 file_id,
-    UInt64 ref_id,
+    UInt64 page_id,
     const String & parent_path,
     const ReadMetaMode & read_meta_mode)
 {
@@ -140,7 +154,7 @@ DMFilePtr DMFile::restore(
     bool single_file_mode = Poco::File(path).isFile();
     DMFilePtr dmfile(new DMFile(
         file_id,
-        ref_id,
+        page_id,
         parent_path,
         single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
         Status::READABLE,
@@ -193,43 +207,43 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-const String DMFile::encryptionBasePath() const
+String DMFile::encryptionBasePath() const
 {
     return getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
 }
 
 
-const EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::DATA_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::INDEX_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::MARK_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionMetaPath() const
+EncryptionPath DMFile::encryptionMetaPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : metaFileName());
 }
 
-const EncryptionPath DMFile::encryptionPackStatPath() const
+EncryptionPath DMFile::encryptionPackStatPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packStatFileName());
 }
 
-const EncryptionPath DMFile::encryptionPackPropertyPath() const
+EncryptionPath DMFile::encryptionPackPropertyPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
-const EncryptionPath DMFile::encryptionConfigurationPath() const
+EncryptionPath DMFile::encryptionConfigurationPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : configurationFileName());
 }
@@ -460,7 +474,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
             configuration->getChecksumAlgorithm(),
             configuration->getChecksumFrameLength());
         buf->seek(meta_pack_info.pack_stat_offset);
-        if (sizeof(PackStat) * packs != buf->readBig((char *)pack_stats.data(), sizeof(PackStat) * packs))
+        if (sizeof(PackStat) * packs != buf->readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -469,7 +483,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     {
         auto buf = openForRead(file_provider, path, encryptionPackStatPath(), meta_pack_info.pack_stat_size);
         buf.seek(meta_pack_info.pack_stat_offset);
-        if (sizeof(PackStat) * packs != buf.readBig((char *)pack_stats.data(), sizeof(PackStat) * packs))
+        if (sizeof(PackStat) * packs != buf.readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -542,7 +556,7 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
         DB::readIntBinary(footer.sub_file_num, buf);
         // initialize sub file state
         buf.seek(footer.sub_file_stat_offset, SEEK_SET);
-        SubFileStat sub_file_stat;
+        SubFileStat sub_file_stat{};
         for (UInt32 i = 0; i < footer.sub_file_num; i++)
         {
             String name;
@@ -565,8 +579,9 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
         auto recheck = [&](size_t size) {
             if (this->configuration)
             {
-                auto frame_count = size / this->configuration->getChecksumFrameLength()
-                    + (0 != size % this->configuration->getChecksumFrameLength());
+                auto total_size = this->configuration->getChecksumFrameLength() + this->configuration->getChecksumHeaderLength();
+                auto frame_count = size / total_size
+                    + (0 != size % total_size);
                 size -= frame_count * this->configuration->getChecksumHeaderLength();
             }
             return size;
@@ -606,13 +621,13 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
     Poco::File file(new_path);
     if (file.exists())
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removing: " << new_path);
+        LOG_FMT_WARNING(log, "Existing dmfile, removing: {}", new_path);
         const String deleted_path = getPathByStatus(parent_path, file_id, Status::DROPPED);
         // no need to delete the encryption info associated with the dmfile path here.
         // because this dmfile path is still a valid path and no obsolete encryption info will be left.
         file.renameTo(deleted_path);
         file.remove(true);
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dmfile, removed: " << deleted_path);
+        LOG_FMT_WARNING(log, "Existing dmfile, removed: {}", deleted_path);
     }
     old_file.renameTo(new_path);
     initializeSubFileStatsForFolderMode();
@@ -645,7 +660,7 @@ void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
     writeIntBinary(static_cast<std::underlying_type_t<DMSingleFileFormatVersion>>(footer.file_format_version), buffer);
     buffer.next();
     if (status != Status::WRITING)
-        throw Exception("Expected WRITING status, now " + statusString(status));
+        throw Exception(fmt::format("Expected WRITING status, now {}", statusString(status)));
     Poco::File old_file(path());
     Poco::File old_ngc_file(ngcPath());
 
@@ -698,7 +713,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File temp_file(full_path); temp_file.exists())
                     temp_file.remove(true);
-                LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing temporary dmfile, removed: " << full_path);
+                LOG_FMT_WARNING(log, "Existing temporary dmfile, removed: {}", full_path);
                 continue;
             }
             else if (startsWith(name, details::FOLDER_PREFIX_DROPPED))
@@ -707,7 +722,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 auto res = try_parse_file_id(name);
                 if (!res)
                 {
-                    LOG_INFO(log, "Unrecognized dropped DM file, ignored: " + name);
+                    LOG_FMT_INFO(log, "Unrecognized dropped DM file, ignored: {}", name);
                     continue;
                 }
                 UInt64 file_id = *res;
@@ -718,7 +733,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File del_file(full_path); del_file.exists())
                     del_file.remove(true);
-                LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dropped dmfile, removed: " << full_path);
+                LOG_FMT_WARNING(log, "Existing dropped dmfile, removed: {}", full_path);
                 continue;
             }
         }
@@ -731,7 +746,7 @@ std::set<UInt64> DMFile::listAllInPath(
         auto res = try_parse_file_id(name);
         if (!res)
         {
-            LOG_INFO(log, "Unrecognized DM file, ignored: " + name);
+            LOG_FMT_INFO(log, "Unrecognized DM file, ignored: {}", name);
             continue;
         }
         UInt64 file_id = *res;

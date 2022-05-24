@@ -1,3 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include <Encryption/FileProvider.h>
@@ -21,8 +35,8 @@ namespace DB::PS::V1
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
- * will covered the old ones. The file used to persist the Pages called PageFile. The meta data of a Page, like the
- * latest PageFile the Page is stored , the offset in file, and checksum, are cached in memory. Users should call
+ * will cover the old ones. The file used to persist the Pages called PageFile. The meta data of a Page, like the
+ * latest PageFile the Page is stored, the offset in file, and checksum, are cached in memory. Users should call
  * #gc() constantly to clean up the sparse PageFiles and release disk space.
  *
  * This class is multi-threads safe. Support single thread write, and multi threads read.
@@ -32,7 +46,7 @@ class PageStorage
 public:
     struct Config
     {
-        Config() {}
+        Config() = default;
 
         bool sync_on_write = true;
 
@@ -52,11 +66,15 @@ public:
 
     struct ListPageFilesOption
     {
-        ListPageFilesOption() {}
+        bool remove_tmp_files;
+        bool ignore_legacy;
+        bool ignore_checkpoint;
 
-        bool remove_tmp_files = false;
-        bool ignore_legacy = false;
-        bool ignore_checkpoint = false;
+        ListPageFilesOption()
+            : remove_tmp_files(false)
+            , ignore_legacy(false)
+            , ignore_checkpoint(false)
+        {}
     };
 
 #ifdef DELTA_VERSION_SET
@@ -80,20 +98,19 @@ public:
 
     PageId getMaxId();
 
-    void write(const WriteBatch & write_batch);
+    void write(const WriteBatch & wb);
 
     SnapshotPtr getSnapshot();
     size_t getNumSnapshots() const;
 
-    PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
-    Page read(PageId page_id, SnapshotPtr snapshot = {});
-    PageMap read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = {});
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot = {});
-    void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
-    void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
+    PageEntry getEntry(PageId page_id, SnapshotPtr snapshot);
+    Page read(PageId page_id, SnapshotPtr snapshot);
+    PageMap read(const PageIds & page_ids, SnapshotPtr snapshot);
+    void read(const PageIds & page_ids, const PageHandler & handler, SnapshotPtr snapshot);
+    void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot);
     bool gc();
 
-    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
+    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot);
 
     // Register two callback:
     // `scanner` for scanning avaliable external page ids.
@@ -119,7 +136,7 @@ private:
 
     std::set<PageFile, PageFile::Comparator> gcCompactLegacy(std::set<PageFile, PageFile::Comparator> && page_files);
 
-    void prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb);
+    static void prepareSnapshotWriteBatch(SnapshotPtr snapshot, WriteBatch & wb);
 
     static constexpr const char * ARCHIVE_SUBDIR = "archive";
 
@@ -171,7 +188,7 @@ public:
     /// Not snapshot read.
     explicit PageReader(PageStorage & storage_)
         : storage(storage_)
-        , snap()
+        , snap(nullptr)
     {}
     /// Snapshot read.
     PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_)
@@ -180,8 +197,8 @@ public:
     {}
 
     Page read(PageId page_id) const { return storage.read(page_id, snap); }
-    PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
-    void read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
+    PageMap read(const PageIds & page_ids) const { return storage.read(page_ids, snap); }
+    void read(const PageIds & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
 
     PageId getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
     UInt64 getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }

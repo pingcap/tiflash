@@ -1,4 +1,21 @@
-#include <Encryption/ReadBufferFromFileProvider.h>
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+#include <Common/nocopyable.h>
+#include <IO/ReadBufferFromFileBase.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <common/types.h>
@@ -33,22 +50,15 @@ public:
         Reporter * reporter_,
         bool verify_checksum_,
         Format::LogNumberType log_num_,
-        WALRecoveryMode recovery_mode_,
-        Poco::Logger * log_);
+        WALRecoveryMode recovery_mode_);
 
-    LogReader(const LogReader &) = delete;
-    LogReader & operator=(const LogReader &) = delete;
+    DISALLOW_COPY(LogReader);
 
     virtual ~LogReader();
 
     // Read the next record record.  Returns <true, record> if read
     // successfully, false if we hit end of the input.
     virtual std::tuple<bool, String> readRecord();
-
-    // Returns the physical offset of the last record returned by readRecord.
-    //
-    // Undefined before the first call to readRecord.
-    UInt64 lastRecordOffset();
 
     bool isEOF() const { return eof; }
 
@@ -102,7 +112,8 @@ private:
 private:
     const bool verify_checksum;
     bool recycled;
-    bool eof; // Last Read() indicated EOF by returning < BlockSize
+    bool is_last_block; // Last Read() indicated EOF by returning < BlockSize
+    bool eof;
     bool read_error; // Error occrured while reading from file
     // Offset of the file position indicator within the last block when an EOF was detected.
     WALRecoveryMode recovery_mode;
@@ -110,14 +121,11 @@ private:
 
     const std::unique_ptr<ReadBufferFromFileBase> file;
     std::string_view buffer;
-    Reporter * reporter;
+    Reporter * const reporter;
 
-    UInt64 last_record_offset;
     UInt64 end_of_buffer_offset;
     // which log number it is
-    Format::LogNumberType log_number;
-
-    Poco::Logger * log;
+    const Format::LogNumberType log_number;
 };
 
 } // namespace PS::V3
