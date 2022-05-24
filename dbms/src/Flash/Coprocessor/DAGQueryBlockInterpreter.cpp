@@ -51,7 +51,6 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Storages/Transaction/TiDB.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
 
@@ -91,7 +90,7 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
-    bool is_final_agg;
+    bool is_final_agg = false;
 };
 
 AnalysisResult analyzeExpressions(
