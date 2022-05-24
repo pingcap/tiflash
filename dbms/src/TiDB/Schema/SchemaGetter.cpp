@@ -271,7 +271,7 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
 
     auto kv_pairs = TxnStructure::hGetAll(snap, db_key);
 
-    for (const auto& kv_pair : kv_pairs)
+    for (const auto & kv_pair : kv_pairs)
     {
         const String & key = kv_pair.first;
         if (key.rfind(TablePrefix, 0) != 0)

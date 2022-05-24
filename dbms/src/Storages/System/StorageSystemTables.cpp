@@ -282,7 +282,7 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
     {
         Tables external_tables = context.getSessionContext().getExternalTables();
 
-        for (const auto& table : external_tables)
+        for (const auto & table : external_tables)
         {
             size_t j = 0;
             res_columns[j++]->insertDefault();
