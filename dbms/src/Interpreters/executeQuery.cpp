@@ -480,7 +480,7 @@ void executeQuery(
 
         if (streams.in)
         {
-            const ASTQueryWithOutput * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
+            const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
 
             WriteBuffer * out_buf = &ostr;
             std::optional<WriteBufferFromFile> out_file_buf;

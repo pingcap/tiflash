@@ -186,7 +186,7 @@ void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
     QuotaForIntervals & quota = context.getQuota();
 
     pipeline.transform([&](auto & stream) {
-        if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
         {
             p_stream->setLimits(limits);
             p_stream->setQuota(quota);
