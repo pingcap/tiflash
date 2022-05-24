@@ -86,8 +86,23 @@ public:
     struct Config
     {
         SettingUInt64 roll_size = PAGE_META_ROLL_SIZE;
-        SettingUInt64 wal_recover_mode = 0;
         SettingUInt64 max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
+
+    private:
+        SettingUInt64 wal_recover_mode = 0;
+
+    public:
+        void setRecoverMode(UInt64 recover_mode)
+        {
+            if (recover_mode != static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
+                && recover_mode != static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
+                && recover_mode != static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
+                && recover_mode != static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords))
+            {
+                throw Exception("Unknow recover mode [num={}]", recover_mode);
+            }
+            wal_recover_mode = recover_mode;
+        }
 
         static WALRecoveryMode getRecoverMode()
         {
