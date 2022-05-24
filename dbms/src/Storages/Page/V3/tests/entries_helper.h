@@ -234,6 +234,14 @@ inline ::testing::AssertionResult getEntryNotExist(
             id_entry.first.low,
             toDebugString(id_entry.second));
     }
+    catch (DB::Exception & ex)
+    {
+        if (ex.code() == ErrorCodes::PS_ENTRY_NOT_EXISTS || ex.code() == ErrorCodes::PS_ENTRY_NO_VALID_VERSION)
+            return ::testing::AssertionSuccess();
+        else
+            error = ex.displayText();
+        return ::testing::AssertionFailure(::testing::Message(error.c_str()));
+    }
     catch (...)
     {
         error = getCurrentExceptionMessage(true);
