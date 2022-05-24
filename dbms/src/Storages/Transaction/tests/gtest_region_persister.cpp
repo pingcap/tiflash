@@ -251,7 +251,7 @@ try
         }
 
         // If we truncate page data file, exception will throw instead of droping last region.
-        auto meta_path = path + "/kvstore/page_1_0/meta"; // First page
+        auto meta_path = path + "/page/kvstore/wal/log_1_0"; // First page
         Poco::File meta_file(meta_path);
         size_t size = meta_file.getSize();
         int rt = ::truncate(meta_path.c_str(), size - 1); // Remove last one byte
@@ -291,6 +291,7 @@ try
     // Force to run in compatible mode for the default region persister
     FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
     SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode); });
+    TiFlashTestEnv::getGlobalContext().setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
     auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
                                           Strings{
                                               path,

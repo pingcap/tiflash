@@ -14,7 +14,6 @@
 
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
-#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
