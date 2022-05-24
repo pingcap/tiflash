@@ -213,7 +213,7 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
 
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
-    const ColumnNullable & nullable_col = static_cast<const ColumnNullable &>(src);
+    const auto & nullable_col = static_cast<const ColumnNullable &>(src);
     getNullMapColumn().insertRangeFrom(*nullable_col.null_map, start, length);
     getNestedColumn().insertRangeFrom(*nullable_col.nested_column, start, length);
 }
@@ -234,7 +234,7 @@ void ColumnNullable::insert(const Field & x)
 
 void ColumnNullable::insertFrom(const IColumn & src, size_t n)
 {
-    const ColumnNullable & src_concrete = static_cast<const ColumnNullable &>(src);
+    const auto & src_concrete = static_cast<const ColumnNullable &>(src);
     getNestedColumn().insertFrom(src_concrete.getNestedColumn(), n);
     getNullMapData().push_back(src_concrete.getNullMapData()[n]);
 }
@@ -293,7 +293,7 @@ int ColumnNullable::compareAt(
     int null_direction_hint,
     const ICollator & collator) const
 {
-    const ColumnNullable & nullable_rhs = static_cast<const ColumnNullable &>(rhs_);
+    const auto & nullable_rhs = static_cast<const ColumnNullable &>(rhs_);
     auto [has_null, res] = compareAtCheckNull(n, m, nullable_rhs, null_direction_hint);
     if (has_null)
         return res;
@@ -303,7 +303,7 @@ int ColumnNullable::compareAt(
 
 int ColumnNullable::compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const
 {
-    const ColumnNullable & nullable_rhs = static_cast<const ColumnNullable &>(rhs_);
+    const auto & nullable_rhs = static_cast<const ColumnNullable &>(rhs_);
     auto [has_null, res] = compareAtCheckNull(n, m, nullable_rhs, null_direction_hint);
     if (has_null)
         return res;
