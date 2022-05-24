@@ -14,13 +14,11 @@
 
 #pragma once
 
-//#include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+
+#include <memory>
 #include <queue>
 #include <vector>
-#include <memory>
-//#include <DataStreams/ParallelInputsProcessor.h>
-//#include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 
 namespace DB
 {
@@ -119,17 +117,15 @@ private:
 class MultiplexInputStream final : public IProfilingBlockInputStream
 {
 private:
-    static constexpr auto NAME = "MultiplexDMSeg";
+    static constexpr auto NAME = "Multiplex";
 
 public:
     MultiplexInputStream(
-        //        BlockInputStreams inputs,
         std::shared_ptr<MultiPartitionStreamPool> & shared_pool,
         const String & req_id)
         : log(Logger::get(NAME, req_id))
         , shared_pool(shared_pool)
     {
-        // TODO: assert capacity of output_queue is not less than processor.getMaxThreads()
         shared_pool->exportAddedStreams(children);
         size_t num_children = children.size();
         if (num_children > 1)
@@ -139,7 +135,7 @@ public:
                 assertBlocksHaveEqualStructure(
                     children[i]->getHeader(),
                     header,
-                    "MULTIPLEX_DMSEG");
+                    "MULTIPLEX");
         }
     }
 

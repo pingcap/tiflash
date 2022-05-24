@@ -16,10 +16,10 @@
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
-#include <DataStreams/MultiplexInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/MultiplexInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -638,9 +638,8 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         if (region_num == 0)
             continue;
         /// calculate weighted max_streams for each partition, note at least 1 stream is needed for each partition
-        size_t current_max_streams =  max_streams;
-//            table_query_infos.size() == 1 ? max_streams : (max_streams * region_num + total_local_region_num - 1) / total_local_region_num;
-
+        size_t current_max_streams = max_streams;
+        LOG_FMT_DEBUG(log, "buildLocalStreams, table_id:{}, streams:{}", table_id, current_max_streams);
         QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
         assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
         auto & storage = storages_with_structure_lock[table_id].storage;
@@ -776,7 +775,6 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
             }
         }
     }
-    //TODO use old style when table_query_infos.size() <= 1;
     for (int i = 0; i < static_cast<int>(max_streams); i++)
     {
         pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, context.getDAGContext()->getMPPTaskId().toString()));
