@@ -2399,6 +2399,35 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryGCTest, testGCTwice)
+try
+{
+    PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+
+    auto restore_from_edit = [](const PageEntriesEdit & edit) {
+        auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
+        auto provider = ctx.getFileProvider();
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        PageDirectoryFactory factory;
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
+        return d;
+    };
+
+    {
+        PageEntriesEdit edit;
+        edit.put(50, entry_50_1);
+        edit.put(50, entry_50_2);
+        edit.ref(51, 50);
+        edit.del(50);
+        edit.del(51);
+        auto page_ids = restore_from_edit(edit)->getAllPageIds();
+        ASSERT_EQ(page_ids.size(), 0);
+    }
+}
+CATCH
+
 #undef INSERT_ENTRY_TO
 #undef INSERT_ENTRY
 #undef INSERT_ENTRY_ACQ_SNAP
