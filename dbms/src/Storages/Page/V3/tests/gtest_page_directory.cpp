@@ -2272,7 +2272,7 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, cleanAfterDecreaseRef)
+TEST_F(PageDirectoryGCTest, CleanAfterDecreaseRef)
 try
 {
     PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};

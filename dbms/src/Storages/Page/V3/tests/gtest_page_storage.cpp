@@ -1380,7 +1380,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorageTest, testGCTwice)
+TEST_F(PageStorageTest, CleanAfterDecreaseRef)
 try
 {
     // Make it in log_1_0

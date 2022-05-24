@@ -1208,13 +1208,15 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
         auto identifier = fmt::format("{}_dump_{}", wal->name(), log_num);
         auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
         PageDirectoryFactory factory;
+        // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
+        // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
         PageDirectoryPtr collapsed_dir = factory.createFromReader(
             identifier,
             std::move(snapshot_reader),
             /*wal=*/nullptr);
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
-        auto edit = collapsed_dir->dumpSnapshotToEdit();
-        done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit), write_limiter);
+        auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
+        done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit_from_disk), write_limiter);
     }
     return done_any_io;
 }
