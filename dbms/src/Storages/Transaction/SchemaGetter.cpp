@@ -139,7 +139,10 @@ public:
 
 AffectedOption::AffectedOption(Poco::JSON::Object::Ptr json)
 {
-    deserialize(json);
+    schema_id = json->getValue<Int64>("schema_id");
+    table_id = json->getValue<Int64>("table_id");
+    old_table_id = json->getValue<Int64>("old_table_id");
+    old_schema_id = json->getValue<Int64>("old_schema_id");
 }
 
 void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)

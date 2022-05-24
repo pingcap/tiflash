@@ -336,7 +336,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
     if (args.size() != 1)
         throw Exception("Args not matched, should be: json_dag_path", ErrorCodes::BAD_ARGUMENTS);
 
-    String json_dag_path = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto json_dag_path = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     auto dag = NaturalDag(json_dag_path, &Poco::Logger::get("MockDAG"));
     dag.init();
     dag.build(context);
@@ -431,7 +431,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     if (args.empty() || args.size() > 3)
         throw Exception("Args not matched, should be: query[, region-id, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
-    String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = InvalidRegionID;
     if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);

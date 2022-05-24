@@ -58,7 +58,7 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
 
-    SortedColumnIDWithPosConstIter column_ids_iter = read_column_ids.begin();
+    auto column_ids_iter = read_column_ids.begin();
     size_t next_column_pos = 0;
 
     /// every table in tiflash must have an extra handle column, it either
