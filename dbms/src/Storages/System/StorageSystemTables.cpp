@@ -229,7 +229,7 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
                 {
                     if (db_tiflash)
                         tidb_database_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo());
-                    auto & table_info = managed_storage->getTableInfo();
+                    const auto & table_info = managed_storage->getTableInfo();
                     tidb_table_name = mapper.displayTableName(table_info);
                     table_id = table_info.id;
                     tombstone = managed_storage->getTombstone();
@@ -282,7 +282,7 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
     {
         Tables external_tables = context.getSessionContext().getExternalTables();
 
-        for (auto table : external_tables)
+        for (const auto& table : external_tables)
         {
             size_t j = 0;
             res_columns[j++]->insertDefault();

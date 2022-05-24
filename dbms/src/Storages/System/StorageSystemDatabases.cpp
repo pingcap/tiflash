@@ -80,7 +80,7 @@ BlockInputStreams StorageSystemDatabases::read(const Names & column_names,
         res_columns[j++]->insert(Int64(database_id));
 
         res_columns[j++]->insert(database.second->getEngineName());
-        res_columns[j++]->insert((UInt64)tombstone);
+        res_columns[j++]->insert(static_cast<UInt64>(tombstone));
         res_columns[j++]->insert(database.second->getDataPath());
         res_columns[j++]->insert(database.second->getMetadataPath());
     }
