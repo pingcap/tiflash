@@ -52,7 +52,7 @@ StorageJoin::StorageJoin(
     /// NOTE StorageJoin doesn't use join_use_nulls setting.
 
     join = std::make_shared<Join>(key_names, key_names, false /* use_nulls */, SizeLimits(), kind, strictness, /*req_id=*/"");
-    join->setSampleBlock(getSampleBlock().sortColumns());
+    join->init(getSampleBlock().sortColumns());
     restore();
 }
 
