@@ -109,7 +109,7 @@ bool WindowBlockInputStream::isDifferentFromPrevPartition(UInt64 current_partiti
         const auto * compared_column = compared_columns[partition_column_indices[i]].get();
         if (window_description.partition_by[i].collator)
         {
-            if (compared_column->compareAtWithCollation(current_partition_row,
+            if (compared_column->compareAt(current_partition_row,
                                                         prev_frame_start.row,
                                                         *reference_column,
                                                         1 /* nan_direction_hint */,
@@ -278,7 +278,7 @@ bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) 
             const auto * column_y = inputAt(y)[order_column_indices[i]].get();
             if (window_description.order_by[i].collator)
             {
-                if (column_x->compareAtWithCollation(x.row, y.row, *column_y, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
+                if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
                 {
                     return false;
                 }
