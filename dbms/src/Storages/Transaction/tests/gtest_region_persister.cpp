@@ -288,9 +288,12 @@ try
 {
     std::string path = dir_path + "/compatible_mode";
 
+    auto current_storage_run_mode = TiFlashTestEnv::getGlobalContext().getPageStorageRunMode();
     // Force to run in compatible mode for the default region persister
     FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
-    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode); });
+    SCOPE_EXIT(
+        { FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
+          TiFlashTestEnv::getGlobalContext().setPageStorageRunMode(current_storage_run_mode); });
     TiFlashTestEnv::getGlobalContext().setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
     auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
                                           Strings{
