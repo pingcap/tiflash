@@ -142,8 +142,8 @@ void FileProvider::deleteRegularFile(const String & file_path_, const Encryption
         {
             throw DB::TiFlashException("File: " + data_file.path() + " is not a regular file", Errors::Encryption::Internal);
         }
-        key_manager->deleteFile(encryption_path_.full_path, true);
         data_file.remove(false);
+        key_manager->deleteFile(encryption_path_.full_path, true);
     }
 }
 
