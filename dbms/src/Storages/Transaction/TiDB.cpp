@@ -615,6 +615,8 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexColumnInfo::IndexColumnInfo(Poco::JSON::Object::Ptr json)
+    : offset(0)
+    , length(0)
 {
     deserialize(json);
 }
@@ -664,6 +666,13 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexInfo::IndexInfo(Poco::JSON::Object::Ptr json)
+    : id(0)
+    , state(TiDB::SchemaState::StateNone)
+    , index_type(0)
+    , is_unique(true)
+    , is_primary(true)
+    , is_invisible(true)
+    , is_global(true)
 {
     deserialize(json);
 }

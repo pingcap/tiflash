@@ -138,6 +138,10 @@ public:
 };
 
 AffectedOption::AffectedOption(Poco::JSON::Object::Ptr json)
+    : schema_id(0)
+    , table_id(0)
+    , old_table_id(0)
+    , old_schema_id(0)
 {
     deserialize(json);
 }
@@ -245,7 +249,7 @@ std::vector<TiDB::DBInfoPtr> SchemaGetter::listDBs()
 {
     std::vector<TiDB::DBInfoPtr> res;
     auto pairs = TxnStructure::hGetAll(snap, DBs);
-    for (auto pair : pairs)
+    for (const auto & pair : pairs)
     {
         auto db_info = std::make_shared<TiDB::DBInfo>(pair.second);
         res.push_back(db_info);

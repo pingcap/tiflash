@@ -55,6 +55,8 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , engine(raft_config.engine)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
+    , wait_index_timeout_ms(0)
+    , read_index_worker_tick_ms(0)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {}
 
