@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 namespace DB
 {

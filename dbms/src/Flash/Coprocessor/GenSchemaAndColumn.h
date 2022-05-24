@@ -17,7 +17,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 namespace DB
 {

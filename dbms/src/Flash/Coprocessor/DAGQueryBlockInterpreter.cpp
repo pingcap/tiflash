@@ -51,8 +51,8 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <TiDB/TiDB.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-#include <src/TiDB/TiDB.h>
 
 
 namespace DB

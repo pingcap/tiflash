@@ -23,7 +23,7 @@
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 namespace DB
 {

@@ -29,7 +29,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 namespace DB
 {

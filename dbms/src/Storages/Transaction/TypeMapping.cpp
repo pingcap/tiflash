@@ -32,7 +32,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 #include <type_traits>
 

@@ -30,7 +30,7 @@
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/VirtualColumnUtils.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 namespace DB
 {

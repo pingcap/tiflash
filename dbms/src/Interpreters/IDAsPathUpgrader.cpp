@@ -36,9 +36,9 @@
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
+#include <TiDB/TiDB.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
-#include <src/TiDB/TiDB.h>
 
 namespace DB
 {

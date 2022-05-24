@@ -21,7 +21,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 
 using TableInfo = TiDB::TableInfo;

@@ -26,7 +26,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 #include <queue>
 

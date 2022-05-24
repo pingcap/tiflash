@@ -18,8 +18,8 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
+#include <TiDB/TiDB.h>
 #include <common/logger_useful.h>
-#include <src/TiDB/TiDB.h>
 
 namespace DB
 {
@@ -117,7 +117,7 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
         }
         case TypeIndex::Enum16:
         {
-            // According to `src/TiDB/TiDB.h` and MySQL 5.7
+            // According to `TiDB/TiDB.h` and MySQL 5.7
             // document(https://dev.mysql.com/doc/refman/5.7/en/enum.html),
             // enum support 65,535 distinct value at most, so only Enum16 is supported here.
             // Default value of Enum should be store as a Int64 Field (Storages/Transaction/Datum.cpp)

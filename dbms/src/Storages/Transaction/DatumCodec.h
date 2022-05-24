@@ -19,7 +19,7 @@
 #include <IO/Endian.h>
 #include <IO/WriteBuffer.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 /// Functions in this file are used for individual datum codec, i.e. UInt/Int64, Float64, String/Bytes, Decimal, Enum, Set, etc.
 /// The internal representation of a datum in TiFlash is Field.

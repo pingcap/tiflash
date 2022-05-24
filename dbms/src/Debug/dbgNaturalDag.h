@@ -18,8 +18,8 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
+#include <TiDB/TiDB.h>
 #include <kvproto/coprocessor.pb.h>
-#include <src/TiDB/TiDB.h>
 
 #include <fstream>
 #include <iostream>

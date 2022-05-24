@@ -20,8 +20,8 @@
 #include <Core/SortDescription.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/Types.h>
+#include <TiDB/TiDB.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
-#include <src/TiDB/TiDB.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 

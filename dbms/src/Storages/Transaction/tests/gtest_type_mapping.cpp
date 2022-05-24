@@ -15,7 +15,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <src/TiDB/TiDB.h>
+#include <TiDB/TiDB.h>
 
 namespace DB
 {
