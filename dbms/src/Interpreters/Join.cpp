@@ -126,6 +126,7 @@ Join::Join(
     , key_names_right(key_names_right_)
     , use_nulls(use_nulls_)
     , build_concurrency(0)
+    , build_set_exceeded(false)
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
@@ -138,7 +139,6 @@ Join::Join(
     , log(Logger::get("Join", req_id))
     , limits(limits)
 {
-    build_set_exceeded.store(false);
     if (other_condition_ptr != nullptr)
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
@@ -739,7 +739,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
         column = column->convertToFullColumnIfConst();
     if (column->isColumnNullable())
     {
-        const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*column);
+        const auto & column_nullable = static_cast<const ColumnNullable &>(*column);
         if (!null_map_holder)
         {
             null_map_holder = column_nullable.getNullMapColumnPtr();
@@ -2064,7 +2064,7 @@ private:
     MutableColumns columns_right;
 
     std::unique_ptr<void, std::function<void(void *)>> position; /// type erasure
-    size_t current_segment;
+    size_t current_segment = 0;
     Join::RowRefList * current_not_mapped_row = nullptr;
 
     void setNextCurrentNotMappedRow()

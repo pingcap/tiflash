@@ -49,8 +49,6 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <Storages/Transaction/TiDB.h>
-
 
 namespace DB
 {
@@ -88,7 +86,7 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
-    bool is_final_agg;
+    bool is_final_agg = false;
 };
 
 AnalysisResult analyzeExpressions(
