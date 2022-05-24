@@ -129,6 +129,9 @@ try
         auto streaming_writer = std::make_shared<StreamWriter>(writer);
         TiDB::TiDBCollators collators;
 
+        // TODO: set this by session var.
+        uint32_t recv_stream_count = 4;
+        Int64 fine_grained_shuffle_batch_size = 8192;
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(
             streaming_writer,
             std::vector<Int64>(),
@@ -137,7 +140,9 @@ try
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
             true,
-            dag_context);
+            dag_context,
+            recv_stream_count,
+            fine_grained_shuffle_batch_size);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }

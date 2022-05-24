@@ -35,9 +35,30 @@ namespace DB
 {
 struct ReceivedMessage
 {
-    std::shared_ptr<mpp::MPPDataPacket> packet;
-    size_t source_index = 0;
+    size_t source_index;
     String req_info;
+
+    // Make sure error_ptr, resp_ptr and chunks pointer to the data inside packet,
+    // So packet can make sure data is valid.
+    const std::shared_ptr<const MPPDataPacket> packet;
+    const mpp::Error * error_ptr;
+    const String * resp_ptr;
+    std::vector<const String *> chunks;
+
+    // Construct that move MPPDataPacketPtr.
+    ReceivedMessage(size_t source_index_,
+                    const String & req_info_,
+                    const std::shared_ptr<const MPPDataPacket> & packet_ = std::make_shared<const MPPDataPacket>(),
+                    const mpp::Error * error_ptr_ = nullptr,
+                    const String * resp_ptr_ = nullptr,
+                    std::vector<const String *> && chunks_ = std::vector<const String *>())
+        : source_index(source_index_)
+        , req_info(req_info_)
+        , packet(packet_)
+        , error_ptr(error_ptr_)
+        , resp_ptr(resp_ptr_)
+        , chunks(chunks_)
+    {}
 };
 
 struct ExchangeReceiverResult
@@ -78,6 +99,7 @@ enum class ExchangeReceiverState
     CLOSED,
 };
 
+using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>>>;
 
 template <typename RPCContext>
 class ExchangeReceiverBase
@@ -92,7 +114,8 @@ public:
         size_t source_num_,
         size_t max_streams_,
         const String & req_id,
-        const String & executor_id);
+        const String & executor_id,
+        uint32_t fine_grained_shuffle_stream_count);
 
     ~ExchangeReceiverBase();
 
@@ -104,7 +127,8 @@ public:
 
     ExchangeReceiverResult nextResult(
         std::queue<Block> & block_queue,
-        const Block & header);
+        const Block & header,
+        UInt32 stream_id);
 
     size_t getSourceNum() const { return source_num; }
 
@@ -139,11 +163,12 @@ private:
         std::queue<Block> & block_queue,
         const Block & header);
 
-
     void connectionDone(
         bool meet_error,
         const String & local_err_msg,
         const LoggerPtr & log);
+
+    void finishAllMsgChannels();
 
     std::shared_ptr<RPCContext> rpc_context;
 
@@ -156,7 +181,7 @@ private:
     std::shared_ptr<ThreadManager> thread_manager;
     DAGSchema schema;
 
-    MPMCQueue<std::shared_ptr<ReceivedMessage>> msg_channel;
+    std::vector<MsgChannelPtr> msg_channels;
 
     std::mutex mu;
     /// should lock `mu` when visit these members
@@ -168,6 +193,7 @@ private:
 
     bool collected = false;
     int thread_count = 0;
+    uint32_t fine_grained_shuffle_stream_count;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

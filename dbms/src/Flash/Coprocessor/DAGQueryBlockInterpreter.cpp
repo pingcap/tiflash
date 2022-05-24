@@ -745,10 +745,19 @@ void DAGQueryBlockInterpreter::executeWindow(
 {
     executeExpression(pipeline, window_description.before_window);
 
-    /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log);
-    assert(pipeline.streams.size() == 1);
-    pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+    // TODO: change name
+    if (dagContext().enableFineGrainedShuffle())
+    {
+        // fine_grained_shuffle_stream_count is logical, no need to be equal to real stream count.
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<WindowBlockInputStream>(stream, window_description, log->identifier()); });
+    }
+    else
+    {
+        /// If there are several streams, we merge them into one
+        executeUnion(pipeline, max_streams, log);
+        assert(pipeline.streams.size() == 1);
+        pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+    }
 }
 
 void DAGQueryBlockInterpreter::executeAggregation(
@@ -847,18 +856,33 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
         stream = sorting_stream;
     });
 
-    /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log);
+    if (dagContext().enableFineGrainedShuffle())
+    {
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<MergeSortingBlockInputStream>(
+                    stream,
+                    order_descr,
+                    settings.max_block_size,
+                    limit,
+                    settings.max_bytes_before_external_sort,
+                    context.getTemporaryPath(),
+                    log->identifier());
+                });
+    }
+    else
+    {
+        /// If there are several streams, we merge them into one.
+        executeUnion(pipeline, max_streams, log);
 
-    /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
-        pipeline.firstStream(),
-        order_descr,
-        settings.max_block_size,
-        limit,
-        settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
-        log->identifier());
+        /// Merge the sorted blocks.
+        pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
+            pipeline.firstStream(),
+            order_descr,
+            settings.max_block_size,
+            limit,
+            settings.max_bytes_before_external_sort,
+            context.getTemporaryPath(),
+            log->identifier());
+    }
 }
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
@@ -926,7 +950,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
         std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), query_block.source_name);
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), query_block.source_name, 0 /* stream_id */);
         pipeline.streams.push_back(input);
         task_start = task_end;
     }
@@ -939,9 +963,12 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
+    size_t stream_idx = 0;
     for (size_t i = 0; i < max_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name);
+        if (dagContext().enableFineGrainedShuffle())
+            stream_idx = i;
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name, stream_idx);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         pipeline.streams.push_back(stream);
@@ -1160,6 +1187,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
     TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
     int stream_id = 0;
+
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
@@ -1170,7 +1198,9 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-            dagContext());
+            dagContext(),
+            dagContext().getFineGrainedShuffleStreamCount(),
+            dagContext().getFineGrainedShuffleBatchSize());
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
     });
 }

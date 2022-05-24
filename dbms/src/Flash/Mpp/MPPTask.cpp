@@ -199,6 +199,13 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
+    dag_context->setFineGrainedShuffleStreamCount(task_request.fine_grained_shuffle_stream_count());
+    dag_context->setFineGrainedShuffleBatchSize(task_request.fine_grained_shuffle_batch_size());
+    LOG_FMT_DEBUG(log, "fine grained shuffle setup, task: {}, enable: {}, stream_count: {}, batch_size: {}",
+            getId().toString(),
+            dag_context->enableFineGrainedShuffle(),
+            dag_context->getFineGrainedShuffleStreamCount(),
+            dag_context->getFineGrainedShuffleBatchSize());
     context->setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())

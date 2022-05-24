@@ -109,6 +109,8 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
+inline bool enableFineGrainedShuffle(uint32_t stream_count) { return stream_count > 0; }
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -125,6 +127,8 @@ public:
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , fine_grained_shuffle_stream_count(0)
+        , fine_grained_shuffle_batch_size(0)
     {
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
@@ -147,6 +151,8 @@ public:
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , fine_grained_shuffle_stream_count(0)
+        , fine_grained_shuffle_batch_size(0)
     {
         assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
 
@@ -167,6 +173,8 @@ public:
         , max_recorded_error_count(max_error_count_)
         , warnings(max_recorded_error_count)
         , warning_count(0)
+        , fine_grained_shuffle_stream_count(0)
+        , fine_grained_shuffle_batch_size(0)
     {}
 
     void attachBlockIO(const BlockIO & io_);
@@ -312,6 +320,12 @@ public:
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
 
+    bool enableFineGrainedShuffle() const { return ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count); }
+    uint32_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
+    Int64 getFineGrainedShuffleBatchSize() const { return fine_grained_shuffle_batch_size; }
+    void setFineGrainedShuffleStreamCount(uint32_t count) { fine_grained_shuffle_stream_count = count; }
+    void setFineGrainedShuffleBatchSize(Int64 size) { fine_grained_shuffle_batch_size = size; }
+
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
@@ -345,6 +359,10 @@ private:
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
+
+    // TODO: comment
+    uint32_t fine_grained_shuffle_stream_count;
+    Int64 fine_grained_shuffle_batch_size;
 };
 
 } // namespace DB

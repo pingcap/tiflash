@@ -228,7 +228,8 @@ void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams
                     executor.exchange_receiver().encoded_task_meta_size(),
                     max_streams,
                     log->identifier(),
-                    executor_id);
+                    executor_id,
+                    fine_grained_shuffle_stream_count);
                 mpp_exchange_receiver_map[executor_id] = exchange_receiver;
                 new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
             }

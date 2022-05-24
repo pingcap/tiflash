@@ -139,7 +139,7 @@ public:
         return detail;
     }
 
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header)
+    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, UInt32 /* stream_id */)
     {
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())

@@ -45,7 +45,9 @@ public:
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
-        DAGContext & dag_context_);
+        DAGContext & dag_context_,
+        uint32_t fine_grained_shuffle_stream_count_,
+        Int64 fine_grained_shuffle_batch_size);
     void write(const Block & block) override;
     void finishWrite() override;
 
@@ -53,9 +55,20 @@ private:
     template <bool send_exec_summary_at_last>
     void batchWrite();
     template <bool send_exec_summary_at_last>
+    void batchWriteFineGrainedShuffle();
+    bool canUseFineGrainedShuffle() const;
+
+    template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     template <bool send_exec_summary_at_last>
     void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+
+    template <bool send_exec_summary_at_last>
+    void handleExecSummary(const std::vector<Block> & input_blocks,
+                           std::vector<mpp::MPPDataPacket> & packet,
+                           tipb::SelectResponse & response) const;
+    template <bool send_exec_summary_at_last>
+    void writePackets(const std::vector<size_t> & responses_row_count, std::vector<mpp::MPPDataPacket> & packets) const;
 
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
@@ -67,6 +80,8 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
+    uint32_t fine_grained_shuffle_stream_count;
+    Int64 fine_grained_shuffle_batch_size;
 };
 
 } // namespace DB
