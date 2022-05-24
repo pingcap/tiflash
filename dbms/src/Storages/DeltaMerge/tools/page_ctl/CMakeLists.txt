@@ -14,5 +14,10 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_subdirectory (workload EXCLUDE_FROM_ALL)
-add_subdirectory (page_ctl EXCLUDE_FROM_ALL)
+set(page-ctl-src ${TiFlash_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestEnv.cpp)
+
+add_library(page-ctl-lib ${page-ctl-src})
+target_link_libraries(page-ctl-lib dbms clickhouse_functions clickhouse-server-lib)
+
+add_executable(page-ctl Main.cpp ${page-ctl-src})
+target_link_libraries(page-ctl dbms gtest clickhouse_functions clickhouse-server-lib)

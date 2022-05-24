@@ -14,6 +14,7 @@
 
 #include <Common/UnifiedLogPatternFormatter.h>
 #include <Encryption/MockKeyManager.h>
+#include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -21,6 +22,7 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Server/DTTool/DTTool.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
@@ -32,6 +34,7 @@
 
 namespace DB::PS::V3
 {
+
 struct ControlOptions
 {
     enum DisplayType
@@ -49,6 +52,8 @@ struct ControlOptions
     UInt64 query_ns_id = DB::TEST_NAMESPACE_ID;
     UInt64 check_page_id = UINT64_MAX;
     bool enable_fo_check = true;
+    bool is_imitative = true;
+    String config_file_path;
 
     static ControlOptions parse(int argc, char ** argv);
 };
@@ -66,7 +71,9 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
         ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.")("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
         ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Page id, and print its version chaim.") //
-        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Quert a single Blob id, and print its data distribution.");
+        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Quert a single Blob id, and print its data distribution.")
+        ("imitative,I", value<bool>()->default_value(true), "Use imitative context instead. (encryption is not supported in this mode so that no need to set config_file_path)")
+        ("config_file_path,C", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
 
 
     static_assert(sizeof(DB::PageId) == sizeof(UInt64));
@@ -97,6 +104,18 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     opt.enable_fo_check = options["enable_fo_check"].as<bool>();
     opt.check_page_id = options["check_page_id"].as<UInt64>();
     opt.query_ns_id = options["query_ns_id"].as<UInt64>();
+    opt.is_imitative = options["imitative"].as<bool>();
+    if (opt.is_imitative && options.count("config-file") != 0)
+    {
+        std::cerr << "config-file is not allowed in imitative mode" << std::endl;
+        exit(0);
+    }
+    else if (!opt.is_imitative && options.count("config-file") == 0)
+    {
+        std::cerr << "config-file is required in proxy mode" << std::endl;
+        exit(0);
+    }
+    opt.config_file_path = options["config_file_path"].as<std::string>();
 
     if (opt.display_mode < DisplayType::DISPLAY_SUMMARY_INFO || opt.display_mode > DisplayType::CHECK_ALL_DATA_CRC)
     {
@@ -118,6 +137,22 @@ public:
 
     void run()
     {
+        if (options.is_imitative)
+        {
+            Context context = Context::createGlobal();
+            getPageStorageV3Info(context, options);
+        }
+        else
+        {
+            PageDirectory::MVCCMapType type;
+            DTTool::CLIService service(getPageStorageV3Info, options, options.config_file_path, DTTool::run_raftstore_proxy_ffi);
+            service.run({""});
+        }
+    }
+
+private:
+    static int getPageStorageV3Info(Context & context, const ControlOptions & options)
+    {
         DB::PSDiskDelegatorPtr delegator;
         if (options.paths.size() == 1)
         {
@@ -128,13 +163,20 @@ public:
             delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(options.paths);
         }
 
-        auto key_manager = std::make_shared<DB::MockKeyManager>(false);
-        auto file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
-
+        FileProviderPtr file_provider_ptr;
+        if (options.is_imitative)
+        {
+            auto key_manager = std::make_shared<DB::MockKeyManager>(false);
+            file_provider_ptr = std::make_shared<DB::FileProvider>(key_manager, false);
+        }
+        else
+        {
+            file_provider_ptr = context.getFileProvider();
+        }
         BlobStore::Config blob_config;
 
         PageStorage::Config config;
-        PageStorageImpl ps_v3("PageStorageControl", delegator, config, file_provider);
+        PageStorageImpl ps_v3("PageStorageControl", delegator, config, file_provider_ptr);
         ps_v3.restore();
         PageDirectory::MVCCMapType & mvcc_table_directory = ps_v3.page_directory->mvcc_table_directory;
 
@@ -171,9 +213,9 @@ public:
             std::cout << "Invalid display mode." << std::endl;
             break;
         }
+        return 0;
     }
 
-private:
     static String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
     {
         auto stat_info = [](const BlobStore::BlobStats::BlobStatPtr & stat, const String & path) {
@@ -469,9 +511,15 @@ private:
 } // namespace DB::PS::V3
 
 using namespace DB::PS::V3;
-int main(int argc, char ** argv)
+
+void pageStorageV3CtlEntry(int argc, char ** argv)
 {
     const auto & options = ControlOptions::parse(argc, argv);
     PageStorageControl(options).run();
+}
+
+int main(int argc, char ** argv)
+{
+    pageStorageV3CtlEntry(argc, argv);
     return 0;
 }

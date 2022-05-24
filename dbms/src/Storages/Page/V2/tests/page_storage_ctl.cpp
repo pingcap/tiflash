@@ -117,7 +117,7 @@ PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * 
     return config;
 }
 
-int main(int argc, char ** argv)
+int pageStorageV2CtlEntry(int argc, char ** argv)
 try
 {
     (void)argc;
@@ -238,6 +238,11 @@ catch (const DB::Exception & e)
                   << e.getStackTrace().toString() << std::endl;
 
     return -1;
+}
+
+int main(int argc, char ** argv)
+{
+    return pageStorageV2CtlEntry(argc, argv);
 }
 
 void dump_all_entries(PageFileSet & page_files, int32_t mode)
