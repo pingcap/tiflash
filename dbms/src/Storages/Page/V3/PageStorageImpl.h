@@ -64,7 +64,7 @@ public:
 
     void drop() override;
 
-    PageId getMaxId(NamespaceId ns_id) override;
+    PageId getMaxId() override;
 
     PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
