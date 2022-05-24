@@ -374,7 +374,7 @@ dt_page_gc_low_write_prob = 0.2
     auto verify_storage_pool_reload_config = [&](std::unique_ptr<DM::StoragePool> & storage_pool) {
         DB::Settings & settings = global_ctx.getSettingsRef();
 
-        auto cfg = storage_pool->data_storage_v3->getSettings();
+        auto cfg = storage_pool->dataWriter()->getSettings();
         EXPECT_NE(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_NE(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_NE(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);
@@ -386,7 +386,7 @@ dt_page_gc_low_write_prob = 0.2
 
         global_ctx.getGlobalStoragePool()->gc();
 
-        cfg = storage_pool->data_storage_v3->getSettings();
+        cfg = storage_pool->dataWriter()->getSettings();
         EXPECT_EQ(cfg.gc_min_files, settings.dt_storage_pool_data_gc_min_file_num);
         EXPECT_EQ(cfg.gc_min_legacy_num, settings.dt_storage_pool_data_gc_min_legacy_num);
         EXPECT_EQ(cfg.gc_min_bytes, settings.dt_storage_pool_data_gc_min_bytes);

@@ -65,6 +65,11 @@ protected:
     String dir_path;
 
     DB::Timestamp tso = 0;
+
+    String getPageStorageV3MetaPath(String & path)
+    {
+        return path + "/page/kvstore/wal/log_1_0";
+    }
 };
 
 static ::testing::AssertionResult PeerCompare(
@@ -251,7 +256,7 @@ try
         }
 
         // If we truncate page data file, exception will throw instead of droping last region.
-        auto meta_path = path + "/page/kvstore/wal/log_1_0"; // First page
+        auto meta_path = getPageStorageV3MetaPath(path); // First page
         Poco::File meta_file(meta_path);
         size_t size = meta_file.getSize();
         int rt = ::truncate(meta_path.c_str(), size - 1); // Remove last one byte
