@@ -130,7 +130,7 @@ void GlobalStoragePool::restore()
 
 bool GlobalStoragePool::gc()
 {
-    return gc(Settings(), true, DELTA_MERGE_GC_PERIOD);
+    return gc(global_context.getSettingsRef(), true, DELTA_MERGE_GC_PERIOD);
 }
 
 bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)

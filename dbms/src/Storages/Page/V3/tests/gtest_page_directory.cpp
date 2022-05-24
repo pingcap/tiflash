@@ -50,12 +50,17 @@ public:
     {
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
+        dir = restoreFromDisk();
+    }
 
+    static PageDirectoryPtr restoreFromDisk()
+    {
+        auto path = getTemporaryPath();
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        dir = factory.create("PageDirectoryTest", provider, delegator, WALStore::Config());
+        return factory.create("PageDirectoryTest", provider, delegator, WALStore::Config());
     }
 
 protected:
@@ -1286,6 +1291,60 @@ class PageDirectoryGCTest : public PageDirectoryTest
         dir->apply(std::move(edit)); \
     }
 
+TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
+{
+    PageId page_id0 = 50;
+    PageId page_id1 = 51;
+    PageId page_id2 = 52;
+    PageId page_id3 = 53;
+
+    PageEntryV3 last_entry_for_0;
+    constexpr size_t num_edits_test = 50000;
+    for (size_t i = 0; i < num_edits_test; ++i)
+    {
+        {
+            INSERT_ENTRY(page_id0, i);
+            last_entry_for_0 = entry_vi;
+        }
+        {
+            INSERT_ENTRY(page_id1, i);
+        }
+    }
+    INSERT_DELETE(page_id1);
+    EXPECT_TRUE(dir->tryDumpSnapshot());
+    dir.reset();
+
+    dir = restoreFromDisk();
+    {
+        auto snap = dir->createSnapshot();
+        ASSERT_SAME_ENTRY(dir->get(page_id0, snap).second, last_entry_for_0);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
+    }
+
+    PageEntryV3 last_entry_for_2;
+    for (size_t i = 0; i < num_edits_test; ++i)
+    {
+        {
+            INSERT_ENTRY(page_id2, i);
+            last_entry_for_2 = entry_vi;
+        }
+        {
+            INSERT_ENTRY(page_id3, i);
+        }
+    }
+    INSERT_DELETE(page_id3);
+    EXPECT_TRUE(dir->tryDumpSnapshot());
+
+    dir = restoreFromDisk();
+    {
+        auto snap = dir->createSnapshot();
+        ASSERT_SAME_ENTRY(dir->get(page_id0, snap).second, last_entry_for_0);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
+        ASSERT_SAME_ENTRY(dir->get(page_id2, snap).second, last_entry_for_2);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id3, snap);
+    }
+}
+
 TEST_F(PageDirectoryGCTest, GCPushForward)
 try
 {
@@ -1931,7 +1990,6 @@ try
 
     auto s0 = dir->createSnapshot();
     auto edit = dir->dumpSnapshotToEdit(s0);
-    edit.size();
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
@@ -2214,6 +2272,35 @@ try
 }
 CATCH
 
+TEST_F(PageDirectoryGCTest, CleanAfterDecreaseRef)
+try
+{
+    PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+
+    auto restore_from_edit = [](const PageEntriesEdit & edit) {
+        auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
+        auto provider = ctx.getFileProvider();
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        PageDirectoryFactory factory;
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
+        return d;
+    };
+
+    {
+        PageEntriesEdit edit;
+        edit.put(50, entry_50_1);
+        edit.put(50, entry_50_2);
+        edit.ref(51, 50);
+        edit.del(50);
+        edit.del(51);
+        auto restored_dir = restore_from_edit(edit);
+        auto page_ids = restored_dir->getAllPageIds();
+        ASSERT_EQ(page_ids.size(), 0);
+    }
+}
+CATCH
 
 #undef INSERT_ENTRY_TO
 #undef INSERT_ENTRY
