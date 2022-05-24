@@ -134,7 +134,7 @@ public:
         // Note that persisted_log_files should not be empty for needSave() == true,
         // cause we get the largest log num from persisted_log_files as the new
         // file name.
-        bool needSave(const size_t & max_size) const
+        bool needSave(const size_t max_size) const
         {
             return persisted_log_files.size() > max_size;
         }
