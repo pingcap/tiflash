@@ -49,6 +49,9 @@ struct ControlOptions
     UInt64 query_ns_id = DB::TEST_NAMESPACE_ID;
     UInt64 check_page_id = UINT64_MAX;
     bool enable_fo_check = true;
+    bool not_enable_blob = false;
+    bool skip_mvcc_gc = false;
+    bool only_restore_snapshot_log = false;
 
     static ControlOptions parse(int argc, char ** argv);
 };
@@ -64,10 +67,13 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
         ("display_mode,D", value<int>()->default_value(1), "Display Mode: 1 is summary information,\n 2 is display all of stored page and version chaim(will be very long),\n 3 is display all blobs(in disk) data distribution. \n 4 is check every data is valid.") //
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
-        ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.")("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
+        ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.") //
+        ("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
         ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Page id, and print its version chaim.") //
-        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Quert a single Blob id, and print its data distribution.");
-
+        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Quert a single Blob id, and print its data distribution.") //
+        ("not_restore_blob", value<bool>()->default_value(false), "Only restore the WAL and snapshot log from disk.") //
+        ("skip_mvcc_gc", value<bool>()->default_value(false), "Skip the mvcc gc when restore.") //
+        ("only_restore_snapshot_log", value<bool>()->default_value(false), "Only restore the snapshot logs.");
 
     static_assert(sizeof(DB::PageId) == sizeof(UInt64));
     static_assert(sizeof(DB::BlobFileId) == sizeof(UInt32));
@@ -97,10 +103,27 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     opt.enable_fo_check = options["enable_fo_check"].as<bool>();
     opt.check_page_id = options["check_page_id"].as<UInt64>();
     opt.query_ns_id = options["query_ns_id"].as<UInt64>();
+    opt.not_enable_blob = options["not_restore_blob"].as<bool>();
+    opt.skip_mvcc_gc = options["skip_mvcc_gc"].as<bool>();
+    opt.only_restore_snapshot_log = options["only_restore_snapshot_log"].as<bool>();
 
     if (opt.display_mode < DisplayType::DISPLAY_SUMMARY_INFO || opt.display_mode > DisplayType::CHECK_ALL_DATA_CRC)
     {
         std::cerr << "Invalid display mode: " << opt.display_mode << std::endl;
+        std::cerr << desc << std::endl;
+        exit(0);
+    }
+
+    if (opt.only_restore_snapshot_log && !opt.not_enable_blob)
+    {
+        std::cerr << "Invalid args. When enabled only_restore_snapshot_log, should also enable not_enable_blob" << std::endl;
+        std::cerr << desc << std::endl;
+        exit(0);
+    }
+
+    if (opt.skip_mvcc_gc && !opt.not_enable_blob)
+    {
+        std::cerr << "Invalid args. When enabled skip_mvcc_gc, should also enable not_enable_blob" << std::endl;
         std::cerr << desc << std::endl;
         exit(0);
     }
@@ -132,6 +155,38 @@ public:
         auto file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
 
         BlobStore::Config blob_config;
+
+        if (options.not_enable_blob)
+        {
+            PageDirectoryFactory factory;
+            WALStore::Config wal_config;
+            auto page_directory = factory.create("PageStorageControl",
+                                                 file_provider,
+                                                 delegator,
+                                                 wal_config,
+                                                 options.not_enable_blob,
+                                                 options.skip_mvcc_gc,
+                                                 options.only_restore_snapshot_log);
+            PageDirectory::MVCCMapType & mvcc_table_directory = page_directory->mvcc_table_directory;
+            switch (options.display_mode)
+            {
+            case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
+            {
+                BlobStore blob_store_empty("PageStorageControl", nullptr, nullptr, blob_config);
+                std::cout << getSummaryInfo(mvcc_table_directory, blob_store_empty) << std::endl;
+                break;
+            }
+            case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
+            {
+                std::cout << getDirectoryInfo(mvcc_table_directory, options.query_ns_id, options.query_page_id) << std::endl;
+                break;
+            }
+            default:
+                std::cout << "Invalid display mode: " << options.display_mode << ", When enabled not_enable_blob" << std::endl;
+                break;
+            }
+            return;
+        }
 
         PageStorage::Config config;
         PageStorageImpl ps_v3("PageStorageControl", delegator, config, file_provider);
@@ -239,6 +294,7 @@ private:
                                    "       sequence: {}\n"
                                    "       epoch: {}\n"
                                    "       is del: {}\n"
+                                   "       being ref count: {}\n"
                                    "       blob id: {}\n"
                                    "       offset: {}\n"
                                    "       size: {}\n"
@@ -247,6 +303,7 @@ private:
                                    version.sequence, //
                                    version.epoch, //
                                    entry_or_del.isDelete(), //
+                                   entry_or_del.being_ref_count,
                                    entry.file_id, //
                                    entry.offset, //
                                    entry.size, //
@@ -349,6 +406,7 @@ private:
         size_t error_count = 0;
         for (const auto & [version, entry_or_del] : it->second->entries)
         {
+            (void)version;
             if (entry_or_del.isEntry() && it->second->type == EditRecordType::VAR_ENTRY)
             {
                 (void)blob_store;
@@ -470,8 +528,14 @@ private:
 
 using namespace DB::PS::V3;
 int main(int argc, char ** argv)
+try
 {
     const auto & options = ControlOptions::parse(argc, argv);
     PageStorageControl(options).run();
     return 0;
+}
+catch (DB::Exception & e)
+{
+    std::cerr << e.displayText() << std::endl;
+    exit(-1);
 }

@@ -41,12 +41,15 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     String storage_name,
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator,
-    WALStore::Config config)
+    WALStore::Config config,
+    bool only_restore_snapshot_log)
 {
     auto reader = WALStoreReader::create(storage_name,
                                          provider,
                                          delegator,
-                                         static_cast<WALRecoveryMode>(config.wal_recover_mode.get()));
+                                         static_cast<WALRecoveryMode>(config.wal_recover_mode.get()),
+                                         nullptr,
+                                         only_restore_snapshot_log);
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {

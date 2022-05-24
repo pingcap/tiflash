@@ -97,7 +97,8 @@ public:
         String storage_name,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator,
-        WALStore::Config config);
+        WALStore::Config config,
+        bool only_restore_snapshot_log = false);
 
     void apply(PageEntriesEdit & edit, const PageVersion & version, const WriteLimiterPtr & write_limiter = nullptr);
     void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);

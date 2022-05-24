@@ -31,7 +31,8 @@ namespace DB::PS::V3
 {
 LogFilenameSet WALStoreReader::listAllFiles(
     const PSDiskDelegatorPtr & delegator,
-    LoggerPtr logger)
+    LoggerPtr logger,
+    bool only_snapshot_log)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
     std::vector<std::pair<String, Strings>> all_filenames;
@@ -62,6 +63,16 @@ LogFilenameSet WALStoreReader::listAllFiles(
             {
             case LogFileStage::Normal:
             {
+#ifndef NDEBUG
+                if (only_snapshot_log)
+                {
+                    if (name.level_num >= 1)
+                    {
+                        log_files.insert(name);
+                    }
+                    break;
+                }
+#endif
                 log_files.insert(name);
                 break;
             }
@@ -136,9 +147,10 @@ WALStoreReaderPtr WALStoreReader::create(
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator,
     WALRecoveryMode recovery_mode_,
-    const ReadLimiterPtr & read_limiter)
+    const ReadLimiterPtr & read_limiter,
+    bool only_snapshot_log)
 {
-    LogFilenameSet log_files = listAllFiles(delegator, Logger::get("WALStore", storage_name));
+    LogFilenameSet log_files = listAllFiles(delegator, Logger::get("WALStore", storage_name), only_snapshot_log);
     return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 

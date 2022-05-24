@@ -53,7 +53,7 @@ private:
 class WALStoreReader
 {
 public:
-    static LogFilenameSet listAllFiles(const PSDiskDelegatorPtr & delegator, LoggerPtr logger);
+    static LogFilenameSet listAllFiles(const PSDiskDelegatorPtr & delegator, LoggerPtr logger, bool only_snapshot_log = false);
     static std::tuple<std::optional<LogFilename>, LogFilenameSet>
     findCheckpoint(LogFilenameSet && all_files);
 
@@ -67,7 +67,8 @@ public:
                                     FileProviderPtr & provider,
                                     PSDiskDelegatorPtr & delegator,
                                     WALRecoveryMode recovery_mode_ = WALRecoveryMode::TolerateCorruptedTailRecords,
-                                    const ReadLimiterPtr & read_limiter = nullptr);
+                                    const ReadLimiterPtr & read_limiter = nullptr,
+                                    bool only_snapshot_log = false);
 
     bool remained() const;
 

@@ -30,7 +30,24 @@ namespace PS::V3
 {
 PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
 {
-    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config);
+    return create(storage_name, //
+                  file_provider,
+                  delegator,
+                  config,
+                  /*not_enable_blob*/ false,
+                  /*skip_mvcc_gc*/ false,
+                  /*only_restore_snapshot_log*/ false);
+}
+
+PageDirectoryPtr PageDirectoryFactory::create(String storage_name, //
+                                              FileProviderPtr & file_provider,
+                                              PSDiskDelegatorPtr & delegator,
+                                              WALStore::Config config,
+                                              bool not_enable_blob,
+                                              bool skip_mvcc_gc,
+                                              bool only_restore_snapshot_log)
+{
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config, only_restore_snapshot_log);
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal), config.max_persisted_log_files);
     loadFromDisk(dir, std::move(reader));
 
@@ -39,9 +56,12 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
 
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
-    dir->gcInMemEntries();
+    if (!skip_mvcc_gc)
+    {
+        dir->gcInMemEntries();
+    }
 
-    if (blob_stats)
+    if (!not_enable_blob && blob_stats)
     {
         // After all entries restored to `mvcc_table_directory`, only apply
         // the latest entry to `blob_stats`, or we may meet error since

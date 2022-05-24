@@ -48,6 +48,7 @@ public:
 
     PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
 
+
     // just for test
     PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
 
@@ -58,7 +59,17 @@ public:
         return *this;
     }
 
+    friend class PageStorageControl;
+
 private:
+    PageDirectoryPtr create(String storage_name, //
+                            FileProviderPtr & file_provider,
+                            PSDiskDelegatorPtr & delegator,
+                            WALStore::Config config,
+                            bool not_enable_blob,
+                            bool skip_mvcc_gc,
+                            bool only_restore_snapshot_log);
+
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
     static bool applyRecord(
