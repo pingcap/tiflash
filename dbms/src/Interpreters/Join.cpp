@@ -27,9 +27,6 @@
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
 
-#include <Interpreters/executeQuery.h>
-
-
 namespace DB
 {
 namespace ErrorCodes
