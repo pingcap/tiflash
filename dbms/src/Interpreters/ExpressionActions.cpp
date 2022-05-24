@@ -461,12 +461,6 @@ void ExpressionAction::executeOnTotals(Block & block) const
         join->joinTotals(block);
 }
 
-void ExpressionAction::dumpAction(FmtBuffer & fb) const
-{
-    if (type == APPLY_FUNCTION)
-        fb.fmtAppend("{}", (function ? function->getName() : "(no function)"));
-}
-
 String ExpressionAction::toString() const
 {
     std::stringstream ss;
@@ -939,12 +933,6 @@ std::string ExpressionActions::dumpActions() const
         ss << output_column.name << " " << output_column.type->getName() << "\n";
 
     return ss.str();
-}
-
-void ExpressionActions::dumpActions(FmtBuffer & fb) const
-{
-    for (const auto & action : actions)
-        action.dumpAction(fb);
 }
 
 void ExpressionActions::optimize()

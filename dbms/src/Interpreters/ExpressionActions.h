@@ -121,8 +121,6 @@ public:
 
     std::string toString() const;
 
-    void dumpAction(FmtBuffer & fb) const;
-
 private:
     friend class ExpressionActions;
 
@@ -213,8 +211,6 @@ public:
     const Block & getSampleBlock() const { return sample_block; }
 
     std::string dumpActions() const;
-
-    void dumpActions(FmtBuffer & fb) const;
 
     static std::string getSmallestColumn(const NamesAndTypesList & columns);
 

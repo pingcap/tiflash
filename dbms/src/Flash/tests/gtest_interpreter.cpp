@@ -54,11 +54,11 @@ Union: <for mpp>
     Union: <for partial order>
      PartialSorting x 10: limit = 10
       Expression: <before order and select>
-       Filter: <execute having>: {equals->Nullable(UInt8)}
+       Filter: <execute having>
         SharedQuery: <restore concurrency>
          ParallelAggregating, max_threads: 10, final: true
           Expression x 10: <before aggregation>
-           Filter: <execute where>: {equals->Nullable(UInt8)}
+           Filter: <execute where>
             MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -74,16 +74,16 @@ Union: <for mpp>
         String expected = R"(
 Union: <for mpp>
  SharedQuery x 10: <restore concurrency>
-  Limit, limit = 10 always_read_till_end = false
+  Limit, limit = 10
    Union: <for partial limit>
-    Limit x 10, limit = 10 always_read_till_end = false
+    Limit x 10, limit = 10
      Expression: <final projection>
       Expression: <before order and select>
-       Filter: <execute having>: {equals->Nullable(UInt8)}
+       Filter: <execute having>
         SharedQuery: <restore concurrency>
          ParallelAggregating, max_threads: 10, final: true
           Expression x 10: <before aggregation>
-           Filter: <execute where>: {equals->Nullable(UInt8)}
+           Filter: <execute where>
             MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
@@ -183,15 +183,15 @@ Union: <for mpp>
         String expected = R"(
 Union: <for mpp>
  SharedQuery x 10: <restore concurrency>
-  Limit, limit = 10 always_read_till_end = false
+  Limit, limit = 10
    Union: <for partial limit>
-    Limit x 10, limit = 10 always_read_till_end = false
+    Limit x 10, limit = 10
      Expression: <final projection>
       Expression: <projection>
        Expression: <before projection>
         Expression: <final projection>
          Expression: <before order and select>
-          Filter: <execute where>: {equals->Nullable(UInt8)}
+          Filter: <execute where>
            Expression: <projection>
             Expression: <before projection>
              Expression: <final projection>

@@ -177,7 +177,7 @@ public:
         }
     }
 
-    virtual void appendInfo(FmtBuffer & buffer [[maybe_unused]]) const {};
+    virtual void appendInfo(FmtBuffer & /*buffer*/) const {};
 
 protected:
     BlockInputStreams children;

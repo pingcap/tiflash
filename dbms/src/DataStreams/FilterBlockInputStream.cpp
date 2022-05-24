@@ -220,19 +220,4 @@ Block FilterBlockInputStream::readImpl()
     }
 }
 
-
-void FilterBlockInputStream::appendInfo(FmtBuffer & buffer) const
-{
-    buffer.append(": {");
-    const auto & actions = expression->getActions();
-    buffer.joinStr(
-        actions.begin(),
-        actions.end(),
-        [](const auto & arg, FmtBuffer & fb) {
-            arg.dumpAction(fb);
-        },
-        ", ");
-    buffer.append("}");
-}
-
 } // namespace DB

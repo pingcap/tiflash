@@ -60,7 +60,7 @@ private:
     void executeImpl(DAGPipeline & pipeline);
     void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
-    void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, const String & executor_id);
+    void handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query);
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleMockExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);

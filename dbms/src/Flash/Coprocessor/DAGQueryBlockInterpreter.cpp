@@ -179,7 +179,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     analyzer = std::move(storage_interpreter.analyzer);
 }
 
-void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, const String & executor_id)
+void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
 {
     if (unlikely(input_streams_vec.size() != 2))
     {
@@ -258,7 +258,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
 
     /// build side streams
-    executeExpression(build_pipeline, build_side_prepare_actions);
+    executeExpression(build_pipeline, build_side_prepare_actions, "Append Join key and join Filters");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
     build_pipeline.transform([&](auto & stream) {
@@ -273,7 +273,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
 
     /// probe side streams
-    executeExpression(probe_pipeline, probe_side_prepare_actions);
+    executeExpression(probe_pipeline, probe_side_prepare_actions, "probe side prepare actions");
     NamesAndTypes source_columns;
     for (const auto & p : probe_pipeline.firstStream()->getHeader())
         source_columns.emplace_back(p.name, p.type);
@@ -293,7 +293,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
                 i,
                 not_joined_concurrency,
                 settings.max_block_size);
-            non_joined_stream->setExtraInfo("Add Stream With NonJoinedData If FullOrRightJoin");
+            non_joined_stream->setExtraInfo("add stream with non_joined_data if full_or_right_join");
             pipeline.streams_with_non_joined_data.push_back(non_joined_stream);
             join_execute_info.non_joined_streams.push_back(non_joined_stream);
         }
@@ -301,7 +301,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     for (auto & stream : pipeline.streams)
     {
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, chain.getLastActions(), log->identifier());
-        stream->setExtraInfo(fmt::format("join probe, join_executor_id = {}", executor_id));
+        stream->setExtraInfo(fmt::format("join probe, join_executor_id = {}", query_block.source_name));
     }
 
     /// add a project to remove all the useless column
@@ -579,7 +579,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         SubqueryForSet right_query;
-        handleJoin(query_block.source->join(), pipeline, right_query, query_block.source->executor_id());
+        handleJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
         dagContext().addSubquery(query_block.source_name, std::move(right_query));
     }
