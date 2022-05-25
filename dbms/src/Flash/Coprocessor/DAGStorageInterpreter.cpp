@@ -376,7 +376,7 @@ void DAGStorageInterpreter::executePushedDownFilter(
         stream->setExtraInfo("push down filter");
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
-        stream->setExtraInfo("push down filter");
+        stream->setExtraInfo("projection after push down filter");
     }
 }
 
@@ -414,7 +414,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         {
             auto & stream = pipeline.streams[i++];
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
-            stream->setExtraInfo("cast after tableScan");
+            stream->setExtraInfo("cast after local tableScan");
         }
         // remote streams
         if (i < pipeline.streams.size())
@@ -427,7 +427,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             {
                 auto & stream = pipeline.streams[i++];
                 stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
-                stream->setExtraInfo("cast after tableScan");
+                stream->setExtraInfo("cast after remote tableScan");
             }
         }
     }

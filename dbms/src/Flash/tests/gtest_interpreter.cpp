@@ -232,12 +232,12 @@ Union: <for mpp>
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = table_scan_3>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      MockTableScan
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -319,12 +319,12 @@ Union: <for mpp>
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = exchange_receiver_3>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -361,12 +361,12 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = exchange_receiver_3>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <Append Join key and join Filters>
     Expression: <final projection>
      Expression: <remove useless column after join>

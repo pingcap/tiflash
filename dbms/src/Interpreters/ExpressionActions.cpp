@@ -929,7 +929,7 @@ std::string ExpressionActions::dumpActions() const
 
     ss << "\noutput:\n";
     NamesAndTypesList output_columns = sample_block.getNamesAndTypesList();
-    for (auto & output_column : output_columns)
+    for (const auto & output_column : output_columns)
         ss << output_column.name << " " << output_column.type->getName() << "\n";
 
     return ss.str();
