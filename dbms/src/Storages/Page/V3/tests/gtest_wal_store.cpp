@@ -596,11 +596,12 @@ TEST_P(WALStoreTest, ManyEdits)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto enc_key_manager = std::make_shared<MockKeyManager>(/*encryption_enabled_=*/true);
+    auto enc_provider = std::make_shared<FileProvider>(enc_key_manager, true);
     auto path = getTemporaryPath();
 
     // Stage 1. empty
-    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     ASSERT_NE(wal, nullptr);
 
     std::mt19937 rd;
@@ -633,7 +634,7 @@ try
 
     size_t num_edits_read = 0;
     size_t num_pages_read = 0;
-    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
         auto [ok, edit] = reader->next();
@@ -653,8 +654,7 @@ try
     LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 
     // Test for save snapshot (with encryption)
-    auto enc_key_manager = std::make_shared<MockKeyManager>(/*encryption_enabled_=*/true);
-    auto enc_provider = std::make_shared<FileProvider>(enc_key_manager, true);
+
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, log);
     WALStore::FilesSnapshot file_snap{.current_writting_log_num = 100, // just a fake value
                                       .persisted_log_files = persisted_log_files};

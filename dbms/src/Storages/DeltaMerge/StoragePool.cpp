@@ -130,7 +130,7 @@ void GlobalStoragePool::restore()
 
 bool GlobalStoragePool::gc()
 {
-    return gc(Settings(), true, DELTA_MERGE_GC_PERIOD);
+    return gc(global_context.getSettingsRef(), true, DELTA_MERGE_GC_PERIOD);
 }
 
 bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)
@@ -378,18 +378,18 @@ PageStorageRunMode StoragePool::restore()
         data_storage_v2->restore();
         meta_storage_v2->restore();
 
-        max_log_page_id = log_storage_v2->getMaxId(ns_id);
-        max_data_page_id = data_storage_v2->getMaxId(ns_id);
-        max_meta_page_id = meta_storage_v2->getMaxId(ns_id);
+        max_log_page_id = log_storage_v2->getMaxId();
+        max_data_page_id = data_storage_v2->getMaxId();
+        max_meta_page_id = meta_storage_v2->getMaxId();
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV2Only};
         break;
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        max_log_page_id = log_storage_v3->getMaxId(ns_id);
-        max_data_page_id = data_storage_v3->getMaxId(ns_id);
-        max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
+        max_log_page_id = log_storage_v3->getMaxId();
+        max_data_page_id = data_storage_v3->getMaxId();
+        max_meta_page_id = meta_storage_v3->getMaxId();
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         break;
@@ -456,18 +456,18 @@ PageStorageRunMode StoragePool::restore()
             data_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, data_storage_v3);
             meta_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, meta_storage_v3);
 
-            max_log_page_id = log_storage_v3->getMaxId(ns_id);
-            max_data_page_id = data_storage_v3->getMaxId(ns_id);
-            max_meta_page_id = meta_storage_v3->getMaxId(ns_id);
+            max_log_page_id = log_storage_v3->getMaxId();
+            max_data_page_id = data_storage_v3->getMaxId();
+            max_meta_page_id = meta_storage_v3->getMaxId();
 
             run_mode = PageStorageRunMode::ONLY_V3;
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         }
         else // Still running Mix Mode
         {
-            max_log_page_id = std::max(log_storage_v2->getMaxId(ns_id), log_storage_v3->getMaxId(ns_id));
-            max_data_page_id = std::max(data_storage_v2->getMaxId(ns_id), data_storage_v3->getMaxId(ns_id));
-            max_meta_page_id = std::max(meta_storage_v2->getMaxId(ns_id), meta_storage_v3->getMaxId(ns_id));
+            max_log_page_id = std::max(log_storage_v2->getMaxId(), log_storage_v3->getMaxId());
+            max_data_page_id = std::max(data_storage_v2->getMaxId(), data_storage_v3->getMaxId());
+            max_meta_page_id = std::max(meta_storage_v2->getMaxId(), meta_storage_v3->getMaxId());
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolMixMode};
         }
         break;

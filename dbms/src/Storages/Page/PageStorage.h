@@ -23,6 +23,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
+#include <Storages/Page/WALRecoveryMode.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -140,7 +141,7 @@ public:
         SettingUInt64 blob_block_alignment_bytes = 0;
 
         SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
-        SettingUInt64 wal_recover_mode = 0;
+        SettingUInt64 wal_recover_mode = static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords);
         SettingUInt64 wal_max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
 
         void reload(const Config & rhs)
@@ -233,7 +234,17 @@ public:
 
     virtual void drop() = 0;
 
-    virtual PageId getMaxId(NamespaceId ns_id) = 0;
+    // Get the max id from PageStorage.
+    //
+    // For V2, every table have its own three PageStorage (meta/data/log).
+    // So this function return the Page id starts from 0 and is continuously incremented to
+    // new pages.
+    // For V3, PageStorage is global(distinguish by ns_id for different table).
+    // In order to avoid Page id from being reused (and cause troubles while restoring WAL from disk),
+    // this function returns the global max id regardless of ns_id. This causes the ids in a table
+    // to not be continuously incremented.
+    // Note that Page id 1 in each ns_id is special.
+    virtual PageId getMaxId() = 0;
 
     virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
 

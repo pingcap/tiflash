@@ -19,6 +19,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
@@ -685,7 +686,8 @@ void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal p
   *************************/
 
 PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 max_persisted_log_files_)
-    : sequence(0)
+    : max_page_id(0)
+    , sequence(0)
     , wal(std::move(wal_))
     , max_persisted_log_files(max_persisted_log_files_)
     , log(Logger::get("PageDirectory", std::move(storage_name)))
@@ -923,49 +925,10 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
     }
 }
 
-PageId PageDirectory::getMaxId(NamespaceId ns_id) const
+PageId PageDirectory::getMaxId() const
 {
     std::shared_lock read_lock(table_rw_mutex);
-    PageIdV3Internal upper_bound = buildV3Id(ns_id, UINT64_MAX);
-
-    auto iter = mvcc_table_directory.upper_bound(upper_bound);
-    if (iter == mvcc_table_directory.begin())
-    {
-        // The smallest page id is greater than the target page id or mvcc_table_directory is empty,
-        // and it means no page id is less than or equal to the target page id, return 0.
-        return 0;
-    }
-    else
-    {
-        // iter is not at the beginning and mvcc_table_directory is not empty,
-        // so iter-- must be a valid iterator, and it's the largest page id which is smaller than the target page id.
-        iter--;
-
-        do
-        {
-            // Can't find any entries in current ns_id
-            if (iter->first.high != ns_id)
-            {
-                break;
-            }
-
-            // Check and return whether this id is visible, otherwise continue to check the previous one.
-            if (iter->second->isVisible(UINT64_MAX - 1))
-            {
-                return iter->first.low;
-            }
-
-            // Current entry/ref/external is deleted and there are no entries before it.
-            if (iter == mvcc_table_directory.begin())
-            {
-                break;
-            }
-
-            iter--;
-        } while (true);
-
-        return 0;
-    }
+    return max_page_id;
 }
 
 std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
@@ -1069,6 +1032,9 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
     {
+        // Protected in write_lock
+        max_page_id = std::max(max_page_id, r.page_id.low);
+
         auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
         if (created)
         {
@@ -1226,16 +1192,31 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
-bool PageDirectory::tryDumpSnapshot(const WriteLimiterPtr & write_limiter)
+bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const WriteLimiterPtr & write_limiter)
 {
     bool done_any_io = false;
     // In order not to make read amplification too high, only apply compact logs when ...
     auto files_snap = wal->getFilesSnapshot();
     if (files_snap.needSave(max_persisted_log_files))
     {
+        // To prevent writes from affecting dumping snapshot (and vice versa), old log files
+        // are read from disk and a temporary PageDirectory is generated for dumping snapshot.
+        // The main reason write affect dumping snapshot is that we can not get a read-only
+        // `being_ref_count` by the function `createSnapshot()`.
+        assert(!files_snap.persisted_log_files.empty()); // should not be empty when `needSave` return true
+        auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
+        auto identifier = fmt::format("{}_dump_{}", wal->name(), log_num);
+        auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
+        PageDirectoryFactory factory;
+        // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
+        // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
+        PageDirectoryPtr collapsed_dir = factory.createFromReader(
+            identifier,
+            std::move(snapshot_reader),
+            /*wal=*/nullptr);
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
-        auto edit = dumpSnapshotToEdit();
-        done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit), write_limiter);
+        auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
+        done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit_from_disk), write_limiter);
     }
     return done_any_io;
 }

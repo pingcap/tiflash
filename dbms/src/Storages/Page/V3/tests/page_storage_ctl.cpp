@@ -45,7 +45,7 @@ struct ControlOptions
     std::vector<std::string> paths;
     int display_mode = DisplayType::DISPLAY_SUMMARY_INFO;
     UInt64 query_page_id = UINT64_MAX;
-    UInt32 query_blob_id = UINT32_MAX;
+    UInt32 query_blob_id = UINT64_MAX;
     UInt64 query_ns_id = DB::TEST_NAMESPACE_ID;
     UInt64 check_page_id = UINT64_MAX;
     bool enable_fo_check = true;
@@ -70,13 +70,13 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.") //
         ("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
         ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Page id, and print its version chaim.") //
-        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Quert a single Blob id, and print its data distribution.") //
+        ("query_blob_id,B", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Blob id, and print its data distribution.") //
         ("not_restore_blob", value<bool>()->default_value(false), "Only restore the WAL and snapshot log from disk.") //
         ("skip_mvcc_gc", value<bool>()->default_value(false), "Skip the mvcc gc when restore.") //
         ("only_restore_snapshot_log", value<bool>()->default_value(false), "Only restore the snapshot logs.");
 
     static_assert(sizeof(DB::PageId) == sizeof(UInt64));
-    static_assert(sizeof(DB::BlobFileId) == sizeof(UInt32));
+    static_assert(sizeof(DB::BlobFileId) == sizeof(UInt64));
 
     po::variables_map options;
     po::store(po::parse_command_line(argc, argv, desc), options);
@@ -99,7 +99,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     opt.paths = options["paths"].as<std::vector<std::string>>();
     opt.display_mode = options["display_mode"].as<int>();
     opt.query_page_id = options["query_page_id"].as<UInt64>();
-    opt.query_blob_id = options["query_blob_id"].as<UInt32>();
+    opt.query_blob_id = options["query_blob_id"].as<UInt64>();
     opt.enable_fo_check = options["enable_fo_check"].as<bool>();
     opt.check_page_id = options["check_page_id"].as<UInt64>();
     opt.query_ns_id = options["query_ns_id"].as<UInt64>();
@@ -160,13 +160,11 @@ public:
         {
             PageDirectoryFactory factory;
             WALStore::Config wal_config;
-            auto page_directory = factory.create("PageStorageControl",
-                                                 file_provider,
-                                                 delegator,
-                                                 wal_config,
-                                                 options.not_enable_blob,
-                                                 options.skip_mvcc_gc,
-                                                 options.only_restore_snapshot_log);
+            auto [wal, reader] = WALStore::create("PageStorageControl", file_provider, delegator, wal_config, options.only_restore_snapshot_log);
+            auto page_directory = factory.createFromReader("PageStorageControl",
+                                                           reader,
+                                                           std::move(wal),
+                                                           options.skip_mvcc_gc);
             PageDirectory::MVCCMapType & mvcc_table_directory = page_directory->mvcc_table_directory;
             switch (options.display_mode)
             {
@@ -229,7 +227,7 @@ public:
     }
 
 private:
-    static String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
+    static String getBlobsInfo(BlobStore & blob_store, UInt64 blob_id)
     {
         auto stat_info = [](const BlobStore::BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
@@ -258,7 +256,7 @@ private:
         {
             for (const auto & stat : stats)
             {
-                if (blob_id != UINT32_MAX)
+                if (blob_id != UINT64_MAX)
                 {
                     if (stat->id == blob_id)
                     {
@@ -272,7 +270,7 @@ private:
             }
         }
 
-        if (blob_id != UINT32_MAX)
+        if (blob_id != UINT64_MAX)
         {
             stats_info.fmtAppend("    no found blob {}", blob_id);
         }

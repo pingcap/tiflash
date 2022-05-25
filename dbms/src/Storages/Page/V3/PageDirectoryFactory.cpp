@@ -30,25 +30,21 @@ namespace PS::V3
 {
 PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
 {
-    return create(storage_name, //
-                  file_provider,
-                  delegator,
-                  config,
-                  /*not_enable_blob*/ false,
-                  /*skip_mvcc_gc*/ false,
-                  /*only_restore_snapshot_log*/ false);
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config);
+    return createFromReader(storage_name, reader, std::move(wal));
 }
 
-PageDirectoryPtr PageDirectoryFactory::create(String storage_name, //
-                                              FileProviderPtr & file_provider,
-                                              PSDiskDelegatorPtr & delegator,
-                                              WALStore::Config config,
-                                              bool not_enable_blob,
-                                              bool skip_mvcc_gc,
-                                              bool only_restore_snapshot_log)
+PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal)
 {
-    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config, only_restore_snapshot_log);
-    PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal), config.max_persisted_log_files);
+    return createFromReader(storage_name, reader, std::move(wal), false);
+}
+
+PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, //
+                                                        WALStoreReaderPtr reader,
+                                                        WALStorePtr wal,
+                                                        bool skip_mvcc_gc)
+{
+    PageDirectoryPtr dir = std::make_unique<PageDirectory>(storage_name, std::move(wal));
     loadFromDisk(dir, std::move(reader));
 
     // Reset the `sequence` to the maximum of persisted.
@@ -60,8 +56,9 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, //
     {
         dir->gcInMemEntries();
     }
+    LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory", storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
-    if (!not_enable_blob && blob_stats)
+    if (blob_stats)
     {
         // After all entries restored to `mvcc_table_directory`, only apply
         // the latest entry to `blob_stats`, or we may meet error since
@@ -131,29 +128,22 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
     {
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
-        max_applied_page_id = std::max(r.page_id, max_applied_page_id);
 
-        // We can not avoid page id from being reused under some corner situation. Try to do gcInMemEntries
-        // and apply again to resolve the error.
-        if (bool ok = applyRecord(dir, r, /*throw_on_error*/ false); unlikely(!ok))
-        {
-            dir->gcInMemEntries();
-            applyRecord(dir, r, /*throw_on_error*/ true);
-            LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory"), "resolve from error status done, continue to restore");
-        }
+        applyRecord(dir, r);
     }
 }
 
-bool PageDirectoryFactory::applyRecord(
+void PageDirectoryFactory::applyRecord(
     const PageDirectoryPtr & dir,
-    const PageEntriesEdit::EditRecord & r,
-    bool throw_on_error)
+    const PageEntriesEdit::EditRecord & r)
 {
     auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
     if (created)
     {
         iter->second = std::make_shared<VersionedPageEntries>();
     }
+
+    dir->max_page_id = std::max(dir->max_page_id, r.page_id.low);
 
     const auto & version_list = iter->second;
     const auto & restored_version = r.version;
@@ -207,14 +197,8 @@ bool PageDirectoryFactory::applyRecord(
     catch (DB::Exception & e)
     {
         e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}]", r.type, r.page_id, restored_version));
-        if (throw_on_error || e.code() != ErrorCodes::PS_DIR_APPLY_INVALID_STATUS)
-        {
-            throw e;
-        }
-        LOG_FMT_WARNING(DB::Logger::get("PageDirectoryFactory"), "try to resolve error during restore: {}", e.message());
-        return false;
+        throw e;
     }
-    return true;
 }
 
 void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader)
