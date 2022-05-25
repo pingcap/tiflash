@@ -14,10 +14,11 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-set(page-ctl-src ${TiFlash_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestEnv.cpp)
+add_library(page-ctl-lib MainEntry.cpp page_storage_ctl_v3.cpp page_storage_ctl_v2.cpp ${page-ctl-src})
+target_include_directories(page-ctl-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_link_libraries(page-ctl-lib dbms daemon tiflash-dttool-entry-object clickhouse-server-lib)
+target_compile_options(page-ctl-lib  PRIVATE -Wno-format)
 
-add_library(page-ctl-lib ${page-ctl-src})
-target_link_libraries(page-ctl-lib dbms clickhouse_functions clickhouse-server-lib)
-
-add_executable(page-ctl Main.cpp ${page-ctl-src})
-target_link_libraries(page-ctl dbms gtest clickhouse_functions clickhouse-server-lib)
+add_executable(page-ctl Main.cpp)
+target_link_libraries(page-ctl page-ctl-lib dbms clickhouse_functions clickhouse-server-lib)
+target_compile_options(page-ctl  PRIVATE -Wno-format)

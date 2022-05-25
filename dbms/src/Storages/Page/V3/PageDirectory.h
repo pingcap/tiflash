@@ -255,7 +255,7 @@ public:
             being_ref_count,
             entries.size());
     }
-    friend class PageStorageControl;
+    friend class PageStorageControlV3;
 
 private:
     mutable std::mutex m;
@@ -376,7 +376,7 @@ public:
     DISALLOW_COPY_AND_MOVE(PageDirectory);
 
     friend class PageDirectoryFactory;
-    friend class PageStorageControl;
+    friend class PageStorageControlV3;
 
 private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that

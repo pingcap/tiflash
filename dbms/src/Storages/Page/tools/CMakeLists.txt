@@ -14,4 +14,4 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_subdirectory (workload EXCLUDE_FROM_ALL)
+add_subdirectory (page_ctl EXCLUDE_FROM_ALL)
