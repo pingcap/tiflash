@@ -45,7 +45,7 @@ struct ControlOptions
     std::vector<std::string> paths;
     int display_mode = DisplayType::DISPLAY_SUMMARY_INFO;
     UInt64 query_page_id = UINT64_MAX;
-    UInt32 query_blob_id = UINT64_MAX;
+    UInt64 query_blob_id = UINT64_MAX;
     UInt64 query_ns_id = DB::TEST_NAMESPACE_ID;
     UInt64 check_page_id = UINT64_MAX;
     bool enable_fo_check = true;
