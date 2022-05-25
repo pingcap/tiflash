@@ -103,8 +103,7 @@ public:
 
     bool writeToDisk(DMContext & dm_context, const PackPtr & pack);
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
-<<<<<<< HEAD
-    bool write(DMContext & dm_context, const Block & block); // For test only
+    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true); // For test only
     bool write(DMContext & dm_context, const HandleRange & delete_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update = false) const;
@@ -131,54 +130,6 @@ public:
                                           size_t                     expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read);
-=======
-
-    /// For test only.
-    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true);
-
-    bool write(DMContext & dm_context, const RowKeyRange & delete_range);
-    bool ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range);
-
-    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
-
-    BlockInputStreamPtr getInputStream(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & read_ranges,
-        const RSOperatorPtr & filter,
-        UInt64 max_version,
-        size_t expected_block_size);
-
-    BlockInputStreamPtr getInputStream(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const RowKeyRanges & read_ranges,
-        const RSOperatorPtr & filter = {},
-        UInt64 max_version = std::numeric_limits<UInt64>::max(),
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
-
-    /// Return a stream which is suitable for exporting data.
-    ///  reorganize_block: put those rows with the same pk rows into the same block or not.
-    BlockInputStreamPtr getInputStreamForDataExport(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRange & data_range,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-        bool reorganize_block = true) const;
-
-    BlockInputStreamPtr getInputStreamRaw(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        bool do_range_filter,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
-
-    BlockInputStreamPtr getInputStreamRaw(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read);
->>>>>>> 94afb714ed (flush cache before segment merge (#4955))
 
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
