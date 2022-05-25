@@ -207,7 +207,7 @@ struct ContextShared
 
     explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
-        , storage_run_mode(PageStorageRunMode::MIX_MODE)
+        , storage_run_mode(PageStorageRunMode::ONLY_V3)
     {
         /// TODO: make it singleton (?)
         static std::atomic<size_t> num_calls{0};
