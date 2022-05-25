@@ -1106,19 +1106,13 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     return merged;
 }
 
-<<<<<<< HEAD
-StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context, //
-                                          const ColumnDefinesPtr &   schema_snap,
-                                          const SegmentPtr &         left,
-=======
 /// Segments may contain some rows that not belong to its range which is left by previous split operation.
 /// And only saved data in the segment will be filtered by the segment range in the merge process,
 /// unsaved data will be directly copied to the new segment.
 /// So remember to do a flush for the segments before merge.
-StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
-                                          const ColumnDefinesPtr & schema_snap,
-                                          const SegmentPtr & left,
->>>>>>> 94afb714ed (flush cache before segment merge (#4955))
+StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context, //
+                                          const ColumnDefinesPtr &   schema_snap,
+                                          const SegmentPtr &         left,
                                           const SegmentSnapshotPtr & left_snap,
                                           const SegmentPtr &         right,
                                           const SegmentSnapshotPtr & right_snap,
