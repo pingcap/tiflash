@@ -14,8 +14,10 @@
 
 #pragma once
 
+#include <Poco/Logger.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/PathPool.h>
 
 #include <atomic>
 #include <chrono>
@@ -31,8 +33,6 @@ namespace DM
 {
 class StoragePool;
 using StoragePoolPtr = std::shared_ptr<StoragePool>;
-class GlobalStoragePool;
-using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 
 static const std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
 
@@ -45,17 +45,18 @@ public:
 
     GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings);
 
-    void restore();
-
     ~GlobalStoragePool();
 
-    PageStoragePtr log() const { return log_storage; }
-    PageStoragePtr data() const { return data_storage; }
-    PageStoragePtr meta() const { return meta_storage; }
+    void restore();
+
+    friend class StoragePool;
+
+    // GC immediately
+    // Only used on dbgFuncMisc
+    bool gc();
 
 private:
-    // TODO: maybe more frequent gc for GlobalStoragePool?
-    bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
+    bool gc(const Settings & settings, bool immediately = false, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
     PageStoragePtr log_storage;
@@ -64,11 +65,10 @@ private:
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
-    std::mutex mutex;
-
     Context & global_context;
     BackgroundProcessingPool::TaskHandle gc_handle;
 };
+using GlobalStoragePoolPtr = std::shared_ptr<GlobalStoragePool>;
 
 class StoragePool : private boost::noncopyable
 {
@@ -77,38 +77,70 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-    StoragePool(const String & name, NamespaceId ns_id_, StoragePathPool & path_pool, Context & global_ctx, const Settings & settings);
+    StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & path_pool, const String & name = "");
 
-    StoragePool(NamespaceId ns_id_, const GlobalStoragePool & global_storage_pool, Context & global_ctx);
-
-    void restore();
+    PageStorageRunMode restore();
 
     ~StoragePool();
 
     NamespaceId getNamespaceId() const { return ns_id; }
 
-    PageStoragePtr log() const { return log_storage; }
-    PageStoragePtr data() const { return data_storage; }
-    PageStoragePtr meta() const { return meta_storage; }
+    PageStorageRunMode getPageStorageRunMode()
+    {
+        return run_mode;
+    }
 
-    PageReader & logReader() { return log_storage_reader; }
-    PageReader & dataReader() { return data_storage_reader; }
-    PageReader & metaReader() { return meta_storage_reader; }
+    PageReaderPtr & logReader()
+    {
+        assert(log_storage_reader);
+        return log_storage_reader;
+    }
 
-    PageReader newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+    PageReaderPtr & dataReader()
     {
-        return PageReader(ns_id, log_storage, snapshot_read ? log_storage->getSnapshot(tracing_id) : nullptr, read_limiter);
+        assert(data_storage_reader);
+        return data_storage_reader;
     }
-    PageReader newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+
+    PageReaderPtr & metaReader()
     {
-        return PageReader(ns_id, data_storage, snapshot_read ? data_storage->getSnapshot(tracing_id) : nullptr, read_limiter);
+        assert(meta_storage_reader);
+        return meta_storage_reader;
     }
-    PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+
+    PageWriterPtr & logWriter()
     {
-        return PageReader(ns_id, meta_storage, snapshot_read ? meta_storage->getSnapshot(tracing_id) : nullptr, read_limiter);
+        assert(log_storage_writer);
+        return log_storage_writer;
     }
+
+    PageWriterPtr & dataWriter()
+    {
+        assert(data_storage_writer);
+        return data_storage_writer;
+    }
+
+    PageWriterPtr & metaWriter()
+    {
+        assert(meta_storage_writer);
+        return meta_storage_writer;
+    }
+
+
+    PageReader newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
+    PageReader newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot);
+
+    PageReader newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
+    PageReader newDataReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot);
+
+    PageReader newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
+    PageReader newMetaReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot);
 
     void enableGC();
+
+    void dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks & callbacks);
+
+    void dataUnregisterExternalPagesCallbacks(NamespaceId ns_id);
 
     bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
@@ -117,25 +149,51 @@ public:
     // Caller must cancel gc tasks before drop
     void drop();
 
+    // For function `newLogPageId`,`newMetaPageId`,`newDataPageIdForDTFile`:
+    // For PageStorageRunMode::ONLY_V2, every table have its own three PageStorage (meta/data/log).
+    // So these functions return the Page id starts from 1 and is continuously incremented.
+    // For PageStorageRunMode::ONLY_V3/MIX_MODE, PageStorage is global(distinguish by ns_id for different table).
+    // In order to avoid Page id from being reused (and cause troubles while restoring WAL from disk),
+    // StoragePool will assign the max_log_page_id/max_meta_page_id/max_data_page_id by the global max id
+    // regardless of ns_id while being restored. This causes the ids in a table to not be continuously incremented.
+
     PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
-
-    PageId maxMetaPageId() { return max_meta_page_id; }
-
     PageId newLogPageId() { return ++max_log_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
+    bool doV2Gc(const Settings & settings);
+
+    void forceTransformMetaV2toV3();
+    void forceTransformDataV2toV3();
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
+    LoggerPtr logger;
+
+    PageStorageRunMode run_mode;
+
     // whether the three storage instance is owned by this StoragePool
-    const bool owned_storage = false;
     const NamespaceId ns_id;
 
-    const PageStoragePtr log_storage;
-    const PageStoragePtr data_storage;
-    const PageStoragePtr meta_storage;
+    PageStoragePtr log_storage_v2;
+    PageStoragePtr data_storage_v2;
+    PageStoragePtr meta_storage_v2;
 
-    PageReader log_storage_reader;
-    PageReader data_storage_reader;
-    PageReader meta_storage_reader;
+    PageStoragePtr log_storage_v3;
+    PageStoragePtr data_storage_v3;
+    PageStoragePtr meta_storage_v3;
+
+    PageReaderPtr log_storage_reader;
+    PageReaderPtr data_storage_reader;
+    PageReaderPtr meta_storage_reader;
+
+    PageWriterPtr log_storage_writer;
+    PageWriterPtr data_storage_writer;
+    PageWriterPtr meta_storage_writer;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
@@ -148,6 +206,8 @@ private:
     std::atomic<PageId> max_meta_page_id = 0;
 
     BackgroundProcessingPool::TaskHandle gc_handle = nullptr;
+
+    CurrentMetrics::Increment storage_pool_metrics;
 };
 
 struct StorageSnapshot : private boost::noncopyable

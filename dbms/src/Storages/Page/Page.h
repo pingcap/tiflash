@@ -59,6 +59,8 @@ public:
     std::set<FieldOffset> field_offsets;
 
 public:
+    inline bool isValid() const { return page_id != INVALID_PAGE_ID; }
+
     ByteBuffer getFieldData(size_t index) const
     {
         auto iter = field_offsets.find(FieldOffset(index));
@@ -72,6 +74,20 @@ public:
         assert(beg <= data.size());
         assert(end <= data.size());
         return ByteBuffer(data.begin() + beg, data.begin() + end);
+    }
+
+    inline static PageFieldSizes fieldOffsetsToSizes(const PageFieldOffsetChecksums & field_offsets, size_t data_size)
+    {
+        PageFieldSizes field_size = {};
+
+        auto it = field_offsets.begin();
+        while (it != field_offsets.end())
+        {
+            PageFieldOffset beg = it->first;
+            ++it;
+            field_size.emplace_back(it == field_offsets.end() ? data_size - beg : it->first - beg);
+        }
+        return field_size;
     }
 
     size_t fieldSize() const
@@ -108,6 +124,17 @@ public:
     PageFileIdAndLevel fileIdLevel() const
     {
         return std::make_pair(file_id, level);
+    }
+
+    String toDebugString() const
+    {
+        return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
+                           file_id,
+                           offset,
+                           size,
+                           checksum,
+                           tag,
+                           field_offsets.size());
     }
 
     size_t getFieldSize(size_t index) const

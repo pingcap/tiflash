@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
 #include <pingcap/coprocessor/Client.h>
@@ -34,7 +35,10 @@ using DAGSchema = std::vector<DAGColumnInfo>;
 
 struct RemoteRequest
 {
-    RemoteRequest(tipb::DAGRequest && dag_request_, DAGSchema && schema_, std::vector<pingcap::coprocessor::KeyRange> && key_ranges_)
+    RemoteRequest(
+        tipb::DAGRequest && dag_request_,
+        DAGSchema && schema_,
+        std::vector<pingcap::coprocessor::KeyRange> && key_ranges_)
         : dag_request(std::move(dag_request_))
         , schema(std::move(schema_))
         , key_ranges(std::move(key_ranges_))
@@ -43,6 +47,12 @@ struct RemoteRequest
     DAGSchema schema;
     /// the sorted key ranges
     std::vector<pingcap::coprocessor::KeyRange> key_ranges;
-    static RemoteRequest build(const RegionRetryList & retry_regions, DAGContext & dag_context, const TiDBTableScan & table_scan, const TiDB::TableInfo & table_info, const tipb::Executor * selection, LoggerPtr & log);
+    static RemoteRequest build(
+        const RegionRetryList & retry_regions,
+        DAGContext & dag_context,
+        const TiDBTableScan & table_scan,
+        const TiDB::TableInfo & table_info,
+        const PushDownFilter & push_down_filter,
+        const LoggerPtr & log);
 };
 } // namespace DB

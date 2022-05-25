@@ -25,6 +25,7 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -185,7 +186,8 @@ inline ::testing::AssertionResult getEntriesCompare(
     String error;
     try
     {
-        auto id_entries = dir->get(page_ids, snap);
+        auto [id_entries, page_ids_not_found] = dir->get(page_ids, snap);
+        (void)page_ids_not_found;
         return check_id_entries(expected_entries, id_entries);
     }
     catch (DB::Exception & ex)
@@ -220,7 +222,9 @@ inline ::testing::AssertionResult getEntryNotExist(
     String error;
     try
     {
-        auto id_entry = dir->get(page_id, snap);
+        auto id_entry = dir->getOrNull(page_id, snap);
+        if (!id_entry.second.isValid())
+            return ::testing::AssertionSuccess();
         error = fmt::format(
             "Expect entry [id={}] from {} with snap{} not exist, but got <{}.{}, {}>",
             page_id_expr,
@@ -258,13 +262,14 @@ inline ::testing::AssertionResult getEntriesNotExist(
     String error;
     try
     {
-        auto id_entry = dir->get(page_ids, snap);
+        auto [id_entries, page_ids_not_found] = dir->get(page_ids, snap);
+        (void)page_ids_not_found;
         error = fmt::format(
             "Expect entry [id={}] from {} with snap{} not exist, but got {}",
             page_ids_expr,
             dir_expr,
             snap_expr,
-            toString(id_entry));
+            toString(id_entries));
     }
     catch (DB::Exception & ex)
     {
