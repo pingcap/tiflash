@@ -29,8 +29,11 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     const Settings & settings = context.getSettingsRef();
     if (dagContext().isBatchCop() || dagContext().isMPPTask())
         max_streams = settings.max_threads;
+    else if (dagContext().isTest())
+        max_streams = dagContext().initialize_concurrency;
     else
         max_streams = 1;
+
     if (max_streams > 1)
     {
         max_streams *= settings.max_streams_to_max_threads_ratio;
@@ -92,7 +95,6 @@ BlockIO InterpreterDAG::execute()
     BlockInputStreams streams = executeQueryBlock(*dag.getRootQueryBlock());
     DAGPipeline pipeline;
     pipeline.streams = streams;
-
     /// add union to run in parallel if needed
     if (dagContext().isMPPTask())
         /// MPPTask do not need the returned blocks.
@@ -108,7 +110,6 @@ BlockIO InterpreterDAG::execute()
             SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
             dagContext().log->identifier());
     }
-
     BlockIO res;
     res.in = pipeline.firstStream();
     return res;

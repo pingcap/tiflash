@@ -30,30 +30,33 @@ using Seconds = std::chrono::seconds;
 static constexpr UInt64 MB = 1ULL * 1024 * 1024;
 static constexpr UInt64 GB = MB * 1024;
 
+
+// PageStorage V2 define
 static constexpr UInt64 PAGE_SIZE_STEP = (1 << 10) * 16; // 16 KB
-static constexpr UInt64 PAGE_BUFFER_SIZE = DBMS_DEFAULT_BUFFER_SIZE;
-static constexpr UInt64 PAGE_MAX_BUFFER_SIZE = 128 * MB;
-static constexpr UInt64 PAGE_SPLIT_SIZE = 1 * MB;
 static constexpr UInt64 PAGE_FILE_MAX_SIZE = 1024 * 2 * MB;
 static constexpr UInt64 PAGE_FILE_SMALL_SIZE = 2 * MB;
 static constexpr UInt64 PAGE_FILE_ROLL_SIZE = 128 * MB;
-static constexpr UInt64 PAGE_META_ROLL_SIZE = 2 * MB;
-
-static constexpr UInt64 BLOBFILE_LIMIT_SIZE = 512 * MB;
-static constexpr UInt64 BLOBSTORE_CACHED_FD_SIZE = 100;
 
 static_assert(PAGE_SIZE_STEP >= ((1 << 10) * 16), "PAGE_SIZE_STEP should be at least 16 KB");
 static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP should be power of 2");
-static_assert(PAGE_BUFFER_SIZE % PAGE_SIZE_STEP == 0, "PAGE_BUFFER_SIZE should be dividable by PAGE_SIZE_STEP");
+
+// PageStorage V3 define
+static constexpr UInt64 BLOBFILE_LIMIT_SIZE = 512 * MB;
+static constexpr UInt64 BLOBSTORE_CACHED_FD_SIZE = 100;
+static constexpr UInt64 PAGE_META_ROLL_SIZE = 2 * MB;
+static constexpr UInt64 MAX_PERSISTED_LOG_FILES = 4;
 
 using NamespaceId = UInt64;
 static constexpr NamespaceId MAX_NAMESPACE_ID = UINT64_MAX;
+// KVStore stores it's data individually, so the actual `ns_id` value doesn't matter(just different from `MAX_NAMESPACE_ID` is enough)
+static constexpr NamespaceId KVSTORE_NAMESPACE_ID = 1000000UL;
 // just a random namespace id for test, the value doesn't matter
 static constexpr NamespaceId TEST_NAMESPACE_ID = 1000;
 
 using PageId = UInt64;
 using PageIds = std::vector<PageId>;
 using PageIdSet = std::unordered_set<PageId>;
+static constexpr PageId INVALID_PAGE_ID = 0;
 
 using PageIdV3Internal = UInt128;
 using PageIdV3Internals = std::vector<PageIdV3Internal>;
@@ -71,7 +74,7 @@ using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;
 
-using BlobFileId = UInt32;
+using BlobFileId = UInt64;
 using BlobFileOffset = UInt64;
 static constexpr BlobFileId INVALID_BLOBFILE_ID = 0;
 static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = std::numeric_limits<BlobFileOffset>::max();
@@ -111,7 +114,7 @@ inline size_t alignPage(size_t n)
 template <>
 struct fmt::formatter<DB::PageIdV3Internal>
 {
-    constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
     {
         return ctx.begin();
     }
