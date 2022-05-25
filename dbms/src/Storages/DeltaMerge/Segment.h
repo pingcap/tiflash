@@ -124,14 +124,7 @@ public:
 
     bool writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack);
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
-<<<<<<< HEAD
-    bool write(DMContext & dm_context, const Block & block); // For test only
-=======
-
-    /// For test only.
-    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true);
-
->>>>>>> 94afb714ed (flush cache before segment merge (#4955))
+    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
     bool ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
 
