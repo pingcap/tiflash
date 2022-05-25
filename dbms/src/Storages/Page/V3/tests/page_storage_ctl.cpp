@@ -44,10 +44,10 @@ struct ControlOptions
 
     std::vector<std::string> paths;
     int display_mode = DisplayType::DISPLAY_SUMMARY_INFO;
-    UInt64 query_page_id = UINT64_MAX;
-    UInt64 query_blob_id = UINT64_MAX;
-    UInt64 query_ns_id = DB::TEST_NAMESPACE_ID;
-    UInt64 check_page_id = UINT64_MAX;
+    PageId query_page_id = UINT64_MAX;
+    BlobFileId query_blob_id = UINT64_MAX;
+    NamespaceId query_ns_id = DB::TEST_NAMESPACE_ID;
+    PageId check_page_id = UINT64_MAX;
     bool enable_fo_check = true;
     bool not_enable_blob = false;
     bool skip_mvcc_gc = false;
@@ -67,10 +67,10 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
         ("display_mode,D", value<int>()->default_value(1), "Display Mode: 1 is summary information,\n 2 is display all of stored page and version chaim(will be very long),\n 3 is display all blobs(in disk) data distribution. \n 4 is check every data is valid.") //
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
-        ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.") //
-        ("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
-        ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Page id, and print its version chaim.") //
-        ("query_blob_id,B", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Blob id, and print its data distribution.") //
+        ("query_ns_id,N", value<NamespaceId>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.") //
+        ("check_page_id,C", value<PageId>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
+        ("query_page_id,W", value<PageId>()->default_value(UINT64_MAX), "Quert a single Page id, and print its version chaim.") //
+        ("query_blob_id,B", value<BlobFileId>()->default_value(UINT64_MAX), "Quert a single Blob id, and print its data distribution.") //
         ("not_restore_blob", value<bool>()->default_value(false), "Only restore the WAL and snapshot log from disk.") //
         ("skip_mvcc_gc", value<bool>()->default_value(false), "Skip the mvcc gc when restore.") //
         ("only_restore_snapshot_log", value<bool>()->default_value(false), "Only restore the snapshot logs.");
@@ -98,11 +98,11 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     }
     opt.paths = options["paths"].as<std::vector<std::string>>();
     opt.display_mode = options["display_mode"].as<int>();
-    opt.query_page_id = options["query_page_id"].as<UInt64>();
-    opt.query_blob_id = options["query_blob_id"].as<UInt64>();
+    opt.query_page_id = options["query_page_id"].as<PageId>();
+    opt.query_blob_id = options["query_blob_id"].as<BlobFileId>();
     opt.enable_fo_check = options["enable_fo_check"].as<bool>();
-    opt.check_page_id = options["check_page_id"].as<UInt64>();
-    opt.query_ns_id = options["query_ns_id"].as<UInt64>();
+    opt.check_page_id = options["check_page_id"].as<PageId>();
+    opt.query_ns_id = options["query_ns_id"].as<NamespaceId>();
     opt.not_enable_blob = options["not_restore_blob"].as<bool>();
     opt.skip_mvcc_gc = options["skip_mvcc_gc"].as<bool>();
     opt.only_restore_snapshot_log = options["only_restore_snapshot_log"].as<bool>();
@@ -227,7 +227,7 @@ public:
     }
 
 private:
-    static String getBlobsInfo(BlobStore & blob_store, UInt64 blob_id)
+    static String getBlobsInfo(BlobStore & blob_store, BlobFileId blob_id)
     {
         auto stat_info = [](const BlobStore::BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
@@ -277,7 +277,7 @@ private:
         return stats_info.toString();
     }
 
-    static String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
+    static String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, NamespaceId ns_id, PageId page_id)
     {
         auto page_info = [](UInt128 page_internal_id_, const VersionedPageEntriesPtr & versioned_entries) {
             FmtBuffer page_str;
@@ -391,7 +391,7 @@ private:
         return dir_summary_info.toString();
     }
 
-    static String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
+    static String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, NamespaceId ns_id, PageId page_id)
     {
         const auto & page_internal_id = buildV3Id(ns_id, page_id);
         const auto & it = mvcc_table_directory.find(page_internal_id);
