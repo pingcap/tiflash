@@ -963,10 +963,7 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
 
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
-<<<<<<< HEAD
     WriteBatches wbs(dm_context.storage_pool);
-=======
-    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
     /// And only saved data in this segment will be filtered by the segment range in the merge process,
     /// unsaved data will be directly copied to the new segment.
@@ -990,8 +987,6 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
         }
     }
 
->>>>>>> 94afb714ed (flush cache before segment merge (#4955))
-
     auto left_snap  = left->createSnapshot(dm_context, true);
     auto right_snap = right->createSnapshot(dm_context, true);
     if (!left_snap || !right_snap)
@@ -1011,19 +1006,13 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     return merged;
 }
 
-<<<<<<< HEAD
-StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context, //
-                                          const ColumnDefinesPtr &   schema_snap,
-                                          const SegmentPtr &         left,
-=======
 /// Segments may contain some rows that not belong to its range which is left by previous split operation.
 /// And only saved data in the segment will be filtered by the segment range in the merge process,
 /// unsaved data will be directly copied to the new segment.
 /// So remember to do a flush for the segments before merge.
-StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
-                                          const ColumnDefinesPtr & schema_snap,
-                                          const SegmentPtr & left,
->>>>>>> 94afb714ed (flush cache before segment merge (#4955))
+StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context, //
+                                          const ColumnDefinesPtr &   schema_snap,
+                                          const SegmentPtr &         left,
                                           const SegmentSnapshotPtr & left_snap,
                                           const SegmentPtr &         right,
                                           const SegmentSnapshotPtr & right_snap,
