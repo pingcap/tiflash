@@ -50,6 +50,7 @@ extern const char force_triggle_foreground_flush[];
 extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
 extern const char force_set_segment_physical_split[];
+extern const char force_set_page_file_write_errno[];
 } // namespace FailPoints
 
 namespace DM
@@ -483,6 +484,198 @@ try
                     }
                     else if (iter.name == col_i8_define.name)
                     {
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, WriteCrashBeforeWalWithoutCache)
+try
+{
+    const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
+    const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
+
+        store = reload(table_column_defines);
+    }
+
+    {
+        // check column structure
+        const auto & cols = store->getTableColumns();
+        ASSERT_EQ(cols.size(), 5UL);
+        const auto & str_col = cols[3];
+        ASSERT_EQ(str_col.name, col_str_define.name);
+        ASSERT_EQ(str_col.id, col_str_define.id);
+        ASSERT_TRUE(str_col.type->equals(*col_str_define.type));
+        const auto & i8_col = cols[4];
+        ASSERT_EQ(i8_col.name, col_i8_define.name);
+        ASSERT_EQ(i8_col.id, col_i8_define.id);
+        ASSERT_TRUE(i8_col.type->equals(*col_i8_define.type));
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of col2:String for test
+            block.insert(DB::tests::createColumn<String>(
+                createNumberStrings(0, num_rows_write),
+                col_str_define.name,
+                col_str_define.id));
+            // Add a column of i8:Int8 for test
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_i8_define.name,
+                col_i8_define.id));
+        }
+        db_context->getSettingsRef().dt_segment_delta_cache_limit_rows = 8;
+        FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+        ASSERT_THROW(store->write(*db_context, db_context->getSettingsRef(), block), DB::Exception);
+        try
+        {
+            store->write(*db_context, db_context->getSettingsRef(), block);
+        }
+        catch (DB::Exception & e)
+        {
+            if (e.code() != ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR)
+                throw;
+        }
+    }
+    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
+
+    {
+        // read all columns from store
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* expected_block_size= */ 1024)[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, 0);
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, WriteCrashBeforeWalWithCache)
+try
+{
+    const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
+    const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
+
+        store = reload(table_column_defines);
+    }
+
+    {
+        // check column structure
+        const auto & cols = store->getTableColumns();
+        ASSERT_EQ(cols.size(), 5UL);
+        const auto & str_col = cols[3];
+        ASSERT_EQ(str_col.name, col_str_define.name);
+        ASSERT_EQ(str_col.id, col_str_define.id);
+        ASSERT_TRUE(str_col.type->equals(*col_str_define.type));
+        const auto & i8_col = cols[4];
+        ASSERT_EQ(i8_col.name, col_i8_define.name);
+        ASSERT_EQ(i8_col.id, col_i8_define.id);
+        ASSERT_TRUE(i8_col.type->equals(*col_i8_define.type));
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of col2:String for test
+            block.insert(DB::tests::createColumn<String>(
+                createNumberStrings(0, num_rows_write),
+                col_str_define.name,
+                col_str_define.id));
+            // Add a column of i8:Int8 for test
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_i8_define.name,
+                col_i8_define.id));
+        }
+
+        FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        ASSERT_THROW(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())), DB::Exception);
+        try
+        {
+            store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+        }
+        catch (DB::Exception & e)
+        {
+            if (e.code() != ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR)
+                throw;
+        }
+    }
+    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
+
+    {
+        // read all columns from store
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* expected_block_size= */ 1024)[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        //printf("pk:%lld\n", c->getInt(i));
+                        EXPECT_EQ(c->getInt(i), i);
+                    }
+                    else if (iter.name == col_str_define.name)
+                    {
+                        //printf("%s:%s\n", col_str_define.name.c_str(), c->getDataAt(i).data);
+                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
+                    }
+                    else if (iter.name == col_i8_define.name)
+                    {
+                        //printf("%s:%lld\n", col_i8_define.name.c_str(), c->getInt(i));
                         Int64 num = i * (i % 2 == 0 ? -1 : 1);
                         EXPECT_EQ(c->getInt(i), num);
                     }
