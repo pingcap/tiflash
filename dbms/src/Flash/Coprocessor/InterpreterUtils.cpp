@@ -70,7 +70,7 @@ void executeUnion(
     size_t max_streams,
     const LoggerPtr & log,
     bool ignore_block,
-    String extra_info)
+    const String & extra_info)
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
         return;

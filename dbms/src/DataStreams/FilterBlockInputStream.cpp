@@ -16,7 +16,6 @@
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
-#include <Common/FmtUtils.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <Interpreters/ExpressionActions.h>

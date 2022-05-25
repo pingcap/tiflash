@@ -258,7 +258,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
 
     /// build side streams
-    executeExpression(build_pipeline, build_side_prepare_actions, "Append Join key and join Filters");
+    executeExpression(build_pipeline, build_side_prepare_actions, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
     build_pipeline.transform([&](auto & stream) {
@@ -273,7 +273,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
 
     /// probe side streams
-    executeExpression(probe_pipeline, probe_side_prepare_actions, "probe side prepare actions");
+    executeExpression(probe_pipeline, probe_side_prepare_actions, "append join key and join filters for probe side");
     NamesAndTypes source_columns;
     for (const auto & p : probe_pipeline.firstStream()->getHeader())
         source_columns.emplace_back(p.name, p.type);
@@ -326,7 +326,7 @@ void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, co
     dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 
-void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column, String extra_info)
+void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column, const String & extra_info)
 {
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log->identifier());
@@ -410,7 +410,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     }
 }
 
-void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String extra_info)
+void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, const String & extra_info)
 {
     if (!expressionActionsPtr->getActions().empty())
     {
@@ -688,7 +688,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, String extra_info)
+void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, const String & extra_info)
 {
     if (project_cols.empty())
         return;

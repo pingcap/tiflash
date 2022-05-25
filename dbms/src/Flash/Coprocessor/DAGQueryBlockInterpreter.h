@@ -66,8 +66,8 @@ private:
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
     void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
-    void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column, String extra_info = "");
-    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String extra_info = "");
+    void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column, const String & extra_info = "");
+    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, const String & extra_info = "");
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
     void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
     void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
@@ -82,7 +82,7 @@ private:
         const TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions,
         bool is_final_agg);
-    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, String extra_info = "");
+    void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, const String & extra_info = "");
     void handleExchangeSender(DAGPipeline & pipeline);
     void handleMockExchangeSender(DAGPipeline & pipeline);
 
