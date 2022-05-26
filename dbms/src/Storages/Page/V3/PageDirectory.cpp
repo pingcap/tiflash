@@ -797,7 +797,17 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
         }
     }
 
-    throw Exception(fmt::format("Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]", page_id, snap->sequence, id_to_resolve, ver_to_resolve), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+    // Only mix mode throw_on_not_exist is false.
+    // In mix mode, storage will create a snapshot contains V2 and V3.
+    // If we find a del entry in V3, we still need find it in V2.
+    if (throw_on_not_exist)
+    {
+        throw Exception(fmt::format("Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]", page_id, snap->sequence, id_to_resolve, ver_to_resolve), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+    }
+    else
+    {
+        return PageIDAndEntryV3{page_id, PageEntryV3{.file_id = INVALID_BLOBFILE_ID}};
+    }
 }
 
 std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
@@ -846,7 +856,15 @@ std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internal
                 break; // continue the resolving
             }
         }
-        throw Exception(fmt::format("Fail to get entry [page_id={}] [ver={}] [resolve_id={}] [resolve_ver={}] [idx={}]", page_id, init_ver_to_resolve, id_to_resolve, ver_to_resolve, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+
+        if (throw_on_not_exist)
+        {
+            throw Exception(fmt::format("Fail to get entry [page_id={}] [ver={}] [resolve_id={}] [resolve_ver={}] [idx={}]", page_id, init_ver_to_resolve, id_to_resolve, ver_to_resolve, idx), ErrorCodes::PS_ENTRY_NO_VALID_VERSION);
+        }
+        else
+        {
+            return false;
+        }
     };
 
     PageIDAndEntriesV3 id_entries;
