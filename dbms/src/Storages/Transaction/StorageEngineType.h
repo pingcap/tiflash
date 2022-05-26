@@ -33,7 +33,7 @@ enum class StorageEngine
 
 enum class SnapshotApplyMethod : std::int32_t
 {
-    Block = 1,
+    DEPRECATED_Block = 1,
     // Invalid if the storage engine is not DeltaTree
     DTFile_Directory,
     DTFile_Single,

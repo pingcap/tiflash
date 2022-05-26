@@ -95,24 +95,6 @@ void RegionTable::shrinkRegionRange(const Region & region)
         dirty_regions.insert(internal_region.region_id);
 }
 
-bool RegionTable::shouldFlush(const InternalRegion & region) const
-{
-    if (region.pause_flush)
-        return false;
-    if (!region.cache_bytes)
-        return false;
-    auto period_time = Clock::now() - region.last_flush_time;
-    for (const auto & [th_bytes, th_duration] : *flush_thresholds.getData())
-    {
-        if (region.cache_bytes >= th_bytes && period_time >= th_duration)
-        {
-            LOG_FMT_INFO(log, "region {}, cache size {}, seconds since last {}", region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
-            return true;
-        }
-    }
-    return false;
-}
-
 RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
 {
     auto & tmt = context->getTMTContext();
