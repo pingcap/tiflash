@@ -257,11 +257,22 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
 
+    String extra_info = fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id);
     // to build a shared hash table.
     if (join_build_concurrency > 1)
-        executeParallel(build_pipeline, std::make_shared<HashJoinBuildParallelWriter<true>>(join_ptr, log->identifier()), max_streams, log);
+        executeParallel(
+            build_pipeline,
+            std::make_shared<HashJoinBuildParallelWriter<true>>(join_ptr, log->identifier()),
+            max_streams,
+            log,
+            extra_info);
     else
-        executeParallel(build_pipeline, std::make_shared<HashJoinBuildParallelWriter<false>>(join_ptr, log->identifier()), max_streams, log);
+        executeParallel(
+            build_pipeline,
+            std::make_shared<HashJoinBuildParallelWriter<false>>(join_ptr, log->identifier()),
+            max_streams,
+            log,
+            extra_info);
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;

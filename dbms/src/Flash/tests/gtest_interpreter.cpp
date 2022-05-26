@@ -231,11 +231,11 @@ Union: <for mpp>
     {
         String expected = R"(
 CreatingSets
- ParallelWriting<HashJoinBuild>
+ ParallelWriting<HashJoinBuild>: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
   Expression x 10: <append join key and join filters for build side>
    Expression: <final projection>
     MockTableScan
- ParallelWriting<HashJoinBuild> x 2
+ ParallelWriting<HashJoinBuild> x 2: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
   Expression x 10: <append join key and join filters for build side>
    Expression: <final projection>
     Expression: <remove useless column after join>
