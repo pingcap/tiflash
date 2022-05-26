@@ -33,8 +33,8 @@ class ColumnFileBig : public ColumnFilePersisted
 
 private:
     DMFilePtr file;
-    size_t valid_rows;
-    size_t valid_bytes;
+    size_t valid_rows = 0;
+    size_t valid_bytes = 0;
 
     RowKeyRange segment_range;
 
@@ -67,17 +67,17 @@ public:
 
     auto getFile() const { return file; }
 
-    PageId getDataPageId() { return file->refId(); }
+    PageId getDataPageId() { return file->pageId(); }
 
     size_t getRows() const override { return valid_rows; }
     size_t getBytes() const override { return valid_bytes; };
 
     void removeData(WriteBatches & wbs) const override
     {
-        // Here we remove the ref id instead of file_id.
-        // Because a dmfile could be used in serveral places, and only after all ref_ids are removed,
+        // Here we remove the data id instead of file_id.
+        // Because a dmfile could be used in several places, and only after all page ids are removed,
         // then the file_id got removed.
-        wbs.removed_data.delPage(file->refId());
+        wbs.removed_data.delPage(file->pageId());
     }
 
     ColumnFileReaderPtr

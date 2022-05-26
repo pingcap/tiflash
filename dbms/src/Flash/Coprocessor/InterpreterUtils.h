@@ -38,7 +38,8 @@ void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
     const LoggerPtr & log,
-    bool ignore_block = false);
+    bool ignore_block = false,
+    const String & extra_info = "");
 
 void executeParallel(
     DAGPipeline & pipeline,

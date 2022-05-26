@@ -42,7 +42,7 @@ public:
     void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 
 private:
-    bool scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, const MPPTaskPtr & task, const bool isWaiting);
+    bool scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, const MPPTaskPtr & task, const bool isWaiting, bool & has_error);
     bool updateMinTSO(const UInt64 tso, const bool retired, const String msg);
     void scheduleWaitingQueries(MPPTaskManager & task_manager);
     bool isDisabled()

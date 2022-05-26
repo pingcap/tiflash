@@ -14,6 +14,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -47,6 +48,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int CHECKSUM_DOESNT_MATCH;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char force_change_all_blobs_to_read_only[];
+} // namespace FailPoints
 
 namespace PS::V3
 {
@@ -342,7 +348,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     catch (DB::Exception & e)
     {
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
-        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed.", blob_id, offset_in_file, all_page_data_size, actually_allocated_size);
+        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
         throw e;
     }
 
@@ -869,6 +875,19 @@ std::vector<BlobFileId> BlobStore::getGCStats()
     const auto stats_list = blob_stats.getStats();
     std::vector<BlobFileId> blob_need_gc;
     BlobStoreGCInfo blobstore_gc_info;
+
+    fiu_do_on(FailPoints::force_change_all_blobs_to_read_only,
+              {
+                  for (const auto & [path, stats] : stats_list)
+                  {
+                      (void)path;
+                      for (const auto & stat : stats)
+                      {
+                          stat->changeToReadOnly();
+                      }
+                  }
+                  LOG_FMT_WARNING(log, "enabled force_change_all_blobs_to_read_only. All of BlobStat turn to READ-ONLY");
+              });
 
     for (const auto & [path, stats] : stats_list)
     {

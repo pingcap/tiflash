@@ -36,7 +36,7 @@ TEST(WALSeriTest, AllPuts)
 {
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20(/*seq=*/20);
+    PageVersion ver20(/*seq=*/20);
     PageEntriesEdit edit;
     edit.put(1, entry_p1);
     edit.put(2, entry_p2);
@@ -58,7 +58,7 @@ try
 {
     PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver21(/*seq=*/21);
+    PageVersion ver21(/*seq=*/21);
     PageEntriesEdit edit;
     edit.put(3, entry_p3);
     edit.ref(4, 3);
@@ -107,8 +107,8 @@ TEST(WALSeriTest, Upserts)
     PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
-    PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
+    PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
+    PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     PageEntriesEdit edit;
     edit.upsertPage(1, ver20_1, entry_p1_2);
     edit.upsertPage(3, ver21_1, entry_p3_2);
@@ -135,9 +135,9 @@ TEST(WALSeriTest, Upserts)
 
 TEST(WALSeriTest, RefExternalAndEntry)
 {
-    PageVersionType ver1_0(/*seq=*/1, /*epoch*/ 0);
-    PageVersionType ver2_0(/*seq=*/2, /*epoch*/ 0);
-    PageVersionType ver3_0(/*seq=*/3, /*epoch*/ 0);
+    PageVersion ver1_0(/*seq=*/1, /*epoch*/ 0);
+    PageVersion ver2_0(/*seq=*/2, /*epoch*/ 0);
+    PageVersion ver3_0(/*seq=*/3, /*epoch*/ 0);
     {
         PageEntriesEdit edit;
         edit.varExternal(1, ver1_0, 2);
@@ -407,7 +407,7 @@ try
     // Stage 2. Apply with only puts
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20(/*seq=*/20);
+    PageVersion ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
         edit.put(1, entry_p1);
@@ -437,7 +437,7 @@ try
     // Stage 3. Apply with puts and refs
     PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver21(/*seq=*/21);
+    PageVersion ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
@@ -471,8 +471,8 @@ try
     PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
-    PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
+    PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
+    PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
         PageEntriesEdit edit;
         edit.upsertPage(1, ver20_1, entry_p1_2);
@@ -516,7 +516,7 @@ try
     // Stage 1. Apply with only puts
     PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20(/*seq=*/20);
+    PageVersion ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
         edit.put(1, entry_p1);
@@ -528,7 +528,7 @@ try
     // Stage 2. Apply with puts and refs
     PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver21(/*seq=*/21);
+    PageVersion ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
         edit.put(3, entry_p3);
@@ -543,8 +543,8 @@ try
     PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageVersionType ver20_1(/*seq=*/20, /*epoch*/ 1);
-    PageVersionType ver21_1(/*seq=*/21, /*epoch*/ 1);
+    PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
+    PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
         PageEntriesEdit edit;
         edit.upsertPage(1, ver20_1, entry_p1_2);
@@ -596,11 +596,12 @@ TEST_P(WALStoreTest, ManyEdits)
 try
 {
     auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
+    auto enc_key_manager = std::make_shared<MockKeyManager>(/*encryption_enabled_=*/true);
+    auto enc_provider = std::make_shared<FileProvider>(enc_key_manager, true);
     auto path = getTemporaryPath();
 
     // Stage 1. empty
-    auto [wal, reader] = WALStore::create(getCurrentTestName(), provider, delegator, config);
+    auto [wal, reader] = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     ASSERT_NE(wal, nullptr);
 
     std::mt19937 rd;
@@ -611,7 +612,7 @@ try
     PageId page_id = 0;
     std::vector<size_t> size_each_edit;
     size_each_edit.reserve(num_edits_test);
-    PageVersionType ver(/*seq*/ 32);
+    PageVersion ver(/*seq*/ 32);
     for (size_t i = 0; i < num_edits_test; ++i)
     {
         PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
@@ -633,7 +634,7 @@ try
 
     size_t num_edits_read = 0;
     size_t num_pages_read = 0;
-    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
+    std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
         auto [ok, edit] = reader->next();
@@ -653,8 +654,7 @@ try
     LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 
     // Test for save snapshot (with encryption)
-    auto enc_key_manager = std::make_shared<MockKeyManager>(/*encryption_enabled_=*/true);
-    auto enc_provider = std::make_shared<FileProvider>(enc_key_manager, true);
+
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, log);
     WALStore::FilesSnapshot file_snap{.current_writting_log_num = 100, // just a fake value
                                       .persisted_log_files = persisted_log_files};
@@ -665,7 +665,7 @@ try
     // just fill in some random entry
     for (size_t i = 0; i < 70; ++i)
     {
-        snap_edit.varEntry(d_10000(rd), PageVersionType(345, 22), entry, 1);
+        snap_edit.varEntry(d_10000(rd), PageVersion(345, 22), entry, 1);
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     bool done = wal->saveSnapshot(std::move(file_snap), std::move(snap_edit));

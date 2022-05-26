@@ -18,6 +18,10 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/Snapshot.h>
+#include <Storages/Page/V2/PageStorage.h>
 #include <fmt/format.h>
 
 
@@ -82,26 +86,21 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
 }
 
 GlobalStoragePool::GlobalStoragePool(const PathPool & path_pool, Context & global_ctx, const Settings & settings)
-    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
-    log_storage(PageStorage::create("__global__.log",
-                                    path_pool.getPSDiskDelegatorGlobalMulti("log"),
-                                    extractConfig(settings, StorageType::Log),
-                                    global_ctx.getFileProvider(),
-                                    true))
-    ,
-    // The iops in data_storage is low, only use the first disk for storing data
-    data_storage(PageStorage::create("__global__.data",
-                                     path_pool.getPSDiskDelegatorGlobalSingle("data"),
-                                     extractConfig(settings, StorageType::Data),
-                                     global_ctx.getFileProvider(),
-                                     true))
-    ,
-    // The iops in meta_storage is relatively high, use multi-disks if possible
-    meta_storage(PageStorage::create("__global__.meta",
-                                     path_pool.getPSDiskDelegatorGlobalMulti("meta"),
-                                     extractConfig(settings, StorageType::Meta),
-                                     global_ctx.getFileProvider(),
-                                     true))
+    : log_storage(PageStorage::create("__global__.log",
+                                      path_pool.getPSDiskDelegatorGlobalMulti("log"),
+                                      extractConfig(settings, StorageType::Log),
+                                      global_ctx.getFileProvider(),
+                                      true))
+    , data_storage(PageStorage::create("__global__.data",
+                                       path_pool.getPSDiskDelegatorGlobalMulti("data"),
+                                       extractConfig(settings, StorageType::Data),
+                                       global_ctx.getFileProvider(),
+                                       true))
+    , meta_storage(PageStorage::create("__global__.meta",
+                                       path_pool.getPSDiskDelegatorGlobalMulti("meta"),
+                                       extractConfig(settings, StorageType::Meta),
+                                       global_ctx.getFileProvider(),
+                                       true))
     , global_context(global_ctx)
 {
 }
@@ -118,9 +117,9 @@ GlobalStoragePool::~GlobalStoragePool()
 
 void GlobalStoragePool::restore()
 {
-    log_max_ids = log_storage->restore();
-    data_max_ids = data_storage->restore();
-    meta_max_ids = meta_storage->restore();
+    log_storage->restore();
+    data_storage->restore();
+    meta_storage->restore();
 
     gc_handle = global_context.getBackgroundPool().addTask(
         [this] {
@@ -131,7 +130,7 @@ void GlobalStoragePool::restore()
 
 bool GlobalStoragePool::gc()
 {
-    return gc(Settings(), true, DELTA_MERGE_GC_PERIOD);
+    return gc(global_context.getSettingsRef(), true, DELTA_MERGE_GC_PERIOD);
 }
 
 bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)
@@ -181,7 +180,7 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
                                              extractConfig(global_context.getSettingsRef(), StorageType::Log),
                                              global_context.getFileProvider());
         data_storage_v2 = PageStorage::create(name + ".data",
-                                              storage_path_pool.getPSDiskDelegatorSingle("data"),
+                                              storage_path_pool.getPSDiskDelegatorSingle("data"), // keep for behavior not changed
                                               extractConfig(global_context.getSettingsRef(), StorageType::Data),
                                               global_ctx.getFileProvider());
         meta_storage_v2 = PageStorage::create(name + ".meta",
@@ -249,6 +248,8 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
 
 void StoragePool::forceTransformMetaV2toV3()
 {
+    if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
+        throw Exception(fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
     assert(meta_storage_v2 != nullptr);
     assert(meta_storage_v3 != nullptr);
     auto meta_transform_storage_writer = std::make_shared<PageWriter>(run_mode, meta_storage_v2, meta_storage_v3);
@@ -293,52 +294,120 @@ void StoragePool::forceTransformMetaV2toV3()
     meta_transform_storage_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
 }
 
+static inline DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *
+toV2ConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
+{
+    return dynamic_cast<DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *>(ptr.get());
+}
+
+void StoragePool::forceTransformDataV2toV3()
+{
+    if (unlikely(run_mode != PageStorageRunMode::MIX_MODE))
+        throw Exception(fmt::format("Transform meta must run under mix mode [run_mode={}]", static_cast<Int32>(run_mode)));
+    assert(data_storage_v2 != nullptr);
+    assert(data_storage_v3 != nullptr);
+    auto data_transform_storage_writer = std::make_shared<PageWriter>(run_mode, data_storage_v2, data_storage_v3);
+
+    auto snapshot = data_storage_v2->getSnapshot("transformDataV2toV3");
+    auto * v2_snap = toV2ConcreteSnapshot(snapshot);
+    if (!snapshot || !v2_snap)
+    {
+        throw Exception("Can not allocate snapshot from pool.data v2", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    // Example
+    // 100 -> 100
+    // 102 -> 100
+    // 105 -> 100
+    // 200 -> 200
+    // 305 -> 300
+    // Migration steps:
+    // collect v2 valid page id: 100, 102, 105, 200, 305
+    // v3 put external 100, 200, 300; put ref 102, 105, 305
+    // mark some id as deleted: v3 del 300
+    // v2 delete 100, 102, 105, 200, 305
+
+    // The page ids that can be accessed by DeltaTree
+    const auto all_page_ids = v2_snap->view.validPageIds();
+
+    WriteBatch write_batch_transform{ns_id};
+    WriteBatch write_batch_del_v2{ns_id};
+
+    std::set<PageId> created_dt_file_id;
+    for (const auto page_id : all_page_ids)
+    {
+        // resolve the page_id into dtfile id
+        const auto resolved_file_id = v2_snap->view.resolveRefId(page_id);
+        if (auto ins_result = created_dt_file_id.insert(resolved_file_id); /*created=*/ins_result.second)
+        {
+            // first see this file id, migrate to v3
+            write_batch_transform.putExternal(resolved_file_id, 0);
+        }
+        // migrate the reference for v3
+        if (page_id != resolved_file_id)
+        {
+            write_batch_transform.putRefPage(page_id, resolved_file_id);
+        }
+        // record del for V2
+        write_batch_del_v2.delPage(page_id);
+    }
+    // If the file id is not existed in `all_page_ids`, it means the file id
+    // itself has been deleted.
+    for (const auto dt_file_id : created_dt_file_id)
+    {
+        if (all_page_ids.count(dt_file_id) == 0)
+        {
+            write_batch_transform.delPage(dt_file_id);
+        }
+    }
+
+    // Will rewrite into V3.
+    data_transform_storage_writer->writeIntoV3(std::move(write_batch_transform), nullptr);
+
+    // DEL must call after rewrite.
+    data_transform_storage_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
+}
+
 PageStorageRunMode StoragePool::restore()
 {
-    const auto & global_storage_pool = global_context.getGlobalStoragePool();
-
     switch (run_mode)
     {
     case PageStorageRunMode::ONLY_V2:
     {
-        auto log_max_ids = log_storage_v2->restore();
-        auto data_max_ids = data_storage_v2->restore();
-        auto meta_max_ids = meta_storage_v2->restore();
+        log_storage_v2->restore();
+        data_storage_v2->restore();
+        meta_storage_v2->restore();
 
-        assert(log_max_ids.size() == 1);
-        assert(data_max_ids.size() == 1);
-        assert(meta_max_ids.size() == 1);
-
-        max_log_page_id = log_max_ids[0];
-        max_data_page_id = data_max_ids[0];
-        max_meta_page_id = meta_max_ids[0];
+        max_log_page_id = log_storage_v2->getMaxId();
+        max_data_page_id = data_storage_v2->getMaxId();
+        max_meta_page_id = meta_storage_v2->getMaxId();
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV2Only};
         break;
     }
     case PageStorageRunMode::ONLY_V3:
     {
-        max_log_page_id = global_storage_pool->getLogMaxId(ns_id);
-        max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
-        max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
+        max_log_page_id = log_storage_v3->getMaxId();
+        max_data_page_id = data_storage_v3->getMaxId();
+        max_meta_page_id = meta_storage_v3->getMaxId();
 
         storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         break;
     }
     case PageStorageRunMode::MIX_MODE:
     {
-        auto v2_log_max_ids = log_storage_v2->restore();
-        auto v2_data_max_ids = data_storage_v2->restore();
-        auto v2_meta_max_ids = meta_storage_v2->restore();
+        log_storage_v2->restore();
+        data_storage_v2->restore();
+        meta_storage_v2->restore();
 
         // The pages on data and log can be rewritten to V3 and the old pages on V2 are deleted by `delta merge`.
         // However, the pages on meta V2 can not be deleted. As the pages in meta are small, we perform a forceTransformMetaV2toV3 to convert pages before all.
         if (const auto & meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
         {
-            LOG_FMT_INFO(logger, "Current meta transform to V3 begin, [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
+            LOG_FMT_INFO(logger, "Current pool.meta transform to V3 begin [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
             forceTransformMetaV2toV3();
             const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
-            LOG_FMT_INFO(logger, "Current meta transform to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
+            LOG_FMT_INFO(logger, "Current pool.meta transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
                          ns_id,
                          meta_remain_pages_after_transform == 0,
                          meta_remain_pages,
@@ -346,12 +415,24 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current meta translate already done before restored.[ns_id={}] ", ns_id);
+            LOG_FMT_INFO(logger, "Current pool.meta translate already done before restored [ns_id={}] ", ns_id);
         }
 
-        assert(v2_log_max_ids.size() == 1);
-        assert(v2_data_max_ids.size() == 1);
-        assert(v2_meta_max_ids.size() == 1);
+        if (const auto & data_remain_pages = data_storage_v2->getNumberOfPages(); data_remain_pages != 0)
+        {
+            LOG_FMT_INFO(logger, "Current pool.data transform to V3 begin [ns_id={}] [pages_before_transform={}]", ns_id, data_remain_pages);
+            forceTransformDataV2toV3();
+            const auto & data_remain_pages_after_transform = data_storage_v2->getNumberOfPages();
+            LOG_FMT_INFO(logger, "Current pool.data transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
+                         ns_id,
+                         data_remain_pages_after_transform == 0,
+                         data_remain_pages,
+                         data_remain_pages_after_transform);
+        }
+        else
+        {
+            LOG_FMT_INFO(logger, "Current pool.data translate already done before restored [ns_id={}] ", ns_id);
+        }
 
         // Check number of valid pages in v2
         // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
@@ -375,18 +456,18 @@ PageStorageRunMode StoragePool::restore()
             data_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, data_storage_v3);
             meta_storage_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, meta_storage_v3);
 
-            max_log_page_id = global_storage_pool->getLogMaxId(ns_id);
-            max_data_page_id = global_storage_pool->getDataMaxId(ns_id);
-            max_meta_page_id = global_storage_pool->getMetaMaxId(ns_id);
+            max_log_page_id = log_storage_v3->getMaxId();
+            max_data_page_id = data_storage_v3->getMaxId();
+            max_meta_page_id = meta_storage_v3->getMaxId();
 
             run_mode = PageStorageRunMode::ONLY_V3;
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolV3Only};
         }
         else // Still running Mix Mode
         {
-            max_log_page_id = std::max(v2_log_max_ids[0], global_storage_pool->getLogMaxId(ns_id));
-            max_data_page_id = std::max(v2_data_max_ids[0], global_storage_pool->getDataMaxId(ns_id));
-            max_meta_page_id = std::max(v2_meta_max_ids[0], global_storage_pool->getMetaMaxId(ns_id));
+            max_log_page_id = std::max(log_storage_v2->getMaxId(), log_storage_v3->getMaxId());
+            max_data_page_id = std::max(data_storage_v2->getMaxId(), data_storage_v3->getMaxId());
+            max_meta_page_id = std::max(meta_storage_v2->getMaxId(), meta_storage_v3->getMaxId());
             storage_pool_metrics = CurrentMetrics::Increment{CurrentMetrics::StoragePoolMixMode};
         }
         break;

@@ -80,7 +80,7 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
     writeIntBinary(valid_bytes, buf);
     writeIntBinary(static_cast<UInt64>(files.size()), buf);
     for (auto & f : files)
-        writeIntBinary(f->refId(), buf);
+        writeIntBinary(f->pageId(), buf);
 
     auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
@@ -100,15 +100,15 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
     readIntBinary(size, buf);
-    UInt64 ref_id;
+    UInt64 page_id;
     for (size_t i = 0; i < size; ++i)
     {
-        readIntBinary(ref_id, buf);
+        readIntBinary(page_id, buf);
 
-        auto file_id = context.storage_pool.dataReader()->getNormalPageId(ref_id);
+        auto file_id = context.storage_pool.dataReader()->getNormalPageId(page_id);
         auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
-        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
+        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
         stable->files.push_back(dmfile);
     }
 
@@ -168,7 +168,7 @@ void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
     {
         // Here we should remove the ref id instead of file_id.
         // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
-        wbs.removed_data.delPage(file->refId());
+        wbs.removed_data.delPage(file->pageId());
     }
 }
 
