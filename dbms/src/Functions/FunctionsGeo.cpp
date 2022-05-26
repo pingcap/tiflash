@@ -28,13 +28,6 @@
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
 
-
-namespace ProfileEvents
-{
-extern const Event PolygonsAddedToPool;
-extern const Event PolygonsInPoolAllocatedBytes;
-} // namespace ProfileEvents
-
 namespace DB
 {
 namespace ErrorCodes
@@ -59,9 +52,6 @@ ColumnPtr callPointInPolygonImplWithPool(const IColumn & x, const IColumn & y, P
 
         /// To allocate memory.
         ptr->init();
-
-        ProfileEvents::increment(ProfileEvents::PolygonsAddedToPool);
-        ProfileEvents::increment(ProfileEvents::PolygonsInPoolAllocatedBytes, ptr->getAllocatedBytes());
 
         return ptr.release();
     };

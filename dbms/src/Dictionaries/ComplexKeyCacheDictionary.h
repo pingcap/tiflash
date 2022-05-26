@@ -34,20 +34,6 @@
 #include <ext/scope_guard.h>
 #include <pcg_random.hpp>
 
-
-namespace ProfileEvents
-{
-extern const Event DictCacheKeysRequested;
-extern const Event DictCacheKeysRequestedMiss;
-extern const Event DictCacheKeysRequestedFound;
-extern const Event DictCacheKeysExpired;
-extern const Event DictCacheKeysNotFound;
-extern const Event DictCacheKeysHit;
-extern const Event DictCacheRequestTimeNs;
-extern const Event DictCacheLockWriteNs;
-extern const Event DictCacheLockReadNs;
-}
-
 namespace DB
 {
 class ComplexKeyCacheDictionary final : public IDictionaryBase
@@ -322,8 +308,6 @@ private:
 
         size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
         {
-            const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
             const auto now = std::chrono::system_clock::now();
             /// fetch up-to-date values, decide which ones require update
             for (const auto row : ext::range(0, rows_num))
@@ -354,9 +338,6 @@ private:
                 }
             }
         }
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
         query_count.fetch_add(rows_num, std::memory_order_relaxed);
         hit_count.fetch_add(rows_num - outdated_keys.size(), std::memory_order_release);
 
@@ -400,8 +381,6 @@ private:
 
         /// perform optimistic version, fallback to pessimistic if failed
         {
-            const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
             const auto now = std::chrono::system_clock::now();
             /// fetch up-to-date values, discard on fail
             for (const auto row : ext::range(0, rows_num))
@@ -446,8 +425,6 @@ private:
         size_t total_length = 0;
         size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
         {
-            const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
             const auto now = std::chrono::system_clock::now();
             for (const auto row : ext::range(0, rows_num))
             {
@@ -477,9 +454,6 @@ private:
                 }
             }
         }
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
 
         query_count.fetch_add(rows_num, std::memory_order_relaxed);
         hit_count.fetch_add(rows_num - outdated_keys.size(), std::memory_order_release);
@@ -539,7 +513,6 @@ private:
 
         std::uniform_int_distribution<UInt64> distribution(dict_lifetime.min_sec, dict_lifetime.max_sec);
 
-        const ProfilingScopedWriteRWLock write_lock{rw_lock, ProfileEvents::DictCacheLockWriteNs};
         {
             Stopwatch watch;
             auto stream = source_ptr->loadKeys(in_key_columns, in_requested_rows);
@@ -612,9 +585,6 @@ private:
             }
 
             stream->readSuffix();
-
-            ProfileEvents::increment(ProfileEvents::DictCacheKeysRequested, in_requested_rows.size());
-            ProfileEvents::increment(ProfileEvents::DictCacheRequestTimeNs, watch.elapsed());
         }
 
         size_t found_num = 0;
@@ -671,9 +641,6 @@ private:
             /// inform caller that the cell has not been found
             on_key_not_found(key, cell_idx);
         }
-
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysRequestedMiss, found_num);
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysRequestedMiss, not_found_num);
     };
 
     UInt64 getCellIdx(const StringRef key) const;

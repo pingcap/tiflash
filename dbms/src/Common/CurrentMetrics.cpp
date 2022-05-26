@@ -17,36 +17,10 @@
 
 /// Available metrics. Add something here as you wish.
 #define APPLY_FOR_METRICS(M)                    \
-    M(Query)                                    \
-    M(Merge)                                    \
-    M(ReplicatedFetch)                          \
-    M(ReplicatedSend)                           \
-    M(ReplicatedChecks)                         \
-    M(BackgroundPoolTask)                       \
-    M(DiskSpaceReservedForMerge)                \
-    M(DistributedSend)                          \
-    M(QueryPreempted)                           \
-    M(TCPConnection)                            \
-    M(HTTPConnection)                           \
-    M(InterserverConnection)                    \
     M(OpenFileForRead)                          \
     M(OpenFileForWrite)                         \
     M(OpenFileForReadWrite)                     \
-    M(SendExternalTables)                       \
-    M(QueryThread)                              \
-    M(ReadonlyReplica)                          \
-    M(LeaderReplica)                            \
     M(MemoryTracking)                           \
-    M(MemoryTrackingInBackgroundProcessingPool) \
-    M(MemoryTrackingForMerges)                  \
-    M(LeaderElection)                           \
-    M(EphemeralNode)                            \
-    M(DelayedInserts)                           \
-    M(ContextLockWait)                          \
-    M(StorageBufferRows)                        \
-    M(StorageBufferBytes)                       \
-    M(DictCacheRequests)                        \
-    M(Revision)                                 \
     M(PSMVCCNumSnapshots)                       \
     M(PSMVCCSnapshotsList)                      \
     M(RWLockWaitingReaders)                     \

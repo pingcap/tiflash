@@ -30,12 +30,6 @@
 #include <Storages/MutableSupport.h>
 #include <TableFunctions/TableFunctionFactory.h>
 
-
-namespace ProfileEvents
-{
-extern const Event InsertQuery;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -54,7 +48,6 @@ InterpreterInsertQuery::InterpreterInsertQuery(
     , context(context_)
     , allow_materialized(allow_materialized_)
 {
-    ProfileEvents::increment(ProfileEvents::InsertQuery);
 }
 
 

@@ -152,13 +152,6 @@ FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
 
 void AsynchronousMetrics::update()
 {
-    {
-        if (auto mark_cache = context.getMarkCache())
-        {
-            set("MarkCacheBytes", mark_cache->weight());
-            set("MarkCacheFiles", mark_cache->count());
-        }
-    }
 
     {
         if (auto uncompressed_cache = context.getUncompressedCache())

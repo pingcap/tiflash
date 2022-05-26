@@ -28,14 +28,6 @@
 
 #include <vector>
 
-
-namespace ProfileEvents
-{
-extern const Event ReadCompressedBytes;
-extern const Event CompressedReadBufferBlocks;
-extern const Event CompressedReadBufferBytes;
-} // namespace ProfileEvents
-
 namespace DB
 {
 namespace ErrorCodes
@@ -83,8 +75,6 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_
     if (size_compressed > DBMS_MAX_COMPRESSED_SIZE)
         throw Exception("Too large size_compressed. Most likely corrupted data.", ErrorCodes::TOO_LARGE_SIZE_COMPRESSED);
 
-    ProfileEvents::increment(ProfileEvents::ReadCompressedBytes, size_compressed + sizeof(checksum));
-
     /// Is whole compressed block located in 'compressed_in' buffer?
     if (compressed_in->offset() >= COMPRESSED_BLOCK_HEADER_SIZE
         && compressed_in->position() + size_compressed - COMPRESSED_BLOCK_HEADER_SIZE <= compressed_in->buffer().end())
@@ -115,9 +105,6 @@ size_t CompressedReadBufferBase<has_checksum>::readCompressedData(size_t & size_
 template <bool has_checksum>
 void CompressedReadBufferBase<has_checksum>::decompress(char * to, size_t size_decompressed, size_t size_compressed_without_checksum)
 {
-    ProfileEvents::increment(ProfileEvents::CompressedReadBufferBlocks);
-    ProfileEvents::increment(ProfileEvents::CompressedReadBufferBytes, size_decompressed);
-
     UInt8 method = compressed_buffer[0]; /// See CompressedWriteBuffer.h
 
     if (method == static_cast<UInt8>(CompressionMethodByte::LZ4))

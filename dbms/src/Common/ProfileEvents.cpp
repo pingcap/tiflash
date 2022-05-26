@@ -18,91 +18,23 @@
 /// Available events. Add something here as you wish.
 #define APPLY_FOR_EVENTS(M)                     \
     M(Query)                                    \
-    M(SelectQuery)                              \
-    M(InsertQuery)                              \
-    M(DeleteQuery)                              \
     M(FileOpen)                                 \
     M(FileOpenFailed)                           \
-    M(Seek)                                     \
     M(ReadBufferFromFileDescriptorRead)         \
     M(ReadBufferFromFileDescriptorReadFailed)   \
     M(ReadBufferFromFileDescriptorReadBytes)    \
     M(WriteBufferFromFileDescriptorWrite)       \
-    M(WriteBufferFromFileDescriptorWriteFailed) \
     M(WriteBufferFromFileDescriptorWriteBytes)  \
     M(ReadBufferAIORead)                        \
     M(ReadBufferAIOReadBytes)                   \
     M(WriteBufferAIOWrite)                      \
     M(WriteBufferAIOWriteBytes)                 \
-    M(ReadCompressedBytes)                      \
-    M(CompressedReadBufferBlocks)               \
-    M(CompressedReadBufferBytes)                \
-    M(UncompressedCacheHits)                    \
-    M(UncompressedCacheMisses)                  \
-    M(UncompressedCacheWeightLost)              \
-    M(IOBufferAllocs)                           \
-    M(IOBufferAllocBytes)                       \
-    M(ArenaAllocChunks)                         \
-    M(ArenaAllocBytes)                          \
-    M(FunctionExecute)                          \
-    M(TableFunctionExecute)                     \
-    M(MarkCacheHits)                            \
-    M(MarkCacheMisses)                          \
-    M(CreatedReadBufferOrdinary)                \
-    M(CreatedReadBufferAIO)                     \
-    M(CreatedWriteBufferOrdinary)               \
-    M(CreatedWriteBufferAIO)                    \
                                                 \
-    M(InsertedRows)                             \
-    M(InsertedBytes)                            \
-    M(DelayedInserts)                           \
-    M(RejectedInserts)                          \
-    M(DelayedInsertsMilliseconds)               \
-    M(DuplicatedInsertedBlocks)                 \
-                                                \
-    M(DistributedConnectionFailTry)             \
-    M(DistributedConnectionMissingTable)        \
-    M(DistributedConnectionStaleReplica)        \
-    M(DistributedConnectionFailAtAll)           \
-                                                \
-    M(CompileAttempt)                           \
-    M(CompileSuccess)                           \
-                                                \
-    M(ExternalSortWritePart)                    \
-    M(ExternalSortMerge)                        \
-    M(ExternalAggregationWritePart)             \
-    M(ExternalAggregationMerge)                 \
     M(ExternalAggregationCompressedBytes)       \
     M(ExternalAggregationUncompressedBytes)     \
                                                 \
-    M(SlowRead)                                 \
-    M(ReadBackoff)                              \
-                                                \
-    M(RegexpCreated)                            \
     M(ContextLock)                              \
                                                 \
-    M(StorageBufferFlush)                       \
-    M(StorageBufferErrorOnFlush)                \
-    M(StorageBufferPassedAllMinThresholds)      \
-    M(StorageBufferPassedTimeMaxThreshold)      \
-    M(StorageBufferPassedRowsMaxThreshold)      \
-    M(StorageBufferPassedBytesMaxThreshold)     \
-                                                \
-    M(DictCacheKeysRequested)                   \
-    M(DictCacheKeysRequestedMiss)               \
-    M(DictCacheKeysRequestedFound)              \
-    M(DictCacheKeysExpired)                     \
-    M(DictCacheKeysNotFound)                    \
-    M(DictCacheKeysHit)                         \
-    M(DictCacheRequestTimeNs)                   \
-    M(DictCacheRequests)                        \
-    M(DictCacheLockWriteNs)                     \
-    M(DictCacheLockReadNs)                      \
-                                                \
-    M(DistributedSyncInsertionTimeoutExceeded)  \
-    M(DataAfterMergeDiffersFromReplica)         \
-    M(PolygonsAddedToPool)                      \
-    M(PolygonsInPoolAllocatedBytes)             \
     M(RWLockAcquiredReadLocks)                  \
     M(RWLockAcquiredWriteLocks)                 \
     M(RWLockReadersWaitMilliseconds)            \
