@@ -628,8 +628,10 @@ try
     {
         auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_before_merge_delta);
         // read 1, 3 with snapshot, should be success
-        ASSERT_NO_THROW(page_reader_mix_with_snap.read(1));
-        ASSERT_NO_THROW(page_reader_mix_with_snap.read(3));
+        const auto & page1 = page_reader_mix_with_snap.read(1);
+        const auto & page3 = page_reader_mix_with_snap.read(3);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page3, 3);
         ASSERT_THROW(page_reader_mix_with_snap.read(4), DB::Exception);
     }
     {
