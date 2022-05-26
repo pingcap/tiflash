@@ -58,7 +58,7 @@ endif()
 
 option(ENABLE_PCH "Enable `Precompiled header`" ${NOT_USE_CCACHE})
 if (USE_CCACHE AND ENABLE_PCH)
-    message(STATUS "`Precompiled header` will be unavailable with ccache")
+    message(WARNING "`Precompiled header` will be unavailable with ccache")
 endif ()
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
