@@ -303,7 +303,7 @@ RawRustPtrWrap::~RawRustPtrWrap()
         return;
     RustGcHelper::instance().gcRustPtr(ptr, type);
 }
-RawRustPtrWrap::RawRustPtrWrap(RawRustPtrWrap && src)
+RawRustPtrWrap::RawRustPtrWrap(RawRustPtrWrap && src) : RawRustPtr()
 {
     RawRustPtr & tar = (*this);
     tar = src;
