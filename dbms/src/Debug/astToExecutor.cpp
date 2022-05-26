@@ -61,7 +61,7 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
         case TiDB::TypeFloat:
         {
             expr->set_tp(tipb::ExprType::Float32);
-            Float32 val = static_cast<Float32>(val_field.safeGet<Float64>());
+            auto val = static_cast<Float32>(val_field.safeGet<Float64>());
             encodeDAGFloat32(val, ss);
             break;
         }
@@ -75,7 +75,7 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
         case TiDB::TypeString:
         {
             expr->set_tp(tipb::ExprType::String);
-            const String & val = val_field.safeGet<String>();
+            const auto & val = val_field.safeGet<String>();
             encodeDAGString(val, ss);
             break;
         }
@@ -282,15 +282,15 @@ void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * ex
 
 void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t collator_id, const Context & context)
 {
-    if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
+    if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         identifierToPB(input, id, expr, collator_id);
     }
-    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
         functionToPB(input, func, expr, collator_id, context);
     }
-    else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
+    else if (auto * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
         literalToPB(expr, lit->value, collator_id);
     }
@@ -525,7 +525,7 @@ void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * ex
 
 void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & used_columns)
 {
-    if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
+    if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         auto column_name = splitQualifiedName(id->getColumnName());
         if (!column_name.first.empty())
@@ -546,7 +546,7 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
             }
         }
     }
-    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
         if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
         {
@@ -579,7 +579,7 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
 TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
 {
     TiDB::ColumnInfo ci;
-    if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
+    if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         /// check column
         auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
@@ -594,7 +594,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
             throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         ci = ft->second;
     }
-    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
         /// check function
         String func_name_lowercase = Poco::toLower(func->name);
@@ -712,7 +712,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
             compileExpr(input, child_ast);
         }
     }
-    else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
+    else if (auto * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
         switch (lit->value.getType())
         {
@@ -929,7 +929,7 @@ bool TopN::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
     tipb::TopN * topn = tipb_executor->mutable_topn();
     for (const auto & child : order_columns)
     {
-        ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
         if (!elem)
             throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
         tipb::ByItem * by = topn->add_order_by();
@@ -974,7 +974,7 @@ bool Aggregation::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collat
     auto & input_schema = children[0]->output_schema;
     for (const auto & expr : agg_exprs)
     {
-        const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+        const auto * func = typeid_cast<const ASTFunction *>(expr.get());
         if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
             throw Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
 
@@ -1044,7 +1044,7 @@ void Aggregation::columnPrune(std::unordered_set<String> & used_columns)
     {
         if (used_columns.find(func->getColumnName()) != used_columns.end())
         {
-            const ASTFunction * agg_func = typeid_cast<const ASTFunction *>(func.get());
+            const auto * agg_func = typeid_cast<const ASTFunction *>(func.get());
             if (agg_func != nullptr)
             {
                 /// agg_func should not be nullptr, just double check
@@ -1095,7 +1095,7 @@ void Aggregation::toMPPSubPlan(size_t & executor_index, const DAGProperties & pr
     /// re-construct agg_exprs and gby_exprs in final_agg
     for (size_t i = 0; i < partial_agg->agg_exprs.size(); i++)
     {
-        const ASTFunction * agg_func = typeid_cast<const ASTFunction *>(partial_agg->agg_exprs[i].get());
+        const auto * agg_func = typeid_cast<const ASTFunction *>(partial_agg->agg_exprs[i].get());
         ASTPtr update_agg_expr = agg_func->clone();
         auto * update_agg_func = typeid_cast<ASTFunction *>(update_agg_expr.get());
         if (agg_func->name == "count")
@@ -1388,7 +1388,7 @@ ExecutorPtr compileTopN(ExecutorPtr input, size_t & executor_index, ASTPtr order
     std::vector<ASTPtr> order_columns;
     for (const auto & child : order_exprs->children)
     {
-        ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
         if (!elem)
             throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
         order_columns.push_back(child);
@@ -1419,7 +1419,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
     {
         for (const auto & expr : agg_funcs->children)
         {
-            const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+            const auto * func = typeid_cast<const ASTFunction *>(expr.get());
             if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
             {
                 need_append_project = true;
@@ -1510,7 +1510,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
                 output_schema.emplace_back(ft->first, ft->second);
                 continue;
             }
-            const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+            const auto * func = typeid_cast<const ASTFunction *>(expr.get());
             if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
             {
                 throw Exception("No such agg " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
