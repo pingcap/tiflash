@@ -536,7 +536,7 @@ ColumnWithTypeAndName executeFunction(
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool raw_function_test = false);
+    bool raw_function_test = true);
 
 ColumnWithTypeAndName executeFunction(
     Context & context,
@@ -544,7 +544,7 @@ ColumnWithTypeAndName executeFunction(
     const ColumnNumbers & argument_column_numbers,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool raw_function_test = false);
+    bool raw_function_test = true);
 
 template <typename... Args>
 ColumnWithTypeAndName executeFunction(
@@ -686,7 +686,7 @@ public:
         const String & func_name,
         const ColumnsWithTypeAndName & columns,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
-        bool raw_function_test = false)
+        bool raw_function_test = true)
     {
         return DB::tests::executeFunction(context, func_name, columns, collator, raw_function_test);
     }
@@ -703,7 +703,7 @@ public:
         const ColumnNumbers & argument_column_numbers,
         const ColumnsWithTypeAndName & columns,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
-        bool raw_function_test = false)
+        bool raw_function_test = true)
     {
         return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
     }
