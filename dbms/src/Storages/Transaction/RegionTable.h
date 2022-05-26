@@ -129,6 +129,7 @@ public:
 
     void removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &);
 
+    bool tryFlushRegions();
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
 
@@ -172,6 +173,7 @@ private:
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
     RegionDataReadInfoList flushRegion(const RegionPtrWithBlock & region, bool try_persist) const;
+    bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
 
 private:

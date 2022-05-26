@@ -95,6 +95,24 @@ void RegionTable::shrinkRegionRange(const Region & region)
         dirty_regions.insert(internal_region.region_id);
 }
 
+bool RegionTable::shouldFlush(const InternalRegion & region) const
+{
+    if (region.pause_flush)
+        return false;
+    if (!region.cache_bytes)
+        return false;
+    auto period_time = Clock::now() - region.last_flush_time;
+    for (const auto & [th_bytes, th_duration] : *flush_thresholds.getData())
+    {
+        if (region.cache_bytes >= th_bytes && period_time >= th_duration)
+        {
+            LOG_FMT_INFO(log, "region {}, cache size {}, seconds since last {}", region.region_id, region.cache_bytes, std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
+            return true;
+        }
+    }
+    return false;
+}
+
 RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & region, bool try_persist) const
 {
     auto & tmt = context->getTMTContext();
@@ -347,6 +365,44 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
         std::rethrow_exception(first_exception);
 
     return data_list_to_remove;
+}
+
+RegionID RegionTable::pickRegionToFlush()
+{
+    std::lock_guard lock(mutex);
+
+    for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
+    {
+        auto region_id = *dirty_it;
+        if (auto it = regions.find(region_id); it != regions.end())
+        {
+            auto table_id = it->second;
+            if (shouldFlush(doGetInternalRegion(table_id, region_id)))
+            {
+                // The dirty flag should only be removed after data is flush successfully.
+                return region_id;
+            }
+
+            dirty_it++;
+        }
+        else
+        {
+            // Region{region_id} is removed, remove its dirty flag
+            dirty_it = dirty_regions.erase(dirty_it);
+        }
+    }
+    return InvalidRegionID;
+}
+
+bool RegionTable::tryFlushRegions()
+{
+    if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
+    {
+        tryFlushRegion(region_to_flush, true);
+        return true;
+    }
+
+    return false;
 }
 
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const

@@ -77,6 +77,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("put_region", dbgFuncPutRegion);
 
+    regSchemalessFunc("try_flush", dbgFuncTryFlush);
     regSchemalessFunc("try_flush_region", dbgFuncTryFlushRegion);
 
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
