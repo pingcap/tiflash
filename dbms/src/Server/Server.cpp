@@ -177,11 +177,6 @@ namespace
 }
 } // namespace
 
-namespace CurrentMetrics
-{
-extern const Metric Revision;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -1042,8 +1037,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         proxy_runner.join();
         LOG_FMT_INFO(log, "tiflash proxy thread is joined");
     });
-
-    CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
     grpc_log = &Poco::Logger::get("grpc");

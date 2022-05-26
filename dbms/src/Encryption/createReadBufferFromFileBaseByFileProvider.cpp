@@ -20,10 +20,6 @@
 #endif
 #include <Common/ProfileEvents.h>
 #include <IO/ChecksumBuffer.h>
-namespace ProfileEvents
-{
-extern const Event CreatedReadBufferOrdinary;
-}
 
 namespace DB
 {
@@ -46,7 +42,6 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
-        ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
         return std::make_unique<ReadBufferFromFileProvider>(
             file_provider,
             filename_,
@@ -75,7 +70,6 @@ createReadBufferFromFileBaseByFileProvider(
     size_t checksum_frame_size,
     int flags_)
 {
-    ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
     auto file = file_provider->newRandomAccessFile(filename_, encryption_path_, read_limiter, flags_);
     auto allocation_size = std::min(estimated_size, checksum_frame_size);
     switch (checksum_algorithm)

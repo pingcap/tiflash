@@ -120,8 +120,6 @@ off_t ReadBufferFromFileDescriptor::doSeek(off_t offset, int whence)
     }
     else
     {
-        ProfileEvents::increment(ProfileEvents::Seek);
-
         pos = working_buffer.end();
         off_t res = doSeekInFile(new_pos, SEEK_SET);
         if (-1 == res)

@@ -31,12 +31,6 @@
 #include <mutex>
 #include <unordered_map>
 
-
-namespace CurrentMetrics
-{
-extern const Metric Query;
-}
-
 namespace DB
 {
 class IStorage;
@@ -89,8 +83,6 @@ private:
     MemoryTracker memory_tracker;
 
     QueryPriorities::Handle priority_handle;
-
-    CurrentMetrics::Increment num_queries{CurrentMetrics::Query};
 
     std::atomic<bool> is_killed{false};
 

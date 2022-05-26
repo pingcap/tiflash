@@ -40,12 +40,6 @@ inline static pid_t getTid()
 }
 #endif
 
-namespace CurrentMetrics
-{
-extern const Metric BackgroundPoolTask;
-extern const Metric MemoryTrackingInBackgroundProcessingPool;
-} // namespace CurrentMetrics
-
 namespace DB
 {
 constexpr double BackgroundProcessingPool::sleep_seconds;
@@ -154,7 +148,6 @@ void BackgroundProcessingPool::threadFunction()
     }
 
     MemoryTracker memory_tracker;
-    memory_tracker.setMetric(CurrentMetrics::MemoryTrackingInBackgroundProcessingPool);
     current_memory_tracker = &memory_tracker;
 
     pcg64 rng(randomSeed());
@@ -215,8 +208,6 @@ void BackgroundProcessingPool::threadFunction()
                 continue;
 
             {
-                CurrentMetrics::Increment metric_increment{CurrentMetrics::BackgroundPoolTask};
-
                 bool done_work = false;
                 if (!task->multi)
                 {

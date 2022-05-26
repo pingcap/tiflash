@@ -19,13 +19,6 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 
-
-namespace ProfileEvents
-{
-extern const Event ExternalSortWritePart;
-extern const Event ExternalSortMerge;
-} // namespace ProfileEvents
-
 namespace DB
 {
 /** Remove constant columns from block.
@@ -136,7 +129,6 @@ Block MergeSortingBlockInputStream::readImpl()
                 MergeSortingBlocksBlockInputStream block_in(blocks, description, log->identifier(), max_merged_block_size, limit);
 
                 LOG_FMT_INFO(log, "Sorting and writing part of data into temporary file {}", path);
-                ProfileEvents::increment(ProfileEvents::ExternalSortWritePart);
                 copyData(block_in, block_out, &is_cancelled); /// NOTE. Possibly limit disk usage.
                 LOG_FMT_INFO(log, "Done writing part of data into temporary file {}", path);
 
@@ -155,7 +147,6 @@ Block MergeSortingBlockInputStream::readImpl()
         else
         {
             /// If there was temporary files.
-            ProfileEvents::increment(ProfileEvents::ExternalSortMerge);
 
             LOG_FMT_INFO(log, "There are {} temporary sorted parts to merge.", temporary_files.size());
 

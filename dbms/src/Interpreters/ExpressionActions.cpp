@@ -27,12 +27,6 @@
 #include <optional>
 #include <set>
 
-
-namespace ProfileEvents
-{
-extern const Event FunctionExecute;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -339,7 +333,6 @@ void ExpressionAction::execute(Block & block) const
         size_t num_columns_without_result = block.columns();
         block.insert({nullptr, result_type, result_name});
 
-        ProfileEvents::increment(ProfileEvents::FunctionExecute);
         function->execute(block, arguments, num_columns_without_result);
 
         break;

@@ -22,10 +22,6 @@
 #include <Common/HTMLForm.h>
 
 
-namespace CurrentMetrics
-{
-    extern const Metric HTTPConnection;
-}
 
 namespace Poco { class Logger; }
 
@@ -71,8 +67,6 @@ private:
 
     /// It is the name of the server that will be sent in an http-header X-ClickHouse-Server-Display-Name. 
     String server_display_name;
-
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::HTTPConnection};
 
     /// Also initializes 'used_output'.
     void processQuery(

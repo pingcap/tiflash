@@ -24,27 +24,6 @@
 #include <ext/range.h>
 #include <ext/map.h>
 
-
-namespace ProfileEvents
-{
-
-    extern const Event DictCacheKeysRequested;
-    extern const Event DictCacheKeysRequestedMiss;
-    extern const Event DictCacheKeysRequestedFound;
-    extern const Event DictCacheKeysExpired;
-    extern const Event DictCacheKeysNotFound;
-    extern const Event DictCacheKeysHit;
-    extern const Event DictCacheRequestTimeNs;
-    extern const Event DictCacheLockWriteNs;
-    extern const Event DictCacheLockReadNs;
-}
-
-namespace CurrentMetrics
-{
-    extern const Metric DictCacheRequests;
-}
-
-
 namespace DB
 {
 
@@ -190,7 +169,6 @@ void ComplexKeyCacheDictionary::has(const Columns & key_columns, const DataTypes
 
     size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
 
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, decide which ones require update
@@ -220,9 +198,6 @@ void ComplexKeyCacheDictionary::has(const Columns & key_columns, const DataTypes
             }
         }
     }
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
 
     query_count.fetch_add(rows_num, std::memory_order_relaxed);
     hit_count.fetch_add(rows_num - outdated_keys.size(), std::memory_order_release);
@@ -392,7 +367,6 @@ BlockInputStreamPtr ComplexKeyCacheDictionary::getBlockInputStream(const Names &
 {
     std::vector<StringRef> keys;
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
 
         for (auto idx : ext::range(0, cells.size()))
             if (!isEmptyCell(idx)

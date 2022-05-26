@@ -20,11 +20,6 @@
 #include <Common/ProfileEvents.h>
 #include <IO/ChecksumBuffer.h>
 
-namespace ProfileEvents
-{
-extern const Event CreatedWriteBufferOrdinary;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -49,7 +44,6 @@ createWriteBufferFromFileBaseByFileProvider(
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
-        ProfileEvents::increment(ProfileEvents::CreatedWriteBufferOrdinary);
         return std::make_unique<WriteBufferFromFileProvider>(
             file_provider,
             filename_,
@@ -81,7 +75,6 @@ createWriteBufferFromFileBaseByFileProvider(
     int flags_,
     mode_t mode)
 {
-    ProfileEvents::increment(ProfileEvents::CreatedWriteBufferOrdinary);
     auto file_ptr
         = file_provider->newWritableFile(filename_, encryption_path_, true, create_new_encryption_info_, write_limiter_, flags_, mode);
     switch (checksum_algorithm)

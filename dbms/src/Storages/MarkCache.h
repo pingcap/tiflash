@@ -22,13 +22,6 @@
 #include <Interpreters/AggregationCommon.h>
 #include <DataStreams/MarkInCompressedFile.h>
 
-
-namespace ProfileEvents
-{
-    extern const Event MarkCacheHits;
-    extern const Event MarkCacheMisses;
-}
-
 namespace DB
 {
 
@@ -59,11 +52,6 @@ public:
     MappedPtr getOrSet(const Key & key, LoadFunc && load)
     {
         auto result = Base::getOrSet(key, load);
-        if (result.second)
-            ProfileEvents::increment(ProfileEvents::MarkCacheMisses);
-        else
-            ProfileEvents::increment(ProfileEvents::MarkCacheHits);
-
         return result.first;
     }
 };

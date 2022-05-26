@@ -20,13 +20,6 @@
 #include <Common/SipHash.h>
 #include <IO/BufferWithOwnMemory.h>
 
-namespace ProfileEvents
-{
-extern const Event UncompressedCacheHits;
-extern const Event UncompressedCacheMisses;
-extern const Event UncompressedCacheWeightLost;
-} // namespace ProfileEvents
-
 namespace DB
 {
 struct UncompressedCacheCell
@@ -73,18 +66,7 @@ public:
     {
         MappedPtr res = Base::get(key);
 
-        if (res)
-            ProfileEvents::increment(ProfileEvents::UncompressedCacheHits);
-        else
-            ProfileEvents::increment(ProfileEvents::UncompressedCacheMisses);
-
         return res;
-    }
-
-private:
-    void onRemoveOverflowWeightLoss(size_t weight_loss) override
-    {
-        ProfileEvents::increment(ProfileEvents::UncompressedCacheWeightLost, weight_loss);
     }
 };
 

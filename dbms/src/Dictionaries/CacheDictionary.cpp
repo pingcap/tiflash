@@ -32,27 +32,6 @@
 #include <ext/range.h>
 #include <ext/map.h>
 
-
-namespace ProfileEvents
-{
-    extern const Event DictCacheKeysRequested;
-    extern const Event DictCacheKeysRequestedMiss;
-    extern const Event DictCacheKeysRequestedFound;
-    extern const Event DictCacheKeysExpired;
-    extern const Event DictCacheKeysNotFound;
-    extern const Event DictCacheKeysHit;
-    extern const Event DictCacheRequestTimeNs;
-    extern const Event DictCacheRequests;
-    extern const Event DictCacheLockWriteNs;
-    extern const Event DictCacheLockReadNs;
-}
-
-namespace CurrentMetrics
-{
-    extern const Metric DictCacheRequests;
-}
-
-
 namespace DB
 {
 
@@ -390,7 +369,6 @@ void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8>
 
     const auto rows = ext::size(ids);
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
 
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, decide which ones require update
@@ -415,10 +393,6 @@ void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8>
             }
         }
     }
-
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
 
     query_count.fetch_add(rows, std::memory_order_relaxed);
     hit_count.fetch_add(rows - outdated_ids.size(), std::memory_order_release);
@@ -586,7 +560,6 @@ void CacheDictionary::getItemsNumberImpl(
     size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
 
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
 
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, decide which ones require update
@@ -617,10 +590,6 @@ void CacheDictionary::getItemsNumberImpl(
             }
         }
     }
-
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
 
     query_count.fetch_add(rows, std::memory_order_relaxed);
     hit_count.fetch_add(rows - outdated_ids.size(), std::memory_order_release);
@@ -666,7 +635,6 @@ void CacheDictionary::getItemsString(
 
     /// perform optimistic version, fallback to pessimistic if failed
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
 
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, discard on fail
@@ -710,8 +678,6 @@ void CacheDictionary::getItemsString(
     size_t total_length = 0;
     size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
         const auto now = std::chrono::system_clock::now();
         for (const auto row : ext::range(0, ids.size()))
         {
@@ -740,10 +706,6 @@ void CacheDictionary::getItemsString(
             }
         }
     }
-
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
 
     query_count.fetch_add(rows, std::memory_order_relaxed);
     hit_count.fetch_add(rows - outdated_ids.size(), std::memory_order_release);
@@ -798,10 +760,7 @@ void CacheDictionary::update(
         dict_lifetime.max_sec
     };
 
-    const ProfilingScopedWriteRWLock write_lock{rw_lock, ProfileEvents::DictCacheLockWriteNs};
-
     {
-        CurrentMetrics::Increment metric_increment{CurrentMetrics::DictCacheRequests};
         Stopwatch watch;
         auto stream = source_ptr->loadIds(requested_ids);
         stream->readPrefix();
@@ -860,8 +819,6 @@ void CacheDictionary::update(
 
         stream->readSuffix();
 
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysRequested, requested_ids.size());
-        ProfileEvents::increment(ProfileEvents::DictCacheRequestTimeNs, watch.elapsed());
     }
 
     size_t not_found_num = 0, found_num = 0;
@@ -904,9 +861,6 @@ void CacheDictionary::update(
         on_id_not_found(id, cell_idx);
     }
 
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysRequestedMiss, not_found_num);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysRequestedFound, found_num);
-    ProfileEvents::increment(ProfileEvents::DictCacheRequests);
 }
 
 
@@ -1003,8 +957,6 @@ bool CacheDictionary::isEmptyCell(const UInt64 idx) const
 
 PaddedPODArray<CacheDictionary::Key> CacheDictionary::getCachedIds() const
 {
-    const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
     PaddedPODArray<Key> array;
     for (size_t idx = 0; idx < cells.size(); ++idx)
     {

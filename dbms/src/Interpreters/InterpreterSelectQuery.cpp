@@ -131,8 +131,6 @@ InterpreterSelectQuery::~InterpreterSelectQuery() = default;
 
 void InterpreterSelectQuery::init(const Names & required_result_column_names)
 {
-    ProfileEvents::increment(ProfileEvents::SelectQuery);
-
     if (!context.hasQueryContext())
         context.setQueryContext(context);
 

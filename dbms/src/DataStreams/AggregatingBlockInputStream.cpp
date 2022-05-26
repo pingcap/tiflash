@@ -17,12 +17,6 @@
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 
-
-namespace ProfileEvents
-{
-extern const Event ExternalAggregationMerge;
-}
-
 namespace DB
 {
 Block AggregatingBlockInputStream::getHeader() const
@@ -55,8 +49,6 @@ Block AggregatingBlockInputStream::readImpl()
             /** If there are temporary files with partially-aggregated data on the disk,
               *  then read and merge them, spending the minimum amount of memory.
               */
-
-            ProfileEvents::increment(ProfileEvents::ExternalAggregationMerge);
 
             if (!isCancelled())
             {

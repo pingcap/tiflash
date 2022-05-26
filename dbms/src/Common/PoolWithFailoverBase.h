@@ -40,12 +40,6 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 } // namespace DB
 
-namespace ProfileEvents
-{
-extern const Event DistributedConnectionFailTry;
-extern const Event DistributedConnectionFailAtAll;
-} // namespace ProfileEvents
-
 /// This class provides a pool with fault tolerance. It is used for pooling of connections to replicated DB.
 /// Initialized by several PoolBase objects.
 /// When a connection is requested, tries to create or choose an alive connection from one of the nested pools.
@@ -254,14 +248,12 @@ PoolWithFailoverBase<TNestedPool>::getMany(
             else
             {
                 LOG_FMT_WARNING(log, "Connection failed at try No.{}, reason: {}", shuffled_pool.error_count + 1, fail_message);
-                ProfileEvents::increment(ProfileEvents::DistributedConnectionFailTry);
 
                 ++shuffled_pool.error_count;
 
                 if (shuffled_pool.error_count >= max_tries)
                 {
                     ++failed_pools_count;
-                    ProfileEvents::increment(ProfileEvents::DistributedConnectionFailAtAll);
                 }
             }
         }

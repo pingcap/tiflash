@@ -20,13 +20,6 @@
 #include <Poco/Net/DNS.h>
 #include <Poco/Net/NetException.h>
 
-
-namespace ProfileEvents
-{
-extern const Event DistributedConnectionMissingTable;
-extern const Event DistributedConnectionStaleReplica;
-} // namespace ProfileEvents
-
 namespace DB
 {
 namespace ErrorCodes
@@ -187,7 +180,6 @@ ConnectionPoolWithFailover::tryGetEntry(
             fail_message = "There is no table " + table_to_check->database + "." + table_to_check->table
                 + " on server: " + result.entry->getDescription();
             LOG_WARNING(log, fail_message);
-            ProfileEvents::increment(ProfileEvents::DistributedConnectionMissingTable);
 
             return result;
         }
@@ -217,7 +209,6 @@ ConnectionPoolWithFailover::tryGetEntry(
                 table_to_check->database,
                 table_to_check->table,
                 delay);
-            ProfileEvents::increment(ProfileEvents::DistributedConnectionStaleReplica);
         }
     }
     catch (const Exception & e)
