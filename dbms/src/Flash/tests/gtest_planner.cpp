@@ -15,18 +15,16 @@
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
-class InterpreterExecuteTest : public DB::tests::InterpreterTest
+class PlannerTest : public DB::tests::InterpreterTest
 {
 public:
     void initializeContext() override
     {
         InterpreterTest::initializeContext();
 
-        context.context->setSetting("enable_planner", "false");
+        context.context->setSetting("enable_planner", "true");
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
@@ -38,7 +36,7 @@ public:
     }
 };
 
-TEST_F(InterpreterExecuteTest, SingleQueryBlock)
+TEST_F(PlannerTest, SingleQueryBlock)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -92,7 +90,7 @@ Union: <for mpp>
 }
 CATCH
 
-TEST_F(InterpreterExecuteTest, MultipleQueryBlockWithSource)
+TEST_F(PlannerTest, MultipleQueryBlockWithSource)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -387,5 +385,4 @@ CreatingSets
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+}
