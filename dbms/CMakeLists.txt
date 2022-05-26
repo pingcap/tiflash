@@ -279,14 +279,22 @@ if (ENABLE_TESTS)
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "bench*.cpp")
     endmacro()
 
+    macro(grep_aggregation_sources BASE_DIR DST_VAR)
+        # Cold match files that are not in tests/ directories
+        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "AggregateFunction*.cpp")
+    endmacro()
+
     # attach all dbms gtest sources
     grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms dbms_gtest_sources)
+    grep_aggregation_sources(${TiFlash_SOURCE_DIR}/dbms dbms_aggregation_sources)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
         ${dbms_gtest_sources}
+        ${dbms_aggregation_sources}
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
-        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/registerAggregateFunctions.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/UniqCombinedBiasData.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)

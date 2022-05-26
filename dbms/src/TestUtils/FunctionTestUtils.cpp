@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Core/ColumnNumbers.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <Encryption/MockKeyManager.h>
 #include <Functions/FunctionFactory.h>
+#include <Interpreters/Aggregator.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -148,6 +152,51 @@ ColumnWithTypeAndName executeFunction(Context & context, const String & func_nam
     block.insert({nullptr, func->getReturnType(), "res"});
     func->execute(block, argument_column_numbers, columns.size());
     return block.getByPosition(columns.size());
+}
+
+ColumnWithTypeAndName executeAggregateFunction(const String & func_name,
+                                               const ColumnsWithTypeAndName & cols,
+                                               const ColumnNumbers & group_keys_offset,
+                                               const bool empty_result_for_aggregation_by_empty_set,
+                                               const bool allow_to_use_two_level_group_by,
+                                               const TiDB::TiDBCollators & collators)
+{
+    auto & factory = AggregateFunctionFactory::instance();
+    AggregateDescriptions aggregate_descriptions(1);
+    DataTypes empty_list_of_types;
+    aggregate_descriptions[0].function = factory.get(func_name, empty_list_of_types);
+
+    Block block;
+    for (ColumnWithTypeAndName col : cols)
+    {
+        block.insert(col);
+    }
+    BlockInputStreamPtr stream = std::make_shared<OneBlockInputStream>(block);
+    Aggregator::Params params(
+        stream->getHeader(),
+        group_keys_offset,
+        aggregate_descriptions,
+        false,
+        SettingUInt64(0), // max_rows_to_group_by
+        SettingOverflowMode<true>(OverflowMode::THROW), // group_by_overflow_mode
+        allow_to_use_two_level_group_by ? SettingUInt64(100000) : SettingUInt64(0), // group_by_two_level_threshold
+        allow_to_use_two_level_group_by ? SettingUInt64(100000000) : SettingUInt64(0), // group_by_two_level_threshold_bytes
+        SettingUInt64(0), // max_bytes_before_external_group_by
+        empty_result_for_aggregation_by_empty_set,
+        "", // temporary path
+        collators);
+    Aggregator aggregator(params, "agg_0");
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+    FileProviderPtr file_provider = std::make_shared<FileProvider>(key_manager, false);
+    AggregatedDataVariantsPtr data_variants = std::make_shared<AggregatedDataVariants>();
+    aggregator.execute(stream, *data_variants, file_provider);
+    if (aggregator.hasTemporaryFiles())
+    {
+        throw TiFlashTestException("aggregator.hasTemporaryFiles() should be false");
+    }
+    ManyAggregatedDataVariants many_data{data_variants};
+    std::unique_ptr<IBlockInputStream> result = aggregator.mergeAndConvertToBlocks(many_data, true, 1);
+    return result->read().getByPosition(cols.size() - 1);
 }
 
 DataTypePtr getReturnTypeForFunction(
