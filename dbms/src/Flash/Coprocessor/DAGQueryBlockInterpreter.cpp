@@ -259,9 +259,9 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     // to build a shared hash table.
     if (join_build_concurrency > 1)
-        executeParallel(right_pipeline, std::make_shared<HashJoinBuildParallelWriter<true>>(join_ptr, log->identifier()), max_streams, log);
+        executeParallel(build_pipeline, std::make_shared<HashJoinBuildParallelWriter<true>>(join_ptr, log->identifier()), max_streams, log);
     else
-        executeParallel(right_pipeline, std::make_shared<HashJoinBuildParallelWriter<false>>(join_ptr, log->identifier()), max_streams, log);
+        executeParallel(build_pipeline, std::make_shared<HashJoinBuildParallelWriter<false>>(join_ptr, log->identifier()), max_streams, log);
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;

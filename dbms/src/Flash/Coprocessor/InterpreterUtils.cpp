@@ -30,7 +30,8 @@ BlockInputStreamPtr executeParallelForNonJoined(
     DAGPipeline & pipeline,
     const ParallelWriterPtr & parallel_writer,
     size_t max_threads,
-    const LoggerPtr & log)
+    const LoggerPtr & log,
+    const String & extra_info)
 {
     assert(!pipeline.streams.empty());
     BlockInputStreamPtr ret = nullptr;
@@ -47,6 +48,7 @@ BlockInputStreamPtr executeParallelForNonJoined(
             parallel_writer,
             max_threads,
             log->identifier());
+        ret->setExtraInfo(fmt::format("{}(non joined_streams)", extra_info));
     }
     else // pipeline.streams_with_non_joined_data.empty(), just else here.
     {
@@ -125,7 +127,8 @@ void executeParallel(
     DAGPipeline & pipeline,
     const ParallelWriterPtr & parallel_writer,
     size_t max_streams,
-    const LoggerPtr & log)
+    const LoggerPtr & log,
+    const String & extra_info)
 {
     if (pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty())
         return;
@@ -134,11 +137,11 @@ void executeParallel(
     {
         pipeline.streams = std::move(pipeline.streams_with_non_joined_data);
         pipeline.streams_with_non_joined_data = {};
-        executeParallel(pipeline, parallel_writer, max_streams, log);
+        executeParallel(pipeline, parallel_writer, max_streams, log, fmt::format("{}(non joined_streams)", extra_info));
     }
     else
     {
-        auto non_joined_data_stream = executeParallelForNonJoined(pipeline, parallel_writer, max_streams, log);
+        auto non_joined_data_stream = executeParallelForNonJoined(pipeline, parallel_writer, max_streams, log, extra_info);
         pipeline.firstStream() = executeParallelWrite(
             pipeline.streams,
             non_joined_data_stream,
@@ -146,6 +149,7 @@ void executeParallel(
             max_streams,
             log->identifier());
         pipeline.streams.resize(1);
+        pipeline.firstStream()->setExtraInfo(extra_info);
     }
     assert(pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty());
 }

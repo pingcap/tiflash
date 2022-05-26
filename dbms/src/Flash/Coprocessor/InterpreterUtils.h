@@ -45,7 +45,8 @@ void executeParallel(
     DAGPipeline & pipeline,
     const ParallelWriterPtr & parallel_writer,
     size_t max_streams,
-    const LoggerPtr & log);
+    const LoggerPtr & log,
+    const String & extra_info = "");
 
 ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,

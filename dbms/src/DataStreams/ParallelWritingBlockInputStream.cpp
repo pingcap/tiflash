@@ -53,6 +53,11 @@ Block SerialWritingBlockInputStream::getHeader() const
     return children.back()->getHeader();
 }
 
+void SerialWritingBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    parallel_writer->appendInfo(buffer);
+}
+
 Block SerialWritingBlockInputStream::readImpl()
 {
     for (const auto & child : children)
@@ -85,6 +90,12 @@ ParallelWritingBlockInputStream::ParallelWritingBlockInputStream(
     children = inputs;
     if (additional_input_at_end)
         children.push_back(additional_input_at_end);
+}
+
+
+void ParallelWritingBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    parallel_writer->appendInfo(buffer);
 }
 
 

@@ -32,13 +32,15 @@ public:
         , log(Logger::get(name_, req_id))
     {}
 
-    virtual void write(Block & /*block*/, size_t /*thread_num*/){};
+    virtual void write(Block & /*block*/, size_t /*thread_num*/) {}
 
     /// `onFinishThread` and `onFinish` may be called repeatedly.
-    virtual void onFinishThread(size_t /*thread_num*/){};
-    virtual void onFinish(){};
+    virtual void onFinishThread(size_t /*thread_num*/) {}
+    virtual void onFinish() {}
 
-    String getName() const { return name; };
+    virtual void appendInfo(FmtBuffer & /*buffer*/) const {}
+
+    String getName() const { return name; }
 
     virtual ~ParallelWriter() = default;
 

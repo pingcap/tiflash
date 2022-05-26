@@ -15,7 +15,8 @@
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/MPMCQueue.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
-#include <DataStreams/HashJoinBuildBlockInputStream.h>
+#include <DataStreams/HashJoinBuildParallelWriter.h>
+#include <DataStreams/ParallelWritingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -473,10 +474,12 @@ struct ReceiverHelper
 
         join_ptr->init(receiver_header, concurrency);
 
-        for (int i = 0; i < concurrency; ++i)
-            streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, /*req_id=*/"");
-
-        return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
+        return executeParallelWrite(
+            streams,
+            nullptr,
+            std::make_shared<HashJoinBuildParallelWriter<true>>(join_ptr, ""),
+            concurrency,
+            /*req_id=*/"");
     }
 
     void finish()
