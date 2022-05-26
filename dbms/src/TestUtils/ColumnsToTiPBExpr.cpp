@@ -175,7 +175,7 @@ void columnsToTiPBExpr(
     {
         expr->set_tp(tipb::ExprType::ScalarFunc);
         expr->set_sig(reverseGetFuncSigByFuncName(func_name));
-        for (size_t i = 0; i < argument_column_number.size(); i++)
+        for (size_t i = 0; i < argument_column_number.size(); ++i)
         {
             auto * argument_expr = expr->add_children();
             columnToTiPBExpr(argument_expr, columns[argument_column_number[i]], i);
