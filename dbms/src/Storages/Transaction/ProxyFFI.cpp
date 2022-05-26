@@ -371,7 +371,7 @@ RawCppPtr PreHandleSnapshot(
 template <typename PreHandledSnapshot>
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot * snap)
 {
-    static_assert(std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>,"Unknown pre-handled snapshot type");
+    static_assert(std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>, "Unknown pre-handled snapshot type");
 
     try
     {
