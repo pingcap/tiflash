@@ -1284,7 +1284,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
             || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
     bool should_foreground_flush = unsaved_rows >= delta_cache_limit_rows * 3 || unsaved_bytes >= delta_cache_limit_bytes * 3;
-    // Actually we never do foreground flush in read thread
+    // Don't block write thread unless the data in delta layer is really too large.
+    // And read thread never do foreground flush so no need to special check for read thread.
     if (thread_type == ThreadType::Write)
     {
         should_foreground_flush = unsaved_rows >= delta_cache_limit_rows * 100 || unsaved_bytes >= delta_cache_limit_bytes * 100;
@@ -1447,7 +1448,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_bg_compact = [&]() {
-        if (should_compact)
+        /// Only add background compact task when this segment is not flushing to reduce lock contention on the segment.
+        if (should_compact && !segment->isFlushing())
         {
             delta_last_try_compact_column_files = column_file_count;
             try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment, {}});
