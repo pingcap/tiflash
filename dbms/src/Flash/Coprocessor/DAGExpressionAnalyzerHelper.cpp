@@ -248,7 +248,7 @@ String DAGExpressionAnalyzerHelper::buildCastFunctionInternal(
         return result_name;
 
     FunctionBuilderPtr function_builder = FunctionFactory::instance().get(tidb_cast_name, analyzer->getContext());
-    FunctionBuilderTiDBCast * function_builder_tidb_cast = dynamic_cast<FunctionBuilderTiDBCast *>(function_builder.get());
+    auto * function_builder_tidb_cast = dynamic_cast<FunctionBuilderTiDBCast *>(function_builder.get());
     function_builder_tidb_cast->setInUnion(in_union);
     function_builder_tidb_cast->setTiDBFieldType(field_type);
 
