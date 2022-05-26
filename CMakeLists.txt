@@ -50,6 +50,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 option (USE_CCACHE "Set to OFF to disable ccache" ON)
 include (cmake/find_ccache.cmake)
 
+if (USE_CCACHE)
+    set(NOT_USE_CCACHE 0)
+else()
+    set(NOT_USE_CCACHE 1)
+endif()
+
+option(ENABLE_PCH "Enable `Precompiled header`" ${NOT_USE_CCACHE})
+if (USE_CCACHE AND ENABLE_PCH)
+    message(STATUS "`Precompiled header` will be unavailable with ccache")
+endif ()
+
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
     set (CMAKE_BUILD_TYPE "RelWithDebInfo")
     message (STATUS "CMAKE_BUILD_TYPE is not set, set to default = ${CMAKE_BUILD_TYPE}")

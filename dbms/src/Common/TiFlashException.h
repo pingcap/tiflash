@@ -194,56 +194,19 @@ class TiFlashErrorRegistry : public ext::Singleton<TiFlashErrorRegistry>
 public:
     friend ext::Singleton<TiFlashErrorRegistry>;
 
-    static TiFlashError simpleGet(const std::string & error_class, const std::string & error_code)
-    {
-        auto & m_instance = instance();
-        auto error = m_instance.get(error_class, error_code);
-        if (error.has_value())
-        {
-            return error.value();
-        }
-        else
-        {
-            throw Exception("Unregistered TiFlashError: FLASH:" + error_class + ":" + error_code);
-        }
-    }
+    static TiFlashError simpleGet(const std::string & error_class, const std::string & error_code);
 
-    static TiFlashError simpleGet(const std::string & error_class, int error_code)
-    {
-        return simpleGet(error_class, std::to_string(error_code));
-    }
+    static TiFlashError simpleGet(const std::string & error_class, int error_code);
 
-    std::optional<TiFlashError> get(const std::string & error_class, const std::string & error_code) const
-    {
-        auto error = all_errors.find({error_class, error_code});
-        if (error != all_errors.end())
-        {
-            return error->second;
-        }
-        else
-        {
-            return {};
-        }
-    }
+    std::optional<TiFlashError> get(const std::string & error_class, const std::string & error_code) const;
 
-    std::optional<TiFlashError> get(const std::string & error_class, int error_code) const
-    {
-        return get(error_class, std::to_string(error_code));
-    }
+    std::optional<TiFlashError> get(const std::string & error_class, int error_code) const;
 
-    std::vector<TiFlashError> allErrors() const
-    {
-        std::vector<TiFlashError> res;
-        res.reserve(all_errors.size());
-        for (const auto & error : all_errors)
-        {
-            res.push_back(error.second);
-        }
-        return res;
-    }
+    std::vector<TiFlashError> allErrors() const;
 
 protected:
-    TiFlashErrorRegistry() { initialize(); }
+    TiFlashErrorRegistry();
+    ~TiFlashErrorRegistry();
 
 private:
     void registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template = "");
@@ -252,8 +215,13 @@ private:
 
     void initialize();
 
+    struct Errors;
+
+    Errors & errors();
+    Errors & errors() const;
+
 private:
-    std::map<std::pair<std::string, std::string>, TiFlashError> all_errors;
+    Errors * inner_data;
 };
 
 /// TiFlashException implements TiDB's standardized error.
