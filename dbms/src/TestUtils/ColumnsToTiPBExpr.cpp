@@ -66,7 +66,7 @@ void columnsToTiPBExprForRegExp(
         expr->set_sig(tipb::ScalarFuncSig::RegexpUTF8Sig);
     else
         expr->set_sig(tipb::ScalarFuncSig::RegexpSig);
-    for (size_t i = 0; i < argument_column_number.size(); i++)
+    for (size_t i = 0; i < argument_column_number.size(); ++i)
     {
         auto * argument_expr = expr->add_children();
         columnToTiPBExpr(argument_expr, columns[argument_column_number[i]], i);
