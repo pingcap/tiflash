@@ -400,10 +400,10 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
     std::vector<AsyncHandler *> waiting_for_retry_requests;
 
-    std::vector<AsyncHandler *> handlers;
+    std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(new AsyncHandler(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier()));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier()));
 
     while (alive_async_connections > 0)
     {
@@ -444,11 +444,6 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
             }
             waiting_for_retry_requests.swap(tmp);
         }
-    }
-    for (auto handler : handlers)
-    {
-        if (handler)
-            delete handler;
     }
 }
 
