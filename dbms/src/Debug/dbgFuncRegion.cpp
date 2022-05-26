@@ -40,7 +40,7 @@ extern const int UNKNOWN_TABLE;
 // put_region(region_id, start, end, database_name, table_name[, partition-name])
 void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    RegionID region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
     bool has_partition_id = false;
     size_t args_size = args.size();
     if (dynamic_cast<ASTLiteral *>(args[args_size - 1].get()) != nullptr)
@@ -81,8 +81,8 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     }
     else
     {
-        HandleID start = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value));
-        HandleID end = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
+        auto start = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value));
+        auto end = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
 
         TMTContext & tmt = context.getTMTContext();
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
@@ -99,7 +99,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
         throw Exception("Args not matched, should be: region-id", ErrorCodes::BAD_ARGUMENTS);
     }
 
-    RegionID region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
     TMTContext & tmt = context.getTMTContext();
     tmt.getRegionTable().tryFlushRegion(region_id);
@@ -152,7 +152,7 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
     if (args.empty())
         throw Exception("Args not matched, should be: table_id", ErrorCodes::BAD_ARGUMENTS);
 
-    TableID table_id = static_cast<TableID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
+    auto table_id = static_cast<TableID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
     bool ignore_none = false;
     if (args.size() > 1)
@@ -182,7 +182,7 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     if (args.empty())
         throw Exception("Args not matched, should be: region_id", ErrorCodes::BAD_ARGUMENTS);
 
-    RegionID region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
     TMTContext & tmt = context.getTMTContext();
     KVStorePtr & kvstore = tmt.getKVStore();
