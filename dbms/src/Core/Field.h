@@ -122,7 +122,7 @@ public:
         }
         if (cnt == 0)
             cnt = 1;
-        return cnt;
+        return std::max(cnt, scale);
     }
 
     template <typename U>

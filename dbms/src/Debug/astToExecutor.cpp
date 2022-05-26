@@ -31,6 +31,93 @@
 
 namespace DB
 {
+void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
+{
+    *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
+    expr->mutable_field_type()->set_collate(collator_id);
+    if (!val_field.isNull())
+    {
+        WriteBufferFromOwnString ss;
+        switch (ci.tp)
+        {
+        case TiDB::TypeLongLong:
+        case TiDB::TypeLong:
+        case TiDB::TypeShort:
+        case TiDB::TypeTiny:
+        case TiDB::TypeInt24:
+            if (ci.hasUnsignedFlag())
+            {
+                expr->set_tp(tipb::ExprType::Uint64);
+                UInt64 val = val_field.safeGet<UInt64>();
+                encodeDAGUInt64(val, ss);
+            }
+            else
+            {
+                expr->set_tp(tipb::ExprType::Int64);
+                Int64 val = val_field.safeGet<Int64>();
+                encodeDAGInt64(val, ss);
+            }
+            break;
+        case TiDB::TypeFloat:
+        {
+            expr->set_tp(tipb::ExprType::Float32);
+            Float32 val = static_cast<Float32>(val_field.safeGet<Float64>());
+            encodeDAGFloat32(val, ss);
+            break;
+        }
+        case TiDB::TypeDouble:
+        {
+            expr->set_tp(tipb::ExprType::Float64);
+            Float64 val = val_field.safeGet<Float64>();
+            encodeDAGFloat64(val, ss);
+            break;
+        }
+        case TiDB::TypeString:
+        {
+            expr->set_tp(tipb::ExprType::String);
+            const String & val = val_field.safeGet<String>();
+            encodeDAGString(val, ss);
+            break;
+        }
+        case TiDB::TypeNewDecimal:
+        {
+            expr->set_tp(tipb::ExprType::MysqlDecimal);
+            encodeDAGDecimal(val_field, ss);
+            break;
+        }
+        case TiDB::TypeDate:
+        {
+            expr->set_tp(tipb::ExprType::MysqlTime);
+            UInt64 val = val_field.safeGet<UInt64>();
+            encodeDAGUInt64(MyDate(val).toPackedUInt(), ss);
+            break;
+        }
+        case TiDB::TypeDatetime:
+        case TiDB::TypeTimestamp:
+        {
+            expr->set_tp(tipb::ExprType::MysqlTime);
+            UInt64 val = val_field.safeGet<UInt64>();
+            encodeDAGUInt64(MyDateTime(val).toPackedUInt(), ss);
+            break;
+        }
+        case TiDB::TypeTime:
+        {
+            expr->set_tp(tipb::ExprType::MysqlDuration);
+            Int64 val = val_field.safeGet<Int64>();
+            encodeDAGInt64(val, ss);
+            break;
+        }
+        default:
+            throw Exception(fmt::format("Type {} does not support literal in function unit test", getDataTypeByColumnInfo(ci)->getName()));
+        }
+        expr->set_val(ss.releaseStr());
+    }
+    else
+    {
+        expr->set_tp(tipb::ExprType::Null);
+    }
+}
+
 namespace
 {
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
@@ -112,76 +199,9 @@ DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
 
 void literalToPB(tipb::Expr * expr, const Field & value, uint32_t collator_id)
 {
-    WriteBufferFromOwnString ss;
-    switch (value.getType())
-    {
-    case Field::Types::Which::Null:
-    {
-        expr->set_tp(tipb::Null);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeNull);
-        ft->set_collate(collator_id);
-        // Null literal expr doesn't need value.
-        break;
-    }
-    case Field::Types::Which::UInt64:
-    {
-        expr->set_tp(tipb::Uint64);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeLongLong);
-        ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        encodeDAGUInt64(value.get<UInt64>(), ss);
-        break;
-    }
-    case Field::Types::Which::Int64:
-    {
-        expr->set_tp(tipb::Int64);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeLongLong);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        encodeDAGInt64(value.get<Int64>(), ss);
-        break;
-    }
-    case Field::Types::Which::Float64:
-    {
-        expr->set_tp(tipb::Float64);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeFloat);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        encodeDAGFloat64(value.get<Float64>(), ss);
-        break;
-    }
-    case Field::Types::Which::Decimal32:
-    case Field::Types::Which::Decimal64:
-    case Field::Types::Which::Decimal128:
-    case Field::Types::Which::Decimal256:
-    {
-        expr->set_tp(tipb::MysqlDecimal);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeNewDecimal);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        encodeDAGDecimal(value, ss);
-        break;
-    }
-    case Field::Types::Which::String:
-    {
-        expr->set_tp(tipb::String);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeString);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        // TODO: Align with TiDB.
-        encodeDAGBytes(value.get<String>(), ss);
-        break;
-    }
-    default:
-        throw Exception(String("Unsupported literal type: ") + value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
-    }
-    expr->set_val(ss.releaseStr());
+    DataTypePtr type = applyVisitor(FieldToDataType(), value);
+    ColumnInfo ci = reverseGetColumnInfo({"", type}, 0, Field(), true);
+    literalFieldToTiPBExpr(ci, value, expr, collator_id);
 }
 
 String getFunctionNameForConstantFolding(tipb::Expr * expr)

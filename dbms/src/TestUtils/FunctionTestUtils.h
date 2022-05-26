@@ -535,13 +535,16 @@ ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator = nullptr);
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = false);
 
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
     const ColumnNumbers & argument_column_numbers,
-    const ColumnsWithTypeAndName & columns);
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = false);
 
 template <typename... Args>
 ColumnWithTypeAndName executeFunction(
@@ -679,9 +682,13 @@ public:
         context.setDAGContext(dag_context_ptr.get());
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator = nullptr)
+    ColumnWithTypeAndName executeFunction(
+        const String & func_name,
+        const ColumnsWithTypeAndName & columns,
+        const TiDB::TiDBCollatorPtr & collator = nullptr,
+        bool raw_function_test = false)
     {
-        return DB::tests::executeFunction(context, func_name, columns, collator);
+        return DB::tests::executeFunction(context, func_name, columns, collator, raw_function_test);
     }
 
     template <typename... Args>
@@ -691,9 +698,14 @@ public:
         return executeFunction(func_name, vec);
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+    ColumnWithTypeAndName executeFunction(
+        const String & func_name,
+        const ColumnNumbers & argument_column_numbers,
+        const ColumnsWithTypeAndName & columns,
+        const TiDB::TiDBCollatorPtr & collator = nullptr,
+        bool raw_function_test = false)
     {
-        return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns);
+        return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
     }
 
     template <typename... Args>

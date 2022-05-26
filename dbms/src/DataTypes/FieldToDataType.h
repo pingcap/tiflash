@@ -40,7 +40,7 @@ public:
     template <typename T>
     DataTypePtr operator()(const DecimalField<T> & x) const
     {
-        PrecType prec = maxDecimalPrecision<T>();
+        PrecType prec = x.getPrec();
         return std::make_shared<DataTypeDecimal<T>>(prec, x.getScale());
     }
 };

@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnNullable.h>
 #include <Core/ColumnNumbers.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/ColumnsToTiPBExpr.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/core.h>
@@ -115,39 +120,78 @@ void blockEqual(
     }
 }
 
-
-ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator)
+std::pair<ExpressionActionsPtr, String> buildFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator)
 {
-    auto & factory = FunctionFactory::instance();
-
-    Block block(columns);
-    ColumnNumbers cns;
-    for (size_t i = 0; i < columns.size(); ++i)
-        cns.push_back(i);
-
-    auto bp = factory.tryGet(func_name, context);
-    if (!bp)
-        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(columns, collator);
-    block.insert({nullptr, func->getReturnType(), "res"});
-    func->execute(block, cns, columns.size());
-    return block.getByPosition(columns.size());
+    tipb::Expr tipb_expr = columnsToTiPBExpr(func_name, argument_column_numbers, columns, collator);
+    NamesAndTypes source_columns;
+    for (size_t index : argument_column_numbers)
+        source_columns.emplace_back(columns[index].name, columns[index].type);
+    DAGExpressionAnalyzer analyzer(source_columns, context);
+    ExpressionActionsChain chain;
+    auto & last_step = analyzer.initAndGetLastStep(chain);
+    auto result_name = DB::DAGExpressionAnalyzerHelper::buildFunction(&analyzer, tipb_expr, last_step.actions);
+    last_step.required_output.push_back(result_name);
+    chain.finalize();
+    return std::make_pair(last_step.actions, result_name);
 }
 
-ColumnWithTypeAndName executeFunction(Context & context, const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+ColumnsWithTypeAndName toColumnsWithUniqueName(const ColumnsWithTypeAndName & columns)
 {
-    auto & factory = FunctionFactory::instance();
-    Block block(columns);
-    ColumnsWithTypeAndName arguments;
-    for (size_t i = 0; i < argument_column_numbers.size(); ++i)
-        arguments.push_back(columns.at(i));
-    auto bp = factory.tryGet(func_name, context);
-    if (!bp)
-        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(arguments);
-    block.insert({nullptr, func->getReturnType(), "res"});
-    func->execute(block, argument_column_numbers, columns.size());
-    return block.getByPosition(columns.size());
+    ColumnsWithTypeAndName columns_with_distinct_name = columns;
+    std::string base_name = "col";
+    for (size_t i = 0; i < columns.size(); ++i)
+    {
+        columns_with_distinct_name[i].name = fmt::format("{}_{}", base_name, i);
+    }
+    return columns_with_distinct_name;
+}
+
+ColumnWithTypeAndName executeFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator,
+    bool raw_function_test)
+{
+    ColumnNumbers argument_column_numbers;
+    for (size_t i = 0; i < columns.size(); ++i)
+        argument_column_numbers.push_back(i);
+    return executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
+}
+
+ColumnWithTypeAndName executeFunction(
+    Context & context,
+    const String & func_name,
+    const ColumnNumbers & argument_column_numbers,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator,
+    bool raw_function_test)
+{
+    if (raw_function_test)
+    {
+        auto & factory = FunctionFactory::instance();
+        Block block(columns);
+        ColumnsWithTypeAndName arguments;
+        for (size_t i = 0; i < argument_column_numbers.size(); ++i)
+            arguments.push_back(columns.at(i));
+        auto bp = factory.tryGet(func_name, context);
+        if (!bp)
+            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+        auto func = bp->build(arguments, collator);
+        block.insert({nullptr, func->getReturnType(), "res"});
+        func->execute(block, argument_column_numbers, columns.size());
+        return block.getByPosition(columns.size());
+    }
+    auto columns_with_unique_name = toColumnsWithUniqueName(columns);
+    auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
+    Block block(columns_with_unique_name);
+    actions->execute(block);
+    return block.getByName(result_name);
 }
 
 DataTypePtr getReturnTypeForFunction(
@@ -156,19 +200,14 @@ DataTypePtr getReturnTypeForFunction(
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator)
 {
-    auto & factory = FunctionFactory::instance();
-
-    Block block(columns);
-    ColumnNumbers cns;
+    ColumnNumbers argument_column_numbers;
     for (size_t i = 0; i < columns.size(); ++i)
-        cns.push_back(i);
-
-    auto bp = factory.tryGet(func_name, context);
-    if (!bp)
-        throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-    auto func = bp->build(columns, collator);
-    return func->getReturnType();
+        argument_column_numbers.push_back(i);
+    auto columns_with_unique_name = toColumnsWithUniqueName(columns);
+    auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
+    return actions->getSampleBlock().getByName(result_name).type;
 }
+
 ColumnWithTypeAndName createOnlyNullColumnConst(size_t size, const String & name)
 {
     DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
