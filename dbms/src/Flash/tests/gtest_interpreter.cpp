@@ -316,19 +316,17 @@ Union: <for mpp>
     {
         String expected = R"(
 CreatingSets
- Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
-       Expression: <final projection>
-        MockExchangeReceiver
+ ParallelWriting<HashJoinBuild>: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+  Expression x 10: <append join key and join filters for build side>
+   Expression: <final projection>
+    MockExchangeReceiver
+ ParallelWriting<HashJoinBuild> x 2: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  Expression x 10: <append join key and join filters for build side>
+   Expression: <final projection>
+    Expression: <remove useless column after join>
+     HashJoinProbe: <join probe, join_executor_id = Join_4>
+      Expression: <final projection>
+       MockExchangeReceiver
  Union: <for mpp>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
@@ -358,19 +356,17 @@ CreatingSets
     {
         String expected = R"(
 CreatingSets
- Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
-       Expression: <final projection>
-        MockExchangeReceiver
+ ParallelWriting<HashJoinBuild>: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+  Expression x 10: <append join key and join filters for build side>
+   Expression: <final projection>
+    MockExchangeReceiver
+ ParallelWriting<HashJoinBuild> x 2: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  Expression x 10: <append join key and join filters for build side>
+   Expression: <final projection>
+    Expression: <remove useless column after join>
+     HashJoinProbe: <join probe, join_executor_id = Join_4>
+      Expression: <final projection>
+       MockExchangeReceiver
  Union: <for mpp>
   MockExchangeSender x 10
    Expression: <final projection>
