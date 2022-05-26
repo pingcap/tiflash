@@ -630,7 +630,7 @@ try
         const auto & page1 = page_reader_mix_with_snap.read(1);
         const auto & page3 = page_reader_mix_with_snap.read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page3, 3);
+        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
         ASSERT_THROW(page_reader_mix_with_snap.read(4), DB::Exception);
     }
     {
