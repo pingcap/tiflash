@@ -367,44 +367,6 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
     return data_list_to_remove;
 }
 
-RegionID RegionTable::pickRegionToFlush()
-{
-    std::lock_guard lock(mutex);
-
-    for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
-    {
-        auto region_id = *dirty_it;
-        if (auto it = regions.find(region_id); it != regions.end())
-        {
-            auto table_id = it->second;
-            if (shouldFlush(doGetInternalRegion(table_id, region_id)))
-            {
-                // The dirty flag should only be removed after data is flush successfully.
-                return region_id;
-            }
-
-            dirty_it++;
-        }
-        else
-        {
-            // Region{region_id} is removed, remove its dirty flag
-            dirty_it = dirty_regions.erase(dirty_it);
-        }
-    }
-    return InvalidRegionID;
-}
-
-bool RegionTable::tryFlushRegions()
-{
-    if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
-    {
-        tryFlushRegion(region_to_flush, true);
-        return true;
-    }
-
-    return false;
-}
-
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
 {
     std::lock_guard lock(mutex);

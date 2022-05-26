@@ -112,25 +112,6 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     size_t index = 0;
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
-        // Ignore data after the start_ts.
-        if (commit_ts > start_ts)
-            continue;
-
-        bool should_skip = false;
-        if constexpr (pk_type != TMTPKType::STRING)
-        {
-            if constexpr (pk_type == TMTPKType::UINT64)
-            {
-                should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(pk));
-            }
-            else
-            {
-                should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(pk));
-            }
-        }
-        if (should_skip)
-            continue;
-
         /// set delmark and version column
         delmark_data.emplace_back(write_type == Region::DelFlag);
         version_data.emplace_back(commit_ts);

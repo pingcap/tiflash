@@ -129,7 +129,6 @@ public:
 
     void removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &);
 
-    bool tryFlushRegions();
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
 
@@ -145,21 +144,6 @@ public:
                                    RegionDataReadInfoList & data_list_to_remove,
                                    Poco::Logger * log,
                                    bool lock_region = true);
-
-    /// Read the data of the given region into block, take good care of learner read and locks.
-    /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
-    /// we directly ask RegionBlockReader::read to perform a read with the given start_ts and force_decode being true.
-    using ReadBlockByRegionRes = std::variant<Block, RegionException::RegionReadStatus>;
-    static ReadBlockByRegionRes readBlockByRegion(const TiDB::TableInfo & table_info,
-                                                  const ColumnsDescription & columns,
-                                                  const Names & column_names_to_read,
-                                                  const RegionPtr & region,
-                                                  RegionVersion region_version,
-                                                  RegionVersion conf_version,
-                                                  bool resolve_locks,
-                                                  Timestamp start_ts,
-                                                  const std::unordered_set<UInt64> * bypass_lock_ts,
-                                                  RegionScanFilterPtr scan_filter = nullptr);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.

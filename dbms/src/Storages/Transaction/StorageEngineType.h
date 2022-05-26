@@ -43,8 +43,6 @@ inline const std::string applyMethodToString(SnapshotApplyMethod method)
 {
     switch (method)
     {
-        case SnapshotApplyMethod::Block:
-            return "block";
         case SnapshotApplyMethod::DTFile_Directory:
             return "file1";
         case SnapshotApplyMethod::DTFile_Single:

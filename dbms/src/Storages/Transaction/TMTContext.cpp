@@ -147,12 +147,6 @@ SchemaSyncerPtr TMTContext::getSchemaSyncer() const
     return schema_syncer;
 }
 
-void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
-{
-    std::lock_guard lock(mutex);
-    schema_syncer = rhs;
-}
-
 pingcap::pd::ClientPtr TMTContext::getPDClient() const
 {
     return cluster->pd_client;

@@ -353,60 +353,6 @@ void RegionTable::writeBlockByRegion(
     data_list_to_remove = std::move(*data_list_read);
 }
 
-RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
-                                                                 const ColumnsDescription & columns [[maybe_unused]],
-                                                                 const Names & column_names_to_read,
-                                                                 const RegionPtr & region,
-                                                                 RegionVersion region_version,
-                                                                 RegionVersion conf_version,
-                                                                 bool resolve_locks,
-                                                                 Timestamp start_ts,
-                                                                 const std::unordered_set<UInt64> * bypass_lock_ts,
-                                                                 RegionScanFilterPtr scan_filter)
-{
-    if (!region)
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region is null", ErrorCodes::LOGICAL_ERROR);
-
-    // Tiny optimization for queries that need only handle, tso, delmark.
-    bool need_value = column_names_to_read.size() != 3;
-    auto region_data_lock = resolveLocksAndReadRegionData(
-        table_info.id,
-        region,
-        start_ts,
-        bypass_lock_ts,
-        region_version,
-        conf_version,
-        resolve_locks,
-        need_value);
-
-    return std::visit(variant_op::overloaded{
-                          [&](RegionDataReadInfoList & data_list_read) -> ReadBlockByRegionRes {
-                              /// Read region data as block.
-                              Block block;
-                              // FIXME: remove this deprecated function
-                              assert(0);
-                              {
-                                  auto reader = RegionBlockReader(nullptr);
-                                  bool ok = reader.setStartTs(start_ts)
-                                                .setFilter(scan_filter)
-                                                .read(block, data_list_read, /*force_decode*/ true);
-                                  if (!ok)
-                                      // TODO: Enrich exception message.
-                                      throw Exception("Read region " + std::to_string(region->id()) + " of table "
-                                                          + std::to_string(table_info.id) + " failed",
-                                                      ErrorCodes::LOGICAL_ERROR);
-                              }
-                              return block;
-                          },
-                          [&](LockInfoPtr & lock_value) -> ReadBlockByRegionRes {
-                              assert(lock_value);
-                              throw LockException(region->id(), std::move(lock_value));
-                          },
-                          [](RegionException::RegionReadStatus & s) -> ReadBlockByRegionRes { return s; },
-                      },
-                      region_data_lock);
-}
-
 RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(TMTContext & tmt,
                                                                                    const TiDB::TableID table_id,
                                                                                    const RegionPtr & region,

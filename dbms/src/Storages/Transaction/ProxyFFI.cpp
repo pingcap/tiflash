@@ -310,19 +310,6 @@ RawRustPtrWrap::RawRustPtrWrap(RawRustPtrWrap && src)
     src.ptr = nullptr;
 }
 
-struct PreHandledSnapshotWithBlock
-{
-    ~PreHandledSnapshotWithBlock() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
-    PreHandledSnapshotWithBlock(const RegionPtr & region_, RegionPtrWithBlock::CachePtr && cache_)
-        : region(region_)
-        , cache(std::move(cache_))
-    {
-        CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
-    }
-    RegionPtr region;
-    RegionPtrWithBlock::CachePtr cache;
-};
-
 struct PreHandledSnapshotWithFiles
 {
     ~PreHandledSnapshotWithFiles() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
@@ -362,13 +349,6 @@ RawCppPtr PreHandleSnapshot(
 
         switch (kvstore->applyMethod())
         {
-        case TiDB::SnapshotApplyMethod::Block:
-        {
-            // Pre-decode as a block
-            auto new_region_block_cache = kvstore->preHandleSnapshotToBlock(new_region, snaps, index, term, tmt);
-            auto * res = new PreHandledSnapshotWithBlock{new_region, std::move(new_region_block_cache)};
-            return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithBlock);
-        }
         case TiDB::SnapshotApplyMethod::DTFile_Directory:
         case TiDB::SnapshotApplyMethod::DTFile_Single:
         {
@@ -391,18 +371,12 @@ RawCppPtr PreHandleSnapshot(
 template <typename PreHandledSnapshot>
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot * snap)
 {
-    static_assert(
-        std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithBlock> || std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>,
-        "Unknown pre-handled snapshot type");
+    static_assert(std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>,"Unknown pre-handled snapshot type");
 
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithBlock>)
-        {
-            kvstore->handlePreApplySnapshot(RegionPtrWithBlock{snap->region, std::move(snap->cache)}, *server->tmt);
-        }
-        else if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
+        if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
         {
             kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->ingest_ids)}, *server->tmt);
         }
@@ -418,12 +392,6 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
 {
     switch (static_cast<RawCppPtrTypeImpl>(type))
     {
-    case RawCppPtrTypeImpl::PreHandledSnapshotWithBlock:
-    {
-        auto * snap = reinterpret_cast<PreHandledSnapshotWithBlock *>(res);
-        ApplyPreHandledSnapshot(server, snap);
-        break;
-    }
     case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
     {
         auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
@@ -444,9 +412,6 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
         {
         case RawCppPtrTypeImpl::String:
             delete reinterpret_cast<RawCppStringPtr>(ptr);
-            break;
-        case RawCppPtrTypeImpl::PreHandledSnapshotWithBlock:
-            delete reinterpret_cast<PreHandledSnapshotWithBlock *>(ptr);
             break;
         case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
             delete reinterpret_cast<PreHandledSnapshotWithFiles *>(ptr);
