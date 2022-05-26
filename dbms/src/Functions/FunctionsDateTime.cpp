@@ -136,7 +136,14 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionTiDBDateDiff>();
     factory.registerFunction<FunctionToTiDBDayOfWeek>();
     factory.registerFunction<FunctionToTiDBDayOfYear>();
+<<<<<<< HEAD
 
+=======
+    factory.registerFunction<FunctionToTiDBWeekOfYear>();
+    factory.registerFunction<FunctionToTiDBToSeconds>();
+    factory.registerFunction<FunctionToTiDBToDays>();
+    factory.registerFunction<FunctionTiDBFromDays>();
+>>>>>>> f10b6d27c6 (Add mutex to protect exchange receiver's async client (#5008))
     factory.registerFunction<FunctionToTimeZone>();
     factory.registerFunction<FunctionToLastDay>();
 }
