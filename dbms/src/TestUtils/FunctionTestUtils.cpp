@@ -198,14 +198,33 @@ DataTypePtr getReturnTypeForFunction(
     Context & context,
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator)
+    const TiDB::TiDBCollatorPtr & collator,
+    bool raw_function_test)
 {
-    ColumnNumbers argument_column_numbers;
-    for (size_t i = 0; i < columns.size(); ++i)
-        argument_column_numbers.push_back(i);
-    auto columns_with_unique_name = toColumnsWithUniqueName(columns);
-    auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
-    return actions->getSampleBlock().getByName(result_name).type;
+    if (raw_function_test)
+    {
+        auto & factory = FunctionFactory::instance();
+
+        Block block(columns);
+        ColumnNumbers cns;
+        for (size_t i = 0; i < columns.size(); ++i)
+            cns.push_back(i);
+
+        auto bp = factory.tryGet(func_name, context);
+        if (!bp)
+            throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
+        auto func = bp->build(columns, collator);
+        return func->getReturnType();
+    }
+    else
+    {
+        ColumnNumbers argument_column_numbers;
+        for (size_t i = 0; i < columns.size(); ++i)
+            argument_column_numbers.push_back(i);
+        auto columns_with_unique_name = toColumnsWithUniqueName(columns);
+        auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
+        return actions->getSampleBlock().getByName(result_name).type;
+    }
 }
 
 ColumnWithTypeAndName createOnlyNullColumnConst(size_t size, const String & name)

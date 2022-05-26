@@ -561,7 +561,8 @@ DataTypePtr getReturnTypeForFunction(
     Context & context,
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator = nullptr);
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = true);
 
 template <typename T>
 ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")
