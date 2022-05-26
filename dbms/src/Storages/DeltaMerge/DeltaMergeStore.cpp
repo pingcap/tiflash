@@ -1284,6 +1284,11 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
             || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
     bool should_foreground_flush = unsaved_rows >= delta_cache_limit_rows * 3 || unsaved_bytes >= delta_cache_limit_bytes * 3;
+    // Actually we never do foreground flush in read thread
+    if (thread_type == ThreadType::Write)
+    {
+        should_foreground_flush = unsaved_rows >= delta_cache_limit_rows * 100 || unsaved_bytes >= delta_cache_limit_bytes * 100;
+    }
 
     bool should_background_merge_delta = ((delta_check_rows >= delta_limit_rows || delta_check_bytes >= delta_limit_bytes) //
                                           && (delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows
@@ -1341,9 +1346,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         }
         else if (should_background_flush)
         {
-            delta_last_try_flush_rows = delta_rows;
-            delta_last_try_flush_bytes = delta_bytes;
-            try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
+            if (!segment->isFlushing())
+            {
+                delta_last_try_flush_rows = delta_rows;
+                delta_last_try_flush_bytes = delta_bytes;
+                try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
+            }
         }
     }
 

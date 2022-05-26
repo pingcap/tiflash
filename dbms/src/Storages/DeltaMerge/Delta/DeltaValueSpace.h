@@ -77,6 +77,10 @@ private:
     /// Note that those things can not be done at the same time.
     std::atomic_bool is_updating = false;
 
+    /// Note that it's safe to do multiple flush concurrently but only one of them can succeed.
+    /// So we only allow one flush task running at any time to aviod waste resource.
+    std::atomic_bool is_flushing = false;
+
     std::atomic<size_t> last_try_flush_rows = 0;
     std::atomic<size_t> last_try_flush_bytes = 0;
     std::atomic<size_t> last_try_compact_column_files = 0;
@@ -158,6 +162,8 @@ public:
     size_t getTotalCacheRows() const;
     size_t getTotalCacheBytes() const;
     size_t getValidCacheRows() const;
+
+    bool isFlushing() const { return is_flushing; }
 
     bool isUpdating() const { return is_updating; }
 

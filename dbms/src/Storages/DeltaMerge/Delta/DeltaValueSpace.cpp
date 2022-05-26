@@ -141,6 +141,20 @@ bool DeltaValueSpace::ingestColumnFiles(DMContext & /*context*/, const RowKeyRan
 
 bool DeltaValueSpace::flush(DMContext & context)
 {
+    bool v = false;
+    // Other thread is flushing, just return.
+    if (!is_flushing.compare_exchange_strong(v, true))
+    {
+        LOG_FMT_DEBUG(log, "{}, Flush stop because other thread is flushing", info());
+        return false;
+    }
+
+    SCOPE_EXIT({
+        bool v = true;
+        if (!is_flushing.compare_exchange_strong(v, false))
+            throw Exception(simpleInfo() + " is expected to be flushing", ErrorCodes::LOGICAL_ERROR);
+    });
+
     LOG_FMT_DEBUG(log, "{}, Flush start", info());
 
     /// We have two types of data needed to flush to disk:
