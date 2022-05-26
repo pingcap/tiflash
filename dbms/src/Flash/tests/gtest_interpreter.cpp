@@ -26,7 +26,7 @@ public:
     {
         InterpreterTest::initializeContext();
 
-        context.context->setSetting("enable_planner", "false");
+        context.context.setSetting("enable_planner", "false");
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
