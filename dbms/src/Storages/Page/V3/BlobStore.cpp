@@ -895,7 +895,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Avoid divide by zero
             if (right_margin == 0)
             {
-                if (stat->sm_valid_rate == 0)
+                if (unlikely(stat->sm_valid_rate == 0))
                 {
                     throw Exception(fmt::format("Current blob is empty, but valid rate is not 0. [blob_id={}][valid_size={}][valid_rate={}]",
                                                 stat->id,
