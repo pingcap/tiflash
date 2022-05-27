@@ -65,11 +65,6 @@ protected:
     String dir_path;
 
     DB::Timestamp tso = 0;
-
-    String getPageStorageV3MetaPath(String & path)
-    {
-        return path + "/page/kvstore/wal/log_1_0";
-    }
 };
 
 static ::testing::AssertionResult PeerCompare(
@@ -256,7 +251,7 @@ try
         }
 
         // If we truncate page data file, exception will throw instead of droping last region.
-        auto meta_path = getPageStorageV3MetaPath(path); // First page
+        auto meta_path = path + "/kvstore/page_1_0/meta"; // First page
         Poco::File meta_file(meta_path);
         size_t size = meta_file.getSize();
         int rt = ::truncate(meta_path.c_str(), size - 1); // Remove last one byte
@@ -293,13 +288,9 @@ try
 {
     std::string path = dir_path + "/compatible_mode";
 
-    auto current_storage_run_mode = TiFlashTestEnv::getGlobalContext().getPageStorageRunMode();
     // Force to run in compatible mode for the default region persister
     FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
-    SCOPE_EXIT(
-        { FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
-          TiFlashTestEnv::getGlobalContext().setPageStorageRunMode(current_storage_run_mode); });
-    TiFlashTestEnv::getGlobalContext().setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode); });
     auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
                                           Strings{
                                               path,

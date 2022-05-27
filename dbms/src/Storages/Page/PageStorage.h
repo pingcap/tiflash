@@ -407,9 +407,7 @@ public:
     // Only used for DATA transform data
     void writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
-#ifndef DBMS_PUBLIC_GTEST
 private:
-#endif
     void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
     // A wrap of getSettings only used for `RegionPersister::gc`
