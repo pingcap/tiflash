@@ -220,18 +220,7 @@ protected:
 
         mockExecuteTableScan(pipeline, source_columns);
 
-        // ywq todo
         mock_interpreter->handleWindowOrder(pipeline, sort);
-        mock_interpreter->input_streams_vec[0] = pipeline.streams;
-        NamesWithAliases final_project_1;
-        for (const auto & column : (*mock_interpreter->analyzer).source_columns)
-        {
-            final_project_1.push_back({column.name, ""});
-        }
-        mockExecuteProject(pipeline, final_project_1);
-
-        // ywq todo
-        mock_interpreter->handleWindow(pipeline, window);
         mock_interpreter->input_streams_vec[0] = pipeline.streams;
         NamesWithAliases final_project;
         for (const auto & column : (*mock_interpreter->analyzer).source_columns)
@@ -239,7 +228,16 @@ protected:
             final_project.push_back({column.name, ""});
         }
         mockExecuteProject(pipeline, final_project);
-
+    
+        mock_interpreter->handleWindow(pipeline, window);
+        mock_interpreter->input_streams_vec[0] = pipeline.streams;
+        NamesWithAliases final_project_1;
+        for (const auto & column : (*mock_interpreter->analyzer).source_columns)
+        {
+            final_project_1.push_back({column.name, ""});
+        }
+        mockExecuteProject(pipeline, final_project_1);
+    
         auto stream = pipeline.firstStream();
 
         Blocks actual_blocks;
@@ -404,7 +402,7 @@ try
     frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
     mock_context.addMockTable({"test_db", "test_table"}, {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}});
     auto request = mock_context.scan("test_db", "test_table").window(RowNumber(), {"order", false}, {"partition", false}, frame).build(mock_context);
-    auto request_sort = mock_context.scan("test_db", "test_table").sort({"order", false}, false).build(mock_context);
+    auto request_sort = mock_context.scan("test_db", "test_table").sort({"order", true}, false).build(mock_context);
     /***** row_number with different types of input *****/
     // int - sql : select *, row_number() over w1 from test1 window w1 as (partition by partition_int order by order_int)
     testOneWindowFunction(
