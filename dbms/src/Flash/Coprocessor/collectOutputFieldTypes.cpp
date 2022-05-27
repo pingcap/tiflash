@@ -148,7 +148,7 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         // Window will only be pushed down in mpp mode.
         // In mpp mode, ExchangeSender or Sender will return output_field_types directly.
         // If not in mpp mode, window executor type is invalid.
-        // ywq todo figure out it...
+        // ywq todo: Question: why only MPP?
         // break;
         return true;
         // throw TiFlashException("Window executor type is invalid in non-mpp mode, should not reach here.", Errors::Coprocessor::Internal);

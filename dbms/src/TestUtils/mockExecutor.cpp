@@ -285,6 +285,16 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     return *this;
 }
 
+DAGRequestBuilder & DAGRequestBuilder::window(MockAsts window_funcs, MockOrderByItems order_by_list, MockOrderByItems partition_by_list, MockWindowFrame frame)
+{
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    for (const auto & func : window_funcs)
+        window_func_list->children.push_back(func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(order_by_list), buildOrderByItemList(partition_by_list), frame);
+    return *this;
+}
+
 DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, bool is_partial_sort)
 {
     assert(root);

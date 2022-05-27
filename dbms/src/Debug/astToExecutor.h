@@ -28,6 +28,8 @@
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
 
+#include <optional>
+
 
 namespace DB
 {
@@ -279,9 +281,9 @@ using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
 struct MockWindowFrame
 {
     tipb::WindowFrameType type;
-    MockWindowFrameBound start;
-    MockWindowFrameBound end;
-    // TODO support calcFuncs
+    std::optional<MockWindowFrameBound> start;
+    std::optional<MockWindowFrameBound> end;
+    // TODO: support calcFuncs
 };
 
 struct Window : Executor

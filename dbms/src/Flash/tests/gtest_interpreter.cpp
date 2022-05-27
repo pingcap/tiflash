@@ -14,6 +14,7 @@
 
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+
 #include "TestUtils/TiFlashTestBasic.h"
 
 namespace DB
@@ -394,8 +395,8 @@ try
     frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
     frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
     auto request = context.scan("test_db", "test_table").sort({{"s1", true}, {"s2", false}}, true).window(RowNumber(), {"s1", true}, {"s2", false}, frame).build(context);
-        {
-            String expected = R"(
+    {
+        String expected = R"(
 Union: <for mpp>
  Expression x 10: <final projection>
   SharedQuery: <restore concurrency>
@@ -407,8 +408,8 @@ Union: <for mpp>
         PartialSorting x 10: limit = 0
          Expression: <final projection>
           MockTableScan)";
-            ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
-        }
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
 }
 CATCH
 

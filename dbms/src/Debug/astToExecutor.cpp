@@ -1354,11 +1354,6 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
     tipb_executor->set_tp(tipb::ExecType::TypeWindow);
     tipb_executor->set_executor_id(name);
     tipb::Window * window = tipb_executor->mutable_window();
-    /* "funcDesc":[{
-        "tp":"RowNumber",
-        "sig":"Unspecified","
-        fieldType":{"tp":8,"flag":128,"flen":21,"decimal":-1,"collate":63,"charset":"binary"},"hasDistinct":false}],
-    */
     auto & input_schema = children[0]->output_schema;
     for (const auto & expr : func_descs)
     {
@@ -1399,19 +1394,25 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         tipb::Expr * expr = by->mutable_expr();
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
-    tipb::WindowFrame * f = window->mutable_frame();
 
-    // ywq todo check end and start null.
-    auto * end = f->mutable_end();
-    end->set_offset(std::get<2>(frame.end));
-    end->set_unbounded(std::get<1>(frame.end));
-    end->set_type(std::get<0>(frame.end));
-    auto * start = f->mutable_start();
-    start->set_offset(std::get<2>(frame.start));
-    start->set_unbounded(std::get<1>(frame.start));
-    start->set_type(std::get<0>(frame.start));
-    f->set_type(frame.type);
+    tipb::WindowFrame * mut_frame = window->mutable_frame();
+    if (frame.start.has_value())
+    {
+        auto * start = mut_frame->mutable_start();
+        start->set_offset(std::get<2>(frame.start.value()));
+        start->set_unbounded(std::get<1>(frame.start.value()));
+        start->set_type(std::get<0>(frame.start.value()));
+    }
 
+    if (frame.end.has_value())
+    {
+        auto * end = mut_frame->mutable_end();
+        end->set_offset(std::get<2>(frame.end.value()));
+        end->set_unbounded(std::get<1>(frame.end.value()));
+        end->set_type(std::get<0>(frame.end.value()));
+    }
+
+    mut_frame->set_type(frame.type);
     auto * children_executor = window->mutable_child();
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
