@@ -895,7 +895,22 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Avoid divide by zero
             if (right_margin == 0)
             {
-                LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}].", stat->id, stat->sm_total_size);
+                if (unlikely(stat->sm_valid_rate != 0))
+                {
+                    throw Exception(fmt::format("Current blob is empty, but valid rate is not 0. [blob_id={}][valid_size={}][valid_rate={}]",
+                                                stat->id,
+                                                stat->sm_valid_size,
+                                                stat->sm_valid_rate));
+                }
+
+                LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}] [valid_rate={}].", stat->id, stat->sm_total_size, stat->sm_valid_rate);
+
+                // If current blob empty, the size of in disk blob may not empty
+                // So we need truncate current blob, and let it be reused.
+                auto blobfile = getBlobFile(stat->id);
+                LOG_FMT_TRACE(log, "Truncate empty blob file [blob_id={}] to 0.", stat->id);
+                blobfile->truncate(right_margin);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
                 continue;
             }
 
@@ -1449,7 +1464,7 @@ void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
     const auto & [total_size, valid_size] = smap->getSizes();
     sm_total_size = total_size;
     sm_valid_size = valid_size;
-    sm_valid_rate = valid_size * 1.0 / total_size;
+    sm_valid_rate = total_size == 0 ? 0.0 : valid_size * 1.0 / total_size;
     recalculateCapacity();
 }
 
