@@ -72,9 +72,10 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
+        // TODO: If column type is nullable, we won't generate index for it
         /// for handle column always generate index
-        auto type = removeNullable(cd.type);
-        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
+        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime();
+
         if (options.flags.isSingleFile())
         {
             if (do_index)

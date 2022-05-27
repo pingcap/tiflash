@@ -471,6 +471,7 @@ public:
     virtual bool isEnum() const { return false; };
 
     virtual bool isNullable() const { return false; }
+
     /** Is this type can represent only NULL value? (It also implies isNullable)
       */
     virtual bool onlyNull() const { return false; }

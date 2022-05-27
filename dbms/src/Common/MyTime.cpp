@@ -429,7 +429,7 @@ std::tuple<int, int> MyTimeBase::calcWeek(UInt32 mode) const
 
     if (week_year && days >= 52 * 7)
     {
-        week_day = (week_day + calcDaysInYear(year)) % 7;
+        week_day = (week_day + calcDaysInYear(ret_year)) % 7;
         if ((!first_week_day && week_day < 4) || (first_week_day && week_day == 0))
         {
             ret_year++;
@@ -876,7 +876,7 @@ String MyDateTime::toString(int fsp) const
 //TODO: we can use modern c++ api instead.
 MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezoneInfo, UInt8 fsp)
 {
-    struct timespec ts;
+    struct timespec ts; // NOLINT(cppcoreguidelines-pro-type-member-init)
     clock_gettime(CLOCK_REALTIME, &ts);
 
     time_t second = ts.tv_sec;
@@ -990,6 +990,15 @@ int calcDayNum(int year, int month, int day)
     }
     int temp = ((year / 100 + 1) * 3) / 4;
     return delsum + year / 4 - temp;
+}
+
+UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second)
+{
+    if (year == 0 && month == 0)
+        return 0;
+    Int32 current_days = calcDayNum(year, month, day);
+    return current_days * MyTimeBase::SECOND_IN_ONE_DAY + hour * MyTimeBase::SECOND_IN_ONE_HOUR
+        + minute * MyTimeBase::SECOND_IN_ONE_MINUTE + second;
 }
 
 size_t maxFormattedDateTimeStringLength(const String & format)
@@ -1142,7 +1151,7 @@ UInt64 addSeconds(UInt64 t, Int64 delta)
         return t;
     }
     MyDateTime my_time(t);
-    Int64 current_second = my_time.hour * 3600 + my_time.minute * 60 + my_time.second;
+    Int64 current_second = my_time.hour * MyTimeBase::SECOND_IN_ONE_HOUR + my_time.minute * MyTimeBase::SECOND_IN_ONE_MINUTE + my_time.second;
     current_second += delta;
     if (current_second >= 0)
     {
@@ -1161,9 +1170,9 @@ UInt64 addSeconds(UInt64 t, Int64 delta)
         current_second += days * MyTimeBase::SECOND_IN_ONE_DAY;
         addDays(my_time, -days);
     }
-    my_time.hour = current_second / 3600;
-    my_time.minute = (current_second % 3600) / 60;
-    my_time.second = current_second % 60;
+    my_time.hour = current_second / MyTimeBase::SECOND_IN_ONE_HOUR;
+    my_time.minute = (current_second % MyTimeBase::SECOND_IN_ONE_HOUR) / MyTimeBase::SECOND_IN_ONE_MINUTE;
+    my_time.second = current_second % MyTimeBase::SECOND_IN_ONE_MINUTE;
     return my_time.toPackedUInt();
 }
 
@@ -1193,6 +1202,11 @@ void fromDayNum(MyDateTime & t, int day_num)
         // the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
         // so can not use day_num % DAY_NUM_PER_100_YEARS
         day_num = day_num - (num_of_100_years * DAY_NUM_PER_100_YEARS);
+        if (num_of_100_years == 4)
+        {
+            num_of_100_years = 3;
+            day_num = DAY_NUM_PER_100_YEARS;
+        }
 
         int num_of_4_years = day_num / DAY_NUM_PER_4_YEARS;
         // can not use day_num % DAY_NUM_PER_4_YEARS
@@ -1201,6 +1215,12 @@ void fromDayNum(MyDateTime & t, int day_num)
         int num_of_years = day_num / DAY_NUM_PER_YEARS;
         // can not use day_num % DAY_NUM_PER_YEARS
         day_num = day_num - (num_of_years * DAY_NUM_PER_YEARS);
+
+        if (num_of_years == 4)
+        {
+            num_of_years = 3;
+            day_num = DAY_NUM_PER_YEARS;
+        }
 
         year = 1 + num_of_400_years * 400 + num_of_100_years * 100 + num_of_4_years * 4 + num_of_years;
     }
@@ -1237,7 +1257,7 @@ void addMonths(MyDateTime & t, Int64 months)
     Int64 current_month = t.month - 1;
     current_month += months;
     Int64 current_year = 0;
-    Int64 year = static_cast<Int64>(t.year);
+    auto year = static_cast<Int64>(t.year);
     if (current_month >= 0)
     {
         current_year = current_month / 12;

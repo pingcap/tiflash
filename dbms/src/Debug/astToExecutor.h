@@ -334,5 +334,8 @@ ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
 ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_lis);
 
 ExecutorPtr compileSort(); // todo
+void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
+
+//TODO: add compileWindow
 
 } // namespace DB

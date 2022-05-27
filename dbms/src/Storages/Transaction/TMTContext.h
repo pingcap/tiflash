@@ -81,8 +81,6 @@ public:
 
     const Context & getContext() const;
 
-    bool isBgFlushDisabled() const { return disable_bg_flush; }
-
     explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
@@ -139,8 +137,6 @@ private:
     MPPTaskManagerPtr mpp_task_manager;
 
     ::TiDB::StorageEngine engine;
-
-    bool disable_bg_flush;
 
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;

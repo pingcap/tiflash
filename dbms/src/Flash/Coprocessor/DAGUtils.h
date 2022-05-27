@@ -70,7 +70,6 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
 TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr);
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type);
 bool hasUnsignedFlag(const tipb::FieldType & tp);
-grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code);
 
 void assertBlockSchema(
     const DataTypes & expected_types,
@@ -105,5 +104,6 @@ public:
 
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
 tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
+tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name);
 
 } // namespace DB
