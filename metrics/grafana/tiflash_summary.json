@@ -33,12 +33,6 @@
       "id": "prometheus",
       "name": "Prometheus",
       "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
     }
   ],
   "annotations": {
@@ -58,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1653629613474,
+  "iteration": 1653635389238,
   "links": [],
   "panels": [
     {
@@ -5508,8 +5502,6 @@
             "rightSide": true,
             "show": true,
             "sideWidth": null,
-            "sort": "current",
-            "sortDesc": true,
             "total": false,
             "values": true
           },
@@ -5620,145 +5612,112 @@
           }
         },
         {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The Global StoragePool and KVStore Runmode",
+          "decimals": 1,
+          "description": "The number of files of PageStorage instances in each TiFlash node",
+          "editable": true,
+          "error": false,
           "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "axisSoftMax": 5,
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 0,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "graph": false,
-                  "legend": false,
-                  "tooltip": false
-                },
-                "lineInterpolation": "linear",
-                "lineStyle": {
-                  "fill": "solid"
-                },
-                "lineWidth": 1,
-                "pointSize": 11,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": false
-              },
-              "decimals": 0,
-              "mappings": [
-                {
-                  "from": "",
-                  "id": 1,
-                  "text": "ONLY_V2",
-                  "to": "",
-                  "type": 1,
-                  "value": "1"
-                },
-                {
-                  "from": "",
-                  "id": 2,
-                  "text": "ONLY_V3",
-                  "to": "",
-                  "type": 1,
-                  "value": "2"
-                },
-                {
-                  "from": "",
-                  "id": 3,
-                  "text": "MIX_MODE",
-                  "to": "",
-                  "type": 1,
-                  "value": "3"
-                },
-                {
-                  "from": "",
-                  "id": 4,
-                  "text": " ",
-                  "to": "",
-                  "type": 1,
-                  "value": "4"
-                },
-                {
-                  "from": "",
-                  "id": 5,
-                  "text": " ",
-                  "to": "",
-                  "type": 1,
-                  "value": "5"
-                }
-              ],
-              "min": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "short"
-            },
+            "defaults": {},
             "overrides": []
           },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
             "y": 14
           },
-          "id": 126,
-          "links": [],
-          "options": {
-            "graph": {},
-            "legend": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "displayMode": "table",
-              "placement": "right"
-            },
-            "tooltipOptions": {
-              "mode": "multi"
-            }
+          "hiddenSeries": false,
+          "id": 129,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "total": false,
+            "values": true
           },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
           "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
           "targets": [
             {
               "exemplar": true,
-              "expr": "tiflash_system_current_metric_GlobalStorageRunMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "expr": "sum(tiflash_system_asynchronous_metric_BlobFileNums{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "{{instance}}-Global",
-              "refId": "A",
-              "step": 10
-            },
-            {
-              "exemplar": false,
-              "expr": "tiflash_system_current_metric_RegionPersisterRunMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{instance}}-KVStore",
-              "refId": "B"
+              "intervalFactor": 2,
+              "legendFormat": "num_file-{{instance}}",
+              "refId": "A",
+              "step": 10
             }
           ],
+          "thresholds": [],
           "timeFrom": null,
+          "timeRegions": [],
           "timeShift": null,
-          "title": "Global Runmode",
-          "type": "timeseries"
+          "title": "PageStorage File Num",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": "1.1",
+              "min": "0",
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         },
         {
           "aliasColors": {},
@@ -5767,7 +5726,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The StoragePool Runmode in DeltaMerge Storage",
+          "description": "The number of tables running under different mode in DeltaTree",
           "editable": true,
           "error": false,
           "fieldConfig": {
@@ -6416,7 +6375,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 7
+            "y": 8
           },
           "hiddenSeries": false,
           "id": 35,
@@ -6514,7 +6473,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 7
+            "y": 8
           },
           "hiddenSeries": false,
           "id": 36,
@@ -6632,7 +6591,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 14
+            "y": 15
           },
           "hiddenSeries": false,
           "id": 37,
@@ -6766,7 +6725,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 14
+            "y": 15
           },
           "hiddenSeries": false,
           "id": 75,
@@ -6870,7 +6829,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 21
+            "y": 22
           },
           "hiddenSeries": false,
           "id": 82,
@@ -7023,7 +6982,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 28
+            "y": 29
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7093,7 +7052,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 28
+            "y": 29
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7163,7 +7122,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 35
+            "y": 36
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7233,7 +7192,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 35
+            "y": 36
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7297,7 +7256,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 42
+            "y": 43
           },
           "height": "",
           "hiddenSeries": false,
@@ -7411,7 +7370,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 49
+            "y": 50
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7480,7 +7439,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 49
+            "y": 50
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7550,7 +7509,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 56
+            "y": 57
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7620,7 +7579,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 56
+            "y": 57
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7690,7 +7649,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 63
+            "y": 64
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7756,7 +7715,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 63
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 91,
