@@ -157,5 +157,69 @@ template struct Decimal<Int64>;
 template struct Decimal<Int128>;
 template struct Decimal<Int256>;
 
-// end namespace
+
+std::tuple<PrecType, ScaleType> PlusDecimalInferer::infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
+{
+    ScaleType result_scale = std::max(left_scale, right_scale);
+    PrecType result_int = std::max(left_prec - left_scale, right_prec - right_scale);
+    PrecType result_prec = std::min(result_scale + result_int + 1, decimal_max_prec);
+    return {result_prec, result_scale};
+}
+std::tuple<PrecType, ScaleType> MulDecimalInferer::infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
+{
+    return {std::min(left_prec + right_prec, decimal_max_prec), std::min(left_scale + right_scale, decimal_max_scale)};
+}
+
+std::tuple<PrecType, ScaleType> DivDecimalInferer::infer(PrecType left_prec, ScaleType left_scale, PrecType /* right_prec is not used */, ScaleType right_scale)
+{
+    return {
+        std::min(left_prec + right_scale + div_precincrement, decimal_max_prec),
+        std::min(left_scale + div_precincrement, decimal_max_scale)};
+}
+
+std::tuple<PrecType, ScaleType> SumDecimalInferer::infer(PrecType prec, ScaleType scale)
+{
+    return {std::min(prec + decimal_longlong_digits, decimal_max_prec), scale};
+}
+
+std::tuple<PrecType, ScaleType> AvgDecimalInferer::infer(PrecType left_prec, ScaleType left_scale)
+{
+    return {std::min(left_prec + div_precincrement, decimal_max_prec), std::min(left_scale + div_precincrement, decimal_max_scale)};
+}
+
+std::tuple<PrecType, ScaleType> ModDecimalInferer::infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
+{
+    return {std::max(left_prec, right_prec), std::max(left_scale, right_scale)};
+}
+
+std::tuple<PrecType, ScaleType> OtherInferer::infer(PrecType, ScaleType, PrecType, ScaleType)
+{
+    return {};
+}
+
+Int256 DecimalMaxValue::get(PrecType idx)
+{
+    // In case DecimalMaxValue::get(IntPrec<Int256>::prec), where IntPrec<Int256>::prec > 65.
+    assert(idx <= decimal_max_prec);
+    return instance().getInternal(idx);
+}
+
+Int256 DecimalMaxValue::maxValue()
+{
+    return get(maxDecimalPrecision<Decimal256>());
+}
+
+DecimalMaxValue::DecimalMaxValue()
+{
+    for (PrecType i = 1; i <= decimal_max_prec; i++)
+    {
+        number[i] = number[i - 1] * 10 + 9;
+    }
+}
+
+Int256 DecimalMaxValue::getInternal(PrecType idx) const
+{
+    return number[idx];
+}
+
 } // namespace DB
