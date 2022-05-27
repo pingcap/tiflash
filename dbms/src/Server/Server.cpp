@@ -1443,6 +1443,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         /// This object will periodically calculate some metrics.
+        /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);
         attachSystemTablesAsync(*global_context->getDatabase("system"), async_metrics);
 
