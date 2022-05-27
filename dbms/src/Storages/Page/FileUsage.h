@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 struct FileUsageStatistics
 {
     size_t total_disk_size = 0;
