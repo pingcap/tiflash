@@ -104,5 +104,6 @@ public:
 
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
 tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
+tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name);
 
 } // namespace DB
