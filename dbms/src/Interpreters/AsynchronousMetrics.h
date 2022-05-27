@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Storages/Page/FileUsage.h>
+
 #include <condition_variable>
 #include <mutex>
 #include <string>
@@ -46,6 +48,9 @@ public:
 
     /// Returns copy of all values.
     Container getValues() const;
+
+private:
+    FileUsageStatistics getPageStorageFileUsage();
 
 private:
     Context & context;
