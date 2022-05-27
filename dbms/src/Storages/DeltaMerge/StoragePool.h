@@ -51,39 +51,6 @@ public:
 
     friend class StoragePool;
 
-    PageId getLogMaxId(NamespaceId ns_id) const
-    {
-        PageId max_log_page_id = 0;
-        if (const auto & it = log_max_ids.find(ns_id); it != log_max_ids.end())
-        {
-            max_log_page_id = it->second;
-        }
-
-        return max_log_page_id;
-    }
-
-    PageId getDataMaxId(NamespaceId ns_id) const
-    {
-        PageId max_data_page_id = 0;
-        if (const auto & it = data_max_ids.find(ns_id); it != data_max_ids.end())
-        {
-            max_data_page_id = it->second;
-        }
-
-        return max_data_page_id;
-    }
-
-    PageId getMetaMaxId(NamespaceId ns_id) const
-    {
-        PageId max_meta_page_id = 0;
-        if (const auto & it = meta_max_ids.find(ns_id); it != meta_max_ids.end())
-        {
-            max_meta_page_id = it->second;
-        }
-
-        return max_meta_page_id;
-    }
-
     // GC immediately
     // Only used on dbgFuncMisc
     bool gc();
@@ -95,10 +62,6 @@ private:
     PageStoragePtr log_storage;
     PageStoragePtr data_storage;
     PageStoragePtr meta_storage;
-
-    std::map<NamespaceId, PageId> log_max_ids;
-    std::map<NamespaceId, PageId> data_max_ids;
-    std::map<NamespaceId, PageId> meta_max_ids;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
@@ -186,17 +149,25 @@ public:
     // Caller must cancel gc tasks before drop
     void drop();
 
-    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
+    // For function `newLogPageId`,`newMetaPageId`,`newDataPageIdForDTFile`:
+    // For PageStorageRunMode::ONLY_V2, every table have its own three PageStorage (meta/data/log).
+    // So these functions return the Page id starts from 1 and is continuously incremented.
+    // For PageStorageRunMode::ONLY_V3/MIX_MODE, PageStorage is global(distinguish by ns_id for different table).
+    // In order to avoid Page id from being reused (and cause troubles while restoring WAL from disk),
+    // StoragePool will assign the max_log_page_id/max_meta_page_id/max_data_page_id by the global max id
+    // regardless of ns_id while being restored. This causes the ids in a table to not be continuously incremented.
 
-    PageId maxMetaPageId() { return max_meta_page_id; }
+    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
     PageId newLogPageId() { return ++max_log_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
     bool doV2Gc(const Settings & settings);
 
     void forceTransformMetaV2toV3();
+    void forceTransformDataV2toV3();
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

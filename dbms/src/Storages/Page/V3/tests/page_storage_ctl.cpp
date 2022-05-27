@@ -399,7 +399,7 @@ private:
         size_t index = 0;
         std::cout << fmt::format("Begin to check all of datas CRC. enable_fo_check={}", static_cast<int>(enable_fo_check)) << std::endl;
 
-        std::list<std::pair<UInt128, PageVersionType>> error_versioned_pages;
+        std::list<std::pair<UInt128, PageVersion>> error_versioned_pages;
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
             if (index == total_pages / 10 * cut_index)

@@ -67,15 +67,6 @@ public:
     }
 
 
-    std::pair<std::shared_ptr<PageStorageImpl>, std::map<NamespaceId, PageId>> reopen()
-    {
-        auto path = getTemporaryPath();
-        auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        auto storage = std::make_shared<PageStorageImpl>("test.t", delegator, config, file_provider);
-        auto max_ids = storage->restore();
-        return {storage, max_ids};
-    }
-
 protected:
     FileProviderPtr file_provider;
     std::unique_ptr<StoragePathPool> path_pool;
@@ -1310,41 +1301,113 @@ try
 }
 CATCH
 
-TEST_F(PageStorageTest, getMaxIdsFromRestore)
+
+TEST_F(PageStorageTest, putExternalAfterRestore)
 try
 {
     {
         WriteBatch batch;
+        batch.putExternal(1999, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    auto alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 1);
+    ASSERT_EQ(*alive_ids.begin(), 1999);
+
+    {
+        WriteBatch batch;
+        batch.putExternal(1999, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 1);
+    ASSERT_EQ(*alive_ids.begin(), 1999);
+}
+CATCH
+
+TEST_F(PageStorageTest, GetMaxId)
+try
+{
+    NamespaceId small = 20;
+    NamespaceId medium = 50;
+    NamespaceId large = 100;
+
+    {
+        WriteBatch batch{small};
         batch.putExternal(1, 0);
-        batch.putExternal(2, 0);
+        batch.putExternal(1999, 0);
+        batch.putExternal(2000, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        WriteBatch batch{medium};
+        batch.putExternal(1, 0);
+        batch.putExternal(100, 0);
+        batch.putExternal(200, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        WriteBatch batch{large};
+        batch.putExternal(1, 0);
+        batch.putExternal(20000, 0);
+        batch.putExternal(20001, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 20001);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 20001);
+    }
+}
+CATCH
+
+TEST_F(PageStorageTest, CleanAfterDecreaseRef)
+try
+{
+    // Make it in log_1_0
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    // Make it in log_2_0
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        batch.putRefPage(2, 1);
         batch.delPage(1);
         batch.delPage(2);
         page_storage->write(std::move(batch));
-
-        WriteBatch batch2{TEST_NAMESPACE_ID + 1};
-        batch2.putExternal(1, 0);
-        batch2.putExternal(2, 0);
-        batch2.putRefPage(3, 1);
-        batch2.putRefPage(100, 2);
-        page_storage->write(std::move(batch2));
-
-        WriteBatch batch3{TEST_NAMESPACE_ID + 2};
-        batch3.putExternal(1, 0);
-        batch3.putExternal(2, 0);
-        batch3.putRefPage(3, 1);
-        batch3.putRefPage(10, 2);
-        batch3.delPage(10);
-        page_storage->write(std::move(batch3));
     }
+    page_storage = reopenWithConfig(config);
 
-    page_storage = nullptr;
-    auto [page_storage, max_ids] = reopen();
-    ASSERT_EQ(max_ids.size(), 3);
-    ASSERT_EQ(max_ids[TEST_NAMESPACE_ID], 2); // external page 2 is marked as deleted, but we can still restore it.
-    ASSERT_EQ(max_ids[TEST_NAMESPACE_ID + 1], 100);
-    ASSERT_EQ(max_ids[TEST_NAMESPACE_ID + 2], 10); // page 10 is marked as deleted, but we can still restore it.
+    auto alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 0);
 }
 CATCH
+
 
 } // namespace PS::V3::tests
 } // namespace DB

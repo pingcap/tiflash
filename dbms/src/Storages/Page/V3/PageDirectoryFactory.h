@@ -17,6 +17,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/V3/WALStore.h>
 
 namespace DB
 {
@@ -37,8 +38,7 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class PageDirectoryFactory
 {
 public:
-    PageVersionType max_applied_ver;
-    PageIdV3Internal max_applied_page_id;
+    PageVersion max_applied_ver;
 
     PageDirectoryFactory & setBlobStore(BlobStore & blob_store)
     {
@@ -47,6 +47,8 @@ public:
     }
 
     PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config);
+
+    PageDirectoryPtr createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal);
 
     // just for test
     PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit);
@@ -58,17 +60,14 @@ public:
         return *this;
     }
 
-    std::map<NamespaceId, PageId> getMaxApplyPageIds() const
-    {
-        return max_apply_page_ids;
-    }
-
 private:
     void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
     void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
+    static void applyRecord(
+        const PageDirectoryPtr & dir,
+        const PageEntriesEdit::EditRecord & r);
 
     BlobStore::BlobStats * blob_stats = nullptr;
-    std::map<NamespaceId, PageId> max_apply_page_ids;
 };
 
 } // namespace PS::V3
