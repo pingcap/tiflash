@@ -464,7 +464,7 @@ private:
     }
 
     RunRaftStoreProxyParms parms;
-    pthread_t thread;
+    pthread_t thread{};
     Poco::Logger * log;
 };
 
@@ -1155,7 +1155,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Try to increase limit on number of open files.
     {
-        rlimit rlim;
+        rlimit rlim{};
         if (getrlimit(RLIMIT_NOFILE, &rlim))
             throw Poco::Exception("Cannot getrlimit");
 
