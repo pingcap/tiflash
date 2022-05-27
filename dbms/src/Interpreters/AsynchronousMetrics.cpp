@@ -184,14 +184,13 @@ void AsynchronousMetrics::update()
 
     do
     {
-        FileUsageStatistics usage = kvstore->getFileUsageStatistics();
 
         // Get from RegionPersister
         auto & tmt = context.getTMTContext();
         auto & kvstore = tmt.getKVStore();
+        FileUsageStatistics usage = kvstore->getFileUsageStatistics();
 
         // Get the blob file status from all PS V3 instances
-
         if (auto global_storage_pool = context.getGlobalStoragePool(); global_storage_pool != nullptr)
         {
             const auto log_usage = global_storage_pool->log_storage->getFileUsageStatistics();
