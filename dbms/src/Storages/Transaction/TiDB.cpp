@@ -631,6 +631,8 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexColumnInfo::IndexColumnInfo(Poco::JSON::Object::Ptr json)
+    : offset()
+    , length()
 {
     deserialize(json);
 }
@@ -680,6 +682,13 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexInfo::IndexInfo(Poco::JSON::Object::Ptr json)
+    : id()
+    , state()
+    , index_type()
+    , is_unique()
+    , is_primary()
+    , is_invisible()
+    , is_global()
 {
     deserialize(json);
 }
