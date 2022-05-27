@@ -135,6 +135,8 @@ void run(WorkloadOptions & opts)
 
         if (opts.ps_run_mode == DB::PageStorageRunMode::MIX_MODE)
         {
+            // clear statistic in DB::PageStorageRunMode::ONLY_V2
+            stats.clear();
             auto & global_context = TiFlashTestEnv::getGlobalContext();
             global_context.setPageStorageRunMode(DB::PageStorageRunMode::MIX_MODE);
             global_context.initializeGlobalStoragePoolIfNeed(global_context.getPathPool());
@@ -268,8 +270,6 @@ int DTWorkload::mainEntry(int argc, char ** argv)
     // or the logging in global context won't be output to
     // the log file
     init(opts);
-
-    // TODO: change opts run parameter and result statistics when in MIXED_MODE
 
     // For mixed mode, we need to run the test in ONLY_V2 mode first.
     TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == PageStorageRunMode::ONLY_V3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);

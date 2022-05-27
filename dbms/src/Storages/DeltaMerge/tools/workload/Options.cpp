@@ -88,7 +88,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
         //
-        ("ps_run_mode", value<std::underlying_type_t<PageStorageRunMode>>()->default_value(static_cast<std::underlying_type_t<PageStorageRunMode>>(PageStorageRunMode::ONLY_V3)), "possible value: 1(only_v2), 2(only_v3), 3(mix_mode)") //
+        ("ps_run_mode", value<uint64_t>()->default_value(2, "possible value: 1(only_v2), 2(only_v3), 3(mix_mode), and note that in mix_mode, the test will run twice, first round in only_v2 mode and second round in mix_mode")) //
         //
         ("bg_thread_count", value<uint64_t>()->default_value(4), "") //
         //
@@ -155,8 +155,20 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
-
-    ps_run_mode = static_cast<PageStorageRunMode>(vm["ps_run_mode"].as<std::underlying_type_t<PageStorageRunMode>>());
+    switch (vm["ps_run_mode"].as<uint64_t>())
+    {
+    case static_cast<uint64_t>(PageStorageRunMode::ONLY_V2):
+        ps_run_mode = PageStorageRunMode::ONLY_V2;
+        break;
+    case static_cast<uint64_t>(PageStorageRunMode::ONLY_V3):
+        ps_run_mode = PageStorageRunMode::ONLY_V3;
+        break;
+    case static_cast<uint64_t>(PageStorageRunMode::MIX_MODE):
+        ps_run_mode = PageStorageRunMode::MIX_MODE;
+        break;
+    default:
+        return {false, fmt::format("unknown ps_run_mode {}.", vm["ps_run_mode"].as<uint64_t>())};
+    }
 
     bg_thread_count = vm["bg_thread_count"].as<uint64_t>();
 
