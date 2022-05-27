@@ -107,7 +107,7 @@ public:
             UInt64 sm_max_caps = 0;
             UInt64 sm_total_size = 0;
             UInt64 sm_valid_size = 0;
-            double sm_valid_rate = 0;
+            double sm_valid_rate = 0.0;
 
         public:
             BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_, BlobStatType type_ = BlobStatType::NORMAL)
