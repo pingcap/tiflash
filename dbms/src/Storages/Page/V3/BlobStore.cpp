@@ -135,7 +135,6 @@ FileUsageStatistics BlobStore::getFileUsageStatistics() const
                 usage.total_disk_size += stat->sm_total_size;
                 usage.total_valid_size += stat->sm_valid_size;
             }
-            LOG_FMT_TRACE(log, "file usage [blob_id={}] [disk_size={}] [valid_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_size, stat->sm_valid_rate);
         }
         usage.total_file_num += stats.size();
     }
