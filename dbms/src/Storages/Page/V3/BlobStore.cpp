@@ -1456,7 +1456,7 @@ void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
     const auto & [total_size, valid_size] = smap->getSizes();
     sm_total_size = total_size;
     sm_valid_size = valid_size;
-    sm_valid_rate = total_size == 0 ? 0 : valid_size * 1.0 / total_size;
+    sm_valid_rate = total_size == 0 ? 0.0 : valid_size * 1.0 / total_size;
     recalculateCapacity();
 }
 
