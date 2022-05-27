@@ -34,7 +34,7 @@ public:
         const Config & config_,
         const FileProviderPtr & file_provider_);
 
-    ~PageStorageImpl();
+    ~PageStorageImpl() override;
 
     static BlobStore::Config parseBlobConfig(const Config & config)
     {
@@ -54,16 +54,17 @@ public:
         WALStore::Config wal_config;
 
         wal_config.roll_size = config.wal_roll_size;
-        wal_config.wal_recover_mode = config.wal_recover_mode;
         wal_config.max_persisted_log_files = config.wal_max_persisted_log_files;
+        wal_config.setRecoverMode(config.wal_recover_mode);
 
         return wal_config;
     }
 
-    std::map<NamespaceId, PageId> restore() override;
+    void restore() override;
 
     void drop() override;
 
+    PageId getMaxId() override;
 
     PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) override;
 
