@@ -12,22 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FmtUtils.h>
-#include <DataStreams/PartialSortingBlockInputStream.h>
-#include <Interpreters/sortBlock.h>
+#pragma once
 
+#include <Core/ColumnNumbers.h>
+#include <Core/ColumnWithTypeAndName.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/Field.h>
+#include <Core/Types.h>
+#include <DataTypes/IDataType.h>
+#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {
-Block PartialSortingBlockInputStream::readImpl()
+namespace tests
 {
-    Block res = children.back()->read();
-    sortBlock(res, description, limit);
-    return res;
-}
-
-void PartialSortingBlockInputStream::appendInfo(FmtBuffer & buffer) const
-{
-    buffer.fmtAppend(": limit = {}", limit);
-}
+tipb::Expr columnsToTiPBExpr(
+    const String & func_name,
+    const ColumnNumbers & argument_column_number,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator);
+} // namespace tests
 } // namespace DB
