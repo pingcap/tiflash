@@ -124,14 +124,17 @@ void run(WorkloadOptions & opts)
         // Table Schema
         auto table_gen = TableGenerator::create(opts);
         auto table_info = table_gen->get(opts.table_id, opts.table_name);
-        // In this for loop, destory DeltaMergeStore gracefully and recreate it.
-        for (uint64_t i = 0; i < opts.verify_round; i++)
-        {
-            DTWorkload workload(opts, handle_table, table_info);
-            workload.run(i);
-            stats.push_back(workload.getStat());
-            LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
-        }
+        // In this for loop, destroy DeltaMergeStore gracefully and recreate it.
+        auto run_test = [&]() {
+            for (uint64_t i = 0; i < opts.verify_round; i++)
+            {
+                DTWorkload workload(opts, handle_table, table_info);
+                workload.run(i);
+                stats.push_back(workload.getStat());
+                LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
+            }
+        };
+        run_test();
 
         if (opts.ps_run_mode == DB::PageStorageRunMode::MIX_MODE)
         {
@@ -140,13 +143,7 @@ void run(WorkloadOptions & opts)
             auto & global_context = TiFlashTestEnv::getGlobalContext();
             global_context.setPageStorageRunMode(DB::PageStorageRunMode::MIX_MODE);
             global_context.initializeGlobalStoragePoolIfNeed(global_context.getPathPool());
-            for (uint64_t i = 0; i < opts.verify_round; i++)
-            {
-                DTWorkload workload(opts, handle_table, table_info);
-                workload.run(i);
-                stats.push_back(workload.getStat());
-                LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
-            }
+            run_test();
         }
     }
     catch (...)
