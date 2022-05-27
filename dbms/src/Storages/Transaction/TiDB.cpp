@@ -9,6 +9,7 @@
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
+#include <cmath>
 
 namespace DB
 {
@@ -46,8 +47,10 @@ Field ColumnInfo::defaultValueToField() const
             return DB::GenDefaultField(*this);
         return Field();
     }
+    // 
     switch (tp)
     {
+    // TODO: Consider unsigned?
     // Integer Type.
     case TypeTiny:
     case TypeShort:
@@ -61,7 +64,9 @@ Field ColumnInfo::defaultValueToField() const
         }
         catch (...)
         {
-            return static_cast<Int64>(std::stoull(value.convert<String>()));
+            // due to https://github.com/pingcap/tidb/issues/34881
+            // we do this to avoid exception in older version of TiDB.
+            return static_cast<Int64>(std::llround(value.convert<double>()));
         }
     }
     case TypeBit:
