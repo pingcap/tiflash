@@ -44,7 +44,7 @@ std::string WorkloadOptions::toString(std::string seperator) const
         fmt::format("read_stream_count {}{}", read_stream_count, seperator) + //
         fmt::format("testing_type {}{}", testing_type, seperator) + //
         fmt::format("log_write_request {}{}", log_write_request, seperator) + //
-        fmt::format("enable_ps_v3 {}{}", enable_ps_v3, seperator) + //
+        fmt::format("ps_run_mode {}{}", ps_run_mode, seperator) + //
         fmt::format("bg_thread_count {}{}", bg_thread_count, seperator) + //
         fmt::format("table_id {}{}", table_id, seperator) + //
         fmt::format("table_name {}{}", table_name, seperator);
@@ -88,7 +88,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
         //
-        ("enable_ps_v3", value<bool>()->default_value(true), "") //
+        ("ps_run_mode", value<std::underlying_type_t<PageStorageRunMode>>()->default_value(static_cast<std::underlying_type_t<PageStorageRunMode>>(PageStorageRunMode::ONLY_V3)), "possible value: 1(only_v2), 2(only_v3), 3(mix_mode)") //
         //
         ("bg_thread_count", value<uint64_t>()->default_value(4), "") //
         //
@@ -156,7 +156,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
 
-    enable_ps_v3 = vm["enable_ps_v3"].as<bool>();
+    ps_run_mode = static_cast<PageStorageRunMode>(vm["ps_run_mode"].as<std::underlying_type_t<PageStorageRunMode>>());
 
     bg_thread_count = vm["bg_thread_count"].as<uint64_t>();
 

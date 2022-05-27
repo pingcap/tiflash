@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Storages/Page/PageStorage.h>
+
 #include <string>
 #include <vector>
 
@@ -53,7 +55,7 @@ struct WorkloadOptions
 
     bool log_write_request;
 
-    bool enable_ps_v3;
+    PageStorageRunMode ps_run_mode;
 
     uint64_t bg_thread_count;
 

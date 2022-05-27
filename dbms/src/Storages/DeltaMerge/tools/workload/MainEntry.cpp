@@ -132,6 +132,20 @@ void run(WorkloadOptions & opts)
             stats.push_back(workload.getStat());
             LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
         }
+
+        if (opts.ps_run_mode == DB::PageStorageRunMode::MIX_MODE)
+        {
+            auto & global_context = TiFlashTestEnv::getGlobalContext();
+            global_context.setPageStorageRunMode(DB::PageStorageRunMode::MIX_MODE);
+            global_context.initializeGlobalStoragePoolIfNeed(global_context.getPathPool());
+            for (uint64_t i = 0; i < opts.verify_round; i++)
+            {
+                DTWorkload workload(opts, handle_table, table_info);
+                workload.run(i);
+                stats.push_back(workload.getStat());
+                LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
+            }
+        }
     }
     catch (...)
     {
@@ -254,8 +268,11 @@ int DTWorkload::mainEntry(int argc, char ** argv)
     // or the logging in global context won't be output to
     // the log file
     init(opts);
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.enable_ps_v3);
 
+    // TODO: change opts run parameter and result statistics when in MIXED_MODE
+
+    // For mixed mode, we need to run the test in ONLY_V2 mode first.
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == PageStorageRunMode::ONLY_V3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);
     if (opts.testing_type == "daily_perf")
     {
         dailyPerformanceTest(opts);
@@ -277,7 +294,6 @@ int DTWorkload::mainEntry(int argc, char ** argv)
             runAndRandomKill(opts);
         }
     }
-
     TiFlashTestEnv::shutdown();
     return 0;
 }
