@@ -285,9 +285,17 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, bool is_partial_sort) {
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, bool is_partial_sort)
+{
     assert(root);
     root = compileSort(root, getExecutorIndex(), buildOrderByItemList({order_by}), is_partial_sort);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItems order_by_list, bool is_partial_sort)
+{
+    assert(root);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemList(order_by_list), is_partial_sort);
     return *this;
 }
 

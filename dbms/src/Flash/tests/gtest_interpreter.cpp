@@ -14,6 +14,7 @@
 
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include "TestUtils/TiFlashTestBasic.h"
 
 namespace DB
 {
@@ -382,33 +383,32 @@ CreatingSets
        MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
+}
+CATCH
 
-    // request = context.scan("test_db", "test_table").window(RowNumber(), {"s1", true}, {"s2", false}).build(context);
-//     {
-//         String expected = R"(
-// CreatingSets
-//  Union: <for join>
-//   HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-//    Expression: <append join key and join filters for build side>
-//     Expression: <final projection>
-//      MockExchangeReceiver
-//  Union x 2: <for join>
-//   HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-//    Expression: <append join key and join filters for build side>
-//     Expression: <final projection>
-//      Expression: <remove useless column after join>
-//       HashJoinProbe: <join probe, join_executor_id = Join_4>
-//        Expression: <final projection>
-//         MockExchangeReceiver
-//  Union: <for mpp>
-//   MockExchangeSender x 10
-//    Expression: <final projection>
-//     Expression: <remove useless column after join>
-//      HashJoinProbe: <join probe, join_executor_id = Join_6>
-//       Expression: <final projection>
-//        MockExchangeReceiver)";
-//         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
-//     }
+TEST_F(InterpreterExecuteTest, Window)
+try
+{
+    MockWindowFrame frame;
+    frame.type = tipb::WindowFrameType::Rows;
+    frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
+    frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
+    auto request = context.scan("test_db", "test_table").sort({{"s1", true}, {"s2", false}}, true).window(RowNumber(), {"s1", true}, {"s2", false}, frame).build(context);
+        {
+            String expected = R"(
+Union: <for mpp>
+ Expression x 10: <final projection>
+  SharedQuery: <restore concurrency>
+   Expression: <cast after window>
+    Window
+     Expression: <final projection>
+      MergeSorting, limit = 0
+       Union: <for partial order>
+        PartialSorting x 10: limit = 0
+         Expression: <final projection>
+          MockTableScan)";
+            ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+        }
 }
 CATCH
 

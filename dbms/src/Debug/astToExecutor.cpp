@@ -29,8 +29,6 @@
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
 
-#include <memory>
-
 namespace DB
 {
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
@@ -937,6 +935,10 @@ bool TopN::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
         tipb::ByItem * by = topn->add_order_by();
         by->set_desc(elem->direction < 0);
         tipb::Expr * expr = by->mutable_expr();
+        expr->mutable_field_type()->set_flen(11);
+        expr->mutable_field_type()->set_decimal(0);
+        expr->mutable_field_type()->set_charset("binary");
+        expr->mutable_field_type()->set_collate(63);
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
     topn->set_limit(limit);
@@ -1376,7 +1378,6 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         // ft->set_decimal(window_expr->children(0).field_type().decimal()); // ywq todo check type?
         // ft->set_flen(window_expr->children(0).field_type().flen());
     }
-
     for (const auto & child : order_by_exprs)
     {
         auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
@@ -1387,6 +1388,7 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         tipb::Expr * expr = by->mutable_expr();
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
+
     for (const auto & child : partition_by_exprs)
     {
         auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
@@ -1400,7 +1402,7 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
     tipb::WindowFrame * f = window->mutable_frame();
 
     // ywq todo check end and start null.
-    auto *end = f->mutable_end();
+    auto * end = f->mutable_end();
     end->set_offset(std::get<2>(frame.end));
     end->set_unbounded(std::get<1>(frame.end));
     end->set_type(std::get<0>(frame.end));
@@ -1426,7 +1428,8 @@ bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
     tipb_executor->set_tp(tipb::ExecType::TypeSort);
     tipb_executor->set_executor_id(name);
     tipb::Sort * sort = tipb_executor->mutable_sort();
- 
+    sort->set_ispartialsort(is_partial_sort);
+
     for (const auto & child : by_exprs)
     {
         auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
@@ -1732,7 +1735,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
     return window;
 }
 
-ExecutorPtr compileSort(ExecutorPtr input, size_t &executor_index, ASTPtr order_by_expr_list, bool is_partial_sort) 
+ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort)
 {
     std::vector<ASTPtr> order_columns;
     if (order_by_expr_list != nullptr)

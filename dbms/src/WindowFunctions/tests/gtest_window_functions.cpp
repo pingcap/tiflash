@@ -18,10 +18,9 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <google/protobuf/util/json_util.h>
-#include "TestUtils/mockExecutor.h"
-#include "tipb/executor.pb.h"
 
 namespace DB::tests
 {
@@ -113,6 +112,8 @@ protected:
     {
         tipb::Sort sort;
         google::protobuf::util::JsonStringToMessage(sort_json_str, &sort);
+        std::cout << "ywq real string" << std::endl;
+        sort.PrintDebugString();
         mock_interpreter->handleWindowOrder(pipeline, sort);
         mock_interpreter->input_streams_vec[0] = pipeline.streams;
         NamesWithAliases final_project;
@@ -211,7 +212,7 @@ protected:
         ASSERT_BLOCK_EQ(except_block, actual_block);
     }
 
-     void testOneWindowFunction(const std::vector<NameAndTypePair> & source_column_types, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, const tipb::Window & window, const tipb::Sort & sort)
+    void testOneWindowFunction(const std::vector<NameAndTypePair> & source_column_types, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, const tipb::Window & window, const tipb::Sort & sort)
     {
         mockInterpreter(source_column_types, context);
         DAGPipeline pipeline;
@@ -228,7 +229,7 @@ protected:
             final_project.push_back({column.name, ""});
         }
         mockExecuteProject(pipeline, final_project);
-    
+
         mock_interpreter->handleWindow(pipeline, window);
         mock_interpreter->input_streams_vec[0] = pipeline.streams;
         NamesWithAliases final_project_1;
@@ -237,7 +238,7 @@ protected:
             final_project_1.push_back({column.name, ""});
         }
         mockExecuteProject(pipeline, final_project_1);
-    
+
         auto stream = pipeline.firstStream();
 
         Blocks actual_blocks;
@@ -394,15 +395,14 @@ TEST_F(WindowFunction, testMock)
 try
 {
     setMaxBlockSize(3);
-    std::string sort_json;
     MockWindowFrame frame;
     MockDAGRequestContext mock_context(context);
     frame.type = tipb::WindowFrameType::Rows;
     frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
     frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
-    mock_context.addMockTable({"test_db", "test_table"}, {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}});
+    mock_context.addMockTable({"test_db", "test_table"}, {{"partition", TiDB::TP::TypeLong}, {"order", TiDB::TP::TypeLong}});
     auto request = mock_context.scan("test_db", "test_table").window(RowNumber(), {"order", false}, {"partition", false}, frame).build(mock_context);
-    auto request_sort = mock_context.scan("test_db", "test_table").sort({"order", true}, false).build(mock_context);
+    auto request_sort = mock_context.scan("test_db", "test_table").sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true).build(mock_context);
     /***** row_number with different types of input *****/
     // int - sql : select *, row_number() over w1 from test1 window w1 as (partition by partition_int order by order_int)
     testOneWindowFunction(
@@ -411,6 +411,7 @@ try
         {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})},
         request->root_executor().window(),
         request_sort->root_executor().sort());
+    request_sort->root_executor().sort().PrintDebugString();
 }
 CATCH
 } // namespace DB::tests
