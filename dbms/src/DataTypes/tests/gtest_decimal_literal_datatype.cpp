@@ -36,6 +36,7 @@ try
     ASSERT_TRUE(DecimalField<Decimal64>(123, 0).getPrec() == 3);
     ASSERT_TRUE(DecimalField<Decimal64>(123, 2).getPrec() == 3);
     ASSERT_TRUE(DecimalField<Decimal64>(123, 4).getPrec() == 4);
+    ASSERT_TRUE(DecimalField<Decimal64>(1234567891011ll, 4).getPrec() == 13);
 
     ASSERT_TRUE(DecimalField<Decimal128>(0, 0).getPrec() == 1);
     ASSERT_TRUE(DecimalField<Decimal128>(0, 1).getPrec() == 1);
@@ -43,6 +44,7 @@ try
     ASSERT_TRUE(DecimalField<Decimal128>(123, 0).getPrec() == 3);
     ASSERT_TRUE(DecimalField<Decimal128>(123, 2).getPrec() == 3);
     ASSERT_TRUE(DecimalField<Decimal128>(123, 4).getPrec() == 4);
+    ASSERT_TRUE(DecimalField<Decimal128>(Int128(123123123123123ll) * 1000000, 4).getPrec() == 21);
 
     ASSERT_TRUE(DecimalField<Decimal256>(Int256(0), 0).getPrec() == 1);
     ASSERT_TRUE(DecimalField<Decimal256>(Int256(0), 1).getPrec() == 1);
@@ -50,6 +52,7 @@ try
     ASSERT_TRUE(DecimalField<Decimal256>(Int256(123), 0).getPrec() == 3);
     ASSERT_TRUE(DecimalField<Decimal256>(Int256(123), 2).getPrec() == 3);
     ASSERT_TRUE(DecimalField<Decimal256>(Int256(123), 4).getPrec() == 4);
+    ASSERT_TRUE(DecimalField<Decimal256>(Int256(123123123123123123ll) * Int256(1000000000ll) * Int256(100000000000000ll), 4).getPrec() == 41);
 }
 CATCH
 
