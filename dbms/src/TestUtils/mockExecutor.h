@@ -97,8 +97,9 @@ public:
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
     DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
 
-    // window ywq todo
+    // window ywq todo more friendly
     DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockOrderByItem partition_by, MockWindowFrame frame);
+    DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort);
 
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);

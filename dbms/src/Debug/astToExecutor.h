@@ -28,6 +28,7 @@
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
 
+
 namespace DB
 {
 namespace ErrorCodes
@@ -275,7 +276,8 @@ struct Join : Executor
 
 using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
 
-struct MockWindowFrame {
+struct MockWindowFrame
+{
     tipb::WindowFrameType type;
     MockWindowFrameBound start;
     MockWindowFrameBound end;
@@ -305,10 +307,15 @@ struct Window : Executor
 
 struct Sort : Executor
 {
-    bool is_partial_sort;
     std::vector<ASTPtr> by_exprs;
+    bool is_partial_sort;
 
-    Sort(size_t & index_, const DAGSchema & output_schema_, ASTPtr params_); // todo
+    Sort(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> by_exprs_, bool is_partial_sort_)
+        : Executor(index_, "sort_" + std::to_string(index_), output_schema_)
+        , by_exprs(by_exprs_)
+        , is_partial_sort(is_partial_sort_)
+    {
+    }
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
 
@@ -338,7 +345,8 @@ ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
 
 ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame);
 
-ExecutorPtr compileSort(); // todo
+ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort);
+
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
 
 //TODO: add compileWindow

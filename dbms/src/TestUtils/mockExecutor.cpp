@@ -285,6 +285,12 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     return *this;
 }
 
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, bool is_partial_sort) {
+    assert(root);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemList({order_by}), is_partial_sort);
+    return *this;
+}
+
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columns)
 {
     std::vector<MockColumnInfo> v_column_info(columns.size());
