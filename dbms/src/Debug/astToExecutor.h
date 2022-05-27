@@ -28,11 +28,6 @@
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
 
-#include <cstddef>
-
-#include "tipb/executor.pb.h"
-#include "tipb/expression.pb.h"
-
 namespace DB
 {
 namespace ErrorCodes
@@ -278,18 +273,28 @@ struct Join : Executor
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
 
+using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
+
+struct MockWindowFrame {
+    tipb::WindowFrameType type;
+    MockWindowFrameBound start;
+    MockWindowFrameBound end;
+    // TODO support calcFuncs
+};
+
 struct Window : Executor
 {
     std::vector<ASTPtr> func_descs;
     std::vector<ASTPtr> partition_by_exprs;
     std::vector<ASTPtr> order_by_exprs;
-    tipb::WindowFrame frame;
+    MockWindowFrame frame;
 
-    Window(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> func_descs_, std::vector<ASTPtr> partition_by_exprs_, std::vector<ASTPtr> order_by_exprs_)
+    Window(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> func_descs_, std::vector<ASTPtr> partition_by_exprs_, std::vector<ASTPtr> order_by_exprs_, MockWindowFrame frame_)
         : Executor(index_, "window_" + std::to_string(index_), output_schema_)
         , func_descs(std::move(func_descs_))
         , partition_by_exprs(std::move(partition_by_exprs_))
         , order_by_exprs(order_by_exprs_)
+        , frame(frame_)
     {
     }
 
@@ -331,7 +336,7 @@ ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, ti
 
 ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
 
-ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_lis);
+ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame);
 
 ExecutorPtr compileSort(); // todo
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);

@@ -22,6 +22,7 @@
 #include <initializer_list>
 #include <unordered_map>
 
+
 namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;
@@ -32,6 +33,7 @@ using MockOrderByItem = std::pair<String, bool>;
 using MockOrderByItems = std::initializer_list<MockOrderByItem>;
 using MockColumnNames = std::initializer_list<String>;
 using MockAsts = std::initializer_list<ASTPtr>;
+using MockWindowFrame = mock::MockWindowFrame;
 
 class MockDAGRequestContext;
 
@@ -96,7 +98,7 @@ public:
     DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
 
     // window ywq todo
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockOrderByItem partition_by);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockOrderByItem partition_by, MockWindowFrame frame);
 
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);

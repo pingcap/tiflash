@@ -256,9 +256,17 @@ TEST_F(MockDAGRequestTest, MockWindow)
 try
 {
     // ywq todo
-    auto request = context.scan("test_db", "test_table").window(RowNumber(), {"s1", true}, {"s2", false}).build(context);
+// google::protobuf::util::JsonStringToMessage(R"({"frame":{"type":"Rows","start":{"type":"CurrentRow","unbounded":false,"offset":"0"}})", frame);
+
+    MockWindowFrame frame;
+    frame.type = tipb::WindowFrameType::Rows;
+    frame.end = {tipb::WindowBoundType::Preceding, false, 0};
+    frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
+    auto request = context.scan("test_db", "test_table").window(RowNumber(), {"s1", true}, {"s2", false}, frame).build(context);
     {
-        String expected = "table_scan_0 | {<0, String>, <1, String>}\n";
+        String expected = 
+        "window_1\n"
+        " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
 }
