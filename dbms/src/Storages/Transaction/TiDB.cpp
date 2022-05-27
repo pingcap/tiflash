@@ -109,7 +109,6 @@ Field ColumnInfo::defaultValueToField() const
             return DB::GenDefaultField(*this);
         return Field();
     }
-    // 
     switch (tp)
     {
     // TODO: Consider unsigned?
