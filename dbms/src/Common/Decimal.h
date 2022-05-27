@@ -306,9 +306,30 @@ using Decimal64 = Decimal<Int64>;
 using Decimal128 = Decimal<Int128>;
 using Decimal256 = Decimal<Int256>;
 
-static constexpr PrecType minDecimalPrecision()
+template <typename T>
+constexpr PrecType minDecimalPrecision()
 {
     return 1;
+}
+template <>
+constexpr PrecType minDecimalPrecision<Decimal32>()
+{
+    return 1;
+}
+template <>
+constexpr PrecType minDecimalPrecision<Decimal64>()
+{
+    return 10;
+}
+template <>
+constexpr PrecType minDecimalPrecision<Decimal128>()
+{
+    return 19;
+}
+template <>
+constexpr PrecType minDecimalPrecision<Decimal256>()
+{
+    return 39;
 }
 template <typename T>
 static constexpr PrecType maxDecimalPrecision()
