@@ -307,31 +307,6 @@ using Decimal128 = Decimal<Int128>;
 using Decimal256 = Decimal<Int256>;
 
 template <typename T>
-constexpr PrecType minDecimalPrecision()
-{
-    return 1;
-}
-template <>
-constexpr PrecType minDecimalPrecision<Decimal32>()
-{
-    return 1;
-}
-template <>
-constexpr PrecType minDecimalPrecision<Decimal64>()
-{
-    return 10;
-}
-template <>
-constexpr PrecType minDecimalPrecision<Decimal128>()
-{
-    return 19;
-}
-template <>
-constexpr PrecType minDecimalPrecision<Decimal256>()
-{
-    return 39;
-}
-template <typename T>
 static constexpr PrecType maxDecimalPrecision()
 {
     return 0;
@@ -355,6 +330,33 @@ template <>
 constexpr PrecType maxDecimalPrecision<Decimal256>()
 {
     return 65;
+}
+
+template <typename T>
+constexpr PrecType minDecimalPrecision()
+{
+    /// return a invalid value
+    return maxDecimalPrecision<Decimal256>() + 1;
+}
+template <>
+constexpr PrecType minDecimalPrecision<Decimal32>()
+{
+    return 1;
+}
+template <>
+constexpr PrecType minDecimalPrecision<Decimal64>()
+{
+    return maxDecimalPrecision<Decimal32>() + 1;
+}
+template <>
+constexpr PrecType minDecimalPrecision<Decimal128>()
+{
+    return maxDecimalPrecision<Decimal64>() + 1;
+}
+template <>
+constexpr PrecType minDecimalPrecision<Decimal256>()
+{
+    return maxDecimalPrecision<Decimal128>() + 1;
 }
 
 template <typename T>
