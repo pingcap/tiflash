@@ -16,10 +16,10 @@
 
 #include <Common/Logger.h>
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Transaction/Types.h>
-#include <Storages/Page/FileUsage.h>
 
 namespace DB
 {

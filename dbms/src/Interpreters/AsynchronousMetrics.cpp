@@ -129,6 +129,26 @@ static void calculateMaxAndSum(Max & max, Sum & sum, T x)
         max = x;
 }
 
+FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
+{
+    // Get from RegionPersister
+    auto & tmt = context.getTMTContext();
+    auto & kvstore = tmt.getKVStore();
+    FileUsageStatistics usage = kvstore->getFileUsageStatistics();
+
+    // Get the blob file status from all PS V3 instances
+    if (auto global_storage_pool = context.getGlobalStoragePool(); global_storage_pool != nullptr)
+    {
+        const auto log_usage = global_storage_pool->log_storage->getFileUsageStatistics();
+        const auto meta_usage = global_storage_pool->meta_storage->getFileUsageStatistics();
+        const auto data_usage = global_storage_pool->data_storage->getFileUsageStatistics();
+
+        usage.total_file_num += log_usage.total_file_num + meta_usage.total_file_num + data_usage.total_file_num;
+        usage.total_disk_size += log_usage.total_disk_size + meta_usage.total_disk_size + data_usage.total_disk_size;
+        usage.total_valid_size += log_usage.total_valid_size + meta_usage.total_valid_size + data_usage.total_valid_size;
+    }
+    return usage;
+}
 
 void AsynchronousMetrics::update()
 {
@@ -182,31 +202,12 @@ void AsynchronousMetrics::update()
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
     }
 
-    do
     {
-
-        // Get from RegionPersister
-        auto & tmt = context.getTMTContext();
-        auto & kvstore = tmt.getKVStore();
-        FileUsageStatistics usage = kvstore->getFileUsageStatistics();
-
-        // Get the blob file status from all PS V3 instances
-        if (auto global_storage_pool = context.getGlobalStoragePool(); global_storage_pool != nullptr)
-        {
-            const auto log_usage = global_storage_pool->log_storage->getFileUsageStatistics();
-            const auto meta_usage = global_storage_pool->meta_storage->getFileUsageStatistics();
-            const auto data_usage = global_storage_pool->data_storage->getFileUsageStatistics();
-
-            usage.total_file_num += log_usage.total_file_num + meta_usage.total_file_num + data_usage.total_file_num;
-            usage.total_disk_size += log_usage.total_disk_size + meta_usage.total_disk_size + data_usage.total_disk_size;
-            usage.total_valid_size += log_usage.total_valid_size + meta_usage.total_valid_size + data_usage.total_valid_size;
-        }
-
+        const FileUsageStatistics usage = getPageStorageFileUsage();
         set("BlobFileNums", usage.total_file_num);
         set("BlobDiskBytes", usage.total_disk_size);
         set("BlobValidBytes", usage.total_valid_size);
-
-    } while (false);
+    }
 
 #if USE_TCMALLOC
     {
