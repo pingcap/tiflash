@@ -851,8 +851,48 @@ try
 }
 CATCH
 
-
 TEST_F(PageStorageMixedTest, testDTWriteRead5)
+try
+{
+    UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    // Change to mix mode here
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+
+    {
+        auto page1 = page_reader_mix->read(2);
+
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
+    }
+}
+CATCH
+
+TEST_F(PageStorageMixedTest, testDTWriteRead6)
 try
 {
     UInt64 tag = 0;
