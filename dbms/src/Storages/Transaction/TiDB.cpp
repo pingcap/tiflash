@@ -49,7 +49,6 @@ Field ColumnInfo::defaultValueToField() const
     }
     switch (tp)
     {
-    // TODO: Consider unsigned?
     // Integer Type.
     case TypeTiny:
     case TypeShort:
@@ -57,6 +56,10 @@ Field ColumnInfo::defaultValueToField() const
     case TypeLongLong:
     case TypeInt24:
     {
+        // In c++, cast a unsigned integer to signed integer will not change the value.
+        // like 9223372036854775808 which is larger than the maximum value of Int64,
+        // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
+        // so we don't need consider unsigned here.
         try
         {
             return value.convert<Int64>();
