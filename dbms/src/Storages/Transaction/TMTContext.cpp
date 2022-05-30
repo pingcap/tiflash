@@ -22,9 +22,9 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDBSchemaSyncer.h>
+#include <TiDB/Schema/SchemaSyncer.h>
+#include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <pingcap/pd/MockPDClient.h>
 
 namespace DB
@@ -53,9 +53,10 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
               context.getSettingsRef().task_scheduler_thread_soft_limit,
               context.getSettingsRef().task_scheduler_thread_hard_limit)))
     , engine(raft_config.engine)
-    , disable_bg_flush(raft_config.disable_bg_flush)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
+    , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
+    , read_index_worker_tick_ms(10)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {}
 

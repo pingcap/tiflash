@@ -26,10 +26,10 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/Utils.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
 
 namespace DB

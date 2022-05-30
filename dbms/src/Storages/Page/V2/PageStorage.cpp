@@ -349,14 +349,13 @@ void PageStorage::restore()
 #endif
 
     statistics = restore_info;
-    {
-        auto snapshot = getConcreteSnapshot();
-        size_t num_pages = snapshot->version()->numPages();
-        LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
-    }
+
+    auto snapshot = getConcreteSnapshot();
+    size_t num_pages = snapshot->version()->numPages();
+    LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
 }
 
-PageId PageStorage::getMaxId(NamespaceId /*ns_id*/)
+PageId PageStorage::getMaxId()
 {
     std::lock_guard write_lock(write_mutex);
     return versioned_page_entries.getSnapshot("")->version()->maxId();
@@ -604,6 +603,19 @@ size_t PageStorage::getNumberOfPages()
     if (concrete_snap)
     {
         return concrete_snap->version()->numPages();
+    }
+    else
+    {
+        throw Exception("Can't get concrete snapshot", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+std::set<PageId> PageStorage::getAliveExternalPageIds(NamespaceId /*ns_id*/)
+{
+    const auto & concrete_snap = getConcreteSnapshot();
+    if (concrete_snap)
+    {
+        return concrete_snap->version()->validNormalPageIds();
     }
     else
     {
@@ -881,9 +893,9 @@ void PageStorage::drop()
 struct GcContext
 {
     PageFileIdAndLevel min_file_id;
-    PageFile::Type min_file_type;
+    PageFile::Type min_file_type = PageFile::Type::Invalid;
     PageFileIdAndLevel max_file_id;
-    PageFile::Type max_file_type;
+    PageFile::Type max_file_type = PageFile::Type::Invalid;
     size_t num_page_files = 0;
     size_t num_legacy_files = 0;
 

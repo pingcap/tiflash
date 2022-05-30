@@ -44,10 +44,10 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
@@ -88,8 +88,6 @@ StorageDeltaMerge::StorageDeltaMerge(
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
 
-    is_common_handle = false;
-    pk_is_handle = false;
     // save schema from TiDB
     if (table_info_)
     {
@@ -287,13 +285,20 @@ void StorageDeltaMerge::updateTableColumnInfo()
     rowkey_column_size = rowkey_column_defines.size();
 }
 
+void StorageDeltaMerge::clearData()
+{
+    shutdown();
+    // init the store so it can clear data
+    auto & store = getAndMaybeInitStore();
+    store->clearData();
+}
+
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    if (storeInited())
-    {
-        _store->drop();
-    }
+    // init the store so it can do the drop work
+    auto & store = getAndMaybeInitStore();
+    store->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
@@ -407,6 +412,10 @@ public:
     void write(const Block & block) override
     try
     {
+        // When dt_insert_max_rows (Max rows of insert blocks when write into DeltaTree Engine, default = 0) is specified,
+        // the insert block will be splited into multiples.
+        // Currently dt_insert_max_rows is only used for performance tests.
+
         if (db_settings.dt_insert_max_rows == 0)
         {
             Block to_write = decorator(block);
@@ -460,6 +469,7 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
 #ifndef NDEBUG
     {
         // Do some check under DEBUG mode to ensure all block are written with column id properly set.
+        // In this way we can catch the case that upstream raft log contains problematic data written from TiDB.
         auto header = store->getHeader();
         bool ok = true;
         String name;
@@ -776,6 +786,11 @@ void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRang
 void StorageDeltaMerge::mergeDelta(const Context & context)
 {
     getAndMaybeInitStore()->mergeDeltaAll(context);
+}
+
+std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread)
+{
+    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key, run_thread);
 }
 
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)

@@ -29,14 +29,6 @@
 #include <unordered_map>
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int NOT_IMPLEMENTED;
-extern const int UNKNOWN_USER;
-extern const int WRONG_PASSWORD;
-extern const int REQUIRED_PASSWORD;
-extern const int IP_ADDRESS_NOT_ALLOWED;
-} // namespace ErrorCodes
 
 const Int8 VAR_SIZE = 0;
 
@@ -572,8 +564,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SecToTime, "cast"},
     //{tipb::ScalarFuncSig::TimeToSec, "cast"},
     //{tipb::ScalarFuncSig::TimestampAdd, "cast"},
-    //{tipb::ScalarFuncSig::ToDays, "cast"},
-    //{tipb::ScalarFuncSig::ToSeconds, "cast"},
+    {tipb::ScalarFuncSig::ToDays, "tidbToDays"},
+    {tipb::ScalarFuncSig::ToSeconds, "tidbToSeconds"},
     //{tipb::ScalarFuncSig::UTCTimeWithArg, "cast"},
     //{tipb::ScalarFuncSig::UTCTimestampWithoutArg, "cast"},
     //{tipb::ScalarFuncSig::Timestamp1Arg, "cast"},
@@ -607,7 +599,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateDatetimeString, "cast"},
     {tipb::ScalarFuncSig::SubDateDatetimeInt, "date_sub"},
 
-    //{tipb::ScalarFuncSig::FromDays, "cast"},
+    {tipb::ScalarFuncSig::FromDays, "tidbFromDays"},
     //{tipb::ScalarFuncSig::TimeFormat, "cast"},
     {tipb::ScalarFuncSig::TimestampDiff, "tidbTimestampDiff"},
 
@@ -715,7 +707,16 @@ void assertBlockSchema(
                     actual->getName()));
     }
 }
-
+/// used by test
+std::unordered_map<String, tipb::ScalarFuncSig> getFuncNameToSigMap()
+{
+    std::unordered_map<String, tipb::ScalarFuncSig> ret;
+    for (const auto & element : scalar_func_map)
+    {
+        ret[element.second] = element.first;
+    }
+    return ret;
+}
 } // namespace
 
 bool isScalarFunctionExpr(const tipb::Expr & expr)
@@ -1360,17 +1361,6 @@ bool hasUnsignedFlag(const tipb::FieldType & tp)
     return tp.flag() & TiDB::ColumnFlagUnsigned;
 }
 
-grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
-{
-    /// do not use switch statement because ErrorCodes::XXXX is not a compile time constant
-    if (error_code == ErrorCodes::NOT_IMPLEMENTED)
-        return grpc::StatusCode::UNIMPLEMENTED;
-    if (error_code == ErrorCodes::UNKNOWN_USER || error_code == ErrorCodes::WRONG_PASSWORD || error_code == ErrorCodes::REQUIRED_PASSWORD
-        || error_code == ErrorCodes::IP_ADDRESS_NOT_ALLOWED)
-        return grpc::StatusCode::UNAUTHENTICATED;
-    return grpc::StatusCode::INTERNAL;
-}
-
 void assertBlockSchema(
     const DataTypes & expected_types,
     const Block & block,
@@ -1438,6 +1428,13 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
         // todo support BigEndian encode for chunk encode type
         return tipb::EncodeType::TypeDefault;
     return encode_type;
+}
+tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
+{
+    static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
+    if (func_name_sig_map.find(name) == func_name_sig_map.end())
+        throw Exception(fmt::format("Unsupported function {}", name));
+    return func_name_sig_map[name];
 }
 
 } // namespace DB

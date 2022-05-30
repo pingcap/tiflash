@@ -65,6 +65,11 @@ protected:
     String dir_path;
 
     DB::Timestamp tso = 0;
+
+    String getPageStorageV3MetaPath(String & path)
+    {
+        return path + "/page/kvstore/wal/log_1_0";
+    }
 };
 
 static ::testing::AssertionResult PeerCompare(
@@ -251,7 +256,7 @@ try
         }
 
         // If we truncate page data file, exception will throw instead of droping last region.
-        auto meta_path = path + "/kvstore/page_1_0/meta"; // First page
+        auto meta_path = getPageStorageV3MetaPath(path); // First page
         Poco::File meta_file(meta_path);
         size_t size = meta_file.getSize();
         int rt = ::truncate(meta_path.c_str(), size - 1); // Remove last one byte
@@ -288,9 +293,13 @@ try
 {
     std::string path = dir_path + "/compatible_mode";
 
+    auto current_storage_run_mode = TiFlashTestEnv::getGlobalContext().getPageStorageRunMode();
     // Force to run in compatible mode for the default region persister
     FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
-    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode); });
+    SCOPE_EXIT(
+        { FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
+          TiFlashTestEnv::getGlobalContext().setPageStorageRunMode(current_storage_run_mode); });
+    TiFlashTestEnv::getGlobalContext().setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
     auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
                                           Strings{
                                               path,
@@ -309,7 +318,8 @@ try
         // Force to run in compatible mode
         FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
         persister.restore(nullptr, config);
-        ASSERT_EQ(persister.page_storage, nullptr);
+        ASSERT_EQ(persister.page_writer, nullptr);
+        ASSERT_EQ(persister.page_reader, nullptr);
         ASSERT_NE(persister.stable_page_storage, nullptr);
 
         for (size_t i = 0; i < region_num; ++i)
@@ -330,7 +340,8 @@ try
         RegionPersister persister(ctx, region_manager);
         // restore normally, should run in compatible mode.
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_EQ(persister.page_storage, nullptr);
+        ASSERT_EQ(persister.page_writer, nullptr);
+        ASSERT_EQ(persister.page_reader, nullptr);
         ASSERT_NE(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num; ++i)
@@ -349,7 +360,8 @@ try
         // Force to run in normal mode
         FailPointHelper::enableFailPoint(FailPoints::force_disable_region_persister_compatible_mode);
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_NE(persister.page_storage, nullptr);
+        ASSERT_NE(persister.page_writer, nullptr);
+        ASSERT_NE(persister.page_reader, nullptr);
         ASSERT_EQ(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num; ++i)
@@ -379,7 +391,8 @@ try
         RegionPersister persister(ctx, region_manager);
         // Restore normally, should run in normal mode.
         RegionMap new_regions = persister.restore(nullptr, config);
-        ASSERT_NE(persister.page_storage, nullptr);
+        ASSERT_NE(persister.page_writer, nullptr);
+        ASSERT_NE(persister.page_reader, nullptr);
         ASSERT_EQ(persister.stable_page_storage, nullptr);
         // Try to read
         for (size_t i = 0; i < region_num + region_num_under_nromal_mode; ++i)

@@ -308,7 +308,6 @@ class ImitativeEnv
 
         raft_config.ignore_databases = {"default", "system"};
         raft_config.engine = TiDB::StorageEngine::DT;
-        raft_config.disable_bg_flush = true;
         global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
         global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
