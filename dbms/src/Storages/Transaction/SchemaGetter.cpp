@@ -138,11 +138,12 @@ public:
 };
 
 AffectedOption::AffectedOption(Poco::JSON::Object::Ptr json)
+    : schema_id(0)
+    , table_id(0)
+    , old_table_id(0)
+    , old_schema_id(0)
 {
-    schema_id = json->getValue<Int64>("schema_id");
-    table_id = json->getValue<Int64>("table_id");
-    old_table_id = json->getValue<Int64>("old_table_id");
-    old_schema_id = json->getValue<Int64>("old_schema_id");
+    deserialize(json);
 }
 
 void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)
