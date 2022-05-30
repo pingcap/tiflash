@@ -51,7 +51,7 @@ static inline bool needCollation(const IColumn * column, const SortColumnDescrip
 {
     if (!description.collator)
         return false;
-    auto not_null_column = column->isColumnNullable() ? typeid_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get() : column;
+    const auto * not_null_column = column->isColumnNullable() ? typeid_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get() : column;
 
     if (not_null_column->isColumnConst())
         return false;
@@ -73,9 +73,9 @@ struct PartialSortingLess
 
     bool operator()(size_t a, size_t b) const
     {
-        for (ColumnsWithSortDescriptions::const_iterator it = columns.begin(); it != columns.end(); ++it)
+        for (const auto & column : columns)
         {
-            int res = it->second.direction * it->first->compareAt(a, b, *it->first, it->second.nulls_direction);
+            int res = column.second.direction * column.first->compareAt(a, b, *column.first, column.second.nulls_direction);
             if (res < 0)
                 return true;
             else if (res > 0)
@@ -95,15 +95,15 @@ struct PartialSortingLessWithCollation
 
     bool operator()(size_t a, size_t b) const
     {
-        for (ColumnsWithSortDescriptions::const_iterator it = columns.begin(); it != columns.end(); ++it)
+        for (const auto & column : columns)
         {
             int res;
-            if (needCollation(it->first, it->second))
-                res = it->first->compareAtWithCollation(a, b, *it->first, it->second.nulls_direction, *it->second.collator);
+            if (needCollation(column.first, column.second))
+                res = column.first->compareAt(a, b, *column.first, column.second.nulls_direction, *column.second.collator);
             else
-                res = it->first->compareAt(a, b, *it->first, it->second.nulls_direction);
+                res = column.first->compareAt(a, b, *column.first, column.second.nulls_direction);
 
-            res *= it->second.direction;
+            res *= column.second.direction;
             if (res < 0)
                 return true;
             else if (res > 0)
@@ -130,7 +130,7 @@ void sortBlock(Block & block, const SortDescription & description, size_t limit)
 
         IColumn::Permutation perm;
         if (needCollation(column, description[0]))
-            column->getPermutationWithCollation(*description[0].collator, reverse, limit, description[0].nulls_direction, perm);
+            column->getPermutation(*description[0].collator, reverse, limit, description[0].nulls_direction, perm);
         else
             column->getPermutation(reverse, limit, description[0].nulls_direction, perm);
 

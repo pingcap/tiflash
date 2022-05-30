@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include <Common/ClickHouseRevision.h>
+#include <Common/FmtUtils.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
@@ -273,6 +276,11 @@ void ParallelAggregatingBlockInputStream::execute()
             threads_data[0].aggregate_columns,
             threads_data[0].local_delta_memory,
             no_more_keys);
+}
+
+void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    buffer.fmtAppend(", max_threads: {}, final: {}", max_threads, final ? "true" : "false");
 }
 
 } // namespace DB

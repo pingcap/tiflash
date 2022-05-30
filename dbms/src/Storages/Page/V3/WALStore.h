@@ -20,6 +20,7 @@
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
+#include <Storages/Page/WALRecoveryMode.h>
 #include <common/types.h>
 
 #include <memory>
@@ -34,45 +35,7 @@ class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 namespace PS::V3
 {
-enum class WALRecoveryMode : UInt8
-{
-    // Original levelDB recovery
-    //
-    // We tolerate the last record in any log to be incomplete due to a crash
-    // while writing it. Zeroed bytes from preallocation are also tolerated in the
-    // trailing data of any log.
-    //
-    // Use case: Applications for which updates, once applied, must not be rolled
-    // back even after a crash-recovery. In this recovery mode, RocksDB guarantees
-    // this as long as `WritableFile::Append()` writes are durable. In case the
-    // user needs the guarantee in more situations (e.g., when
-    // `WritableFile::Append()` writes to page cache, but the user desires this
-    // guarantee in face of power-loss crash-recovery), RocksDB offers various
-    // mechanisms to additionally invoke `WritableFile::Sync()` in order to
-    // strengthen the guarantee.
-    //
-    // This differs from `kPointInTimeRecovery` in that, in case a corruption is
-    // detected during recovery, this mode will refuse to open the DB. Whereas,
-    // `kPointInTimeRecovery` will stop recovery just before the corruption since
-    // that is a valid point-in-time to which to recover.
-    TolerateCorruptedTailRecords = 0x00,
-    // Recover from clean shutdown
-    // We don't expect to find any corruption in the WAL
-    // Use case : This is ideal for unit tests and rare applications that
-    // can require high consistency guarantee
-    AbsoluteConsistency = 0x01,
-    // Recover to point-in-time consistency (default)
-    // We stop the WAL playback on discovering WAL inconsistency
-    // Use case : Ideal for systems that have disk controller cache like
-    // hard disk, SSD without super capacitor that store related data
-    PointInTimeRecovery = 0x02,
-    // Recovery after a disaster
-    // We ignore any corruption in the WAL and try to salvage as much data as
-    // possible
-    // Use case : Ideal for last ditch effort to recover data or systems that
-    // operate with low grade unrelated data
-    SkipAnyCorruptedRecords = 0x03,
-};
+
 
 class WALStore;
 using WALStorePtr = std::unique_ptr<WALStore>;
@@ -86,18 +49,40 @@ public:
     struct Config
     {
         SettingUInt64 roll_size = PAGE_META_ROLL_SIZE;
-        SettingUInt64 wal_recover_mode = 0;
         SettingUInt64 max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
+
+    private:
+        SettingUInt64 wal_recover_mode = 0;
+
+    public:
+        void setRecoverMode(UInt64 recover_mode)
+        {
+            if (unlikely(recover_mode != static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
+                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
+                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
+                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords)))
+            {
+                throw Exception("Unknow recover mode [num={}]", recover_mode);
+            }
+            wal_recover_mode = recover_mode;
+        }
+
+        WALRecoveryMode getRecoverMode()
+        {
+            return static_cast<WALRecoveryMode>(wal_recover_mode.get());
+        }
     };
 
     constexpr static const char * wal_folder_prefix = "/wal";
 
     static std::pair<WALStorePtr, WALStoreReaderPtr>
     create(
-        String storage_name,
+        String storage_name_,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator,
         WALStore::Config config);
+
+    WALStoreReaderPtr createReaderForFiles(const String & identifier, const LogFilenameSet & log_filenames, const ReadLimiterPtr & read_limiter);
 
     void apply(PageEntriesEdit & edit, const PageVersion & version, const WriteLimiterPtr & write_limiter = nullptr);
     void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
@@ -105,11 +90,15 @@ public:
     struct FilesSnapshot
     {
         Format::LogNumberType current_writting_log_num;
+        // The log files to generate snapshot from. Sorted by <log number, log level>.
+        // If the WAL log file is not inited, it is an empty set.
         LogFilenameSet persisted_log_files;
 
-        bool needSave(const size_t & max_size) const
+        // Note that persisted_log_files should not be empty for needSave() == true,
+        // cause we get the largest log num from persisted_log_files as the new
+        // file name.
+        bool needSave(const size_t max_size) const
         {
-            // TODO: Make it configurable and check the reasonable of this number
             return persisted_log_files.size() > max_size;
         }
     };
@@ -120,6 +109,8 @@ public:
         FilesSnapshot && files_snap,
         PageEntriesEdit && directory_snap,
         const WriteLimiterPtr & write_limiter = nullptr);
+
+    const String & name() { return storage_name; }
 
 private:
     WALStore(
@@ -134,6 +125,8 @@ private:
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
         bool manual_flush);
 
+private:
+    const String storage_name;
     PSDiskDelegatorPtr delegator;
     FileProviderPtr provider;
     mutable std::mutex log_file_mutex;

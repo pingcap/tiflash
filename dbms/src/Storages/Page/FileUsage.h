@@ -12,22 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FmtUtils.h>
-#include <DataStreams/PartialSortingBlockInputStream.h>
-#include <Interpreters/sortBlock.h>
+#pragma once
+#include <stdint.h>
 
+#include <cstddef>
 
 namespace DB
 {
-Block PartialSortingBlockInputStream::readImpl()
+struct FileUsageStatistics
 {
-    Block res = children.back()->read();
-    sortBlock(res, description, limit);
-    return res;
-}
+    size_t total_disk_size = 0;
+    size_t total_valid_size = 0;
+    size_t total_file_num = 0;
+};
 
-void PartialSortingBlockInputStream::appendInfo(FmtBuffer & buffer) const
-{
-    buffer.fmtAppend(": limit = {}", limit);
-}
 } // namespace DB

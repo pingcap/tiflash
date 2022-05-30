@@ -18,6 +18,7 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V1/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
@@ -377,6 +378,11 @@ bool RegionPersister::gc()
     }
     else
         return stable_page_storage->gc();
+}
+
+FileUsageStatistics RegionPersister::getFileUsageStatistics() const
+{
+    return page_reader->getFileUsageStatistics();
 }
 
 } // namespace DB

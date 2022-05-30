@@ -17,6 +17,7 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <fmt/core.h>
 
 /// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
 #define APPROX_STRING_SIZE 64
@@ -80,7 +81,7 @@ void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t len
     if (length == 0)
         return;
 
-    const ColumnString & src_concrete = static_cast<const ColumnString &>(src);
+    const auto & src_concrete = static_cast<const ColumnString &>(src);
 
     if (start + length > src_concrete.offsets.size())
         throw Exception("Parameter out of bound in IColumnString::insertRangeFrom method.",
@@ -310,7 +311,7 @@ void ColumnString::getExtremes(Field & min, Field & max) const
 
 int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn & rhs_, const ICollator & collator) const
 {
-    const ColumnString & rhs = static_cast<const ColumnString &>(rhs_);
+    const auto & rhs = static_cast<const ColumnString &>(rhs_);
 
     return collator.compare(
         reinterpret_cast<const char *>(&chars[offsetAt(n)]),
@@ -374,7 +375,7 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
     auto s = offsets.size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) + ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
     const UInt8 * pos = chars.data();
     UInt32 * hash_data = hash.getData().data();

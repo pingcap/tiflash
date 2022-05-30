@@ -19,10 +19,12 @@
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Config.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/Snapshot.h>
+#include <Storages/Page/WALRecoveryMode.h>
 #include <Storages/Page/WriteBatch.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -140,7 +142,7 @@ public:
         SettingUInt64 blob_block_alignment_bytes = 0;
 
         SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
-        SettingUInt64 wal_recover_mode = 0;
+        SettingUInt64 wal_recover_mode = static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords);
         SettingUInt64 wal_max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
 
         void reload(const Config & rhs)
@@ -249,6 +251,12 @@ public:
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
+
+    virtual FileUsageStatistics getFileUsageStatistics() const
+    {
+        // return all zeros by default
+        return FileUsageStatistics{};
+    }
 
     virtual size_t getNumberOfPages() = 0;
 
@@ -379,6 +387,8 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const;
 
+    FileUsageStatistics getFileUsageStatistics() const;
+
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
 private:
@@ -406,7 +416,9 @@ public:
     // Only used for DATA transform data
     void writeIntoV3(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     void writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr write_limiter) const;
 
     // A wrap of getSettings only used for `RegionPersister::gc`

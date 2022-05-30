@@ -52,7 +52,7 @@ StorageJoin::StorageJoin(
     /// NOTE StorageJoin doesn't use join_use_nulls setting.
 
     join = std::make_shared<Join>(key_names, key_names, false /* use_nulls */, SizeLimits(), kind, strictness, /*req_id=*/"");
-    join->setSampleBlock(getSampleBlock().sortColumns());
+    join->init(getSampleBlock().sortColumns());
     restore();
 }
 
@@ -87,7 +87,7 @@ void registerStorageJoin(StorageFactory & factory)
                 "Storage Join requires at least 3 parameters: Join(ANY|ALL, LEFT|INNER, keys...).",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        const ASTIdentifier * strictness_id = typeid_cast<const ASTIdentifier *>(engine_args[0].get());
+        const auto * strictness_id = typeid_cast<const ASTIdentifier *>(engine_args[0].get());
         if (!strictness_id)
             throw Exception("First parameter of storage Join must be ANY or ALL (without quotes).", ErrorCodes::BAD_ARGUMENTS);
 
@@ -100,7 +100,7 @@ void registerStorageJoin(StorageFactory & factory)
         else
             throw Exception("First parameter of storage Join must be ANY or ALL (without quotes).", ErrorCodes::BAD_ARGUMENTS);
 
-        const ASTIdentifier * kind_id = typeid_cast<const ASTIdentifier *>(engine_args[1].get());
+        const auto * kind_id = typeid_cast<const ASTIdentifier *>(engine_args[1].get());
         if (!kind_id)
             throw Exception("Second parameter of storage Join must be LEFT or INNER (without quotes).", ErrorCodes::BAD_ARGUMENTS);
 
@@ -121,7 +121,7 @@ void registerStorageJoin(StorageFactory & factory)
         key_names.reserve(engine_args.size() - 2);
         for (size_t i = 2, size = engine_args.size(); i < size; ++i)
         {
-            const ASTIdentifier * key = typeid_cast<const ASTIdentifier *>(engine_args[i].get());
+            const auto * key = typeid_cast<const ASTIdentifier *>(engine_args[i].get());
             if (!key)
                 throw Exception("Parameter №" + toString(i + 1) + " of storage Join don't look like column name.", ErrorCodes::BAD_ARGUMENTS);
 
