@@ -38,8 +38,6 @@ extern const char pause_before_server_merge_one_delta[];
 
 namespace tests
 {
-
-
 class BasicManualCompactTest
     : public DB::base::TiFlashStorageTestBasic
     , public testing::WithParamInterface<DM::tests::DMTestEnv::PkType>
@@ -83,7 +81,7 @@ public:
         storage = StorageDeltaMerge::create("TiFlash",
                                             "default" /* db_name */,
                                             "test_table" /* table_name */,
-                                            std::ref(table_info),
+                                            table_info,
                                             ColumnsDescription{columns},
                                             astptr,
                                             0,

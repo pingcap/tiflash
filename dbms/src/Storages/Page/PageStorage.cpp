@@ -66,6 +66,8 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
+    virtual FileUsageStatistics getFileUsageStatistics() const = 0;
+
     virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const = 0;
 };
 
@@ -135,6 +137,11 @@ public:
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
     {
         storage->traverse(acceptor, nullptr);
+    }
+
+    FileUsageStatistics getFileUsageStatistics() const override
+    {
+        return storage->getFileUsageStatistics();
     }
 
 private:
@@ -294,6 +301,11 @@ public:
         return statistics_total;
     }
 
+    FileUsageStatistics getFileUsageStatistics() const override
+    {
+        return storage_v3->getFileUsageStatistics();
+    }
+
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const override
     {
         // Used by RegionPersister::restore
@@ -424,6 +436,12 @@ SnapshotsStatistics PageReader::getSnapshotsStat() const
     return impl->getSnapshotsStat();
 }
 
+
+FileUsageStatistics PageReader::getFileUsageStatistics() const
+{
+    return impl->getFileUsageStatistics();
+}
+
 void PageReader::traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const
 {
     impl->traverse(acceptor, only_v2, only_v3);
@@ -475,6 +493,8 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
     // We need hold mem from V2 pages after write.
     std::list<MemHolder> mem_holders;
 
+    std::set<PageId> page_ids_before_ref;
+
     for (const auto & write : write_batch.getWrites())
     {
         switch (write.type)
@@ -483,6 +503,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::PUT_EXTERNAL:
         {
+            page_ids_before_ref.insert(write.page_id);
             break;
         }
         // Both need del in v2 and v3
@@ -493,57 +514,84 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         }
         case WriteBatch::WriteType::REF:
         {
+            // 1. Try to resolve normal page id
             PageId resolved_page_id = storage_v3->getNormalPageId(ns_id,
                                                                   write.ori_page_id,
                                                                   /*snapshot*/ nullptr,
                                                                   false);
-            // If the normal id is not found in v3, read from v2 and create a new put + ref
-            if (resolved_page_id == INVALID_PAGE_ID)
+
+            // If the origin id is found in V3, then just apply the ref to v3
+            if (resolved_page_id != INVALID_PAGE_ID)
             {
-                const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
-                if (entry_for_put.isValid())
-                {
-                    auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
-
-                    // Keep the mem hold, no need create new one.
-                    mem_holders.emplace_back(page_for_put.mem_holder);
-                    assert(entry_for_put.size == page_for_put.data.size());
-
-                    // Page with fields
-                    if (!entry_for_put.field_offsets.empty())
-                    {
-                        wb_for_put_v3.putPage(write.ori_page_id, //
-                                              entry_for_put.tag,
-                                              std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
-                                              page_for_put.data.size(),
-                                              Page::fieldOffsetsToSizes(entry_for_put.field_offsets, entry_for_put.size));
-                    }
-                    else
-                    { // Normal page with fields
-                        wb_for_put_v3.putPage(write.ori_page_id, //
-                                              entry_for_put.tag,
-                                              std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(),
-                                                                                     page_for_put.data.size()),
-                                              page_for_put.data.size());
-                    }
-
-                    LOG_FMT_INFO(
-                        Logger::get("PageWriter"),
-                        "Can't find the origin page in v3, migrate a new being ref page into V3 [page_id={}] [origin_id={}] [field_offsets={}]",
-                        write.page_id,
-                        write.ori_page_id,
-                        entry_for_put.field_offsets.size());
-                }
-                else
-                {
-                    throw Exception(fmt::format("Can't find origin entry in V2 and V3, [ns_id={}, ori_page_id={}]",
-                                                ns_id,
-                                                write.ori_page_id),
-                                    ErrorCodes::LOGICAL_ERROR);
-                }
+                break;
             }
-            // else V3 found the origin one.
-            // Then do nothing.
+
+            // 2. Check ori_page_id in current writebatch
+            if (page_ids_before_ref.count(write.ori_page_id) > 0)
+            {
+                break;
+            }
+
+            // Else the normal id is not found in v3, read from v2 and create a new put + ref
+
+            // 3. Check ori_page_id in V2
+            const auto & entry_for_put = storage_v2->getEntry(ns_id, write.ori_page_id, /*snapshot*/ {});
+
+            // If we can't find origin id in V3, must exist in V2.
+            if (!entry_for_put.isValid())
+            {
+                throw Exception(fmt::format("Can't find origin entry in V2 and V3, [ns_id={}, ori_page_id={}]",
+                                            ns_id,
+                                            write.ori_page_id),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+
+            if (entry_for_put.size == 0)
+            {
+                // If the origin page size is 0.
+                // That means origin page in V2 is a external page id.
+                // Should not run into here after we introduce `StoragePool::forceTransformDataV2toV3`
+                throw Exception(fmt::format(
+                                    "Can't find the origin page in v3. Origin page in v2 size is 0, meaning it's a external id."
+                                    "Migrate a new being ref page into V3 [page_id={}] [origin_id={}]",
+                                    write.page_id,
+                                    write.ori_page_id,
+                                    entry_for_put.field_offsets.size()),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+
+            // Else find out origin page is a normal page in V2
+            auto page_for_put = storage_v2->read(ns_id, write.ori_page_id);
+
+            // Keep the mem holder for later write
+            mem_holders.emplace_back(page_for_put.mem_holder);
+            assert(entry_for_put.size == page_for_put.data.size());
+
+            // Page with fields
+            if (!entry_for_put.field_offsets.empty())
+            {
+                wb_for_put_v3.putPage(write.ori_page_id, //
+                                      entry_for_put.tag,
+                                      std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(), page_for_put.data.size()),
+                                      page_for_put.data.size(),
+                                      Page::fieldOffsetsToSizes(entry_for_put.field_offsets, entry_for_put.size));
+            }
+            else
+            { // Normal page without fields
+                wb_for_put_v3.putPage(write.ori_page_id, //
+                                      entry_for_put.tag,
+                                      std::make_shared<ReadBufferFromMemory>(page_for_put.data.begin(),
+                                                                             page_for_put.data.size()),
+                                      page_for_put.data.size());
+            }
+
+            LOG_FMT_INFO(
+                Logger::get("PageWriter"),
+                "Can't find the origin page in v3, migrate a new being ref page into V3 [page_id={}] [origin_id={}] [field_offsets={}]",
+                write.page_id,
+                write.ori_page_id,
+                entry_for_put.field_offsets.size());
+
             break;
         }
         default:

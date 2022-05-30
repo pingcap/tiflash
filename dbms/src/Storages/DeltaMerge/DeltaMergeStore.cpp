@@ -244,10 +244,19 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
         if (const auto first_segment_entry = storage_pool->metaReader()->getPageEntry(DELTA_MERGE_FIRST_SEGMENT_ID);
             !first_segment_entry.isValid())
         {
-            // Create the first segment.
             auto segment_id = storage_pool->newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
-                throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
+            {
+                if (page_storage_run_mode == PageStorageRunMode::ONLY_V2)
+                {
+                    throw Exception(fmt::format("The first segment id should be {}", DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
+                }
+
+                // In ONLY_V3 or MIX_MODE, If create a new DeltaMergeStore
+                // Should used fixed DELTA_MERGE_FIRST_SEGMENT_ID to create first segment
+                segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+            }
+
             auto first_segment
                 = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
@@ -314,8 +323,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                 if (valid_ids.count(id))
                     continue;
 
-                // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, DMFile::ReadMetaMode::none());
+                // Note that page_id is useless here.
+                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
                 if (dmfile->canGC())
                 {
                     delegate.removeDTFile(dmfile->fileId());
@@ -820,14 +829,14 @@ void DeltaMergeStore::ingestFiles(
                 /// Generate DMFile instance with a new ref_id pointed to the file_id.
                 auto file_id = file->fileId();
                 const auto & file_parent_path = file->parentPath();
-                auto ref_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+                auto page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-                auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path, DMFile::ReadMetaMode::all());
+                auto ref_file = DMFile::restore(file_provider, file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
                 auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
                 if (column_file->getRows() != 0)
                 {
                     column_files.emplace_back(std::move(column_file));
-                    wbs.data.putRefPage(ref_id, file_id);
+                    wbs.data.putRefPage(page_id, file->pageId());
                 }
             }
 
@@ -1971,6 +1980,29 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         right->info(),
         dm_context.min_version);
 
+    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
+    /// And only saved data in this segment will be filtered by the segment range in the merge process,
+    /// unsaved data will be directly copied to the new segment.
+    /// So we flush here to make sure that all potential data left by previous split operation is saved.
+    while (!left->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (left->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return;
+        }
+    }
+    while (!right->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (right->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return;
+        }
+    }
+
     SegmentSnapshotPtr left_snap;
     SegmentSnapshotPtr right_snap;
     ColumnDefinesPtr schema_snap;
@@ -2343,7 +2375,7 @@ void DeltaMergeStore::restoreStableFiles()
     {
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
         {
-            auto dmfile = DMFile::restore(file_provider, file_id, /* ref_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
+            auto dmfile = DMFile::restore(file_provider, file_id, /* page_id= */ 0, root_path, DMFile::ReadMetaMode::diskSizeOnly());
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }

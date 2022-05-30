@@ -50,12 +50,17 @@ public:
     {
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
+        dir = restoreFromDisk();
+    }
 
+    static PageDirectoryPtr restoreFromDisk()
+    {
+        auto path = getTemporaryPath();
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        dir = factory.create("PageDirectoryTest", provider, delegator, WALStore::Config());
+        return factory.create("PageDirectoryTest", provider, delegator, WALStore::Config());
     }
 
 protected:
@@ -1286,6 +1291,60 @@ class PageDirectoryGCTest : public PageDirectoryTest
         dir->apply(std::move(edit)); \
     }
 
+TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
+{
+    PageId page_id0 = 50;
+    PageId page_id1 = 51;
+    PageId page_id2 = 52;
+    PageId page_id3 = 53;
+
+    PageEntryV3 last_entry_for_0;
+    constexpr size_t num_edits_test = 50000;
+    for (size_t i = 0; i < num_edits_test; ++i)
+    {
+        {
+            INSERT_ENTRY(page_id0, i);
+            last_entry_for_0 = entry_vi;
+        }
+        {
+            INSERT_ENTRY(page_id1, i);
+        }
+    }
+    INSERT_DELETE(page_id1);
+    EXPECT_TRUE(dir->tryDumpSnapshot());
+    dir.reset();
+
+    dir = restoreFromDisk();
+    {
+        auto snap = dir->createSnapshot();
+        ASSERT_SAME_ENTRY(dir->get(page_id0, snap).second, last_entry_for_0);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
+    }
+
+    PageEntryV3 last_entry_for_2;
+    for (size_t i = 0; i < num_edits_test; ++i)
+    {
+        {
+            INSERT_ENTRY(page_id2, i);
+            last_entry_for_2 = entry_vi;
+        }
+        {
+            INSERT_ENTRY(page_id3, i);
+        }
+    }
+    INSERT_DELETE(page_id3);
+    EXPECT_TRUE(dir->tryDumpSnapshot());
+
+    dir = restoreFromDisk();
+    {
+        auto snap = dir->createSnapshot();
+        ASSERT_SAME_ENTRY(dir->get(page_id0, snap).second, last_entry_for_0);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
+        ASSERT_SAME_ENTRY(dir->get(page_id2, snap).second, last_entry_for_2);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id3, snap);
+    }
+}
+
 TEST_F(PageDirectoryGCTest, GCPushForward)
 try
 {
@@ -1931,7 +1990,6 @@ try
 
     auto s0 = dir->createSnapshot();
     auto edit = dir->dumpSnapshotToEdit(s0);
-    edit.size();
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
@@ -2214,9 +2272,12 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, RestoreWithDuplicateID)
+TEST_F(PageDirectoryGCTest, CleanAfterDecreaseRef)
 try
 {
+    PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
         auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
@@ -2227,286 +2288,17 @@ try
         return d;
     };
 
-    const PageId target_id = 100;
-    // ========= 1 =======//
-    // Reuse same id: PUT_EXT/DEL/REF
     {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.putExternal(target_id);
-        edit.del(target_id);
-        // restart and reuse id=100 as ref to replace put_ext
-        edit.ref(target_id, 50);
-
+        edit.put(50, entry_50_1);
+        edit.put(50, entry_50_2);
+        edit.ref(51, 50);
+        edit.del(50);
+        edit.del(51);
         auto restored_dir = restore_from_edit(edit);
-        auto snap = restored_dir->createSnapshot();
-        ASSERT_EQ(restored_dir->getNormalPageId(target_id, snap).low, 50);
+        auto page_ids = restored_dir->getAllPageIds();
+        ASSERT_EQ(page_ids.size(), 0);
     }
-    // Reuse same id: PUT_EXT/DEL/PUT
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntryV3 entry_100{.file_id = 100, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.putExternal(target_id);
-        edit.del(target_id);
-        // restart and reuse id=100 as put to replace put_ext
-        edit.put(target_id, entry_100);
-
-        auto restored_dir = restore_from_edit(edit);
-        auto snap = restored_dir->createSnapshot();
-        ASSERT_SAME_ENTRY(restored_dir->get(target_id, snap).second, entry_100);
-    }
-
-    // ========= 1-invalid =======//
-    // Reuse same id: PUT_EXT/BEING REF/DEL/REF
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.putExternal(target_id);
-        edit.ref(101, target_id);
-        edit.del(target_id);
-        // restart and reuse id=100 as ref. Should not happen because 101 still ref to 100
-        edit.ref(target_id, 50);
-
-        ASSERT_THROW(restore_from_edit(edit);, DB::Exception);
-    }
-    // Reuse same id: PUT_EXT/BEING REF/DEL/PUT
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntryV3 entry_100{.file_id = 100, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.putExternal(target_id);
-        edit.ref(101, target_id);
-        edit.del(target_id);
-        // restart and reuse id=100 as put. Should not happen because 101 still ref to 100
-        edit.put(target_id, entry_100);
-
-        ASSERT_THROW(restore_from_edit(edit);, DB::Exception);
-    }
-
-    // ========= 2 =======//
-    // Reuse same id: PUT/DEL/REF
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.put(target_id, entry_50);
-        edit.del(target_id);
-        // restart and reuse id=100 as ref to replace put
-        edit.ref(target_id, 50);
-
-        auto restored_dir = restore_from_edit(edit);
-        auto snap = restored_dir->createSnapshot();
-        ASSERT_EQ(restored_dir->getNormalPageId(target_id, snap).low, 50);
-    }
-    // Reuse same id: PUT/DEL/PUT_EXT
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.put(target_id, entry_50);
-        edit.del(target_id);
-        // restart and reuse id=100 as external to replace put
-        edit.putExternal(target_id);
-
-        auto restored_dir = restore_from_edit(edit);
-        auto snap = restored_dir->createSnapshot();
-        auto ext_ids = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        ASSERT_EQ(ext_ids.size(), 1);
-        ASSERT_EQ(*ext_ids.begin(), target_id);
-    }
-
-    // ========= 2-invalid =======//
-    // Reuse same id: PUT/BEING REF/DEL/REF
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.put(target_id, entry_50);
-        edit.ref(101, target_id);
-        edit.del(target_id);
-        // restart and reuse id=100 as ref to replace put
-        edit.ref(target_id, 50);
-
-        ASSERT_THROW(restore_from_edit(edit);, DB::Exception);
-    }
-    // Reuse same id: PUT/BEING REF/DEL/PUT_EXT
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.put(target_id, entry_50);
-        edit.ref(101, target_id);
-        edit.del(target_id);
-        // restart and reuse id=100 as external to replace put
-        edit.putExternal(target_id);
-
-        ASSERT_THROW(restore_from_edit(edit);, DB::Exception);
-    }
-
-    // ========= 3 =======//
-    // Reuse same id: REF/DEL/PUT
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntryV3 entry_100{.file_id = 100, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.ref(target_id, 50);
-        edit.del(target_id);
-        // restart and reuse id=100 as put to replace ref
-        edit.put(target_id, entry_100);
-
-        auto restored_dir = restore_from_edit(edit);
-        auto snap = restored_dir->createSnapshot();
-        ASSERT_SAME_ENTRY(restored_dir->get(target_id, snap).second, entry_100);
-    }
-    // Reuse same id: REF/DEL/PUT_EXT
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.ref(target_id, 50);
-        edit.del(target_id);
-        // restart and reuse id=100 as external to replace ref
-        edit.putExternal(target_id);
-
-        auto restored_dir = restore_from_edit(edit);
-        auto snap = restored_dir->createSnapshot();
-        auto ext_ids = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        ASSERT_EQ(ext_ids.size(), 1);
-        ASSERT_EQ(*ext_ids.begin(), target_id);
-    }
-    // Reuse same id: REF/DEL/REF another id
-    {
-        PageEntryV3 entry_50{.file_id = 1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntryV3 entry_51{.file_id = 2, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        PageEntriesEdit edit;
-        edit.put(50, entry_50);
-        edit.put(51, entry_51);
-        edit.ref(target_id, 50);
-        edit.del(target_id);
-        // restart and reuse id=target_id as external to replace put
-        edit.ref(target_id, 51);
-
-        auto restored_dir = restore_from_edit(edit);
-        auto snap = restored_dir->createSnapshot();
-        ASSERT_EQ(restored_dir->getNormalPageId(target_id, snap).low, 51);
-    }
-}
-CATCH
-
-TEST_F(PageDirectoryTest, GetMaxId)
-try
-{
-    NamespaceId small = 20;
-    NamespaceId medium = 50;
-    NamespaceId large = 100;
-    ASSERT_EQ(dir->getMaxId(small), 0);
-    ASSERT_EQ(dir->getMaxId(medium), 0);
-    ASSERT_EQ(dir->getMaxId(large), 0);
-
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    {
-        PageEntriesEdit edit;
-        edit.put(buildV3Id(small, 1), entry1);
-        edit.put(buildV3Id(large, 2), entry2);
-        dir->apply(std::move(edit));
-        ASSERT_EQ(dir->getMaxId(small), 1);
-        ASSERT_EQ(dir->getMaxId(medium), 0);
-        ASSERT_EQ(dir->getMaxId(large), 2);
-    }
-
-    PageEntryV3 entry3{.file_id = 3, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry4{.file_id = 4, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    {
-        PageEntriesEdit edit;
-        edit.put(buildV3Id(medium, 300), entry1);
-        edit.put(buildV3Id(medium, 320), entry2);
-        dir->apply(std::move(edit));
-        ASSERT_EQ(dir->getMaxId(small), 1);
-        ASSERT_EQ(dir->getMaxId(medium), 320);
-        ASSERT_EQ(dir->getMaxId(large), 2);
-    }
-
-    {
-        PageEntriesEdit edit;
-        edit.del(buildV3Id(medium, 320));
-        dir->apply(std::move(edit));
-        ASSERT_EQ(dir->getMaxId(medium), 300);
-    }
-
-    {
-        PageEntriesEdit edit;
-        edit.del(buildV3Id(medium, 300));
-        dir->apply(std::move(edit));
-        ASSERT_EQ(dir->getMaxId(medium), 0);
-    }
-}
-CATCH
-
-TEST_F(PageDirectoryTest, GetMaxIdAfterDelete)
-try
-{
-    /// test for deleting put
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    {
-        PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
-        dir->apply(std::move(edit));
-    }
-
-    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 2);
-
-    {
-        PageEntriesEdit edit;
-        edit.del(2);
-        dir->apply(std::move(edit));
-    }
-    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 1);
-
-    {
-        PageEntriesEdit edit;
-        edit.del(1);
-        dir->apply(std::move(edit));
-    }
-    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
-
-    dir->gcInMemEntries();
-    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
-
-    /// test for deleting put_ext/ref
-
-    {
-        PageEntriesEdit edit;
-        edit.putExternal(1);
-        edit.ref(2, 1);
-        dir->apply(std::move(edit));
-    }
-
-    {
-        PageEntriesEdit edit;
-        edit.del(1);
-        dir->apply(std::move(edit));
-    }
-    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 2);
-    dir->gcInMemEntries();
-    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 2);
-
-    {
-        PageEntriesEdit edit;
-        edit.del(2);
-        dir->apply(std::move(edit));
-    }
-    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
-    dir->gcInMemEntries();
-    ASSERT_EQ(dir->getMaxId(TEST_NAMESPACE_ID), 0);
 }
 CATCH
 

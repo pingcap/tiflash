@@ -28,6 +28,7 @@ struct Settings;
 class Context;
 class StoragePathPool;
 class StableDiskDelegator;
+class AsynchronousMetrics;
 
 namespace DM
 {
@@ -50,6 +51,7 @@ public:
     void restore();
 
     friend class StoragePool;
+    friend class ::DB::AsynchronousMetrics;
 
     // GC immediately
     // Only used on dbgFuncMisc
@@ -149,17 +151,25 @@ public:
     // Caller must cancel gc tasks before drop
     void drop();
 
-    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
+    // For function `newLogPageId`,`newMetaPageId`,`newDataPageIdForDTFile`:
+    // For PageStorageRunMode::ONLY_V2, every table have its own three PageStorage (meta/data/log).
+    // So these functions return the Page id starts from 1 and is continuously incremented.
+    // For PageStorageRunMode::ONLY_V3/MIX_MODE, PageStorage is global(distinguish by ns_id for different table).
+    // In order to avoid Page id from being reused (and cause troubles while restoring WAL from disk),
+    // StoragePool will assign the max_log_page_id/max_meta_page_id/max_data_page_id by the global max id
+    // regardless of ns_id while being restored. This causes the ids in a table to not be continuously incremented.
 
-    PageId maxMetaPageId() { return max_meta_page_id; }
+    PageId newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who);
     PageId newLogPageId() { return ++max_log_page_id; }
     PageId newMetaPageId() { return ++max_meta_page_id; }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
     bool doV2Gc(const Settings & settings);
 
     void forceTransformMetaV2toV3();
+    void forceTransformDataV2toV3();
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

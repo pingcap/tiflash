@@ -21,16 +21,17 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemDatabases.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 
 
 namespace DB
 {
 
 
-StorageSystemDatabases::StorageSystemDatabases(const std::string & name_) : name(name_)
+StorageSystemDatabases::StorageSystemDatabases(const std::string & name_)
+    : name(name_)
 {
     setColumns(ColumnsDescription({
         {"name", std::make_shared<DataTypeString>()},
@@ -45,11 +46,11 @@ StorageSystemDatabases::StorageSystemDatabases(const std::string & name_) : name
 
 
 BlockInputStreams StorageSystemDatabases::read(const Names & column_names,
-    const SelectQueryInfo &,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+                                               const SelectQueryInfo &,
+                                               const Context & context,
+                                               QueryProcessingStage::Enum & processed_stage,
+                                               const size_t /*max_block_size*/,
+                                               const unsigned /*num_streams*/)
 {
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
@@ -79,7 +80,7 @@ BlockInputStreams StorageSystemDatabases::read(const Names & column_names,
         res_columns[j++]->insert(Int64(database_id));
 
         res_columns[j++]->insert(database.second->getEngineName());
-        res_columns[j++]->insert((UInt64)tombstone);
+        res_columns[j++]->insert(static_cast<UInt64>(tombstone));
         res_columns[j++]->insert(database.second->getDataPath());
         res_columns[j++]->insert(database.second->getMetadataPath());
     }
