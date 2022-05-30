@@ -37,16 +37,16 @@ try
         executeFunction(
             "substringUTF8",
             createColumn<Nullable<String>>({"www.pingcap.com", "ww.pingcap.com", "w.pingcap.com", ".pingcap.com"}),
-            createConstColumn<Nullable<Int64>>(4, 1),
-            createConstColumn<Nullable<Int64>>(4, 4)));
+            createConstColumn<Int64>(4, 1),
+            createConstColumn<Int64>(4, 4)));
     // const, const, const
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(1, "www."),
+        createConstColumn<String>(1, "www."),
         executeFunction(
             "substringUTF8",
-            createConstColumn<Nullable<String>>(1, "www.pingcap.com"),
-            createConstColumn<Nullable<Int64>>(1, 1),
-            createConstColumn<Nullable<Int64>>(1, 4)));
+            createConstColumn<String>(1, "www.pingcap.com"),
+            createConstColumn<Int64>(1, 1),
+            createConstColumn<Int64>(1, 4)));
     // Test Null
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({{}, "www."}),
@@ -54,8 +54,8 @@ try
             "substringUTF8",
             createColumn<Nullable<String>>(
                 {{}, "www.pingcap.com"}),
-            createConstColumn<Nullable<Int64>>(2, 1),
-            createConstColumn<Nullable<Int64>>(2, 4)));
+            createConstColumn<Int64>(2, 1),
+            createConstColumn<Int64>(2, 4)));
 }
 CATCH
 

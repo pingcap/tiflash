@@ -61,12 +61,12 @@ try
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     // ColumnConst(non-null)
-    data_col_ptr = createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(
+    data_col_ptr = createConstColumn<DataTypeMyDateTime::FieldType>(
                        4,
                        MyDateTime(2020, 10, 10, 0, 0, 0, 0).toPackedUInt())
                        .column;
     input_col = ColumnWithTypeAndName(data_col_ptr, data_type_ptr, "input");
-    output_col = createConstColumn<Nullable<UInt8>>(4, 4);
+    output_col = createConstColumn<UInt8>(4, 4);
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     // ColumnConst(null)

@@ -34,19 +34,15 @@ class TestIfNull : public DB::tests::FunctionTest
 protected:
     ColumnWithTypeAndName executeIfNull(const ColumnWithTypeAndName & first_column, const ColumnWithTypeAndName & second_column)
     {
-        auto is_null_column = executeFunction("isNull", first_column);
-        auto not_null_column = executeFunction("assumeNotNull", first_column);
-        return executeFunction("multiIf", is_null_column, second_column, not_null_column);
+        return executeFunction("ifNull", first_column, second_column);
     }
     DataTypePtr getReturnTypeForIfNull(const DataTypePtr & type_1, const DataTypePtr & type_2)
     {
-        const static auto cond_type = std::make_shared<DataTypeUInt8>();
         ColumnsWithTypeAndName input_columns{
-            {nullptr, cond_type, ""},
-            {nullptr, removeNullable(type_1), ""},
+            {nullptr, type_1, ""},
             {nullptr, type_2, ""},
         };
-        return getReturnTypeForFunction(context, "multiIf", input_columns);
+        return getReturnTypeForFunction(context, "ifNull", input_columns);
     }
     template <class IntegerType>
     ColumnWithTypeAndName createIntegerColumnInternal(const std::vector<Int64> & signed_input, const std::vector<UInt64> unsigned_input, const std::vector<Int32> & null_map)
@@ -115,14 +111,14 @@ try
         /// constant
         createConstColumn<Int64>(5, expr1_data[0]),
         /// nullable(not null constant)
-        createConstColumn<Nullable<Int64>>(5, expr1_data[0]),
+        //createConstColumn<Nullable<Int64>>(5, expr1_data[0]),
         /// nullable(null constant)
         createConstColumn<Nullable<Int64>>(5, {}),
         /// onlyNull constant
         createConstColumn<Nullable<Null>>(5, {})};
     ColumnsWithTypeAndName second_const_arguments = {
         createConstColumn<Int64>(5, expr2_data[0]),
-        createConstColumn<Nullable<Int64>>(5, expr2_data[0]),
+        //createConstColumn<Nullable<Int64>>(5, expr2_data[0]),
         createConstColumn<Nullable<Int64>>(5, {}),
         createConstColumn<Nullable<Null>>(5, {}),
     };

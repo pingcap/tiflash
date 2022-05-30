@@ -142,8 +142,8 @@ try
 
     // const non-null column
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(1, "0.0.0.1"),
-        executeFunction(func_name, createConstColumn<Nullable<UInt32>>(1, 1)));
+        createConstColumn<String>(1, "0.0.0.1"),
+        executeFunction(func_name, createConstColumn<UInt32>(1, 1)));
 
     // normal cases
     ASSERT_COLUMN_EQ(
