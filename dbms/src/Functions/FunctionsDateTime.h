@@ -3450,7 +3450,6 @@ using FunctionToTiDBDayOfYear = FunctionMyDateOrMyDateTimeToSomething<DataTypeUI
 using FunctionToTiDBWeekOfYear = FunctionMyDateOrMyDateTimeToSomething<DataTypeUInt16, TiDBWeekOfYearTransformerImpl, return_nullable>;
 using FunctionToTiDBToSeconds = FunctionMyDateOrMyDateTimeToSomething<DataTypeUInt64, TiDBToSecondsTransformerImpl, return_nullable>;
 using FunctionToTiDBToDays = FunctionMyDateOrMyDateTimeToSomething<DataTypeUInt32, TiDBToDaysTransformerImpl, return_nullable>;
-
 using FunctionToRelativeYearNum = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToRelativeYearNumImpl>;
 using FunctionToRelativeQuarterNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeQuarterNumImpl>;
 using FunctionToRelativeMonthNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeMonthNumImpl>;

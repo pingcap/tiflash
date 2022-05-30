@@ -88,7 +88,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     Context context = *global_context;
     context.setGlobalContext(*global_context);
     // Load `testdata_path` as path if it is set.
-    const String root_path = testdata_path.empty() ? getTemporaryPath() : testdata_path[0];
+    const String root_path = testdata_path.empty() ? (DB::toString(getpid()) + "/" + getTemporaryPath()) : testdata_path[0];
     if (testdata_path.empty())
         testdata_path.push_back(root_path);
     context.setPath(root_path);
