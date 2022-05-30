@@ -61,7 +61,7 @@ private:
 };
 using PageStorageSnapshotMixedPtr = std::shared_ptr<PageStorageSnapshotMixed>;
 
-static inline PageStorageSnapshotMixedPtr
+inline PageStorageSnapshotMixedPtr
 toConcreteMixedSnapshot(const PageStorageSnapshotPtr & ptr)
 {
     return std::static_pointer_cast<PageStorageSnapshotMixed>(ptr);

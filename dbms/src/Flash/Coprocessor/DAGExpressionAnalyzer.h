@@ -275,10 +275,6 @@ private:
         const ExpressionActionsPtr & actions,
         const String & column_name);
 
-    String buildFunction(
-        const tipb::Expr & expr,
-        const ExpressionActionsPtr & actions);
-
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
