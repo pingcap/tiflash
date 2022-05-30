@@ -34,6 +34,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -168,6 +169,8 @@ try
     }
     EXPECT_EQ(total_segment_rows, num_rows_read);
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -252,6 +255,8 @@ try
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -315,6 +320,8 @@ try
     ASSERT_EQ(sort_desc.front().nulls_direction, sort_desc2.front().nulls_direction);
 
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -609,6 +616,8 @@ try
     sample.insert(DB::tests::createColumn<String>(
         Strings(100, "a"),
         "col2"));
+    constexpr TiDB::TableID table_id = 1;
+    const String table_name = fmt::format("t_{}", table_id);
 
     Context ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
@@ -631,12 +640,11 @@ try
             path.remove(true);
 
         // primary_expr_ast
-        const String table_name = "t_1233";
         ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         TiDB::TableInfo tidb_table_info;
-        tidb_table_info.id = 1;
+        tidb_table_info.id = table_id;
 
         storage = StorageDeltaMerge::create("TiFlash",
                                             /* db_name= */ "default",
@@ -692,8 +700,8 @@ try
                 {
                     Field res;
                     c->get(i, res);
-                    ASSERT(!res.isNull());
-                    ASSERT(res.get<Int64>() == 1);
+                    ASSERT_TRUE(!res.isNull());
+                    ASSERT_EQ(res.get<Int64>(), table_id);
                 }
             }
         }
@@ -701,6 +709,8 @@ try
     in->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -848,6 +858,8 @@ try
         ASSERT_LT(read_data(), num_rows_write);
     }
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
