@@ -111,14 +111,14 @@ try
         /// constant
         createConstColumn<Int64>(5, expr1_data[0]),
         /// nullable(not null constant)
-        //createConstColumn<Nullable<Int64>>(5, expr1_data[0]),
+        createConstColumn<Nullable<Int64>>(5, expr1_data[0]),
         /// nullable(null constant)
         createConstColumn<Nullable<Int64>>(5, {}),
         /// onlyNull constant
         createConstColumn<Nullable<Null>>(5, {})};
     ColumnsWithTypeAndName second_const_arguments = {
         createConstColumn<Int64>(5, expr2_data[0]),
-        //createConstColumn<Nullable<Int64>>(5, expr2_data[0]),
+        createConstColumn<Nullable<Int64>>(5, expr2_data[0]),
         createConstColumn<Nullable<Int64>>(5, {}),
         createConstColumn<Nullable<Null>>(5, {}),
     };
@@ -146,12 +146,12 @@ try
                 }
                 else
                 {
-                    ASSERT_COLUMN_EQ(col_2.type->isNullable() ? expr_data_2_nullable_vector : expr_data_2_vector, executeIfNull(col_1, col_2));
+                    ASSERT_COLUMN_EQ(expr_data_2_vector, executeIfNull(col_1, col_2));
                 }
             }
             else
             {
-                if (col_2.type->isNullable())
+                if (col_2.column->isNullAt(0))
                 {
                     ASSERT_COLUMN_EQ(expr_data_1_nullable_vector, executeIfNull(col_1, col_2));
                 }
@@ -181,14 +181,7 @@ try
             }
             else
             {
-                if (col_2.type->isNullable())
-                {
-                    ASSERT_COLUMN_EQ(createNullableColumn<Int64>(vector_const_result, {0, 0, 0, 0, 0}), executeIfNull(col_1, col_2));
-                }
-                else
-                {
-                    ASSERT_COLUMN_EQ(createColumn<Int64>(vector_const_result), executeIfNull(col_1, col_2));
-                }
+                ASSERT_COLUMN_EQ(createColumn<Int64>(vector_const_result), executeIfNull(col_1, col_2));
             }
         }
     }
