@@ -42,19 +42,19 @@ int PageStorageCtl::mainEntry(int argc, char ** argv)
     }
     if (options.count("page_storage_version") > 0)
     {
-        int ps_mode = options["page_storage_version"].as<int>();
-        if (ps_mode == 3)
+        int ps_version = options["page_storage_version"].as<int>();
+        if (ps_version == 3)
         {
             pageStorageV3CtlEntry(argc - 2, argv + 2);
             return 0;
         }
-        else if (ps_mode == 2)
+        else if (ps_version == 2)
         {
-            return pageStorageV2CtlEntry(argc - 1, argv + 1);
+            return pageStorageV2CtlEntry(argc - 2, argv + 2);
         }
         else
         {
-            std::cerr << "Invalid arg page_storage_mode." << std::endl;
+            std::cerr << "Invalid arg page_storage_version." << std::endl;
             std::cerr << desc << std::endl;
             exit(0);
         }
