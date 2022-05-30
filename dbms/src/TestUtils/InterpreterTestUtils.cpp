@@ -63,6 +63,7 @@ void InterpreterTest::executeInterpreter(const String & expected_string, const s
     FmtBuffer fb;
     res.in->dumpTree(fb);
     std::cout << "\n\n" << fb.toString() << std::endl;
+    std::cout << "\n" << expected_string.size() << std::endl;
 //    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
 }
 
