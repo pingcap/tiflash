@@ -256,8 +256,8 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
 
 Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info)
 {
-    PrecType prec = raw_value[cursor++];
-    ScaleType scale = raw_value[cursor++];
+    UInt8 prec = raw_value[cursor++];
+    UInt8 scale = raw_value[cursor++];
     auto type = createDecimal(column_info.flen, column_info.decimal);
     if (checkDecimal<Decimal32>(*type))
     {
@@ -283,8 +283,8 @@ Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiD
 
 Field DecodeDecimal(size_t & cursor, const String & raw_value)
 {
-    PrecType prec = raw_value[cursor++];
-    ScaleType scale = raw_value[cursor++];
+    UInt8 prec = raw_value[cursor++];
+    UInt8 scale = raw_value[cursor++];
     auto type = createDecimal(prec, scale);
     if (checkDecimal<Decimal32>(*type))
     {
@@ -310,8 +310,8 @@ Field DecodeDecimal(size_t & cursor, const String & raw_value)
 
 void SkipDecimal(size_t & cursor, const String & raw_value)
 {
-    PrecType prec = raw_value[cursor++];
-    ScaleType frac = raw_value[cursor++];
+    UInt8 prec = raw_value[cursor++];
+    UInt8 frac = raw_value[cursor++];
 
     int bin_size = getBytes(prec, frac);
     cursor += bin_size;
