@@ -390,27 +390,112 @@ try
 }
 CATCH
 
-TEST_F(WindowFunction, testMock)
+TEST_F(WindowFunction, testWithMock)
 try
 {
     setMaxBlockSize(3);
-    MockWindowFrame frame;
     MockDAGRequestContext mock_context(context);
+
+    /***** row_number with different types of input *****/
+    // TODO: wrap it into a function
+    MockWindowFrame frame;
     frame.type = tipb::WindowFrameType::Rows;
     frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
     frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
-    mock_context.addMockTable({"test_db", "test_table"}, {{"partition", TiDB::TP::TypeLong}, {"order", TiDB::TP::TypeLong}});
-    auto request = mock_context.scan("test_db", "test_table").window(RowNumber(), {"order", false}, {"partition", false}, frame).build(mock_context);
-    auto request_sort = mock_context.scan("test_db", "test_table").sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true).build(mock_context);
-    /***** row_number with different types of input *****/
+
     // int - sql : select *, row_number() over w1 from test1 window w1 as (partition by partition_int order by order_int)
+    mock_context.addMockTable({"test_db", "test_table"}, {{"partition", TiDB::TP::TypeLong}, {"order", TiDB::TP::TypeLong}});
+    auto request_window_int = mock_context.scan("test_db", "test_table").window(RowNumber(), {"order", false}, {"partition", false}, frame).build(mock_context);
+    auto request_sort_int = mock_context.scan("test_db", "test_table").sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true).build(mock_context);
+
     testOneWindowFunction(
         {NameAndTypePair("partition", std::make_shared<DataTypeInt64>()), NameAndTypePair("order", std::make_shared<DataTypeInt64>())},
         {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})},
         {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})},
-        request->root_executor().window(),
-        request_sort->root_executor().sort());
-    // request_sort->root_executor().sort().PrintDebugString();
+        request_window_int->root_executor().window(),
+        request_sort_int->root_executor().sort());
+
+    // null input
+    testOneWindowFunction(
+        {NameAndTypePair("partition", makeNullable(std::make_shared<DataTypeInt64>())), NameAndTypePair("order", makeNullable(std::make_shared<DataTypeInt64>()))},
+        {toNullableVec<Int64>("partition", {}), toNullableVec<Int64>("order", {})},
+        {},
+        request_window_int->root_executor().window(),
+        request_sort_int->root_executor().sort());
+
+    // nullable
+    testOneWindowFunction(
+        {NameAndTypePair("partition", makeNullable(std::make_shared<DataTypeInt64>())), NameAndTypePair("order", makeNullable(std::make_shared<DataTypeInt64>()))},
+        {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}), toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2})},
+        {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}), toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})},
+        request_window_int->root_executor().window(),
+        request_sort_int->root_executor().sort());
+
+    // string - sql : select *, row_number() over w1 from test2 window w1 as (partition by partition_string order by order_string)
+    mock_context.addMockTable({"test_db", "test_table_string"}, {{"partition", TiDB::TP::TypeString}, {"order", TiDB::TP::TypeString}});
+    auto request_window_string = mock_context.scan("test_db", "test_table_string").window(RowNumber(), {"order", false}, {"partition", false}, frame).build(mock_context);
+    auto request_sort_string = mock_context.scan("test_db", "test_table_string").sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true).build(mock_context);
+    testOneWindowFunction(
+        {NameAndTypePair("partition", std::make_shared<DataTypeString>()), NameAndTypePair("order", std::make_shared<DataTypeString>())},
+        {toVec<String>("partition", {"banana", "banana", "banana", "banana", "apple", "apple", "apple", "apple"}), toVec<String>("order", {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"})},
+        {toVec<String>("partition", {"apple", "apple", "apple", "apple", "banana", "banana", "banana", "banana"}), toVec<String>("order", {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"}), toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})},
+        request_window_string->root_executor().window(),
+        request_sort_string->root_executor().sort());
+
+    // nullable
+    testOneWindowFunction(
+        {NameAndTypePair("partition", makeNullable(std::make_shared<DataTypeString>())), NameAndTypePair("order", makeNullable(std::make_shared<DataTypeString>()))},
+        {toNullableVec<String>("partition", {"banana", "banana", "banana", "banana", {}, "apple", "apple", "apple", "apple"}), toNullableVec<String>("order", {"apple", "apple", "banana", "banana", {}, "apple", "apple", "banana", "banana"})},
+        {toNullableVec<String>("partition", {{}, "apple", "apple", "apple", "apple", "banana", "banana", "banana", "banana"}), toNullableVec<String>("order", {{}, "apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"}), toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})},
+        request_window_string->root_executor().window(),
+        request_sort_string->root_executor().sort());
+
+    // decimal - sql : select *, row_number() over w1 from test3 window w1 as (partition by partition_float order by order_decimal)
+    mock_context.addMockTable({"test_db", "test_table_decimal"}, {{"partition", TiDB::TP::TypeDecimal}, {"order", TiDB::TP::TypeDecimal}});
+    auto request_window_decimal = mock_context.scan("test_db", "test_table_decimal").window(RowNumber(), {"order", false}, {"partition", false}, frame).build(mock_context);
+    auto request_sort_decimal = mock_context.scan("test_db", "test_table_decimal").sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true).build(mock_context);
+
+    testOneWindowFunction(
+        {NameAndTypePair("partition", std::make_shared<DataTypeDecimal256>()), NameAndTypePair("order", std::make_shared<DataTypeDecimal256>())},
+        {toVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}), toVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00})},
+        {toVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}), toVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00}), toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})},
+        request_window_decimal->root_executor().window(),
+        request_sort_decimal->root_executor().sort());
+
+    // nullable
+    testOneWindowFunction(
+        {NameAndTypePair("partition", makeNullable(std::make_shared<DataTypeInt64>())), NameAndTypePair("order", makeNullable(std::make_shared<DataTypeInt64>()))},
+        {toNullableVec<Float64>("partition", {{}, 1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}), toNullableVec<Float64>("order", {{}, 1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00})},
+        {toNullableVec<Float64>("partition", {{}, 1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}), toNullableVec<Float64>("order", {{}, 1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00}), toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})},
+        request_window_decimal->root_executor().window(),
+        request_sort_decimal->root_executor().sort());
+
+    // datetime - select *, row_number() over w1 from test4 window w1 as (partition by partition_datetime order by order_datetime);
+    mock_context.addMockTable({"test_db", "test_table_datetime"}, {{"partition", TiDB::TP::TypeDatetime}, {"order", TiDB::TP::TypeDatetime}});
+    auto request_window_datetime = mock_context.scan("test_db", "test_table_datetime").window(RowNumber(), {"order", false}, {"partition", false}, frame).build(mock_context);
+    auto request_sort_datetime = mock_context.scan("test_db", "test_table_datetime").sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true).build(mock_context);
+
+    testOneWindowFunction(
+        {NameAndTypePair("partition", std::make_shared<DataTypeMyDateTime>()), NameAndTypePair("order", std::make_shared<DataTypeMyDateTime>())},
+        {toDatetimeVec("partition", {"20220101010102", "20220101010102", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010101", "20220101010101"}, 0),
+         toDatetimeVec("order", {"20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0)},
+        {toDatetimeVec("partition", {"20220101010101", "20220101010101", "20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010102", "20220101010102"}, 0),
+         toDatetimeVec("order", {"20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0),
+         toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})},
+        request_window_datetime->root_executor().window(),
+        request_sort_datetime->root_executor().sort());
+
+    // nullable
+    testOneWindowFunction(
+        {NameAndTypePair("partition", makeNullable(std::make_shared<DataTypeMyDateTime>())), NameAndTypePair("order", makeNullable(std::make_shared<DataTypeMyDateTime>()))},
+        {toNullableDatetimeVec("partition", {"20220101010102", {}, "20220101010102", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010101", "20220101010101"}, 0),
+         toNullableDatetimeVec("order", {"20220101010101", {}, "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0)},
+        {toNullableDatetimeVec("partition", {{}, "20220101010101", "20220101010101", "20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010102", "20220101010102"}, 0),
+         toNullableDatetimeVec("order", {{}, "20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0),
+         toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})},
+        request_window_datetime->root_executor().window(),
+        request_sort_datetime->root_executor().sort());
 }
 CATCH
+
 } // namespace DB::tests

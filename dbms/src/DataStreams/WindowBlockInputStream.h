@@ -14,13 +14,13 @@
 
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/WindowDescription.h>
 
 #include <deque>
 #include <memory>
-#include <Common/FmtUtils.h>
 
 namespace DB
 {

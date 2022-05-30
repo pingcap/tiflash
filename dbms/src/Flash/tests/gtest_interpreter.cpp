@@ -15,7 +15,6 @@
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
-#include "TestUtils/TiFlashTestBasic.h"
 
 namespace DB
 {
