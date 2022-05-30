@@ -221,7 +221,7 @@ private:
     Errors & errors() const;
 
 private:
-    Errors * inner_data;
+    Errors * inner_data; // PImpl
 };
 
 /// TiFlashException implements TiDB's standardized error.
