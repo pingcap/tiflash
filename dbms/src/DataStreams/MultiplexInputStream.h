@@ -81,12 +81,14 @@ private:
         if (queue_id != static_cast<int>(streams_queue_by_partition.size()) - 1)
         {
             swap(streams_queue_by_partition[queue_id], streams_queue_by_partition.back());
-        }
-        streams_queue_by_partition.pop_back();
-        if (queue_id < static_cast<int>(streams_queue_by_partition.size()))
+            streams_queue_by_partition.pop_back();
             return queue_id;
+        }
         else
+        {
+            streams_queue_by_partition.pop_back();
             return 0;
+        }
     }
 
     int nextQueueId(int queue_id) const
