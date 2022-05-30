@@ -20,6 +20,7 @@
 
 #include <deque>
 #include <memory>
+#include <Common/FmtUtils.h>
 
 namespace DB
 {
@@ -169,6 +170,7 @@ public:
 
 protected:
     Block readImpl() override;
+    void appendInfo(FmtBuffer & buffer) const override;
 
     LoggerPtr log;
 

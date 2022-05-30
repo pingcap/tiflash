@@ -60,4 +60,30 @@ void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
     frame.end_preceding = (frame_.end().type() == tipb::WindowBoundType::Preceding);
     frame.is_default = false;
 }
+
+String frameTypeToString(WindowFrame::FrameType type)
+{
+    switch (type)
+    {
+    case WindowFrame::FrameType::Rows:
+        return "Rows";
+    case WindowFrame::FrameType::Groups:
+        return "Groups";
+    case WindowFrame::FrameType::Ranges:
+        return "Ranges";
+    }
+}
+
+String boundaryTypeToString(WindowFrame::BoundaryType type)
+{
+    switch (type)
+    {
+    case WindowFrame::BoundaryType::Unbounded:
+        return "Unbounded";
+    case WindowFrame::BoundaryType::Current:
+        return "Current";
+    case WindowFrame::BoundaryType::Offset:
+        return "Offset";
+    }
+}
 } // namespace DB

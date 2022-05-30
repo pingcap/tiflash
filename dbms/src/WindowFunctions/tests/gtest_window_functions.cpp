@@ -112,8 +112,7 @@ protected:
     {
         tipb::Sort sort;
         google::protobuf::util::JsonStringToMessage(sort_json_str, &sort);
-        std::cout << "ywq real string" << std::endl;
-        sort.PrintDebugString();
+        // sort.PrintDebugString(); ywq todo
         mock_interpreter->handleWindowOrder(pipeline, sort);
         mock_interpreter->input_streams_vec[0] = pipeline.streams;
         NamesWithAliases final_project;
@@ -411,7 +410,7 @@ try
         {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})},
         request->root_executor().window(),
         request_sort->root_executor().sort());
-    request_sort->root_executor().sort().PrintDebugString();
+    // request_sort->root_executor().sort().PrintDebugString();
 }
 CATCH
 } // namespace DB::tests

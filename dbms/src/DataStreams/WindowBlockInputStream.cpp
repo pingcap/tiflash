@@ -16,6 +16,7 @@
 #include <Common/Arena.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/WindowDescription.h>
 #include <Interpreters/convertFieldToType.h>
 
 namespace DB
@@ -573,5 +574,22 @@ void WindowBlockInputStream::tryCalculate()
         peer_group_start_row_number = 1;
         peer_group_number = 1;
     }
+}
+
+void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    buffer.append(", function: {");
+    buffer.joinStr(
+        window_description.window_functions_descriptions.begin(),
+        window_description.window_functions_descriptions.end(),
+        [&](const auto & func, FmtBuffer & b) {
+            b.fmtAppend("{}", func.window_function->getName());
+        },
+        ", ");
+    buffer.fmtAppend(
+        "}}, frame: {{type: {}, boundary_begin: {}, boundary_end: {}}}",
+        frameTypeToString(window_description.frame.type),
+        boundaryTypeToString(window_description.frame.begin_type),
+        boundaryTypeToString(window_description.frame.end_type));
 }
 } // namespace DB

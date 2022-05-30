@@ -401,7 +401,7 @@ Union: <for mpp>
  Expression x 10: <final projection>
   SharedQuery: <restore concurrency>
    Expression: <cast after window>
-    Window
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
       MergeSorting, limit = 0
        Union: <for partial order>
