@@ -26,7 +26,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <pingcap/pd/MockPDClient.h>
-#include <sys/qos.h>
 
 namespace DB
 {
