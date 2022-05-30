@@ -1136,6 +1136,40 @@ void RegionKVStoreTest::testKVStore()
             kvs.handleDestroy(20, ctx.getTMTContext());
         }
     }
+
+    {
+        auto region_id = 19;
+        auto region_id_str = std::to_string(19);
+        auto & mmp = MockSSTReader::getMockSSTData();
+        MockSSTReader::getMockSSTData().clear();
+        MockSSTReader::Data default_kv_list;
+        {
+            default_kv_list.emplace_back(RecordKVFormat::genKey(1, 55, 5).getStr(), TiKVValue("value1").getStr());
+            default_kv_list.emplace_back(RecordKVFormat::genKey(1, 58, 5).getStr(), TiKVValue("value2").getStr());
+        }
+        mmp[MockSSTReader::Key{region_id_str, ColumnFamilyType::Default}] = std::move(default_kv_list);
+
+        // Mock SST data for handle [star, end)
+        auto region = kvs.getRegion(region_id);
+
+        RegionMockTest mock_test(ctx.getTMTContext().getKVStore(), region);
+
+        {
+            // Mocking ingest a SST for column family "Write"
+            std::vector<SSTView> sst_views;
+            sst_views.push_back(SSTView{
+                ColumnFamilyType::Default,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            });
+            kvs.handleIngestSST(
+                region_id,
+                SSTViewVec{sst_views.data(), sst_views.size()},
+                100,
+                1,
+                ctx.getTMTContext());
+        }
+    }
+
     {
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
