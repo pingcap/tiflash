@@ -26,6 +26,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <pingcap/pd/MockPDClient.h>
+#include <sys/qos.h>
 
 namespace DB
 {
@@ -35,6 +36,8 @@ extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
 extern const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
 
 const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
+
+const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
@@ -55,6 +58,8 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , engine(raft_config.engine)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
+    , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
+    , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {}
 

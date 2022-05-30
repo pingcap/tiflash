@@ -139,8 +139,8 @@ private:
 
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;
-    std::atomic_uint64_t wait_index_timeout_ms{};
-    std::atomic_uint64_t read_index_worker_tick_ms{};
+    std::atomic_uint64_t wait_index_timeout_ms;
+    std::atomic_uint64_t read_index_worker_tick_ms;
     std::atomic_int64_t wait_region_ready_timeout_sec;
 };
 
