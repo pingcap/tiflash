@@ -280,7 +280,7 @@ using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
 
 struct MockWindowFrame
 {
-    tipb::WindowFrameType type;
+    std::optional<tipb::WindowFrameType> type;
     std::optional<MockWindowFrameBound> start;
     std::optional<MockWindowFrameBound> end;
     // TODO: support calcFuncs

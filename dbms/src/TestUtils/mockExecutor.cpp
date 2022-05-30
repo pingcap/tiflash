@@ -291,7 +291,7 @@ DAGRequestBuilder & DAGRequestBuilder::window(MockAsts window_funcs, MockOrderBy
     auto window_func_list = std::make_shared<ASTExpressionList>();
     for (const auto & func : window_funcs)
         window_func_list->children.push_back(func);
-    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(order_by_list), buildOrderByItemList(partition_by_list), frame);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(partition_by_list), buildOrderByItemList(order_by_list), frame);
     return *this;
 }
 

@@ -190,6 +190,12 @@ std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"group_concat", tipb::ExprType::GroupConcat},
 });
 
+std::unordered_map<String, tipb::ExprType> window_func_name_to_sig({
+    {"RowNumber", tipb::ExprType::RowNumber},
+    {"Rank", tipb::ExprType::Rank},
+    {"DenseRank", tipb::ExprType::DenseRank},
+});
+
 DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
 {
     DAGColumnInfo output = input;
@@ -1364,11 +1370,21 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
             tipb::Expr * func = window_expr->add_children();
             astToPB(input_schema, arg, func, collator_id, context);
         }
-        window_expr->set_tp(tipb::ExprType::RowNumber);
+        // ywq todo
+        auto window_sig_it = window_func_name_to_sig.find(window_func->name);
+        std::cout << "window_func->name = " << window_func->name << std::endl;
+        if (window_sig_it == window_func_name_to_sig.end())
+            throw Exception("Unsupported window function " + window_func->name, ErrorCodes::LOGICAL_ERROR);
+        auto window_sig = window_sig_it->second;
+        window_expr->set_tp(window_sig);
+        std::cout << "window_func sig = " << window_sig << std::endl;
         auto * ft = window_expr->mutable_field_type();
         ft->set_tp(TiDB::TypeLongLong);
         ft->set_flag(TiDB::ColumnFlagBinary);
         ft->set_collate(collator_id);
+        if (window_sig == tipb::ExprType::Rank || window_sig == tipb::ExprType::DenseRank)
+            ft->set_flen(21); // ywq todo
+
         // rowNumber don't have children.
         // ft->set_decimal(window_expr->children(0).field_type().decimal()); // ywq todo check type?
         // ft->set_flen(window_expr->children(0).field_type().flen());
@@ -1395,24 +1411,29 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
 
-    tipb::WindowFrame * mut_frame = window->mutable_frame();
-    if (frame.start.has_value())
+
+    if (frame.type.has_value())
     {
-        auto * start = mut_frame->mutable_start();
-        start->set_offset(std::get<2>(frame.start.value()));
-        start->set_unbounded(std::get<1>(frame.start.value()));
-        start->set_type(std::get<0>(frame.start.value()));
+        tipb::WindowFrame * mut_frame = window->mutable_frame();
+        mut_frame->set_type(frame.type.value());
+        std::cout << "ywq test reach here." << std::endl;
+        if (frame.start.has_value())
+        {
+            auto * start = mut_frame->mutable_start();
+            start->set_offset(std::get<2>(frame.start.value()));
+            start->set_unbounded(std::get<1>(frame.start.value()));
+            start->set_type(std::get<0>(frame.start.value()));
+        }
+
+        if (frame.end.has_value())
+        {
+            auto * end = mut_frame->mutable_end();
+            end->set_offset(std::get<2>(frame.end.value()));
+            end->set_unbounded(std::get<1>(frame.end.value()));
+            end->set_type(std::get<0>(frame.end.value()));
+        }
     }
 
-    if (frame.end.has_value())
-    {
-        auto * end = mut_frame->mutable_end();
-        end->set_offset(std::get<2>(frame.end.value()));
-        end->set_unbounded(std::get<1>(frame.end.value()));
-        end->set_type(std::get<0>(frame.end.value()));
-    }
-
-    mut_frame->set_type(frame.type);
     auto * children_executor = window->mutable_child();
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
@@ -1694,9 +1715,10 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             {
                 children_ci.push_back(compileExpr(input->output_schema, arg));
             }
-            // TODO: add more window functions  ywq todo
+            // TODO: add more window functions
+            // ywq todo
             TiDB::ColumnInfo ci;
-            if (func->name == "RowNumber")
+            if (func->name == "RowNumber" || func->name == "Rank" || func->name == "DenseRank")
             {
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagBinary;

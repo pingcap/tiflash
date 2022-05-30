@@ -167,7 +167,9 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr1), (expr2))
 #define Max(expr) makeASTFunction("max", expr)
-// ywq todo more window functions
+/// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
+#define Rank() makeASTFunction("Rank")
+#define DenseRank() makeASTFunction("DenseRank")
 
 } // namespace DB::tests
