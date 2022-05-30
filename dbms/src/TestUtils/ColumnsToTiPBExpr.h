@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/typeid_cast.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/InterpreterTruncateQuery.h>
-#include <Parsers/ASTTruncateQuery.h>
-#include <Storages/IStorage.h>
+#pragma once
 
+#include <Core/ColumnNumbers.h>
+#include <Core/ColumnWithTypeAndName.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Core/Field.h>
+#include <Core/Types.h>
+#include <DataTypes/IDataType.h>
+#include <Flash/Coprocessor/DAGContext.h>
 
 namespace DB
 {
-BlockIO InterpreterTruncateQuery::execute()
+namespace tests
 {
-    auto & truncate = typeid_cast<ASTTruncateQuery &>(*query_ptr);
-
-    const String & table_name = truncate.table;
-    String database_name = truncate.database.empty() ? context.getCurrentDatabase() : truncate.database;
-    StoragePtr table = context.getTable(database_name, table_name);
-    table->truncate(query_ptr, context);
-    return {};
-}
-
+tipb::Expr columnsToTiPBExpr(
+    const String & func_name,
+    const ColumnNumbers & argument_column_number,
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator);
+} // namespace tests
 } // namespace DB

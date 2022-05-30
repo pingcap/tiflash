@@ -26,7 +26,7 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     , dag(dag_)
 {
     const Settings & settings = context.getSettingsRef();
-    if (dagContext().isBatchCop() || dagContext().isMPPTask())
+    if (dagContext().isBatchCop() || (dagContext().isMPPTask() && !dagContext().isTest()))
         max_streams = settings.max_threads;
     else if (dagContext().isTest())
         max_streams = dagContext().initialize_concurrency;
@@ -85,9 +85,9 @@ BlockIO InterpreterDAG::execute()
     /// add union to run in parallel if needed
     if (dagContext().isMPPTask())
         /// MPPTask do not need the returned blocks.
-        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true);
+        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true, "for mpp");
     else
-        executeUnion(pipeline, max_streams, dagContext().log);
+        executeUnion(pipeline, max_streams, dagContext().log, false, "for non mpp");
     if (dagContext().hasSubquery())
     {
         const Settings & settings = context.getSettingsRef();

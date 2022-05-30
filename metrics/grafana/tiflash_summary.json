@@ -33,6 +33,12 @@
       "id": "prometheus",
       "name": "Prometheus",
       "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
     }
   ],
   "annotations": {
@@ -52,7 +58,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1647230387563,
+  "iteration": 1652861766192,
   "links": [],
   "panels": [
     {
@@ -76,7 +82,12 @@
           "description": "The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)",
           "editable": true,
           "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 5,
+          "fillGradient": 0,
           "grid": {},
           "gridPos": {
             "h": 8,
@@ -84,6 +95,7 @@
             "x": 0,
             "y": 1
           },
+          "hiddenSeries": false,
           "id": 53,
           "legend": {
             "alignAsTable": true,
@@ -103,7 +115,11 @@
           "linewidth": 0,
           "links": [],
           "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -173,7 +189,12 @@
           "description": "The available capacity size per TiFlash instance",
           "editable": true,
           "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 5,
+          "fillGradient": 0,
           "grid": {},
           "gridPos": {
             "h": 8,
@@ -181,6 +202,7 @@
             "x": 8,
             "y": 1
           },
+          "hiddenSeries": false,
           "id": 54,
           "legend": {
             "alignAsTable": true,
@@ -200,7 +222,11 @@
           "linewidth": 0,
           "links": [],
           "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -270,7 +296,12 @@
           "description": "The capacity size per TiFlash instance",
           "editable": true,
           "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 5,
+          "fillGradient": 0,
           "grid": {},
           "gridPos": {
             "h": 8,
@@ -278,6 +309,7 @@
             "x": 16,
             "y": 1
           },
+          "hiddenSeries": false,
           "id": 55,
           "legend": {
             "alignAsTable": true,
@@ -297,7 +329,11 @@
           "linewidth": 0,
           "links": [],
           "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -367,7 +403,12 @@
           "description": "TiFlash uptime since last restart",
           "editable": true,
           "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "grid": {},
           "gridPos": {
             "h": 8,
@@ -375,6 +416,7 @@
             "x": 0,
             "y": 9
           },
+          "hiddenSeries": false,
           "id": 21,
           "legend": {
             "alignAsTable": true,
@@ -391,8 +433,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -466,13 +511,19 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The memory usage per TiFlash instance",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
             "y": 9
           },
+          "hiddenSeries": false,
           "id": 10,
           "legend": {
             "alignAsTable": true,
@@ -489,7 +540,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -636,7 +691,12 @@
           "description": "TiFlash CPU usage calculated with process CPU running seconds.",
           "editable": true,
           "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "grid": {},
           "gridPos": {
             "h": 7,
@@ -644,6 +704,7 @@
             "x": 0,
             "y": 17
           },
+          "hiddenSeries": false,
           "id": 51,
           "legend": {
             "alignAsTable": false,
@@ -660,7 +721,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -735,13 +800,19 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The number of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
             "y": 17
           },
+          "hiddenSeries": false,
           "id": 52,
           "legend": {
             "alignAsTable": false,
@@ -758,7 +829,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -824,13 +899,19 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
             "y": 24
           },
+          "hiddenSeries": false,
           "id": 22,
           "legend": {
             "alignAsTable": false,
@@ -849,7 +930,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -921,13 +1006,19 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
             "y": 24
           },
+          "hiddenSeries": false,
           "id": 50,
           "legend": {
             "alignAsTable": true,
@@ -946,7 +1037,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1051,13 +1146,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
             "y": 2
           },
+          "hiddenSeries": false,
           "id": 9,
           "legend": {
             "alignAsTable": true,
@@ -1074,7 +1175,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1139,13 +1244,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
             "y": 2
           },
+          "hiddenSeries": false,
           "id": 2,
           "legend": {
             "alignAsTable": true,
@@ -1162,7 +1273,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1226,13 +1341,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
             "y": 9
           },
+          "hiddenSeries": false,
           "id": 11,
           "legend": {
             "alignAsTable": false,
@@ -1249,7 +1370,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1334,13 +1459,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
             "y": 9
           },
+          "hiddenSeries": false,
           "id": 12,
           "legend": {
             "alignAsTable": true,
@@ -1357,7 +1488,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1421,13 +1556,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
             "y": 16
           },
+          "hiddenSeries": false,
           "id": 13,
           "legend": {
             "alignAsTable": false,
@@ -1444,7 +1585,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1529,13 +1674,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
             "y": 16
           },
+          "hiddenSeries": false,
           "id": 14,
           "legend": {
             "alignAsTable": true,
@@ -1552,7 +1703,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1616,13 +1771,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
             "y": 23
           },
+          "hiddenSeries": false,
           "id": 63,
           "legend": {
             "avg": false,
@@ -1637,7 +1798,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -1722,13 +1887,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
             "y": 23
           },
+          "hiddenSeries": false,
           "id": 77,
           "legend": {
             "alignAsTable": true,
@@ -1745,7 +1916,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1843,7 +2018,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1942,7 +2117,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -2041,7 +2216,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -2140,7 +2315,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3346,7 +3521,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 4
+            "y": 5
           },
           "hiddenSeries": false,
           "id": 41,
@@ -3369,7 +3544,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3459,7 +3634,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 4
+            "y": 5
           },
           "hiddenSeries": false,
           "id": 38,
@@ -3482,7 +3657,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3509,17 +3684,21 @@
               "refId": "A"
             },
             {
+              "exemplar": true,
               "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
               "format": "time_series",
               "hide": false,
+              "interval": "",
               "intervalFactor": 1,
               "legendFormat": "5min-{{instance}}",
               "refId": "B"
             },
             {
+              "exemplar": true,
               "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[10m])) / (rate(tiflash_system_profile_event_DMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[10m]))) by (instance)",
               "format": "time_series",
               "hide": true,
+              "interval": "",
               "intervalFactor": 1,
               "legendFormat": "10min-{{instance}}",
               "refId": "C"
@@ -3608,7 +3787,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 12
+            "y": 13
           },
           "hiddenSeries": false,
           "id": 40,
@@ -3631,7 +3810,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3708,7 +3887,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 20
+            "y": 21
           },
           "hiddenSeries": false,
           "id": 39,
@@ -3731,7 +3910,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3821,7 +4000,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 20
+            "y": 21
           },
           "hiddenSeries": false,
           "id": 42,
@@ -3846,7 +4025,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -3955,7 +4134,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 28
+            "y": 29
           },
           "hiddenSeries": false,
           "id": 43,
@@ -3978,7 +4157,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -4061,7 +4240,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 28
+            "y": 29
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -4124,7 +4303,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 36
+            "y": 37
           },
           "hiddenSeries": false,
           "id": 46,
@@ -4149,7 +4328,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -4247,7 +4426,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 36
+            "y": 37
           },
           "hiddenSeries": false,
           "id": 47,
@@ -4272,7 +4451,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -4371,7 +4550,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 44
+            "y": 45
           },
           "height": "",
           "hiddenSeries": false,
@@ -4400,7 +4579,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -4501,7 +4680,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 44
+            "y": 45
           },
           "height": "",
           "hiddenSeries": false,
@@ -4530,7 +4709,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -4629,7 +4808,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 52
+            "y": 53
           },
           "hiddenSeries": false,
           "id": 88,
@@ -4652,7 +4831,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -4829,7 +5008,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 52
+            "y": 53
           },
           "hiddenSeries": false,
           "id": 67,
@@ -4852,7 +5031,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -4943,7 +5122,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 60
+            "y": 61
           },
           "hiddenSeries": false,
           "id": 84,
@@ -4966,7 +5145,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -5043,7 +5222,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 60
+            "y": 61
           },
           "hiddenSeries": false,
           "id": 86,
@@ -5066,7 +5245,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -5204,11 +5383,11 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "BlobAllocated",
+              "alias": "/^BlobAllocated/",
               "yaxis": 1
             },
             {
-              "alias": "BlobReusedRate",
+              "alias": "/^BlobExpandRate/",
               "yaxis": 2
             }
           ],
@@ -5223,17 +5402,17 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "BlobAllocated",
+              "legendFormat": "BlobAllocated-{{instance}}",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) / (rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) + rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (instance)",
+              "expr": "sum(rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) / (rate(tiflash_system_profile_event_PSV3MBlobExpansion{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) + rate(tiflash_system_profile_event_PSV3MBlobReused{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (instance)",
               "format": "time_series",
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "BlobReusedRate",
+              "legendFormat": "BlobExpandRate-{{instance}}",
               "refId": "B"
             }
           ],
@@ -5241,7 +5420,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "The BlobStore Status",
+          "title": "BlobStore Status",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -5313,7 +5492,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 5
+            "y": 6
           },
           "height": "",
           "hiddenSeries": false,
@@ -5342,7 +5521,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5450,7 +5629,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 14
+            "y": 15
           },
           "hiddenSeries": false,
           "id": 62,
@@ -5473,7 +5652,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5562,7 +5741,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 22
+            "y": 23
           },
           "height": "",
           "hiddenSeries": false,
@@ -5591,7 +5770,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5684,7 +5863,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 31
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 90,
@@ -5707,7 +5886,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5801,13 +5980,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 0,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 6
+            "y": 7
           },
+          "hiddenSeries": false,
           "id": 35,
           "legend": {
             "alignAsTable": false,
@@ -5824,7 +6009,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5889,13 +6078,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 6
+            "y": 7
           },
+          "hiddenSeries": false,
           "id": 36,
           "legend": {
             "alignAsTable": false,
@@ -5912,7 +6107,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -5997,13 +6196,19 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 13
+            "y": 14
           },
+          "hiddenSeries": false,
           "id": 37,
           "legend": {
             "alignAsTable": true,
@@ -6022,7 +6227,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -6121,13 +6330,19 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "The number of currently applying snapshots.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 13
+            "y": 14
           },
+          "hiddenSeries": false,
           "id": 75,
           "legend": {
             "alignAsTable": true,
@@ -6146,7 +6361,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -6214,14 +6433,20 @@
           "description": "Duration of applying Raft write logs",
           "editable": true,
           "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "grid": {},
           "gridPos": {
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 20
+            "y": 21
           },
+          "hiddenSeries": false,
           "id": 82,
           "legend": {
             "alignAsTable": true,
@@ -6240,7 +6465,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -6360,11 +6589,15 @@
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of applying Raft write logs",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 27
+            "y": 28
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6426,11 +6659,15 @@
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of applying Raft write logs",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 27
+            "y": 28
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6492,11 +6729,15 @@
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of pre-decode when applying region snapshot",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 34
+            "y": 35
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6558,16 +6799,20 @@
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of SST to DT in pre-decode when applying region snapshot",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 34
+            "y": 35
           },
           "heatmap": {},
           "hideZeroBuckets": true,
           "highlightCards": true,
-          "id": 100,
+          "id": 127,
           "legend": {
             "show": true
           },
@@ -6609,72 +6854,6 @@
           "yBucketSize": null
         },
         {
-          "cards": {
-            "cardPadding": null,
-            "cardRound": null
-          },
-          "color": {
-            "cardColor": "#b4ff00",
-            "colorScale": "sqrt",
-            "colorScheme": "interpolateSpectral",
-            "exponent": 0.5,
-            "min": 0,
-            "mode": "spectrum"
-          },
-          "dataFormat": "tsbuckets",
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "Duration of pre-decode when applying region snapshot",
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 34
-          },
-          "heatmap": {},
-          "hideZeroBuckets": true,
-          "highlightCards": true,
-          "id": 73,
-          "legend": {
-            "show": true
-          },
-          "links": [],
-          "reverseYBuckets": false,
-          "targets": [
-            {
-              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"snapshot_flush\"}[1m])) by (le)",
-              "format": "heatmap",
-              "intervalFactor": 2,
-              "legendFormat": "{{le}}",
-              "refId": "B"
-            }
-          ],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Snapshot Flush Duration",
-          "tooltip": {
-            "show": true,
-            "showHistogram": true
-          },
-          "type": "heatmap",
-          "xAxis": {
-            "show": true
-          },
-          "xBucketNumber": null,
-          "xBucketSize": null,
-          "yAxis": {
-            "decimals": 0,
-            "format": "s",
-            "logBase": 1,
-            "max": null,
-            "min": null,
-            "show": true,
-            "splitFactor": null
-          },
-          "yBucketBound": "upper",
-          "yBucketNumber": null,
-          "yBucketSize": null
-        },
-        {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
@@ -6682,14 +6861,20 @@
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
           "description": "The keys flow of different kinds of Raft operations",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "gridPos": {
             "h": 7,
-            "w": 12,
+            "w": 24,
             "x": 0,
-            "y": 41
+            "y": 42
           },
           "height": "",
+          "hiddenSeries": false,
           "id": 71,
           "legend": {
             "alignAsTable": true,
@@ -6711,7 +6896,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -6782,16 +6971,90 @@
             "colorScale": "sqrt",
             "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Duration of pre-decode when applying region snapshot",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 49
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 73,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"snapshot_flush\"}[1m])) by (le)",
+              "format": "heatmap",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Snapshot Flush Duration",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "s",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
             "mode": "spectrum"
           },
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of ingesting SST",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 41
+            "y": 49
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6853,11 +7116,15 @@
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of decoding Region data into blocks when writing Region data to the storage layer. (Mixed with \"write logs\" and \"apply Snapshot\" operations)",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 48
+            "y": 56
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6919,11 +7186,15 @@
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of writing Region data blocks to the storage layer (Mixed with \"write logs\" and \"apply Snapshot\" operations)",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 48
+            "y": 56
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6985,11 +7256,15 @@
           "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Latency that TiKV sends raft log to TiFlash.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 55
+            "y": 63
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7044,14 +7319,20 @@
           "description": "Latency that TiKV sends raft log to TiFlash.",
           "editable": true,
           "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
           "fill": 1,
+          "fillGradient": 0,
           "grid": {},
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 55
+            "y": 63
           },
+          "hiddenSeries": false,
           "id": 91,
           "legend": {
             "alignAsTable": true,
@@ -7070,7 +7351,11 @@
           "linewidth": 1,
           "links": [],
           "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
           "percentage": false,
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -7188,7 +7473,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 7
+            "y": 80
           },
           "hiddenSeries": false,
           "id": 99,
@@ -7211,7 +7496,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "6.1.6",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -7341,7 +7626,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 7
+            "y": 80
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7389,6 +7674,287 @@
         }
       ],
       "title": "Rough Set Filter Rate Histogram",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 119,
+      "panels": [
+        {
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The Global StoragePool and KVStore Runmode",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMax": 5,
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "graph": false,
+                  "legend": false,
+                  "tooltip": false
+                },
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 11,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "decimals": 0,
+              "mappings": [
+                {
+                  "from": "",
+                  "id": 1,
+                  "text": "ONLY_V2",
+                  "to": "",
+                  "type": 1,
+                  "value": "1"
+                },
+                {
+                  "from": "",
+                  "id": 2,
+                  "text": "ONLY_V3",
+                  "to": "",
+                  "type": 1,
+                  "value": "2"
+                },
+                {
+                  "from": "",
+                  "id": 3,
+                  "text": "MIX_MODE",
+                  "to": "",
+                  "type": 1,
+                  "value": "3"
+                },
+                {
+                  "from": "",
+                  "id": 4,
+                  "text": " ",
+                  "to": "",
+                  "type": 1,
+                  "value": "4"
+                },
+                {
+                  "from": "",
+                  "id": 5,
+                  "text": " ",
+                  "to": "",
+                  "type": 1,
+                  "value": "5"
+                }
+              ],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 9
+          },
+          "id": 126,
+          "links": [],
+          "options": {
+            "graph": {},
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right"
+            },
+            "tooltipOptions": {
+              "mode": "multi"
+            }
+          },
+          "pluginVersion": "7.5.11",
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "tiflash_system_current_metric_GlobalStorageRunMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}-GlobalRunMode",
+              "refId": "A",
+              "step": 10
+            },
+            {
+              "exemplar": false,
+              "expr": "tiflash_system_current_metric_RegionPersisterRunMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-KVStoreRunMode",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Global Runmode",
+          "type": "timeseries"
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The StoragePool Runmode in DeltaMerge Storage",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 9
+          },
+          "hiddenSeries": false,
+          "id": 123,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_StoragePoolV2Only{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}-OnlyV2",
+              "refId": "A",
+              "step": 10
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_StoragePoolV3Only{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-OnlyV3",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_StoragePoolMixMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-MixMode",
+              "refId": "C"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "StoragePool Runmode",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        }
+      ],
+      "title": "StoragePool",
       "type": "row"
     }
   ],
