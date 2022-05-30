@@ -146,7 +146,7 @@ public:
 
         for (auto & input : inputs)
         {
-            if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(&*input))
+            if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*input))
             {
                 try
                 {
@@ -189,7 +189,7 @@ private:
     struct InputData
     {
         BlockInputStreamPtr in;
-        size_t i; /// The source number (for debugging).
+        size_t i = 0; /// The source number (for debugging).
 
         InputData() = default;
         InputData(const BlockInputStreamPtr & in_, size_t i_)
@@ -371,7 +371,7 @@ private:
     using AvailableInputs = std::queue<InputData>;
     AvailableInputs available_inputs;
 
-    size_t active_inputs;
+    size_t active_inputs = 0;
 
     /** For parallel preparing (readPrefix) child streams.
       * First, streams are located here.
