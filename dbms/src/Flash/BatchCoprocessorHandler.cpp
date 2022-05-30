@@ -18,8 +18,8 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/ServiceUtils.h>
 #include <Storages/IStorage.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
 
