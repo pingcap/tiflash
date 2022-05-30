@@ -18,6 +18,7 @@
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <TiDB/Codec/DatumCodec.h>
 #include <TiDB/Codec/JSONCodec.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -118,7 +119,7 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
     int s = 0;
     for (int i = 0; cursor < raw_value.size(); i++)
     {
-        unsigned char v = raw_value[cursor++];
+        UInt8 v = raw_value[cursor++];
         if (v < 0x80)
         {
             if (i > 9 || (i == 9 && v > 1))
@@ -255,8 +256,8 @@ T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, Sc
 
 Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiDB::ColumnInfo & column_info)
 {
-    unsigned char prec = raw_value[cursor++];
-    unsigned char scale = raw_value[cursor++];
+    PrecType prec = raw_value[cursor++];
+    ScaleType scale = raw_value[cursor++];
     auto type = createDecimal(column_info.flen, column_info.decimal);
     if (checkDecimal<Decimal32>(*type))
     {
@@ -282,8 +283,8 @@ Field DecodeDecimalForCHRow(size_t & cursor, const String & raw_value, const TiD
 
 Field DecodeDecimal(size_t & cursor, const String & raw_value)
 {
-    unsigned char prec = raw_value[cursor++];
-    unsigned char scale = raw_value[cursor++];
+    PrecType prec = raw_value[cursor++];
+    ScaleType scale = raw_value[cursor++];
     auto type = createDecimal(prec, scale);
     if (checkDecimal<Decimal32>(*type))
     {
@@ -309,8 +310,8 @@ Field DecodeDecimal(size_t & cursor, const String & raw_value)
 
 void SkipDecimal(size_t & cursor, const String & raw_value)
 {
-    unsigned char prec = raw_value[cursor++];
-    unsigned char frac = raw_value[cursor++];
+    PrecType prec = raw_value[cursor++];
+    ScaleType frac = raw_value[cursor++];
 
     int bin_size = getBytes(prec, frac);
     cursor += bin_size;
