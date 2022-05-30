@@ -62,9 +62,7 @@ void InterpreterTest::executeInterpreter(const String & expected_string, const s
     auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
     FmtBuffer fb;
     res.in->dumpTree(fb);
-    std::cout << "\n\n" << fb.toString() << std::endl;
-    std::cout << "\n" << expected_string.size() << std::endl;
-//    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
 }
 
 void InterpreterTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
