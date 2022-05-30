@@ -128,6 +128,8 @@ try
     null_or_zero_field.push_back(Field(DecimalField<Decimal128>(0, 0)));
 
     std::vector<Int64> values{10, 2, 20, 8, 10, 0, 30, 8, 16, 4};
+    /// The precision of a non-zero DecimalField<Decimal128> must not less than minDecimalPrecision<Decimal128>
+    /// the decimal_128_factor is used to make sure the precision is big enough
     Int128 decimal_128_factor = 10000000000;
     decimal_128_factor *= 1000000000;
 
