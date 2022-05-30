@@ -65,10 +65,10 @@
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
@@ -464,7 +464,7 @@ private:
     }
 
     RunRaftStoreProxyParms parms;
-    pthread_t thread;
+    pthread_t thread{};
     Poco::Logger * log;
 };
 
@@ -477,6 +477,11 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
         int err_cnt = 0;
         for (auto & [table_id, storage] : storages)
         {
+            // This will skip the init of storages that do not contain any data. TiFlash now sync the schema and
+            // create all tables regardless the table have define TiFlash replica or not, so there may be lots
+            // of empty tables in TiFlash.
+            // Note that we still need to init stores that contains data (defined by the stable dir of this storage
+            // is exist), or the data used size reported to PD is not correct.
             try
             {
                 init_cnt += storage->initStoreIfDataDirExist() ? 1 : 0;
@@ -498,6 +503,7 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     if (lazily_init_store)
     {
         LOG_FMT_INFO(log, "Lazily init store.");
+        // apply the inited in another thread to shorten the start time of TiFlash
         std::thread(do_init_stores).detach();
     }
     else
@@ -1149,7 +1155,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Try to increase limit on number of open files.
     {
-        rlimit rlim;
+        rlimit rlim{};
         if (getrlimit(RLIMIT_NOFILE, &rlim))
             throw Poco::Exception("Cannot getrlimit");
 
@@ -1437,6 +1443,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         /// This object will periodically calculate some metrics.
+        /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);
         attachSystemTablesAsync(*global_context->getDatabase("system"), async_metrics);
 
