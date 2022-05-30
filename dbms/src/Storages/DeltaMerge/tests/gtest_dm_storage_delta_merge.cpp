@@ -169,6 +169,8 @@ try
     }
     EXPECT_EQ(total_segment_rows, num_rows_read);
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -253,6 +255,8 @@ try
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -316,6 +320,8 @@ try
     ASSERT_EQ(sort_desc.front().nulls_direction, sort_desc2.front().nulls_direction);
 
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -610,7 +616,7 @@ try
     sample.insert(DB::tests::createColumn<String>(
         Strings(100, "a"),
         "col2"));
-    constexpr TiDB::TableID table_id = 1232;
+    constexpr TiDB::TableID table_id = 1;
     const String table_name = fmt::format("t_{}", table_id);
 
     Context ctx = DMTestEnv::getContext();
@@ -703,6 +709,8 @@ try
     in->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -850,6 +858,8 @@ try
         ASSERT_LT(read_data(), num_rows_write);
     }
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
