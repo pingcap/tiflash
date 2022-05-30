@@ -257,6 +257,9 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
 
+    /// build side streams
+    executeExpression(build_pipeline, build_side_prepare_actions, "append join key and join filters for build side");
+
     String extra_info = fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id);
     // to build a shared hash table.
     if (join_build_concurrency > 1)
