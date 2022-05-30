@@ -139,13 +139,13 @@ struct SchemaGetter
 
     SchemaDiff getSchemaDiff(Int64 ver);
 
-    String getSchemaDiffKey(Int64 ver);
+    static String getSchemaDiffKey(Int64 ver);
 
     bool checkDBExists(const String & key);
 
-    String getDBKey(DatabaseID db_id);
+    static String getDBKey(DatabaseID db_id);
 
-    String getTableKey(TableID table_id);
+    static String getTableKey(TableID table_id);
 
     TiDB::DBInfoPtr getDatabase(DatabaseID db_id);
 
