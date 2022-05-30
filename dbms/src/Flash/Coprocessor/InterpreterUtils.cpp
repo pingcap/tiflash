@@ -135,9 +135,14 @@ void executeParallel(
 
     if (pipeline.streams.empty()) // && !pipeline.streams_with_non_joined_data.empty()
     {
-        pipeline.streams = std::move(pipeline.streams_with_non_joined_data);
-        pipeline.streams_with_non_joined_data = {};
-        executeParallel(pipeline, parallel_writer, max_streams, log, fmt::format("{}(non joined_streams)", extra_info));
+        pipeline.streams.push_back(executeParallelWrite(
+            pipeline.streams_with_non_joined_data,
+            nullptr,
+            parallel_writer,
+            max_streams,
+            log->identifier()));
+        pipeline.streams_with_non_joined_data.clear();
+        pipeline.firstStream()->setExtraInfo(fmt::format("{}(non joined_streams)", extra_info));
     }
     else
     {

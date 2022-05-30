@@ -24,6 +24,7 @@ BlockInputStreamPtr executeParallelWrite(
     size_t max_threads,
     const String & req_id)
 {
+    assert(!inputs.empty());
     if (inputs.size() == 1)
     {
         return std::make_shared<SerialWritingBlockInputStream>(inputs.back(), additional_input_at_end, parallel_writer, req_id);

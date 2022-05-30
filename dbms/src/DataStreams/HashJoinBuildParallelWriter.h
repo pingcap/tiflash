@@ -60,7 +60,7 @@ public:
             {ASTTableJoin::Kind::Cross_LeftSemi, "Cross_LeftSemi"},
             {ASTTableJoin::Kind::Cross_LeftAnti, "Cross_LeftAnti"}};
         auto join_type_it = join_type_map.find(join->getKind());
-        if (join_type_it == join_type_map.end())
+        if (unlikely(join_type_it == join_type_map.end()))
             throw TiFlashException("Unknown join type", Errors::Coprocessor::Internal);
         buffer.fmtAppend(", join_kind = {}", join_type_it->second);
     }
