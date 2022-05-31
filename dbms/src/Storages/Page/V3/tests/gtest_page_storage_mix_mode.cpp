@@ -889,7 +889,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorageMixedTest, ReadWithSnapshot)
+TEST_F(PageStorageMixedTest, ReadWithSnapshot2)
 try
 {
     UInt64 tag = 0;
