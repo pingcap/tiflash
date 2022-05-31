@@ -48,15 +48,16 @@ public:
         gen.seed(time(nullptr));
     }
 
-    virtual ~PSWriter()
-    {
-        if (memory != nullptr)
-        {
-            free(memory);
-        }
-    }
+    //  ~PSWriter() override
+    // {
+    //     // if (memory != nullptr)
+    //     // {
+    //     //     free(memory);
+    //     // }
+    // }
+    ~PSWriter() override = default;
 
-    virtual String description() override
+     String description() override
     {
         return fmt::format("(Stress Test Writer {})", index);
     }
@@ -69,7 +70,7 @@ public:
 
     static void fillAllPages(const PSPtr & ps);
 
-    virtual bool runImpl() override;
+     bool runImpl() override;
 
 protected:
     virtual DB::PageId genRandomPageId();
@@ -93,11 +94,11 @@ public:
         : PSWriter(ps_, index_)
     {}
 
-    virtual void updatedRandomData() override;
+     void updatedRandomData() override;
 
-    virtual String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
+     String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
 
-    virtual bool runImpl() override;
+     bool runImpl() override;
 
     void setBatchBufferNums(size_t numbers);
 
@@ -122,7 +123,7 @@ protected:
 
     DB::PageFieldSizes data_sizes = {};
 
-    virtual DB::PageId genRandomPageId() override;
+     DB::PageId genRandomPageId() override;
     virtual size_t genBufferSize();
 };
 
@@ -156,7 +157,7 @@ public:
     void setNormalDistributionSigma(size_t sigma);
 
 protected:
-    virtual DB::PageId genRandomPageId() override;
+     DB::PageId genRandomPageId() override;
 
 protected:
     size_t window_size = 100;
@@ -172,12 +173,12 @@ public:
 
     String description() override { return fmt::format("(Stress Test Increase Writer {})", index); }
 
-    virtual bool runImpl() override;
+     bool runImpl() override;
 
     void setPageRange(size_t page_range);
 
 protected:
-    virtual DB::PageId genRandomPageId() override;
+     DB::PageId genRandomPageId() override;
 
 protected:
     size_t begin_page_id = 1;
@@ -194,9 +195,9 @@ public:
         gen.seed(time(nullptr));
     }
 
-    virtual String description() override { return fmt::format("(Stress Test PSReader {})", index); }
+     String description() override { return fmt::format("(Stress Test PSReader {})", index); }
 
-    virtual bool runImpl() override;
+     bool runImpl() override;
 
     void setPageReadOnce(size_t page_read_once);
 
@@ -244,7 +245,7 @@ public:
     void setWriterNums(size_t writer_nums);
 
 protected:
-    virtual DB::PageIds genRandomPageIds() override;
+     DB::PageIds genRandomPageIds() override;
 
 protected:
     size_t window_size = 100;
@@ -263,12 +264,12 @@ public:
         : PSReader(ps_, index_)
     {}
 
-    virtual bool runImpl() override;
+     bool runImpl() override;
 
     void setSnapshotGetIntervalMs(size_t snapshot_get_interval_ms_);
 
 protected:
-    size_t snapshots_hold_num;
+    size_t snapshots_hold_num = 0;
     size_t snapshot_get_interval_ms = 0;
     std::list<DB::PageStorage::SnapshotPtr> snapshots;
 };

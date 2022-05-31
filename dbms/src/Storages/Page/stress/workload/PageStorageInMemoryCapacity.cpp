@@ -18,7 +18,6 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-
 #ifdef __APPLE__
 
 #include <libproc.h>
