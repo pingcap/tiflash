@@ -48,8 +48,6 @@ endif ()
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 option (USE_CCACHE "Set to OFF to disable ccache" ON)
-include (cmake/find_ccache.cmake)
-
 if (USE_CCACHE)
     set(NOT_USE_CCACHE 0)
 else()
@@ -57,9 +55,8 @@ else()
 endif()
 
 option(ENABLE_PCH "Enable `Precompiled header`" ${NOT_USE_CCACHE})
-if (USE_CCACHE AND ENABLE_PCH)
-    message(WARNING "`Precompiled header` will be unavailable with ccache")
-endif ()
+
+include (cmake/find_ccache.cmake)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
     set (CMAKE_BUILD_TYPE "RelWithDebInfo")
