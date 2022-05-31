@@ -133,16 +133,24 @@ public:
 
     void run()
     {
-        if (options.is_imitative)
+        try
         {
-            Context context = Context::createGlobal();
-            getPageStorageV3Info(context, options);
+            if (options.is_imitative)
+            {
+                Context context = Context::createGlobal();
+                getPageStorageV3Info(context, options);
+            }
+            else
+            {
+                PageDirectory::MVCCMapType type;
+                CLIService service(getPageStorageV3Info, options, options.config_file_path, run_raftstore_proxy_ffi);
+                service.run({""});
+            }
         }
-        else
+        catch (...)
         {
-            PageDirectory::MVCCMapType type;
-            CLIService service(getPageStorageV3Info, options, options.config_file_path, run_raftstore_proxy_ffi);
-            service.run({""});
+            DB::tryLogCurrentException("exception thrown");
+            std::abort(); // Finish testing if some error happened.
         }
     }
 
