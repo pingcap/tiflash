@@ -192,7 +192,7 @@ public:
 
 
 protected:
-    /// Do nothing, to make the preparation for the query execution in parallel, in ParallelInputsProcessor.
+    /// Do nothing, to make the preparation when underlying InputStream is picked from the pool
     void readPrefix() override
     {
     }
