@@ -47,6 +47,8 @@ public:
 class StressWorkload
 {
 public:
+    static int main(int argc, char ** argv);
+
     explicit StressWorkload(StressEnv options_)
         : options(options_)
     {}
