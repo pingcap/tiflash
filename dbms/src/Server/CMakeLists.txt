@@ -22,6 +22,7 @@ option(ENABLE_CLICKHOUSE_SERVER "Enable server" ${ENABLE_CLICKHOUSE_ALL})
 option(ENABLE_CLICKHOUSE_CLIENT "Enable client" ${ENABLE_CLICKHOUSE_ALL})
 option(ENABLE_TIFLASH_DTTOOL "Enable dttool: tools to manage dmfile" ${ENABLE_CLICKHOUSE_ALL})
 option(ENABLE_TIFLASH_DTWORKLOAD "Enable dtworkload: tools to test and stress DeltaTree" ${ENABLE_CLICKHOUSE_ALL})
+option(ENABLE_TIFLASH_STRESSWORKLOAD "Enable stressworkload: tools to test and stress PageStorage" ${ENABLE_CLICKHOUSE_ALL})
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
@@ -135,6 +136,9 @@ endif ()
 if (ENABLE_TIFLASH_DTWORKLOAD)
     target_link_libraries(tiflash dt-workload-lib)
 endif ()
+if (ENABLE_TIFLASH_STRESSWORKLOAD)
+    target_link_libraries(tiflash stress-workload-lib)
+endif()
 
 # install always because depian package want this files:
 install (TARGETS tiflash RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT tiflash)

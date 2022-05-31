@@ -15,7 +15,7 @@
 #pragma once
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
-#include <PSStressEnv.h>
+#include <Storages/Page/stress/workload/PSStressEnv.h>
 #include <Poco/Timer.h>
 
 namespace CurrentMetrics

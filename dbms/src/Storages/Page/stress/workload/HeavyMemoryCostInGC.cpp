@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <PSWorkload.h>
+#include <Storages/Page/stress/workload/PSWorkload.h>
 
 namespace DB::PS::tests
 {

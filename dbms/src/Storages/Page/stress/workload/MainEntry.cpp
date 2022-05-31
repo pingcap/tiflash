@@ -12,35 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <PSStressEnv.h>
-#include <PSWorkload.h>
+#include <Storages/Page/stress/workload/PSStressEnv.h>
+#include <Storages/Page/stress/workload/PSWorkload.h>
 
-namespace DB
+namespace DB::PS::tests
 {
-// Define is_background_thread for this binary
-// It is required for `RateLimiter` but we do not link with `BackgroundProcessingPool`.
-#if __APPLE__ && __clang__
-__thread bool is_background_thread = false;
-#else
-thread_local bool is_background_thread = false;
-#endif
-} // namespace DB
-
-int main(int argc, char ** argv)
+int StressWorkload::mainEntry(int argc, char ** argv)
 try
 {
-    DB::PS::tests::StressEnv::initGlobalLogger();
-    auto env = DB::PS::tests::StressEnv::parse(argc, argv);
+    StressEnv::initGlobalLogger();
+    auto env = StressEnv::parse(argc, argv);
     env.setup();
 
-    auto & mamager = DB::PS::tests::StressWorkloadManger::getInstance();
+    auto & mamager = StressWorkloadManger::getInstance();
     mamager.setEnv(env);
     mamager.runWorkload();
 
-    return DB::PS::tests::StressEnvStatus::getInstance().isSuccess();
+    return StressEnvStatus::getInstance().isSuccess();
 }
 catch (...)
 {
     DB::tryLogCurrentException("");
     exit(-1);
 }
+} // namespace DB::PS::tests

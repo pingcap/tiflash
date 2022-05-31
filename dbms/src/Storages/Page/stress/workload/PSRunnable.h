@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #pragma once
-#include <PSStressEnv.h>
 #include <Poco/Runnable.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/stress/workload/PSStressEnv.h>
 
 const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
 
@@ -48,7 +48,7 @@ public:
         gen.seed(time(nullptr));
     }
 
-     ~PSWriter() override
+    ~PSWriter() override
     {
         if (memory != nullptr)
         {
@@ -56,7 +56,7 @@ public:
         }
     }
 
-     String description() override
+    String description() override
     {
         return fmt::format("(Stress Test Writer {})", index);
     }
@@ -69,7 +69,7 @@ public:
 
     static void fillAllPages(const PSPtr & ps);
 
-     bool runImpl() override;
+    bool runImpl() override;
 
 protected:
     virtual DB::PageId genRandomPageId();
@@ -93,11 +93,11 @@ public:
         : PSWriter(ps_, index_)
     {}
 
-     void updatedRandomData() override;
+    void updatedRandomData() override;
 
-     String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
+    String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
 
-     bool runImpl() override;
+    bool runImpl() override;
 
     void setBatchBufferNums(size_t numbers);
 
@@ -122,7 +122,7 @@ protected:
 
     DB::PageFieldSizes data_sizes = {};
 
-     DB::PageId genRandomPageId() override;
+    DB::PageId genRandomPageId() override;
     virtual size_t genBufferSize();
 };
 
@@ -156,7 +156,7 @@ public:
     void setNormalDistributionSigma(size_t sigma);
 
 protected:
-     DB::PageId genRandomPageId() override;
+    DB::PageId genRandomPageId() override;
 
 protected:
     size_t window_size = 100;
@@ -172,12 +172,12 @@ public:
 
     String description() override { return fmt::format("(Stress Test Increase Writer {})", index); }
 
-     bool runImpl() override;
+    bool runImpl() override;
 
     void setPageRange(size_t page_range);
 
 protected:
-     DB::PageId genRandomPageId() override;
+    DB::PageId genRandomPageId() override;
 
 protected:
     size_t begin_page_id = 1;
@@ -194,9 +194,9 @@ public:
         gen.seed(time(nullptr));
     }
 
-     String description() override { return fmt::format("(Stress Test PSReader {})", index); }
+    String description() override { return fmt::format("(Stress Test PSReader {})", index); }
 
-     bool runImpl() override;
+    bool runImpl() override;
 
     void setPageReadOnce(size_t page_read_once);
 
@@ -244,7 +244,7 @@ public:
     void setWriterNums(size_t writer_nums);
 
 protected:
-     DB::PageIds genRandomPageIds() override;
+    DB::PageIds genRandomPageIds() override;
 
 protected:
     size_t window_size = 100;
@@ -263,7 +263,7 @@ public:
         : PSReader(ps_, index_)
     {}
 
-     bool runImpl() override;
+    bool runImpl() override;
 
     void setSnapshotGetIntervalMs(size_t snapshot_get_interval_ms_);
 

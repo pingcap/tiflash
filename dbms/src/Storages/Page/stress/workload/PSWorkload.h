@@ -16,12 +16,12 @@
 
 #include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
-#include <PSBackground.h>
-#include <PSRunnable.h>
-#include <PSStressEnv.h>
 #include <Poco/ThreadPool.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Page/stress/workload/PSBackground.h>
+#include <Storages/Page/stress/workload/PSRunnable.h>
+#include <Storages/Page/stress/workload/PSStressEnv.h>
 #include <fmt/format.h>
 
 #define NORMAL_WORKLOAD 0
@@ -47,7 +47,7 @@ public:
 class StressWorkload
 {
 public:
-    static int main(int argc, char ** argv);
+    static int mainEntry(int argc, char ** argv);
 
     explicit StressWorkload(StressEnv options_)
         : options(options_)
@@ -204,4 +204,4 @@ private:
             });                                                                         \
     }
 
-} // namespace DB::PageStorage::tests
+} // namespace DB::PS::tests

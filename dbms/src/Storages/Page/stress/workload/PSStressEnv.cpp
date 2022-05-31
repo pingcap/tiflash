@@ -16,8 +16,8 @@
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/UnifiedLogPatternFormatter.h>
-#include <PSStressEnv.h>
-#include <PSWorkload.h>
+#include <Storages/Page/stress/workload/PSStressEnv.h>
+#include <Storages/Page/stress/workload/PSWorkload.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>

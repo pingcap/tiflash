@@ -16,7 +16,7 @@
 #include <Common/formatReadable.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/ReadBufferFromMemory.h>
-#include <PSRunnable.h>
+#include <Storages/Page/stress/workload/PSRunnable.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <TestUtils/MockDiskDelegator.h>

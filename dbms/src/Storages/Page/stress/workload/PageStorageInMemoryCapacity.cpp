@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <PSWorkload.h>
+#include <Storages/Page/stress/workload/PSWorkload.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/resource.h>

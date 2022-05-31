@@ -12,4 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(V2)
+include_directories (${CMAKE_CURRENT_BINARY_DIR})
+
+add_subdirectory (workload EXCLUDE_FROM_ALL)

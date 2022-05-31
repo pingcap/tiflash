@@ -17,6 +17,10 @@ add_subdirectory (Page)
 add_subdirectory (DeltaMerge/File/dtpb)
 add_subdirectory (DeltaMerge/tools)
 
+if (ENABLE_V3_PAGESTORAGE)
+    add_subdirectory (Page/stress)
+endif ()
+
 if (ENABLE_TESTS)
     add_subdirectory (tests EXCLUDE_FROM_ALL)
     add_subdirectory (Transaction/tests EXCLUDE_FROM_ALL)
