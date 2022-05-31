@@ -56,7 +56,6 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
 {
     None = 0,
     String,
-    PreHandledSnapshotWithBlock,
     PreHandledSnapshotWithFiles,
     WakerNotifier,
 };
