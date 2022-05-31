@@ -162,6 +162,11 @@ public:
 
     ~KVStore();
 
+    FileUsageStatistics getFileUsageStatistics() const
+    {
+        return region_persister.getFileUsageStatistics();
+    }
+
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;

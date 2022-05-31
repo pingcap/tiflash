@@ -92,10 +92,14 @@ public:
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
+        {
+            // Use lock to ensure reader is created already in reactor thread
+            std::unique_lock lock(mu);
             if (!ok)
                 reader.reset();
             notifyReactor();
             break;
+        }
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
                 ++read_packet_index;
@@ -227,6 +231,8 @@ private:
     void start()
     {
         stage = AsyncRequestStage::WAIT_MAKE_READER;
+        // Use lock to ensure async reader is unreachable from grpc thread before this function returns
+        std::unique_lock lock(mu);
         rpc_context->makeAsyncReader(*request, reader, thisAsUnaryCallback());
     }
 
@@ -283,6 +289,7 @@ private:
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
     LoggerPtr log;
+    std::mutex mu;
 };
 } // namespace
 
@@ -393,10 +400,10 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
     std::vector<AsyncHandler *> waiting_for_retry_requests;
 
-    std::vector<AsyncRequestHandler<RPCContext>> handlers;
+    std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier());
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier()));
 
     while (alive_async_connections > 0)
     {

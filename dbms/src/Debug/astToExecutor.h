@@ -294,6 +294,8 @@ ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, ti
 
 ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
 
+void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
+
 //TODO: add compileWindow
 
 } // namespace DB
