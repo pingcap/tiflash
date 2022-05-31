@@ -19,10 +19,10 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
-#include <Storages/Transaction/SchemaSyncService.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
 
 namespace DB

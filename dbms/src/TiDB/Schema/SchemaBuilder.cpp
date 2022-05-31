@@ -35,11 +35,11 @@
 #include <Parsers/parseQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/SchemaBuilder-internal.h>
-#include <Storages/Transaction/SchemaBuilder.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Schema/SchemaBuilder-internal.h>
+#include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/join.hpp>
@@ -1078,7 +1078,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info->name, 0);
 
-    ASTCreateQuery * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
+    auto * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
     ast_create_query->attach = true;
     ast_create_query->if_not_exists = true;
     ast_create_query->database = name_mapper.mapDatabaseName(*db_info);

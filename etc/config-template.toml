@@ -130,10 +130,6 @@
 # pd_addr = "pd0:2379"
 # specify which storage engine we use. tmt or dt TODO: Remove deprecated tmt engine
 # storage_engine = "dt"
-[raft.snapshot]
-# The way to apply snapshot data
-# The value is one of "block" / "file1"
-# method = "file1"
 
 [status]
 # The port through which Prometheus pulls metrics information.

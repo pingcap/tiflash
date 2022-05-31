@@ -720,47 +720,6 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
     return EngineStoreApplyRes::None;
 }
 
-void Region::handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term)
-{
-    if (index <= appliedIndex())
-        return;
-
-    {
-        std::unique_lock<std::shared_mutex> lock(mutex);
-
-        for (UInt64 i = 0; i < snaps.len; ++i)
-        {
-            const auto & snapshot = snaps.views[i];
-            auto sst_reader = SSTReader{proxy_helper, snapshot};
-
-            LOG_FMT_INFO(log,
-                         "{} begin to ingest sst of cf {} at [term: {}, index: {}]",
-                         this->toString(false),
-                         CFToName(snapshot.type),
-                         term,
-                         index);
-
-            uint64_t kv_size = 0;
-            while (sst_reader.remained())
-            {
-                auto key = sst_reader.key();
-                auto value = sst_reader.value();
-                doInsert(snaps.views[i].type, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
-                ++kv_size;
-                sst_reader.next();
-            }
-
-            LOG_FMT_INFO(log,
-                         "{} finish to ingest sst of kv count {}",
-                         this->toString(false),
-                         kv_size);
-            GET_METRIC(tiflash_raft_process_keys, type_ingest_sst).Increment(kv_size);
-        }
-        meta.setApplied(index, term);
-    }
-    meta.notifyAll();
-}
-
 void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term)
 {
     if (index <= appliedIndex())
