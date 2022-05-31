@@ -48,14 +48,13 @@ public:
         gen.seed(time(nullptr));
     }
 
-    //  ~PSWriter() override
-    // {
-    //     // if (memory != nullptr)
-    //     // {
-    //     //     free(memory);
-    //     // }
-    // }
-    ~PSWriter() override = default;
+     ~PSWriter() override
+    {
+        if (memory != nullptr)
+        {
+            free(memory);
+        }
+    }
 
      String description() override
     {
