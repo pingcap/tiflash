@@ -16,14 +16,14 @@
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/UnifiedLogPatternFormatter.h>
-#include <Storages/Page/stress/workload/PSStressEnv.h>
-#include <Storages/Page/stress/workload/PSWorkload.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
+#include <Storages/Page/stress/workload/PSStressEnv.h>
+#include <Storages/Page/stress/workload/PSWorkload.h>
 #include <signal.h>
 
 #include <boost/program_options.hpp>

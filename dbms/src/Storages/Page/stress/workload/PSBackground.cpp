@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/MemoryTracker.h>
-#include <Storages/Page/stress/workload/PSBackground.h>
 #include <Poco/Logger.h>
 #include <Poco/Timer.h>
+#include <Storages/Page/stress/workload/PSBackground.h>
 #include <fmt/format.h>
 
 

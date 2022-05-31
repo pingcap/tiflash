@@ -15,24 +15,25 @@
 #include <Storages/Page/stress/workload/PSStressEnv.h>
 #include <Storages/Page/stress/workload/PSWorkload.h>
 
-namespace DB::PS::tests
-{
+using namespace DB::PS::tests;
+
 int StressWorkload::mainEntry(int argc, char ** argv)
-try
 {
-    StressEnv::initGlobalLogger();
-    auto env = StressEnv::parse(argc, argv);
-    env.setup();
+    try
+    {
+        StressEnv::initGlobalLogger();
+        auto env = StressEnv::parse(argc, argv);
+        env.setup();
 
-    auto & mamager = StressWorkloadManger::getInstance();
-    mamager.setEnv(env);
-    mamager.runWorkload();
+        auto & mamager = StressWorkloadManger::getInstance();
+        mamager.setEnv(env);
+        mamager.runWorkload();
 
-    return StressEnvStatus::getInstance().isSuccess();
+        return StressEnvStatus::getInstance().isSuccess();
+    }
+    catch (...)
+    {
+        DB::tryLogCurrentException("");
+        exit(-1);
+    }
 }
-catch (...)
-{
-    DB::tryLogCurrentException("");
-    exit(-1);
-}
-} // namespace DB::PS::tests

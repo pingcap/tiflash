@@ -14,10 +14,10 @@
 
 #include <Common/MemoryTracker.h>
 #include <Encryption/MockKeyManager.h>
-#include <Storages/Page/stress/workload/PSWorkload.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/stress/workload/PSWorkload.h>
 #include <TestUtils/MockDiskDelegator.h>
 
 namespace DB::PS::tests

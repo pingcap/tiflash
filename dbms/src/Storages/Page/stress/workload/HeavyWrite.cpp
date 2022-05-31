@@ -16,7 +16,7 @@
 
 namespace DB::PS::tests
 {
-    class HeavyWrite : public StressWorkload
+class HeavyWrite : public StressWorkload
     , public StressWorkloadFunc<HeavyWrite>
 {
 public:
