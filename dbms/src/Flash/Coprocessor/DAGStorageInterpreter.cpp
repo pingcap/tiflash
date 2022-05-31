@@ -647,7 +647,6 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
             continue;
         /// calculate weighted max_streams for each partition, note at least 1 stream is needed for each partition
         size_t current_max_streams = max_streams;
-        LOG_FMT_DEBUG(log, "buildLocalStreams, table_id:{}, streams:{}", table_id, current_max_streams);
         QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
         assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
         auto & storage = storages_with_structure_lock[table_id].storage;
