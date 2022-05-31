@@ -76,7 +76,7 @@ public:
             bool is_one_of_args_null_const = (is_str_const && !str.has_value()) || (is_delim_const && !delim.has_value()) || (is_count_const && !count.has_value());
             bool is_result_const = (is_str_const && is_delim_const && is_count_const) || is_one_of_args_null_const;
             if (is_result_const && !is_one_of_args_null_const && !result.has_value())
-                return;
+                throw Exception("Should not reach here");
             auto expected_res_column = is_result_const ? (is_one_of_args_null_const ? createConstColumn<Nullable<String>>(1, result) : createConstColumn<String>(1, result.value())) : createColumn<Nullable<String>>({result});
             auto str_column = is_str_const ? createConstColumn<Nullable<String>>(1, str) : createColumn<Nullable<String>>({str});
             auto delim_column = is_delim_const ? createConstColumn<Nullable<String>>(1, delim) : createColumn<Nullable<String>>({delim});

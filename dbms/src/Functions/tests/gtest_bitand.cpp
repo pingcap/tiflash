@@ -126,25 +126,36 @@ try
     /// 1. ColumnVector
     /// 2. ColumnVector<Nullable>
     /// 3. ColumnConst
-    /// 4. ColumnConst<Nullable>, value = null
+    /// 4. ColumnConst<Nullable>, value != null
+    /// 5. ColumnConst<Nullable>, value = null
 
     ASSERT_BITAND(createColumn<Int8>({0, 0, 1, 1}), createColumn<UInt64>({0, 1, 0, 1}), createColumn<UInt64>({0, 0, 0, 1}));
     ASSERT_BITAND(createColumn<Int8>({0, 0, 1, 1}), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({0, 0, std::nullopt, std::nullopt}));
     ASSERT_BITAND(createColumn<Int8>({0, 0, 1, 1}), createConstColumn<UInt64>(4, 0), createColumn<UInt64>({0, 0, 0, 0}));
+    ASSERT_BITAND(createColumn<Int8>({0, 0, 1, 1}), createConstColumn<Nullable<UInt64>>(4, 0), createColumn<UInt64>({0, 0, 0, 0}));
     ASSERT_BITAND(createColumn<Int8>({0, 0, 1, 1}), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt)); // become const in wrapInNullable
 
     ASSERT_BITAND(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createColumn<UInt64>({0, 1, 0, 1}), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}));
     ASSERT_BITAND(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}));
     ASSERT_BITAND(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<UInt64>(4, 0), createColumn<Nullable<UInt64>>({0, 0, std::nullopt, std::nullopt}));
+    ASSERT_BITAND(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<Nullable<UInt64>>(4, 0), createColumn<Nullable<UInt64>>({0, 0, std::nullopt, std::nullopt}));
     ASSERT_BITAND(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 
     ASSERT_BITAND(createConstColumn<Int8>(4, 0), createColumn<UInt64>({0, 1, 0, 1}), createColumn<UInt64>({0, 0, 0, 0}));
     ASSERT_BITAND(createConstColumn<Int8>(4, 0), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({0, 0, std::nullopt, std::nullopt}));
     ASSERT_BITAND(createConstColumn<Int8>(4, 0), createConstColumn<UInt64>(4, 0), createConstColumn<UInt64>(4, 0));
+    ASSERT_BITAND(createConstColumn<Int8>(4, 0), createConstColumn<Nullable<UInt64>>(4, 0), createConstColumn<UInt64>(4, 0));
     ASSERT_BITAND(createConstColumn<Int8>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+
+    ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, 0), createColumn<UInt64>({0, 1, 0, 1}), createColumn<UInt64>({0, 0, 0, 0}));
+    ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, 0), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({0, 0, std::nullopt, std::nullopt}));
+    ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<UInt64>(4, 0), createConstColumn<UInt64>(4, 0));
+    ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<Nullable<UInt64>>(4, 0), createConstColumn<UInt64>(4, 0));
+    ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 
     ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, std::nullopt), createColumn<UInt64>({0, 1, 0, 1}), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
     ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, std::nullopt), createColumn<Nullable<UInt64>>({0, 1, std::nullopt, std::nullopt}), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
+    ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<UInt64>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
     ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<UInt64>(4, 0), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
     ASSERT_BITAND(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 }

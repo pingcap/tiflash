@@ -62,6 +62,7 @@ try
     ASSERT_BITNOT(createColumn<Int8>({0, 0, 1, 1}), createColumn<UInt64>({UINT64_MAX, UINT64_MAX, UINT64_MAX - 1, UINT64_MAX - 1}));
     ASSERT_BITNOT(createColumn<Nullable<Int8>>({0, 1, std::nullopt, std::nullopt}), createColumn<Nullable<UInt64>>({UINT64_MAX, UINT64_MAX - 1, std::nullopt, std::nullopt}));
     ASSERT_BITNOT(createConstColumn<Int8>(4, 0), createConstColumn<UInt64>(4, UINT64_MAX));
+    ASSERT_BITNOT(createConstColumn<Nullable<Int8>>(4, 0), createConstColumn<UInt64>(4, UINT64_MAX));
     ASSERT_BITNOT(createConstColumn<Nullable<Int8>>(4, std::nullopt), createConstColumn<Nullable<UInt64>>(4, std::nullopt));
 }
 CATCH

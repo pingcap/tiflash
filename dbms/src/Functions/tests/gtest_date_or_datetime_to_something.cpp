@@ -61,7 +61,7 @@ try
     ASSERT_COLUMN_EQ(output_col, executeFunction(func_name, input_col));
 
     // ColumnConst(non-null)
-    data_col_ptr = createConstColumn<DataTypeMyDateTime::FieldType>(
+    data_col_ptr = createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(
                        4,
                        MyDateTime(2020, 10, 10, 0, 0, 0, 0).toPackedUInt())
                        .column;
