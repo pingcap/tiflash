@@ -76,7 +76,15 @@ protected:
         {
             if constexpr (nullable)
             {
-                return;
+                column = ColumnWithTypeAndName(
+                    createConstColumn<Nullable<typename DT::FieldType>>(1,
+                                                                        {raw_input.toPackedUInt()})
+                        .column,
+                    makeNullable(std::make_shared<DT>()),
+                    "result");
+                result_day = createConstColumn<UInt8>(1, {day});
+                result_month = createConstColumn<UInt8>(1, {month});
+                result_year = createConstColumn<UInt16>(1, {year});
             }
             else
             {
