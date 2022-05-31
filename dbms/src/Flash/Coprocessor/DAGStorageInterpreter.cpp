@@ -634,7 +634,9 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     if (total_local_region_num == 0)
         return;
     const auto table_query_infos = generateSelectQueryInfos();
-    std::shared_ptr<MultiPartitionStreamPool> stream_pool = std::make_shared<MultiPartitionStreamPool>();
+    bool has_multiple_partitions = table_query_infos.size() > 1;
+    // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
+    std::shared_ptr<MultiPartitionStreamPool> stream_pool = has_multiple_partitions ? std::make_shared<MultiPartitionStreamPool>() : nullptr;
     for (const auto & table_query_info : table_query_infos)
     {
         DAGPipeline current_pipeline;
@@ -656,7 +658,8 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
             try
             {
                 current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, current_max_streams);
-                stream_pool->addPartitionStreams(current_pipeline.streams);
+                if (has_multiple_partitions)
+                    stream_pool->addPartitionStreams(current_pipeline.streams);
 
                 // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
                 // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
@@ -780,10 +783,17 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
                 throw;
             }
         }
+        if (!has_multiple_partitions)
+        {
+            pipeline.streams.insert(pipeline.streams.end(), current_pipeline.streams.begin(), current_pipeline.streams.end());
+        }
     }
-    for (int i = 0; i < static_cast<int>(max_streams); i++)
+    if (has_multiple_partitions)
     {
-        pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, context.getDAGContext()->getMPPTaskId().toString()));
+        for (int i = 0; i < static_cast<int>(max_streams); i++)
+        {
+            pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, context.getDAGContext()->getMPPTaskId().toString()));
+        }
     }
 }
 
