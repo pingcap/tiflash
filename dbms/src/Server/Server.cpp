@@ -1063,6 +1063,82 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
+#ifdef TIFLASH_HAS_NUMACTL
+    /// setting up numa
+    if (config().has("libnuma_path")) {
+        auto libnuma_path = config().getString("libnuma_path");
+        global_context->initializeNumaCTL(libnuma_path.data(), log);
+    } else {
+        global_context->initializeNumaCTL(nullptr, log);
+    }
+
+    if (config().has("numa_memory_policy")) {
+        const auto & ctl = global_context->getNumaCTL();
+        if (!ctl.numa_available || ctl.numa_available() == -1) {
+            LOG_FMT_ERROR(log, "numa support is unavailable while `numa_memory_policy` is set");
+            return;
+        }
+        auto numa_memory_policy = config().getString("numa_memory_policy");
+
+        if (numa_memory_policy == "localalloc") {
+            if (!ctl.numa_set_localalloc) {
+                LOG_FMT_ERROR(log, "`numa_set_localalloc` is undefined");
+                return;
+            }
+            ctl.numa_set_localalloc();
+        } else if (numa_memory_policy == "preferred") {
+            if (!config().has("numa_memory_preferred_node")) {
+                LOG_FMT_ERROR(log, "numa memory policy is `preferred`, but no node is specified via `numa_memory_preferred_node`.");
+                return;
+            }
+            if (!ctl.numa_set_preferred) {
+                LOG_FMT_ERROR(log, "`numa_set_preferred` is undefined");
+                return;
+            }
+            auto node = config().getInt("numa_memory_preferred_node");
+            ctl.numa_set_preferred(node);
+        } else if (numa_memory_policy == "membind" || numa_memory_policy == "membind_balancing" || numa_memory_policy == "interleave") {
+            if (!config().has("numa_memory_nodes")) {
+                LOG_FMT_ERROR(log, "`numa_memory_nodes` is required for memory policy `membind`, `membind_balancing` and `interleave`");
+                return;
+            }
+            if (!ctl.numa_parse_nodestring) {
+                LOG_FMT_ERROR(log, "`numa_parse_nodestring` is undefined");
+                return;
+            }
+            auto nodes = config().getString("numa_memory_nodes");
+            auto * bitmask = ctl.numa_parse_nodestring(nodes.data());
+            if (!bitmask) {
+                LOG_FMT_ERROR(log, "failed to parse `numa_memory_nodes`");
+                return;
+            }
+            if (numa_memory_policy == "membind") {
+                if (!ctl.numa_set_membind) {
+                    LOG_FMT_ERROR(log, "`numa_set_membind` is undefined");
+                    return;
+                }
+                ctl.numa_set_membind(bitmask);
+            } else if (numa_memory_policy == "membind_balancing") {
+                if (!ctl.numa_set_membind_balancing) {
+                    LOG_FMT_ERROR(log, "`numa_set_membind_balancing` is undefined");
+                    return;
+                }
+                ctl.numa_set_membind_balancing(bitmask);
+            } else {
+                if (!ctl.numa_set_interleave_mask) {
+                    LOG_FMT_ERROR(log, "`numa_set_interleave_mask` is undefined");
+                    return;
+                }
+                ctl.numa_set_interleave_mask(bitmask);
+            }
+            ctl.free_nodemask(bitmask);
+        } else {
+            LOG_FMT_ERROR(log, "invalid memory policy");
+            return;
+        }
+    }
+#endif
+
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
     {

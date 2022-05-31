@@ -158,6 +158,10 @@ if (RT_LIBRARY)
     target_link_libraries (common PUBLIC ${RT_LIBRARY})
 endif ()
 
+if (ARCH_LINUX)
+    target_link_libraries (common PUBLIC dl)
+endif()
+
 if (ENABLE_TESTS)
     add_subdirectory (src/tests EXCLUDE_FROM_ALL)
 endif ()

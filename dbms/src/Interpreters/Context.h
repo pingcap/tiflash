@@ -21,6 +21,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <common/MultiVersion.h>
+#include <common/numa.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -477,6 +478,21 @@ private:
 
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
+
+#ifdef TIFLASH_HAS_NUMACTL
+private:
+    std::unique_ptr<common::numa::NumaCTL> numactl;
+
+public:
+    void initializeNumaCTL(const char * pattern, Poco::Logger * log)
+    {
+        numactl = std::make_unique<common::numa::NumaCTL>(pattern, log);
+    }
+    const common::numa::NumaCTL & getNumaCTL()
+    {
+        return *numactl;
+    };
+#endif
 };
 
 using ContextPtr = std::shared_ptr<Context>;

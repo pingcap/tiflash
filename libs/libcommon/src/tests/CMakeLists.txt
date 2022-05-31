@@ -38,6 +38,7 @@ add_executable (gtests_libcommon
     gtest_crc64.cpp
     gtest_logger.cpp
     gtest_arithmetic_overflow.cpp
+    gtest_numa.cpp
     )
 target_link_libraries (gtests_libcommon gtest_main common)
 add_check(gtests_libcommon)
