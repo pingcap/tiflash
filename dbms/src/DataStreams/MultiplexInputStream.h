@@ -181,15 +181,7 @@ public:
         }
     }
 
-    BlockExtraInfo getBlockExtraInfo() const override
-    {
-        throw Exception(
-            "Method getBlockExtraInfo is not supported for mode StreamUnionMode::Basic",
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
-
     Block getHeader() const override { return children.at(0)->getHeader(); }
-
 
 protected:
     /// Do nothing, to make the preparation when underlying InputStream is picked from the pool
