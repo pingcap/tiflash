@@ -1063,7 +1063,7 @@ void RegionKVStoreTest::testKVStore()
 
         {
             {
-                auto region = makeRegion(22, RecordKVFormat::genKey(55, 95), RecordKVFormat::genKey(65, 95));
+                auto region = makeRegion(22, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
                 auto ingest_ids = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
@@ -1074,7 +1074,7 @@ void RegionKVStoreTest::testKVStore()
             }
             try
             {
-                auto region = makeRegion(20, RecordKVFormat::genKey(55, 95), RecordKVFormat::genKey(65, 95));
+                auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
                 auto ingest_ids = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
@@ -1098,7 +1098,7 @@ void RegionKVStoreTest::testKVStore()
 
                 try
                 {
-                    auto region = makeRegion(20, RecordKVFormat::genKey(55, 95), RecordKVFormat::genKey(65, 95));
+                    auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
                     auto ingest_ids = kvs.preHandleSnapshotToFiles(
                         region,
                         {},
@@ -1120,7 +1120,7 @@ void RegionKVStoreTest::testKVStore()
                     s.set_state(::raft_serverpb::PeerState::Tombstone);
                     s;
                 }));
-                auto region = makeRegion(20, RecordKVFormat::genKey(55, 95), RecordKVFormat::genKey(65, 95));
+                auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
                 auto ingest_ids = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
@@ -1167,6 +1167,7 @@ void RegionKVStoreTest::testKVStore()
                 100,
                 1,
                 ctx.getTMTContext());
+            ASSERT_EQ(kvs.getRegion(19)->checkIndex(100), true);
         }
     }
 

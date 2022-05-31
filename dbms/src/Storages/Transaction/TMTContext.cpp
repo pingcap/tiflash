@@ -190,7 +190,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
             t = t >= 0 ? t : std::numeric_limits<int64_t>::max(); // set -1 to wait infinitely
             t;
         });
-        read_index_worker_tick_ms = config.getUInt64(READ_INDEX_WORKER_TICK_MS, 10 /*10ms*/);
+        read_index_worker_tick_ms = config.getUInt64(READ_INDEX_WORKER_TICK_MS, DEFAULT_READ_INDEX_WORKER_TICK_MS);
     }
     {
         LOG_FMT_INFO(
