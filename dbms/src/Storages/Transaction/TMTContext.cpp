@@ -36,6 +36,8 @@ extern const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
 
 const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
+const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
+
 TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_)
     , kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
@@ -56,7 +58,7 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
-    , read_index_worker_tick_ms(10)
+    , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {}
 
@@ -149,12 +151,6 @@ SchemaSyncerPtr TMTContext::getSchemaSyncer() const
     return schema_syncer;
 }
 
-void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
-{
-    std::lock_guard lock(mutex);
-    schema_syncer = rhs;
-}
-
 pingcap::pd::ClientPtr TMTContext::getPDClient() const
 {
     return cluster->pd_client;
@@ -194,7 +190,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
             t = t >= 0 ? t : std::numeric_limits<int64_t>::max(); // set -1 to wait infinitely
             t;
         });
-        read_index_worker_tick_ms = config.getUInt64(READ_INDEX_WORKER_TICK_MS, 10 /*10ms*/);
+        read_index_worker_tick_ms = config.getUInt64(READ_INDEX_WORKER_TICK_MS, DEFAULT_READ_INDEX_WORKER_TICK_MS);
     }
     {
         LOG_FMT_INFO(
