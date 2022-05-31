@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Common/Exception.h>
+#include <Common/TiFlashException.h>
 #include <Flash/Planner/PhysicalPlan.h>
 
 namespace DB
@@ -31,17 +31,17 @@ public:
 
     PhysicalPlanPtr children(size_t) const override
     {
-        throw Exception("the children size of PhysicalLeaf is zero");
+        throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
     }
 
     void setChild(size_t, const PhysicalPlanPtr &) override
     {
-        throw Exception("the children size of PhysicalLeaf is zero");
+        throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
     }
 
     void appendChild(const PhysicalPlanPtr &) override
     {
-        throw Exception("the children size of PhysicalLeaf is zero");
+        throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
     }
 
     size_t childrenSize() const override { return 0; };

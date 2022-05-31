@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
+#include <Common/TiFlashException.h>
 #include <Flash/Planner/PlanType.h>
 
 namespace DB
@@ -24,7 +24,7 @@ String PlanType::toString() const
     case Source:
         return "Source";
     default:
-        throw Exception("Unknown PlanType");
+        throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }
 }
 } // namespace DB
