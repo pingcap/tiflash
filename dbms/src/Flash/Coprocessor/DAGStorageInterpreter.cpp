@@ -658,8 +658,6 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
             try
             {
                 current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, current_max_streams);
-                if (has_multiple_partitions)
-                    stream_pool->addPartitionStreams(current_pipeline.streams);
 
                 // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
                 // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
@@ -783,10 +781,10 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
                 throw;
             }
         }
-        if (!has_multiple_partitions)
-        {
+        if (has_multiple_partitions)
+            stream_pool->addPartitionStreams(current_pipeline.streams);
+        else
             pipeline.streams.insert(pipeline.streams.end(), current_pipeline.streams.begin(), current_pipeline.streams.end());
-        }
     }
     if (has_multiple_partitions)
     {
