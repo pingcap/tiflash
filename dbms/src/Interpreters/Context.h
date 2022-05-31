@@ -481,12 +481,12 @@ private:
 
 #ifdef TIFLASH_HAS_NUMACTL
 private:
-    std::unique_ptr<common::numa::NumaCTL> numactl;
+    std::shared_ptr<common::numa::NumaCTL> numactl;
 
 public:
     void initializeNumaCTL(const char * pattern, Poco::Logger * log)
     {
-        numactl = std::make_unique<common::numa::NumaCTL>(pattern, log);
+        numactl = std::make_shared<common::numa::NumaCTL>(pattern, log);
     }
     const common::numa::NumaCTL & getNumaCTL()
     {
