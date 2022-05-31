@@ -18,6 +18,9 @@
 #include <Poco/Timer.h>
 #include <fmt/format.h>
 
+
+namespace DB::PS::tests
+{
 void PSMetricsDumper::onTime(Poco::Timer & /*timer*/)
 {
     for (auto & metric : metrics)
@@ -107,3 +110,4 @@ void StressTimeout::start()
 {
     timeout_timer.start(Poco::TimerCallback<StressTimeout>(*this, &StressTimeout::onTime));
 }
+} // namespace DB::PS::tests

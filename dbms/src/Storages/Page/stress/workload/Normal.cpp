@@ -14,6 +14,8 @@
 
 #include <PSWorkload.h>
 
+namespace DB::PS::tests
+{
 class NormalWorkload
     : public StressWorkload
     , public StressWorkloadFunc<NormalWorkload>
@@ -77,3 +79,4 @@ public:
 };
 
 REGISTER_WORKLOAD(NormalWorkload)
+} // namespace DB::PS::tests

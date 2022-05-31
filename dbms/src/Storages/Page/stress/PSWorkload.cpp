@@ -20,6 +20,8 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <TestUtils/MockDiskDelegator.h>
 
+namespace DB::PS::tests
+{
 void StressWorkload::onDumpResult()
 {
     UInt64 time_interval = stop_watch.elapsedMilliseconds();
@@ -177,3 +179,4 @@ void StressWorkloadManger::runWorkload()
         }
     }
 }
+} // namespace DB::PS::tests

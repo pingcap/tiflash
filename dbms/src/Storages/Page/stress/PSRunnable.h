@@ -19,6 +19,8 @@
 
 const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
 
+namespace DB::PS::tests
+{
 class PSRunnable : public Poco::Runnable
 {
 public:
@@ -270,3 +272,4 @@ protected:
     size_t snapshot_get_interval_ms = 0;
     std::list<DB::PageStorage::SnapshotPtr> snapshots;
 };
+} // namespace DB::PS::tests

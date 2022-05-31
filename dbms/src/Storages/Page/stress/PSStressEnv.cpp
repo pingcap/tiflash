@@ -28,6 +28,8 @@
 
 #include <boost/program_options.hpp>
 
+namespace DB::PS::tests
+{
 Poco::Logger * StressEnv::logger;
 void StressEnv::initGlobalLogger()
 {
@@ -146,3 +148,4 @@ void StressEnv::setup()
         init_pages = true;
     setupSignal();
 }
+} // namespace DB::PS::tests

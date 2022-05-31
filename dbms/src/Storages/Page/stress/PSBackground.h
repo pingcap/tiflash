@@ -23,6 +23,8 @@ namespace CurrentMetrics
 extern const Metric PSMVCCSnapshotsList;
 }
 
+namespace DB::PS::tests
+{
 class PSMetricsDumper
 {
 public:
@@ -162,3 +164,4 @@ private:
     Poco::Timer timeout_timer;
 };
 using StressTimeoutPtr = std::shared_ptr<StressTimeout>;
+} // namespace DB::PS::tests

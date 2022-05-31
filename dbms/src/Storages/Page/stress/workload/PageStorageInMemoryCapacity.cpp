@@ -27,6 +27,8 @@
 #include <sys/sysctl.h>
 #endif
 
+namespace DB::PS::tests
+{
 class PageStorageInMemoryCapacity : public StressWorkload
     , public StressWorkloadFunc<PageStorageInMemoryCapacity>
 {
@@ -89,7 +91,7 @@ public:
         }
 
         FILE * file = fopen("/proc/meminfo", "r");
-        if (file != NULL)
+        if (file != nullptr)
         {
             char buffer[128];
 #define MEMORY_TOTAL_LABEL "MemTotal:"
@@ -175,3 +177,4 @@ private:
 };
 
 REGISTER_WORKLOAD(PageStorageInMemoryCapacity)
+} // namespace DB::PS::tests

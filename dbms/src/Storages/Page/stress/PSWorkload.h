@@ -25,6 +25,8 @@
 #include <fmt/format.h>
 
 #define NORMAL_WORKLOAD 0
+namespace DB::PS::tests
+{
 template <typename Child>
 class StressWorkloadFunc
 {
@@ -199,3 +201,5 @@ private:
                 return std::make_shared<WORKLOAD>(opts);                                \
             });                                                                         \
     }
+
+} // namespace DB::PageStorage::tests

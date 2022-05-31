@@ -29,15 +29,15 @@ thread_local bool is_background_thread = false;
 int main(int argc, char ** argv)
 try
 {
-    StressEnv::initGlobalLogger();
-    auto env = StressEnv::parse(argc, argv);
+    DB::PS::tests::StressEnv::initGlobalLogger();
+    auto env = DB::PS::tests::StressEnv::parse(argc, argv);
     env.setup();
 
-    auto & mamager = StressWorkloadManger::getInstance();
+    auto & mamager = DB::PS::tests::StressWorkloadManger::getInstance();
     mamager.setEnv(env);
     mamager.runWorkload();
 
-    return StressEnvStatus::getInstance().isSuccess();
+    return DB::PS::tests::StressEnvStatus::getInstance().isSuccess();
 }
 catch (...)
 {

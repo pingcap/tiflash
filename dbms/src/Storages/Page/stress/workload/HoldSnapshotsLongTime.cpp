@@ -14,6 +14,8 @@
 
 #include <PSWorkload.h>
 
+namespace DB::PS::tests
+{
 class HoldSnapshotsLongTime : public StressWorkload
     , public StressWorkloadFunc<HoldSnapshotsLongTime>
 {
@@ -94,3 +96,4 @@ private:
 };
 
 REGISTER_WORKLOAD(HoldSnapshotsLongTime)
+} // namespace DB::PS::tests

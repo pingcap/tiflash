@@ -14,6 +14,8 @@
 
 #include <PSWorkload.h>
 
+namespace DB::PS::tests
+{
 class HighValidBigFileGCWorkload
     : public StressWorkload
     , public StressWorkloadFunc<HighValidBigFileGCWorkload>
@@ -129,3 +131,4 @@ private:
 };
 
 REGISTER_WORKLOAD(HighValidBigFileGCWorkload)
+} // namespace DB::PS::tests

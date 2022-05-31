@@ -24,6 +24,8 @@
 
 #include <random>
 
+namespace DB::PS::tests
+{
 void PSRunnable::run()
 try
 {
@@ -415,3 +417,4 @@ DB::PageId PSIncreaseWriter::genRandomPageId()
 {
     return static_cast<DB::PageId>(begin_page_id++);
 }
+} // namespace DB::PS::tests

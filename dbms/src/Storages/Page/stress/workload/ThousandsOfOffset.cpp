@@ -14,7 +14,9 @@
 
 #include <PSWorkload.h>
 
-class ThousandsOfOffset : public StressWorkload
+namespace DB::PS::tests
+{
+    class ThousandsOfOffset : public StressWorkload
     , public StressWorkloadFunc<ThousandsOfOffset>
 {
 public:
@@ -169,3 +171,4 @@ private:
 };
 
 REGISTER_WORKLOAD(ThousandsOfOffset)
+} // namespace DB::PS::tests

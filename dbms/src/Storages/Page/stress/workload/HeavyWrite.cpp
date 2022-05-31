@@ -14,7 +14,9 @@
 
 #include <PSWorkload.h>
 
-class HeavyWrite : public StressWorkload
+namespace DB::PS::tests
+{
+    class HeavyWrite : public StressWorkload
     , public StressWorkloadFunc<HeavyWrite>
 {
 public:
@@ -72,3 +74,4 @@ private:
 };
 
 REGISTER_WORKLOAD(HeavyWrite)
+} // namespace DB::PS::tests

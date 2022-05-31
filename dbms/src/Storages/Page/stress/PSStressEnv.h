@@ -25,6 +25,8 @@ namespace Poco
 class Logger;
 }
 
+namespace DB::PS::tests
+{
 using PSPtr = std::shared_ptr<DB::PageStorage>;
 
 enum StressEnvStat
@@ -124,3 +126,4 @@ struct StressEnv
 
     void setup();
 };
+} // namespace DB::PS::tests

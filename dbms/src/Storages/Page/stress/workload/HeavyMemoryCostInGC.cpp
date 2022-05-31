@@ -14,6 +14,8 @@
 
 #include <PSWorkload.h>
 
+namespace DB::PS::tests
+{
 class HeavyMemoryCostInGC
     : public StressWorkload
     , public StressWorkloadFunc<HeavyMemoryCostInGC>
@@ -81,3 +83,4 @@ public:
 };
 
 REGISTER_WORKLOAD(HeavyMemoryCostInGC)
+} // namespace DB::PS::tests

@@ -14,6 +14,8 @@
 
 #include <PSWorkload.h>
 
+namespace DB::PS::tests
+{
 class HeavyRead : public StressWorkload
     , public StressWorkloadFunc<HeavyRead>
 {
@@ -70,3 +72,4 @@ private:
 };
 
 REGISTER_WORKLOAD(HeavyRead)
+} // namespace DB::PS::tests
