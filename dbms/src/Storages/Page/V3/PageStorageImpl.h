@@ -72,6 +72,8 @@ public:
 
     SnapshotsStatistics getSnapshotsStat() const override;
 
+    FileUsageStatistics getFileUsageStatistics() const override;
+
     size_t getNumberOfPages() override;
 
     std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) override;

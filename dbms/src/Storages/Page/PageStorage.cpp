@@ -66,6 +66,8 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
+    virtual FileUsageStatistics getFileUsageStatistics() const = 0;
+
     virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const = 0;
 };
 
@@ -135,6 +137,11 @@ public:
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
     {
         storage->traverse(acceptor, nullptr);
+    }
+
+    FileUsageStatistics getFileUsageStatistics() const override
+    {
+        return storage->getFileUsageStatistics();
     }
 
 private:
@@ -294,6 +301,11 @@ public:
         return statistics_total;
     }
 
+    FileUsageStatistics getFileUsageStatistics() const override
+    {
+        return storage_v3->getFileUsageStatistics();
+    }
+
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const override
     {
         // Used by RegionPersister::restore
@@ -422,6 +434,12 @@ PageStorage::SnapshotPtr PageReader::getSnapshot(const String & tracing_id) cons
 SnapshotsStatistics PageReader::getSnapshotsStat() const
 {
     return impl->getSnapshotsStat();
+}
+
+
+FileUsageStatistics PageReader::getFileUsageStatistics() const
+{
+    return impl->getFileUsageStatistics();
 }
 
 void PageReader::traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const
