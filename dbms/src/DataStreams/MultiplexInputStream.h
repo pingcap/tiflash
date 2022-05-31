@@ -35,9 +35,9 @@ public:
 
     void addPartitionStreams(const BlockInputStreams & cur_streams)
     {
-        std::unique_lock lk(mu);
         if (cur_streams.empty())
             return;
+        std::unique_lock lk(mu);
         streams_queue_by_partition.push_back(
             std::make_shared<std::queue<std::shared_ptr<IBlockInputStream>>>());
         for (const auto & stream : cur_streams)
