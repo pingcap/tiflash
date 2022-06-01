@@ -787,9 +787,10 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     }
     if (has_multiple_partitions)
     {
+        String req_info = dag_context.isMPPTask() ? dag_context.getMPPTaskId().toString() : "";
         for (int i = 0; i < static_cast<int>(max_streams); ++i)
         {
-            pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, context.getDAGContext()->getMPPTaskId().toString()));
+            pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, req_info));
         }
     }
 }
