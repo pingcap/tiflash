@@ -266,7 +266,11 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
 
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 {
-    auto task_lock = genTaskLock();
+    handleDestroy(region_id, tmt, genTaskLock());
+}
+
+void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock & task_lock)
+{
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
@@ -596,6 +600,7 @@ void WaitCheckRegionReady(const TMTContext & tmt, const std::atomic_size_t & ter
             if (!need_retry)
             {
                 // if region is able to get latest commit-index from TiKV, we should make it available only after it has caught up.
+                assert(resp.read_index() != 0);
                 regions_to_check.emplace(region_id, resp.read_index());
                 remain_regions.erase(region_id);
             }
