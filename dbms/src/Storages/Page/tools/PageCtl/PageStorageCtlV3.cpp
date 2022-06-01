@@ -70,7 +70,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
 
 
     static_assert(sizeof(DB::PageId) == sizeof(UInt64));
-    static_assert(sizeof(DB::BlobFileId) == sizeof(UInt32));
+    static_assert(sizeof(DB::BlobFileId) == sizeof(UInt64));
 
     po::variables_map options;
     po::store(po::parse_command_line(argc, argv, desc), options);
