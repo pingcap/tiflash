@@ -24,11 +24,10 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include <ctime>
 #include <memory>
-
-#include "common/logger_useful.h"
 
 namespace CurrentMetrics
 {
@@ -438,7 +437,7 @@ try
 {
     Settings my_settings;
     const auto enable_relevant_place = GetParam();
-    my_settings.dt_enable_relevant_place = enable_relevant_place; // set for test
+    my_settings.dt_enable_relevant_place = enable_relevant_place;
     this->reload({}, std::move(my_settings));
 
     const size_t num_rows_write = 300;
@@ -466,18 +465,19 @@ try
 
     {
         HandleRange remove(100, 200);
-        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
+        segment->write(dmContext(), /*delete_range*/ {RowKeyRange::fromHandleRange(remove)});
     }
 
     // The first call of get_rows below will place the DeleteRange into delta index.
+    // If relevant place is enabled, the placed deleted in delta-tree-index is not
+    // pushed forward since we do not fully apply the delete range [100, 200).
     auto rows1 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 150)));
     {
         auto delta = segment->getDelta();
         auto placed_rows = delta->getPlacedDeltaRows();
         auto placed_deleted = delta->getPlacedDeltaDeletes();
         ASSERT_EQ(placed_rows, num_rows_write);
-        ASSERT_EQ(placed_deleted, enable_relevant_place ? 0 : 1);
-        LOG_FMT_INFO(&Poco::Logger::get("fff"), "fffffff {} {}", placed_rows, placed_deleted);
+        EXPECT_EQ(placed_deleted, enable_relevant_place ? 0 : 1);
     }
     auto rows2 = get_rows(RowKeyRange::fromHandleRange(HandleRange(150, 300)));
     {
@@ -485,8 +485,7 @@ try
         auto placed_rows = delta->getPlacedDeltaRows();
         auto placed_deleted = delta->getPlacedDeltaDeletes();
         ASSERT_EQ(placed_rows, num_rows_write);
-        ASSERT_EQ(placed_deleted, enable_relevant_place ? 0 : 1);
-        LOG_FMT_INFO(&Poco::Logger::get("fff"), "fffffff {} {}", placed_rows, placed_deleted);
+        EXPECT_EQ(placed_deleted, enable_relevant_place ? 0 : 1);
     }
 
     ASSERT_EQ(rows1, 100);
