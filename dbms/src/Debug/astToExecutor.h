@@ -30,7 +30,6 @@
 
 #include <optional>
 
-
 namespace DB
 {
 namespace ErrorCodes
