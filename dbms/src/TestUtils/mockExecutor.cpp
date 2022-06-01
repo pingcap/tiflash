@@ -274,37 +274,37 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
     return *this;
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columns)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columnInfos)
 {
-    std::vector<MockColumnInfo> v_column_info(columns.size());
+    std::vector<MockColumnInfo> v_column_info(columnInfos.size());
     size_t i = 0;
-    for (const auto & info : columns)
+    for (const auto & info : columnInfos)
     {
         v_column_info[i++] = std::move(info);
     }
     mock_tables[name.first + "." + name.second] = v_column_info;
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfos & columns)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfos & columnInfos)
 {
-    mock_tables[db + "." + table] = columns;
+    mock_tables[db + "." + table] = columnInfos;
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfos & columns)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfos & columnInfos)
 {
-    mock_tables[name.first + "." + name.second] = columns;
+    mock_tables[name.first + "." + name.second] = columnInfos;
 }
 
-void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfos & columns)
+void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfos & columnInfos)
 {
-    exchange_schemas[name] = columns;
+    exchange_schemas[name] = columnInfos;
 }
 
-void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoList & columns)
+void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoList & columnInfos)
 {
-    std::vector<MockColumnInfo> v_column_info(columns.size());
+    std::vector<MockColumnInfo> v_column_info(columnInfos.size());
     size_t i = 0;
-    for (const auto & info : columns)
+    for (const auto & info : columnInfos)
     {
         v_column_info[i++] = std::move(info);
     }
@@ -350,6 +350,18 @@ void MockDAGRequestContext::addMockTableWithColumnData(const MockTableName & nam
     addMockTableColumnData(name, columns);
 }
 
+void MockDAGRequestContext::addExchangeReceiverWithColumnData(const String & name, MockColumnInfos columnInfos, ColumnsWithTypeAndName columns)
+{
+    addExchangeRelationSchema(name, columnInfos);
+    addExchangeReceiverColumnData(name, columns);
+}
+
+void MockDAGRequestContext::addExchangeReceiverWithColumnData(const String & name, MockColumnInfoList columnInfos, ColumnsWithTypeAndName columns)
+{
+    addExchangeRelationSchema(name, columnInfos);
+    addExchangeReceiverColumnData(name, columns);
+}
+
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
     source_columns = mock_table_columns[db_name + "." + table_name];
@@ -360,6 +372,7 @@ DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name)
 {
     auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name]);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
+    source_columns = mock_exchange_columns[exchange_name];
     return builder;
 }
 } // namespace DB::tests

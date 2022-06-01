@@ -385,44 +385,5 @@ CreatingSets
 }
 CATCH
 
-
-template <typename T>
-ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
-{
-    return createColumn<Nullable<T>>(v, name);
-}
-
-TEST_F(InterpreterExecuteTest, Filter)
-try
-{
-    auto request = context.scan("test_db", "test_table").filter(eq(col("s1"), col("s2"))).build(context);
-    {
-        String expected = "selection_1 | equals(<0, String>, <1, String>)}\n"
-                          " table_scan_0 | {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
-        executeStreams(request,
-                       {toNullableVec<String>("s1", {"banana", "banana"}),
-                        toNullableVec<String>("s2", {"apple", "banana"})},
-                       {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})});
-    }
-
-    request = context.scan("test_db", "test_table")
-                  .filter(And(eq(col("s1"), col("s2")), eq(col("s2"), col("s2"))))
-                  .build(context);
-    {
-        String expected = "selection_1 | equals(<0, String>, <1, String>) and equals(<1, String>, <1, String>)}\n"
-                          " table_scan_0 | {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
-
-        executeStreams(request,
-                       {toNullableVec<String>("s1", {"banana", "banana"}),
-                        toNullableVec<String>("s2", {"apple", "banana"})},
-                       {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})});
-    }
-}
-CATCH
-
 } // namespace tests
 } // namespace DB

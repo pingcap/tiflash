@@ -516,8 +516,15 @@ void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline
 {
     for (size_t i = 0; i < max_streams; ++i)
     {
-        // use max_block_size / 10 to determine the mock block's size
-        pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(query_block.source->exchange_receiver(), context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
+        if (context.getDAGContext()->columnsForTest().empty())
+        {
+            // use max_block_size / 10 to determine the mock block's size
+            pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(query_block.source->exchange_receiver(), context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
+        }
+        else
+        {
+            pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(context.getDAGContext()->columnsForTest(), context.getSettingsRef().max_block_size));
+        }
     }
     NamesAndTypes source_columns;
     for (const auto & col : pipeline.firstStream()->getHeader())

@@ -123,11 +123,11 @@ public:
         return DAGRequestBuilder(index);
     }
 
-    void addMockTable(const MockTableName & name, const MockColumnInfoList & columns);
-    void addMockTable(const String & db, const String & table, const MockColumnInfos & columns);
-    void addMockTable(const MockTableName & name, const MockColumnInfos & columns);
-    void addExchangeRelationSchema(String name, const MockColumnInfos & columns);
-    void addExchangeRelationSchema(String name, const MockColumnInfoList & columns);
+    void addMockTable(const MockTableName & name, const MockColumnInfoList & columnInfos);
+    void addMockTable(const String & db, const String & table, const MockColumnInfos & columnInfos);
+    void addMockTable(const MockTableName & name, const MockColumnInfos & columnInfos);
+    void addExchangeRelationSchema(String name, const MockColumnInfos & columnInfos);
+    void addExchangeRelationSchema(String name, const MockColumnInfoList & columnInfos);
     void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
     void addMockTableWithColumnData(const String & db, const String & table, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns);
     void addMockTableWithColumnData(const String & db, const String & table, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns);
@@ -135,6 +135,8 @@ public:
     void addMockTableWithColumnData(const MockTableName & name, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns);
     void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
     void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
+    void addExchangeReceiverWithColumnData(const String & name, MockColumnInfos columnInfos, ColumnsWithTypeAndName columns);
+    void addExchangeReceiverWithColumnData(const String & name, MockColumnInfoList columnInfos, ColumnsWithTypeAndName columns);
 
     ColumnsWithTypeAndName sourceColumns() { return source_columns; }
 

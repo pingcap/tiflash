@@ -29,6 +29,10 @@ public:
                                            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                            {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                                             toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addExchangeReceiverWithColumnData("exchange1",
+                                                  {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+                                                  {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+                                                   toNullableVec<String>("s2", {"apple", {}, "banana"})});
     }
 
     template <typename T>
@@ -70,6 +74,18 @@ try
         executeStreams(request,
                        {toNullableVec<String>("s1", {"banana", "banana"}),
                         toNullableVec<String>("s2", {"apple", "banana"})},
+                       {toNullableVec<String>("s1", {"banana"}),
+                        toNullableVec<String>("s2", {"banana"})});
+    }
+
+    request = context.receive("exchange1")
+                  .filter(eq(col("s1"), col("s2")))
+                  .build(context);
+    {
+        String expected = "selection_1 | equals(<0, String>, <1, String>)}\n"
+                          " exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>}\n";
+        ASSERT_DAGREQUEST_EQAUL(expected, request);
+        executeStreams(request,
                        {toNullableVec<String>("s1", {"banana"}),
                         toNullableVec<String>("s2", {"banana"})});
     }
