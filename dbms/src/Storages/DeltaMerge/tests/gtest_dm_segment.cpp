@@ -28,6 +28,8 @@
 #include <ctime>
 #include <memory>
 
+#include "common/logger_useful.h"
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfRead;
@@ -40,11 +42,6 @@ extern const Metric DT_SnapshotOfPlaceIndex;
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_enable_dt_relevant_place[];
-extern const char force_disable_dt_relevant_place[];
-} // namespace FailPoints
 namespace DM
 {
 extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
@@ -440,7 +437,8 @@ TEST_P(SegmentDeletionRelevantPlaceTest, ShareDelteRangeIndex)
 try
 {
     Settings my_settings;
-    my_settings.dt_enable_relevant_place = GetParam(); // set for test
+    const auto enable_relevant_place = GetParam();
+    my_settings.dt_enable_relevant_place = enable_relevant_place; // set for test
     this->reload({}, std::move(my_settings));
 
     const size_t num_rows_write = 300;
@@ -473,7 +471,23 @@ try
 
     // The first call of get_rows below will place the DeleteRange into delta index.
     auto rows1 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 150)));
+    {
+        auto delta = segment->getDelta();
+        auto placed_rows = delta->getPlacedDeltaRows();
+        auto placed_deleted = delta->getPlacedDeltaDeletes();
+        ASSERT_EQ(placed_rows, num_rows_write);
+        ASSERT_EQ(placed_deleted, enable_relevant_place ? 0 : 1);
+        LOG_FMT_INFO(&Poco::Logger::get("fff"), "fffffff {} {}", placed_rows, placed_deleted);
+    }
     auto rows2 = get_rows(RowKeyRange::fromHandleRange(HandleRange(150, 300)));
+    {
+        auto delta = segment->getDelta();
+        auto placed_rows = delta->getPlacedDeltaRows();
+        auto placed_deleted = delta->getPlacedDeltaDeletes();
+        ASSERT_EQ(placed_rows, num_rows_write);
+        ASSERT_EQ(placed_deleted, enable_relevant_place ? 0 : 1);
+        LOG_FMT_INFO(&Poco::Logger::get("fff"), "fffffff {} {}", placed_rows, placed_deleted);
+    }
 
     ASSERT_EQ(rows1, 100);
     ASSERT_EQ(rows2, 100);

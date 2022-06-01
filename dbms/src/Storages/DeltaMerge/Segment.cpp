@@ -86,11 +86,6 @@ extern const Metric DT_SnapshotOfPlaceIndex;
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char force_enable_dt_relevant_place[];
-extern const char force_disable_dt_relevant_place[];
-} // namespace FailPoints
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -1485,9 +1480,6 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
 
     bool relevant_place = dm_context.enable_relevant_place;
     bool skippable_place = dm_context.enable_skippable_place;
-
-    fiu_do_on(FailPoints::force_enable_dt_relevant_place, relevant_place = true);
-    fiu_do_on(FailPoints::force_disable_dt_relevant_place, relevant_place = false);
 
     // Note that, when enable_relevant_place is false , we cannot use the range of this segment.
     // Because some block / delete ranges could contain some data / range that are not belong to current segment.
