@@ -58,6 +58,29 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
     return false;
 }
 
+bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Window & window)
+{
+    for (const auto & expr : window.func_desc())
+    {
+        if (!exprHasValidFieldType(expr))
+            throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(expr.field_type());
+    }
+    for (const auto & byitem : window.partition_by())
+    {
+        if (!exprHasValidFieldType(byitem.expr()))
+            throw TiFlashException("partition by expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(byitem.expr().field_type());
+    }
+
+    for (const auto & byitem : window.order_by())
+    {
+        if (!exprHasValidFieldType(byitem.expr()))
+            throw TiFlashException("order by expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(byitem.expr().field_type());
+    }
+    return false;
+}
 bool collectForReceiver(std::vector<tipb::FieldType> & output_field_types, const tipb::ExchangeReceiver & receiver)
 {
     for (const auto & field_type : receiver.field_types())
@@ -149,9 +172,7 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         // In mpp mode, ExchangeSender or Sender will return output_field_types directly.
         // If not in mpp mode, window executor type is invalid.
         // ywq todo: Question: why only MPP?
-        // break;
-        return true;
-        // throw TiFlashException("Window executor type is invalid in non-mpp mode, should not reach here.", Errors::Coprocessor::Internal);
+        return collectForWindow(output_field_types, executor.window());
     case tipb::ExecType::TypeExchangeReceiver:
         return collectForReceiver(output_field_types, executor.exchange_receiver());
     case tipb::ExecType::TypeTableScan:

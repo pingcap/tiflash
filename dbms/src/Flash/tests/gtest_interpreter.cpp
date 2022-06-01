@@ -393,20 +393,51 @@ try
     frame.type = tipb::WindowFrameType::Rows;
     frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
     frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
-    auto request = context.scan("test_db", "test_table").sort({{"s1", true}, {"s2", false}}, true).window(RowNumber(), {"s1", true}, {"s2", false}, frame).build(context);
+    auto request = context
+                       .scan("test_db", "test_table")
+                       .sort({{"s1", true}, {"s2", false}}, true)
+                       .window(RowNumber(), {"s1", true}, {"s2", false}, frame)
+                       .build(context);
     {
         String expected = R"(
 Union: <for mpp>
  Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
-   Expression: <cast after window>
-    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+  Expression: <before order and select>
+   SharedQuery: <restore concurrency>
+    Expression: <cast after window>
+     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+      Expression: <final projection>
+       MergeSorting, limit = 0
+        Union: <for partial order>
+         PartialSorting x 10: limit = 0
+          Expression: <final projection>
+           MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+
+    request = context.scan("test_db", "test_table")
+                  .sort({{"s1", true}, {"s2", false}}, true)
+                  .window(RowNumber(), {"s1", true}, {"s2", false}, frame)
+                  .project({"s1", "s2", "RowNumber()"})
+                  .build(context);
+    {
+        String expected = R"(
+Union: <for mpp>
+ Expression x 10: <final projection>
+  Expression: <before order and select>
+   Expression: <projection>
+    Expression: <before projection>
      Expression: <final projection>
-      MergeSorting, limit = 0
-       Union: <for partial order>
-        PartialSorting x 10: limit = 0
+      SharedQuery: <restore concurrency>
+       Expression: <cast after window>
+        Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
          Expression: <final projection>
-          MockTableScan)";
+          MergeSorting, limit = 0
+           Union: <for partial order>
+            PartialSorting x 10: limit = 0
+             Expression: <final projection>
+              MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }

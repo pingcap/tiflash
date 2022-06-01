@@ -1370,14 +1370,11 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
             tipb::Expr * func = window_expr->add_children();
             astToPB(input_schema, arg, func, collator_id, context);
         }
-        // ywq todo
         auto window_sig_it = window_func_name_to_sig.find(window_func->name);
-        std::cout << "window_func->name = " << window_func->name << std::endl;
         if (window_sig_it == window_func_name_to_sig.end())
             throw Exception("Unsupported window function " + window_func->name, ErrorCodes::LOGICAL_ERROR);
         auto window_sig = window_sig_it->second;
         window_expr->set_tp(window_sig);
-        std::cout << "window_func sig = " << window_sig << std::endl;
         auto * ft = window_expr->mutable_field_type();
         ft->set_tp(TiDB::TypeLongLong);
         ft->set_flag(TiDB::ColumnFlagBinary);
@@ -1389,6 +1386,7 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         // ft->set_decimal(window_expr->children(0).field_type().decimal()); // ywq todo check type?
         // ft->set_flen(window_expr->children(0).field_type().flen());
     }
+
     for (const auto & child : order_by_exprs)
     {
         auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
@@ -1397,6 +1395,10 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         tipb::ByItem * by = window->add_order_by();
         by->set_desc(elem->direction < 0);
         tipb::Expr * expr = by->mutable_expr();
+        expr->mutable_field_type()->set_flen(11);
+        expr->mutable_field_type()->set_decimal(0);
+        expr->mutable_field_type()->set_charset("binary");
+        expr->mutable_field_type()->set_collate(63);
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
 
@@ -1408,6 +1410,10 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         tipb::ByItem * by = window->add_partition_by();
         by->set_desc(elem->direction < 0);
         tipb::Expr * expr = by->mutable_expr();
+        expr->mutable_field_type()->set_flen(11);
+        expr->mutable_field_type()->set_decimal(0);
+        expr->mutable_field_type()->set_charset("binary");
+        expr->mutable_field_type()->set_collate(63);
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
 
@@ -1416,7 +1422,6 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
     {
         tipb::WindowFrame * mut_frame = window->mutable_frame();
         mut_frame->set_type(frame.type.value());
-        std::cout << "ywq test reach here." << std::endl;
         if (frame.start.has_value())
         {
             auto * start = mut_frame->mutable_start();
@@ -1440,9 +1445,37 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
 
 void Window::columnPrune(std::unordered_set<String> & used_columns)
 {
-    children[0]->columnPrune(used_columns);
-    /// update output schema after column prune
-    output_schema = children[0]->output_schema;
+    output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
+                        output_schema.end());
+    std::unordered_set<String> used_input_columns;
+    for (auto & func : func_descs)
+    {
+        if (used_columns.find(func->getColumnName()) != used_columns.end())
+        {
+            const auto * window_func = typeid_cast<const ASTFunction *>(func.get());
+            if (window_func != nullptr)
+            {
+                for (auto & child : window_func->arguments->children)
+                    collectUsedColumnsFromExpr(children[0]->output_schema, child, used_input_columns);
+            }
+        }
+    }
+    for (auto & partition_by : partition_by_exprs)
+    {
+        auto * elem = typeid_cast<ASTOrderByElement *>(partition_by.get());
+        if (!elem)
+            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+
+        collectUsedColumnsFromExpr(children[0]->output_schema, elem->children[0], used_input_columns);
+    }
+    for (auto & order_by : order_by_exprs)
+    {
+        auto * elem = typeid_cast<ASTOrderByElement *>(order_by.get());
+        if (!elem)
+            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+        collectUsedColumnsFromExpr(children[0]->output_schema, elem->children[0], used_input_columns);
+    }
+    children[0]->columnPrune(used_input_columns);
 }
 
 bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
@@ -1716,7 +1749,6 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
                 children_ci.push_back(compileExpr(input->output_schema, arg));
             }
             // TODO: add more window functions
-            // ywq todo
             TiDB::ColumnInfo ci;
             if (func->name == "RowNumber" || func->name == "Rank" || func->name == "DenseRank")
             {
@@ -1739,9 +1771,11 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             if (!elem)
                 throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
             partition_columns.push_back(child);
-            compileExpr(input->output_schema, elem->children[0]);
+            auto ci = compileExpr(input->output_schema, elem->children[0]);
+            output_schema.emplace_back(std::make_pair(elem->children[0]->getColumnName(), ci));
         }
     }
+
     if (order_by_expr_list != nullptr)
     {
         for (const auto & child : order_by_expr_list->children)
@@ -1750,10 +1784,17 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             if (!elem)
                 throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
             order_columns.push_back(child);
-            compileExpr(input->output_schema, elem->children[0]);
+            auto ci = compileExpr(input->output_schema, elem->children[0]);
+            output_schema.emplace_back(std::make_pair(elem->children[0]->getColumnName(), ci));
         }
     }
-    ExecutorPtr window = std::make_shared<mock::Window>(executor_index, output_schema, window_exprs, std::move(partition_columns), std::move(order_columns), frame);
+    ExecutorPtr window = std::make_shared<mock::Window>(
+        executor_index,
+        output_schema,
+        window_exprs,
+        std::move(partition_columns),
+        std::move(order_columns),
+        frame);
     window->children.push_back(input);
     return window;
 }
