@@ -159,13 +159,34 @@ AnalysisResult analyzeExpressions(
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    auto names_and_types = genNamesAndTypes(table_scan);
-    auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+    NamesAndTypes names_and_types;
+    ColumnsWithTypeAndName columns_with_type_and_name;
+    if (context.getDAGContext()->columnsForTest().empty())
+    {
+        names_and_types = genNamesAndTypes(table_scan);
+        columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+    }
+    else
+    {
+        for (const auto & col : context.getDAGContext()->columnsForTest())
+        {
+            names_and_types.push_back({col.name, col.type});
+        }
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+    }
     for (size_t i = 0; i < max_streams; ++i)
     {
-        auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size);
-        pipeline.streams.emplace_back(mock_table_scan_stream);
+        if (context.getDAGContext()->columnsForTest().empty())
+        {
+            auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size);
+            pipeline.streams.emplace_back(mock_table_scan_stream);
+        }
+        else
+        {
+            auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(context.getDAGContext()->columnsForTest(), context.getSettingsRef().max_block_size);
+            pipeline.streams.emplace_back(mock_table_scan_stream);
+        }
     }
 }
 

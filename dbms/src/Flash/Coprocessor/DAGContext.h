@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include "Core/ColumnWithTypeAndName.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -298,6 +299,8 @@ public:
     }
 
     bool isTest() const { return is_test; }
+    void setColumnsForTest(ColumnsWithTypeAndName columns_for_test_) { columns_for_test = columns_for_test_; }
+    ColumnsWithTypeAndName columnsForTest() { return columns_for_test; }
 
     void cancelAllExchangeReceiver();
 
@@ -317,8 +320,8 @@ public:
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
     String table_scan_executor_id;
     String tidb_host = "Unknown";
-    bool collect_execution_summaries;
-    bool return_executor_id;
+    bool collect_execution_summaries{};
+    bool return_executor_id{};
     bool is_mpp_task = false;
     bool is_root_mpp_task = false;
     bool is_batch_cop = false;
@@ -372,6 +375,7 @@ private:
     std::vector<SubqueriesForSets> subqueries;
 
     bool is_test = false; /// switch for test, do not use it in production.
+    ColumnsWithTypeAndName columns_for_test;
 };
 
 } // namespace DB

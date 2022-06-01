@@ -65,6 +65,71 @@ void InterpreterTest::executeInterpreter(const String & expected_string, const s
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
 }
 
+// todo not in interpreter test class.
+static Block mergeBlocks(Blocks blocks)
+{
+    if (blocks.empty())
+    {
+        return {};
+    }
+    Block sample_block;
+    std::vector<MutableColumnPtr> actual_cols;
+
+    for (const auto & block : blocks)
+    {
+        if (!sample_block)
+        {
+            sample_block = block;
+            for (const auto & column : block.getColumnsWithTypeAndName())
+            {
+                actual_cols.push_back(column.type->createColumn());
+            }
+        }
+
+        for (size_t i = 0; i < block.columns(); ++i)
+        {
+            for (size_t j = 0; j < block.rows(); ++j)
+            {
+                actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
+            }
+        }
+    }
+
+    ColumnsWithTypeAndName actual_columns;
+
+    for (size_t i = 0; i < actual_cols.size(); ++i)
+    {
+        actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
+    }
+    return Block(actual_columns);
+}
+
+void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
+{
+    DAGContext dag_context(*request, "interpreter_test", 1);
+
+    dag_context.setColumnsForTest(source_columns);
+    context.context.setDAGContext(&dag_context);
+    // Currently, don't care about regions information in interpreter tests.
+    DAGQuerySource dag(context.context);
+    auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
+    auto stream = res.in;
+    Blocks actual_blocks;
+    Block except_block(expect_columns);
+    while (Block block = stream->read())
+    {
+        actual_blocks.push_back(block);
+    }
+
+    Block actual_block = mergeBlocks(actual_blocks);
+    if (actual_block)
+    {
+        // Check that input columns is properly split to many blocks
+        ASSERT_EQ(actual_blocks.size(), (actual_block.rows() - 1) / context.context.getSettingsRef().max_block_size + 1);
+    }
+    ASSERT_BLOCK_EQ(except_block, actual_block);
+}
+
 void InterpreterTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
 {
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));

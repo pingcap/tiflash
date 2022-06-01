@@ -52,6 +52,8 @@ public:
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
+    void executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns);
+
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
