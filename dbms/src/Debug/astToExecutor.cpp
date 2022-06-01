@@ -1380,8 +1380,8 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         ft->set_tp(TiDB::TypeLongLong);
         ft->set_flag(TiDB::ColumnFlagBinary);
         ft->set_collate(collator_id);
-        ft->set_flen(21)
-            ft->set_decimal(-1);
+        ft->set_flen(21);
+        ft->set_decimal(-1);
     }
 
     for (const auto & child : order_by_exprs)
