@@ -78,7 +78,6 @@ public:
     explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
-    void setSchemaSyncer(SchemaSyncerPtr);
 
     pingcap::pd::ClientPtr getPDClient() const;
 

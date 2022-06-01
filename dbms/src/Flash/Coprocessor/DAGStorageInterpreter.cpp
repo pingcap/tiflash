@@ -33,8 +33,8 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -187,7 +187,7 @@ void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
     QuotaForIntervals & quota = context.getQuota();
 
     pipeline.transform([&](auto & stream) {
-        if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
         {
             p_stream->setLimits(limits);
             p_stream->setQuota(quota);
@@ -374,8 +374,10 @@ void DAGStorageInterpreter::executePushedDownFilter(
     {
         auto & stream = pipeline.streams[i];
         stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
+        stream->setExtraInfo("push down filter");
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
+        stream->setExtraInfo("projection after push down filter");
     }
 }
 
@@ -413,6 +415,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         {
             auto & stream = pipeline.streams[i++];
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+            stream->setExtraInfo("cast after local tableScan");
         }
         // remote streams
         if (i < pipeline.streams.size())
@@ -425,6 +428,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             {
                 auto & stream = pipeline.streams[i++];
                 stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
+                stream->setExtraInfo("cast after remote tableScan");
             }
         }
     }

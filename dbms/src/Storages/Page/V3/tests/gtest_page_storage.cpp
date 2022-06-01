@@ -1380,5 +1380,67 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, CleanAfterDecreaseRef)
+try
+{
+    // Make it in log_1_0
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    // Make it in log_2_0
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        batch.putRefPage(2, 1);
+        batch.delPage(1);
+        batch.delPage(2);
+        page_storage->write(std::move(batch));
+    }
+    page_storage = reopenWithConfig(config);
+
+    auto alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 0);
+}
+CATCH
+
+TEST_F(PageStorageTest, TruncateBlobFile)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    auto blob_file = Poco::File(getTemporaryPath() + "/blobfile_1");
+
+    page_storage = reopenWithConfig(config);
+    EXPECT_GT(blob_file.getSize(), 0);
+
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        page_storage->write(std::move(batch));
+    }
+    page_storage = reopenWithConfig(config);
+    page_storage->gc(/*not_skip*/ false, nullptr, nullptr);
+    EXPECT_EQ(blob_file.getSize(), 0);
+}
+CATCH
+
+
 } // namespace PS::V3::tests
 } // namespace DB

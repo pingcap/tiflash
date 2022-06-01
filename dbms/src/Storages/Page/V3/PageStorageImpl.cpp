@@ -80,6 +80,11 @@ DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing
     return page_directory->createSnapshot(tracing_id);
 }
 
+FileUsageStatistics PageStorageImpl::getFileUsageStatistics() const
+{
+    return blob_store.getFileUsageStatistics();
+}
+
 SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
 {
     return page_directory->getSnapshotsStat();
@@ -289,7 +294,7 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
 
     // 1. Do the MVCC gc, clean up expired snapshot.
     // And get the expired entries.
-    if (page_directory->tryDumpSnapshot(write_limiter))
+    if (page_directory->tryDumpSnapshot(read_limiter, write_limiter))
     {
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }

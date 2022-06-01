@@ -239,9 +239,9 @@ public:
       */
     virtual int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const = 0;
 
-    virtual int compareAtWithCollation(size_t, size_t, const IColumn &, int, const ICollator &) const
+    virtual int compareAt(size_t, size_t, const IColumn &, int, const ICollator &) const
     {
-        throw Exception("Method compareAtWithCollation is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(fmt::format("Method compareAt with collation is not supported for {}" + getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /** Returns a permutation that sorts elements of this column,
@@ -252,9 +252,9 @@ public:
       */
     virtual void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const = 0;
 
-    virtual void getPermutationWithCollation(const ICollator &, bool, size_t, int, Permutation &) const
+    virtual void getPermutation(const ICollator &, bool, size_t, int, Permutation &) const
     {
-        throw Exception("Method getPermutationWithCollation is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(fmt::format("Method getPermutation with collation is not supported for {}", getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /** Copies each element according offsets parameter.

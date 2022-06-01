@@ -58,7 +58,7 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
 
-    SortedColumnIDWithPosConstIter column_ids_iter = read_column_ids.begin();
+    auto column_ids_iter = read_column_ids.begin();
     size_t next_column_pos = 0;
 
     /// every table in tiflash must have an extra handle column, it either
@@ -112,25 +112,6 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     size_t index = 0;
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
-        // Ignore data after the start_ts.
-        if (commit_ts > start_ts)
-            continue;
-
-        bool should_skip = false;
-        if constexpr (pk_type != TMTPKType::STRING)
-        {
-            if constexpr (pk_type == TMTPKType::UINT64)
-            {
-                should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(pk));
-            }
-            else
-            {
-                should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(pk));
-            }
-        }
-        if (should_skip)
-            continue;
-
         /// set delmark and version column
         delmark_data.emplace_back(write_type == Region::DelFlag);
         version_data.emplace_back(commit_ts);
@@ -186,7 +167,7 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                 {
                     // The pk_type must be Int32/Uint32 or more narrow type
                     // so cannot tell its' exact type here, just use `insert(Field)`
-                    HandleID handle_value(static_cast<Int64>(pk));
+                    auto handle_value(static_cast<Int64>(pk));
                     raw_pk_column->insert(Field(handle_value));
                     if (unlikely(raw_pk_column->getInt(index) != handle_value))
                     {

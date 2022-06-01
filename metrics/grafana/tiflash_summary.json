@@ -33,12 +33,6 @@
       "id": "prometheus",
       "name": "Prometheus",
       "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
     }
   ],
   "annotations": {
@@ -58,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1652861766192,
+  "iteration": 1653635389238,
   "links": [],
   "panels": [
     {
@@ -5336,14 +5330,30 @@
             "align": false,
             "alignLevel": null
           }
-        },
+        }
+      ],
+      "repeat": null,
+      "title": "Storage",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 119,
+      "panels": [
         {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The states of BlobStore (an internal component of storage engine)",
+          "description": "The states of BlobStore (an internal component of PageStorage)",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -5354,20 +5364,20 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 6
           },
           "hiddenSeries": false,
           "id": 85,
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": false,
-            "current": false,
+            "current": true,
             "max": false,
             "min": false,
-            "rightSide": false,
+            "rightSide": true,
             "show": true,
             "total": false,
-            "values": false
+            "values": true
           },
           "lines": true,
           "linewidth": 1,
@@ -5383,11 +5393,11 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "/^BlobAllocated/",
+              "alias": "/^allocated/",
               "yaxis": 1
             },
             {
-              "alias": "/^BlobExpandRate/",
+              "alias": "/^expand_rate/",
               "yaxis": 2
             }
           ],
@@ -5402,7 +5412,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "BlobAllocated-{{instance}}",
+              "legendFormat": "allocated-{{instance}}",
               "refId": "A"
             },
             {
@@ -5412,7 +5422,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "BlobExpandRate-{{instance}}",
+              "legendFormat": "expand_rate-{{instance}}",
               "refId": "B"
             }
           ],
@@ -5420,7 +5430,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "BlobStore Status",
+          "title": "PageStorage Blob Status",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -5457,10 +5467,385 @@
             "align": false,
             "alignLevel": null
           }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The disk usage of PageStorage instances in each TiFlash node",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 6
+          },
+          "hiddenSeries": false,
+          "id": 128,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "/^valid_rate/",
+              "yaxis": 2
+            },
+            {
+              "alias": "/size/",
+              "linewidth": 3
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "tiflash_system_asynchronous_metric_BlobDiskBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "disk_size-{{instance}}",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_asynchronous_metric_BlobValidBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "valid_size-{{instance}}",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum((tiflash_system_asynchronous_metric_BlobValidBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) / (tiflash_system_asynchronous_metric_BlobDiskBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "valid_rate-{{instance}}",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_asynchronous_metric_BlobFileNums{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "num_file-{{instance}}",
+              "refId": "E",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "PageStorage Disk Usage",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": "1.1",
+              "min": "0",
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The number of files of PageStorage instances in each TiFlash node",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 14
+          },
+          "hiddenSeries": false,
+          "id": 129,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_asynchronous_metric_BlobFileNums{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "num_file-{{instance}}",
+              "refId": "A",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "PageStorage File Num",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": "1.1",
+              "min": "0",
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The number of tables running under different mode in DeltaTree",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 14
+          },
+          "hiddenSeries": false,
+          "id": 123,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_StoragePoolV2Only{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}-OnlyV2",
+              "refId": "A",
+              "step": 10
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_StoragePoolV3Only{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-OnlyV3",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_StoragePoolMixMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{instance}}-MixMode",
+              "refId": "C"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "StoragePool Runmode",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         }
       ],
-      "repeat": null,
-      "title": "Storage",
+      "title": "StoragePool",
       "type": "row"
     },
     {
@@ -5470,7 +5855,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 6
       },
       "id": 64,
       "panels": [
@@ -5481,7 +5866,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The throughput of write and  delta's background management",
+          "description": "The throughput of write and delta's background management",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -5492,7 +5877,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 6
+            "y": 71
           },
           "height": "",
           "hiddenSeries": false,
@@ -5629,7 +6014,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 15
+            "y": 80
           },
           "hiddenSeries": false,
           "id": 62,
@@ -5741,7 +6126,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 23
+            "y": 88
           },
           "height": "",
           "hiddenSeries": false,
@@ -5863,7 +6248,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 32
+            "y": 97
           },
           "hiddenSeries": false,
           "id": 90,
@@ -5970,7 +6355,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 7
       },
       "id": 34,
       "panels": [
@@ -5990,7 +6375,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 7
+            "y": 8
           },
           "hiddenSeries": false,
           "id": 35,
@@ -6088,7 +6473,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 7
+            "y": 8
           },
           "hiddenSeries": false,
           "id": 36,
@@ -6206,7 +6591,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 14
+            "y": 15
           },
           "hiddenSeries": false,
           "id": 37,
@@ -6340,7 +6725,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 14
+            "y": 15
           },
           "hiddenSeries": false,
           "id": 75,
@@ -6444,7 +6829,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 21
+            "y": 22
           },
           "hiddenSeries": false,
           "id": 82,
@@ -6597,7 +6982,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 28
+            "y": 29
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6667,7 +7052,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 28
+            "y": 29
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6737,7 +7122,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 35
+            "y": 36
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6807,7 +7192,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 35
+            "y": 36
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -6871,7 +7256,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 42
+            "y": 43
           },
           "height": "",
           "hiddenSeries": false,
@@ -6985,7 +7370,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 49
+            "y": 50
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7054,7 +7439,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 49
+            "y": 50
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7124,7 +7509,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 56
+            "y": 57
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7194,7 +7579,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 56
+            "y": 57
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7264,7 +7649,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 63
+            "y": 64
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -7330,7 +7715,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 63
+            "y": 64
           },
           "hiddenSeries": false,
           "id": 91,
@@ -7453,7 +7838,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 8
       },
       "id": 95,
       "panels": [
@@ -7675,290 +8060,9 @@
       ],
       "title": "Rough Set Filter Rate Histogram",
       "type": "row"
-    },
-    {
-      "collapsed": true,
-      "datasource": null,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 8
-      },
-      "id": 119,
-      "panels": [
-        {
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The Global StoragePool and KVStore Runmode",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "axisSoftMax": 5,
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 0,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "graph": false,
-                  "legend": false,
-                  "tooltip": false
-                },
-                "lineInterpolation": "linear",
-                "lineStyle": {
-                  "fill": "solid"
-                },
-                "lineWidth": 1,
-                "pointSize": 11,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": false
-              },
-              "decimals": 0,
-              "mappings": [
-                {
-                  "from": "",
-                  "id": 1,
-                  "text": "ONLY_V2",
-                  "to": "",
-                  "type": 1,
-                  "value": "1"
-                },
-                {
-                  "from": "",
-                  "id": 2,
-                  "text": "ONLY_V3",
-                  "to": "",
-                  "type": 1,
-                  "value": "2"
-                },
-                {
-                  "from": "",
-                  "id": 3,
-                  "text": "MIX_MODE",
-                  "to": "",
-                  "type": 1,
-                  "value": "3"
-                },
-                {
-                  "from": "",
-                  "id": 4,
-                  "text": " ",
-                  "to": "",
-                  "type": 1,
-                  "value": "4"
-                },
-                {
-                  "from": "",
-                  "id": 5,
-                  "text": " ",
-                  "to": "",
-                  "type": 1,
-                  "value": "5"
-                }
-              ],
-              "min": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "short"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 9
-          },
-          "id": 126,
-          "links": [],
-          "options": {
-            "graph": {},
-            "legend": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "displayMode": "table",
-              "placement": "right"
-            },
-            "tooltipOptions": {
-              "mode": "multi"
-            }
-          },
-          "pluginVersion": "7.5.11",
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "tiflash_system_current_metric_GlobalStorageRunMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "{{instance}}-GlobalRunMode",
-              "refId": "A",
-              "step": 10
-            },
-            {
-              "exemplar": false,
-              "expr": "tiflash_system_current_metric_RegionPersisterRunMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "{{instance}}-KVStoreRunMode",
-              "refId": "B"
-            }
-          ],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Global Runmode",
-          "type": "timeseries"
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "decimals": 1,
-          "description": "The StoragePool Runmode in DeltaMerge Storage",
-          "editable": true,
-          "error": false,
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "grid": {},
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 9
-          },
-          "hiddenSeries": false,
-          "id": 123,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "max": false,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sideWidth": null,
-            "sort": "current",
-            "sortDesc": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_StoragePoolV2Only{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "{{instance}}-OnlyV2",
-              "refId": "A",
-              "step": 10
-            },
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_StoragePoolV3Only{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "{{instance}}-OnlyV3",
-              "refId": "B"
-            },
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_StoragePoolMixMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "{{instance}}-MixMode",
-              "refId": "C"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "StoragePool Runmode",
-          "tooltip": {
-            "msResolution": false,
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        }
-      ],
-      "title": "StoragePool",
-      "type": "row"
     }
   ],
-  "refresh": false,
+  "refresh": "30s",
   "schemaVersion": 27,
   "style": "dark",
   "tags": [],
