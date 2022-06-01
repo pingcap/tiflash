@@ -424,11 +424,6 @@ class SegmentDeletionRelevantPlaceTest
     : public SegmentTest
     , public testing::WithParamInterface<bool>
 {
-    void SetUp() override
-    {
-        // init segment
-        SegmentTest::SetUp();
-    }
 };
 
 
