@@ -33,10 +33,10 @@
 #include <Poco/FileStream.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/TiDBSchemaSyncer.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/TiDBSchemaSyncer.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
@@ -71,7 +71,7 @@ std::shared_ptr<ASTFunction> getDatabaseEngine(const FileProviderPtr & file_prov
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "in file " + filename, 0);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
-    auto storage = ast_create_query.storage;
+    auto * storage = ast_create_query.storage;
     if (storage == nullptr || storage->engine == nullptr || storage->engine->name.empty())
     {
         throw Exception("Can not get database engine for file: " + filename, ErrorCodes::LOGICAL_ERROR);
@@ -97,7 +97,7 @@ std::pair<String, TiDB::TableInfo> getTableInfo(const FileProviderPtr & file_pro
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, definition.data(), definition.data() + definition.size(), "in file " + table_metadata_file, 0);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
-    auto storage = ast_create_query.storage;
+    auto * storage = ast_create_query.storage;
     if (storage == nullptr || storage->engine == nullptr || storage->engine->name.empty())
     {
         throw Exception("Can not get table engine for file: " + table_metadata_file, ErrorCodes::LOGICAL_ERROR);
@@ -105,7 +105,7 @@ std::pair<String, TiDB::TableInfo> getTableInfo(const FileProviderPtr & file_pro
 
     TiDB::TableInfo info;
     ASTFunction * engine = storage->engine;
-    auto * args = typeid_cast<const ASTExpressionList *>(engine->arguments.get());
+    const auto * args = typeid_cast<const ASTExpressionList *>(engine->arguments.get());
     if (args == nullptr)
         throw Exception("Can not cast table engine arguments", ErrorCodes::BAD_ARGUMENTS);
 
@@ -399,12 +399,12 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaDirectory(const String & ro
     return root_path + (endsWith(root_path, "/") ? "" : "/") + "/metadata/" + escapeForFileName(newName()) + "/";
 }
 // "data/"
-String IDAsPathUpgrader::DatabaseDiskInfo::getNewDataDirectory(const String & root_path) const
+String IDAsPathUpgrader::DatabaseDiskInfo::getNewDataDirectory(const String & root_path)
 {
     return root_path + "/data/";
 }
 // "extra_data/"
-String IDAsPathUpgrader::DatabaseDiskInfo::getNewExtraDirectory(const String & extra_root) const
+String IDAsPathUpgrader::DatabaseDiskInfo::getNewExtraDirectory(const String & extra_root)
 {
     return extra_root + "/";
 }
@@ -457,11 +457,11 @@ IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, bool is_mock_, std::un
 
 bool IDAsPathUpgrader::needUpgrade()
 {
-    const auto metadataPath = global_context.getPath() + "/metadata";
+    const auto metadata_path = global_context.getPath() + "/metadata";
 
     // For old version, we have database directories and its `.sql` file
     Poco::DirectoryIterator dir_end;
-    for (Poco::DirectoryIterator it(metadataPath); it != dir_end; ++it)
+    for (Poco::DirectoryIterator it(metadata_path); it != dir_end; ++it)
     {
         if (!it->isDirectory())
             continue;
@@ -893,7 +893,7 @@ void IDAsPathUpgrader::renameTable(
                     args->children.emplace_back(literal);
                 else if (args->children.size() >= 2)
                     args->children.at(1) = literal;
-            } while (0);
+            } while (false);
         }
 
         const String new_tbl_meta_file = table.getNewMetaFilePath(root_path, db_info);

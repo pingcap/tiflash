@@ -137,9 +137,9 @@ public:
         // "metadata/db_${id}/"
         String getNewMetaDirectory(const String & root_path) const;
         // "data/"
-        String getNewDataDirectory(const String & root_path) const;
+        static String getNewDataDirectory(const String & root_path);
         // "extra_data/"
-        String getNewExtraDirectory(const String & extra_root) const;
+        static String getNewExtraDirectory(const String & extra_root);
 
     private:
         // "metadata/${db_name}.sql"

@@ -20,6 +20,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Poco/File.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -66,7 +67,7 @@ using ChecksumClass = Digest::CRC64;
   * BlobStore methods *
   *********************/
 
-BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
+BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobStore::Config & config_)
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
@@ -113,6 +114,38 @@ void BlobStore::registerPaths()
             }
         }
     }
+}
+
+FileUsageStatistics BlobStore::getFileUsageStatistics() const
+{
+    FileUsageStatistics usage;
+
+    // Get a copy of stats map to avoid the big lock on stats map
+    const auto stats_list = blob_stats.getStats();
+
+    for (const auto & [path, stats] : stats_list)
+    {
+        (void)path;
+        for (const auto & stat : stats)
+        {
+            // We can access to these type without any locking.
+            if (stat->isReadOnly() || stat->isBigBlob())
+            {
+                usage.total_disk_size += stat->sm_total_size;
+                usage.total_valid_size += stat->sm_valid_size;
+            }
+            else
+            {
+                // Else the stat may being updated, acquire a lock to avoid data race.
+                auto lock = stat->lock();
+                usage.total_disk_size += stat->sm_total_size;
+                usage.total_valid_size += stat->sm_valid_size;
+            }
+        }
+        usage.total_file_num += stats.size();
+    }
+
+    return usage;
 }
 
 PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
@@ -872,6 +905,7 @@ private:
 
 std::vector<BlobFileId> BlobStore::getGCStats()
 {
+    // Get a copy of stats map to avoid the big lock on stats map
     const auto stats_list = blob_stats.getStats();
     std::vector<BlobFileId> blob_need_gc;
     BlobStoreGCInfo blobstore_gc_info;
@@ -914,7 +948,22 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Avoid divide by zero
             if (right_margin == 0)
             {
-                LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}].", stat->id, stat->sm_total_size);
+                if (unlikely(stat->sm_valid_rate != 0))
+                {
+                    throw Exception(fmt::format("Current blob is empty, but valid rate is not 0. [blob_id={}][valid_size={}][valid_rate={}]",
+                                                stat->id,
+                                                stat->sm_valid_size,
+                                                stat->sm_valid_rate));
+                }
+
+                LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}] [valid_rate={}].", stat->id, stat->sm_total_size, stat->sm_valid_rate);
+
+                // If current blob empty, the size of in disk blob may not empty
+                // So we need truncate current blob, and let it be reused.
+                auto blobfile = getBlobFile(stat->id);
+                LOG_FMT_TRACE(log, "Truncate empty blob file [blob_id={}] to 0.", stat->id);
+                blobfile->truncate(right_margin);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
                 continue;
             }
 
@@ -1196,7 +1245,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, const std:
     // New blob file id won't bigger than roll_id
     if (blob_file_id > roll_id)
     {
-        throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [RollMaxId={}]",
+        throw Exception(fmt::format("BlobStats won't create [blob_id={}], which is bigger than [roll_id={}]",
                                     blob_file_id,
                                     roll_id),
                         ErrorCodes::LOGICAL_ERROR);
@@ -1259,8 +1308,7 @@ BlobStatPtr BlobStore::BlobStats::createBigPageStatNotChecking(BlobFileId blob_f
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
         SpaceMap::SpaceMapType::SMAP64_BIG,
-        config.file_limit_size,
-        BlobStatType::BIG_BLOB);
+        config.file_limit_size);
 
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
     stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
@@ -1438,7 +1486,7 @@ bool BlobStore::BlobStats::BlobStat::removePosFromStat(BlobFileOffset offset, si
     if (!smap->markFree(offset, buf_size))
     {
         smap->logDebugString();
-        throw Exception(fmt::format("Remove postion from BlobStat failed, [offset={} , buf_size={}, blob_id={}] is invalid.",
+        throw Exception(fmt::format("Remove postion from BlobStat failed, invalid position [offset={}] [buf_size={}] [blob_id={}]",
                                     offset,
                                     buf_size,
                                     id),
@@ -1455,7 +1503,7 @@ void BlobStore::BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size
     if (!smap->markUsed(offset, buf_size))
     {
         smap->logDebugString();
-        throw Exception(fmt::format("Restore postion from BlobStat failed, [offset={}] [buf_size={}] [blob_id={}] is used or subspan is used",
+        throw Exception(fmt::format("Restore postion from BlobStat failed, the space/subspace is already being used [offset={}] [buf_size={}] [blob_id={}]",
                                     offset,
                                     buf_size,
                                     id),
@@ -1468,7 +1516,7 @@ void BlobStore::BlobStats::BlobStat::recalculateSpaceMap()
     const auto & [total_size, valid_size] = smap->getSizes();
     sm_total_size = total_size;
     sm_valid_size = valid_size;
-    sm_valid_rate = valid_size * 1.0 / total_size;
+    sm_valid_rate = total_size == 0 ? 0.0 : valid_size * 1.0 / total_size;
     recalculateCapacity();
 }
 

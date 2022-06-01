@@ -19,6 +19,7 @@
 #include <Interpreters/SettingsCommon.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/Page/Config.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageUtil.h>
@@ -251,6 +252,12 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
+    virtual FileUsageStatistics getFileUsageStatistics() const
+    {
+        // return all zeros by default
+        return FileUsageStatistics{};
+    }
+
     virtual size_t getNumberOfPages() = 0;
 
     virtual std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) = 0;
@@ -379,6 +386,8 @@ public:
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const;
+
+    FileUsageStatistics getFileUsageStatistics() const;
 
     void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
