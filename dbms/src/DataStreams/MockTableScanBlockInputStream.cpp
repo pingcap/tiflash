@@ -36,7 +36,7 @@ ColumnPtr MockTableScanBlockInputStream::makeColumn(ColumnWithTypeAndName elem) 
 {
     auto column = elem.type->createColumn();
     size_t row_count = 0;
-    for (size_t i = output_index; i < rows & row_count < max_block_size; ++i)
+    for (size_t i = output_index; (i < rows) & (row_count < max_block_size); ++i)
     {
         column->insert((*elem.column)[i]);
         row_count++;

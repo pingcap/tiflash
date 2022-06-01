@@ -23,13 +23,13 @@
 
 namespace DB::PS::V3::ser
 {
-inline void serializeVersionTo(const PageVersionType & version, WriteBuffer & buf)
+inline void serializeVersionTo(const PageVersion & version, WriteBuffer & buf)
 {
     writeIntBinary(version.sequence, buf);
     writeIntBinary(version.epoch, buf);
 }
 
-inline void deserializeVersionFrom(ReadBuffer & buf, PageVersionType & version)
+inline void deserializeVersionFrom(ReadBuffer & buf, PageVersion & version)
 {
     readIntBinary(version.sequence, buf);
     readIntBinary(version.epoch, buf);
@@ -174,7 +174,7 @@ void deserializeDelFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 
     PageIdV3Internal page_id;
     readIntBinary(page_id, buf);
-    PageVersionType version;
+    PageVersion version;
     deserializeVersionFrom(buf, version);
 
     PageEntriesEdit::EditRecord rec;
@@ -218,7 +218,7 @@ void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
             break;
         }
         default:
-            throw Exception(fmt::format("Unknown record type: {}", record_type));
+            throw Exception(fmt::format("Unknown record type: {}", record_type), ErrorCodes::LOGICAL_ERROR);
         }
     }
 }
@@ -261,7 +261,7 @@ PageEntriesEdit deserializeFrom(std::string_view record)
     UInt32 version = 0;
     readIntBinary(version, buf);
     if (version != 1)
-        throw Exception("");
+        throw Exception(fmt::format("Unknown version for PageEntriesEdit deser [version={}]", version), ErrorCodes::LOGICAL_ERROR);
 
     deserializeFrom(buf, edit);
     return edit;

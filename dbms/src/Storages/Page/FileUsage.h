@@ -13,18 +13,17 @@
 // limitations under the License.
 
 #pragma once
-#include <Parsers/IParserBase.h>
+#include <stdint.h>
 
+#include <cstddef>
 
 namespace DB
 {
-
-
-class ParserSystemQuery : public IParserBase
+struct FileUsageStatistics
 {
-protected:
-    const char * getName() const override { return "SYSTEM query"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+    size_t total_disk_size = 0;
+    size_t total_valid_size = 0;
+    size_t total_file_num = 0;
 };
 
-}
+} // namespace DB

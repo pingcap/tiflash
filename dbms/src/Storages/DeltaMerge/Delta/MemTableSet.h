@@ -88,8 +88,14 @@ public:
     /// The following methods returning false means this operation failed, caused by other threads could have done
     /// some updates on this instance. E.g. this instance have been abandoned.
     /// Caller should try again from the beginning.
+
+    /// Append a ColumnFile into this MemTableSet. The ColumnFile may be flushed later.
+    /// Note that some ColumnFiles may not contain block data, but only a reference to the block data stored in disk.
+    /// See different ColumnFile implementations for details.
     void appendColumnFile(const ColumnFilePtr & column_file);
 
+    /// Append the block data into a ColumnFileInMemory (may be reused).
+    /// The ColumnFileInMemory will be stored in this MemTableSet and flushed later.
     void appendToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
 
     void appendDeleteRange(const RowKeyRange & delete_range);
@@ -99,7 +105,7 @@ public:
     /// Create a constant snapshot for read.
     ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap);
 
-    /// Build a flush task which will try to flush all column files in MemTableSet now
+    /// Build a flush task which will try to flush all column files in this MemTableSet at this moment.
     ColumnFileFlushTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);
 
     void removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush_task);

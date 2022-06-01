@@ -174,7 +174,7 @@ public:
     explicit DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
         : dag_request(&dag_request_)
         , initialize_concurrency(concurrency)
-        , is_mpp_task(false)
+        , is_mpp_task(true)
         , is_root_mpp_task(false)
         , tunnel_set(nullptr)
         , log(Logger::get(log_identifier))

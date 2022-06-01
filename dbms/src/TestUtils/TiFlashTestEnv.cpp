@@ -28,7 +28,7 @@ namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
 
-void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_ps_v3)
+void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode)
 {
     // set itself as global context
     global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
@@ -68,7 +68,7 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
-    global_context->setPageStorageRunMode(enable_ps_v3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);
+    global_context->setPageStorageRunMode(ps_run_mode);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_FMT_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
@@ -76,7 +76,6 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
 
     raft_config.ignore_databases = {"default", "system"};
     raft_config.engine = TiDB::StorageEngine::DT;
-    raft_config.disable_bg_flush = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
@@ -89,12 +88,13 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     Context context = *global_context;
     context.setGlobalContext(*global_context);
     // Load `testdata_path` as path if it is set.
-    const String root_path = testdata_path.empty() ? getTemporaryPath() : testdata_path[0];
+    const String root_path = testdata_path.empty() ? (DB::toString(getpid()) + "/" + getTemporaryPath()) : testdata_path[0];
     if (testdata_path.empty())
         testdata_path.push_back(root_path);
     context.setPath(root_path);
     auto paths = getPathPool(testdata_path);
     context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
+    global_context->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
     return context;
 }

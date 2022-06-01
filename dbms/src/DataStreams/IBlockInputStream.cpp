@@ -77,15 +77,17 @@ size_t IBlockInputStream::checkDepthImpl(size_t max_depth, size_t level) const
     return res + 1;
 }
 
-
 void IBlockInputStream::dumpTree(FmtBuffer & buffer, size_t indent, size_t multiplier)
 {
-    // todo append getHeader().dumpStructure()
     buffer.fmtAppend(
-        "{}{}{}\n",
+        "{}{}{}",
         String(indent, ' '),
         getName(),
         multiplier > 1 ? fmt::format(" x {}", multiplier) : "");
+    if (!extra_info.empty())
+        buffer.fmtAppend(": <{}>", extra_info);
+    appendInfo(buffer);
+    buffer.append("\n");
     ++indent;
 
     /// If the subtree is repeated several times, then we output it once with the multiplier.

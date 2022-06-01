@@ -315,7 +315,7 @@ public:
             return size > rhs_size ? 1 : (size < rhs_size ? -1 : 0);
     }
 
-    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int, const ICollator & collator) const override
+    int compareAt(size_t n, size_t m, const IColumn & rhs_, int, const ICollator & collator) const override
     {
         return compareAtWithCollationImpl(n, m, rhs_, collator);
     }
@@ -324,7 +324,7 @@ public:
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
-    void getPermutationWithCollation(const ICollator & collator, bool reverse, size_t limit, int, Permutation & res) const override
+    void getPermutation(const ICollator & collator, bool reverse, size_t limit, int, Permutation & res) const override
     {
         getPermutationWithCollationImpl(collator, reverse, limit, res);
     }

@@ -83,4 +83,8 @@ Block LimitBlockInputStream::readImpl()
     return res;
 }
 
+void LimitBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    buffer.fmtAppend(", limit = {}", limit);
+}
 } // namespace DB

@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Transaction/Types.h>
@@ -57,9 +58,13 @@ public:
 
     PageStorage::Config getPageStorageSettings() const;
 
+    FileUsageStatistics getFileUsageStatistics() const;
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+
+    void forceTransformKVStoreV2toV3();
 
     void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock, const Region & region);
     void doPersist(const Region & region, const RegionTaskLock * lock);

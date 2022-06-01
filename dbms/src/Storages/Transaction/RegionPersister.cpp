@@ -18,6 +18,7 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V1/PageStorage.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
@@ -27,6 +28,11 @@
 #include <Storages/Transaction/RegionPersister.h>
 
 #include <memory>
+
+namespace CurrentMetrics
+{
+extern const Metric RegionPersisterRunMode;
+}
 
 namespace DB
 {
@@ -170,6 +176,45 @@ PS::V1::PageStorage::Config getV1PSConfig(const PS::V2::PageStorage::Config & co
     return c;
 }
 
+void RegionPersister::forceTransformKVStoreV2toV3()
+{
+    assert(page_reader != nullptr);
+    assert(page_writer != nullptr);
+
+    WriteBatch write_batch_del_v2{KVSTORE_NAMESPACE_ID};
+    auto meta_transform_acceptor = [&](const DB::Page & page) {
+        WriteBatch write_batch_transform{KVSTORE_NAMESPACE_ID};
+        // Check pages have not contain field offset
+        // Also get the tag of page_id
+        const auto & page_transform_entry = page_reader->getPageEntry(page.page_id);
+        if (!page_transform_entry.field_offsets.empty())
+        {
+            throw Exception(fmt::format("Can't transfrom kvstore from V2 to V3, [page_id={}] {}",
+                                        page.page_id,
+                                        page_transform_entry.toDebugString()),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+
+        write_batch_transform.putPage(page.page_id, //
+                                      page_transform_entry.tag,
+                                      std::make_shared<ReadBufferFromMemory>(page.data.begin(),
+                                                                             page.data.size()),
+                                      page.data.size());
+
+        // Will rewrite into V3 one by one.
+        // The region data is big. It is not a good idea to combine pages.
+        page_writer->write(std::move(write_batch_transform), nullptr);
+
+        // Record del page_id
+        write_batch_del_v2.delPage(page.page_id);
+    };
+
+    page_reader->traverse(meta_transform_acceptor, /*only_v2*/ true, /*only_v3*/ false);
+
+    // DEL must call after rewrite.
+    page_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
+}
+
 RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, PageStorage::Config config)
 {
     {
@@ -247,22 +292,43 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             page_storage_v2->restore();
             page_storage_v3->restore();
 
-            if (page_storage_v2->getNumberOfPages() == 0)
-            {
-                page_storage_v2 = nullptr;
-                run_mode = PageStorageRunMode::ONLY_V3;
-                page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
-                page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
-            }
-            else
+            if (const auto & kvstore_remain_pages = page_storage_v2->getNumberOfPages(); kvstore_remain_pages != 0)
             {
                 page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
                 page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
+
+                LOG_FMT_INFO(log, "Current kvstore transform to V3 begin [pages_before_transform={}]", kvstore_remain_pages);
+                forceTransformKVStoreV2toV3();
+                const auto & kvstore_remain_pages_after_transform = page_storage_v2->getNumberOfPages();
+                LOG_FMT_INFO(log, "Current kvstore transfrom to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}] [pages_after_transform={}]", //
+                             ns_id,
+                             kvstore_remain_pages_after_transform == 0,
+                             kvstore_remain_pages,
+                             kvstore_remain_pages_after_transform);
+
+                if (kvstore_remain_pages_after_transform != 0)
+                {
+                    throw Exception("KVStore transform failed. Still have some data exist in V2", ErrorCodes::LOGICAL_ERROR);
+                }
             }
+            else // no need do transform
+            {
+                LOG_FMT_INFO(log, "Current kvstore translate already done before restored.");
+            }
+
+            // change run_mode to ONLY_V3
+            page_storage_v2 = nullptr;
+
+            // Must use PageStorageRunMode::ONLY_V3 here.
+            page_writer = std::make_shared<PageWriter>(PageStorageRunMode::ONLY_V3, /*storage_v2_*/ nullptr, page_storage_v3);
+            page_reader = std::make_shared<PageReader>(PageStorageRunMode::ONLY_V3, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
+
+            run_mode = PageStorageRunMode::ONLY_V3;
             break;
         }
         }
 
+        CurrentMetrics::set(CurrentMetrics::RegionPersisterRunMode, static_cast<UInt8>(run_mode));
         LOG_FMT_INFO(log, "RegionPersister running. Current Run Mode is {}", static_cast<UInt8>(run_mode));
     }
 
@@ -312,6 +378,11 @@ bool RegionPersister::gc()
     }
     else
         return stable_page_storage->gc();
+}
+
+FileUsageStatistics RegionPersister::getFileUsageStatistics() const
+{
+    return page_reader->getFileUsageStatistics();
 }
 
 } // namespace DB

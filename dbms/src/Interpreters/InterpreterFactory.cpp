@@ -28,7 +28,6 @@
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
-#include <Interpreters/InterpreterSystemQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -42,7 +41,6 @@
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
-#include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 
@@ -136,11 +134,7 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     {
         return std::make_unique<InterpreterDBGInvokeQuery>(query, context);
     }
-    else if (typeid_cast<ASTSystemQuery *>(query.get()))
-    {
-        throwIfReadOnly(context);
-        return std::make_unique<InterpreterSystemQuery>(query, context);
-    }
+
     else if (typeid_cast<ASTManageQuery *>(query.get()))
     {
         throwIfReadOnly(context);

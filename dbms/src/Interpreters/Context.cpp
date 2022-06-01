@@ -59,9 +59,9 @@
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/BackgroundService.h>
-#include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>
@@ -81,6 +81,7 @@ namespace CurrentMetrics
 {
 extern const Metric ContextLockWait;
 extern const Metric MemoryTrackingForMerges;
+extern const Metric GlobalStorageRunMode;
 } // namespace CurrentMetrics
 
 
@@ -161,7 +162,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr; /// Path capacity metrics
     FileProviderPtr file_provider; /// File provider.
     IORateLimiter io_rate_limiter;
-    PageStorageRunMode storage_run_mode;
+    PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -206,6 +207,7 @@ struct ContextShared
 
     explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
         : runtime_components_factory(std::move(runtime_components_factory_))
+        , storage_run_mode(PageStorageRunMode::ONLY_V3)
     {
         /// TODO: make it singleton (?)
         static std::atomic<size_t> num_calls{0};
@@ -713,7 +715,7 @@ Dependencies Context::getDependencies(const String & database_name, const String
         checkDatabaseAccessRightsImpl(db);
     }
 
-    ViewDependencies::const_iterator iter = shared->view_dependencies.find(DatabaseAndTableName(db, table_name));
+    auto iter = shared->view_dependencies.find(DatabaseAndTableName(db, table_name));
     if (iter == shared->view_dependencies.end())
         return {};
 
@@ -727,7 +729,7 @@ bool Context::isTableExist(const String & database_name, const String & table_na
     String db = resolveDatabase(database_name, current_database);
     checkDatabaseAccessRightsImpl(db);
 
-    Databases::const_iterator it = shared->databases.find(db);
+    auto it = shared->databases.find(db);
     return shared->databases.end() != it
         && it->second->isTableExist(*this, table_name);
 }
@@ -753,7 +755,7 @@ void Context::assertTableExists(const String & database_name, const String & tab
     String db = resolveDatabase(database_name, current_database);
     checkDatabaseAccessRightsImpl(db);
 
-    Databases::const_iterator it = shared->databases.find(db);
+    auto it = shared->databases.find(db);
     if (shared->databases.end() == it)
         throw Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
 
@@ -770,7 +772,7 @@ void Context::assertTableDoesntExist(const String & database_name, const String 
     if (check_database_access_rights)
         checkDatabaseAccessRightsImpl(db);
 
-    Databases::const_iterator it = shared->databases.find(db);
+    auto it = shared->databases.find(db);
     if (shared->databases.end() != it && it->second->isTableExist(*this, table_name))
         throw Exception(fmt::format("Table {}.{} already exists.", backQuoteIfNeed(db), backQuoteIfNeed(table_name)), ErrorCodes::TABLE_ALREADY_EXISTS);
 }
@@ -825,7 +827,7 @@ Tables Context::getExternalTables() const
 
 StoragePtr Context::tryGetExternalTable(const String & table_name) const
 {
-    TableAndCreateASTs::const_iterator jt = external_tables.find(table_name);
+    auto jt = external_tables.find(table_name);
     if (external_tables.end() == jt)
         return StoragePtr();
 
@@ -863,7 +865,7 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
     String db = resolveDatabase(database_name, current_database);
     checkDatabaseAccessRightsImpl(db);
 
-    Databases::const_iterator it = shared->databases.find(db);
+    auto it = shared->databases.find(db);
     if (shared->databases.end() == it)
     {
         if (exception)
@@ -893,7 +895,7 @@ void Context::addExternalTable(const String & table_name, const StoragePtr & sto
 
 StoragePtr Context::tryRemoveExternalTable(const String & table_name)
 {
-    TableAndCreateASTs::const_iterator it = external_tables.find(table_name);
+    auto it = external_tables.find(table_name);
 
     if (external_tables.end() == it)
         return StoragePtr();
@@ -953,7 +955,7 @@ std::unique_ptr<DDLGuard> Context::getDDLGuardIfTableDoesntExist(const String & 
 {
     auto lock = getLock();
 
-    Databases::const_iterator it = shared->databases.find(database);
+    auto it = shared->databases.find(database);
     if (shared->databases.end() != it && it->second->isTableExist(*this, table))
         return {};
 
@@ -992,7 +994,7 @@ ASTPtr Context::getCreateTableQuery(const String & database_name, const String &
 
 ASTPtr Context::getCreateExternalTableQuery(const String & table_name) const
 {
-    TableAndCreateASTs::const_iterator jt = external_tables.find(table_name);
+    auto jt = external_tables.find(table_name);
     if (external_tables.end() == jt)
         throw Exception(fmt::format("Temporary table {} doesn't exist", backQuoteIfNeed(table_name)), ErrorCodes::UNKNOWN_TABLE);
 
@@ -1087,7 +1089,7 @@ void Context::setCurrentQueryId(const String & query_id)
                 UInt64 a;
                 UInt64 b;
             };
-        } random;
+        } random{};
 
         {
             auto lock = getLock();
@@ -1649,12 +1651,10 @@ bool Context::initializeGlobalStoragePoolIfNeed(const PathPool & path_pool)
     auto lock = getLock();
     if (shared->global_storage_pool)
     {
-        // Can't init GlobalStoragePool twice.
-        // Because we won't remove the gc task in BackGroundPool
-        // Also won't remove it from ~GlobalStoragePool()
-        throw Exception("GlobalStoragePool has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+        // GlobalStoragePool may be initialized many times in some test cases for restore.
+        LOG_WARNING(shared->log, "GlobalStoragePool has already been initialized.");
     }
-
+    CurrentMetrics::set(CurrentMetrics::GlobalStorageRunMode, static_cast<UInt8>(shared->storage_run_mode));
     if (shared->storage_run_mode == PageStorageRunMode::MIX_MODE || shared->storage_run_mode == PageStorageRunMode::ONLY_V3)
     {
         try

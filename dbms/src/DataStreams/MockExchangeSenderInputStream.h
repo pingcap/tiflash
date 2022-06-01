@@ -13,27 +13,34 @@
 // limitations under the License.
 
 #pragma once
-#include <Interpreters/IInterpreter.h>
 
+#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Storages/Transaction/TypeMapping.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
-class Context;
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
-
-
-class InterpreterSystemQuery : public IInterpreter
+/// Currently, this operator do nothing with the block.
+/// TODO: Mock the sender process
+class MockExchangeSenderInputStream : public IProfilingBlockInputStream
 {
-public:
-    InterpreterSystemQuery(const ASTPtr & query_ptr_, Context & context_);
+private:
+    static constexpr auto NAME = "MockExchangeSender";
 
-    BlockIO execute() override;
+public:
+    MockExchangeSenderInputStream(
+        const BlockInputStreamPtr & input,
+        const String & req_id);
+
+    String getName() const override { return NAME; }
+    Block getTotals() override;
+    Block getHeader() const override;
+
+protected:
+    Block readImpl() override;
 
 private:
-    ASTPtr query_ptr;
-    Context & context;
+    const LoggerPtr log;
 };
-
 
 } // namespace DB
