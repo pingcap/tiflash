@@ -707,7 +707,16 @@ void assertBlockSchema(
                     actual->getName()));
     }
 }
-
+/// used by test
+std::unordered_map<String, tipb::ScalarFuncSig> getFuncNameToSigMap()
+{
+    std::unordered_map<String, tipb::ScalarFuncSig> ret;
+    for (const auto & element : scalar_func_map)
+    {
+        ret[element.second] = element.first;
+    }
+    return ret;
+}
 } // namespace
 
 bool isScalarFunctionExpr(const tipb::Expr & expr)
@@ -1419,6 +1428,13 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
         // todo support BigEndian encode for chunk encode type
         return tipb::EncodeType::TypeDefault;
     return encode_type;
+}
+tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
+{
+    static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
+    if (func_name_sig_map.find(name) == func_name_sig_map.end())
+        throw Exception(fmt::format("Unsupported function {}", name));
+    return func_name_sig_map[name];
 }
 
 } // namespace DB

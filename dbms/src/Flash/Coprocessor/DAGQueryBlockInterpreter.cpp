@@ -33,9 +33,7 @@
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/WindowBlockInputStream.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
@@ -43,6 +41,7 @@
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -50,9 +49,6 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <WindowFunctions/WindowFunctionFactory.h>
-
 
 namespace DB
 {
@@ -183,329 +179,130 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     analyzer = std::move(storage_interpreter.analyzer);
 }
 
-void DAGQueryBlockInterpreter::prepareJoin(
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
-    DAGPipeline & pipeline,
-    Names & key_names,
-    bool left,
-    bool is_right_out_join,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
-    String & filter_column_name)
-{
-    NamesAndTypes source_columns;
-    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
-        source_columns.emplace_back(p.name, p.type);
-    DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
-    ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
-    {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log->identifier()); });
-    }
-}
-
-ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
-    const tipb::Join & join,
-    NamesAndTypes & source_columns,
-    String & filter_column_for_other_condition,
-    String & filter_column_for_other_eq_condition)
-{
-    if (join.other_conditions_size() == 0 && join.other_eq_conditions_from_in_size() == 0)
-        return nullptr;
-    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
-    ExpressionActionsChain chain;
-    std::vector<const tipb::Expr *> condition_vector;
-    if (join.other_conditions_size() > 0)
-    {
-        for (const auto & c : join.other_conditions())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_condition = dag_analyzer.appendWhere(chain, condition_vector);
-    }
-    if (join.other_eq_conditions_from_in_size() > 0)
-    {
-        condition_vector.clear();
-        for (const auto & c : join.other_eq_conditions_from_in())
-        {
-            condition_vector.push_back(&c);
-        }
-        filter_column_for_other_eq_condition = dag_analyzer.appendWhere(chain, condition_vector);
-    }
-    return chain.getLastActions();
-}
-
-/// ClickHouse require join key to be exactly the same type
-/// TiDB only require the join key to be the same category
-/// for example decimal(10,2) join decimal(20,0) is allowed in
-/// TiDB and will throw exception in ClickHouse
-void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
-{
-    for (int i = 0; i < join.left_join_keys().size(); i++)
-    {
-        if (!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i)))
-            throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
-        DataTypes types;
-        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.left_join_keys(i).field_type()));
-        types.emplace_back(getDataTypeByFieldTypeForComputingLayer(join.right_join_keys(i).field_type()));
-        DataTypePtr common_type = getLeastSupertype(types);
-        key_types.emplace_back(common_type);
-    }
-}
-
 void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
 {
-    // build
-    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> equal_join_type_map{
-        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right},
-        {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
-        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::LeftSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::LeftAnti}};
-    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> cartesian_join_type_map{
-        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Cross},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Cross_Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Cross_Right},
-        {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Cross},
-        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Cross_Anti},
-        {tipb::JoinType::TypeLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftSemi},
-        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, ASTTableJoin::Kind::Cross_LeftAnti}};
-
-    if (input_streams_vec.size() != 2)
+    if (unlikely(input_streams_vec.size() != 2))
     {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
     }
 
-    const auto & join_type_map = join.left_join_keys_size() == 0 ? cartesian_join_type_map : equal_join_type_map;
-    auto join_type_it = join_type_map.find(join.join_type());
-    if (join_type_it == join_type_map.end())
-        throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
+    JoinInterpreterHelper::TiFlashJoin tiflash_join{join};
 
-    /// (cartesian) (anti) left semi join.
-    const bool is_left_semi_family = join.join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || join.join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin;
+    DAGPipeline probe_pipeline;
+    DAGPipeline build_pipeline;
+    probe_pipeline.streams = input_streams_vec[1 - tiflash_join.build_side_index];
+    build_pipeline.streams = input_streams_vec[tiflash_join.build_side_index];
 
-    ASTTableJoin::Kind kind = join_type_it->second;
-    const bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin || is_left_semi_family;
-    ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
-    if (is_semi_join)
-        strictness = ASTTableJoin::Strictness::Any;
+    RUNTIME_ASSERT(!input_streams_vec[0].empty(), log, "left input streams cannot be empty");
+    const Block & left_input_header = input_streams_vec[0].back()->getHeader();
 
-    /// in DAG request, inner part is the build side, however for TiFlash implementation,
-    /// the build side must be the right side, so need to swap the join side if needed
-    /// 1. for (cross) inner join, there is no problem in this swap.
-    /// 2. for (cross) semi/anti-semi join, the build side is always right, needn't swap.
-    /// 3. for non-cross left/right join, there is no problem in this swap.
-    /// 4. for cross left join, the build side is always right, needn't and can't swap.
-    /// 5. for cross right join, the build side is always left, so it will always swap and change to cross left join.
-    /// note that whatever the build side is, we can't support cross-right join now.
+    RUNTIME_ASSERT(!input_streams_vec[1].empty(), log, "right input streams cannot be empty");
+    const Block & right_input_header = input_streams_vec[1].back()->getHeader();
 
-    bool swap_join_side;
-    if (kind == ASTTableJoin::Kind::Cross_Right)
-        swap_join_side = true;
-    else if (kind == ASTTableJoin::Kind::Cross_Left)
-        swap_join_side = false;
-    else
-        swap_join_side = join.inner_idx() == 0;
-
-    DAGPipeline left_pipeline;
-    DAGPipeline right_pipeline;
-
-    if (swap_join_side)
-    {
-        if (kind == ASTTableJoin::Kind::Left)
-            kind = ASTTableJoin::Kind::Right;
-        else if (kind == ASTTableJoin::Kind::Right)
-            kind = ASTTableJoin::Kind::Left;
-        else if (kind == ASTTableJoin::Kind::Cross_Right)
-            kind = ASTTableJoin::Kind::Cross_Left;
-        left_pipeline.streams = input_streams_vec[1];
-        right_pipeline.streams = input_streams_vec[0];
-    }
-    else
-    {
-        left_pipeline.streams = input_streams_vec[0];
-        right_pipeline.streams = input_streams_vec[1];
-    }
-
-    NamesAndTypes join_output_columns;
-    /// columns_for_other_join_filter is a vector of columns used
-    /// as the input columns when compiling other join filter.
-    /// Note the order in the column vector is very important:
-    /// first the columns in input_streams_vec[0], then followed
-    /// by the columns in input_streams_vec[1], if there are other
-    /// columns generated before compile other join filter, then
-    /// append the extra columns afterwards. In order to figure out
-    /// whether a given column is already in the column vector or
-    /// not quickly, we use another set to store the column names
-    NamesAndTypes columns_for_other_join_filter;
-    std::unordered_set<String> column_set_for_other_join_filter;
-    bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
-    for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
-    {
-        join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        column_set_for_other_join_filter.emplace(p.name);
-    }
-    make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
-    for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
-    {
-        if (!is_semi_join)
-            /// for semi join, the columns from right table will be ignored
-            join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        /// however, when compiling join's other condition, we still need the columns from right table
-        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        column_set_for_other_join_filter.emplace(p.name);
-    }
-
-    bool is_tiflash_left_join = kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Cross_Left;
-    /// Cross_Right join will be converted to Cross_Left join, so no need to check Cross_Right
-    bool is_tiflash_right_join = kind == ASTTableJoin::Kind::Right;
-    /// all the columns from right table should be added after join, even for the join key
-    NamesAndTypesList columns_added_by_join;
-    make_nullable = is_tiflash_left_join;
-    for (auto const & p : right_pipeline.streams[0]->getHeader().getNamesAndTypesList())
-    {
-        columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-    }
-
-    String match_helper_name;
-    if (is_left_semi_family)
-    {
-        const auto & left_block = input_streams_vec[0][0]->getHeader();
-        const auto & right_block = input_streams_vec[1][0]->getHeader();
-
-        match_helper_name = Join::match_helper_prefix;
-        for (int i = 1; left_block.has(match_helper_name) || right_block.has(match_helper_name); ++i)
-        {
-            match_helper_name = Join::match_helper_prefix + std::to_string(i);
-        }
-
-        columns_added_by_join.emplace_back(match_helper_name, Join::match_helper_type);
-        join_output_columns.emplace_back(match_helper_name, Join::match_helper_type);
-    }
-
-    DataTypes join_key_types;
-    getJoinKeyTypes(join, join_key_types);
-    TiDB::TiDBCollators collators;
-    size_t join_key_size = join_key_types.size();
-    if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
-        for (size_t i = 0; i < join_key_size; i++)
-        {
-            if (removeNullable(join_key_types[i])->isString())
-            {
-                if (join.probe_types(i).collate() != join.build_types(i).collate())
-                    throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);
-                collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
-            }
-            else
-                collators.push_back(nullptr);
-        }
-
-    Names left_key_names, right_key_names;
-    String left_filter_column_name, right_filter_column_name;
+    String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
+    NamesAndTypesList columns_added_by_join = tiflash_join.genColumnsAddedByJoin(build_pipeline.firstStream()->getHeader(), match_helper_name);
+    NamesAndTypes join_output_columns = tiflash_join.genJoinOutputColumns(left_input_header, right_input_header, match_helper_name);
 
     /// add necessary transformation if the join key is an expression
 
-    prepareJoin(
-        swap_join_side ? join.right_join_keys() : join.left_join_keys(),
-        join_key_types,
-        left_pipeline,
-        left_key_names,
+    bool is_tiflash_right_join = tiflash_join.isTiFlashRightJoin();
+
+    // prepare probe side
+    auto [probe_side_prepare_actions, probe_key_names, probe_filter_column_name] = JoinInterpreterHelper::prepareJoin(
+        context,
+        probe_pipeline.firstStream()->getHeader(),
+        tiflash_join.getProbeJoinKeys(),
+        tiflash_join.join_key_types,
         true,
         is_tiflash_right_join,
-        swap_join_side ? join.right_conditions() : join.left_conditions(),
-        left_filter_column_name);
+        tiflash_join.getProbeConditions());
+    RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
 
-    prepareJoin(
-        swap_join_side ? join.left_join_keys() : join.right_join_keys(),
-        join_key_types,
-        right_pipeline,
-        right_key_names,
+    // prepare build side
+    auto [build_side_prepare_actions, build_key_names, build_filter_column_name] = JoinInterpreterHelper::prepareJoin(
+        context,
+        build_pipeline.firstStream()->getHeader(),
+        tiflash_join.getBuildJoinKeys(),
+        tiflash_join.join_key_types,
         false,
         is_tiflash_right_join,
-        swap_join_side ? join.left_conditions() : join.right_conditions(),
-        right_filter_column_name);
+        tiflash_join.getBuildConditions());
+    RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");
 
-    String other_filter_column_name, other_eq_filter_from_in_column_name;
-    for (auto const & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
-    {
-        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
-            columns_for_other_join_filter.emplace_back(p.name, p.type);
-    }
-    for (auto const & p : right_pipeline.streams[0]->getHeader().getNamesAndTypesList())
-    {
-        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
-            columns_for_other_join_filter.emplace_back(p.name, p.type);
-    }
-
-    ExpressionActionsPtr other_condition_expr
-        = genJoinOtherConditionAction(join, columns_for_other_join_filter, other_filter_column_name, other_eq_filter_from_in_column_name);
+    auto [other_condition_expr, other_filter_column_name, other_eq_filter_from_in_column_name]
+        = tiflash_join.genJoinOtherConditionAction(context, left_input_header, right_input_header, probe_side_prepare_actions);
 
     const Settings & settings = context.getSettingsRef();
-    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;
     size_t max_block_size_for_cross_join = settings.max_block_size;
     fiu_do_on(FailPoints::minimum_block_size_for_cross_join, { max_block_size_for_cross_join = 1; });
 
     JoinPtr join_ptr = std::make_shared<Join>(
-        left_key_names,
-        right_key_names,
+        probe_key_names,
+        build_key_names,
         true,
         SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
-        kind,
-        strictness,
+        tiflash_join.kind,
+        tiflash_join.strictness,
         log->identifier(),
-        join_build_concurrency,
-        collators,
-        left_filter_column_name,
-        right_filter_column_name,
+        tiflash_join.join_key_collators,
+        probe_filter_column_name,
+        build_filter_column_name,
         other_filter_column_name,
         other_eq_filter_from_in_column_name,
         other_condition_expr,
         max_block_size_for_cross_join,
         match_helper_name);
 
-    recordJoinExecuteInfo(swap_join_side ? 0 : 1, join_ptr);
+    recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 
+    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
+
+    /// build side streams
+    executeExpression(build_pipeline, build_side_prepare_actions, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
-    size_t concurrency_build_index = 0;
-    auto get_concurrency_build_index = [&concurrency_build_index, &join_build_concurrency]() {
-        return (concurrency_build_index++) % join_build_concurrency;
-    };
-    right_pipeline.transform([&](auto & stream) {
+    auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
+    build_pipeline.transform([&](auto & stream) {
         stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
+        stream->setExtraInfo(
+            fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
     });
-    executeUnion(right_pipeline, max_streams, log, /*ignore_block=*/true);
+    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/true, "for join");
 
-    right_query.source = right_pipeline.firstStream();
+    right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
-    right_query.join->setSampleBlock(right_query.source->getHeader());
+    join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
 
+    /// probe side streams
+    executeExpression(probe_pipeline, probe_side_prepare_actions, "append join key and join filters for probe side");
     NamesAndTypes source_columns;
-    for (const auto & p : left_pipeline.streams[0]->getHeader().getNamesAndTypesList())
+    for (const auto & p : probe_pipeline.firstStream()->getHeader())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
     dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
-    pipeline.streams = left_pipeline.streams;
+    pipeline.streams = probe_pipeline.streams;
     /// add join input stream
     if (is_tiflash_right_join)
     {
         auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
-        for (size_t i = 0; i < join_build_concurrency; i++)
+        size_t not_joined_concurrency = join_ptr->getNotJoinedStreamConcurrency();
+        for (size_t i = 0; i < not_joined_concurrency; ++i)
         {
-            auto non_joined_stream = chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
+            auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(
                 pipeline.firstStream()->getHeader(),
                 i,
-                join_build_concurrency,
+                not_joined_concurrency,
                 settings.max_block_size);
+            non_joined_stream->setExtraInfo("add stream with non_joined_data if full_or_right_join");
             pipeline.streams_with_non_joined_data.push_back(non_joined_stream);
             join_execute_info.non_joined_streams.push_back(non_joined_stream);
         }
     }
     for (auto & stream : pipeline.streams)
+    {
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, chain.getLastActions(), log->identifier());
+        stream->setExtraInfo(fmt::format("join probe, join_executor_id = {}", query_block.source_name));
+    }
 
     /// add a project to remove all the useless column
     NamesWithAliases project_cols;
@@ -515,7 +312,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         /// it is guaranteed by its children query block
         project_cols.emplace_back(c.name, c.name);
     }
-    executeProject(pipeline, project_cols);
+    executeProject(pipeline, project_cols, "remove useless column after join");
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
@@ -529,19 +326,22 @@ void DAGQueryBlockInterpreter::recordJoinExecuteInfo(size_t build_side_index, co
     dagContext().getJoinExecuteInfoMap()[query_block.source_name] = std::move(join_execute_info);
 }
 
-void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
+void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column, const String & extra_info)
 {
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log->identifier()); });
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column, log->identifier());
+        stream->setExtraInfo(extra_info);
+    });
 }
 
 void DAGQueryBlockInterpreter::executeWindow(
     DAGPipeline & pipeline,
     WindowDescription & window_description)
 {
-    executeExpression(pipeline, window_description.before_window);
+    executeExpression(pipeline, window_description.before_window, "before window");
 
     /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log);
+    executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
     assert(pipeline.streams.size() == 1);
     pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
 }
@@ -554,7 +354,10 @@ void DAGQueryBlockInterpreter::executeAggregation(
     AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg)
 {
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log->identifier()); });
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log->identifier());
+        stream->setExtraInfo("before aggregation");
+    });
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
 
@@ -607,11 +410,14 @@ void DAGQueryBlockInterpreter::executeAggregation(
     }
 }
 
-void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
+void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, const String & extra_info)
 {
     if (!expressionActionsPtr->getActions().empty())
     {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, log->identifier()); });
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, log->identifier());
+            stream->setExtraInfo(extra_info);
+        });
     }
 }
 
@@ -643,7 +449,7 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
     });
 
     /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log);
+    executeUnion(pipeline, max_streams, log, false, "for partial order");
 
     /// Merge the sorted blocks.
     pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
@@ -674,6 +480,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
+        stream->setExtraInfo("squashing after exchange receiver");
         pipeline.streams.push_back(stream);
     }
     NamesAndTypes source_columns;
@@ -720,8 +527,11 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
         output_columns.emplace_back(alias, col.type);
         project_cols.emplace_back(col.name, alias);
     }
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log->identifier()); });
-    executeProject(pipeline, project_cols);
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log->identifier());
+        stream->setExtraInfo("before projection");
+    });
+    executeProject(pipeline, project_cols, "projection");
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
@@ -735,7 +545,7 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
     WindowDescription window_description = dag_analyzer.buildWindowDescription(window);
     executeWindow(pipeline, window_description);
-    executeExpression(pipeline, window_description.after_window);
+    executeExpression(pipeline, window_description.after_window, "cast after window");
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
 }
@@ -822,7 +632,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.before_where)
     {
         // execute where
-        executeWhere(pipeline, res.before_where, res.filter_column_name);
+        executeWhere(pipeline, res.before_where, res.filter_column_name, "execute where");
         recordProfileStreams(pipeline, query_block.selection_name);
     }
 
@@ -842,12 +652,12 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.before_having)
     {
         // execute having
-        executeWhere(pipeline, res.before_having, res.having_column_name);
+        executeWhere(pipeline, res.before_having, res.having_column_name, "execute having");
         recordProfileStreams(pipeline, query_block.having_name);
     }
     if (res.before_order_and_select)
     {
-        executeExpression(pipeline, res.before_order_and_select);
+        executeExpression(pipeline, res.before_order_and_select, "before order and select");
     }
 
     if (!res.order_columns.empty())
@@ -858,7 +668,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // execute final project action
-    executeProject(pipeline, final_project);
+    executeProject(pipeline, final_project, "final projection");
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
     {
@@ -878,12 +688,15 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols)
+void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, const String & extra_info)
 {
     if (project_cols.empty())
         return;
     ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project, log->identifier()); });
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, project, log->identifier());
+        stream->setExtraInfo(extra_info);
+    });
 }
 
 void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
@@ -896,7 +709,7 @@ void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
     pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
     if (pipeline.hasMoreThanOneStream())
     {
-        executeUnion(pipeline, max_streams, log);
+        executeUnion(pipeline, max_streams, log, false, "for partial limit");
         pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, limit, 0, log->identifier(), false); });
     }
 }
@@ -943,7 +756,7 @@ BlockInputStreams DAGQueryBlockInterpreter::execute()
     executeImpl(pipeline);
     if (!pipeline.streams_with_non_joined_data.empty())
     {
-        executeUnion(pipeline, max_streams, log);
+        executeUnion(pipeline, max_streams, log, false, "final union for non_joined_data");
         restorePipelineConcurrency(pipeline);
     }
 

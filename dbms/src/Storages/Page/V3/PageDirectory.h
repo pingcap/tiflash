@@ -358,7 +358,7 @@ public:
 
     void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    bool tryDumpSnapshot(const WriteLimiterPtr & write_limiter = nullptr);
+    bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr);
 
     PageEntriesV3 gcInMemEntries();
 

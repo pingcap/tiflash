@@ -124,13 +124,26 @@ void run(WorkloadOptions & opts)
         // Table Schema
         auto table_gen = TableGenerator::create(opts);
         auto table_info = table_gen->get(opts.table_id, opts.table_name);
-        // In this for loop, destory DeltaMergeStore gracefully and recreate it.
-        for (uint64_t i = 0; i < opts.verify_round; i++)
+        // In this for loop, destroy DeltaMergeStore gracefully and recreate it.
+        auto run_test = [&]() {
+            for (uint64_t i = 0; i < opts.verify_round; i++)
+            {
+                DTWorkload workload(opts, handle_table, table_info);
+                workload.run(i);
+                stats.push_back(workload.getStat());
+                LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
+            }
+        };
+        run_test();
+
+        if (opts.ps_run_mode == DB::PageStorageRunMode::MIX_MODE)
         {
-            DTWorkload workload(opts, handle_table, table_info);
-            workload.run(i);
-            stats.push_back(workload.getStat());
-            LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
+            // clear statistic in DB::PageStorageRunMode::ONLY_V2
+            stats.clear();
+            auto & global_context = TiFlashTestEnv::getGlobalContext();
+            global_context.setPageStorageRunMode(DB::PageStorageRunMode::MIX_MODE);
+            global_context.initializeGlobalStoragePoolIfNeed(global_context.getPathPool());
+            run_test();
         }
     }
     catch (...)
@@ -254,8 +267,9 @@ int DTWorkload::mainEntry(int argc, char ** argv)
     // or the logging in global context won't be output to
     // the log file
     init(opts);
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.enable_ps_v3);
 
+    // For mixed mode, we need to run the test in ONLY_V2 mode first.
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == PageStorageRunMode::ONLY_V3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);
     if (opts.testing_type == "daily_perf")
     {
         dailyPerformanceTest(opts);
@@ -277,7 +291,6 @@ int DTWorkload::mainEntry(int argc, char ** argv)
             runAndRandomKill(opts);
         }
     }
-
     TiFlashTestEnv::shutdown();
     return 0;
 }
