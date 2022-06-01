@@ -39,7 +39,7 @@
 #include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
 #endif
 #if ENABLE_TIFLASH_PAGECTL
-#include <Storages/Page/tools/page_ctl/PageStorageCtl.h>
+#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
 #endif
 #include <Common/StringUtils/StringUtils.h>
 #include <Server/DTTool/DTTool.h>

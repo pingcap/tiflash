@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Page/tools/page_ctl/PageStorageCtl.h>
+#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
 
 int main(int argc, char ** argv)
 {

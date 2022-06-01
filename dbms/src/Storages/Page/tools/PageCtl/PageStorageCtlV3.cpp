@@ -65,8 +65,8 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         ("display_mode,D", value<int>()->default_value(1), "Display Mode: 1 is summary information,\n 2 is display all of stored page and version chaim(will be very long),\n 3 is display all blobs(in disk) data distribution. \n 4 is check every data is valid.") //
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
         ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.")("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
-        ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Quert a single Page id, and print its version chaim.") //
-        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Quert a single Blob id, and print its data distribution.")("imitative,I", value<bool>()->default_value(true), "Use imitative context instead. (encryption is not supported in this mode so that no need to set config_file_path)")("config_file_path", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
+        ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chaim.") //
+        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.")("imitative,I", value<bool>()->default_value(true), "Use imitative context instead. (encryption is not supported in this mode so that no need to set config_file_path)")("config_file_path", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
 
 
     static_assert(sizeof(DB::PageId) == sizeof(UInt64));

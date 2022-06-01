@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Page/tools/page_ctl/PageStorageCtl.h>
-#include <Storages/Page/tools/page_ctl/page_storage_ctl_v2.h>
-#include <Storages/Page/tools/page_ctl/page_storage_ctl_v3.h>
+#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
+#include <Storages/Page/tools/PageCtl/PageStorageCtlV2.h>
+#include <Storages/Page/tools/PageCtl/PageStorageCtlV3.h>
 
 #include <boost/program_options.hpp>
 #include <iostream>
