@@ -192,7 +192,7 @@ using DataTypeDecimal256 = DataTypeDecimal<Decimal256>;
 
 inline DataTypePtr createDecimal(UInt64 prec, UInt64 scale)
 {
-    if (prec < minDecimalPrecision() || prec > maxDecimalPrecision<Decimal256>())
+    if (prec < minDecimalPrecision<Decimal32>() || prec > maxDecimalPrecision<Decimal256>())
         throw Exception("Wrong precision:" + DB::toString(prec), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (static_cast<UInt64>(scale) > prec)
