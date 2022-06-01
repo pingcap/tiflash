@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include "Core/ColumnWithTypeAndName.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__

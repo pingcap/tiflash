@@ -311,8 +311,48 @@ void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockCol
     exchange_schemas[name] = v_column_info;
 }
 
+void MockDAGRequestContext::addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
+{
+    mock_table_columns[db + "." + table] = columns;
+}
+
+void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns)
+{
+    mock_table_columns[name.first + "." + name.second] = columns;
+}
+
+void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
+{
+    mock_exchange_columns[name] = columns;
+}
+
+void MockDAGRequestContext::addMockTableWithColumnData(const String & db, const String & table, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns)
+{
+    addMockTable(db, table, columnInfos);
+    addMockTableColumnData(db, table, columns);
+}
+
+void MockDAGRequestContext::addMockTableWithColumnData(const String & db, const String & table, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns)
+{
+    addMockTable(db, table, columnInfos);
+    addMockTableColumnData(db, table, columns);
+}
+
+void MockDAGRequestContext::addMockTableWithColumnData(const MockTableName & name, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns)
+{
+    addMockTable(name, columnInfos);
+    addMockTableColumnData(name, columns);
+}
+
+void MockDAGRequestContext::addMockTableWithColumnData(const MockTableName & name, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns)
+{
+    addMockTable(name, columnInfos);
+    addMockTableColumnData(name, columns);
+}
+
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
+    source_columns = mock_table_columns[db_name + "." + table_name];
     return DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
 }
 
