@@ -201,20 +201,12 @@ protected:
     {
         if (all_read)
             return {};
-        if (!cur_stream)
-        {
-            cur_stream = shared_pool->pickOne();
-            if (!cur_stream)
-            { // shared_pool is empty
-                all_read = true;
-                return {};
-            }
-        }
 
         Block ret;
-        while (!(ret = cur_stream->read()))
+        while (!cur_stream || !(ret = cur_stream->read()))
         {
-            cur_stream->readSuffix(); // release old inputstream
+            if (cur_stream)
+                cur_stream->readSuffix(); // release old inputstream
             cur_stream = shared_pool->pickOne();
             if (!cur_stream)
             { // shared_pool is empty
