@@ -1376,15 +1376,12 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         auto window_sig = window_sig_it->second;
         window_expr->set_tp(window_sig);
         auto * ft = window_expr->mutable_field_type();
+        // TODO: Maybe more window functions with different field type.
         ft->set_tp(TiDB::TypeLongLong);
         ft->set_flag(TiDB::ColumnFlagBinary);
         ft->set_collate(collator_id);
-        if (window_sig == tipb::ExprType::Rank || window_sig == tipb::ExprType::DenseRank)
-            ft->set_flen(21); // ywq todo
-
-        // rowNumber don't have children.
-        // ft->set_decimal(window_expr->children(0).field_type().decimal()); // ywq todo check type?
-        // ft->set_flen(window_expr->children(0).field_type().flen());
+        ft->set_flen(21)
+            ft->set_decimal(-1);
     }
 
     for (const auto & child : order_by_exprs)

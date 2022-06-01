@@ -170,8 +170,7 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
     case tipb::ExecType::TypeWindow:
         // Window will only be pushed down in mpp mode.
         // In mpp mode, ExchangeSender or Sender will return output_field_types directly.
-        // If not in mpp mode, window executor type is invalid.
-        // ywq todo: Question: why only MPP?
+        // If not in mpp mode or debug mode, window executor type is invalid.
         return collectForWindow(output_field_types, executor.window());
     case tipb::ExecType::TypeExchangeReceiver:
         return collectForReceiver(output_field_types, executor.exchange_receiver());

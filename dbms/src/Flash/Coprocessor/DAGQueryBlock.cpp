@@ -40,7 +40,6 @@ bool isSourceNode(const tipb::Executor * root)
         || root->tp() == tipb::ExecType::TypePartitionTableScan
         || root->tp() == tipb::ExecType::TypeWindow
         || (root->tp() == tipb::ExecType::TypeSort && root->sort().ispartialsort());
-    // ywq test: question: why is_partialsort.
 }
 
 const static String SOURCE_NAME("source");

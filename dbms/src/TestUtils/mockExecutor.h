@@ -22,7 +22,6 @@
 #include <initializer_list>
 #include <unordered_map>
 
-
 namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;

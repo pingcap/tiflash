@@ -108,34 +108,6 @@ protected:
         mock_interpreter->input_streams_vec.push_back(pipeline.streams);
     }
 
-    void mockExecuteWindowOrder(DAGPipeline & pipeline, std::string sort_json_str)
-    {
-        tipb::Sort sort;
-        google::protobuf::util::JsonStringToMessage(sort_json_str, &sort);
-        mock_interpreter->handleWindowOrder(pipeline, sort);
-        mock_interpreter->input_streams_vec[0] = pipeline.streams;
-        NamesWithAliases final_project;
-        for (const auto & column : (*mock_interpreter->analyzer).source_columns)
-        {
-            final_project.push_back({column.name, ""});
-        }
-        mockExecuteProject(pipeline, final_project);
-    }
-
-    void mockExecuteWindow(DAGPipeline & pipeline, std::string window_json_str)
-    {
-        tipb::Window window;
-        google::protobuf::util::JsonStringToMessage(window_json_str, &window);
-        mock_interpreter->handleWindow(pipeline, window);
-        mock_interpreter->input_streams_vec[0] = pipeline.streams;
-        NamesWithAliases final_project;
-        for (const auto & column : (*mock_interpreter->analyzer).source_columns)
-        {
-            final_project.push_back({column.name, ""});
-        }
-        mockExecuteProject(pipeline, final_project);
-    }
-
     void mockExecuteProject(DAGPipeline & pipeline, NamesWithAliases & final_project)
     {
         mock_interpreter->executeProject(pipeline, final_project);
@@ -179,37 +151,7 @@ protected:
         return Block(actual_columns);
     }
 
-    void testOneWindowFunction(const std::vector<NameAndTypePair> & source_column_types, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, const std::string window_json_str, const std::string sort_json_str)
-    {
-        mockInterpreter(source_column_types, context);
-        DAGPipeline pipeline;
-        ExpressionActionsChain chain;
-        Block except_block(expect_columns);
-
-        mockExecuteTableScan(pipeline, source_columns);
-
-        mockExecuteWindowOrder(pipeline, sort_json_str);
-
-        mockExecuteWindow(pipeline, window_json_str);
-
-        auto stream = pipeline.firstStream();
-
-        Blocks actual_blocks;
-        while (Block block = stream->read())
-        {
-            actual_blocks.push_back(block);
-        }
-
-        Block actual_block = mergeBlocks(actual_blocks);
-
-        if (actual_block)
-        {
-            // Check that input columns is properly split to many blocks
-            ASSERT_EQ(actual_blocks.size(), (actual_block.rows() - 1) / context.getSettingsRef().max_block_size + 1);
-        }
-        ASSERT_BLOCK_EQ(except_block, actual_block);
-    }
-
+    // TODO: This is a temporary method.
     void testOneWindowFunction(const std::vector<NameAndTypePair> & source_column_types, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, const tipb::Window & window, const tipb::Sort & sort)
     {
         mockInterpreter(source_column_types, context);
@@ -227,44 +169,6 @@ protected:
             final_project.push_back({column.name, ""});
         }
         mockExecuteProject(pipeline, final_project);
-
-        mock_interpreter->handleWindow(pipeline, window);
-        mock_interpreter->input_streams_vec[0] = pipeline.streams;
-        NamesWithAliases final_project_1;
-        for (const auto & column : (*mock_interpreter->analyzer).source_columns)
-        {
-            final_project_1.push_back({column.name, ""});
-        }
-        mockExecuteProject(pipeline, final_project_1);
-
-        auto stream = pipeline.firstStream();
-
-        Blocks actual_blocks;
-        while (Block block = stream->read())
-        {
-            actual_blocks.push_back(block);
-        }
-
-        Block actual_block = mergeBlocks(actual_blocks);
-
-        if (actual_block)
-        {
-            // Check that input columns is properly split to many blocks
-            ASSERT_EQ(actual_blocks.size(), (actual_block.rows() - 1) / context.getSettingsRef().max_block_size + 1);
-        }
-        ASSERT_BLOCK_EQ(except_block, actual_block);
-    }
-
-    void testOneWindowFunction(const std::vector<NameAndTypePair> & source_column_types, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, const tipb::Window & window, const String sort_json_str)
-    {
-        mockInterpreter(source_column_types, context);
-        DAGPipeline pipeline;
-        ExpressionActionsChain chain;
-        Block except_block(expect_columns);
-
-        mockExecuteTableScan(pipeline, source_columns);
-
-        mockExecuteWindowOrder(pipeline, sort_json_str);
 
         mock_interpreter->handleWindow(pipeline, window);
         mock_interpreter->input_streams_vec[0] = pipeline.streams;

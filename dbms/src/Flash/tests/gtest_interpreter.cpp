@@ -15,7 +15,6 @@
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
-
 namespace DB
 {
 namespace tests
