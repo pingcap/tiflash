@@ -71,7 +71,7 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder
     std::uniform_int_distribution<> dist(0, 3000);
 
     const size_t buff_sz = approx_page_mb * DB::MB + dist(size_gen);
-    char * buff = static_cast<char *>(malloc(buff_sz));
+    char * buff = static_cast<char *>(malloc(buff_sz)); // NOLINT
     if (buff == nullptr)
     {
         throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
@@ -80,7 +80,7 @@ DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder
     const char buff_ch = pageId % 0xFF;
     memset(buff, buff_ch, buff_sz);
 
-    holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
+    holder = DB::createMemHolder(buff, [&](char * p) { free(p); }); // NOLINT
 
     return std::make_shared<DB::ReadBufferFromMemory>(const_cast<char *>(buff), buff_sz);
 }
@@ -90,7 +90,7 @@ void PSWriter::updatedRandomData()
     size_t memory_size = approx_page_mb * DB::MB * 2;
     if (memory == nullptr)
     {
-        memory = static_cast<char *>(malloc(memory_size));
+        memory = static_cast<char *>(malloc(memory_size)); // NOLINT
         if (memory == nullptr)
         {
             throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
@@ -149,7 +149,7 @@ void PSCommonWriter::updatedRandomData()
 
     if (memory == nullptr)
     {
-        memory = static_cast<char *>(malloc(memory_size));
+        memory = static_cast<char *>(malloc(memory_size)); // NOLINT
         if (memory == nullptr)
         {
             throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);

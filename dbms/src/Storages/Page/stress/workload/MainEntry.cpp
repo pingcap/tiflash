@@ -18,6 +18,28 @@ using namespace DB::PS::tests;
 
 int StressWorkload::mainEntry(int argc, char ** argv)
 {
+    {
+        // in order to trigger REGISTER_WORKLOAD
+        void _work_load_register_named_HeavyMemoryCostInGC();
+        void (*f)() = _work_load_register_named_HeavyMemoryCostInGC;
+        void _work_load_register_named_HeavyRead();
+        f = _work_load_register_named_HeavyRead;
+        void _work_load_register_named_HeavySkewWriteRead();
+        f = _work_load_register_named_HeavySkewWriteRead;
+        void _work_load_register_named_HeavyWrite();
+        f = _work_load_register_named_HeavyWrite;
+        void _work_load_register_named_HighValidBigFileGCWorkload();
+        f = _work_load_register_named_HighValidBigFileGCWorkload;
+        void _work_load_register_named_HoldSnapshotsLongTime();
+        f = _work_load_register_named_HoldSnapshotsLongTime;
+        void _work_load_register_named_PageStorageInMemoryCapacity();
+        f = _work_load_register_named_PageStorageInMemoryCapacity;
+        void _work_load_register_named_NormalWorkload();
+        f = _work_load_register_named_NormalWorkload;
+        void _work_load_register_named_ThousandsOfOffset();
+        f = _work_load_register_named_ThousandsOfOffset;
+        (void)f;
+    }
     try
     {
         StressEnv::initGlobalLogger();

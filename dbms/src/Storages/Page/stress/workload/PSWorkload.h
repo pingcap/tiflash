@@ -193,15 +193,15 @@ private:
     StressEnv options;
 };
 
-#define REGISTER_WORKLOAD(WORKLOAD)                                                     \
-    static void __attribute__((constructor)) _work_load_register_named_##WORKLOAD(void) \
-    {                                                                                   \
-        StressWorkloadManger::getInstance().reg(                                        \
-            WORKLOAD::nameFunc(),                                                       \
-            WORKLOAD::maskFunc(),                                                       \
-            [](const StressEnv & opts) -> std::shared_ptr<StressWorkload> {             \
-                return std::make_shared<WORKLOAD>(opts);                                \
-            });                                                                         \
+#define REGISTER_WORKLOAD(WORKLOAD)                                              \
+    void __attribute__((constructor)) _work_load_register_named_##WORKLOAD(void) \
+    {                                                                            \
+        StressWorkloadManger::getInstance().reg(                                 \
+            WORKLOAD::nameFunc(),                                                \
+            WORKLOAD::maskFunc(),                                                \
+            [](const StressEnv & opts) -> std::shared_ptr<StressWorkload> {      \
+                return std::make_shared<WORKLOAD>(opts);                         \
+            });                                                                  \
     }
 
 } // namespace DB::PS::tests
