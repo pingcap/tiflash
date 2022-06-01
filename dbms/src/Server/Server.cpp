@@ -65,10 +65,10 @@
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
