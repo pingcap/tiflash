@@ -24,14 +24,14 @@ int StressWorkload::mainEntry(int argc, char ** argv)
         void (*f)() = _work_load_register_named_HeavyMemoryCostInGC;
         (void)f;
         void _work_load_register_named_HeavyRead();
-        (void)f;
         f = _work_load_register_named_HeavyRead;
+        (void)f;
         void _work_load_register_named_HeavySkewWriteRead();
-        (void)f;
         f = _work_load_register_named_HeavySkewWriteRead;
-        void _work_load_register_named_HeavyWrite();
         (void)f;
+        void _work_load_register_named_HeavyWrite();
         f = _work_load_register_named_HeavyWrite;
+        (void)f;
         void _work_load_register_named_HighValidBigFileGCWorkload();
         f = _work_load_register_named_HighValidBigFileGCWorkload;
         (void)f;
