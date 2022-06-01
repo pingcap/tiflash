@@ -18,6 +18,7 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/SortedDirectoryIterator.h>
+#include <Storages/Page/PageStorage.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 
