@@ -28,34 +28,21 @@
 
 using namespace DB::PS::V2;
 DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
-/* some exported global vars */
-namespace DB
-{
-#if __APPLE__ && __clang__
-__thread bool is_background_thread = false;
-#else
-thread_local bool is_background_thread = false;
-#endif
-} // namespace DB
-/* some exported global vars */
 
-void Usage(const char * prog)
+void Usage()
 {
     fprintf(stderr,
             R"HELP(
-Usage: %s <path> <mode>
+Usage: <path> <mode>
     mode == 1 -> dump all page entries
             2 -> dump valid page entries
-              param: %s <path> 2 [max-recover-sequence]
+              param: <path> 2 [max-recover-sequence]
             3 -> check all page entries and page data checksum
             4 -> list capacity of all page files
             5 -> list all page files
             1000 -> gc files
-              param: %s <path> 1000 [run-gc-times=1] [min-gc-file-num=10] [min-gc-bytes=134217728] [max-gc-valid-rate=0.35]
-)HELP",
-            prog,
-            prog,
-            prog);
+              param: <path> 1000 [run-gc-times=1] [min-gc-file-num=10] [min-gc-bytes=134217728] [max-gc-valid-rate=0.35]
+            )HELP");
 }
 
 void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
@@ -117,7 +104,7 @@ PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * 
     return config;
 }
 
-int main(int argc, char ** argv)
+int pageStorageV2CtlEntry(int argc, char ** argv)
 try
 {
     (void)argc;
@@ -125,7 +112,7 @@ try
 
     if (argc < 3)
     {
-        Usage(argv[0]);
+        Usage();
         return 1;
     }
 
@@ -153,7 +140,7 @@ try
         LOG_FMT_INFO(logger, "Running with [mode={}]", mode);
         break;
     default:
-        Usage(argv[0]);
+        Usage();
         return 1;
     }
 
@@ -271,13 +258,13 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
                 case DB::WriteBatch::WriteType::DEL:
-                    printf("DEL\t%lld\n", //
+                    printf("DEL\t%lld\t%llu\t%u\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
                 case DB::WriteBatch::WriteType::REF:
-                    printf("REF\t%lld\t%lld\t\n", //
+                    printf("REF\t%lld\t%lld\t\t%llu\t%u\n", //
                            record.page_id,
                            record.ori_page_id,
                            page_file.getFileId(),
