@@ -241,7 +241,7 @@ private:
     // The following two members must be used under the protection of table structure lock
     bool decoding_schema_changed = false;
     // internal version for `decoding_schema_snapshot`
-    size_t decoding_schema_version = 1;
+    Int64 decoding_schema_version = 1;
 
     // avoid creating block every time when decoding row
     std::vector<BlockUPtr> cache_blocks;
