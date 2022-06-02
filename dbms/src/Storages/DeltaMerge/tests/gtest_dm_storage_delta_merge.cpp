@@ -709,19 +709,9 @@ try
 {
     auto & global_settings = ::DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef();
     // store the old value to restore global_context settings after the test finish to avoid influence other tests
-    auto old_dt_segment_limit_rows = global_settings.dt_segment_limit_rows;
-    auto old_dt_segment_limit_size = global_settings.dt_segment_limit_size;
-    auto old_dt_segment_delta_limit_rows = global_settings.dt_segment_delta_limit_rows;
-    auto old_dt_segment_delta_limit_sizes = global_settings.dt_segment_delta_limit_size;
-    auto old_dt_segment_force_split_size = global_settings.dt_segment_force_split_size;
-    auto old_dt_segment_delta_cache_limit_size = global_settings.dt_segment_delta_cache_limit_size;
+    auto old_global_settings = global_settings;
     SCOPE_EXIT({
-        global_settings.dt_segment_limit_rows = old_dt_segment_limit_rows;
-        global_settings.dt_segment_limit_size = old_dt_segment_limit_size;
-        global_settings.dt_segment_delta_limit_rows = old_dt_segment_delta_limit_rows;
-        global_settings.dt_segment_delta_limit_size = old_dt_segment_delta_limit_sizes;
-        global_settings.dt_segment_force_split_size = old_dt_segment_force_split_size;
-        global_settings.dt_segment_delta_cache_limit_size = old_dt_segment_delta_cache_limit_size;
+        global_settings = old_global_settings;
     });
     // change the settings to make it more easy to trigger splitting segments
     Settings settings;
