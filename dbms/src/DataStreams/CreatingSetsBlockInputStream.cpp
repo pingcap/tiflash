@@ -228,7 +228,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
             if (done_with_set && done_with_join && done_with_table)
             {
-                if (IProfilingBlockInputStream * profiling_in = dynamic_cast<IProfilingBlockInputStream *>(&*subquery.source))
+                if (auto * profiling_in = dynamic_cast<IProfilingBlockInputStream *>(&*subquery.source))
                     profiling_in->cancel(false);
 
                 break;
@@ -248,7 +248,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         watch.stop();
 
         size_t head_rows = 0;
-        if (IProfilingBlockInputStream * profiling_in = dynamic_cast<IProfilingBlockInputStream *>(&*subquery.source))
+        if (auto * profiling_in = dynamic_cast<IProfilingBlockInputStream *>(&*subquery.source))
         {
             const BlockStreamProfileInfo & profile_info = profiling_in->getProfileInfo();
 
@@ -272,7 +272,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
                 if (subquery.table)
                     msg.fmtAppend("Table with {} rows. ", head_rows);
 
-                msg.fmtAppend("In {.3f} sec. ", watch.elapsedSeconds());
+                msg.fmtAppend("In {:.3f} sec. ", watch.elapsedSeconds());
                 msg.fmtAppend("using {} threads.", subquery.join ? subquery.join->getBuildConcurrency() : 1);
                 return msg.toString();
             };
