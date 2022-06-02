@@ -19,7 +19,9 @@ using namespace DB::PS::tests;
 int StressWorkload::mainEntry(int argc, char ** argv)
 {
     {
-        // in order to trigger REGISTER_WORKLOAD
+        // maybe due to sequence of linking, REGISTER_WORKLOAD is not visible to main function in dbms/src/Server/main.cpp
+        // cause that REGISTER_WORKLOAD will not be triggered before mainEntry
+        // we do this to trigger REGISTER_WORKLOAD explicitly.
         void _work_load_register_named_HeavyMemoryCostInGC();
         void (*f)() = _work_load_register_named_HeavyMemoryCostInGC;
         (void)f;
