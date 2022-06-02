@@ -479,7 +479,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "{} table: {}.{}, rows: {}", __FUNCTION__, db_name, table_name, block.rows());
+    LOG_FMT_TRACE(log, "{} table: {}.{}, rows: {}, block: {}", __FUNCTION__, db_name, table_name, block.rows(), block.dumpStructure());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 

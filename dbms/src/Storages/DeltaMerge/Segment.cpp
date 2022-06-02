@@ -299,7 +299,7 @@ bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_f
 
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] write to cache rows: {}", segment_id, limit);
+    LOG_FMT_TRACE(log, "Segment [{}] write to cache offset: {} rows: {}", segment_id, offset, limit);
     if (unlikely(limit == 0))
         return true;
     return delta->appendToCache(dm_context, block, offset, limit);

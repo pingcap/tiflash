@@ -129,8 +129,10 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
     if (!column_files.empty())
     {
         auto & last_column_file = column_files.back();
+        LOG_FMT_DEBUG(log, "MemTableSet appendToCache column_files size[{}]. last_column_file[{}].", column_files.size(), last_column_file.toString());
         if (last_column_file->isAppendable())
             success = last_column_file->append(context, block, offset, limit, append_bytes);
+        LOG_FMT_DEBUG(log, "MemTableSet appendToCache success[{}]. last_column_file[{}].", success, last_column_file.toString());
     }
 
     if (!success)
@@ -141,12 +143,15 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
         // Must append the empty `new_column_file` to `column_files` before appending data to it,
         // because `appendColumnFileInner` will update stats related to `column_files` but we will update stats relate to `new_column_file` here.
         appendColumnFileInner(new_column_file);
+        LOG_FMT_DEBUG(log, "MemTableSet appendToCache new_column_file[{}].", last_column_file.toString());
         success = new_column_file->append(context, block, offset, limit, append_bytes);
         if (unlikely(!success))
             throw Exception("Write to MemTableSet failed", ErrorCodes::LOGICAL_ERROR);
+        LOG_FMT_DEBUG(log, "MemTableSet appendToCache new_column_file[{}].", last_column_file.toString());
     }
     rows += limit;
     bytes += append_bytes;
+    LOG_FMT_DEBUG(log, "MemTableSet appendToCache rows[{}]. bytes[{}]. column_files_count[{}]. offset[{}], limit[{}]. block[{}].", rows, bytes, column_files_count, offset, limit, block.dumpStructure());
 }
 
 void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)
