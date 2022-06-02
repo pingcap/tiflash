@@ -28,6 +28,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <kvproto/mpp.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Rpc.h>
