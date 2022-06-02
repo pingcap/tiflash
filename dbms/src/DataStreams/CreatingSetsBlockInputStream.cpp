@@ -225,6 +225,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
                         ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
                     done_with_table = true;
             }
+            std::cout << "ywq test 228" << std::endl;
 
             if (done_with_set && done_with_join && done_with_table)
             {
@@ -246,6 +247,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             table_out->writeSuffix();
 
         watch.stop();
+        std::cout << "ywq test 250"<< std::endl;
 
         size_t head_rows = 0;
         if (IProfilingBlockInputStream * profiling_in = dynamic_cast<IProfilingBlockInputStream *>(&*subquery.source))
@@ -257,27 +259,28 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             if (subquery.join)
                 subquery.join->setTotals(profiling_in->getTotals());
         }
+        std::cout << "ywq test 262"<< std::endl;
 
         if (head_rows != 0)
         {
             // avoid generate log message when log level > DEBUG.
-            auto gen_debug_log_msg = [&] {
-                FmtBuffer msg;
-                msg.append("Created. ");
+            // auto gen_debug_log_msg = [&] {
+            //     FmtBuffer msg;
+            //     msg.append("Created. ");
 
-                if (subquery.set)
-                    msg.fmtAppend("Set with {} entries from {} rows. ", subquery.set->getTotalRowCount(), head_rows);
-                if (subquery.join)
-                    msg.fmtAppend("Join with {} entries from {} rows. ", subquery.join->getTotalRowCount(), head_rows);
-                if (subquery.table)
-                    msg.fmtAppend("Table with {} rows. ", head_rows);
+            //     // if (subquery.set)
+            //     //     msg.fmtAppend("Set with {} entries from {} rows. ", subquery.set->getTotalRowCount(), head_rows);
+            //     // if (subquery.join)
+            //     //     msg.fmtAppend("Join with {} entries from {} rows. ", subquery.join->getTotalRowCount(), head_rows);
+            //     // if (subquery.table)
+            //     //     msg.fmtAppend("Table with {} rows. ", head_rows);
 
-                msg.fmtAppend("In {.3f} sec. ", watch.elapsedSeconds());
-                msg.fmtAppend("using {} threads.", subquery.join ? subquery.join->getBuildConcurrency() : 1);
-                return msg.toString();
-            };
+            //     msg.fmtAppend("In {.3f} sec. ", watch.elapsedSeconds());
+            //     msg.fmtAppend("using {} threads.",  1);
+            //     return msg.toString();
+            // };
 
-            LOG_FMT_DEBUG(log, "{}", gen_debug_log_msg());
+            // LOG_FMT_DEBUG(log, "{}", gen_debug_log_msg());
         }
         else
         {

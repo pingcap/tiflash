@@ -298,8 +298,8 @@ public:
     }
 
     bool isTest() const { return is_test; }
-    void setColumnsForTest(ColumnsWithTypeAndName columns_for_test_) { columns_for_test = columns_for_test_; }
-    ColumnsWithTypeAndName columnsForTest() { return columns_for_test; }
+    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
+    ColumnsWithTypeAndName columnsForTest(String exector_id) { return columns_for_test_map[exector_id]; }
 
     void cancelAllExchangeReceiver();
 
@@ -374,7 +374,7 @@ private:
     std::vector<SubqueriesForSets> subqueries;
 
     bool is_test = false; /// switch for test, do not use it in production.
-    ColumnsWithTypeAndName columns_for_test;
+    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources // ywq todo
 };
 
 } // namespace DB

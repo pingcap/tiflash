@@ -22,6 +22,7 @@
 
 #include <initializer_list>
 #include <unordered_map>
+#include "common/types.h"
 
 namespace DB::tests
 {
@@ -138,7 +139,7 @@ public:
     void addExchangeReceiverWithColumnData(const String & name, MockColumnInfos columnInfos, ColumnsWithTypeAndName columns);
     void addExchangeReceiverWithColumnData(const String & name, MockColumnInfoList columnInfos, ColumnsWithTypeAndName columns);
 
-    ColumnsWithTypeAndName sourceColumns() { return source_columns; }
+    std::unordered_map<String, ColumnsWithTypeAndName> & executorIdColumnsMap() { return executor_id_columns_map; }
 
     DAGRequestBuilder scan(String db_name, String table_name);
     DAGRequestBuilder receive(String exchange_name);
@@ -149,7 +150,9 @@ private:
     std::unordered_map<String, MockColumnInfos> exchange_schemas;
     std::unordered_map<String, ColumnsWithTypeAndName> mock_table_columns;
     std::unordered_map<String, ColumnsWithTypeAndName> mock_exchange_columns;
-    ColumnsWithTypeAndName source_columns;
+    // TODO: Do not check duplicated name ywq todo
+    // std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map; /// <table_name or exchange name, columns>
+    std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map; /// <executor_id, columns>
 
 public:
     // Currently don't support task_id, so the following to structure is useless,

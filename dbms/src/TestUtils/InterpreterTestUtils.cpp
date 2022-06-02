@@ -98,10 +98,10 @@ static Block mergeBlocks(Blocks blocks)
     return Block(actual_columns);
 }
 
-void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
+void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, const ColumnsWithTypeAndName & expect_columns)
 {
     DAGContext dag_context(*request, "interpreter_test", 1);
-    dag_context.setColumnsForTest(source_columns);
+    dag_context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
@@ -125,7 +125,7 @@ void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & r
 
 void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
 {
-    executeStreams(request, context.sourceColumns(), expect_columns);
+    executeStreams(request, context.executorIdColumnsMap(), expect_columns);
 }
 
 void InterpreterTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

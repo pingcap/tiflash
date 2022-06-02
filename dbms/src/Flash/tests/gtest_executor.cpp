@@ -15,6 +15,8 @@
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
+#include "Parsers/ASTTablesInSelectQuery.h"
+
 namespace DB
 {
 namespace tests
@@ -33,6 +35,16 @@ public:
                                                   {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                                   {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                                                    toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+        context.addMockTableWithColumnData({"test_db", "r_table"},
+                                           {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                           {toVec<String>("s", {"banana", "banana"}),
+                                            toVec<String>("join_c", {"apple", "banana"})});
+
+        context.addMockTableWithColumnData({"test_db", "l_table"},
+                                           {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                           {toVec<String>("s", {"banana", "banana"}),
+                                            toVec<String>("join_c", {"apple", "banana"})});
     }
 
     template <typename T>
@@ -72,8 +84,6 @@ try
                           " table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
-                       {toNullableVec<String>("s1", {"banana", "banana"}),
-                        toNullableVec<String>("s2", {"apple", "banana"})},
                        {toNullableVec<String>("s1", {"banana"}),
                         toNullableVec<String>("s2", {"banana"})});
     }
@@ -88,6 +98,18 @@ try
         executeStreams(request,
                        {toNullableVec<String>("s1", {"banana"}),
                         toNullableVec<String>("s2", {"banana"})});
+    }
+
+    request = context.scan("test_db", "l_table").join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left).build(context);
+    {
+        String expected = 
+        "Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+        " table_scan_0 | {<0, String>, <1, String>}\n"
+        " table_scan_1 | {<0, String>, <1, String>}\n";
+        ASSERT_DAGREQUEST_EQAUL(expected, request);
+        executeStreams(request,
+                       {toNullableVec<String>("s", {"banana"}),
+                        toNullableVec<String>("join_c", {"banana"})});
     }
 }
 CATCH
