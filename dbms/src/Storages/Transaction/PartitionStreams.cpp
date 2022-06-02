@@ -118,7 +118,7 @@ static void writeRegionDataToStorage(
         BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
-            LOG_FMT_DEBUG(log, "{} begin to decode table {}, region {}", FUNCTION_NAME, table_id, region->id());
+            LOG_FMT_TRACE(log, "{} begin to decode table {}, region {}", FUNCTION_NAME, table_id, region->id());
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
             std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
             block_decoding_schema_version = decoding_schema_snapshot->decoding_schema_version;
@@ -155,7 +155,7 @@ static void writeRegionDataToStorage(
         if (need_decode)
             storage->releaseDecodingBlock(block_decoding_schema_version, std::move(block_ptr));
 
-        LOG_FMT_DEBUG(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
+        LOG_FMT_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
         return true;
     };
 
@@ -169,7 +169,6 @@ static void writeRegionDataToStorage(
         if (atomic_read_write(false))
             return;
     }
-    LOG_FMT_DEBUG(log, "{} try to sync schema", FUNCTION_NAME);
 
     /// If first try failed, sync schema and force read then write.
     {
