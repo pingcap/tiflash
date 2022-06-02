@@ -123,9 +123,9 @@ public:
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
 
-    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */) override;
+    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool /* need_block */) override;
 
-    void releaseDecodingBlock(Int64 schema_version, BlockUPtr block) override;
+    void releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block) override;
 
     bool initStoreIfDataDirExist() override;
 
@@ -206,6 +206,11 @@ private:
 
     mutable std::mutex decode_schema_mutex;
     DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
+    // The following two members must be used under the protection of table structure lock
+    bool decoding_schema_changed = false;
+    // internal version for `decoding_schema_snapshot`
+    Int64 decoding_schema_version = 1;
+
     // avoid creating block every time when decoding row
     std::vector<BlockUPtr> cache_blocks;
     // avoid creating too many cached blocks(the typical num should be less and equal than raft apply thread)

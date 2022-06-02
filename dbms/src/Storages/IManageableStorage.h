@@ -146,15 +146,25 @@ public:
 
     virtual size_t getRowKeyColumnSize() const { return 1; }
 
+<<<<<<< HEAD
     // when `need_block` is true, it will try return a cached block corresponding to DecodingStorageSchemaSnapshotConstPtr,
     //     and `releaseDecodingBlock` need to be called when the block is free
     // when `need_block` is false, it will just return an nullptr
     virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */)
+=======
+    /// when `need_block` is true, it will try return a cached block corresponding to DecodingStorageSchemaSnapshotConstPtr,
+    ///     and `releaseDecodingBlock` need to be called when the block is free
+    /// when `need_block` is false, it will just return an nullptr
+    /// This method must be called under the protection of table structure lock
+    virtual std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & /* table_structure_lock */, bool /* need_block */)
+>>>>>>> 2ce9529f10 (Fix potential data inconsistency under heavy ddl operation (#5044))
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     };
 
-    virtual void releaseDecodingBlock(Int64 /* schema_version */, BlockUPtr /* block */)
+    /// The `block_decoding_schema_version` is just an internal version for `DecodingStorageSchemaSnapshot`,
+    /// And it has no relation with the table schema version.
+    virtual void releaseDecodingBlock(Int64 /* block_decoding_schema_version */, BlockUPtr /* block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

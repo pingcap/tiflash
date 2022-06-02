@@ -45,6 +45,7 @@ extern const char exception_before_step_2_rename_in_exchange_partition[];
 extern const char exception_after_step_2_in_exchange_partition[];
 extern const char exception_before_step_3_rename_in_exchange_partition[];
 extern const char exception_after_step_3_in_exchange_partition[];
+extern const char exception_between_schema_change_in_the_same_diff[];
 } // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
@@ -316,6 +317,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         return;
     }
 
+<<<<<<< HEAD:dbms/src/Storages/Transaction/SchemaBuilder.cpp
     std::stringstream ss;
     ss << "Detected schema changes: " << name_mapper.debugCanonicalName(*db_info, *table_info) << ": ";
     for (const auto & schema_change : schema_changes)
@@ -332,13 +334,43 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         }
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
+=======
+    auto log_str = [&]() {
+        FmtBuffer fmt_buf;
+        fmt_buf.fmtAppend("Detected schema changes: {}: ", name_mapper.debugCanonicalName(*db_info, *table_info));
+        for (const auto & schema_change : schema_changes)
+        {
+            for (const auto & command : schema_change.first)
+            {
+                if (command.type == AlterCommand::ADD_COLUMN)
+                    fmt_buf.fmtAppend("ADD COLUMN {} {},", command.column_name, command.data_type->getName());
+                else if (command.type == AlterCommand::DROP_COLUMN)
+                    fmt_buf.fmtAppend("DROP COLUMN {}, ", command.column_name);
+                else if (command.type == AlterCommand::MODIFY_COLUMN)
+                    fmt_buf.fmtAppend("MODIFY COLUMN {} {}, ", command.column_name, command.data_type->getName());
+                else if (command.type == AlterCommand::RENAME_COLUMN)
+                    fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
+            }
+        }
+        return fmt_buf.toString();
+    };
+    LOG_DEBUG(log, log_str());
+>>>>>>> 2ce9529f10 (Fix potential data inconsistency under heavy ddl operation (#5044)):dbms/src/TiDB/Schema/SchemaBuilder.cpp
 
     /// Update metadata, through calling alterFromTiDB.
     // Using original table info with updated columns instead of using new_table_info directly,
     // so that other changes (RENAME commands) won't be saved.
     // Also, updating schema_version as altering column is structural.
-    for (const auto & schema_change : schema_changes)
+    for (size_t i = 0; i < schema_changes.size(); i++)
     {
+        if (i > 0)
+        {
+            /// If there are multiple schema change in the same diff,
+            /// the table schema version will be set to the latest schema version after the first schema change is applied.
+            /// Throw exception in the middle of the schema change to mock the case that there is a race between data decoding and applying different schema change.
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_schema_change_in_the_same_diff);
+        }
+        const auto & schema_change = schema_changes[i];
         /// Update column infos by applying schema change in this step.
         schema_change.second(orig_table_info);
         /// Update schema version aggressively for the sake of correctness.
