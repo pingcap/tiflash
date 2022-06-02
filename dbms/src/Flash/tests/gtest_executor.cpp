@@ -68,9 +68,6 @@ try
                        .filter(eq(col("s1"), col("s2")))
                        .build(context);
     {
-        String expected = "selection_1 | equals(<0, String>, <1, String>)}\n"
-                          " table_scan_0 | {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s1", {"banana"}),
                         toNullableVec<String>("s2", {"banana"})});
@@ -80,9 +77,6 @@ try
                   .filter(eq(col("s1"), col("s2")))
                   .build(context);
     {
-        String expected = "selection_1 | equals(<0, String>, <1, String>)}\n"
-                          " table_scan_0 | {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s1", {"banana"}),
                         toNullableVec<String>("s2", {"banana"})});
@@ -92,9 +86,6 @@ try
                   .filter(eq(col("s1"), col("s2")))
                   .build(context);
     {
-        String expected = "selection_1 | equals(<0, String>, <1, String>)}\n"
-                          " exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s1", {"banana"}),
                         toNullableVec<String>("s2", {"banana"})});
@@ -108,8 +99,10 @@ try
         " table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana"}),
-                        toNullableVec<String>("join_c", {"banana"})});
+                       {toNullableVec<String>("s", {"banana", "banana"}),
+                        toNullableVec<String>("join_c", {"apple", "banana"}),
+                        toNullableVec<String>("s", {"banana", "banana"}),
+                        toNullableVec<String>("join_c", {"apple", "banana"})});
     }
 }
 CATCH
