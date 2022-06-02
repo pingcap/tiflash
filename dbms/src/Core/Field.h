@@ -122,7 +122,20 @@ public:
         }
         if (cnt == 0)
             cnt = 1;
-        return cnt;
+        return std::max(cnt, scale);
+    }
+
+    /// In TiFlash there are 4 subtype of decimal:
+    /// Decimal32, Decimal64, Decimal128 and Decimal256
+    /// they are not compatible with each other. So a DecimalField<Decimal32>
+    /// can not be inserted into a decimal column with DecimalType<Decimal64>
+    /// getPrecWithCurrentDecimalType will return the prec that fit
+    /// current decimal type, that is to say, current DecimalField can be
+    /// inserted into a decimal column with type `Decimal(getPrecWithCurrentDecimalType, getScale)`
+    UInt32 getPrecWithCurrentDecimalType() const
+    {
+        auto raw_prec = getPrec();
+        return std::max(raw_prec, minDecimalPrecision<T>());
     }
 
     template <typename U>

@@ -13,3 +13,4 @@
 # limitations under the License.
 
 add_subdirectory(V2)
+add_subdirectory(tools)

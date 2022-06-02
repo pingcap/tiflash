@@ -44,7 +44,7 @@ std::string WorkloadOptions::toString(std::string seperator) const
         fmt::format("read_stream_count {}{}", read_stream_count, seperator) + //
         fmt::format("testing_type {}{}", testing_type, seperator) + //
         fmt::format("log_write_request {}{}", log_write_request, seperator) + //
-        fmt::format("enable_ps_v3 {}{}", enable_ps_v3, seperator) + //
+        fmt::format("ps_run_mode {}{}", ps_run_mode, seperator) + //
         fmt::format("bg_thread_count {}{}", bg_thread_count, seperator) + //
         fmt::format("table_id {}{}", table_id, seperator) + //
         fmt::format("table_name {}{}", table_name, seperator);
@@ -88,7 +88,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("log_write_request", value<bool>()->default_value(false), "") //
         //
-        ("enable_ps_v3", value<bool>()->default_value(true), "") //
+        ("ps_run_mode", value<uint64_t>()->default_value(2, "possible value: 1(only_v2), 2(only_v3), 3(mix_mode), and note that in mix_mode, the test will run twice, first round in only_v2 mode and second round in mix_mode")) //
         //
         ("bg_thread_count", value<uint64_t>()->default_value(4), "") //
         //
@@ -155,8 +155,20 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     testing_type = vm["testing_type"].as<std::string>();
     log_write_request = vm["log_write_request"].as<bool>();
-
-    enable_ps_v3 = vm["enable_ps_v3"].as<bool>();
+    switch (vm["ps_run_mode"].as<uint64_t>())
+    {
+    case static_cast<uint64_t>(PageStorageRunMode::ONLY_V2):
+        ps_run_mode = PageStorageRunMode::ONLY_V2;
+        break;
+    case static_cast<uint64_t>(PageStorageRunMode::ONLY_V3):
+        ps_run_mode = PageStorageRunMode::ONLY_V3;
+        break;
+    case static_cast<uint64_t>(PageStorageRunMode::MIX_MODE):
+        ps_run_mode = PageStorageRunMode::MIX_MODE;
+        break;
+    default:
+        return {false, fmt::format("unknown ps_run_mode {}.", vm["ps_run_mode"].as<uint64_t>())};
+    }
 
     bg_thread_count = vm["bg_thread_count"].as<uint64_t>();
 
