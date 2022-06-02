@@ -54,7 +54,7 @@ else()
     set(NOT_USE_CCACHE 1)
 endif()
 
-option(ENABLE_PCH "Enable `Precompiled header`" ${NOT_USE_CCACHE})
+option(ENABLE_PCH "Enable `Precompiled header`" OFF)
 
 include (cmake/find_ccache.cmake)
 
