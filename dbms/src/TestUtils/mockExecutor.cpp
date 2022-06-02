@@ -22,6 +22,7 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
+
 #include <unordered_map>
 
 namespace DB::tests
@@ -373,7 +374,7 @@ DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name)
 {
     auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name]);
-    receiver_source_task_ids_map[builder.getRoot()->name] = {};    
+    receiver_source_task_ids_map[builder.getRoot()->name] = {};
     executor_id_columns_map[builder.getRoot()->name] = mock_exchange_columns[exchange_name];
     return builder;
 }

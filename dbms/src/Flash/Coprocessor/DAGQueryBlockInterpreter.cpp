@@ -168,7 +168,8 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     }
     else
     {
-        for (const auto & col : context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID())) {
+        for (const auto & col : context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID()))
+        {
             names_and_types.push_back({col.name, col.type});
         }
         columns_with_type_and_name = context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID());
