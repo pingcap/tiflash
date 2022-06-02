@@ -1,0 +1,59 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table test.t (a int);
+mysql> insert into test.t values (null),(-100),(0),(1),(365),(366),(367),(730850);
+mysql> insert into test.t values (3652424),(3652425),(3652499),(3652500),(3652501);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+# we are compaitable with mysql
+mysql> set tidb_enforce_mpp=1; select a, from_days(a), to_days(from_days(a)) from test.t;
++---------+--------------+-----------------------+
+| a       | from_days(a) | to_days(from_days(a)) |
++---------+--------------+-----------------------+
+|    NULL | NULL         |                  NULL |
+|    -100 | 0000-00-00   |                  NULL |
+|       0 | 0000-00-00   |                  NULL |
+|       1 | 0000-00-00   |                  NULL |
+|     365 | 0000-00-00   |                  NULL |
+|     366 | 0001-01-01   |                   366 |
+|     367 | 0001-01-02   |                   367 |
+|  730850 | 2000-12-31   |                730850 |
+| 3652424 | 9999-12-31   |               3652424 |
+| 3652425 | NULL         |                  NULL |
+| 3652499 | NULL         |                  NULL |
+| 3652500 | NULL         |                  NULL |
+| 3652501 | NULL         |                  NULL |
++---------+--------------+-----------------------+
+
+mysql> set tidb_allow_mpp=0; select a, from_days(a), to_days(from_days(a)) from test.t;
++---------+--------------+-----------------------+
+| a       | from_days(a) | to_days(from_days(a)) |
++---------+--------------+-----------------------+
+|    NULL | NULL         |                  NULL |
+|    -100 | 0000-00-00   |                  NULL |
+|       0 | 0000-00-00   |                  NULL |
+|       1 | 0000-00-00   |                  NULL |
+|     365 | 0000-00-00   |                  NULL |
+|     366 | 0001-01-01   |                   366 |
+|     367 | 0001-01-02   |                   367 |
+|  730850 | 2000-12-31   |                730850 |
+| 3652424 | 9999-12-31   |               3652424 |
+| 3652425 | 10000-01-01  |               3652425 |
+| 3652499 | 10000-03-15  |               3652499 |
+| 3652500 | 0000-00-00   |                  NULL |
+| 3652501 | 0000-00-00   |                  NULL |
++---------+--------------+-----------------------+

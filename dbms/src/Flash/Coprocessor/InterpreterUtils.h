@@ -20,7 +20,7 @@
 
 namespace DB
 {
-class DAGContext;
+class Context;
 
 void restoreConcurrency(
     DAGPipeline & pipeline,
@@ -37,7 +37,8 @@ void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
     const LoggerPtr & log,
-    bool ignore_block = false);
+    bool ignore_block = false,
+    const String & extra_info = "");
 
 void executeExpression(
     DAGPipeline & pipeline,
@@ -48,4 +49,9 @@ void updateFinalConcurrency(
     DAGContext & dag_context,
     size_t cur_streams_size,
     size_t max_streams);
+
+ExpressionActionsPtr generateProjectExpressionActions(
+    const BlockInputStreamPtr & stream,
+    const Context & context,
+    const NamesWithAliases & project_cols);
 } // namespace DB

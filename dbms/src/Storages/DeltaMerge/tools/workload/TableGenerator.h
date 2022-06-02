@@ -36,7 +36,7 @@ class TableGenerator
 public:
     static std::unique_ptr<TableGenerator> create(const WorkloadOptions & opts);
 
-    virtual TableInfo get() = 0;
+    virtual TableInfo get(int64_t table_id, std::string table_name) = 0;
 
     virtual ~TableGenerator() {}
 };

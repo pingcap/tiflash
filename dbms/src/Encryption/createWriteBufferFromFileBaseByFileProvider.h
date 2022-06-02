@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Checksum.h>
+#include <Common/nocopyable.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteBufferFromFileBase.h>
 
@@ -96,8 +97,7 @@ public:
         , write_limiter(write_limiter)
     {}
 
-    WriteBufferByFileProviderBuilder(const WriteBufferByFileProviderBuilder &) = delete;
-    WriteBufferByFileProviderBuilder & operator=(const WriteBufferByFileProviderBuilder &) = delete;
+    DISALLOW_COPY(WriteBufferByFileProviderBuilder);
 
     std::unique_ptr<WriteBufferFromFileBase>
     build()

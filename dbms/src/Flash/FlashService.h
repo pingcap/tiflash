@@ -36,6 +36,10 @@ namespace DB
 class IServer;
 class CallExecPool;
 class EstablishCallData;
+namespace Management
+{
+class ManualCompactManager;
+} // namespace Management
 
 class FlashService : public tikvpb::Tikv::Service
     , public std::enable_shared_from_this<FlashService>
@@ -44,13 +48,12 @@ class FlashService : public tikvpb::Tikv::Service
 public:
     explicit FlashService(IServer & server_);
 
+    ~FlashService() override;
+
     grpc::Status Coprocessor(
         grpc::ServerContext * grpc_context,
         const coprocessor::Request * request,
         coprocessor::Response * response) override;
-
-    grpc::Status BatchCommands(grpc::ServerContext * grpc_context,
-                               grpc::ServerReaderWriter<tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream) override;
 
     ::grpc::Status BatchCoprocessor(::grpc::ServerContext * context,
                                     const ::coprocessor::BatchRequest * request,
@@ -66,15 +69,16 @@ public:
         const ::mpp::IsAliveRequest * request,
         ::mpp::IsAliveResponse * response) override;
 
-    ::grpc::Status EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, EstablishCallData * calldata);
+    ::grpc::Status establishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, EstablishCallData * calldata);
 
     ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer) override
     {
-        return EstablishMPPConnectionSyncOrAsync(context, request, sync_writer, nullptr);
+        return establishMPPConnectionSyncOrAsync(context, request, sync_writer, nullptr);
     }
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
 
+    ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
@@ -85,6 +89,8 @@ protected:
     bool is_async = false;
     bool enable_local_tunnel = false;
     bool enable_async_grpc_client = false;
+
+    std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
@@ -110,8 +116,7 @@ public:
         abort();
         return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-
-    void RequestEstablishMPPConnection(::grpc::ServerContext * context, ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> * writer, ::grpc::CompletionQueue * new_call_cq, ::grpc::ServerCompletionQueue * notification_cq, void * tag)
+    void requestEstablishMPPConnection(::grpc::ServerContext * context, ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> * writer, ::grpc::CompletionQueue * new_call_cq, ::grpc::ServerCompletionQueue * notification_cq, void * tag)
     {
         ::grpc::Service::RequestAsyncServerStreaming(EstablishMPPConnectionApiID, context, request, writer, new_call_cq, notification_cq, tag);
     }
