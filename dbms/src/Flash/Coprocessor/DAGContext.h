@@ -299,7 +299,13 @@ public:
 
     bool isTest() const { return is_test; }
     void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
-    ColumnsWithTypeAndName columnsForTest(String exector_id) { return columns_for_test_map[exector_id]; }
+    ColumnsWithTypeAndName columnsForTest(String executor_id) { 
+        if (columns_for_test_map.find(executor_id) == columns_for_test_map.end())
+        {
+            throw DB::Exception("Don't have columns for mock source executors");
+        }
+        return columns_for_test_map[executor_id];
+    }
 
     void cancelAllExchangeReceiver();
 
