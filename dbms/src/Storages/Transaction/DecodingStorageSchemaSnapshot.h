@@ -67,13 +67,14 @@ struct DecodingStorageSchemaSnapshot
     bool pk_is_handle;
     bool is_common_handle;
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
-    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+    // an internal increasing version for `DecodingStorageSchemaSnapshot`, has no relation with the table schema version
+    Int64 decoding_schema_version;
 
-    DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_)
+    DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_, Int64 decoding_schema_version_)
         : column_defines{std::move(column_defines_)}
         , pk_is_handle{table_info_.pk_is_handle}
         , is_common_handle{table_info_.is_common_handle}
-        , schema_version{table_info_.schema_version}
+        , decoding_schema_version{decoding_schema_version_}
     {
         std::unordered_map<ColumnID, size_t> column_lut;
         for (size_t i = 0; i < table_info_.columns.size(); i++)
