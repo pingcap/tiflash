@@ -27,9 +27,3 @@ target_link_libraries(gtests_page_storage_v3 page_storage_v3 gtest_main)
 target_compile_options(gtests_page_storage_v3 PRIVATE -Wno-unknown-pragmas)
 target_compile_definitions(gtests_page_storage_v3 PRIVATE DBMS_PUBLIC_GTEST)
 add_check(gtests_page_storage_v3)
-
-
-add_executable(page_storage_ctl EXCLUDE_FROM_ALL page_storage_ctl.cpp)
-target_compile_definitions(page_storage_ctl PUBLIC DBMS_PUBLIC_GTEST)
-target_link_libraries(page_storage_ctl dbms page_storage_v3)
-target_compile_options(page_storage_ctl PRIVATE -Wno-format -lc++) # turn off printf format check
