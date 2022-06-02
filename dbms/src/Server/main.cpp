@@ -112,6 +112,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #endif
 #if ENABLE_TIFLASH_STRESSWORKLOAD
     {"stressworkload", DB::PS::tests::StressWorkload::mainEntry},
+#endif
 #if ENABLE_TIFLASH_PAGECTL
     {"pagectl", DB::PageStorageCtl::mainEntry},
 #endif
