@@ -424,7 +424,7 @@ private:
 
 BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settings & settings)
 {
-    auto & insert_query = typeid_cast<const ASTInsertQuery &>(*query);
+    const auto & insert_query = typeid_cast<const ASTInsertQuery &>(*query);
     auto decorator = [&](const Block & block) { //
         return this->buildInsertBlock(insert_query.is_import, insert_query.is_delete, block);
     };
@@ -563,7 +563,7 @@ BlockInputStreams StorageDeltaMerge::read(
     // failed to parsed.
     ColumnDefines columns_to_read;
     auto header = store->getHeader();
-    for (auto & n : column_names)
+    for (const auto & n : column_names)
     {
         ColumnDefine col_define;
         if (n == EXTRA_HANDLE_COLUMN_NAME)
@@ -798,7 +798,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
 
 DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
-    auto start_index = rand() % (total_rows - delete_rows + 1);
+    auto start_index = rand() % (total_rows - delete_rows + 1); // NOLINT(cert-msc50-cpp)
 
     DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize());
     {
@@ -933,12 +933,12 @@ static void updateDeltaMergeTableCreateStatement(
     const SortDescription & pk_names,
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,
-    const OptionTableInfoConstRef table_info,
+    OptionTableInfoConstRef table_info,
     Timestamp tombstone,
     const Context & context);
 
 inline OptionTableInfoConstRef getTableInfoForCreateStatement(
-    const OptionTableInfoConstRef table_info_from_tidb,
+    OptionTableInfoConstRef table_info_from_tidb,
     TiDB::TableInfo & table_info_from_store,
     const ColumnDefines & store_table_columns,
     const OrderedNameSet & hidden_columns)
@@ -1419,7 +1419,7 @@ void StorageDeltaMerge::startup()
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
-void StorageDeltaMerge::shutdown()
+void StorageDeltaMerge::shutdownImpl()
 {
     bool v = false;
     if (!shutdown_called.compare_exchange_strong(v, true))
@@ -1428,6 +1428,11 @@ void StorageDeltaMerge::shutdown()
     {
         _store->shutdown();
     }
+}
+
+void StorageDeltaMerge::shutdown()
+{
+    shutdownImpl();
 }
 
 void StorageDeltaMerge::removeFromTMTContext()
@@ -1440,7 +1445,7 @@ void StorageDeltaMerge::removeFromTMTContext()
 
 StorageDeltaMerge::~StorageDeltaMerge()
 {
-    shutdown();
+    shutdownImpl();
 }
 
 DataTypePtr StorageDeltaMerge::getPKTypeImpl() const

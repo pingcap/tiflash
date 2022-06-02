@@ -573,14 +573,14 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     updated_table_info.partition = table_info->partition;
 
     /// Apply changes to physical tables.
-    for (auto orig_def : orig_defs)
+    for (const auto & orig_def : orig_defs)
     {
         if (new_part_id_set.count(orig_def.id) == 0)
         {
             applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), orig_def.id);
         }
     }
-    for (auto new_def : new_defs)
+    for (const auto & new_def : new_defs)
     {
         if (orig_part_id_set.count(new_def.id) == 0)
         {
@@ -988,7 +988,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
     /// Check if this is a RECOVER table.
     {
         auto & tmt_context = context.getTMTContext();
-        if (auto storage = tmt_context.getStorages().get(table_info->id).get(); storage)
+        if (auto * storage = tmt_context.getStorages().get(table_info->id).get(); storage)
         {
             if (!storage->isTombstone())
             {
@@ -1102,7 +1102,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropTable(DBInfoPtr db_info, TableID table_id)
 {
     auto & tmt_context = context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(table_id).get();
+    auto * storage = tmt_context.getStorages().get(table_id).get();
     if (storage == nullptr)
     {
         LOG_DEBUG(log, "table " << table_id << " does not exist.");

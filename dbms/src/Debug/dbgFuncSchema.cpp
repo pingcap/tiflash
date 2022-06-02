@@ -72,7 +72,7 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
 {
     auto & service = context.getSchemaSyncService();
     Timestamp gc_safe_point = 0;
-    if (args.size() == 0)
+    if (args.empty())
         gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
     else
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -92,7 +92,7 @@ void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer ou
 
 void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() < 1 || args.size() > 2)
+    if (args.empty() || args.size() > 2)
         throw Exception("Args not matched, should be: database-name[, table-name]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;

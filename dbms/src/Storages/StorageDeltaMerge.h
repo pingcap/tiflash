@@ -87,7 +87,7 @@ public:
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     void alterFromTiDB(
         const TableLockHolder &,
-        const AlterCommands & commands,
+        const AlterCommands & params,
         const String & database_name,
         const TiDB::TableInfo & table_info,
         const SchemaNameMapper & name_mapper,
@@ -168,6 +168,7 @@ private:
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
+    void shutdownImpl();
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
