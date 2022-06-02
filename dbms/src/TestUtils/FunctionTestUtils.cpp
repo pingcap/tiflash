@@ -86,7 +86,6 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     {
         auto expected_field = (*expected)[i];
         auto actual_field = (*actual)[i];
-        std::cout << expected_field.toString() << ":" << actual_field.toString() << std::endl;
 
         ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value {} mismatch", i), expected_field.toString(), actual_field.toString());
     }
