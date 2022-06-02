@@ -272,7 +272,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
                 if (subquery.table)
                     msg.fmtAppend("Table with {} rows. ", head_rows);
 
-                msg.fmtAppend("In {.3f} sec. ", watch.elapsedSeconds());
+                msg.fmtAppend("In {:.3f} sec. ", watch.elapsedSeconds());
                 msg.fmtAppend("using {} threads.", subquery.join ? subquery.join->getBuildConcurrency() : 1);
                 return msg.toString();
             };
