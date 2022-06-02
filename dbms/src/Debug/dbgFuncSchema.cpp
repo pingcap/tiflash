@@ -34,6 +34,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int FAIL_POINT_ERROR;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
@@ -62,7 +63,22 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
 {
     TMTContext & tmt = context.getTMTContext();
     auto schema_syncer = tmt.getSchemaSyncer();
-    schema_syncer->syncSchemas(context);
+    try
+    {
+        schema_syncer->syncSchemas(context);
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+        {
+            output(e.message());
+            return;
+        }
+        else
+        {
+            throw;
+        }
+    }
 
     output("schemas refreshed");
 }
