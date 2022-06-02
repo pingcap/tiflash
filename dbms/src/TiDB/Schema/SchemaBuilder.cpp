@@ -35,11 +35,11 @@
 #include <Parsers/parseQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/SchemaBuilder-internal.h>
-#include <Storages/Transaction/SchemaBuilder.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Schema/SchemaBuilder-internal.h>
+#include <TiDB/Schema/SchemaBuilder.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/join.hpp>
@@ -61,6 +61,7 @@ extern const char exception_before_step_2_rename_in_exchange_partition[];
 extern const char exception_after_step_2_in_exchange_partition[];
 extern const char exception_before_step_3_rename_in_exchange_partition[];
 extern const char exception_after_step_3_in_exchange_partition[];
+extern const char exception_between_schema_change_in_the_same_diff[];
 } // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
@@ -336,6 +337,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         FmtBuffer fmt_buf;
         fmt_buf.fmtAppend("Detected schema changes: {}: ", name_mapper.debugCanonicalName(*db_info, *table_info));
         for (const auto & schema_change : schema_changes)
+        {
             for (const auto & command : schema_change.first)
             {
                 if (command.type == AlterCommand::ADD_COLUMN)
@@ -347,6 +349,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
                 else if (command.type == AlterCommand::RENAME_COLUMN)
                     fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
             }
+        }
         return fmt_buf.toString();
     };
     LOG_DEBUG(log, log_str());
@@ -355,8 +358,16 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
     // Using original table info with updated columns instead of using new_table_info directly,
     // so that other changes (RENAME commands) won't be saved.
     // Also, updating schema_version as altering column is structural.
-    for (const auto & schema_change : schema_changes)
+    for (size_t i = 0; i < schema_changes.size(); i++)
     {
+        if (i > 0)
+        {
+            /// If there are multiple schema change in the same diff,
+            /// the table schema version will be set to the latest schema version after the first schema change is applied.
+            /// Throw exception in the middle of the schema change to mock the case that there is a race between data decoding and applying different schema change.
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_schema_change_in_the_same_diff);
+        }
+        const auto & schema_change = schema_changes[i];
         /// Update column infos by applying schema change in this step.
         schema_change.second(orig_table_info);
         /// Update schema version aggressively for the sake of correctness.
@@ -1078,7 +1089,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info->name, 0);
 
-    ASTCreateQuery * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
+    auto * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
     ast_create_query->attach = true;
     ast_create_query->if_not_exists = true;
     ast_create_query->database = name_mapper.mapDatabaseName(*db_info);

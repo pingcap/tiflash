@@ -109,12 +109,7 @@ public:
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
-    RegionPreDecodeBlockDataPtr preHandleSnapshotToBlock(
-        RegionPtr new_region,
-        const SSTViewVec,
-        uint64_t index,
-        uint64_t term,
-        TMTContext & tmt);
+
     std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
         RegionPtr new_region,
         const SSTViewVec,
@@ -161,6 +156,11 @@ public:
     void runOneRoundOfReadIndexRunner(size_t runner_id);
 
     ~KVStore();
+
+    FileUsageStatistics getFileUsageStatistics() const
+    {
+        return region_persister.getFileUsageStatistics();
+    }
 
 private:
     friend class MockTiDB;
