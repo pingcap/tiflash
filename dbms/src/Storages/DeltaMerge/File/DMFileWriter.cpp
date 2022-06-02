@@ -107,17 +107,17 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
 
-    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : (const ColumnVector<UInt8> *)del_mark_column.get();
+    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : static_cast<const ColumnVector<UInt8> *>(del_mark_column.get());
 
     for (auto & cd : write_columns)
     {
-        auto & col = getByColumnId(block, cd.id).column;
+        const auto & col = getByColumnId(block, cd.id).column;
         writeColumn(cd.id, *cd.type, *col, del_mark);
 
         if (cd.id == VERSION_COLUMN_ID)
             stat.first_version = col->get64(0);
         else if (cd.id == TAG_COLUMN_ID)
-            stat.first_tag = (UInt8)(col->get64(0));
+            stat.first_tag = static_cast<UInt8>(col->get64(0));
     }
 
     if (!options.flags.isSingleFile())
