@@ -28,6 +28,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int FAIL_POINT_ERROR;
+};
+
 template <bool mock_getter>
 struct TiDBSchemaSyncer : public SchemaSyncer
 {
@@ -179,6 +184,10 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         catch (Exception & e)
         {
+            if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+            {
+                throw;
+            }
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
             return false;
