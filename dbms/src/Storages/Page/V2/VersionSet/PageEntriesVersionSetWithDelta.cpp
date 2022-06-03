@@ -597,6 +597,11 @@ void DeltaVersionEditAcceptor::decreasePageRef(const PageId page_id)
         entry.ref = old_entry->ref <= 1 ? 0 : old_entry->ref - 1;
         // Keep an tombstone entry (ref-count == 0), so that we can delete this entry when merged to base
         current_version->normal_pages[page_id] = entry;
+        LOG_FMT_WARNING(
+            &Poco::Logger::get("ffff"),
+            "add a tombstone entry id={}, entry={}",
+            page_id,
+            entry.toDebugString());
     }
 }
 
