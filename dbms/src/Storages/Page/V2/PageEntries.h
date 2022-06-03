@@ -373,7 +373,7 @@ void PageEntriesMixin<T>::del(PageId page_id)
         // decrease origin page's ref counting, this method can
         // only called by base, so we should remove the entry if
         // the ref count down to zero
-        decreasePageRef<must_exist>(normal_page_id, /*keep_tombstone*/ false);
+        decreasePageRef<must_exist>(normal_page_id, /*keep_tombstone=*/false);
     }
 }
 
@@ -396,7 +396,7 @@ void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
                 return;
             // this method can only called by base, so we should remove the entry if
             // the ref count down to zero
-            decreasePageRef<true>(ori_ref->second, /*keep_tombstone*/false);
+            decreasePageRef<true>(ori_ref->second, /*keep_tombstone=*/false);
         }
         // build ref
         page_ref[ref_id] = normal_page_id;
@@ -627,7 +627,10 @@ private:
             {
                 ref_deletions.insert(page_id);
             }
-            decreasePageRef<false>(page_id, /*keep_tombstone*/!this->isBase());
+            // If this is the base version, we should remove the entry if
+            // the ref count down to zero. Otherwise it is the delta version
+            // we should keep a tombstone.
+            decreasePageRef<false>(page_id, /*keep_tombstone=*/!this->isBase());
         }
         for (auto it : rhs.page_ref)
         {
