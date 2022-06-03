@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -49,6 +50,8 @@ public:
     const BackgroundService & getBackgroundService() const;
     BackgroundService & getBackgroundService();
 
+    GCManager & getGCManager();
+
     Context & getContext();
 
     bool isBgFlushDisabled() const { return disable_bg_flush; }
@@ -89,6 +92,7 @@ private:
     ManagedStorages storages;
     RegionTable region_table;
     BackGroundServicePtr background_service;
+    GCManager gc_manager;
 
     KVClusterPtr cluster;
 
