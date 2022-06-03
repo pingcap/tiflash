@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
-#include <common/logger_useful.h>
 
 namespace DB::PS::V2
 {
