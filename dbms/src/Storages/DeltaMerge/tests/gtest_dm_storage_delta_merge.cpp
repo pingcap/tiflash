@@ -726,7 +726,6 @@ try
     // change the settings to make it more easy to trigger splitting segments
     Settings settings;
     settings.dt_segment_limit_rows = 11;
-    settings.dt_segment_limit_rows = 11;
     settings.dt_segment_limit_size = 20;
     settings.dt_segment_delta_limit_rows = 7;
     settings.dt_segment_delta_limit_size = 20;
