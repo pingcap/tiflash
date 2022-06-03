@@ -321,6 +321,12 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
         // Page{normal_page_id} not exist
         normal_pages[normal_page_id] = entry;
         normal_pages[normal_page_id].ref = 1;
+        LOG_FMT_WARNING(
+            &Poco::Logger::get("ffff"),
+            "put create entry id={}, nid={}, entry={}",
+            page_id,
+            normal_page_id,
+            normal_pages[normal_page_id].toDebugString());
     }
     else
     {
@@ -328,6 +334,12 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
         const UInt32 page_ref_count = ori_iter->second.ref;
         normal_pages[normal_page_id] = entry;
         normal_pages[normal_page_id].ref = page_ref_count + is_new_ref_pair_inserted;
+        LOG_FMT_WARNING(
+            &Poco::Logger::get("ffff"),
+            "put replace entry id={}, nid={}, entry={}",
+            page_id,
+            normal_page_id,
+            normal_pages[normal_page_id].toDebugString());
     }
 
     // update max_page_id
@@ -347,12 +359,22 @@ void PageEntriesMixin<T>::upsertPage(PageId normal_page_id, PageEntry entry)
         const UInt32 page_ref_count = ori_iter->second.ref;
         entry.ref = page_ref_count;
         normal_pages[normal_page_id] = entry;
+        LOG_FMT_WARNING(
+            &Poco::Logger::get("ffff"),
+            "upsert a entry id={}, entry={}",
+            normal_page_id,
+            normal_pages[normal_page_id].toDebugString());
     }
     else
     {
         // Page{normal_page_id} not exist
         entry.ref = 0;
         normal_pages[normal_page_id] = entry;
+        LOG_FMT_WARNING(
+            &Poco::Logger::get("ffff"),
+            "upsert b entry id={}, entry={}",
+            normal_page_id,
+            normal_pages[normal_page_id].toDebugString());
     }
 
     // update max_page_id
@@ -421,7 +443,10 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
     if (iter != normal_pages.end())
     {
         auto & entry = iter->second;
-        entry.ref -= 1;
+        if (entry.ref > 0)
+        {
+            entry.ref -= 1;
+        }
         if (entry.ref == 0)
         {
             normal_pages.erase(iter);
@@ -571,6 +596,11 @@ public:
         base->copyEntries(*old_base);
         // apply delta edits
         base->merge(*delta);
+        LOG_FMT_WARNING(
+            &Poco::Logger::get("ffff"),
+            "compact from base:{} delta:{} done",
+            fmt::ptr(base),
+            fmt::ptr(delta));
         return base;
     }
 
@@ -601,10 +631,20 @@ public:
         while (!nodes.empty())
         {
             auto node = nodes.top();
+            LOG_FMT_WARNING(
+                &Poco::Logger::get("ffff"),
+                "compact deltas since tail:{} merging {}",
+                fmt::ptr(tail),
+                fmt::ptr(node));
             tmp->merge(*node);
             nodes.pop();
         }
 
+        LOG_FMT_WARNING(
+            &Poco::Logger::get("ffff"),
+            "compact deltas since tail:{} done, return {}",
+            fmt::ptr(tail),
+            fmt::ptr(tmp));
         return tmp;
     }
 
@@ -636,9 +676,23 @@ private:
             else
             {
                 normal_pages[it.first] = it.second;
+                LOG_FMT_WARNING(
+                    &Poco::Logger::get("ffff"),
+                    "merge entry id={}, entry={}",
+                    it.first,
+                    normal_pages[it.first].toDebugString());
             }
         }
         max_page_id = std::max(max_page_id, rhs.max_page_id);
+
+        for (auto & it : normal_pages)
+        {
+            LOG_FMT_WARNING(
+                &Poco::Logger::get("ffff"),
+                "after merge entry id={}, entry={}",
+                it.first,
+                it.second.toDebugString());
+        }
     }
 };
 } // namespace PS::V2
