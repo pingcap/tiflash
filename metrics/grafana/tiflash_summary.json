@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1653635389238,
+  "iteration": 1654217728945,
   "links": [],
   "panels": [
     {
@@ -3878,7 +3878,7 @@
           "fill": 0,
           "fillGradient": 0,
           "gridPos": {
-            "h": 8,
+            "h": 5,
             "w": 12,
             "x": 0,
             "y": 21
@@ -3893,6 +3893,7 @@
             "min": false,
             "rightSide": true,
             "show": true,
+            "sideWidth": null,
             "total": false,
             "values": false
           },
@@ -3908,38 +3909,27 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "alias": "/(delta_merge)|(seg_)/",
-              "yaxis": 2
-            }
-          ],
+          "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
-          "steppedLine": false,
+          "steppedLine": true,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_subtask_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split|seg_split_fg\"}[1m])) by (type)",
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_subtask_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (type)",
               "format": "time_series",
               "hide": false,
-              "intervalFactor": 1,
+              "interval": "",
+              "intervalFactor": 2,
               "legendFormat": "{{type}}",
               "refId": "A"
-            },
-            {
-              "expr": "sum(increase(tiflash_storage_subtask_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"delta_merge|delta_merge_fg|delta_merge_bg_gc|seg_merge|seg_split|seg_split_fg\"}[1m])) by (type)",
-              "format": "time_series",
-              "hide": false,
-              "intervalFactor": 1,
-              "legendFormat": "{{type}}",
-              "refId": "B"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Internal Tasks OPS",
+          "title": "Small Internal Tasks OPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -3955,7 +3945,7 @@
           },
           "yaxes": [
             {
-              "decimals": null,
+              "decimals": 1,
               "format": "ops",
               "label": null,
               "logBase": 1,
@@ -3969,7 +3959,7 @@
               "logBase": 1,
               "max": null,
               "min": "0",
-              "show": true
+              "show": false
             }
           ],
           "yaxis": {
@@ -3988,10 +3978,10 @@
             "defaults": {},
             "overrides": []
           },
-          "fill": 1,
+          "fill": 0,
           "fillGradient": 0,
           "gridPos": {
-            "h": 8,
+            "h": 5,
             "w": 12,
             "x": 12,
             "y": 21
@@ -4023,58 +4013,27 @@
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "alias": "/^.*-delta_merge/",
-              "yaxis": 2
-            },
-            {
-              "alias": "/^.*-seg_split/",
-              "yaxis": 2
-            }
-          ],
+          "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
+              "exemplar": false,
+              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (le,type))",
               "format": "time_series",
               "hide": false,
-              "intervalFactor": 1,
+              "interval": "",
+              "intervalFactor": 2,
               "legendFormat": "max-{{type}}",
               "refId": "A"
-            },
-            {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "99-{{type}}",
-              "refId": "B"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "95-{{type}}",
-              "refId": "C"
-            },
-            {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "80-{{type}}",
-              "refId": "D"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Internal Tasks Duration",
+          "title": "Small Internal Tasks Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -4090,6 +4049,7 @@
           },
           "yaxes": [
             {
+              "decimals": 1,
               "format": "s",
               "label": null,
               "logBase": 1,
@@ -4103,7 +4063,213 @@
               "logBase": 1,
               "max": null,
               "min": "0",
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Total number of storage's internal sub tasks",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 0,
+            "y": 26
+          },
+          "hiddenSeries": false,
+          "id": 130,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": true,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_subtask_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (type)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Large Internal Tasks OPS",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 1,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
               "show": true
+            },
+            {
+              "format": "opm",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Duration of storage's internal sub tasks",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 12,
+            "y": 26
+          },
+          "hiddenSeries": false,
+          "id": 131,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sort": null,
+            "sortDesc": null,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (le,type))",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "max-{{type}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Large Internal Tasks Duration",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 1,
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": false
             }
           ],
           "yaxis": {
@@ -4128,7 +4294,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 29
+            "y": 31
           },
           "hiddenSeries": false,
           "id": 43,
@@ -4234,7 +4400,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 29
+            "y": 31
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -4297,7 +4463,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 37
+            "y": 39
           },
           "hiddenSeries": false,
           "id": 46,
@@ -4420,7 +4586,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 37
+            "y": 39
           },
           "hiddenSeries": false,
           "id": 47,
@@ -4544,7 +4710,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 45
+            "y": 47
           },
           "height": "",
           "hiddenSeries": false,
@@ -4674,7 +4840,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 45
+            "y": 47
           },
           "height": "",
           "hiddenSeries": false,
@@ -4802,7 +4968,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 53
+            "y": 55
           },
           "hiddenSeries": false,
           "id": 88,
@@ -5002,7 +5168,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 53
+            "y": 55
           },
           "hiddenSeries": false,
           "id": 67,
@@ -5116,7 +5282,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 61
+            "y": 63
           },
           "hiddenSeries": false,
           "id": 84,
@@ -5216,7 +5382,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 61
+            "y": 63
           },
           "hiddenSeries": false,
           "id": 86,
@@ -8183,5 +8349,5 @@
   "timezone": "",
   "title": "Test-Cluster-TiFlash-Summary",
   "uid": "SVbh2xUWk",
-  "version": 2
+  "version": 1
 }
