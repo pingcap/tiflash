@@ -136,25 +136,19 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
     {
         link_nodes.emplace(node);
     }
-    LOG_FMT_WARNING(&Poco::Logger::get("ffff"), "num link nodes: {}", link_nodes.size());
-    size_t i = 0;
     // Get valid normal pages, from link-list's head to tail
     std::set<PageId> valid_normal_pages;
     while (!link_nodes.empty())
     {
         PageEntriesForDeltaPtr node = link_nodes.top();
-        i++;
-        LOG_FMT_WARNING(&Poco::Logger::get("ffff"), "node:{}@{}", i, fmt::ptr(node));
         for (auto & [page_id, entry] : node->normal_pages)
         {
             if (entry.isTombstone())
             {
-                LOG_FMT_WARNING(&Poco::Logger::get("ffff"), "tombstone, removing id:{}, entry:{}, node:{}", page_id, entry.toDebugString(), i);
                 valid_normal_pages.erase(page_id);
             }
             else
             {
-                LOG_FMT_WARNING(&Poco::Logger::get("ffff"), "         , inserting id:{}, entry:{}, node:{}", page_id, entry.toDebugString(), i);
                 valid_normal_pages.insert(page_id);
             }
         }

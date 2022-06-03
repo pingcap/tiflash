@@ -22,7 +22,6 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V2/PageStorage.h>
-#include <common/logger_useful.h>
 #include <fmt/format.h>
 
 
@@ -343,17 +342,14 @@ void StoragePool::forceTransformDataV2toV3()
         {
             // first see this file id, migrate to v3
             write_batch_transform.putExternal(resolved_file_id, 0);
-            LOG_FMT_DEBUG(logger, "v2->v3 v3 put ext {}", resolved_file_id);
         }
         // migrate the reference for v3
         if (page_id != resolved_file_id)
         {
             write_batch_transform.putRefPage(page_id, resolved_file_id);
-            LOG_FMT_DEBUG(logger, "v2->v3 v3 put ref {}->{}", page_id, resolved_file_id);
         }
         // record del for V2
         write_batch_del_v2.delPage(page_id);
-        LOG_FMT_DEBUG(logger, "v2->v3 v2 del {}", page_id);
     }
     // If the file id is not existed in `all_page_ids`, it means the file id
     // itself has been deleted.
@@ -362,7 +358,6 @@ void StoragePool::forceTransformDataV2toV3()
         if (all_page_ids.count(dt_file_id) == 0)
         {
             write_batch_transform.delPage(dt_file_id);
-            LOG_FMT_DEBUG(logger, "v2->v3 v3 del {}", dt_file_id);
         }
     }
 
@@ -530,15 +525,6 @@ void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks
         mix_mode_callbacks.remover = [this, callbacks](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
             // ns_id won't used on V2
             auto v2_valid_page_ids = data_storage_v2->getAliveExternalPageIds(ns_id);
-            LOG_FMT_DEBUG(logger, "valid external ids [v2_total_num={}] [v3_total_num={}]", v2_valid_page_ids.size(), valid_ids.size());
-            for (auto pid : v2_valid_page_ids)
-            {
-                LOG_FMT_DEBUG(logger, "valid external ids [v2_id={}]", pid);
-            }
-            for (auto pid : valid_ids)
-            {
-                LOG_FMT_DEBUG(logger, "valid external ids [v3_id={}]", pid);
-            }
             v2_valid_page_ids.insert(valid_ids.begin(), valid_ids.end());
             callbacks.remover(path_and_ids_vec, v2_valid_page_ids);
         };
