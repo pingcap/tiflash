@@ -717,14 +717,27 @@ CATCH
 TEST(StorageDeltaMergeTest, RestoreAfterClearData)
 try
 {
-    Context ctx = DMTestEnv::getContext();
-    auto & settings = ctx.getSettingsRef();
+    auto & global_settings = ::DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef();
+    // store the old value to restore global_context settings after the test finish to avoid influence other tests
+    auto old_global_settings = global_settings;
+    SCOPE_EXIT({
+        global_settings = old_global_settings;
+    });
+    // change the settings to make it more easy to trigger splitting segments
+    Settings settings;
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_limit_size = 20;
     settings.dt_segment_delta_limit_rows = 7;
     settings.dt_segment_delta_limit_size = 20;
     settings.dt_segment_force_split_size = 100;
     settings.dt_segment_delta_cache_limit_size = 20;
+
+    // we need change the settings in both the ctx we get just below and the global_context above.
+    // because when processing write request, `DeltaMergeStore` will call `checkSegmentUpdate` with the context we just get below.
+    // and when initialize `DeltaMergeStore`, it will call `checkSegmentUpdate` with the global_context above.
+    // so we need to make the settings in these two contexts consistent.
+    global_settings = settings;
+    Context ctx = DMTestEnv::getContext(settings);
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
