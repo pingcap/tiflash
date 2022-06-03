@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Poco/Logger.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -19,6 +20,8 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
+#include <fmt/ranges.h>
 #include <gtest/gtest.h>
 
 namespace DB
@@ -563,6 +566,129 @@ try
         // Revert v3
         WriteBatch batch;
         batch.delPage(102);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+}
+CATCH
+
+
+TEST_F(PageStorageMixedTest, RefV2External2)
+try
+{
+    auto logger = DB::Logger::get("PageStorageMixedTest");
+    {
+        WriteBatch batch;
+        batch.putExternal(100, 0);
+        batch.putRefPage(101, 100);
+        batch.delPage(100);
+        batch.putExternal(102, 0);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+    {
+        WriteBatch batch;
+        batch.putExternal(100, 0);
+        batch.putRefPage(101, 100);
+        batch.delPage(100);
+        batch.putExternal(102, 0);
+        page_writer_mix->writeIntoV3(std::move(batch), nullptr);
+    }
+    {
+        auto snap = storage_pool_mix->log_storage_v2->getSnapshot("zzz"); // must hold
+        // after transform to v3, delete these from v2
+        WriteBatch batch;
+        batch.delPage(100);
+        batch.delPage(101);
+        batch.delPage(102);
+        page_writer_mix->writeIntoV2(std::move(batch), nullptr);
+    }
+
+    {
+        LOG_FMT_INFO(logger, "first check alive id in v2");
+        auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_dt_ids_in_v2.size(), 0);
+
+        storage_pool_mix->log_storage_v3->gc(false, nullptr, nullptr);
+        auto alive_dt_ids_in_v3 = storage_pool_mix->log_storage_v3->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        ASSERT_EQ(alive_dt_ids_in_v3.size(), 2);
+        auto iter = alive_dt_ids_in_v3.begin();
+        EXPECT_EQ(*iter, 100);
+        iter++;
+        EXPECT_EQ(*iter, 102);
+    }
+
+    {
+        LOG_FMT_INFO(logger, "remove 100, create 105");
+        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        // write delete again
+        WriteBatch batch;
+        batch.delPage(100);
+        batch.putExternal(105, 0);
+        page_writer_mix->write(std::move(batch), nullptr);
+        LOG_FMT_INFO(logger, "done");
+    }
+    {
+        LOG_FMT_INFO(logger, "remove 101, create 106");
+        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        // write delete again
+        WriteBatch batch;
+        batch.delPage(101);
+        batch.putExternal(106, 0);
+        page_writer_mix->write(std::move(batch), nullptr);
+        LOG_FMT_INFO(logger, "done");
+    }
+    {
+        LOG_FMT_INFO(logger, "remove 102, create 107");
+        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        // write delete again
+        WriteBatch batch;
+        batch.delPage(102);
+        batch.putExternal(107, 0);
+        page_writer_mix->write(std::move(batch), nullptr);
+        LOG_FMT_INFO(logger, "done");
+    }
+
+    {
+        LOG_FMT_INFO(logger, "second check alive id in v2");
+        auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_dt_ids_in_v2.size(), 0) << fmt::format("{}", alive_dt_ids_in_v2);
+
+        storage_pool_mix->log_storage_v3->gc(false, nullptr, nullptr);
+        auto alive_dt_ids_in_v3 = storage_pool_mix->log_storage_v3->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        ASSERT_EQ(alive_dt_ids_in_v3.size(), 3) << fmt::format("{}", alive_dt_ids_in_v3);
+        auto iter = alive_dt_ids_in_v3.begin();
+        EXPECT_EQ(*iter, 105);
+        iter++;
+        EXPECT_EQ(*iter, 106);
+        iter++;
+        EXPECT_EQ(*iter, 107);
+    }
+    {
+        LOG_FMT_INFO(logger, "third check alive id in v2");
+        auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_dt_ids_in_v2.size(), 0) << fmt::format("{}", alive_dt_ids_in_v2);
+
+        storage_pool_mix->log_storage_v3->gc(false, nullptr, nullptr);
+        auto alive_dt_ids_in_v3 = storage_pool_mix->log_storage_v3->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        ASSERT_EQ(alive_dt_ids_in_v3.size(), 3) << fmt::format("{}", alive_dt_ids_in_v3);
+        auto iter = alive_dt_ids_in_v3.begin();
+        EXPECT_EQ(*iter, 105);
+        iter++;
+        EXPECT_EQ(*iter, 106);
+        iter++;
+        EXPECT_EQ(*iter, 107);
+    }
+
+    {
+        // cleanup v3
+        WriteBatch batch;
+        batch.delPage(100);
+        batch.delPage(101);
+        batch.delPage(102);
+        batch.delPage(105);
+        batch.delPage(106);
+        batch.delPage(107);
         page_writer_mix->write(std::move(batch), nullptr);
     }
 }
