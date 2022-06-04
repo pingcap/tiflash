@@ -100,12 +100,12 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
 std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
 {
     std::map<FSID, DiskCapacity> disk_stats_map;
-    for (size_t i = 0; i < path_infos.size(); ++i)
+    for (auto & path_info : path_infos)
     {
         struct statvfs vfs;
         FsStats path_stat;
 
-        std::tie(path_stat, vfs) = path_infos[i].getStats(log);
+        std::tie(path_stat, vfs) = path_info.getStats(log);
         if (!path_stat.ok)
         {
             // Disk may be hot remove, Ignore this disk.
@@ -131,14 +131,14 @@ FsStats PathCapacityMetrics::getFsStats()
     FsStats total_stat{};
 
     // Build the disk stats map
-    // which use to measure single disk capacoty and available size
+    // which use to measure single disk capacity and available size
     auto disk_stats_map = getDiskStats();
 
-    for (auto fs_it = disk_stats_map.begin(); fs_it != disk_stats_map.end(); ++fs_it)
+    for (auto & fs_it : disk_stats_map)
     {
         FsStats disk_stat{};
 
-        auto & disk_stat_vec = fs_it->second;
+        auto & disk_stat_vec = fs_it.second;
         auto & vfs_info = disk_stat_vec.vfs_info;
 
         for (const auto & single_path_stats : disk_stat_vec.path_stats)
@@ -152,7 +152,7 @@ FsStats PathCapacityMetrics::getFsStats()
         if (disk_stat.capacity_size == 0 || disk_capacity_size < disk_stat.capacity_size)
             disk_stat.capacity_size = disk_capacity_size;
 
-        // Calutate single disk info
+        // Calculate single disk info
         const uint64_t disk_free_bytes = vfs_info.f_bavail * vfs_info.f_frsize;
         disk_stat.avail_size = std::min(disk_free_bytes, disk_stat.avail_size);
 
@@ -243,7 +243,10 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     struct statvfs vfs;
     if (int code = statvfs(path.data(), &vfs); code != 0)
     {
-        LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
+        if (log)
+        {
+            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
+        }
         return {};
     }
 
