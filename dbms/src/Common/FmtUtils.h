@@ -14,8 +14,6 @@
 
 #pragma once
 
-#include <common/StringRef.h>
-#include <fmt/core.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -32,16 +30,9 @@ public:
         return *this;
     }
 
-    FmtBuffer & append(StringRef s)
-    {
-        buffer.append(s.data, s.data + s.size);
-        return *this;
-    }
+    FmtBuffer & append(std::string_view s);
 
-    std::string toString() const
-    {
-        return fmt::to_string(buffer);
-    }
+    std::string toString() const;
 
     template <typename Iter>
     FmtBuffer & joinStr(
@@ -55,7 +46,7 @@ public:
     FmtBuffer & joinStr(
         Iter first,
         Iter end,
-        StringRef delimiter)
+        std::string_view delimiter)
     {
         auto func = [](const auto & s, FmtBuffer & fb) {
             fb.append(s);
@@ -68,7 +59,7 @@ public:
         Iter first,
         Iter end,
         FF && toStringFunc, // void (const auto &, FmtBuffer &)
-        StringRef delimiter)
+        std::string_view delimiter)
     {
         if (first == end)
             return *this;
@@ -82,9 +73,9 @@ public:
         return *this;
     }
 
-    void resize(size_t count) { buffer.resize(count); }
-    void reserve(size_t capacity) { buffer.reserve(capacity); }
-    void clear() { buffer.clear(); }
+    void resize(size_t count);
+    void reserve(size_t capacity);
+    void clear();
 
 private:
     fmt::memory_buffer buffer;
