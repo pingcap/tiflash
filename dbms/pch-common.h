@@ -17,5 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/StackTrace.h>
+#include <common/StringRef.h>
+#include <common/types.h>
 
 #include "pch-stl.h"

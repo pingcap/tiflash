@@ -19,9 +19,12 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <ostream>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>

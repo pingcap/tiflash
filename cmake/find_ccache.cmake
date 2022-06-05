@@ -26,14 +26,16 @@ if (USE_CCACHE AND CCACHE_FOUND AND NOT CMAKE_CXX_COMPILER_LAUNCHER MATCHES "cca
     set_property (GLOBAL PROPERTY RULE_LAUNCH_LINK ${CCACHE_FOUND})
 
     if (ENABLE_PCH)
-        message (WARNING "`Precompiled header` can not be used with `ccache` because of unexpected behaviors")
-        set (ENABLE_PCH FALSE CACHE BOOL "" FORCE)
+        execute_process (COMMAND ${CCACHE_FOUND} --get-config sloppiness OUTPUT_VARIABLE _CCACHE_SLOPPINESS OUTPUT_STRIP_TRAILING_WHITESPACE)
+        string (FIND "${_CCACHE_SLOPPINESS}" "pch_defines" _CCACHE_SLOPPINESS_RES)
+        if (NOT _CCACHE_SLOPPINESS_RES STREQUAL "-1")
+            string (FIND "${_CCACHE_SLOPPINESS}" "time_macros" _CCACHE_SLOPPINESS_RES)
+        endif ()
 
-        # execute_process (COMMAND ${CCACHE_FOUND} --get-config sloppiness OUTPUT_VARIABLE _CCACHE_SLOPPINESS OUTPUT_STRIP_TRAILING_WHITESPACE)
-        # set (CCACHE_SLOPPINESS "${_CCACHE_SLOPPINESS}" CACHE STRING "ccache --get-config sloppiness" FORCE)
-        # if (NOT CCACHE_SLOPPINESS STREQUAL "time_macros, pch_defines")
-        #     message(WARNING "`Precompiled header` won't be cached by ccache, sloppiness = `${CCACHE_SLOPPINESS}`,please execute `ccache -o sloppiness=pch_defines,time_macros`")
-        # endif ()
+        if (_CCACHE_SLOPPINESS_RES STREQUAL "-1")
+            message(WARNING "`Precompiled header` won't be cached by ccache, sloppiness = `${CCACHE_SLOPPINESS}`,please execute `ccache -o sloppiness=pch_defines,time_macros`")
+            set (ENABLE_PCH FALSE CACHE BOOL "" FORCE)
+        endif ()
     endif ()
 
 else ()

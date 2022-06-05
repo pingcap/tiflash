@@ -261,7 +261,7 @@ target_link_libraries (clickhouse_common_io PUBLIC ${TIFLASH_XXHASH_LIBRARY})
 
 function(add_target_pch context target)
     if (ENABLE_PCH)
-        message(STATUS "Add PCH `${context}` for library `${target}`")
+        message(STATUS "Add PCH `${context}` for target `${target}`")
         target_precompile_headers(${target} PRIVATE ${context})
     endif ()
     if(${ARGC} GREATER 2)
@@ -306,6 +306,7 @@ if (ENABLE_TESTS)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
+
     add_target_pch("pch-dbms.h" gtests_dbms)
 
     grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources)
@@ -360,8 +361,9 @@ add_target_pch("pch-common.h" clickhouse_common_io clickhouse_functions clickhou
 add_target_pch("pch-common.h" clickhouse_parsers clickhouse_storages_system dt-workload-lib clickhouse-server-lib)
 
 # common
-add_target_pch("pch-stl.h" ${Boost_SYSTEM_LIBRARY} cctz ${RE2_LIBRARY} ${RE2_ST_LIBRARY})
 add_target_pch("pch-kvpb.h" kv_client)
+
+add_target_pch("pch-stl.h" ${Boost_SYSTEM_LIBRARY} cctz ${RE2_LIBRARY} ${RE2_ST_LIBRARY})
 
 # grpc
 add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" grpc grpc++)
