@@ -645,8 +645,6 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
         if (region_num == 0)
             continue;
-        /// calculate weighted max_streams for each partition, note at least 1 stream is needed for each partition
-        size_t current_max_streams = max_streams;
         QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
         assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
         auto & storage = storages_with_structure_lock[table_id].storage;
@@ -656,7 +654,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         {
             try
             {
-                current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, current_max_streams);
+                current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
 
                 // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
                 // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
@@ -788,7 +786,8 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     if (has_multiple_partitions)
     {
         String req_info = dag_context.isMPPTask() ? dag_context.getMPPTaskId().toString() : "";
-        for (int i = 0; i < static_cast<int>(max_streams); ++i)
+        int exposed_streams_cnt = std::min(static_cast<int>(max_streams), stream_pool->addedStreamsCnt());
+        for (int i = 0; i < exposed_streams_cnt; ++i)
         {
             pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, req_info));
         }

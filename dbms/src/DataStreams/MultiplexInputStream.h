@@ -74,6 +74,12 @@ public:
         return added_streams.size();
     }
 
+    int addedStreamsCnt()
+    {
+        std::unique_lock lk(mu);
+        return added_streams.size();
+    }
+
 private:
     int removeQueue(int queue_id)
     {
