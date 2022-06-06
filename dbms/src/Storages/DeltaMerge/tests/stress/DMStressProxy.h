@@ -18,7 +18,7 @@
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 
 #include <mutex>
 #include <random>
