@@ -92,11 +92,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
     {
         String snapshot_method = config.getString("raft.snapshot.method");
         std::transform(snapshot_method.begin(), snapshot_method.end(), snapshot_method.begin(), [](char ch) { return std::tolower(ch); });
-        if (snapshot_method == "block")
-        {
-            res.snapshot_apply_method = TiDB::SnapshotApplyMethod::Block;
-        }
-        else if (snapshot_method == "file1")
+        if (snapshot_method == "file1")
         {
             res.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
         }

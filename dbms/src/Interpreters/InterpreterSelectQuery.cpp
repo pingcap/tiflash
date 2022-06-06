@@ -55,12 +55,12 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -494,7 +494,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         {
             if (expressions.has_join)
             {
-                const ASTTableJoin & join = static_cast<const ASTTableJoin &>(*query.join()->table_join);
+                const auto & join = static_cast<const ASTTableJoin &>(*query.join()->table_join);
                 if (join.kind == ASTTableJoin::Kind::Full || join.kind == ASTTableJoin::Kind::Right)
                     pipeline.stream_with_non_joined_data = expressions.before_join->createStreamWithNonJoinedDataIfFullOrRightJoin(
                         pipeline.firstStream()->getHeader(),
@@ -814,7 +814,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
             for (size_t i = 0; i < arr->size(); i++)
             {
-                String str = arr->getElement<String>(i);
+                auto str = arr->getElement<String>(i);
                 ::metapb::Region region;
                 ::google::protobuf::TextFormat::ParseFromString(str, &region);
 
@@ -837,7 +837,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         }
 
         /// PARTITION SELECT only supports MergeTree family now.
-        if (const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
+        if (const auto * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
         {
             if (select_query->partition_expression_list)
             {
@@ -858,7 +858,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
                 managed_storage && managed_storage->engineType() == TiDB::StorageEngine::DT)
             {
-                if (const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
+                if (const auto * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
                 {
                     // With `no_kvsotre` is true, we do not do learner read
                     if (likely(!select_query->no_kvstore))
@@ -908,7 +908,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             QuotaForIntervals & quota = context.getQuota();
 
             pipeline.transform([&](auto & stream) {
-                if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
                 {
                     p_stream->setLimits(limits);
 
@@ -1273,7 +1273,7 @@ void InterpreterSelectQuery::executeLimitBy(Pipeline & pipeline) // NOLINT
     for (const auto & elem : query.limit_by_expression_list->children)
         columns.emplace_back(elem->getColumnName());
 
-    size_t value = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*query.limit_by_value).value);
+    auto value = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*query.limit_by_value).value);
 
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<LimitByBlockInputStream>(stream, value, columns);
@@ -1345,7 +1345,7 @@ void InterpreterSelectQuery::executeExtremes(Pipeline & pipeline)
         return;
 
     pipeline.transform([&](auto & stream) {
-        if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
             p_stream->enableExtremes();
     });
 }

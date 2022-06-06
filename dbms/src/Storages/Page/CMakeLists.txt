@@ -13,6 +13,7 @@
 # limitations under the License.
 
 add_subdirectory(V2)
+add_subdirectory(tools)
 
 # PageStorage Stress test
 if (ENABLE_V3_PAGESTORAGE)
