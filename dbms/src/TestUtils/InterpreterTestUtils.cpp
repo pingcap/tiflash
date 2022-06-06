@@ -93,7 +93,7 @@ static Block mergeBlocks(Blocks blocks)
     return Block(actual_columns);
 }
 
-void InterpreterTest::readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns)
+void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns)
 {
     Blocks actual_blocks;
     Block except_block(expect_columns);
@@ -114,7 +114,8 @@ void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & r
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
-    readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
+    std::thread thd(readBlock, executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
+    thd.join();
 }
 
 void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)

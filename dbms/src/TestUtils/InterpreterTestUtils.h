@@ -62,9 +62,6 @@ public:
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency);
 
-private:
-    static void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns);
-
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
