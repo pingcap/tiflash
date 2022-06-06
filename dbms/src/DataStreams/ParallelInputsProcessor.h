@@ -207,6 +207,7 @@ private:
 
     void thread(size_t thread_num)
     {
+        std::cout << "ywq test thread num:" << thread_num << std::endl;
         std::exception_ptr exception;
 
         CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
@@ -235,6 +236,7 @@ private:
             }
 
             loop(thread_num);
+            std::cout << "ywq test end loop thread num" << std::endl;
         }
         catch (...)
         {

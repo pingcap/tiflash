@@ -18,6 +18,7 @@
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/executorSerializer.h>
 #include <unistd.h>
+
 #include <thread>
 namespace DB::tests
 {
@@ -95,10 +96,50 @@ static Block mergeBlocks(Blocks blocks)
     return Block(actual_columns);
 }
 
+
+void printException(const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl
+              << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl
+                  << e.getStackTrace().toString() << std::endl;
+}
+
+void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns)
+{
+    try
+    {
+        Blocks actual_blocks;
+        Block except_block(expect_columns);
+        stream->readPrefix();
+        while (auto block = stream->read())
+        {
+            actual_blocks.push_back(block);
+        }
+        stream->readSuffix();
+        Block actual_block = mergeBlocks(actual_blocks);
+        if (actual_block)
+        {
+            // Check that input columns is properly split to many blocks
+            // ASSERT_EQ(actual_blocks.size(), (actual_block.rows() - 1) / context.context.getSettingsRef().max_block_size + 1);
+        }
+        ASSERT_BLOCK_EQ(except_block, actual_block);
+    }
+    catch (const Exception & e)
+    {
+        printException(e);
+        throw;
+    }
+}
+
 void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, const ColumnsWithTypeAndName & expect_columns)
 {
     // TODO: Currently only support 1 thread to execute.
-    DAGContext dag_context(*request, "interpreter_test", 2); 
+    DAGContext dag_context(*request, "interpreter_test", 2);
     dag_context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
@@ -108,24 +149,14 @@ void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & r
     FmtBuffer fb;
     res.in->dumpTree(fb);
     std::cout << fb.toString() << std::endl;
-    Blocks actual_blocks;
-    Block except_block(expect_columns);
     std::cout << "ywq test stream name: " << stream->getName() << std::endl;
-    stream->readPrefix();
-    while (Block block = stream->read())
-    {
-        actual_blocks.push_back(block);
-    }
-    stream->readSuffix();
+    std::vector<std::thread> threads;
+    threads.emplace_back(readBlock, stream, expect_columns);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    Block actual_block = mergeBlocks(actual_blocks);
-    if (actual_block)
-    {
-        // Check that input columns is properly split to many blocks
-        // ASSERT_EQ(actual_blocks.size(), (actual_block.rows() - 1) / context.context.getSettingsRef().max_block_size + 1);
-    }
-    ASSERT_BLOCK_EQ(except_block, actual_block);
+    for (auto & thread : threads) thread.join();
 }
+
 
 void InterpreterTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
 {

@@ -129,6 +129,7 @@ public:
                 cancel(false);
 
             finalize();
+            std::cout << "ywq test dtor of union block " << std::endl;
         }
         catch (...)
         {

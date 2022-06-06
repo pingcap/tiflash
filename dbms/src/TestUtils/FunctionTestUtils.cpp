@@ -114,6 +114,7 @@ void blockEqual(
     const Block & actual)
 {
     size_t columns = actual.columns();
+    std::cout << "actual columns: " << columns << ", expected_columns: " << expected.columns() << std::endl;
     ASSERT_TRUE(expected.columns() == columns);
 
     for (size_t i = 0; i < columns; ++i)
