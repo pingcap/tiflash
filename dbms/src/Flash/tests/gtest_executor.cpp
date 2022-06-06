@@ -210,5 +210,27 @@ try
 }
 CATCH
 
+TEST_F(ExecutorTest, JoinWithTableScanAndReceiver)
+try 
+{
+    auto request = context
+                       .scan("test_db", "l_table")
+                       .join(context.receive("exchange_r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                       .build(context);
+    {
+        String expected = "Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                          " table_scan_0 | {<0, String>, <1, String>}\n"
+                          " exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
+        ASSERT_DAGREQUEST_EQAUL(expected, request);
+        executeStreams(request,
+                       {toNullableVec<String>("s", {"banana", "banana"}),
+                        toNullableVec<String>("join_c", {"apple", "banana"}),
+                        toNullableVec<String>("s", {"banana", "banana"}),
+                        toNullableVec<String>("join_c", {"apple", "banana"})},
+                       2);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
