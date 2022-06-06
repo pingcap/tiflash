@@ -17,6 +17,7 @@
 #include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
+#include <iostream>
 
 
 namespace DB
@@ -169,6 +170,9 @@ protected:
             return;
 
         LOG_FMT_TRACE(log, "Waiting for threads to finish");
+        for (const auto& is : children) {
+            std::cout << "ywq test child name: " << is->getName() << std::endl;
+        }
 
         std::exception_ptr exception;
         if (!all_read)

@@ -15,8 +15,6 @@
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
-#include "Parsers/ASTTablesInSelectQuery.h"
-
 namespace DB
 {
 namespace tests
@@ -63,46 +61,59 @@ public:
 TEST_F(ExecutorTest, Filter)
 try
 {
+    // auto request = context
+    //                    .scan("test_db", "test_table")
+    //                    .filter(eq(col("s1"), col("s2")))
+    //                    .build(context);
+    // {
+    //     executeStreams(request,
+    //                    {toNullableVec<String>("s1", {"banana"}),
+    //                     toNullableVec<String>("s2", {"banana"})});
+    // }
+
+    // request = context.receive("exchange1")
+    //               .filter(eq(col("s1"), col("s2")))
+    //               .build(context);
+    // {
+    //     executeStreams(request,
+    //                    {toNullableVec<String>("s1", {"banana"}),
+    //                     toNullableVec<String>("s2", {"banana"})});
+    // }
+
     auto request = context
-                       .scan("test_db", "test_table")
-                       .filter(eq(col("s1"), col("s2")))
+                       .scan("test_db", "l_table")
+                       .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                       .project({"s", "join_c"}) // buggy
                        .build(context);
     {
-        executeStreams(request,
-                       {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})});
-    }
-
-    request = context.scan("test_db", "test_table")
-                  .filter(eq(col("s1"), col("s2")))
-                  .build(context);
-    {
-        executeStreams(request,
-                       {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})});
-    }
-
-    request = context.receive("exchange1")
-                  .filter(eq(col("s1"), col("s2")))
-                  .build(context);
-    {
-        executeStreams(request,
-                       {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})});
-    }
-
-    request = context.scan("test_db", "l_table").join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left).build(context);
-    {
-        String expected = "Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          " table_scan_0 | {<0, String>, <1, String>}\n"
-                          " table_scan_1 | {<0, String>, <1, String>}\n";
+        String expected = "project_3 | {<0, String>, <1, String>}\n"
+                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                          "  table_scan_0 | {<0, String>, <1, String>}\n"
+                          "  table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana"}),
                         toNullableVec<String>("join_c", {"apple", "banana"})});
     }
+
+
+    // request = context
+    //                    .scan("test_db", "l_table")
+    //                    .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+    //                    .project({"s", "join_c", "s", "join_c"})
+    //                    .build(context);
+    // {
+    //     String expected = "project_3 | {<0, String>, <1, String>, <0, String>, <1, String>}\n"
+    //                       " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+    //                       "  table_scan_0 | {<0, String>, <1, String>}\n"
+    //                       "  table_scan_1 | {<0, String>, <1, String>}\n";
+    //     ASSERT_DAGREQUEST_EQAUL(expected, request);
+    //     executeStreams(request,
+    //                    {toNullableVec<String>("s", {"banana", "banana"}),
+    //                     toNullableVec<String>("join_c", {"apple", "banana"}),
+    //                     toNullableVec<String>("s", {"banana", "banana"}),
+    //                     toNullableVec<String>("join_c", {"apple", "banana"})});
+    // }
 }
 CATCH
 

@@ -167,6 +167,7 @@ public:
         if (thread_manager)
             thread_manager->wait();
         joined_threads = true;
+        std::cout << "ywq test..................wait" << std::endl;
     }
 
     size_t getNumActiveThreads() const

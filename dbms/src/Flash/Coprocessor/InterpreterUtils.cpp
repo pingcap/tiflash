@@ -72,6 +72,7 @@ void executeUnion(
     bool ignore_block,
     const String & extra_info)
 {
+    std::cout << "ywq test ignore block: " << ignore_block << std::endl;
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
         return;
     auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log, ignore_block);

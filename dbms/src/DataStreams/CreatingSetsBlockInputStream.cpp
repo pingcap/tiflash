@@ -89,6 +89,7 @@ Block CreatingSetsBlockInputStream::readImpl()
 
     if (isCancelledOrThrowIfKilled())
         return res;
+    std::cout << "ywq test before read child" << std::endl;
 
     return children.back()->read();
 }
