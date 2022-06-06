@@ -464,23 +464,23 @@ try
     }
 
     // The first call of get_rows below will place the DeleteRange into delta index.
-    // If relevant place is enabled, the placed deleted in delta-tree-index is not
+    // If relevant place is enabled, the placed deletes in delta-tree-index is not
     // pushed forward since we do not fully apply the delete range [100, 200).
     auto rows1 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 150)));
     {
         auto delta = segment->getDelta();
         auto placed_rows = delta->getPlacedDeltaRows();
-        auto placed_deleted = delta->getPlacedDeltaDeletes();
+        auto placed_deletes = delta->getPlacedDeltaDeletes();
         ASSERT_EQ(placed_rows, num_rows_write);
-        EXPECT_EQ(placed_deleted, enable_relevant_place ? 0 : 1);
+        EXPECT_EQ(placed_deletes, enable_relevant_place ? 0 : 1);
     }
     auto rows2 = get_rows(RowKeyRange::fromHandleRange(HandleRange(150, 300)));
     {
         auto delta = segment->getDelta();
         auto placed_rows = delta->getPlacedDeltaRows();
-        auto placed_deleted = delta->getPlacedDeltaDeletes();
+        auto placed_deletes = delta->getPlacedDeltaDeletes();
         ASSERT_EQ(placed_rows, num_rows_write);
-        EXPECT_EQ(placed_deleted, enable_relevant_place ? 0 : 1);
+        EXPECT_EQ(placed_deletes, enable_relevant_place ? 0 : 1);
     }
 
     ASSERT_EQ(rows1, 100);
