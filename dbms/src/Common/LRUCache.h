@@ -379,6 +379,8 @@ private:
             --queue_size;
         }
 
+        onRemoveOverflowWeightLoss(current_weight_lost);
+
         if (current_size > (1ull << 63))
         {
             LOG_FMT_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
