@@ -129,7 +129,6 @@ public:
                 cancel(false);
 
             finalize();
-            std::cout << "ywq test dtor of union block " << std::endl;
         }
         catch (...)
         {
@@ -171,9 +170,6 @@ protected:
             return;
 
         LOG_FMT_TRACE(log, "Waiting for threads to finish");
-        for (const auto& is : children) {
-            std::cout << "ywq test child name: " << is->getName() << std::endl;
-        }
 
         std::exception_ptr exception;
         if (!all_read)
@@ -235,7 +231,6 @@ protected:
 
         /// We will wait until the next block is ready or an exception is thrown.
         output_queue.pop(received_payload);
-
         if (received_payload.exception)
         {
             if (exception_callback)
