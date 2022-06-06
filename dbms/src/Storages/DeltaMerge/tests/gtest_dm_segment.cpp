@@ -482,9 +482,20 @@ try
         ASSERT_EQ(placed_rows, num_rows_write);
         EXPECT_EQ(placed_deletes, enable_relevant_place ? 0 : 1);
     }
+    // Query with range [0, 300) will push the placed deletes forward no matter
+    // relevant place is enable or not.
+    auto rows3 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 300)));
+    {
+        auto delta = segment->getDelta();
+        auto placed_rows = delta->getPlacedDeltaRows();
+        auto placed_deletes = delta->getPlacedDeltaDeletes();
+        ASSERT_EQ(placed_rows, num_rows_write);
+        EXPECT_EQ(placed_deletes, 1);
+    }
 
     ASSERT_EQ(rows1, 100);
     ASSERT_EQ(rows2, 100);
+    ASSERT_EQ(rows3, 200);
 }
 CATCH
 
