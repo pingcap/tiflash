@@ -156,7 +156,6 @@ AnalysisResult analyzeExpressions(
 }
 } // namespace
 
-
 void DAGQueryBlockInterpreter::mockSourceStream(String executor_id, DAGPipeline & pipeline, const String & source_type)
 {
     ColumnsWithTypeAndName columns_with_type_and_name;
@@ -193,6 +192,7 @@ void DAGQueryBlockInterpreter::mockSourceStream(String executor_id, DAGPipeline 
             pipeline.streams.emplace_back(std::make_shared<MockExchangeReceiverInputStream>(columns_for_stream, context.getSettingsRef().max_block_size));
     }
 }
+
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
@@ -535,6 +535,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
+// for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
     auto columns_with_type_and_name = context.getDAGContext()->columnsForTest(query_block.source_name);

@@ -17,7 +17,6 @@
 #include <Common/MPMCQueue.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
-#include <iostream>
 
 
 namespace DB
@@ -231,6 +230,7 @@ protected:
 
         /// We will wait until the next block is ready or an exception is thrown.
         output_queue.pop(received_payload);
+
         if (received_payload.exception)
         {
             if (exception_callback)

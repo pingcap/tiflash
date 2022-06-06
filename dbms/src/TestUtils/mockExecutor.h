@@ -149,8 +149,6 @@ private:
     std::unordered_map<String, MockColumnInfos> exchange_schemas;
     std::unordered_map<String, ColumnsWithTypeAndName> mock_table_columns;
     std::unordered_map<String, ColumnsWithTypeAndName> mock_exchange_columns;
-    // TODO: Do not check duplicated name ywq todo
-    // std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map; /// <table_name or exchange name, columns>
     std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map; /// <executor_id, columns>
 
 public:

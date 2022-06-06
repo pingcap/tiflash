@@ -100,7 +100,7 @@ try
 CATCH
 
 TEST_F(ExecutorTest, JoinWithTableScan)
-try 
+try
 {
     auto request = context
                        .scan("test_db", "l_table")
@@ -175,7 +175,7 @@ try
 CATCH
 
 TEST_F(ExecutorTest, JoinWithExchangeReceiver)
-try 
+try
 {
     auto request = context
                        .receive("exchange_l_table")
@@ -211,7 +211,7 @@ try
 CATCH
 
 TEST_F(ExecutorTest, JoinWithTableScanAndReceiver)
-try 
+try
 {
     auto request = context
                        .scan("test_db", "l_table")
