@@ -53,8 +53,7 @@ public:
         if (streams_queue_id >= static_cast<int>(streams_queue_by_partition.size()))
             streams_queue_id = 0;
 
-        auto & q_ptr = streams_queue_by_partition[streams_queue_id];
-        auto & q = *q_ptr;
+        auto & q = *streams_queue_by_partition[streams_queue_id];
         std::shared_ptr<IBlockInputStream> ret = nullptr;
         assert(!q.empty());
         ret = q.front();
