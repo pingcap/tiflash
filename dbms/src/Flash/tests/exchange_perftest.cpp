@@ -46,29 +46,10 @@ using StopFlag = std::atomic<bool>;
 
 std::atomic<Int64> received_data_size{0};
 
+// NOLINTBEGIN(readability-convert-member-functions-to-static)
 struct MockReceiverContext
 {
-    struct Status
-    {
-        int status_code = 0;
-        String error_msg;
-
-        bool ok() const
-        {
-            return status_code == 0;
-        }
-
-        const String & error_message() const
-        {
-            return error_msg;
-        }
-
-        int error_code() const
-        {
-            return status_code;
-        }
-    };
-
+    using Status = ::grpc::Status;
     struct Request
     {
         String debugString() const
@@ -105,11 +86,21 @@ struct MockReceiverContext
 
         Status finish() const
         {
-            return {0, ""};
+            return ::grpc::Status();
         }
 
         PacketQueuePtr queue;
     };
+
+    struct MockAsyncGrpcExchangePacketReader
+    {
+        // Not implement benchmark for Async GRPC for now.
+        void init(UnaryCallback<bool> *) { assert(0); }
+        void read(MPPDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
+        void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }
+    };
+
+    using AsyncReader = MockAsyncGrpcExchangePacketReader;
 
     MockReceiverContext(
         const std::vector<PacketQueuePtr> & queues_,
@@ -142,24 +133,31 @@ struct MockReceiverContext
 
     static Status getStatusOK()
     {
-        return {0, ""};
+        return ::grpc::Status();
     }
+
+    bool supportAsync(const Request &) const { return false; }
+    void makeAsyncReader(
+        const Request &,
+        std::shared_ptr<AsyncReader> &,
+        UnaryCallback<bool> *) const {}
 
     std::vector<PacketQueuePtr> queues;
     std::vector<tipb::FieldType> field_types;
 };
+// NOLINTEND(readability-convert-member-functions-to-static)
 
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
 using MockExchangeReceiverPtr = std::shared_ptr<MockExchangeReceiver>;
 using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
 
-struct MockWriter
+struct MockWriter : public PacketWriter
 {
     explicit MockWriter(PacketQueuePtr queue_)
         : queue(std::move(queue_))
     {}
 
-    bool Write(const Packet & packet)
+    bool write(const Packet & packet) override
     {
         queue->push(std::make_shared<Packet>(packet));
         return true;
@@ -433,15 +431,19 @@ struct ReceiverHelper
             std::make_shared<MockReceiverContext>(queues, fields),
             source_num,
             source_num * 5,
-            nullptr);
+            "mock_req_id",
+            "mock_executor_id",
+            0);
     }
 
     BlockInputStreamPtr buildUnionStream(int concurrency)
     {
         auto receiver = buildReceiver();
         std::vector<BlockInputStreamPtr> streams;
+        // Don't consider stream_id for now.
+        const uint32_t stream_id = 0;
         for (int i = 0; i < concurrency; ++i)
-            streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, nullptr));
+            streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, "mock_req_id", "mock_executor_id", stream_id));
         return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
     }
 
@@ -449,8 +451,10 @@ struct ReceiverHelper
     {
         auto receiver = buildReceiver();
         std::vector<BlockInputStreamPtr> streams;
+        // Don't consider stream_id for now.
+        const uint32_t stream_id = 0;
         for (int i = 0; i < concurrency; ++i)
-            streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, nullptr));
+            streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(receiver, "mock_req_id", "mock_executor_id", stream_id));
 
         auto receiver_header = streams.front()->getHeader();
         auto key_name = receiver_header.getByPosition(0).name;
@@ -462,6 +466,7 @@ struct ReceiverHelper
             SizeLimits(0, 0, OverflowMode::THROW),
             ASTTableJoin::Kind::Inner,
             ASTTableJoin::Strictness::All,
+            "mock_req_id",
             concurrency,
             TiDB::TiDBCollators{nullptr},
             "",
@@ -521,7 +526,9 @@ struct SenderHelper
                 task_meta,
                 std::chrono::seconds(60),
                 concurrency,
-                false);
+                false,
+                false,
+                "mock_req_id");
             tunnel->connect(writer.get());
             tunnels.push_back(tunnel);
             tunnel_set->addTunnel(tunnel);
@@ -556,7 +563,9 @@ struct SenderHelper
                     -1,
                     -1,
                     true,
-                    *dag_context));
+                    *dag_context,
+                    0,
+                    0));
             send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
 
