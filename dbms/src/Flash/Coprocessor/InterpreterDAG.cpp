@@ -83,11 +83,13 @@ BlockIO InterpreterDAG::execute()
     DAGPipeline pipeline;
     pipeline.streams = streams;
     /// add union to run in parallel if needed
-    if (dagContext().isMPPTask() && !dagContext().isTest())
+    if (dagContext().isTest())
+        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/false, "for test");
+    else if (dagContext().isMPPTask())
         /// MPPTask do not need the returned blocks.
         executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true, "for mpp");
     else
-        executeUnion(pipeline, max_streams, dagContext().log, false, "for non mpp");
+        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/false, "for non mpp");
     if (dagContext().hasSubquery())
     {
         const Settings & settings = context.getSettingsRef();

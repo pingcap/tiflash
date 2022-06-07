@@ -209,8 +209,7 @@ try
                        {toNullableVec<String>("s", {"banana", "banana"}),
                         toNullableVec<String>("join_c", {"apple", "banana"}),
                         toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})},
-                       1);
+                        toNullableVec<String>("join_c", {"apple", "banana"})});
     }
 }
 CATCH
