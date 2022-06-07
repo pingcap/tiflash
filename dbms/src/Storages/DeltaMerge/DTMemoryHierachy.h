@@ -24,7 +24,7 @@ public:
         DownStream buffer;
         std::atomic<Cell *> next;
 
-        explicit Cell(size_t initial_size, MemoryResource::memory_resource* upstream)
+        explicit Cell(size_t initial_size, MemoryResource::memory_resource * upstream)
             : buffer(initial_size, upstream)
             , next(nullptr)
         {

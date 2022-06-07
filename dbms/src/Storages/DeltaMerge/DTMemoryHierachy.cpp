@@ -7,7 +7,7 @@ namespace DB::DM::Memory
 #pragma push_macro("thread_local")
 #undef thread_local
 
-static AllocatorMemoryResource<Allocator<false>> SYSTEM_MEMORY_RESOURCE {};
+static AllocatorMemoryResource<Allocator<false>> SYSTEM_MEMORY_RESOURCE{};
 static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL;
 static thread_local std::shared_ptr<ThreadMemoryPool> PER_THREAD_MEMORY_POOL = nullptr;
 static MemoryResource::pool_options PER_THREAD_POOL_OPTIONS{};
