@@ -309,8 +309,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         stream->setExtraInfo(
             fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
     });
-    bool ignore_block = !dagContext().isTest();
-    executeUnion(build_pipeline, max_streams, log, ignore_block, "for join");
+    executeUnion(build_pipeline, max_streams, log, !dagContext().isTest(), "for join");
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
