@@ -107,9 +107,7 @@ private:
     static void swap(std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & a,
                      std::shared_ptr<std::queue<std::shared_ptr<IBlockInputStream>>> & b)
     {
-        auto tmp = a;
-        a = b;
-        b = tmp;
+        a.swap(b);
     }
 
     std::vector<
