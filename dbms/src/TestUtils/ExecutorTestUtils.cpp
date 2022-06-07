@@ -65,7 +65,9 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
 }
 
-static Block mergeBlocks(Blocks blocks)
+namespace
+{
+Block mergeBlocks(Blocks blocks)
 {
     if (blocks.empty())
         return {};
@@ -106,6 +108,7 @@ void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect
     Block actual_block = mergeBlocks(actual_blocks);
     ASSERT_BLOCK_EQ(except_block, actual_block);
 }
+} // namespace
 
 void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
 {

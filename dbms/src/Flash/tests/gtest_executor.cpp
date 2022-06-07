@@ -19,7 +19,7 @@ namespace DB
 {
 namespace tests
 {
-class ExecutorTestDemo : public DB::tests::ExecutorTest
+class ExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
@@ -61,7 +61,7 @@ public:
     }
 };
 
-TEST_F(ExecutorTestDemo, Filter)
+TEST_F(ExecutorTestRunner, Filter)
 try
 {
     auto request = context
@@ -85,7 +85,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTestDemo, JoinWithTableScan)
+TEST_F(ExecutorTestRunner, JoinWithTableScan)
 try
 {
     auto request = context
@@ -165,7 +165,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTestDemo, JoinWithExchangeReceiver)
+TEST_F(ExecutorTestRunner, JoinWithExchangeReceiver)
 try
 {
     auto request = context
@@ -202,7 +202,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTestDemo, JoinWithTableScanAndReceiver)
+TEST_F(ExecutorTestRunner, JoinWithTableScanAndReceiver)
 try
 {
     auto request = context
