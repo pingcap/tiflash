@@ -458,6 +458,7 @@ if (ARCH_AMD64)
     endif()
 else()
     add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+    add_definitions(-DTIFLASH_COMPILER_CX16_SUPPORT=0)
 endif()
 
 add_subdirectory (libs)
