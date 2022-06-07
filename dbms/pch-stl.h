@@ -18,12 +18,15 @@
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <future>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <ostream>
+#include <queue>
+#include <random>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
