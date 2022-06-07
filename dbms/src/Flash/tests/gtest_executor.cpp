@@ -25,39 +25,39 @@ public:
     void initializeContext() override
     {
         InterpreterTest::initializeContext();
-        context.addMockTableWithColumnData({"test_db", "test_table"},
-                                           {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                                           {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                                            toNullableVec<String>("s2", {"apple", {}, "banana"})});
-        context.addExchangeReceiverWithColumnData("exchange1",
-                                                  {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
-                                                  {toNullableVec<String>("s1", {"banana", {}, "banana"}),
-                                                   toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addMockTable({"test_db", "test_table"},
+                             {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+                             {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+                              toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addExchangeReceiver("exchange1",
+                                    {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+                                    {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+                                     toNullableVec<String>("s2", {"apple", {}, "banana"})});
 
-        context.addExchangeReceiverWithColumnData("exchange_r_table",
-                                                  {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                                  {toNullableVec<String>("s", {"banana", "banana"}),
-                                                   toNullableVec<String>("join_c", {"apple", "banana"})});
+        context.addExchangeReceiver("exchange_r_table",
+                                    {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                    {toNullableVec<String>("s", {"banana", "banana"}),
+                                     toNullableVec<String>("join_c", {"apple", "banana"})});
 
-        context.addExchangeReceiverWithColumnData("exchange_l_table",
-                                                  {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                                  {toNullableVec<String>("s", {"banana", "banana"}),
-                                                   toNullableVec<String>("join_c", {"apple", "banana"})});
+        context.addExchangeReceiver("exchange_l_table",
+                                    {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                    {toNullableVec<String>("s", {"banana", "banana"}),
+                                     toNullableVec<String>("join_c", {"apple", "banana"})});
 
-        context.addMockTableWithColumnData({"test_db", "r_table"},
-                                           {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                           {toVec<String>("s", {"banana", "banana"}),
-                                            toVec<String>("join_c", {"apple", "banana"})});
+        context.addMockTable({"test_db", "r_table"},
+                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                             {toVec<String>("s", {"banana", "banana"}),
+                              toVec<String>("join_c", {"apple", "banana"})});
 
-        context.addMockTableWithColumnData({"test_db", "r_table_2"},
-                                           {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                           {toVec<String>("s", {"banana", "banana", "banana"}),
-                                            toVec<String>("join_c", {"apple", "apple", "apple"})});
+        context.addMockTable({"test_db", "r_table_2"},
+                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                             {toVec<String>("s", {"banana", "banana", "banana"}),
+                              toVec<String>("join_c", {"apple", "apple", "apple"})});
 
-        context.addMockTableWithColumnData({"test_db", "l_table"},
-                                           {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
-                                           {toVec<String>("s", {"banana", "banana"}),
-                                            toVec<String>("join_c", {"apple", "banana"})});
+        context.addMockTable({"test_db", "l_table"},
+                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                             {toVec<String>("s", {"banana", "banana"}),
+                              toVec<String>("join_c", {"apple", "banana"})});
     }
 
     template <typename T>
