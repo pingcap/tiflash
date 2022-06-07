@@ -83,8 +83,7 @@ try
     {
         executeStreams(request,
                        {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})},
-                       1);
+                        toNullableVec<String>("s2", {"banana"})});
     }
 
     request = context.receive("exchange1")
@@ -93,8 +92,7 @@ try
     {
         executeStreams(request,
                        {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})},
-                       1);
+                        toNullableVec<String>("s2", {"banana"})});
     }
 }
 CATCH
@@ -131,8 +129,7 @@ try
                        {toNullableVec<String>("s", {"banana", "banana"}),
                         toNullableVec<String>("join_c", {"apple", "banana"}),
                         toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})},
-                       1);
+                        toNullableVec<String>("join_c", {"apple", "banana"})});
     }
     request = context
                   .scan("test_db", "l_table")

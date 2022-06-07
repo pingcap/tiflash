@@ -156,7 +156,8 @@ AnalysisResult analyzeExpressions(
 }
 } // namespace
 
-void DAGQueryBlockInterpreter::mockSourceStream(String executor_id, DAGPipeline & pipeline, const String & source_type)
+template <typename SourceType>
+void DAGQueryBlockInterpreter::mockSourceStream(String executor_id, DAGPipeline & pipeline)
 {
     ColumnsWithTypeAndName columns_with_type_and_name;
     NamesAndTypes names_and_types;
@@ -186,18 +187,16 @@ void DAGQueryBlockInterpreter::mockSourceStream(String executor_id, DAGPipeline 
                     column_with_type_and_name.name));
         }
         start += row_for_current_stream;
-        if (source_type == "table_scan")
-            pipeline.streams.emplace_back(std::make_shared<MockTableScanBlockInputStream>(columns_for_stream, context.getSettingsRef().max_block_size));
-        else
-            pipeline.streams.emplace_back(std::make_shared<MockExchangeReceiverInputStream>(columns_for_stream, context.getSettingsRef().max_block_size));
+        pipeline.streams.emplace_back(std::make_shared<SourceType>(columns_for_stream, context.getSettingsRef().max_block_size));
     }
 }
 
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    if (context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID()).empty())
+    if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID()).empty())
     {
+        std::cout << "reach here?????????????? " << std::endl;
         auto names_and_types = genNamesAndTypes(table_scan);
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
@@ -209,7 +208,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     }
     else
     {
-        mockSourceStream(table_scan.getTableScanExecutorID(), pipeline, "table_scan");
+        mockSourceStream<MockTableScanBlockInputStream>(table_scan.getTableScanExecutorID(), pipeline);
     }
 }
 
@@ -310,7 +309,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         stream->setExtraInfo(
             fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
     });
-    executeUnion(build_pipeline, max_streams, log, !dagContext().isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dagContext().isTest(), "for join");
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
@@ -538,8 +537,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    auto columns_with_type_and_name = context.getDAGContext()->columnsForTest(query_block.source_name);
-    if (columns_with_type_and_name.empty())
+    if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(query_block.source_name).empty())
     {
         for (size_t i = 0; i < max_streams; ++i)
         {
@@ -555,7 +553,7 @@ void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline
     }
     else
     {
-        mockSourceStream(query_block.source_name, pipeline, "exchange_receiver");
+        mockSourceStream<MockExchangeReceiverInputStream>(query_block.source_name, pipeline);
     }
 }
 

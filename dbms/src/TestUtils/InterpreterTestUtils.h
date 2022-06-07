@@ -56,11 +56,11 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
         const ColumnsWithTypeAndName & expect_columns,
-        size_t concurrency);
+        size_t concurrency = 1);
     void executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const ColumnsWithTypeAndName & expect_columns,
-        size_t concurrency);
+        size_t concurrency = 1);
 
 protected:
     MockDAGRequestContext context;
