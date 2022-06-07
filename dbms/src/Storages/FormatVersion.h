@@ -118,7 +118,7 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V4 = StorageFormatVersio
     .identifier = 4,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V4;
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V3;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {
