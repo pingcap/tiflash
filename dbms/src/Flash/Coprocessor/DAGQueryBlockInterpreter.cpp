@@ -164,8 +164,7 @@ void DAGQueryBlockInterpreter::mockSourceStream(String executor_id, DAGPipeline 
     columns_with_type_and_name = context.getDAGContext()->columnsForTest(executor_id);
     for (const auto & col : columns_with_type_and_name)
     {
-        if (rows == 0)
-            rows = col.column->size();
+        if (rows == 0) rows = col.column->size();
         RUNTIME_ASSERT(rows == col.column->size(), log, "each column has same size");
         names_and_types.push_back({col.name, col.type});
     }
@@ -310,7 +309,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         stream->setExtraInfo(
             fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
     });
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/true, "for join");
+    bool ignore_block = !dagContext().isTest();
+    executeUnion(build_pipeline, max_streams, log, ignore_block, "for join");
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;

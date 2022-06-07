@@ -105,11 +105,13 @@ try
     auto request = context
                        .scan("test_db", "l_table")
                        .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                       .topN("join_c", false, 2)
                        .build(context);
     {
-        String expected = "Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          " table_scan_0 | {<0, String>, <1, String>}\n"
-                          " table_scan_1 | {<0, String>, <1, String>}\n";
+        String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                          "  table_scan_0 | {<0, String>, <1, String>}\n"
+                          "  table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s", {"banana", "banana"}),
@@ -136,12 +138,14 @@ try
                   .scan("test_db", "l_table")
                   .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
                   .project({"s", "join_c"})
+                  .topN("join_c", false, 2)
                   .build(context);
     {
-        String expected = "project_3 | {<0, String>, <1, String>}\n"
-                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          "  table_scan_0 | {<0, String>, <1, String>}\n"
-                          "  table_scan_1 | {<0, String>, <1, String>}\n";
+        String expected = "topn_4 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+                          " project_3 | {<0, String>, <1, String>}\n"
+                          "  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                          "   table_scan_0 | {<0, String>, <1, String>}\n"
+                          "   table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s", {"banana", "banana"}),
@@ -152,11 +156,13 @@ try
     request = context
                   .scan("test_db", "l_table")
                   .join(context.scan("test_db", "r_table_2"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                  .topN("join_c", false, 4)
                   .build(context);
     {
-        String expected = "Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          " table_scan_0 | {<0, String>, <1, String>}\n"
-                          " table_scan_1 | {<0, String>, <1, String>}\n";
+        String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 4\n"
+                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                          "  table_scan_0 | {<0, String>, <1, String>}\n"
+                          "  table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s", {"banana", "banana", "banana", "banana"}),
@@ -180,11 +186,13 @@ try
     auto request = context
                        .receive("exchange_l_table")
                        .join(context.receive("exchange_r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                       .topN("join_c", false, 2)
                        .build(context);
     {
-        String expected = "Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          " exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>}\n"
-                          " exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
+        String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                          "  exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>}\n"
+                          "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s", {"banana", "banana"}),
@@ -216,11 +224,13 @@ try
     auto request = context
                        .scan("test_db", "l_table")
                        .join(context.receive("exchange_r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                       .topN("join_c", false, 2)
                        .build(context);
     {
-        String expected = "Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          " table_scan_0 | {<0, String>, <1, String>}\n"
-                          " exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
+        String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                          "  table_scan_0 | {<0, String>, <1, String>}\n"
+                          "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
                        {toNullableVec<String>("s", {"banana", "banana"}),
