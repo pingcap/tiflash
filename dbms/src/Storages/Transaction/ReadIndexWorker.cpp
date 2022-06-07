@@ -175,7 +175,7 @@ public:
         return waker.waitFor(tm);
     }
 
-    virtual ~BlockedReadIndexHelper() = default;
+    ~BlockedReadIndexHelper() override = default;
 
 private:
     AsyncWaker & waker;
@@ -194,7 +194,7 @@ struct BlockedReadIndexHelperV3 : BlockedReadIndexHelperTrait
         return notifier.blockedWaitFor(tm);
     }
 
-    virtual ~BlockedReadIndexHelperV3() = default;
+    ~BlockedReadIndexHelperV3() override = default;
 
 private:
     AsyncWaker::Notifier & notifier;
@@ -343,7 +343,7 @@ struct RegionReadIndexNotifier : AsyncNotifier
         notify->wake();
     }
 
-    virtual ~RegionReadIndexNotifier() = default;
+    ~RegionReadIndexNotifier() override = default;
 
     RegionReadIndexNotifier(
         RegionID region_id_,
