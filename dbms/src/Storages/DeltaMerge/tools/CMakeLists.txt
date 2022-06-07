@@ -15,3 +15,6 @@
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
 add_subdirectory (workload EXCLUDE_FROM_ALL)
+
+add_executable(bench_deltatree bench_deltatree.cpp)
+target_link_libraries(bench_deltatree PRIVATE dbms benchmark)
