@@ -129,14 +129,14 @@ public:
     void addExchangeRelationSchema(String name, const MockColumnInfos & columnInfos);
     void addExchangeRelationSchema(String name, const MockColumnInfoList & columnInfos);
     void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
-    void addMockTableWithColumnData(const String & db, const String & table, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns);
-    void addMockTableWithColumnData(const String & db, const String & table, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns);
-    void addMockTableWithColumnData(const MockTableName & name, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns);
-    void addMockTableWithColumnData(const MockTableName & name, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const String & db, const String & table, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const MockTableName & name, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const MockTableName & name, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns);
     void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
     void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
-    void addExchangeReceiverWithColumnData(const String & name, MockColumnInfos columnInfos, ColumnsWithTypeAndName columns);
-    void addExchangeReceiverWithColumnData(const String & name, MockColumnInfoList columnInfos, ColumnsWithTypeAndName columns);
+    void addExchangeReceiver(const String & name, MockColumnInfos columnInfos, ColumnsWithTypeAndName columns);
+    void addExchangeReceiver(const String & name, MockColumnInfoList columnInfos, ColumnsWithTypeAndName columns);
 
     std::unordered_map<String, ColumnsWithTypeAndName> & executorIdColumnsMap() { return executor_id_columns_map; }
 
