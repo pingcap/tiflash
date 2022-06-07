@@ -80,8 +80,8 @@
 /// can destruct the buffer before returning the new buffer.
 #pragma once
 #include <Common/AllocatorMemoryResource.h>
-#include <common/mpmcstack.h>
 #include <common/logger_useful.h>
+#include <common/mpmcstack.h>
 
 #include <boost/container/pmr/monotonic_buffer_resource.hpp>
 #include <boost/container/pmr/pool_options.hpp>
@@ -126,7 +126,7 @@ public:
 private:
     common::MPMCStack<Cell> stack{};
     MemoryResource::synchronized_pool_resource pool;
-    Poco::Logger *log;
+    Poco::Logger * log;
 
     void recycle(Cell * cell)
     {

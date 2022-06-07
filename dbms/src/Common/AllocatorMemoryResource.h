@@ -54,7 +54,8 @@ public:
         return {};
     }
 
-    void swap(AllocatorMemoryResource & other) {
+    void swap(AllocatorMemoryResource & other)
+    {
         UNUSED(other);
     }
 };
