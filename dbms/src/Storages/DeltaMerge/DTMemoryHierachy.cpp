@@ -15,13 +15,14 @@
 
 #include <boost/fiber/detail/cpu_relax.hpp>
 #include <optional>
+#include <sstream>
 namespace DB::DM::Memory
 {
 #pragma push_macro("thread_local")
 #undef thread_local
 
 static AllocatorMemoryResource<Allocator<false>> SYSTEM_MEMORY_RESOURCE{};
-static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL {&SYSTEM_MEMORY_RESOURCE};
+static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL{&SYSTEM_MEMORY_RESOURCE};
 static thread_local std::shared_ptr<ThreadMemoryPool> PER_THREAD_MEMORY_POOL = nullptr;
 static MemoryResource::pool_options PER_THREAD_POOL_OPTIONS{};
 static size_t INITIAL_BUFFER_SIZE = 1024;
@@ -62,7 +63,9 @@ std::shared_ptr<ThreadMemoryPool> per_thread_memory_pool()
 
 ThreadMemoryPool::ThreadMemoryPool(MemoryResource::pool_options options, MemoryResource::memory_resource * upstream)
     : pool(options, upstream)
+    , log(&Poco::Logger::get("DeltaTreeThreadMemoryPool"))
 {
+    LOG_FMT_TRACE(log, "thread local memory pool created");
 }
 
 LocalAllocatorBuffer LocalAllocatorBuffer::create()
