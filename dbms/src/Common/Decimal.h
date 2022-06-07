@@ -108,40 +108,66 @@ struct IntPrec<Int256>
 
 struct PlusDecimalInferer
 {
-    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale);
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
+    {
+        ScaleType result_scale = std::max(left_scale, right_scale);
+        PrecType result_int = std::max(left_prec - left_scale, right_prec - right_scale);
+        PrecType result_prec = std::min(result_scale + result_int + 1, decimal_max_prec);
+        return {result_prec, result_scale};
+    }
 };
 
 struct MulDecimalInferer
 {
-    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale);
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
+    {
+        return {std::min(left_prec + right_prec, decimal_max_prec), std::min(left_scale + right_scale, decimal_max_scale)};
+    }
 };
 
 struct DivDecimalInferer
 {
     static const ScaleType div_precincrement = 4;
-    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType /* right_prec is not used */, ScaleType right_scale);
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType /* right_prec is not used */, ScaleType right_scale)
+    {
+        return {
+            std::min(left_prec + right_scale + div_precincrement, decimal_max_prec),
+            std::min(left_scale + div_precincrement, decimal_max_scale)};
+    }
 };
 
 struct SumDecimalInferer
 {
     static constexpr PrecType decimal_longlong_digits = 22;
-    static std::tuple<PrecType, ScaleType> infer(PrecType prec, ScaleType scale);
+    static std::tuple<PrecType, ScaleType> infer(PrecType prec, ScaleType scale)
+    {
+        return {std::min(prec + decimal_longlong_digits, decimal_max_prec), scale};
+    }
 };
 
 struct AvgDecimalInferer
 {
     static const ScaleType div_precincrement = 4;
-    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale);
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale)
+    {
+        return {std::min(left_prec + div_precincrement, decimal_max_prec), std::min(left_scale + div_precincrement, decimal_max_scale)};
+    }
 };
 
 struct ModDecimalInferer
 {
-    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale);
+    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale)
+    {
+        return {std::max(left_prec, right_prec), std::max(left_scale, right_scale)};
+    }
 };
 
 struct OtherInferer
 {
-    static std::tuple<PrecType, ScaleType> infer(PrecType, ScaleType, PrecType, ScaleType);
+    static std::tuple<PrecType, ScaleType> infer(PrecType, ScaleType, PrecType, ScaleType)
+    {
+        return {};
+    }
 };
 
 template <typename T>
@@ -386,14 +412,31 @@ class DecimalMaxValue final : public ext::Singleton<DecimalMaxValue>
     Int256 number[decimal_max_prec + 1];
 
 public:
-    static Int256 get(PrecType idx);
+    static Int256 get(PrecType idx)
+    {
+        // In case DecimalMaxValue::get(IntPrec<Int256>::prec), where IntPrec<Int256>::prec > 65.
+        assert(idx <= decimal_max_prec);
+        return instance().getInternal(idx);
+    }
 
-    static Int256 maxValue();
+    static Int256 maxValue()
+    {
+        return get(maxDecimalPrecision<Decimal256>());
+    }
 
 private:
-    DecimalMaxValue();
+    DecimalMaxValue()
+    {
+        for (PrecType i = 1; i <= decimal_max_prec; i++)
+        {
+            number[i] = number[i - 1] * 10 + 9;
+        }
+    }
 
-    Int256 getInternal(PrecType idx) const;
+    Int256 getInternal(PrecType idx) const
+    {
+        return number[idx];
+    }
 };
 
 // In some case, getScaleMultiplier and its callee may not be auto inline by the compiler.

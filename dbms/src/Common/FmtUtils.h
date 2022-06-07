@@ -30,9 +30,16 @@ public:
         return *this;
     }
 
-    FmtBuffer & append(std::string_view s);
+    FmtBuffer & append(std::string_view s)
+    {
+        buffer.append(s.data(), s.data() + s.size());
+        return *this;
+    }
 
-    std::string toString() const;
+    std::string toString() const
+    {
+        return fmt::to_string(buffer);
+    }
 
     template <typename Iter>
     FmtBuffer & joinStr(
@@ -73,9 +80,9 @@ public:
         return *this;
     }
 
-    void resize(size_t count);
-    void reserve(size_t capacity);
-    void clear();
+    void resize(size_t count) { buffer.resize(count); }
+    void reserve(size_t capacity) { buffer.reserve(capacity); }
+    void clear() { buffer.clear(); }
 
 private:
     fmt::memory_buffer buffer;
