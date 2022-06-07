@@ -21,7 +21,7 @@ namespace DB::DM::Memory
 #undef thread_local
 
 static AllocatorMemoryResource<Allocator<false>> SYSTEM_MEMORY_RESOURCE{};
-static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL;
+static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL {&SYSTEM_MEMORY_RESOURCE};
 static thread_local std::shared_ptr<ThreadMemoryPool> PER_THREAD_MEMORY_POOL = nullptr;
 static MemoryResource::pool_options PER_THREAD_POOL_OPTIONS{};
 static size_t INITIAL_BUFFER_SIZE = 1024;
@@ -36,7 +36,7 @@ boost::container::pmr::synchronized_pool_resource & global_memory_pool()
     return *GLOBAL_MEMORY_POOL;
 }
 
-void initGlobalMemoryPool(const MemoryResource::pool_options & options)
+void replaceGlobalMemoryPool(const MemoryResource::pool_options & options)
 {
     GLOBAL_MEMORY_POOL.emplace(options, &SYSTEM_MEMORY_RESOURCE);
 }

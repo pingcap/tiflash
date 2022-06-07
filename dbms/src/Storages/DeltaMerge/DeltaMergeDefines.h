@@ -20,6 +20,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Storages/DeltaMerge/DTMemoryHierachy.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/MutableSupport.h>
@@ -49,14 +50,16 @@ static constexpr size_t DT_M = 55;
 static constexpr size_t DT_F = 20;
 
 using Ids = std::vector<UInt64>;
-
-template <class ValueSpace, size_t M, size_t F, size_t S = 3, typename TAllocator = Allocator<false>>
+using SystemResource = AllocatorMemoryResource<Allocator<false>>;
+using ArenaResource = ArenaMemoryResource;
+using MultiLevelResource = Memory::LocalAllocatorBuffer;
+template <class ValueSpace, size_t M, size_t F, size_t S = 3, typename Resource = MultiLevelResource>
 class DeltaTree;
 
 template <size_t M, size_t F, size_t S>
 class DTEntryIterator;
 
-template <size_t M, size_t F, size_t S, typename TAllocator = Allocator<false>>
+template <size_t M, size_t F, size_t S, typename Resource = MultiLevelResource>
 class DTEntriesCopy;
 
 struct RefTuple;
@@ -67,7 +70,7 @@ struct EmptyValueSpace
 };
 
 using EntryIterator = DTEntryIterator<DT_M, DT_F, DT_S>;
-using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
+using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, MultiLevelResource>;
 using DeltaTreePtr = std::shared_ptr<DefaultDeltaTree>;
 using BlockPtr = std::shared_ptr<Block>;
 

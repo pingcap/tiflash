@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/AllocatorMemoryResource.h>
 #include <Common/Arena.h>
 #include <Common/BitHelpers.h>
 
@@ -32,7 +33,7 @@ namespace DB
 class ArenaWithFreeLists : private Allocator<false>
     , private boost::noncopyable
 {
-private:
+protected:
     /// If the block is free, then the pointer to the next free block is stored at its beginning, or nullptr, if there are no more free blocks.
     /// If the block is used, then some data is stored in it.
     union Block
@@ -106,6 +107,44 @@ public:
     size_t size() const
     {
         return pool.size();
+    }
+};
+
+
+class ArenaMemoryResource : public ArenaWithFreeLists
+    , public MemoryResource::memory_resource
+{
+    void * do_allocate(std::size_t bytes, std::size_t) override
+    {
+        return this->ArenaWithFreeLists::alloc(bytes);
+    }
+    void do_deallocate(void * p, std::size_t bytes, std::size_t alignment) override
+    {
+        UNUSED(alignment);
+        this->ArenaWithFreeLists::free(static_cast<char *>(p), bytes);
+    }
+    /// Compare *this with other for identity.
+    /// STL states that: Memory allocated using a synchronized_pool_resource
+    /// can only be deallocated using that same resource. Hence, we just need to
+    /// check whether the base class are the same.
+    bool do_is_equal(const MemoryResource::memory_resource & other) const noexcept override
+    {
+        return std::addressof(other) == this;
+    }
+
+public:
+    static ArenaMemoryResource create()
+    {
+        return {};
+    }
+
+    void swap(ArenaMemoryResource & other)
+    {
+        this->pool.swap(other.pool);
+        for (size_t i = 0; i < std::size(this->free_lists); ++i)
+        {
+            std::swap(this->free_lists[i], other.free_lists[i]);
+        }
     }
 };
 

@@ -126,6 +126,14 @@ public:
         delete head;
     }
 
+    void swap(Arena & other) noexcept
+    {
+        std::swap(growth_factor, other.growth_factor);
+        std::swap(linear_growth_threshold, other.linear_growth_threshold);
+        std::swap(head, other.head);
+        std::swap(size_in_bytes, other.size_in_bytes);
+    }
+
     /// Get piece of memory with alignment
     char * alignedAlloc(size_t size, size_t alignment)
     {

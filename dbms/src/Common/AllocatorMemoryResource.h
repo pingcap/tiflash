@@ -47,5 +47,15 @@ class AllocatorMemoryResource : public BaseAllocator
     {
         return dynamic_cast<const BaseAllocator *>(std::addressof(other)) != nullptr;
     }
+
+public:
+    static AllocatorMemoryResource create()
+    {
+        return {};
+    }
+
+    void swap(AllocatorMemoryResource & other) {
+        UNUSED(other);
+    }
 };
 } // namespace DB

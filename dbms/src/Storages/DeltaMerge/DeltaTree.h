@@ -571,11 +571,12 @@ public:
     void setValue(UInt64 value) { leaf->mutations[pos].value = checkId(value); }
 };
 
-template <size_t M, size_t F, size_t S, typename Allocator>
-class DTEntriesCopy : Allocator
+template <size_t M, size_t F, size_t S, typename Resource>
+class DTEntriesCopy
 {
     using LeafPtr = DTLeaf<M, F, S> *;
 
+    Resource resource;
     const size_t entry_count;
     const Int64 delta;
     UInt64 * const sids = nullptr;
@@ -583,10 +584,11 @@ class DTEntriesCopy : Allocator
 
 public:
     DTEntriesCopy(LeafPtr left_leaf, size_t entry_count_, Int64 delta_)
-        : entry_count(entry_count_)
+        : resource(Resource::create())
+        , entry_count(entry_count_)
         , delta(delta_)
-        , sids(reinterpret_cast<UInt64 *>(this->alloc(sizeof(UInt64) * entry_count)))
-        , mutations(reinterpret_cast<DTMutation *>(this->alloc(sizeof(DTMutation) * entry_count)))
+        , sids(reinterpret_cast<UInt64 *>(resource.allocate(sizeof(UInt64) * entry_count, alignof(UInt64))))
+        , mutations(reinterpret_cast<DTMutation *>(resource.allocate(sizeof(DTMutation) * entry_count, alignof(DTMutation))))
     {
         size_t offset = 0;
         while (left_leaf)
@@ -604,9 +606,9 @@ public:
     ~DTEntriesCopy()
     {
         if (sids)
-            this->free(sids, sizeof(UInt64) * entry_count);
+            this->deallocate(sids, sizeof(UInt64) * entry_count, alignof(UInt64));
         if (mutations)
-            this->free(mutations, sizeof(DTMutation) * entry_count);
+            this->deallocate(mutations, sizeof(DTMutation) * entry_count, alignof(DTMutation));
     }
 
     class Iterator
@@ -736,11 +738,11 @@ public:
     auto end() { return Iterator(entries.end()); }
 };
 
-template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
+template <class ValueSpace, size_t M, size_t F, size_t S, typename Resource>
 class DeltaTree
 {
 public:
-    using Self = DeltaTree<ValueSpace, M, F, S, Allocator>;
+    using Self = DeltaTree<ValueSpace, M, F, S, Resource>;
     using NodePtr = void *;
     using Leaf = DTLeaf<M, F, S>;
     using Intern = DTIntern<M, F, S>;
@@ -769,7 +771,7 @@ private:
     size_t num_deletes = 0;
     size_t num_entries = 0;
 
-    Allocator * allocator = nullptr;
+    Resource resource;
     size_t bytes = 0;
 
     Poco::Logger * log = nullptr;
@@ -833,7 +835,7 @@ private:
     template <typename T>
     void freeNode(T * node)
     {
-        allocator->free(reinterpret_cast<char *>(node), sizeof(T));
+        resource.deallocate(reinterpret_cast<char *>(node), sizeof(T), alignof(T));
 
         bytes -= sizeof(T);
     }
@@ -841,7 +843,7 @@ private:
     template <typename T>
     T * createNode()
     {
-        T * n = reinterpret_cast<T *>(allocator->alloc(sizeof(T)));
+        T * n = reinterpret_cast<T *>(resource.allocate(sizeof(T), alignof(T)));
         new (n) T();
 
         bytes += sizeof(T);
@@ -871,7 +873,8 @@ private:
 
     void init(const ValueSpacePtr & insert_value_space_)
     {
-        allocator = new Allocator();
+        auto new_res = Resource::create();
+        resource.swap(new_res);
 
         log = &Poco::Logger::get("DeltaTree");
 
@@ -915,7 +918,7 @@ public:
 
         std::swap(log, other.log);
 
-        std::swap(allocator, allocator);
+        resource.swap(other.resource);
 
         insert_value_space.swap(other.insert_value_space);
     }
@@ -929,8 +932,6 @@ public:
             else
                 freeTree<Intern>(static_cast<InternPtr>(root));
         }
-
-        delete allocator;
 
         LOG_FMT_TRACE(log, "free");
     }
@@ -979,8 +980,8 @@ public:
     void updateTupleId(const TupleRefs & tuple_refs, size_t offset);
 };
 
-#define DT_TEMPLATE template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
-#define DT_CLASS DeltaTree<ValueSpace, M, F, S, Allocator>
+#define DT_TEMPLATE template <class ValueSpace, size_t M, size_t F, size_t S, typename Resource>
+#define DT_CLASS DeltaTree<ValueSpace, M, F, S, Resource>
 
 DT_TEMPLATE
 DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
@@ -988,7 +989,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     , num_inserts(o.num_inserts)
     , num_deletes(o.num_deletes)
     , num_entries(o.num_entries)
-    , allocator(new Allocator())
+    , resource(Resource::create())
     , log(&Poco::Logger::get("DeltaTree"))
 {
     NodePtr my_root;

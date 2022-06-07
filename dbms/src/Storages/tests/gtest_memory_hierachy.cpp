@@ -22,7 +22,6 @@ namespace DB::DM::tests
 using namespace Memory;
 TEST(DTMemoryHierachy, SingleThreadAllocation)
 {
-    initGlobalMemoryPool({});
     auto buffer = LocalAllocatorBuffer::create();
     for (int i = 0; i < 100; ++i)
     {
@@ -32,7 +31,6 @@ TEST(DTMemoryHierachy, SingleThreadAllocation)
 }
 TEST(DTMemoryHierachy, MultiThreadAllocation)
 {
-    initGlobalMemoryPool({});
     std::vector<std::thread> handles;
 
     for (int n = 0; n < 60; ++n)

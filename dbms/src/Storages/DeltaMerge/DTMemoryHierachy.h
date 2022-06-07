@@ -91,7 +91,7 @@ namespace DB::DM::Memory
 {
 AllocatorMemoryResource<Allocator<false>> & system_memory_source();
 MemoryResource::synchronized_pool_resource & global_memory_pool();
-void initGlobalMemoryPool(const MemoryResource::pool_options & options);
+void replaceGlobalMemoryPool(const MemoryResource::pool_options & options);
 void setPerThreadPoolOptions(const MemoryResource::pool_options & options);
 void setLocalBufferInitialSize(size_t size);
 std::shared_ptr<class ThreadMemoryPool> per_thread_memory_pool();
@@ -149,15 +149,33 @@ class LocalAllocatorBuffer : public MemoryResource::memory_resource
     /// hold the upstream in case the thread has already exited
     std::shared_ptr<ThreadMemoryPool> upstream_holder = nullptr;
     ThreadMemoryPool::Cell * cell = nullptr;
-    LocalAllocatorBuffer() = default;
 
 public:
+    LocalAllocatorBuffer() = default;
+    LocalAllocatorBuffer(const LocalAllocatorBuffer &) = delete;
+    LocalAllocatorBuffer operator=(const LocalAllocatorBuffer &) = delete;
+    LocalAllocatorBuffer(LocalAllocatorBuffer && other)
+        : upstream_holder(std::move(other.upstream_holder))
+        , cell(other.cell)
+    {
+        other.upstream_holder = nullptr;
+        other.cell = nullptr;
+    }
+
     ~LocalAllocatorBuffer() override
     {
-        upstream_holder->recycle(cell);
+        if (cell && upstream_holder)
+        {
+            upstream_holder->recycle(cell);
+        }
     }
 
     static LocalAllocatorBuffer create();
+    void swap(LocalAllocatorBuffer & other)
+    {
+        std::swap(upstream_holder, other.upstream_holder);
+        std::swap(cell, other.cell);
+    }
 
 protected:
     void * do_allocate(std::size_t bytes, std::size_t alignment) override
