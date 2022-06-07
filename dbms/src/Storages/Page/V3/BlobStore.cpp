@@ -1368,7 +1368,8 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
     std::advance(stats_iter, stats_map_path_index);
 
     size_t path_iter_idx = 0;
-    for (path_iter_idx = 0; path_iter_idx < stats_map.size(); ++path_iter_idx)
+    size_t stats_map_size = stats_map.size();
+    for (path_iter_idx = 0; path_iter_idx < stats_map_size; ++path_iter_idx)
     {
         // Try to find a suitable stat under current path (path=`stats_iter->first`)
         for (const auto & stat : stats_iter->second)

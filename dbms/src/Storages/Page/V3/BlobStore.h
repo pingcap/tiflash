@@ -23,6 +23,7 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/PathPool.h>
+#include <absl/container/btree_map.h>
 
 #include <mutex>
 
@@ -81,16 +82,18 @@ public:
 
         static String blobTypeToString(BlobStatType type)
         {
-            switch (type)
-            {
-            case BlobStatType::NORMAL:
-                return "normal";
-            case BlobStatType::READ_ONLY:
-                return "read only";
-            case BlobStatType::BIG_BLOB:
-                return "big blob";
-            }
-            return "Invalid";
+            // switch (type)
+            // {
+            // case BlobStatType::NORMAL:
+            //     return "normal";
+            // case BlobStatType::READ_ONLY:
+            //     return "read only";
+            // case BlobStatType::BIG_BLOB:
+            //     return "big blob";
+            // }
+            // return "Invalid";
+            static const String type_str[] = {"invalid", "normal", "read only", "big blob"};
+            return type_str[static_cast<int>(type)];
         }
 
         struct BlobStat
@@ -141,14 +144,14 @@ public:
                 return type.load() == BlobStatType::READ_ONLY;
             }
 
-            void changeToReadOnly()
-            {
-                type.store(BlobStatType::READ_ONLY);
-            }
-
             bool isBigBlob() const
             {
                 return type.load() == BlobStatType::BIG_BLOB;
+            }
+
+            void changeToReadOnly()
+            {
+                type.store(BlobStatType::READ_ONLY);
             }
 
             BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
@@ -223,7 +226,7 @@ public:
 
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
-        std::map<String, std::list<BlobStatPtr>> getStats() const
+        absl::btree_map<String, std::list<BlobStatPtr>> getStats() const
         {
             auto guard = lock();
             return stats_map;
@@ -249,7 +252,7 @@ public:
         BlobFileId roll_id = 1;
         // Index for selecting next path for creating new blobfile
         UInt32 stats_map_path_index = 0;
-        std::map<String, std::list<BlobStatPtr>> stats_map;
+        absl::btree_map<String, std::list<BlobStatPtr>> stats_map;
     };
 
     BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobStore::Config & config);

@@ -14,13 +14,13 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-set (stress-workload-src HeavyMemoryCostInGC.cpp HeavyRead.cpp HeavySkewWriteRead.cpp HeavyWrite.cpp HighValidBigFileGC.cpp HoldSnapshotsLongTime.cpp Normal.cpp 
+set (page-workload-src HeavyMemoryCostInGC.cpp HeavyRead.cpp HeavySkewWriteRead.cpp HeavyWrite.cpp HighValidBigFileGC.cpp HoldSnapshotsLongTime.cpp Normal.cpp 
      PageStorageInMemoryCapacity.cpp ThousandsOfOffset.cpp MainEntry.cpp Normal.cpp PageStorageInMemoryCapacity.cpp PSBackground.cpp PSRunnable.cpp PSStressEnv.cpp PSWorkload.cpp)
 
-add_library (stress-workload-lib ${stress-workload-src})
-target_link_libraries (stress-workload-lib dbms clickhouse_functions clickhouse-server-lib)
-target_compile_options (stress-workload-lib PRIVATE -Wno-format -lc++)
+add_library (page-workload-lib ${page-workload-src})
+target_link_libraries (page-workload-lib dbms clickhouse_functions clickhouse-server-lib)
+target_compile_options (page-workload-lib PRIVATE -Wno-format -lc++)
 
-add_executable (stress-workload Main.cpp ${stress-workload-src})
-target_link_libraries (stress-workload dbms clickhouse_functions clickhouse-server-lib)
-target_compile_options (stress-workload PRIVATE -Wno-format -lc++)
+add_executable (page-workload Main.cpp ${page-workload-src})
+target_link_libraries (page-workload dbms clickhouse_functions clickhouse-server-lib)
+target_compile_options (page-workload PRIVATE -Wno-format -lc++)

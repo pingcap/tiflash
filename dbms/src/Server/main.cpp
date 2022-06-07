@@ -38,7 +38,7 @@
 #if ENABLE_TIFLASH_DTWORKLOAD
 #include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
 #endif
-#if ENABLE_TIFLASH_STRESSWORKLOAD
+#if ENABLE_TIFLASH_PAGEWORKLOAD
 #include <Storages/Page/stress/workload/PSWorkload.h>
 #endif
 #if ENABLE_TIFLASH_PAGECTL
@@ -110,8 +110,8 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #if ENABLE_TIFLASH_DTWORKLOAD
     {"dtworkload", DB::DM::tests::DTWorkload::mainEntry},
 #endif
-#if ENABLE_TIFLASH_STRESSWORKLOAD
-    {"stressworkload", DB::PS::tests::StressWorkload::mainEntry},
+#if ENABLE_TIFLASH_PAGEWORKLOAD
+    {"pageworkload", DB::PS::tests::StressWorkload::mainEntry},
 #endif
 #if ENABLE_TIFLASH_PAGECTL
     {"pagectl", DB::PageStorageCtl::mainEntry},

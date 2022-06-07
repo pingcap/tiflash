@@ -314,13 +314,22 @@ try
             .offset = 2048,
             .checksum = 0x4567,
         });
-        blob_store.blob_stats.restoreByEntry(PageEntryV3{
-            .file_id = file_id2,
-            .size = 512,
-            .tag = 0,
-            .offset = 2048,
-            .checksum = 0x4567,
-        });
+        // blob_store.blob_stats.restoreByEntry(PageEntryV3{
+        //     .file_id = file_id2,
+        //     .size = 512,
+        //     .tag = 0,
+        //     .offset = 2048,
+        //     .checksum = 0x4567,
+        // });
+        for (UInt64 i = 0; i < 2560; ++i) {
+            blob_store.blob_stats.restoreByEntry(PageEntryV3{
+                .file_id = file_id2,
+                .size = 1,
+                .tag = 0,
+                .offset = i * 1,
+                .checksum = 0x4567,
+            });
+        }
         blob_store.blob_stats.restore();
     }
 
@@ -340,8 +349,8 @@ try
                 else if (stat->id == file_id2)
                 {
                     ASSERT_EQ(stat->sm_total_size, 2560);
-                    ASSERT_EQ(stat->sm_valid_size, 512);
-                    ASSERT_EQ(stat->sm_max_caps, 2048);
+                    ASSERT_EQ(stat->sm_valid_size, 2560);
+                    ASSERT_EQ(stat->sm_max_caps, 0);
                 }
             }
         }
