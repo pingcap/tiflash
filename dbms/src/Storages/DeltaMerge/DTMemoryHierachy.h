@@ -1,3 +1,83 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/// This file describes the multi-level memory hierarchy of delta merge trees. The general structure
+/// is shown the diagram:
+///
+/// \code{.txt}
+///                              ---------------------
+///                              |  System Allocator |
+///                              ---------------------
+///                                        |
+///                              ---------------------
+///                              | Synchronized Pool |
+///                              ---------------------
+///                             /                     \
+///                            /         .......       \
+///             ==============/============= ===========\=================
+///             | ThD 1      /             | | ThD N     \               |
+///             |  ----------------------- | | ------------------------- |
+///             |  | Unsynchronized Pool | | | | Unsynchronized Pool   | |
+///             |  ----------------------- | | ------------------------| |
+///             ====/======================= ========================\====
+///                /                                                  \
+///  =============/=================                  =================\=============
+///  | Tree 1    /                 |                  | Tree N          \           |
+///  |   -----------------------   |                  |   -----------------------   |
+///  |   |  Monotonic Buffer   |   |       ....       |   |  Monotonic Buffer   |   |
+///  |   -----------------------   |                  |   -----------------------   |
+///  ===============================                  ===============================
+/// \endcode
+///
+/// As it is shown in the diagram, all delta tree node memory originates from a global system allocator
+/// and then pooled by size in a synchronized pool. Then, each worker threads hold a thread-local cache
+/// which acquires memory from the global pool. To do real allocations, each tree hold a buffer as a
+/// proxy to the thread local cache.
+/// This architecture utilizes the following facts:
+/// 1. Node deletions are limited and it is much fewer compared with node creation; therefore, monotonic
+///    buffer can be a good choice in this case.
+/// 2. Delta Tree are updated in a CoW manner and all modifications happens in a local thread. Hence,
+///    thread-local pools and monotonic buffers does not need thread-safety. This enables fast allocation
+///     routine.
+///
+/// However, a particular problem happens when a tree is placed back as an updated copy. How to handle
+/// the memory ownership afterwards?
+///
+/// \code{.txt}
+///   ----------------------  shared pointer  -----------------------
+///   |  Monotonic Buffer  |  --------------> | Unsynchronized Pool |
+///   ----------------------                  -----------------------
+/// \endcode
+///
+/// To address the issue, each `Monotonic Buffer` holds a shared pointer to the `Unsynchronized Pool`.
+/// Therefore, it is guaranteed that the memory can be returned back to the upstream each after the
+/// thread exits unexpectedly.
+///
+/// \code{.txt}
+///   =============================            =============================
+///   | Delta Tree                |            | Thread Local Cache        |
+///   | ----------                |            |        -------------      |
+///   | | Buffer | -----------------------------------> | MPMCStack |      |
+///   | ----------                |            |        -------------      |
+///   =============================            =============================
+/// \endcode
+///
+/// Another problem is that later, when the placed copy destructs, the memory deallocation may not
+/// happen in the same thread where the upstream unsynchronized pool locates in. The solution is to do
+/// a message passing and hands in the buffer to a MPMC stack at upstream. Later, when creating a new
+/// buffer from the thread-local pool, one can check if there are pending buffer on the stack. If so, one
+/// can destruct the buffer before returning the new buffer.
 #pragma once
 #include <Common/AllocatorMemoryResource.h>
 #include <common/mpmcstack.h>
@@ -6,6 +86,7 @@
 #include <boost/container/pmr/pool_options.hpp>
 #include <boost/container/pmr/synchronized_pool_resource.hpp>
 #include <boost/container/pmr/unsynchronized_pool_resource.hpp>
+
 namespace DB::DM::Memory
 {
 AllocatorMemoryResource<Allocator<false>> & system_memory_source();
