@@ -65,7 +65,7 @@ LocalAllocatorBuffer LocalAllocatorBuffer::create()
         thread_pool->allocate(sizeof(ThreadMemoryPool::Cell), alignof(ThreadMemoryPool::Cell)));
 
     /// setup fields
-    ::new (cell) ThreadMemoryPool::Cell(INITIAL_BUFFER_SIZE);
+    ::new (cell) ThreadMemoryPool::Cell(INITIAL_BUFFER_SIZE, thread_pool.get());
     buffer.cell = cell;
     buffer.upstream_holder = std::move(thread_pool);
     return buffer;
