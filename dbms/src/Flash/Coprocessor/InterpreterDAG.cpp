@@ -83,7 +83,7 @@ BlockIO InterpreterDAG::execute()
     DAGPipeline pipeline;
     pipeline.streams = streams;
     /// add union to run in parallel if needed
-    if (dagContext().isTest())
+    if (unlikely(dagContext().isTest()))
         executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/false, "for test");
     else if (dagContext().isMPPTask())
         /// MPPTask do not need the returned blocks.

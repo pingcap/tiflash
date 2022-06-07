@@ -33,7 +33,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     {
         if (rows == 0)
             rows = col.column->size();
-        RUNTIME_ASSERT(rows == col.column->size(), log, "each column has same size");
+        RUNTIME_ASSERT(rows == col.column->size(), log, "each column must has same size");
         names_and_types.push_back({col.name, col.type});
     }
     size_t row_for_each_stream = rows / max_streams;
@@ -54,6 +54,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
         start += row_for_current_stream;
         mock_source_streams.emplace_back(std::make_shared<SourceType>(columns_for_stream, context.getSettingsRef().max_block_size));
     }
+    RUNTIME_ASSERT(start == rows, log, "mock source streams' total size must same as user input");
     return {names_and_types, mock_source_streams};
 }
 } // namespace DB
