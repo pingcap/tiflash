@@ -20,6 +20,7 @@
 #include <fmt/chrono.h>
 
 #include <memory>
+#include <queue>
 
 namespace DB
 {
