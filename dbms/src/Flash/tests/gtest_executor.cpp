@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/InterpreterTestUtils.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB
 {
 namespace tests
 {
-class ExecutorTest : public DB::tests::InterpreterTest
+class ExecutorTestDemo : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
     {
-        InterpreterTest::initializeContext();
+        ExecutorTest::initializeContext();
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
@@ -59,21 +59,9 @@ public:
                              {toVec<String>("s", {"banana", "banana"}),
                               toVec<String>("join_c", {"apple", "banana"})});
     }
-
-    template <typename T>
-    ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
-    {
-        return createColumn<Nullable<T>>(v, name);
-    }
-
-    template <typename T>
-    ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
-    {
-        return createColumn<T>(v, name);
-    }
 };
 
-TEST_F(ExecutorTest, Filter)
+TEST_F(ExecutorTestDemo, Filter)
 try
 {
     auto request = context
@@ -82,8 +70,8 @@ try
                        .build(context);
     {
         executeStreams(request,
-                       {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})});
+                       {toNullableVec<String>({"banana"}),
+                        toNullableVec<String>({"banana"})});
     }
 
     request = context.receive("exchange1")
@@ -91,13 +79,13 @@ try
                   .build(context);
     {
         executeStreams(request,
-                       {toNullableVec<String>("s1", {"banana"}),
-                        toNullableVec<String>("s2", {"banana"})});
+                       {toNullableVec<String>({"banana"}),
+                        toNullableVec<String>({"banana"})});
     }
 }
 CATCH
 
-TEST_F(ExecutorTest, JoinWithTableScan)
+TEST_F(ExecutorTestDemo, JoinWithTableScan)
 try
 {
     auto request = context
@@ -112,24 +100,24 @@ try
                           "  table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})},
+                       {toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"})},
                        2);
 
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})},
+                       {toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"})},
                        5);
 
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})});
+                       {toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"})});
     }
     request = context
                   .scan("test_db", "l_table")
@@ -145,8 +133,8 @@ try
                           "   table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})},
+                       {toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"})},
                        2);
     }
 
@@ -162,22 +150,22 @@ try
                           "  table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana", "banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "apple", "apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana", "banana", {}}),
-                        toNullableVec<String>("join_c", {"apple", "apple", "apple", {}})},
+                       {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
+                        toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana", "banana", {}}),
+                        toNullableVec<String>({"apple", "apple", "apple", {}})},
                        2);
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana", "banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "apple", "apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana", "banana", {}}),
-                        toNullableVec<String>("join_c", {"apple", "apple", "apple", {}})},
+                       {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
+                        toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana", "banana", {}}),
+                        toNullableVec<String>({"apple", "apple", "apple", {}})},
                        3);
     }
 }
 CATCH
 
-TEST_F(ExecutorTest, JoinWithExchangeReceiver)
+TEST_F(ExecutorTestDemo, JoinWithExchangeReceiver)
 try
 {
     auto request = context
@@ -192,29 +180,29 @@ try
                           "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})},
+                       {toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"})},
                        2);
 
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})},
+                       {toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"})},
                        5);
 
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})});
+                       {toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"})});
     }
 }
 CATCH
 
-TEST_F(ExecutorTest, JoinWithTableScanAndReceiver)
+TEST_F(ExecutorTestDemo, JoinWithTableScanAndReceiver)
 try
 {
     auto request = context
@@ -229,10 +217,10 @@ try
                           "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeStreams(request,
-                       {toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"}),
-                        toNullableVec<String>("s", {"banana", "banana"}),
-                        toNullableVec<String>("join_c", {"apple", "banana"})},
+                       {toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"}),
+                        toNullableVec<String>({"banana", "banana"}),
+                        toNullableVec<String>({"apple", "banana"})},
                        2);
     }
 }

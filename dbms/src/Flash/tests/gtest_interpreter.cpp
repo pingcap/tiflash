@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/InterpreterTestUtils.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB
 {
 namespace tests
 {
-class InterpreterExecuteTest : public DB::tests::InterpreterTest
+class InterpreterExecuteTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
     {
-        InterpreterTest::initializeContext();
+        ExecutorTest::initializeContext();
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
