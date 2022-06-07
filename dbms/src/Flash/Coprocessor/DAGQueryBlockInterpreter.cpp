@@ -164,7 +164,8 @@ void DAGQueryBlockInterpreter::mockSourceStream(String executor_id, DAGPipeline 
     columns_with_type_and_name = context.getDAGContext()->columnsForTest(executor_id);
     for (const auto & col : columns_with_type_and_name)
     {
-        if (rows == 0) rows = col.column->size();
+        if (rows == 0)
+            rows = col.column->size();
         RUNTIME_ASSERT(rows == col.column->size(), log, "each column has same size");
         names_and_types.push_back({col.name, col.type});
     }
