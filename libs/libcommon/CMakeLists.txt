@@ -157,6 +157,11 @@ target_link_libraries (
     cpu_features
 )
 
+if(NOT TIFLASH_LLVM_TOOLCHAIN)
+    # on non-llvm targets, 16-byte xchg will emit call to libatomic.so.
+    target_link_libraries (common PUBLIC atomic)
+endif()
+
 if (RT_LIBRARY)
     target_link_libraries (common PUBLIC ${RT_LIBRARY})
 endif ()
