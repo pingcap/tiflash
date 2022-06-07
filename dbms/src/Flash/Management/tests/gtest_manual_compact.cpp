@@ -17,8 +17,8 @@
 #include <Poco/Logger.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <common/types.h>
