@@ -49,7 +49,7 @@
 ///    buffer can be a good choice in this case.
 /// 2. Delta Tree are updated in a CoW manner and all modifications happens in a local thread. Hence,
 ///    thread-local pools and monotonic buffers does not need thread-safety. This enables fast allocation
-///     routine.
+///    routine.
 ///
 /// However, a particular problem happens when a tree is placed back as an updated copy. How to handle
 /// the memory ownership afterwards?
