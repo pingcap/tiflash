@@ -52,6 +52,7 @@ add_library (common ${SPLIT_SHARED}
     src/crc64.cpp
     src/simd.cpp
     src/detect_features.cpp
+    src/aba.cpp
 
     include/common/types.h
     include/common/DateLUT.h
@@ -79,6 +80,8 @@ add_library (common ${SPLIT_SHARED}
     include/common/crc64_fast.h
     include/common/crc64.h
     include/common/detect_features.h
+    include/common/aba.h
+    include/common/mpmcstack.h
 
     include/ext/bit_cast.h
     include/ext/collection_cast.h
@@ -198,3 +201,20 @@ if (ARCH_AMD64)
             src/crc64_sse2_asimd.cpp
             APPEND COMPILE_FLAGS "-mpclmul")
 endif()
+
+check_cxx_compiler_flag("-march=armv8.1-a -Werror -Wall -Wextra" TIFLASH_COMPILER_ARMV8_1_SUPPORT)
+check_cxx_compiler_flag("-mcx16 -Werror -Wall -Wextra" TIFLASH_COMPILER_MCX16_SUPPORT)
+
+if (TIFLASH_COMPILER_ARMV8_1_SUPPORT)
+    set_source_files_properties(
+            src/aba.cpp
+            APPEND COMPILE_FLAGS "-march=armv8.1-a -O3")
+endif()
+
+if (TIFLASH_COMPILER_MCX16_SUPPORT)
+    set_source_files_properties(
+            src/aba.cpp
+            APPEND COMPILE_FLAGS "-mcx16 -O3")
+endif()
+
+get_source_file_property(TTT src/aba.cpp COMPILE_FLAGS)
