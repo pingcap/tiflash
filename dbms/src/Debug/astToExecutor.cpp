@@ -1757,7 +1757,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagBinary;
                 break;
-            } 
+            }
             default:
                 throw Exception(fmt::format("Unsupported window function {}", func->name), ErrorCodes::LOGICAL_ERROR);
             }
