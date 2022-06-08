@@ -17,6 +17,7 @@
 #include <DataStreams/MockTableScanBlockInputStream.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
@@ -330,6 +331,50 @@ try
         {toNullableVec<Int64>("partition", {{}, {}, 1, 1, 1, 1, 2, 2, 2, 2}), toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("rank", {1, 2, 1, 1, 3, 3, 1, 1, 3, 3}), toNullableVec<Int64>("dense_rank", {1, 2, 1, 1, 2, 2, 1, 1, 2, 2})},
         request_window_rank_int->root_executor().window(),
         request_sort_rank_int->root_executor().sort());
+}
+CATCH
+
+
+class WindowExecutorTestRunner : public DB::tests::ExecutorTest
+{
+public:
+    void initializeContext() override
+    {
+        ExecutorTest::initializeContext();
+        context.addMockTable({"test_db", "test_table"},
+                             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
+                             {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
+    }
+};
+
+TEST_F(WindowExecutorTestRunner, Test1)
+try
+{
+    /***** row_number with different types of input *****/
+    // TODO: wrap it into a function
+    MockWindowFrame frame;
+    frame.type = tipb::WindowFrameType::Rows;
+    frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
+    frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
+
+    // int - sql : select *, row_number() over w1 from test1 window w1 as (partition by partition_int order by order_int)
+    auto request = context
+                       .scan("test_db", "test_table")
+                       .window(RowNumber(), {"order", false}, {"partition", false}, frame)
+                       .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
+                       .build(context);
+    executeStreams(
+        request,
+        {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+         toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+         toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
+    // auto request_sort_int = mock_context.scan("test_db", "test_table").sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true).build(mock_context);
+    // testOneWindowFunction(
+    //     {NameAndTypePair("partition", std::make_shared<DataTypeInt64>()), NameAndTypePair("order", std::make_shared<DataTypeInt64>())},
+    //     {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})},
+    //     {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})},
+    //     request_window_int->root_executor().window(),
+    //     request_sort_int->root_executor().sort());
 }
 CATCH
 

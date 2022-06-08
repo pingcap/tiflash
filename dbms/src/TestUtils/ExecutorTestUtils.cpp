@@ -17,6 +17,7 @@
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
+#include "AggregateFunctions/registerAggregateFunctions.h"
 namespace DB::tests
 {
 DAGContext & ExecutorTest::getDAGContext()
@@ -37,7 +38,24 @@ void ExecutorTest::SetUpTestCase()
     try
     {
         DB::registerFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
+
+    try
+    {
         DB::registerAggregateFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
+
+    try
+    {
+        DB::registerWindowFunctions();
     }
     catch (DB::Exception &)
     {
