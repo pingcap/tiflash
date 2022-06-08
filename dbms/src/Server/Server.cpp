@@ -73,7 +73,6 @@
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
-#include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
@@ -1052,13 +1051,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// get server info.
     {
-        auto * request = new diagnosticspb::ServerInfoRequest();
-        request->set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+        // auto * request = new diagnosticspb::ServerInfoRequest();
+        diagnosticspb::ServerInfoRequest request;
+        request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
         auto * response = new diagnosticspb::ServerInfoResponse();
         auto * helper = tiflash_instance_wrap.proxy_helper;
         if (helper)
         {
-            std::string req = request->SerializeAsString();
+            std::string req = request.SerializeAsString();
             helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), response);
         }
         else
