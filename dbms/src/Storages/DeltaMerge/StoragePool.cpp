@@ -624,6 +624,7 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
 
         auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
         fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
+            std::lock_guard lock_for_fail_point(mutex_for_fail_point);
             static size_t fail_point_called = 0;
             if (existed_path.empty() && fail_point_called % 10 == 0)
             {
