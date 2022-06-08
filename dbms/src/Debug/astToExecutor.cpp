@@ -1354,7 +1354,6 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
     exchange_map[right_exchange_receiver->name] = std::make_pair(right_exchange_receiver, right_exchange_sender);
 }
 
-
 bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeWindow);
@@ -1457,21 +1456,6 @@ void Window::columnPrune(std::unordered_set<String> & used_columns)
                     collectUsedColumnsFromExpr(children[0]->output_schema, child, used_input_columns);
             }
         }
-    }
-    for (auto & partition_by : partition_by_exprs)
-    {
-        auto * elem = typeid_cast<ASTOrderByElement *>(partition_by.get());
-        if (!elem)
-            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
-
-        collectUsedColumnsFromExpr(children[0]->output_schema, elem->children[0], used_input_columns);
-    }
-    for (auto & order_by : order_by_exprs)
-    {
-        auto * elem = typeid_cast<ASTOrderByElement *>(order_by.get());
-        if (!elem)
-            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
-        collectUsedColumnsFromExpr(children[0]->output_schema, elem->children[0], used_input_columns);
     }
     children[0]->columnPrune(used_input_columns);
 }

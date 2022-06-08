@@ -257,7 +257,7 @@ try
 {
     auto request = context.scan("test_db", "test_table").sort({"s1", false}, true).window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame()).build(context);
     {
-        String expected = "window_2 | partition_by: {(<1, String>, desc: false)}}, order_by: {(<0, String>, desc: true)}, func_desc: {row_number()}, frame: {start<2, false, 0>, end<1, false, 0>}\n"
+        String expected = "window_2 | partition_by: {(<1, String>, desc: false)}}, order_by: {(<0, String>, desc: true)}, func_desc: {row_number()}, frame: {start<2, false, 0>, end<2, false, 0>}\n"
                           " sort_1 | isPartialSort: true, partition_by: {(<0, String>, desc: false)}\n"
                           "  table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);

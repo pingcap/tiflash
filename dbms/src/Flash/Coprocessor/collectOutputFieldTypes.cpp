@@ -57,27 +57,29 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
     }
     return false;
 }
-// ywq todo child.schema + window functions....
-bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Window & window)
+
+bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
+bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
-    for (const auto & expr : window.func_desc())
+    for (const auto & expr : executor.window().func_desc())
     {
         if (!exprHasValidFieldType(expr))
-            throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
+            throw TiFlashException("Window expression without valid field type", Errors::Coprocessor::BadRequest);
         output_field_types.push_back(expr.field_type());
     }
-    for (const auto & byitem : window.partition_by())
+    // collect output_field_types of children
+    std::vector<std::vector<tipb::FieldType>> children_output_field_types;
+    children_output_field_types.resize(2);
+    size_t child_index = 0;
+    // for join, dag_request.has_root_executor() == true, can use getChildren and traverseExecutorTree directly.
+    getChildren(executor).forEach([&children_output_field_types, &child_index](const tipb::Executor & child) {
+        auto & child_output_field_types = children_output_field_types[child_index++];
+        traverseExecutorTree(child, [&child_output_field_types](const tipb::Executor & e) { return collectForExecutor(child_output_field_types, e); });
+    });
+    assert(child_index == 1);
+    for (auto & field_type : children_output_field_types[0])
     {
-        if (!exprHasValidFieldType(byitem.expr()))
-            throw TiFlashException("partition by expression without valid field type", Errors::Coprocessor::BadRequest);
-        output_field_types.push_back(byitem.expr().field_type());
-    }
-
-    for (const auto & byitem : window.order_by())
-    {
-        if (!exprHasValidFieldType(byitem.expr()))
-            throw TiFlashException("order by expression without valid field type", Errors::Coprocessor::BadRequest);
-        output_field_types.push_back(byitem.expr().field_type());
+        output_field_types.push_back(field_type);
     }
     return false;
 }
@@ -106,7 +108,6 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
-bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
 bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
     // collect output_field_types of children
@@ -172,7 +173,7 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         // Window will only be pushed down in mpp mode.
         // In mpp mode, ExchangeSender or Sender will return output_field_types directly.
         // If not in mpp mode or debug mode, window executor type is invalid.
-        return collectForWindow(output_field_types, executor.window());
+        return collectForWindow(output_field_types, executor);
     case tipb::ExecType::TypeExchangeReceiver:
         return collectForReceiver(output_field_types, executor.exchange_receiver());
     case tipb::ExecType::TypeTableScan:
