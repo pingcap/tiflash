@@ -1,0 +1,83 @@
+
+#pragma once
+#include <common/types.h>
+
+#include <vector>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+#include <kvproto/diagnosticspb.grpc.pb.h>
+#pragma GCC diagnostic pop
+
+namespace DB
+{
+class ServerInfo
+{
+public:
+    struct CPUInfo
+    {
+        /// number of logical CPU cores
+        UInt16 logical_cores{};
+        /// number of physical CPU cores
+        UInt16 physical_cores{};
+        /// number of L1 cache size
+        /// units: Byte
+        UInt32 l1_cache_size{};
+        /// number of L2 cache size
+        /// units: Byte
+        UInt32 l2_cache_size{};
+        /// number of L3 cache size
+        /// units: Byte
+        UInt32 l3_cache_size{};
+        /// number of L1 cache line size
+        UInt8 l1_cache_line_size{};
+        /// number of L2 cache line size
+        UInt8 l2_cache_line_size{};
+        /// number of L3 cache line size
+        UInt8 l3_cache_line_size{};
+        /// CPU architecture
+        String arch;
+        /// CPU frequency
+        String frequency;
+    };
+
+    struct Disk
+    {
+        String name;
+        enum DiskType
+        {
+            HDD,
+            SSD,
+            UNKNOWN
+        };
+        DiskType disk_type;
+        UInt64 total_space;
+        UInt64 free_space;
+        String mount_point;
+        String fs_type;
+    };
+    using DiskInfo = std::vector<Disk>;
+
+    struct MemoryInfo
+    {
+        /// total memory size
+        /// units: Byte
+        UInt64 capacity;
+    };
+
+    ServerInfo() = default;
+    ~ServerInfo() = default;
+    void parseCPUInfo(const diagnosticspb::ServerInfoItem & cpu_info_item);
+    void parseDiskInfo(const diagnosticspb::ServerInfoItem & disk_info_item);
+    void parseMemoryInfo(const diagnosticspb::ServerInfoItem & memory_info_item);
+    void parseSysInfo(diagnosticspb::ServerInfoResponse & sys_info_response);
+    String debugString() const;
+
+    CPUInfo cpu_info;
+    DiskInfo disk_infos;
+    MemoryInfo memory_info{};
+};
+} // namespace DB

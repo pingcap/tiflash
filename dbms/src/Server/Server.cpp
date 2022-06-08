@@ -56,6 +56,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/ServerInfo.h>
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
@@ -1395,6 +1396,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (size == 0)
             size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+    }
+
+    /// get server info.
+    {
+        auto * request = new diagnosticspb::ServerInfoRequest();
+        request->set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+        auto * response = new diagnosticspb::ServerInfoResponse();
+        const TiFlashRaftProxyHelper * helper = global_context->getTMTContext().getKVStore()->getProxyHelper();
+        if (helper)
+        {
+            std::string req = request->SerializeAsString();
+            helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), response);
+        }
+        else
+        {
+            LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+        }
+        server_info.parseSysInfo(*response);
+        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
