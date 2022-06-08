@@ -1050,6 +1050,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_FMT_INFO(log, "tiflash proxy thread is joined");
     });
 
+    /// get server info.
+    {
+        auto * request = new diagnosticspb::ServerInfoRequest();
+        request->set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+        auto * response = new diagnosticspb::ServerInfoResponse();
+        auto * helper = tiflash_instance_wrap.proxy_helper;
+        if (helper)
+        {
+            std::string req = request->SerializeAsString();
+            helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), response);
+        }
+        else
+        {
+            LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+        }
+        server_info.parseSysInfo(*response);
+        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
+    }
+
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
@@ -1382,25 +1401,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             throw Exception("Raft Proxy Helper is not set, should not happen");
         /// initialize TMTContext
         global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
-    }
-
-    /// get server info.
-    {
-        auto * request = new diagnosticspb::ServerInfoRequest();
-        request->set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-        auto * response = new diagnosticspb::ServerInfoResponse();
-        const TiFlashRaftProxyHelper * helper = global_context->getTMTContext().getKVStore()->getProxyHelper();
-        if (helper)
-        {
-            std::string req = request->SerializeAsString();
-            helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), response);
-        }
-        else
-        {
-            LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
-        }
-        server_info.parseSysInfo(*response);
-        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
 
     /// setting up elastic thread pool
