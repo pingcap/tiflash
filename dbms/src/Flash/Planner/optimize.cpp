@@ -38,11 +38,12 @@ public:
     static RulePtr create() { return std::make_shared<FinalizeRule>(); }
 };
 
-void optimize(const Context & context, PhysicalPlanPtr plan)
+PhysicalPlanPtr optimize(const Context & context, PhysicalPlanPtr plan)
 {
     assert(plan);
     static std::vector<RulePtr> rules{FinalizeRule::create()};
     for (const auto & rule : rules)
         plan = rule->apply(context, plan);
+    return plan;
 }
 } // namespace DB

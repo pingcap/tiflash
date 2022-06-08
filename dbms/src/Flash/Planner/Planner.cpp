@@ -67,12 +67,12 @@ void Planner::executeImpl(DAGPipeline & pipeline)
     PhysicalPlanBuilder builder{context, log->identifier()};
     for (const auto & input_streams : input_streams_vec)
     {
-        assert(!input_streams.empty());
+        RUNTIME_ASSERT(!input_streams.empty(), log, "input streams cannot be empty");
         builder.buildSource(input_streams.back()->getHeader());
     }
 
     auto physical_plan = builder.getResult();
-    optimize(context, physical_plan);
+    physical_plan = optimize(context, physical_plan);
     physical_plan->transform(pipeline, context, max_streams);
 }
 } // namespace DB

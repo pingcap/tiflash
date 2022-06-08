@@ -19,5 +19,5 @@
 namespace DB
 {
 class Context;
-void optimize(const Context & context, PhysicalPlanPtr plan);
+PhysicalPlanPtr optimize(const Context & context, PhysicalPlanPtr plan);
 } // namespace DB
