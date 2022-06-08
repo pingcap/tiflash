@@ -1384,20 +1384,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
     }
 
-    /// setting up elastic thread pool
-    if (settings.enable_elastic_threadpool)
-        DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
-            settings.elastic_threadpool_init_cap,
-            std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
-
-    if (settings.enable_async_grpc_client)
-    {
-        auto size = settings.grpc_completion_queue_pool_size;
-        if (size == 0)
-            size = std::thread::hardware_concurrency();
-        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
-    }
-
     /// get server info.
     {
         auto * request = new diagnosticspb::ServerInfoRequest();
@@ -1417,6 +1403,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
 
+    /// setting up elastic thread pool
+    if (settings.enable_elastic_threadpool)
+        DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
+            settings.elastic_threadpool_init_cap,
+            std::chrono::milliseconds(settings.elastic_threadpool_shrink_period_ms));
+
+    if (settings.enable_async_grpc_client)
+    {
+        auto size = settings.grpc_completion_queue_pool_size;
+        if (size == 0)
+            size = std::thread::hardware_concurrency();
+        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+    }
+
     /// Then, startup grpc server to serve raft and/or flash services.
     FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
 
@@ -1430,10 +1430,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // on ARM processors it can show only enabled at current moment cores
             LOG_FMT_INFO(
                 log,
-                "Available RAM = {}; physical cores = {}; threads = {}.",
-                formatReadableSizeWithBinarySuffix(getMemoryAmount()),
-                getNumberOfPhysicalCPUCores(),
-                std::thread::hardware_concurrency());
+                "Available RAM = {}; physical cores = {}; logical cores = {}.",
+                server_info.memory_info.capacity,
+                server_info.cpu_info.physical_cores,
+                server_info.cpu_info.logical_cores);
         }
 
         LOG_FMT_INFO(log, "Ready for connections.");

@@ -14,10 +14,9 @@
 
 #pragma once
 
-#include <daemon/BaseDaemon.h>
-
 #include <Server/IServer.h>
 #include <Server/ServerInfo.h>
+#include <daemon/BaseDaemon.h>
 
 /** Server provides three interfaces:
   * 1. HTTP - simple interface for any applications.
