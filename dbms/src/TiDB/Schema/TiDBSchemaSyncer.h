@@ -18,7 +18,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <pingcap/kv/Cluster.h>
