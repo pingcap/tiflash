@@ -13,9 +13,7 @@
 // limitations under the License.
 #include <Storages/DeltaMerge/DTMemoryHierachy.h>
 
-#include <boost/fiber/detail/cpu_relax.hpp>
 #include <optional>
-#include <sstream>
 namespace DB::DM::Memory
 {
 #pragma push_macro("thread_local")
