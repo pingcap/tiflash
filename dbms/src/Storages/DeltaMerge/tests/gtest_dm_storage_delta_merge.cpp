@@ -31,16 +31,17 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <TestUtils/FunctionTestUtils.h>
 
 #include <limits>
-
-#include "dm_basic_include.h"
 
 namespace DB
 {
@@ -168,6 +169,8 @@ try
     }
     EXPECT_EQ(total_segment_rows, num_rows_read);
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -252,6 +255,8 @@ try
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -315,6 +320,8 @@ try
     ASSERT_EQ(sort_desc.front().nulls_direction, sort_desc2.front().nulls_direction);
 
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -609,6 +616,8 @@ try
     sample.insert(DB::tests::createColumn<String>(
         Strings(100, "a"),
         "col2"));
+    constexpr TiDB::TableID table_id = 1;
+    const String table_name = fmt::format("t_{}", table_id);
 
     Context ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
@@ -631,12 +640,11 @@ try
             path.remove(true);
 
         // primary_expr_ast
-        const String table_name = "t_1233";
         ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         TiDB::TableInfo tidb_table_info;
-        tidb_table_info.id = 1;
+        tidb_table_info.id = table_id;
 
         storage = StorageDeltaMerge::create("TiFlash",
                                             /* db_name= */ "default",
@@ -692,8 +700,8 @@ try
                 {
                     Field res;
                     c->get(i, res);
-                    ASSERT(!res.isNull());
-                    ASSERT(res.get<Int64>() == 1);
+                    ASSERT_TRUE(!res.isNull());
+                    ASSERT_EQ(res.get<Int64>(), table_id);
                 }
             }
         }
@@ -701,20 +709,35 @@ try
     in->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
 TEST(StorageDeltaMergeTest, RestoreAfterClearData)
 try
 {
-    Context ctx = DMTestEnv::getContext();
-    auto & settings = ctx.getSettingsRef();
+    auto & global_settings = ::DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef();
+    // store the old value to restore global_context settings after the test finish to avoid influence other tests
+    auto old_global_settings = global_settings;
+    SCOPE_EXIT({
+        global_settings = old_global_settings;
+    });
+    // change the settings to make it more easy to trigger splitting segments
+    Settings settings;
     settings.dt_segment_limit_rows = 11;
     settings.dt_segment_limit_size = 20;
     settings.dt_segment_delta_limit_rows = 7;
     settings.dt_segment_delta_limit_size = 20;
     settings.dt_segment_force_split_size = 100;
     settings.dt_segment_delta_cache_limit_size = 20;
+
+    // we need change the settings in both the ctx we get just below and the global_context above.
+    // because when processing write request, `DeltaMergeStore` will call `checkSegmentUpdate` with the context we just get below.
+    // and when initialize `DeltaMergeStore`, it will call `checkSegmentUpdate` with the global_context above.
+    // so we need to make the settings in these two contexts consistent.
+    global_settings = settings;
+    Context ctx = DMTestEnv::getContext(settings);
     std::shared_ptr<StorageDeltaMerge> storage;
     DataTypes data_types;
     Names column_names;
@@ -848,6 +871,8 @@ try
         ASSERT_LT(read_data(), num_rows_write);
     }
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 

@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/InterpreterTestUtils.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB
 {
 namespace tests
 {
-class InterpreterExecuteTest : public DB::tests::InterpreterTest
+class InterpreterExecuteTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
     {
-        InterpreterTest::initializeContext();
+        ExecutorTest::initializeContext();
 
         context.context.setSetting("enable_planner", "false");
 
@@ -49,7 +49,7 @@ try
                        .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Expression: <final projection>
    MergeSorting, limit = 10
@@ -74,7 +74,7 @@ Union: <for mpp>
 
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Limit, limit = 10
    Union: <for partial limit>
@@ -102,7 +102,7 @@ try
                        .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -124,7 +124,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -149,7 +149,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -183,7 +183,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Limit, limit = 10
    Union: <for partial limit>
@@ -246,7 +246,7 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockTableScan
- Union: <for mpp>
+ Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
     HashJoinProbe: <join probe, join_executor_id = Join_6>
@@ -262,7 +262,7 @@ CreatingSets
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -285,7 +285,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  MockExchangeSender x 10
   Expression: <final projection>
    Expression: <projection>
@@ -333,7 +333,7 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockExchangeReceiver
- Union: <for mpp>
+ Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
     HashJoinProbe: <join probe, join_executor_id = Join_6>
@@ -375,7 +375,7 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockExchangeReceiver
- Union: <for mpp>
+ Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>

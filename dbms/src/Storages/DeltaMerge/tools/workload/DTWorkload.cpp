@@ -233,7 +233,7 @@ void DTWorkload::verifyHandle(uint64_t r)
             }
             for (size_t i = 0; i < handle_col->size(); i++)
             {
-                // Handle must be int64 or uint64. Currently, TableGenterator would ensure this limit.
+                // Handle must be int64 or uint64. Currently, TableGenerator would ensure this limit.
                 uint64_t h = handle_col->getInt(i);
                 uint64_t store_ts = ts_col->getInt(i);
 
