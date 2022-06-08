@@ -39,7 +39,7 @@ static AllocatorMemoryResource<Allocator<false>> SYSTEM_MEMORY_RESOURCE{};
 static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL = std::nullopt;
 static thread_local std::shared_ptr<ThreadMemoryPool> PER_THREAD_MEMORY_POOL = nullptr;
 static MemoryResource::pool_options PER_THREAD_POOL_OPTIONS = defaultThreadPoolOptions();
-static size_t INITIAL_BUFFER_SIZE = 64;
+static size_t INITIAL_BUFFER_SIZE = 32 * sizeof(void *);
 
 struct DefaultMemoryInitHook
 {
