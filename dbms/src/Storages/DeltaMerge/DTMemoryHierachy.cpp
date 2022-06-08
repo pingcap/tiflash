@@ -21,11 +21,37 @@ namespace DB::DM::Memory
 #pragma push_macro("thread_local")
 #undef thread_local
 
+static MemoryResource::pool_options defaultGlobalPoolOptions()
+{
+    MemoryResource::pool_options global_opts{};
+    global_opts.max_blocks_per_chunk = 64u;
+    global_opts.largest_required_pool_block = 64u * 1024u * 1024u;
+    return global_opts;
+}
+
+static MemoryResource::pool_options defaultThreadPoolOptions()
+{
+    MemoryResource::pool_options thread_opts{};
+    thread_opts.max_blocks_per_chunk = 64u;
+    thread_opts.largest_required_pool_block = 4u * 1024u * 1024u;
+    return thread_opts;
+};
+
 static AllocatorMemoryResource<Allocator<false>> SYSTEM_MEMORY_RESOURCE{};
-static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL{&SYSTEM_MEMORY_RESOURCE};
+static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL = std::nullopt;
 static thread_local std::shared_ptr<ThreadMemoryPool> PER_THREAD_MEMORY_POOL = nullptr;
-static MemoryResource::pool_options PER_THREAD_POOL_OPTIONS{};
-static size_t INITIAL_BUFFER_SIZE = 1024;
+static MemoryResource::pool_options PER_THREAD_POOL_OPTIONS = defaultThreadPoolOptions();
+static size_t INITIAL_BUFFER_SIZE = 64;
+
+struct DefaultMemoryInitHook
+{
+    DefaultMemoryInitHook()
+    {
+        GLOBAL_MEMORY_POOL.emplace(defaultGlobalPoolOptions(), &SYSTEM_MEMORY_RESOURCE);
+    }
+};
+
+static DefaultMemoryInitHook hook{};
 
 AllocatorMemoryResource<Allocator<false>> & system_memory_source()
 {

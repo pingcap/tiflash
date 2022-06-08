@@ -53,12 +53,11 @@ static void BM_deltatree(benchmark::State & state)
     static Tree center;
     static std::mutex center_lock;
     static std::atomic_size_t finished;
-    Tree tree;
-
     for (auto _ : state)
     {
         for (int j = 0; j < 64; ++j)
         {
+            Tree tree;
             {
                 std::unique_lock lock{center_lock};
                 tree = center;
