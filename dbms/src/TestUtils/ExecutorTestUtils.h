@@ -63,6 +63,13 @@ public:
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
+    void executeStreamsWithSource(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & source_columns,
+        const ColumnsWithTypeAndName & expect_columns,
+        size_t concurrency = 1);
+
+
     template <typename T>
     ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
     {

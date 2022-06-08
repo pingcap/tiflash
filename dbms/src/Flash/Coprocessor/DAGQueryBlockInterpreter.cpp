@@ -137,7 +137,7 @@ AnalysisResult analyzeExpressions(
 
     const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
-    final_project = query_block.isRootQueryBlock()
+    final_project = query_block.isRootQueryBlock() && !context.getDAGContext()->isTest()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,
             dag_context.output_field_types,
@@ -628,6 +628,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeWindow)
     {
+        std::cout << "ywq window here" << std::endl;
         handleWindow(pipeline, query_block.source->window());
         recordProfileStreams(pipeline, query_block.source_name);
         restorePipelineConcurrency(pipeline);
@@ -689,6 +690,10 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // execute final project action
+    for (const auto & col : final_project)
+    {
+        std::cout << "col name:" << col.first << std::endl;
+    }
     executeProject(pipeline, final_project, "final projection");
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
@@ -711,6 +716,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
 void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols, const String & extra_info)
 {
+    std::cout << "extra info: " << extra_info << std::endl;
     if (project_cols.empty())
         return;
     ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);

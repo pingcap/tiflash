@@ -172,6 +172,8 @@ ASTPtr buildLiteral(const Field & field);
 ASTPtr buildFunction(MockAsts exprs, const String & name);
 ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 
+MockWindowFrame buildDefaultRowsFrame();
+
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))

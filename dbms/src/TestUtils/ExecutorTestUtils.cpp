@@ -17,7 +17,11 @@
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
+
+#include <iostream>
+
 #include "AggregateFunctions/registerAggregateFunctions.h"
+#include "Core/ColumnsWithTypeAndName.h"
 namespace DB::tests
 {
 DAGContext & ExecutorTest::getDAGContext()
@@ -135,12 +139,23 @@ void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & requ
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
-    readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
+    std::cout << "expected columns size: " << expect_columns.size() << std::endl;
+    auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
+    FmtBuffer fb;
+    res.in->dumpTree(fb);
+    readBlock(res.in, expect_columns);
 }
 
 void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
 {
     executeStreams(request, context.executorIdColumnsMap(), expect_columns, concurrency);
+}
+
+void ExecutorTest::executeStreamsWithSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
+{
+    std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
+    source_columns_map["table_scan_0"] = source_columns; // ywq todo user defined?
+    executeStreams(request, source_columns_map, expect_columns, concurrency);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

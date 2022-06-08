@@ -1010,6 +1010,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForNonRootQueryBlock(
     ExpressionActionsChain & chain,
     const String & column_prefix) const
 {
+    std::cout << "call for non root" << std::endl;
     NamesWithAliases final_project = genNonRootFinalProjectAliases(column_prefix);
 
     auto & step = initAndGetLastStep(chain);
@@ -1131,6 +1132,7 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     const String & column_prefix,
     bool keep_session_timezone_info)
 {
+    std::cout << "call for root" << std::endl;
     if (unlikely(output_offsets.empty()))
         throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
@@ -1216,6 +1218,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     {
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
+        std::cout << "append cast, expected_type:" << expected_type->getName() << ", actual_type: " << actual_type->getName() << std::endl;
         if (expected_type->getName() != actual_type->getName())
             return appendCast(expected_type, actions, expr_name);
     }

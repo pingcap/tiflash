@@ -54,6 +54,15 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
     return exp_list;
 }
 
+MockWindowFrame buildDefaultRowsFrame()
+{
+    MockWindowFrame frame;
+    frame.type = tipb::WindowFrameType::Rows;
+    frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
+    frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
+    return frame;
+}
+
 // a mock DAGRequest should prepare its time_zone, flags, encode_type and output_schema.
 void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 {

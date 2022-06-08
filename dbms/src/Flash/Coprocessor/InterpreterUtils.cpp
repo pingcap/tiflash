@@ -97,7 +97,10 @@ ExpressionActionsPtr generateProjectExpressionActions(
 {
     NamesAndTypesList input_column;
     for (const auto & column : stream->getHeader())
+    {
+        std::cout << "header col name: " << column.name << ", column type:" << column.type->getName() << std::endl;
         input_column.emplace_back(column.name, column.type);
+    }
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
     project->add(ExpressionAction::project(project_cols));
     return project;

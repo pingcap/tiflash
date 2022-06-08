@@ -25,6 +25,10 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/core.h>
 
+#include <cstddef>
+#include <iostream>
+#include <ostream>
+
 namespace DB
 {
 namespace tests
@@ -79,6 +83,18 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     const ColumnPtr & expected,
     const ColumnPtr & actual)
 {
+    for (size_t j = 0; j < actual->size(); ++j)
+    {
+        // std::cout << "actual: " << (*actual)[j].toString() << ", " << "expected: " <<  (*expected)[j].toString() << std::endl;
+        std::cout << "actual: " << (*actual)[j].toString() << std::endl;
+    }
+
+    for (size_t j = 0; j < expected->size(); ++j)
+    {
+        // std::cout << "actual: " << (*actual)[j].toString() << ", " << "expected: " <<  (*expected)[j].toString() << std::endl;
+        std::cout << "expected: " << (*expected)[j].toString() << std::endl;
+    }
+
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
     ASSERT_EQUAL(expected->size(), actual->size(), "Column size mismatch");
 
@@ -86,6 +102,14 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     {
         auto expected_field = (*expected)[i];
         auto actual_field = (*actual)[i];
+        if (expected_field != actual_field)
+        {
+            for (size_t j = 0; j < actual->size(); ++j)
+            {
+                // std::cout << "actual: " << (*actual)[j].toString() << ", " << "expected: " <<  (*expected)[j].toString() << std::endl;
+                std::cout << "actual: " << (*actual)[j].toString() << std::endl;
+            }
+        }
 
         ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value {} mismatch", i), expected_field.toString(), actual_field.toString());
     }
@@ -108,13 +132,17 @@ void blockEqual(
     const Block & actual)
 {
     size_t columns = actual.columns();
-
+    std::cout << "actual columns: " << actual.columns() << std::endl;
+    std::cout << "expected columns: " << expected.columns() << std::endl;
     ASSERT_TRUE(expected.columns() == columns);
 
     for (size_t i = 0; i < columns; ++i)
     {
         const auto & expected_col = expected.getByPosition(i);
         const auto & actual_col = actual.getByPosition(i);
+        std::cout << "actual type: " << actual_col.type->getName() << ", "
+                  << "expected_col: " << expected_col.type->getName() << std::endl;
+
         ASSERT_TRUE(actual_col.type->getName() == expected_col.type->getName());
         ASSERT_COLUMN_EQ(expected_col.column, actual_col.column);
     }
