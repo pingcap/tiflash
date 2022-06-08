@@ -3608,7 +3608,7 @@ protected:
     UInt64 ps_ver;
     DMTestEnv::PkType pk_type;
 
-    [[maybe_unused]] Poco::Logger * log;
+    Poco::Logger * log;
 };
 
 INSTANTIATE_TEST_CASE_P(

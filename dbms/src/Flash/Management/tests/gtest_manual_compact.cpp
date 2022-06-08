@@ -63,7 +63,7 @@ public:
             setupStorage();
 
             // In tests let's only compact one segment.
-            db_context->setSetting("manual_compact_more_until_ms", UInt64(0));
+            db_context->setSetting("manual_compact_more_until_ms", Field(UInt64(0)));
 
             // Split into 4 segments, and prepare some delta data for first 3 segments.
             helper = std::make_unique<DM::tests::MultiSegmentTestUtil>(*db_context);
@@ -117,7 +117,7 @@ protected:
 
     DM::tests::DMTestEnv::PkType pk_type;
 
-    [[maybe_unused]] Poco::Logger * log;
+    Poco::Logger * log;
 };
 
 
@@ -315,7 +315,7 @@ CATCH
 TEST_P(BasicManualCompactTest, CompactMultiple)
 try
 {
-    db_context->setSetting("manual_compact_more_until_ms", UInt64(60 * 1000)); // Hope it's long enough!
+    db_context->setSetting("manual_compact_more_until_ms", Field(UInt64(60 * 1000))); // Hope it's long enough!
 
     auto request = ::kvrpcpb::CompactRequest();
     request.set_physical_table_id(TABLE_ID);
