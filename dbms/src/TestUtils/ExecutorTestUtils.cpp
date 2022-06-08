@@ -112,7 +112,7 @@ void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect
 
 void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
 {
-    DAGContext dag_context(*request, "interpreter_test", concurrency);
+    DAGContext dag_context(*request, "executor_test", concurrency);
     dag_context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
