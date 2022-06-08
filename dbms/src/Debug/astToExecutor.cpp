@@ -1440,6 +1440,7 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
+// ywq todo child.schema + window functions
 void Window::columnPrune(std::unordered_set<String> & used_columns)
 {
     output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
@@ -1747,16 +1748,19 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             }
             // TODO: add more window functions
             TiDB::ColumnInfo ci;
-            if (func->name == "RowNumber" || func->name == "Rank" || func->name == "DenseRank")
+            switch (window_func_name_to_sig[func->name])
+            {
+            case tipb::ExprType::RowNumber:
+            case tipb::ExprType::Rank:
+            case tipb::ExprType::DenseRank:
             {
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagBinary;
+                break;
+            } 
+            default:
+                throw Exception(fmt::format("Unsupported window function {}", func->name), ErrorCodes::LOGICAL_ERROR);
             }
-            else
-            {
-                throw Exception("Unsupported window function " + func->name, ErrorCodes::LOGICAL_ERROR);
-            }
-
             output_schema.emplace_back(std::make_pair(func->getColumnName(), ci));
         }
     }
@@ -1766,7 +1770,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
         {
             auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
             if (!elem)
-                throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Invalid partition by element", ErrorCodes::LOGICAL_ERROR);
             partition_columns.push_back(child);
             auto ci = compileExpr(input->output_schema, elem->children[0]);
             output_schema.emplace_back(std::make_pair(elem->children[0]->getColumnName(), ci));

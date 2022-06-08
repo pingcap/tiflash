@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/executeQuery.h>
@@ -19,9 +20,6 @@
 #include <TestUtils/executorSerializer.h>
 
 #include <iostream>
-
-#include "AggregateFunctions/registerAggregateFunctions.h"
-#include "Core/ColumnsWithTypeAndName.h"
 namespace DB::tests
 {
 DAGContext & ExecutorTest::getDAGContext()

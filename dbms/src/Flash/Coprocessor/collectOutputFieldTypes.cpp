@@ -57,7 +57,7 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
     }
     return false;
 }
-
+// ywq todo child.schema + window functions....
 bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Window & window)
 {
     for (const auto & expr : window.func_desc())
@@ -81,6 +81,7 @@ bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const t
     }
     return false;
 }
+
 bool collectForReceiver(std::vector<tipb::FieldType> & output_field_types, const tipb::ExchangeReceiver & receiver)
 {
     for (const auto & field_type : receiver.field_types())

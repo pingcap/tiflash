@@ -255,11 +255,7 @@ CATCH
 TEST_F(MockDAGRequestTest, MockWindow)
 try
 {
-    MockWindowFrame frame;
-    frame.type = tipb::WindowFrameType::Rows;
-    frame.end = {tipb::WindowBoundType::Preceding, false, 0};
-    frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
-    auto request = context.scan("test_db", "test_table").sort({"s1", false}, true).window(RowNumber(), {"s1", true}, {"s2", false}, frame).build(context);
+    auto request = context.scan("test_db", "test_table").sort({"s1", false}, true).window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame()).build(context);
     {
         String expected = "window_2 | partition_by: {(<1, String>, desc: false)}}, order_by: {(<0, String>, desc: true)}, func_desc: {row_number()}, frame: {start<2, false, 0>, end<1, false, 0>}\n"
                           " sort_1 | isPartialSort: true, partition_by: {(<0, String>, desc: false)}\n"
@@ -268,6 +264,5 @@ try
     }
 }
 CATCH
-
 } // namespace tests
 } // namespace DB

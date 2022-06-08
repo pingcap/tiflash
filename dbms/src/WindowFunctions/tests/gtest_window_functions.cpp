@@ -31,9 +31,11 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-        context.addMockTable({"test_db", "test_table"},
-                             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
-                             {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
+        context.addMockTable(
+            {"test_db", "test_table"},
+            {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
+            {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+             toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
         context.addMockTable(
             {"test_db", "test_table_string"},
             {{"partition", TiDB::TP::TypeString}, {"order", TiDB::TP::TypeString}},
