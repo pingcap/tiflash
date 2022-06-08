@@ -54,7 +54,8 @@ public:
         auto inner_test = [&](bool is_str_const, bool is_length_const) {
             bool is_one_of_args_null_const = (is_str_const && !str.has_value()) || (is_length_const && !length.has_value());
             bool is_result_const = (is_str_const && is_length_const) || is_one_of_args_null_const;
-            auto expected_res_column = is_result_const ? createConstColumn<Nullable<String>>(1, result) : createColumn<Nullable<String>>({result});
+            auto expected_res_column = is_result_const ? (is_one_of_args_null_const ? createConstColumn<Nullable<String>>(1, result) : createConstColumn<String>(1, result.value()))
+                                                       : createColumn<Nullable<String>>({result});
             auto str_column = is_str_const ? createConstColumn<Nullable<String>>(1, str) : createColumn<Nullable<String>>({str});
             auto length_column = is_length_const ? createConstColumn<Nullable<Integer>>(1, length) : createColumn<Nullable<Integer>>({length});
             auto actual_res_column = executeFunction(func_name, str_column, length_column);

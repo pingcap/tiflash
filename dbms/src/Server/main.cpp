@@ -38,6 +38,9 @@
 #if ENABLE_TIFLASH_DTWORKLOAD
 #include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
 #endif
+#if ENABLE_TIFLASH_PAGECTL
+#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
+#endif
 #include <Common/StringUtils/StringUtils.h>
 #include <Server/DTTool/DTTool.h>
 
@@ -103,6 +106,9 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #endif
 #if ENABLE_TIFLASH_DTWORKLOAD
     {"dtworkload", DB::DM::tests::DTWorkload::mainEntry},
+#endif
+#if ENABLE_TIFLASH_PAGECTL
+    {"pagectl", DB::PageStorageCtl::mainEntry},
 #endif
     {"version", mainEntryVersion},
     {"errgen", mainExportError}};

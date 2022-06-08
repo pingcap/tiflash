@@ -80,6 +80,11 @@ DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing
     return page_directory->createSnapshot(tracing_id);
 }
 
+FileUsageStatistics PageStorageImpl::getFileUsageStatistics() const
+{
+    return blob_store.getFileUsageStatistics();
+}
+
 SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const
 {
     return page_directory->getSnapshotsStat();

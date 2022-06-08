@@ -23,12 +23,13 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTSegments.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/Types.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {
-StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : name(name_)
+StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
+    : name(name_)
 {
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
@@ -61,11 +62,11 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : na
 }
 
 BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
-    const SelectQueryInfo &,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+                                                const SelectQueryInfo &,
+                                                const Context & context,
+                                                QueryProcessingStage::Enum & processed_stage,
+                                                const size_t /*max_block_size*/,
+                                                const unsigned /*num_streams*/)
 {
     check(column_names);
     processed_stage = QueryProcessingStage::FetchColumns;
@@ -78,19 +79,19 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
     for (const auto & d : databases)
     {
         String database_name = d.first;
-        auto & database = d.second;
+        const auto & database = d.second;
         const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.get());
 
         auto it = database->getIterator(context);
         for (; it->isValid(); it->next())
         {
-            auto & table_name = it->name();
+            const auto & table_name = it->name();
             auto & storage = it->table();
             if (storage->getName() != MutableSupport::delta_tree_storage_name)
                 continue;
 
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            auto & table_info = dm_storage->getTableInfo();
+            const auto & table_info = dm_storage->getTableInfo();
             auto table_id = table_info.id;
             auto segment_stats = dm_storage->getStore()->getSegmentStats();
             for (auto & stat : segment_stats)

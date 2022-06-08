@@ -20,7 +20,6 @@
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
@@ -29,6 +28,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <kvproto/mpp.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Rpc.h>
