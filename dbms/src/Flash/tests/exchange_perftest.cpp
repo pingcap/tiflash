@@ -466,8 +466,7 @@ struct ReceiverHelper
             SizeLimits(0, 0, OverflowMode::THROW),
             ASTTableJoin::Kind::Inner,
             ASTTableJoin::Strictness::All,
-            "mock_req_id",
-            concurrency,
+            /*req_id=*/"",
             TiDB::TiDBCollators{nullptr},
             "",
             "",
@@ -476,7 +475,7 @@ struct ReceiverHelper
             nullptr,
             65536);
 
-        join_ptr->setSampleBlock(receiver_header);
+        join_ptr->init(receiver_header, concurrency);
 
         for (int i = 0; i < concurrency; ++i)
             streams[i] = std::make_shared<HashJoinBuildBlockInputStream>(streams[i], join_ptr, i, /*req_id=*/"");

@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Storages/Page/PageStorage.h>
+
 #include <string>
 #include <vector>
 
@@ -53,9 +55,12 @@ struct WorkloadOptions
 
     bool log_write_request;
 
-    bool enable_ps_v3;
+    PageStorageRunMode ps_run_mode;
 
     uint64_t bg_thread_count;
+
+    int64_t table_id;
+    std::string table_name;
 
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);

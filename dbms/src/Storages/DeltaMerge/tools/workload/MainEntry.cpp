@@ -22,7 +22,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <signal.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include <fstream>
@@ -37,11 +36,12 @@ void initWorkDirs(const std::vector<std::string> & dirs)
 {
     for (const auto & dir : dirs)
     {
-        int ret = ::mkdir(dir.c_str(), 0777);
-        if (ret != 0 && errno != EEXIST)
+        Poco::File d(dir);
+        if (d.exists())
         {
-            throw std::runtime_error(fmt::format("mkdir {} failed: {}", dir, strerror(errno)));
+            d.remove(true);
         }
+        d.createDirectories();
     }
 }
 
@@ -54,21 +54,6 @@ void init(WorkloadOptions & opts)
     }
     TiFlashTestEnv::setupLogger(opts.log_level, log_ofs);
     opts.initFailpoints();
-}
-
-void finish()
-{
-    log_ofs.close();
-}
-
-void removeData(Poco::Logger * log, const std::vector<std::string> & data_dirs)
-{
-    for (const auto & dir : data_dirs)
-    {
-        LOG_FMT_ERROR(log, "rm -rf {}", dir);
-        Poco::File d(dir);
-        d.remove(true);
-    }
 }
 
 void outputResultHeader()
@@ -131,7 +116,6 @@ void run(WorkloadOptions & opts)
 {
     auto * log = &Poco::Logger::get("DTWorkload_main");
     LOG_FMT_INFO(log, "{}", opts.toString());
-    auto data_dirs = DB::tests::TiFlashTestEnv::getGlobalContext().getPathPool().listPaths();
     std::vector<Statistics> stats;
     try
     {
@@ -139,24 +123,36 @@ void run(WorkloadOptions & opts)
         auto handle_table = createHandleTable(opts);
         // Table Schema
         auto table_gen = TableGenerator::create(opts);
-        auto table_info = table_gen->get();
-        // In this for loop, destory DeltaMergeStore gracefully and recreate it.
-        for (uint64_t i = 0; i < opts.verify_round; i++)
+        auto table_info = table_gen->get(opts.table_id, opts.table_name);
+        // In this for loop, destroy DeltaMergeStore gracefully and recreate it.
+        auto run_test = [&]() {
+            for (uint64_t i = 0; i < opts.verify_round; i++)
+            {
+                DTWorkload workload(opts, handle_table, table_info);
+                workload.run(i);
+                stats.push_back(workload.getStat());
+                LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
+            }
+        };
+        run_test();
+
+        if (opts.ps_run_mode == DB::PageStorageRunMode::MIX_MODE)
         {
-            DTWorkload workload(opts, handle_table, table_info);
-            workload.run(i);
-            stats.push_back(workload.getStat());
-            LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
+            // clear statistic in DB::PageStorageRunMode::ONLY_V2
+            stats.clear();
+            auto & global_context = TiFlashTestEnv::getGlobalContext();
+            global_context.setPageStorageRunMode(DB::PageStorageRunMode::MIX_MODE);
+            global_context.initializeGlobalStoragePoolIfNeed(global_context.getPathPool());
+            run_test();
         }
-        removeData(log, data_dirs);
     }
     catch (...)
     {
         DB::tryLogCurrentException("exception thrown");
+        std::abort(); // Finish testing if some error happened.
     }
 
     outputResult(log, stats, opts);
-    finish();
 }
 
 void randomKill(WorkloadOptions & opts, pid_t pid)
@@ -231,9 +227,11 @@ void dailyPerformanceTest(WorkloadOptions & opts)
 {
     outputResultHeader();
     std::vector<std::string> workloads{"uniform", "normal", "incremental"};
-    for (const auto & w : workloads)
+    for (size_t i = 0; i < workloads.size(); i++)
     {
-        opts.write_key_distribution = w;
+        opts.write_key_distribution = workloads[i];
+        opts.table_id = i;
+        opts.table_name = workloads[i];
         ::run(opts);
     }
 }
@@ -263,13 +261,15 @@ int DTWorkload::mainEntry(int argc, char ** argv)
 
     // Log file is created in the first directory of `opts.work_dirs` by default.
     // So create these work_dirs before logger initialization.
+    // Attention: This function will remove directory first if `work_dirs` exists.
     initWorkDirs(opts.work_dirs);
     // need to init logger before creating global context,
     // or the logging in global context won't be output to
     // the log file
     init(opts);
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.enable_ps_v3);
 
+    // For mixed mode, we need to run the test in ONLY_V2 mode first.
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == PageStorageRunMode::ONLY_V3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);
     if (opts.testing_type == "daily_perf")
     {
         dailyPerformanceTest(opts);
@@ -291,7 +291,6 @@ int DTWorkload::mainEntry(int argc, char ** argv)
             runAndRandomKill(opts);
         }
     }
-
     TiFlashTestEnv::shutdown();
     return 0;
 }

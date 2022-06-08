@@ -158,10 +158,14 @@ public:
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
+        {
+            // Use lock to ensure reader is created already in reactor thread
+            std::unique_lock lock(mu);
             if (!ok)
                 reader.reset();
             notifyReactor();
             break;
+        }
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
                 ++read_packet_index;
@@ -293,6 +297,8 @@ private:
     void start()
     {
         stage = AsyncRequestStage::WAIT_MAKE_READER;
+        // Use lock to ensure async reader is unreachable from grpc thread before this function returns
+        std::unique_lock lock(mu);
         rpc_context->makeAsyncReader(*request, reader, thisAsUnaryCallback());
     }
 
@@ -347,6 +353,7 @@ private:
     Status finish_status = RPCContext::getStatusOK();
     LoggerPtr log;
     bool enable_fine_grained_shuffle;
+    std::mutex mu;
 };
 } // namespace
 
@@ -369,27 +376,50 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , collected(false)
     , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
 {
-    if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
+    try
     {
-        // Fine grained shuffle is enabled.
-        for (size_t i = 0; i < max_streams_; ++i)
+        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
+        {
+            // Fine grained shuffle is enabled.
+            for (size_t i = 0; i < max_streams_; ++i)
+            {
+                msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+            }
+        }
+        else
         {
             msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
         }
+        rpc_context->fillSchema(schema);
+        setUpConnection();
     }
-    else
+    catch (...)
     {
-        msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
+        try
+        {
+            cancel();
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        }
+        throw;
     }
-    rpc_context->fillSchema(schema);
-    setUpConnection();
 }
 
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    close();
-    thread_manager->wait();
+    try
+    {
+        close();
+        thread_manager->wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+    }
 }
 
 template <typename RPCContext>
@@ -447,11 +477,11 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
     std::vector<AsyncHandler *> waiting_for_retry_requests;
 
-    std::vector<AsyncRequestHandler<RPCContext>> handlers;
+    std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(&ready_requests, msg_channels, rpc_context, req, exc_log->identifier(),
-                ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier(),
+                ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count)));
 
     while (alive_async_connections > 0)
     {

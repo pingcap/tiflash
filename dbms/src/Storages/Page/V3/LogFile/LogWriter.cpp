@@ -43,7 +43,7 @@ LogWriter::LogWriter(
         path,
         EncryptionPath(path, ""),
         false,
-        /*create_new_encryption_info_*/ false);
+        /*create_new_encryption_info_*/ true);
 
     buffer = static_cast<char *>(alloc(buffer_size));
     write_buffer = WriteBuffer(buffer, buffer_size);
@@ -69,7 +69,14 @@ size_t LogWriter::writtenBytes() const
 
 void LogWriter::flush(const WriteLimiterPtr & write_limiter, const bool background)
 {
-    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), write_limiter, /*background*/ background, /*enable_failpoint*/ false);
+    PageUtil::writeFile(log_file,
+                        written_bytes,
+                        write_buffer.buffer().begin(),
+                        write_buffer.offset(),
+                        write_limiter,
+                        /*background=*/background,
+                        /*truncate_if_failed=*/false,
+                        /*enable_failpoint=*/false);
     log_file->fsync();
     written_bytes += write_buffer.offset();
 

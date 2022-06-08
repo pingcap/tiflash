@@ -23,6 +23,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
+#include <Debug/MockTiDB.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -43,12 +44,13 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
+#include <common/logger_useful.h>
 
 #include <random>
 
@@ -86,14 +88,18 @@ StorageDeltaMerge::StorageDeltaMerge(
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
 
-    is_common_handle = false;
-    pk_is_handle = false;
     // save schema from TiDB
     if (table_info_)
     {
         tidb_table_info = table_info_->get();
         is_common_handle = tidb_table_info.is_common_handle;
         pk_is_handle = tidb_table_info.pk_is_handle;
+    }
+    else
+    {
+        const auto mock_table_id = MockTiDB::instance().newTableID();
+        tidb_table_info.id = mock_table_id;
+        LOG_FMT_WARNING(log, "Allocate table id for mock test [id={}]", mock_table_id);
     }
 
     table_column_info = std::make_unique<TableColumnInfo>(db_name_, table_name_, primary_expr_ast_);
@@ -279,13 +285,20 @@ void StorageDeltaMerge::updateTableColumnInfo()
     rowkey_column_size = rowkey_column_defines.size();
 }
 
+void StorageDeltaMerge::clearData()
+{
+    shutdown();
+    // init the store so it can clear data
+    auto & store = getAndMaybeInitStore();
+    store->clearData();
+}
+
 void StorageDeltaMerge::drop()
 {
     shutdown();
-    if (storeInited())
-    {
-        _store->drop();
-    }
+    // init the store so it can do the drop work
+    auto & store = getAndMaybeInitStore();
+    store->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
@@ -399,6 +412,10 @@ public:
     void write(const Block & block) override
     try
     {
+        // When dt_insert_max_rows (Max rows of insert blocks when write into DeltaTree Engine, default = 0) is specified,
+        // the insert block will be splited into multiples.
+        // Currently dt_insert_max_rows is only used for performance tests.
+
         if (db_settings.dt_insert_max_rows == 0)
         {
             Block to_write = decorator(block);
@@ -452,6 +469,7 @@ void StorageDeltaMerge::write(Block & block, const Settings & settings)
 #ifndef NDEBUG
     {
         // Do some check under DEBUG mode to ensure all block are written with column id properly set.
+        // In this way we can catch the case that upstream raft log contains problematic data written from TiDB.
         auto header = store->getHeader();
         bool ok = true;
         String name;
@@ -770,6 +788,11 @@ void StorageDeltaMerge::mergeDelta(const Context & context)
     getAndMaybeInitStore()->mergeDeltaAll(context);
 }
 
+std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread)
+{
+    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key, run_thread);
+}
+
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)
 {
     GET_METRIC(tiflash_storage_command_count, type_delete_range).Increment();
@@ -878,14 +901,16 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
         LOG_FMT_ERROR(log, "Rows after delete range not match, expected: {}, got: {}", (total_rows - delete_rows), after_delete_rows);
 }
 
-std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(bool need_block)
+std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool need_block)
 {
+    (void)table_structure_lock;
     std::lock_guard lock{decode_schema_mutex};
-    if (!decoding_schema_snapshot || decoding_schema_snapshot->schema_version < tidb_table_info.schema_version)
+    if (!decoding_schema_snapshot || decoding_schema_changed)
     {
         auto & store = getAndMaybeInitStore();
-        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle());
+        decoding_schema_snapshot = std::make_shared<DecodingStorageSchemaSnapshot>(store->getStoreColumns(), tidb_table_info, store->getHandle(), decoding_schema_version++);
         cache_blocks.clear();
+        decoding_schema_changed = false;
     }
 
     if (need_block)
@@ -907,10 +932,10 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
     }
 }
 
-void StorageDeltaMerge::releaseDecodingBlock(Int64 schema_version, BlockUPtr block_ptr)
+void StorageDeltaMerge::releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block_ptr)
 {
     std::lock_guard lock{decode_schema_mutex};
-    if (!decoding_schema_snapshot || schema_version < decoding_schema_snapshot->schema_version)
+    if (!decoding_schema_snapshot || block_decoding_schema_version < decoding_schema_snapshot->decoding_schema_version)
         return;
     if (cache_blocks.size() >= max_cached_blocks_num)
         return;
@@ -1090,6 +1115,7 @@ try
             updateTableColumnInfo();
         }
     }
+    decoding_schema_changed = true;
 
     SortDescription pk_desc = getPrimarySortDescription();
     ColumnDefines store_columns = getStoreColumnDefines();

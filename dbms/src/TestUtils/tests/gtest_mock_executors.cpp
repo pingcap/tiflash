@@ -12,22 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Context.h>
-#include <TestUtils/InterpreterTestUtils.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <tipb/executor.pb.h>
 
 namespace DB
 {
 namespace tests
 {
-class MockDAGRequestTest : public DB::tests::MockExecutorTest
+class MockDAGRequestTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
     {
-        dag_context_ptr = std::make_unique<DAGContext>(1024);
-        context = MockDAGRequestContext(TiFlashTestEnv::getContext());
+        ExecutorTest::initializeContext();
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
@@ -45,6 +42,8 @@ try
         String expected = "table_scan_0 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
+
+
     request = context.scan("test_db", "test_table_1").build(context);
     {
         String expected = "table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
@@ -63,10 +62,10 @@ try
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
     request = context.scan("test_db", "test_table_1")
-                  .filter(And(eq(col("s1"), col("s2")), lt(col("s2"), lt(col("s1"), col("s2")))))
+                  .filter(And(eq(col("s1"), col("s2")), lt(col("s2"), col("s2")))) // type in lt must be same
                   .build(context);
     {
-        String expected = "selection_1 | equals(<0, Long>, <1, String>) and less(<1, String>, less(<0, Long>, <1, String>))}\n"
+        String expected = "selection_1 | equals(<0, Long>, <1, String>) and less(<1, String>, <1, String>)}\n"
                           " table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
     }
