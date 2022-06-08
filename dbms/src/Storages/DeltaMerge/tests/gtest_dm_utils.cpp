@@ -14,9 +14,8 @@
 
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include "dm_basic_include.h"
 
 namespace DB
 {

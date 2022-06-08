@@ -48,6 +48,14 @@ endif ()
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 option (USE_CCACHE "Set to OFF to disable ccache" ON)
+if (USE_CCACHE)
+    set(NOT_USE_CCACHE 0)
+else()
+    set(NOT_USE_CCACHE 1)
+endif()
+
+option(ENABLE_PCH "Enable `Precompiled header`" OFF)
+
 include (cmake/find_ccache.cmake)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")

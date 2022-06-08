@@ -23,7 +23,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTTables.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {

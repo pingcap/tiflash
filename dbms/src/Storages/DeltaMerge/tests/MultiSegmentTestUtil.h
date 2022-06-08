@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -30,7 +31,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "dm_basic_include.h"
 
 namespace DB
 {
@@ -43,7 +43,6 @@ namespace DM
 {
 namespace tests
 {
-
 /// Helper class to test with multiple segments.
 /// You can call `prepareSegments` to prepare multiple segments. After that,
 /// you can use `verifyExpectedRowsForAllSegments` to verify the expectation for each segment.

@@ -27,8 +27,7 @@ namespace tests
 class StringLeftTest : public DB::tests::FunctionTest
 {
 public:
-    // leftUTF8(str,len) = substrUTF8(str,const 1,len)
-    static constexpr auto func_name = "substringUTF8";
+    static constexpr auto func_name = "leftUTF8";
 
     template <typename Integer>
     void testBoundary()
@@ -53,14 +52,14 @@ public:
     template <typename Integer>
     void test(const std::optional<String> & str, const std::optional<Integer> & length, const std::optional<String> & result)
     {
-        const auto start_column = createConstColumn<Int64>(1, 1);
         auto inner_test = [&](bool is_str_const, bool is_length_const) {
             bool is_one_of_args_null_const = (is_str_const && !str.has_value()) || (is_length_const && !length.has_value());
             bool is_result_const = (is_str_const && is_length_const) || is_one_of_args_null_const;
-            auto expected_res_column = is_result_const ? createConstColumn<Nullable<String>>(1, result) : createColumn<Nullable<String>>({result});
+            auto expected_res_column = is_result_const ? (is_one_of_args_null_const ? createConstColumn<Nullable<String>>(1, result) : createConstColumn<String>(1, result.value()))
+                                                       : createColumn<Nullable<String>>({result});
             auto str_column = is_str_const ? createConstColumn<Nullable<String>>(1, str) : createColumn<Nullable<String>>({str});
             auto length_column = is_length_const ? createConstColumn<Nullable<Integer>>(1, length) : createColumn<Nullable<Integer>>({length});
-            auto actual_res_column = executeFunction(func_name, str_column, start_column, length_column);
+            auto actual_res_column = executeFunction(func_name, str_column, length_column);
             ASSERT_COLUMN_EQ(expected_res_column, actual_res_column);
         };
         std::vector<bool> is_consts = {true, false};
@@ -78,7 +77,6 @@ public:
                 executeFunction(
                     func_name,
                     is_str_const ? createConstColumn<Nullable<String>>(1, "") : createColumn<Nullable<String>>({""}),
-                    createConstColumn<Int64>(1, 1),
                     is_length_const ? createConstColumn<Nullable<Integer>>(1, 0) : createColumn<Nullable<Integer>>({0})),
                 Exception);
         };
@@ -132,7 +130,6 @@ try
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({big_string, origin_str, origin_str, mixed_language_str}),
-            createConstColumn<Int64>(8, 1),
             createColumn<Nullable<Int64>>({22, 12, 22, english_str.size()})));
     // case 2
     String second_case_string = "abc";
@@ -141,14 +138,12 @@ try
         executeFunction(
             func_name,
             createColumn<Nullable<String>>({second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string, second_case_string}),
-            createConstColumn<Int64>(8, 1),
             createColumn<Nullable<Int64>>({0, 1, 0, 1, 0, 0, 1, 1})));
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<String>>({"", "a", "", "a", "", "", "a", "a"}),
         executeFunction(
             func_name,
             createConstColumn<Nullable<String>>(8, second_case_string),
-            createConstColumn<Int64>(8, 1),
             createColumn<Nullable<Int64>>({0, 1, 0, 1, 0, 0, 1, 1})));
 }
 CATCH

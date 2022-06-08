@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/astToExecutor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
@@ -130,11 +131,23 @@ public:
         return DAGRequestBuilder(index);
     }
 
-    void addMockTable(const MockTableName & name, const MockColumnInfoList & columns);
-    void addMockTable(const String & db, const String & table, const MockColumnInfos & columns);
-    void addMockTable(const MockTableName & name, const MockColumnInfos & columns);
-    void addExchangeRelationSchema(String name, const MockColumnInfos & columns);
-    void addExchangeRelationSchema(String name, const MockColumnInfoList & columns);
+    void addMockTable(const MockTableName & name, const MockColumnInfoList & columnInfos);
+    void addMockTable(const String & db, const String & table, const MockColumnInfos & columnInfos);
+    void addMockTable(const MockTableName & name, const MockColumnInfos & columnInfos);
+    void addExchangeRelationSchema(String name, const MockColumnInfos & columnInfos);
+    void addExchangeRelationSchema(String name, const MockColumnInfoList & columnInfos);
+    void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const String & db, const String & table, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const MockTableName & name, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const MockTableName & name, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
+    void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
+    void addExchangeReceiver(const String & name, MockColumnInfos columnInfos, ColumnsWithTypeAndName columns);
+    void addExchangeReceiver(const String & name, MockColumnInfoList columnInfos, ColumnsWithTypeAndName columns);
+
+    std::unordered_map<String, ColumnsWithTypeAndName> & executorIdColumnsMap() { return executor_id_columns_map; }
+
     DAGRequestBuilder scan(String db_name, String table_name);
     DAGRequestBuilder receive(String exchange_name);
 
@@ -142,6 +155,9 @@ private:
     size_t index;
     std::unordered_map<String, MockColumnInfos> mock_tables;
     std::unordered_map<String, MockColumnInfos> exchange_schemas;
+    std::unordered_map<String, ColumnsWithTypeAndName> mock_table_columns;
+    std::unordered_map<String, ColumnsWithTypeAndName> mock_exchange_columns;
+    std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map; /// <executor_id, columns>
 
 public:
     // Currently don't support task_id, so the following to structure is useless,

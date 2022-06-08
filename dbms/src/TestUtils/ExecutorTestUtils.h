@@ -28,7 +28,7 @@
 namespace DB::tests
 {
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
-class InterpreterTest : public ::testing::Test
+class ExecutorTest : public ::testing::Test
 {
 protected:
     void SetUp() override
@@ -38,7 +38,7 @@ protected:
     }
 
 public:
-    InterpreterTest()
+    ExecutorTest()
         : context(TiFlashTestEnv::getContext())
     {}
     static void SetUpTestCase();
@@ -52,6 +52,40 @@ public:
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
+
+    void executeStreams(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
+        const ColumnsWithTypeAndName & expect_columns,
+        size_t concurrency = 1);
+    void executeStreams(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & expect_columns,
+        size_t concurrency = 1);
+
+    template <typename T>
+    ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+    {
+        return createColumn<Nullable<T>>(v);
+    }
+
+    template <typename T>
+    ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
+    {
+        return createColumn<T>(v);
+    }
+
+    template <typename T>
+    ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+    {
+        return createColumn<Nullable<T>>(v, name);
+    }
+
+    template <typename T>
+    ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
+    {
+        return createColumn<T>(v, name);
+    }
 
 protected:
     MockDAGRequestContext context;

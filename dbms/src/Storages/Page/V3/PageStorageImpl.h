@@ -72,6 +72,8 @@ public:
 
     SnapshotsStatistics getSnapshotsStat() const override;
 
+    FileUsageStatistics getFileUsageStatistics() const override;
+
     size_t getNumberOfPages() override;
 
     std::set<PageId> getAliveExternalPageIds(NamespaceId ns_id) override;
@@ -113,7 +115,7 @@ public:
 #endif
 
     friend class PageDirectoryFactory;
-    friend class PageStorageControl;
+    friend class PageStorageControlV3;
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
