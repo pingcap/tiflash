@@ -480,7 +480,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier(),
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, msg_channels, rpc_context, req, exc_log->identifier(),
                 ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count)));
 
     while (alive_async_connections > 0)

@@ -518,55 +518,6 @@ bool schemaMatch(const DAGSchema & left, const DAGSchema & right)
     return true;
 }
 
-void DAGQueryBlockInterpreter::executeRemoteQueryImpl(
-    DAGPipeline & pipeline,
-    std::vector<RemoteRequest> & remote_requests)
-{
-    assert(!remote_requests.empty());
-    DAGSchema & schema = remote_requests[0].schema;
-#ifndef NDEBUG
-    for (size_t i = 1; i < remote_requests.size(); i++)
-    {
-        if (!schemaMatch(schema, remote_requests[i].schema))
-            throw Exception("Schema mismatch between different partitions for partition table");
-    }
-#endif
-    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
-    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
-    std::vector<pingcap::coprocessor::copTask> all_tasks;
-    for (const auto & remote_request : remote_requests)
-    {
-        pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
-        remote_request.dag_request.SerializeToString(&(req->data));
-        req->tp = pingcap::coprocessor::ReqType::DAG;
-        req->start_ts = context.getSettingsRef().read_tso;
-        req->schema_version = context.getSettingsRef().schema_version;
-
-        pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-        pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-        all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
-    }
-
-    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
-    size_t task_per_thread = all_tasks.size() / concurrent_num;
-    size_t rest_task = all_tasks.size() % concurrent_num;
-    for (size_t i = 0, task_start = 0; i < concurrent_num; i++)
-    {
-        size_t task_end = task_start + task_per_thread;
-        if (i < rest_task)
-            task_end++;
-        if (task_end == task_start)
-            continue;
-        std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
-
-        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), query_block.source_name, 0 /* stream_id */);
-        pipeline.streams.push_back(input);
-        task_start = task_end;
-    }
-}
-
 void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 {
     auto it = dagContext().getMPPExchangeReceiverMap().find(query_block.source_name);
