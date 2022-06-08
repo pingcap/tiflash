@@ -252,7 +252,7 @@ protected:
 
 protected:
     template <bool must_exist = true>
-    void decreasePageRef(PageId page_id);
+    void decreasePageRef(PageId page_id, bool keep_tombstone);
 
     void copyEntries(const PageEntriesMixin & rhs)
     {
@@ -370,8 +370,10 @@ void PageEntriesMixin<T>::del(PageId page_id)
     const size_t num_erase = page_ref.erase(page_id);
     if (num_erase > 0)
     {
-        // decrease origin page's ref counting
-        decreasePageRef<must_exist>(normal_page_id);
+        // decrease origin page's ref counting, this method can
+        // only called by base, so we should remove the entry if
+        // the ref count down to zero
+        decreasePageRef<must_exist>(normal_page_id, /*keep_tombstone=*/false);
     }
 }
 
@@ -392,7 +394,9 @@ void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
             // if RefPage{ref-id} -> Page{normal_page_id} already exists, just ignore
             if (ori_ref->second == normal_page_id)
                 return;
-            decreasePageRef<true>(ori_ref->second);
+            // this method can only called by base, so we should remove the entry if
+            // the ref count down to zero
+            decreasePageRef<true>(ori_ref->second, /*keep_tombstone=*/false);
         }
         // build ref
         page_ref[ref_id] = normal_page_id;
@@ -408,7 +412,7 @@ void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
 
 template <typename T>
 template <bool must_exist>
-void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
+void PageEntriesMixin<T>::decreasePageRef(const PageId page_id, bool keep_tombstone)
 {
     auto iter = normal_pages.find(page_id);
     if constexpr (must_exist)
@@ -421,8 +425,11 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
     if (iter != normal_pages.end())
     {
         auto & entry = iter->second;
-        entry.ref -= 1;
-        if (entry.ref == 0)
+        if (entry.ref > 0)
+        {
+            entry.ref -= 1;
+        }
+        if (!keep_tombstone && entry.ref == 0)
         {
             normal_pages.erase(iter);
         }
@@ -620,7 +627,10 @@ private:
             {
                 ref_deletions.insert(page_id);
             }
-            decreasePageRef<false>(page_id);
+            // If this is the base version, we should remove the entry if
+            // the ref count down to zero. Otherwise it is the delta version
+            // we should keep a tombstone.
+            decreasePageRef<false>(page_id, /*keep_tombstone=*/!this->isBase());
         }
         for (auto it : rhs.page_ref)
         {

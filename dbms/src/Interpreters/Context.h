@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
