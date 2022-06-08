@@ -200,7 +200,6 @@ private:
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     std::mutex mutex;
-    std::mutex mutex_for_fail_point;
 
     Context & global_context;
 
