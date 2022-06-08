@@ -1051,7 +1051,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// get server info.
     {
-        // auto * request = new diagnosticspb::ServerInfoRequest();
         diagnosticspb::ServerInfoRequest request;
         request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
         auto * response = new diagnosticspb::ServerInfoResponse();
