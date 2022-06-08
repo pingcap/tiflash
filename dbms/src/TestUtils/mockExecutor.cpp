@@ -367,6 +367,8 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
     auto builder = DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
+    // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
+    // If user don't want to test executors, it will be safe to run Interpreter Tests.
     if (mock_table_columns.find(db_name + "." + table_name) != mock_table_columns.end())
     {
         executor_id_columns_map[builder.getRoot()->name] = mock_table_columns[db_name + "." + table_name];
@@ -378,6 +380,8 @@ DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name)
 {
     auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name]);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
+    // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
+    // If user don't want to test executors, it will be safe to run Interpreter Tests.
     if (mock_exchange_columns.find(exchange_name) != mock_exchange_columns.end())
     {
         executor_id_columns_map[builder.getRoot()->name] = mock_exchange_columns[exchange_name];
