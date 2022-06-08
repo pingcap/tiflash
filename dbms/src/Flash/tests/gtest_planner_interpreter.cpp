@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/InterpreterTestUtils.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
-namespace DB::tests
+namespace DB
 {
-class PlannerTest : public DB::tests::InterpreterTest
+namespace tests
+{
+class PlannerInterpreterExecuteTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
     {
-        InterpreterTest::initializeContext();
+        ExecutorTest::initializeContext();
 
         context.context.setSetting("enable_planner", "true");
 
@@ -36,7 +38,7 @@ public:
     }
 };
 
-TEST_F(PlannerTest, SingleQueryBlock)
+TEST_F(PlannerInterpreterExecuteTest, SimpleQuery)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -47,7 +49,7 @@ try
                        .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Expression: <final projection>
    MergeSorting, limit = 10
@@ -72,7 +74,7 @@ Union: <for mpp>
 
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Limit, limit = 10
    Union: <for partial limit>
@@ -90,7 +92,7 @@ Union: <for mpp>
 }
 CATCH
 
-TEST_F(PlannerTest, MultipleQueryBlockWithSource)
+TEST_F(PlannerInterpreterExecuteTest, ComplexQuery)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -100,7 +102,7 @@ try
                        .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -122,7 +124,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -147,7 +149,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -181,7 +183,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Limit, limit = 10
    Union: <for partial limit>
@@ -244,7 +246,7 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockTableScan
- Union: <for mpp>
+ Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
     HashJoinProbe: <join probe, join_executor_id = Join_6>
@@ -260,7 +262,7 @@ CreatingSets
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -283,7 +285,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  MockExchangeSender x 10
   Expression: <final projection>
    Expression: <projection>
@@ -331,7 +333,7 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockExchangeReceiver
- Union: <for mpp>
+ Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
     HashJoinProbe: <join probe, join_executor_id = Join_6>
@@ -373,7 +375,7 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockExchangeReceiver
- Union: <for mpp>
+ Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>
@@ -385,4 +387,150 @@ CreatingSets
 }
 CATCH
 
-} // namespace DB::tests
+TEST_F(PlannerInterpreterExecuteTest, ParallelQuery)
+try
+{
+    /// executor with table scan
+    auto request = context.scan("test_db", "test_table_1")
+        .limit(10)
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .project({"s1", "s2", "s3"})
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .topN("s2", false, 10)
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .filter(eq(col("s2"), col("s3")))
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 5);
+    }
+
+    /// other cases
+    request = context.scan("test_db", "test_table_1")
+        .limit(10)
+        .project({"s1", "s2", "s3"})
+        .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .topN("s2", false, 10)
+        .project({"s1", "s2", "s3"})
+        .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+        .project({"s2", "s3"})
+        .aggregation({Max(col("s2"))}, {col("s3")})
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+        .exchangeSender(tipb::PassThrough)
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .topN("s2", false, 10)
+        .exchangeSender(tipb::PassThrough)
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+        .limit(10)
+        .exchangeSender(tipb::PassThrough)
+        .build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+
+        expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    DAGRequestBuilder table1 = context.scan("test_db", "r_table");
+    DAGRequestBuilder table2 = context.scan("test_db", "l_table");
+    request = table1.join(table2.limit(1), {col("join_c")}, ASTTableJoin::Kind::Left).build(context);
+    {
+        String expected;
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
+} // namespace tests
+} // namespace DB
