@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "Server.h"
-
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
@@ -56,6 +54,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/Server.h>
 #include <Server/ServerInfo.h>
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>

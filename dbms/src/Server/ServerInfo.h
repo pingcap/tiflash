@@ -13,8 +13,11 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <common/getMemoryAmount.h>
 #include <common/types.h>
 
+#include <thread>
 #include <vector>
 
 #pragma GCC diagnostic push
@@ -33,9 +36,9 @@ public:
     struct CPUInfo
     {
         /// number of logical CPU cores
-        UInt16 logical_cores = 0; // set default value to 0 which means INVALID server info
+        UInt16 logical_cores = std::thread::hardware_concurrency();
         /// number of physical CPU cores
-        UInt16 physical_cores = 1; // the minimum number of physical_cores is 1
+        UInt16 physical_cores = getNumberOfPhysicalCPUCores();
         /// number of L1 cache size
         /// units: Byte
         UInt32 l1_cache_size = 16384; // 16KB (typical value)
@@ -78,7 +81,7 @@ public:
     {
         /// total memory size
         /// units: Byte
-        UInt64 capacity = 0;
+        UInt64 capacity = getMemoryAmount();
     };
 
     ServerInfo() = default;
