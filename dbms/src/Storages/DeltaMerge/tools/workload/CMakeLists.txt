@@ -18,6 +18,3 @@ set(dt-workload-src MainEntry.cpp DTWorkload.cpp KeyGenerator.cpp TableGenerator
 
 add_library(dt-workload-lib ${dt-workload-src})
 target_link_libraries(dt-workload-lib dbms clickhouse_functions clickhouse-server-lib)
-
-add_executable(dt-workload Main.cpp ${dt-workload-src})
-target_link_libraries(dt-workload dbms gtest clickhouse_functions clickhouse-server-lib)
