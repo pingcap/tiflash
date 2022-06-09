@@ -144,9 +144,9 @@ void ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DA
     executeStreams(request, source_columns_map, expect_columns, concurrency);
 }
 
-
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
 {
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
 }
+
 } // namespace DB::tests
