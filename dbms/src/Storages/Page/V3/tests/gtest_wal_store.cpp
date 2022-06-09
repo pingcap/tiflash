@@ -34,8 +34,8 @@ namespace DB::PS::V3::tests
 {
 TEST(WALSeriTest, AllPuts)
 {
-    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver20(/*seq=*/20);
     PageEntriesEdit edit;
     edit.put(1, entry_p1);
@@ -56,8 +56,8 @@ TEST(WALSeriTest, AllPuts)
 TEST(WALSeriTest, PutsAndRefsAndDels)
 try
 {
-    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver21(/*seq=*/21);
     PageEntriesEdit edit;
     edit.put(3, entry_p3);
@@ -104,9 +104,9 @@ CATCH
 
 TEST(WALSeriTest, Upserts)
 {
-    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
     PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     PageEntriesEdit edit;
@@ -164,7 +164,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
 
     {
         PageEntriesEdit edit;
-        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         edit.varEntry(1, ver1_0, entry_p1_2, 2);
         edit.varDel(1, ver2_0);
         edit.varRef(2, ver3_0, 1);
@@ -405,8 +405,8 @@ try
     ASSERT_NE(wal, nullptr);
 
     // Stage 2. Apply with only puts
-    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
@@ -435,8 +435,8 @@ try
     }
 
     // Stage 3. Apply with puts and refs
-    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
@@ -468,9 +468,9 @@ try
 
 
     // Stage 4. Apply with delete and upsert
-    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
     PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
@@ -514,8 +514,8 @@ try
 
     std::vector<size_t> size_each_edit;
     // Stage 1. Apply with only puts
-    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p2{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
@@ -526,8 +526,8 @@ try
     }
 
     // Stage 2. Apply with puts and refs
-    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3{.file_id = 1, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5{.file_id = 1, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
@@ -540,9 +540,9 @@ try
     }
 
     // Stage 3. Apply with delete and upsert
-    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p3_2{.file_id = 2, .size = 3, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_p5_2{.file_id = 2, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
     PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
@@ -615,7 +615,7 @@ try
     PageVersion ver(/*seq*/ 32);
     for (size_t i = 0; i < num_edits_test; ++i)
     {
-        PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+        PageEntryV3 entry{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         PageEntriesEdit edit;
         const size_t num_pages_put = d_20(rd);
         for (size_t p = 0; p < num_pages_put; ++p)
@@ -660,7 +660,7 @@ try
                                       .persisted_log_files = persisted_log_files};
 
     PageEntriesEdit snap_edit;
-    PageEntryV3 entry{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     std::uniform_int_distribution<> d_10000(0, 10000);
     // just fill in some random entry
     for (size_t i = 0; i < 70; ++i)
