@@ -1140,7 +1140,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
         std::thread thread_hold_snapshots([this, tasks]() {
             LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
-            std::this_thread::sleep_for(std::chrono::seconds(120 + 60 * 60));
+            std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
             (void)tasks;
             LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
         });
