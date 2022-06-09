@@ -31,7 +31,7 @@ public:
         , key(0)
     {}
 
-    virtual uint64_t get64() override
+    uint64_t get64() override
     {
         return key.fetch_add(1, std::memory_order_relaxed) % key_count + start_key;
     }
@@ -54,7 +54,7 @@ public:
         , uniform_dist(0, key_count)
     {}
 
-    virtual uint64_t get64() override
+    uint64_t get64() override
     {
         std::lock_guard lock(mtx);
         return uniform_dist(rand_gen);
@@ -78,7 +78,7 @@ public:
         , normal_dist(key_count / 2.0, key_count / 20.0)
     {}
 
-    virtual uint64_t get64() override
+    uint64_t get64() override
     {
         std::lock_guard lock(mtx);
         return normal_dist(rand_gen);

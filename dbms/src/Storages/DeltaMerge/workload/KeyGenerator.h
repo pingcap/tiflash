@@ -23,8 +23,8 @@ class KeyGenerator
 public:
     static std::unique_ptr<KeyGenerator> create(const WorkloadOptions & opts);
 
-    KeyGenerator() {}
-    virtual ~KeyGenerator() {}
+    KeyGenerator() = default;
+    virtual ~KeyGenerator() = default;
 
     virtual uint64_t get64() = 0;
 };

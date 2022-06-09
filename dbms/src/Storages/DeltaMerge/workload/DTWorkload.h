@@ -73,7 +73,7 @@ private:
 class Statistics
 {
 public:
-    Statistics(int write_thread_count = 0, int read_thread_count = 0)
+    explicit Statistics(int write_thread_count = 0, int read_thread_count = 0)
         : init_ms(0)
         , write_stats(write_thread_count)
         , read_stats(read_thread_count)

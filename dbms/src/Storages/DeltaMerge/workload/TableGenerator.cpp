@@ -237,7 +237,7 @@ public:
         , rand_gen(std::random_device()())
     {}
 
-    virtual TableInfo get(int64_t table_id, std::string table_name) override
+    TableInfo get(int64_t table_id, std::string table_name) override
     {
         TableInfo table_info;
 
@@ -293,7 +293,7 @@ private:
 
 class ConstantTableGenerator : public TableGenerator
 {
-    virtual TableInfo get(int64_t table_id, std::string table_name) override
+    TableInfo get(int64_t table_id, std::string table_name) override
     {
         TableInfo table_info;
 

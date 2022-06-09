@@ -40,7 +40,7 @@ public:
     static constexpr uint64_t default_lock_count = 4096;
 
     static std::unique_ptr<HandleLock> create(const TableInfo & table_info);
-    HandleLock(uint64_t lock_count = default_lock_count)
+    explicit HandleLock(uint64_t lock_count = default_lock_count)
         : rmtxs(lock_count)
     {}
 
@@ -51,14 +51,14 @@ public:
 
     std::vector<std::unique_lock<std::recursive_mutex>> getLocks(const std::vector<uint64_t> & handles)
     {
-        std::vector<uint64_t> indexes;
+        std::vector<uint64_t> indexes(handles.size());
         for (const auto & h : handles)
         {
             indexes.push_back(index(h));
         }
         // Sort mutex indexes to avoid dead lock.
         sort(indexes.begin(), indexes.end());
-        std::vector<std::unique_lock<std::recursive_mutex>> locks;
+        std::vector<std::unique_lock<std::recursive_mutex>> locks(indexes.size());
         for (auto i : indexes)
         {
             locks.push_back(getLockByIndex(i));
@@ -105,7 +105,7 @@ public:
         std::lock_guard lock(mtx);
         handle_to_ts[handle] = ts;
         Record r{handle, ts};
-        if (wal != nullptr && wal->write((char *)&r, sizeof(r)) != sizeof(r))
+        if (wal != nullptr && wal->write(reinterpret_cast<char *>(&r), sizeof(r)) != sizeof(r))
         {
             throw std::runtime_error(fmt::format("write ret {}", strerror(errno)));
         }
@@ -134,8 +134,8 @@ private:
         try
         {
             PosixRandomAccessFile f(fname, -1);
-            Record r;
-            while (f.read((char *)&r, sizeof(r)) == sizeof(r))
+            Record r{};
+            while (f.read(reinterpret_cast<char *>(&r), sizeof(r)) == sizeof(r))
             {
                 handle_to_ts[r.handle] = r.ts;
             }
@@ -156,7 +156,7 @@ private:
         for (const auto & pa : handle_to_ts)
         {
             Record r{pa.first, pa.second};
-            if (f.write((char *)&r, sizeof(r)) != sizeof(r))
+            if (f.write(reinterpret_cast<char *>(&r), sizeof(r)) != sizeof(r))
             {
                 throw std::runtime_error(fmt::format("write ret {}", strerror(errno)));
             }
@@ -191,7 +191,7 @@ class SharedHandleTable
 public:
     static constexpr uint64_t default_shared_count = 4096;
 
-    SharedHandleTable(uint64_t max_key_count, const std::string & waldir = "", uint64_t shared_cnt = default_shared_count)
+    explicit SharedHandleTable(uint64_t max_key_count, const std::string & waldir = "", uint64_t shared_cnt = default_shared_count)
         : tables(shared_cnt)
     {
         uint64_t max_key_count_per_shared = max_key_count / default_shared_count + 1;

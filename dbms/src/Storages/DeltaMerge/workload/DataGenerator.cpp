@@ -33,7 +33,7 @@ public:
         , rand_gen(std::random_device()())
     {}
 
-    virtual std::tuple<Block, uint64_t> get(uint64_t key) override
+    std::tuple<Block, uint64_t> get(uint64_t key) override
     {
         Block block;
         // Generate 'rowkeys'.
@@ -227,7 +227,9 @@ private:
     struct tm randomLocalTime()
     {
         time_t t = randomUTCTimestamp();
-        struct tm res;
+        struct tm res
+        {
+        };
         if (localtime_r(&t, &res) == nullptr)
         {
             throw std::invalid_argument(fmt::format("localtime_r({}) ret {}", t, strerror(errno)));

@@ -83,7 +83,7 @@ std::string fieldToString(const DataTypePtr & data_type, const Field & f)
         }
         else if (t == Field::Types::Which::Decimal256)
         {
-            auto i = f.get<Decimal256>();
+            const auto & i = f.get<Decimal256>();
             auto scale = dynamic_cast<const DataTypeDecimal256 *>(data_type.get())->getScale();
             return i.toString(scale);
         }
@@ -105,8 +105,8 @@ std::vector<std::string> colToVec(const DataTypePtr & data_type, const ColumnPtr
 std::string blockToString(const Block & block)
 {
     std::string s = "id name type values\n";
-    auto & cols = block.getColumnsWithTypeAndName();
-    for (auto & col : cols)
+    const auto & cols = block.getColumnsWithTypeAndName();
+    for (const auto & col : cols)
     {
         s += fmt::format("{} {} {} {}\n", col.column_id, col.name, col.type->getFamilyName(), colToVec(col.type, col.column));
     }

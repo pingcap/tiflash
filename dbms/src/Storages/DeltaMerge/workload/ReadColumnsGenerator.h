@@ -28,7 +28,7 @@ public:
         return std::make_unique<ReadColumnsGenerator>(table_info);
     }
 
-    ReadColumnsGenerator(const TableInfo & table_info_)
+    explicit ReadColumnsGenerator(const TableInfo & table_info_)
         : table_info(table_info_)
         , rand_gen(std::random_device()())
         , uniform_dist(0, table_info_.columns->size() - 1)

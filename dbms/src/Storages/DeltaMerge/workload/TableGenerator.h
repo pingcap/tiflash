@@ -38,6 +38,6 @@ public:
 
     virtual TableInfo get(int64_t table_id, std::string table_name) = 0;
 
-    virtual ~TableGenerator() {}
+    virtual ~TableGenerator() = default;
 };
 } // namespace DB::DM::tests
