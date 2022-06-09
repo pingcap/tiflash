@@ -15,7 +15,6 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <common/types.h>
-#include "common/defines.h"
 
 namespace DB
 {
