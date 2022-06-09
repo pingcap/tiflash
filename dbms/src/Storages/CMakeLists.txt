@@ -15,8 +15,8 @@
 add_subdirectory (System)
 add_subdirectory (Page)
 add_subdirectory (DeltaMerge/File/dtpb)
-add_subdirectory (DeltaMerge/tools)
-add_subdirectory (Page/stress)
+add_subdirectory (DeltaMerge/workload)
+add_subdirectory (Page/workload)
 
 if (ENABLE_TESTS)
     add_subdirectory (tests EXCLUDE_FROM_ALL)

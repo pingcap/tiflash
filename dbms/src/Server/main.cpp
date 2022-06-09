@@ -36,10 +36,10 @@
 #include <Server/DTTool/DTTool.h>
 #endif
 #if ENABLE_TIFLASH_DTWORKLOAD
-#include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
+#include <Storages/DeltaMerge/workload/DTWorkload.h>
 #endif
 #if ENABLE_TIFLASH_PAGEWORKLOAD
-#include <Storages/Page/stress/workload/PSWorkload.h>
+#include <Storages/Page/workload/PSWorkload.h>
 #endif
 #if ENABLE_TIFLASH_PAGECTL
 #include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
