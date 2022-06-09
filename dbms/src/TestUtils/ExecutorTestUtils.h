@@ -63,6 +63,7 @@ public:
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
+    // ywq todo source_columns should be a map...
     void executeStreamsWithSource(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const ColumnsWithTypeAndName & source_columns,
