@@ -424,9 +424,6 @@ else (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are disabled")
 endif (ENABLE_FAILPOINTS)
 
-# Enable PageStorage V3 test.
-option (ENABLE_V3_PAGESTORAGE "Enables V3 PageStorage" ON)
-
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
 option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
