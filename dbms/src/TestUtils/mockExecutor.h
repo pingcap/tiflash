@@ -20,10 +20,6 @@
 #include <Parsers/ASTFunction.h>
 #include <tipb/executor.pb.h>
 
-#include <initializer_list>
-#include <unordered_map>
-#include <utility>
-
 namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;

@@ -941,10 +941,6 @@ bool TopN::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
         tipb::ByItem * by = topn->add_order_by();
         by->set_desc(elem->direction < 0);
         tipb::Expr * expr = by->mutable_expr();
-        expr->mutable_field_type()->set_flen(11);
-        expr->mutable_field_type()->set_decimal(0);
-        expr->mutable_field_type()->set_charset("binary");
-        expr->mutable_field_type()->set_collate(63);
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
     topn->set_limit(limit);
@@ -1371,7 +1367,7 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         }
         auto window_sig_it = window_func_name_to_sig.find(window_func->name);
         if (window_sig_it == window_func_name_to_sig.end())
-            throw Exception("Unsupported window function " + window_func->name, ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Unsupported window function {}", window_func->name), ErrorCodes::LOGICAL_ERROR);
         auto window_sig = window_sig_it->second;
         window_expr->set_tp(window_sig);
         auto * ft = window_expr->mutable_field_type();
@@ -1412,7 +1408,6 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         expr->mutable_field_type()->set_collate(63);
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
-
 
     if (frame.type.has_value())
     {

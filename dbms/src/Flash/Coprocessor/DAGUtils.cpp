@@ -29,6 +29,7 @@
 #include <unordered_map>
 namespace DB
 {
+
 const Int8 VAR_SIZE = 0;
 
 extern const String uniq_raw_res_name;

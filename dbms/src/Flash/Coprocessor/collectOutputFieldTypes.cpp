@@ -16,9 +16,6 @@
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <common/types.h>
 
-#include "tipb/executor.pb.h"
-#include "tipb/expression.pb.h"
-
 namespace DB
 {
 namespace

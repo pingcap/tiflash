@@ -25,6 +25,7 @@
 #include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
+
 namespace DB::tests
 {
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
@@ -63,13 +64,25 @@ public:
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
-    // ywq todo source_columns should be a map...
-    void executeStreamsWithSource(
+    enum SourceType {TableScan, ExchangeReceiver};
+    void executeStreamsWithSingleSource(
         const std::shared_ptr<tipb::DAGRequest> & request,
+        SourceType type,
         const ColumnsWithTypeAndName & source_columns,
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
+    void executeStreamsWithSingleTableScanSource(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & source_columns,
+        const ColumnsWithTypeAndName & expect_columns,
+        size_t concurrency = 1);
+    
+    void executeStreamsWithSingleExchangeReceiverSource(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & source_columns,
+        const ColumnsWithTypeAndName & expect_columns,
+        size_t concurrency = 1);
 
     template <typename T>
     ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
@@ -94,6 +107,9 @@ public:
     {
         return createColumn<T>(v, name);
     }
+
+
+    // todo move to cpp
 
     static ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp)
     {
