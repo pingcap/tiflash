@@ -25,7 +25,11 @@ namespace DB
 class PhysicalLeaf : public PhysicalPlan
 {
 public:
-    PhysicalLeaf(const String & executor_id_, const PlanType & type_, const NamesAndTypes & schema_, const String & req_id)
+    PhysicalLeaf(
+        const String & executor_id_,
+        const PlanType & type_,
+        const NamesAndTypes & schema_,
+        const String & req_id)
         : PhysicalPlan(executor_id_, type_, schema_, req_id)
     {}
 
