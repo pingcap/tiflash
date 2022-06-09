@@ -502,22 +502,6 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
     pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
 }
 
-bool schemaMatch(const DAGSchema & left, const DAGSchema & right)
-{
-    if (left.size() != right.size())
-        return false;
-    for (size_t i = 0; i < left.size(); i++)
-    {
-        const auto & left_ci = left[i];
-        const auto & right_ci = right[i];
-        if (left_ci.second.tp != right_ci.second.tp)
-            return false;
-        if (left_ci.second.flag != right_ci.second.flag)
-            return false;
-    }
-    return true;
-}
-
 void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 {
     auto it = dagContext().getMPPExchangeReceiverMap().find(query_block.source_name);
@@ -525,12 +509,12 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
-    size_t stream_idx = 0;
+    size_t stream_id = 0;
     for (size_t i = 0; i < max_streams; ++i)
     {
         if (dagContext().enableFineGrainedShuffle())
-            stream_idx = i;
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name, stream_idx);
+            stream_id = i;
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name, stream_id);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         stream->setExtraInfo("squashing after exchange receiver");

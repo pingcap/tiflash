@@ -37,21 +37,19 @@ struct ReceivedMessage
 {
     size_t source_index;
     String req_info;
-
-    // Make sure error_ptr, resp_ptr and chunks pointer to the data inside packet,
-    // So packet can make sure data is valid.
+    // shared_ptr<const MPPDataPacket> is copied, so error_ptr, resp_ptr and chunks are valid.
     const std::shared_ptr<const MPPDataPacket> packet;
     const mpp::Error * error_ptr;
     const String * resp_ptr;
     std::vector<const String *> chunks;
 
-    // Construct that move MPPDataPacketPtr.
+    // Constructor that move chunks.
     ReceivedMessage(size_t source_index_,
                     const String & req_info_,
-                    const std::shared_ptr<const MPPDataPacket> & packet_ = std::make_shared<const MPPDataPacket>(),
-                    const mpp::Error * error_ptr_ = nullptr,
-                    const String * resp_ptr_ = nullptr,
-                    std::vector<const String *> && chunks_ = std::vector<const String *>())
+                    const std::shared_ptr<const MPPDataPacket> & packet_,
+                    const mpp::Error * error_ptr_,
+                    const String * resp_ptr_,
+                    std::vector<const String *> && chunks_)
         : source_index(source_index_)
         , req_info(req_info_)
         , packet(packet_)

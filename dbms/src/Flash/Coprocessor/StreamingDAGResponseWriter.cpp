@@ -122,9 +122,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 template <class StreamWriterPtr>
 bool StreamingDAGResponseWriter<StreamWriterPtr>::canUseFineGrainedShuffle() const
 {
-    // Fine grained shuffle will only be enabled when exchange_type is Hash,
-    // TODO: if enableFineGrainedShuffle flag can be set for each operator instead of each MPPTask,
-    //       we can set it properly in TiDB and no need to check exchange_type in TiFlash.
+    // Fine grained shuffle will only be enabled when exchange_type is Hash.
     return enableFineGrainedShuffle(fine_grained_shuffle_stream_count) && exchange_type == tipb::ExchangeType::Hash;
 }
 
@@ -155,7 +153,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
                 packet.add_chunks(chunk_codec_stream->getString());
-                // Fine grained shuffle is disabled, so all packet will be handled by receiver's first stream.
+                // Fine grained shuffle is disabled, all packet need to be handled by receiver's first stream.
                 packet.add_stream_ids(0);
                 chunk_codec_stream->clear();
             }
@@ -448,7 +446,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
             for (uint32_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
             {
                 Block dest_block = blocks[0].cloneEmpty();
-                // TODO: we put all rows into one Block, may cause this Block too large.
+                // For now we put all rows into one Block, may cause this Block too large.
                 dest_block.setColumns(std::move(final_dest_tbl_columns[bucket_idx + stream_idx]));
                 row_count_per_part += dest_block.rows();
 

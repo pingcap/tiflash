@@ -94,7 +94,7 @@ struct MockReceiverContext
 
     struct MockAsyncGrpcExchangePacketReader
     {
-        // Not implement benchmark for Async GRPC for now.
+        // Async GRPC not implemented for now.
         void init(UnaryCallback<bool> *) { assert(0); }
         void read(MPPDataPacketPtr &, UnaryCallback<bool> *) { assert(0); }
         void finish(::grpc::Status &, UnaryCallback<bool> *) { assert(0); }

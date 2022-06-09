@@ -41,8 +41,12 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
     }
 }
 
-// Seperate chunks if recv_msg specify stream_id for each chunk, then push to corresponding msg_channel.
-// Return true if push succeed.
+// If enable_fine_grained_shuffle:
+//      Seperate chunks according to packet.stream_ids[i], then push to msg_channels[stream_id].
+// If fine grained_shuffle is disabled:
+//      Push all chunks to msg_channels[0].
+// Return true if all push succeed, otherwise return false.
+// NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
 bool pushPacket(size_t source_index,
                 const String & req_info,
                 MPPDataPacketPtr & packet,
@@ -51,25 +55,30 @@ bool pushPacket(size_t source_index,
                 LoggerPtr & log)
 {
     bool push_succeed = true;
+
     const mpp::Error * error_ptr = nullptr;
     if (packet->has_error())
         error_ptr = packet->mutable_error();
     const String * resp_ptr = nullptr;
+    if (!packet->data().empty())
+        resp_ptr = packet->mutable_data();
+
     if (enable_fine_grained_shuffle)
     {
+        if (unlikely(packet->stream_ids().empty()))
+        {
+            // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
+            // This can happen when there are old version nodes when upgrading.
+            LOG_FMT_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary \
+                    (source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. Cannot handle this.", source_index);
+            return false;
+        }
+
         assert(packet->chunks_size() == packet->stream_ids_size());
         std::vector<std::vector<const String *>> chunks(msg_channels.size());
         if (!packet->chunks().empty())
         {
-            // packet not empty.
-            if (unlikely(packet->stream_ids().empty()))
-            {
-                // Fine grained shuffle is enabled in receiver, but sender didn't, we cannot handle this, so return error.
-                // This can happen when there are old version nodes when upgrading.
-                // TODO: think real error message.
-                LOG_FMT_ERROR(log, "MPPDataPacket.stream_ids empty, can happen if sender is old version");
-                return false;
-            }
+            // Packet not empty.
             for (int i = 0; i < packet->stream_ids_size(); ++i)
             {
                 UInt32 stream_id = packet->stream_ids(i) % msg_channels.size();
@@ -78,13 +87,15 @@ bool pushPacket(size_t source_index,
         }
         for (size_t i = 0; i < msg_channels.size() && push_succeed; ++i)
         {
-            if (i == 0)
-                resp_ptr = packet->mutable_data();
-            else
-                resp_ptr = nullptr;
+            if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
+                continue;
+
             std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
                     source_index, req_info, packet, error_ptr, resp_ptr, std::move(chunks[i]));
             push_succeed = msg_channels[i]->push(std::move(recv_msg));
+
+            // Only the first ExchangeReceiverInputStream need to handle resp.
+            resp_ptr = nullptr;
         }
     }
     else
@@ -94,11 +105,14 @@ bool pushPacket(size_t source_index,
         {
             chunks[i] = packet->mutable_chunks(i);
         }
-        resp_ptr = packet->mutable_data();
-        std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
-                source_index, req_info, packet, error_ptr, resp_ptr, std::move(chunks));
 
-        push_succeed = msg_channels[0]->push(std::move(recv_msg));
+        if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
+        {
+            std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
+                    source_index, req_info, packet, error_ptr, resp_ptr, std::move(chunks));
+
+            push_succeed = msg_channels[0]->push(std::move(recv_msg));
+        }
     }
     LOG_FMT_DEBUG(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}",
             msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
@@ -322,7 +336,6 @@ private:
             if (!pushPacket(request->source_index, req_info, packet, msg_channels, enable_fine_grained_shuffle, log))
                 return false;
             // Update packets[i].
-            // TODO: really check this.
             packet = std::make_shared<MPPDataPacket>();
         }
         return true;
@@ -380,7 +393,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     {
         if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
         {
-            // Fine grained shuffle is enabled.
             for (size_t i = 0; i < max_streams_; ++i)
             {
                 msg_channels.push_back(std::make_shared<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
@@ -554,7 +566,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 bool success = reader->read(packet);
                 if (!success)
                     break;
-                auto recv_msg = std::make_shared<ReceivedMessage>(req.source_index, req_info);
                 has_data = true;
                 if (packet->has_error())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
@@ -633,9 +644,9 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     if (recv_msg->chunks.empty())
         return detail;
 
+    // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = recv_msg->packet->ByteSizeLong();
 
-    /// ExchangeReceiverBase should receive chunks of TypeCHBlock.
     for (const String * chunk : recv_msg->chunks)
     {
         Block block = CHBlockChunkCodec::decode(*chunk, header);
@@ -653,7 +664,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
     if (unlikely(stream_id >= msg_channels.size()))
     {
         LoggerPtr log = Logger::get("ExchangeReceiver", exc_log->identifier());
-        LOG_FMT_ERROR(log, "unexpected stream_id for ExchangeReceiver, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
+        LOG_FMT_ERROR(log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
         return {nullptr, 0, "", true, "stream_id out of range", false};
     }
     std::shared_ptr<ReceivedMessage> recv_msg;
