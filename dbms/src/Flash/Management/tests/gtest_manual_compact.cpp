@@ -14,7 +14,6 @@
 
 #include <Common/FailPoint.h>
 #include <Flash/Management/ManualCompact.h>
-#include <Poco/Logger.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -48,7 +47,6 @@ public:
 
     BasicManualCompactTest()
     {
-        log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
         pk_type = GetParam();
     }
 
@@ -116,8 +114,6 @@ protected:
     std::unique_ptr<DB::Management::ManualCompactManager> manager;
 
     DM::tests::DMTestEnv::PkType pk_type;
-
-    Poco::Logger * log;
 };
 
 

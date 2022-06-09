@@ -3564,7 +3564,6 @@ class DeltaMergeStoreMergeDeltaBySegmentTest
 public:
     DeltaMergeStoreMergeDeltaBySegmentTest()
     {
-        log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
         std::tie(ps_ver, pk_type) = GetParam();
     }
 
@@ -3607,8 +3606,6 @@ protected:
 
     UInt64 ps_ver;
     DMTestEnv::PkType pk_type;
-
-    Poco::Logger * log;
 };
 
 INSTANTIATE_TEST_CASE_P(
