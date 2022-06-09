@@ -285,7 +285,7 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItem order_by, MockOrderByItem partition_by, MockWindowFrame frame)
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame)
 {
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();
@@ -294,7 +294,7 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItems order_by_list, MockOrderByItems partition_by_list, MockWindowFrame frame)
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame)
 {
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();
@@ -303,7 +303,7 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::window(MockAsts window_funcs, MockOrderByItems order_by_list, MockOrderByItems partition_by_list, MockWindowFrame frame)
+DAGRequestBuilder & DAGRequestBuilder::window(MockAsts window_funcs, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame)
 {
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();

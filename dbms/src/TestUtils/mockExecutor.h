@@ -22,6 +22,7 @@
 
 #include <initializer_list>
 #include <unordered_map>
+#include <utility>
 
 namespace DB::tests
 {
@@ -31,6 +32,8 @@ using MockColumnInfoList = std::initializer_list<MockColumnInfo>;
 using MockTableName = std::pair<String, String>;
 using MockOrderByItem = std::pair<String, bool>;
 using MockOrderByItems = std::initializer_list<MockOrderByItem>;
+using MockPartitionByItem = std::pair<String, bool>;
+using MockPartitionByItems = std::initializer_list<MockPartitionByItem>;
 using MockColumnNames = std::initializer_list<String>;
 using MockAsts = std::initializer_list<ASTPtr>;
 using MockWindowFrame = mock::MockWindowFrame;
@@ -98,9 +101,9 @@ public:
     DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
 
     // window
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockOrderByItem partition_by, MockWindowFrame frame);
-    DAGRequestBuilder & window(MockAsts window_funcs, MockOrderByItems order_by_list, MockOrderByItems partition_by_list, MockWindowFrame frame);
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItems order_by_list, MockOrderByItems partition_by_list, MockWindowFrame frame);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame);
+    DAGRequestBuilder & window(MockAsts window_funcs, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame);
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort);
     DAGRequestBuilder & sort(MockOrderByItems order_by_list, bool is_partial_sort);
 

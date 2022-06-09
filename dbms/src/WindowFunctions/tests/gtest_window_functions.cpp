@@ -67,7 +67,7 @@ public:
              toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
     }
 };
-// todo datetime.... 2 parkey 2 order key
+
 TEST_F(WindowExecutorTestRunner, Test1)
 try
 {
@@ -167,7 +167,7 @@ try
     // sql : select *, row_number() over w1 from test6 window w1 as (partition by partition_int1, partition_int2 order by order_int1,order_int2)
     request = context
                   .scan("test_db", "test_table_more_cols")
-                  .sort({{"partition1", false}, {"order1", false}, {"partition2", false}, {"order2", false}}, true)
+                  .sort({{"partition1", false}, {"partition2", false}, {"order1", false}, {"order2", false}}, true)
                   .window(RowNumber(), {{"order1", false}, {"order2", false}}, {{"partition1", false}, {"partition2", false}}, buildDefaultRowsFrame())
                   .build(context);
 

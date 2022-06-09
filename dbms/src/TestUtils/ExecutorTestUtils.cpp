@@ -137,7 +137,6 @@ void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & requ
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
-    std::cout << "expected columns size: " << expect_columns.size() << std::endl;
     auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
     FmtBuffer fb;
     res.in->dumpTree(fb);
