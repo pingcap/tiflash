@@ -64,7 +64,11 @@ public:
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
-    enum SourceType {TableScan, ExchangeReceiver};
+    enum SourceType
+    {
+        TableScan,
+        ExchangeReceiver
+    };
     void executeStreamsWithSingleSource(
         const std::shared_ptr<tipb::DAGRequest> & request,
         SourceType type,
@@ -77,75 +81,44 @@ public:
         const ColumnsWithTypeAndName & source_columns,
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
-    
+
     void executeStreamsWithSingleExchangeReceiverSource(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const ColumnsWithTypeAndName & source_columns,
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
-    template <typename T>
-    ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
-    {
-        return createColumn<Nullable<T>>(v);
-    }
-
-    template <typename T>
-    ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
-    {
-        return createColumn<T>(v);
-    }
-
-    template <typename T>
-    ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
-    {
-        return createColumn<Nullable<T>>(v, name);
-    }
-
-    template <typename T>
-    ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
-    {
-        return createColumn<T>(v, name);
-    }
-
-
-    // todo move to cpp
-
-    static ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp)
-    {
-        std::vector<typename TypeTraits<MyDateTime>::FieldType> vec;
-        for (const auto & value_str : v)
-        {
-            Field value = parseMyDateTime(value_str, fsp);
-            vec.push_back(value.template safeGet<UInt64>());
-        }
-        DataTypePtr data_type = std::make_shared<DataTypeMyDateTime>(fsp);
-        return {makeColumn<MyDateTime>(data_type, vec), data_type, name, 0};
-    }
-
-    static ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp)
-    {
-        std::vector<std::optional<typename TypeTraits<MyDateTime>::FieldType>> vec;
-        for (const auto & value_str : v)
-        {
-            if (!value_str.empty())
-            {
-                Field value = parseMyDateTime(value_str, fsp);
-                vec.push_back(value.template safeGet<UInt64>());
-            }
-            else
-            {
-                vec.push_back({});
-            }
-        }
-        DataTypePtr data_type = makeNullable(std::make_shared<DataTypeMyDateTime>(fsp));
-        return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
-    }
-
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
+
+ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp);
+ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp);
+
+template <typename T>
+ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v, name);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v, name);
+}
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))

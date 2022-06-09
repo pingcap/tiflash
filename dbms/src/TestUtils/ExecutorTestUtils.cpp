@@ -18,6 +18,7 @@
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
+
 #include <functional>
 
 namespace DB::tests
@@ -166,6 +167,37 @@ void ExecutorTest::executeStreamsWithSingleExchangeReceiverSource(const std::sha
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
 {
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
+}
+
+ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp)
+{
+    std::vector<typename TypeTraits<MyDateTime>::FieldType> vec;
+    for (const auto & value_str : v)
+    {
+        Field value = parseMyDateTime(value_str, fsp);
+        vec.push_back(value.template safeGet<UInt64>());
+    }
+    DataTypePtr data_type = std::make_shared<DataTypeMyDateTime>(fsp);
+    return {makeColumn<MyDateTime>(data_type, vec), data_type, name, 0};
+}
+
+ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp)
+{
+    std::vector<std::optional<typename TypeTraits<MyDateTime>::FieldType>> vec;
+    for (const auto & value_str : v)
+    {
+        if (!value_str.empty())
+        {
+            Field value = parseMyDateTime(value_str, fsp);
+            vec.push_back(value.template safeGet<UInt64>());
+        }
+        else
+        {
+            vec.push_back({});
+        }
+    }
+    DataTypePtr data_type = makeNullable(std::make_shared<DataTypeMyDateTime>(fsp));
+    return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
 }
 
 } // namespace DB::tests
