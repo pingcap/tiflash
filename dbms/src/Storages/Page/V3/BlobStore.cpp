@@ -836,7 +836,7 @@ BlobFilePtr BlobStore::read(const PageIdV3Internal & page_id_v3, BlobFileId blob
     catch (DB::Exception & e)
     {
         // add debug message
-        e.addMessage(fmt::format("(error while reading page data [page_id={}] [blob_id={}] [offset={}] [size={}])", page_id_v3, blob_id, offset, size));
+        e.addMessage(fmt::format("(error while reading page data [page_id={}] [blob_id={}] [offset={}] [size={}] [background={}])", page_id_v3, blob_id, offset, size, background));
         e.rethrow();
     }
     return blob_file;
