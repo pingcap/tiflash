@@ -83,18 +83,6 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     const ColumnPtr & expected,
     const ColumnPtr & actual)
 {
-    for (size_t j = 0; j < actual->size(); ++j)
-    {
-        // std::cout << "actual: " << (*actual)[j].toString() << ", " << "expected: " <<  (*expected)[j].toString() << std::endl;
-        std::cout << "actual: " << (*actual)[j].toString() << std::endl;
-    }
-
-    for (size_t j = 0; j < expected->size(); ++j)
-    {
-        // std::cout << "actual: " << (*actual)[j].toString() << ", " << "expected: " <<  (*expected)[j].toString() << std::endl;
-        std::cout << "expected: " << (*expected)[j].toString() << std::endl;
-    }
-
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
     ASSERT_EQUAL(expected->size(), actual->size(), "Column size mismatch");
 
@@ -106,8 +94,8 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
         {
             for (size_t j = 0; j < actual->size(); ++j)
             {
-                // std::cout << "actual: " << (*actual)[j].toString() << ", " << "expected: " <<  (*expected)[j].toString() << std::endl;
-                std::cout << "actual: " << (*actual)[j].toString() << std::endl;
+                std::cout << "actual: " << (*actual)[j].toString() << ", "
+                          << "expected: " << (*expected)[j].toString() << std::endl;
             }
         }
 

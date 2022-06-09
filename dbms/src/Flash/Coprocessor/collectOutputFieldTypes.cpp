@@ -16,6 +16,9 @@
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <common/types.h>
 
+#include "tipb/executor.pb.h"
+#include "tipb/expression.pb.h"
+
 namespace DB
 {
 namespace
@@ -61,16 +64,10 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
 bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
 bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
-    for (const auto & expr : executor.window().func_desc())
-    {
-        if (!exprHasValidFieldType(expr))
-            throw TiFlashException("Window expression without valid field type", Errors::Coprocessor::BadRequest);
-        output_field_types.push_back(expr.field_type());
-    }
     // collect output_field_types of children
     std::vector<std::vector<tipb::FieldType>> children_output_field_types;
-    children_output_field_types.resize(2);
     size_t child_index = 0;
+    children_output_field_types.resize(1);
     // for join, dag_request.has_root_executor() == true, can use getChildren and traverseExecutorTree directly.
     getChildren(executor).forEach([&children_output_field_types, &child_index](const tipb::Executor & child) {
         auto & child_output_field_types = children_output_field_types[child_index++];
@@ -80,6 +77,12 @@ bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const t
     for (auto & field_type : children_output_field_types[0])
     {
         output_field_types.push_back(field_type);
+    }
+    for (const auto & expr : executor.window().func_desc())
+    {
+        if (!exprHasValidFieldType(expr))
+            throw TiFlashException("Window expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(expr.field_type());
     }
     return false;
 }

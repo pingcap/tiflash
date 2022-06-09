@@ -100,7 +100,7 @@ public:
     // window
     DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockOrderByItem partition_by, MockWindowFrame frame);
     DAGRequestBuilder & window(MockAsts window_funcs, MockOrderByItems order_by_list, MockOrderByItems partition_by_list, MockWindowFrame frame);
-
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItems order_by_list, MockOrderByItems partition_by_list, MockWindowFrame frame);
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort);
     DAGRequestBuilder & sort(MockOrderByItems order_by_list, bool is_partial_sort);
 

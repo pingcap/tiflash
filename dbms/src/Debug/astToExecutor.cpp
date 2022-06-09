@@ -1439,7 +1439,6 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-// ywq todo child.schema + window functions
 void Window::columnPrune(std::unordered_set<String> & used_columns)
 {
     output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),

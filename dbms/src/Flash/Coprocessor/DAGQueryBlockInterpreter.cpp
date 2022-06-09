@@ -137,7 +137,7 @@ AnalysisResult analyzeExpressions(
 
     const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
-    final_project = query_block.isRootQueryBlock() && !context.getDAGContext()->isTest()
+    final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,
             dag_context.output_field_types,

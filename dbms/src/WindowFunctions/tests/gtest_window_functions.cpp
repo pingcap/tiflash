@@ -43,19 +43,31 @@ public:
              toVec<String>("order", {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"})});
 
         context.addMockTable(
-            {"test_db", "test_table_decimal"},
-            {{"partition", TiDB::TP::TypeDecimal}, {"order", TiDB::TP::TypeDecimal}},
+            {"test_db", "test_table_more_cols"},
+            {{"partition1", TiDB::TP::TypeLongLong}, {"partition2", TiDB::TP::TypeLongLong}, {"order1", TiDB::TP::TypeLongLong}, {"order2", TiDB::TP::TypeLongLong}},
+            {toVec<Int64>("partition1", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}),
+             toVec<Int64>("partition2", {1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2}),
+             toVec<Int64>("order1", {2, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1}),
+             toVec<Int64>("order2", {2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1})});
+
+        context.addMockTable(
+            {"test_db", "test_table_float64"},
+            {{"partition", TiDB::TP::TypeDouble}, {"order", TiDB::TP::TypeDouble}},
             {toVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
              toVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00})});
 
         context.addMockTable(
+            {"test_db", "test_table_datetime"},
+            {{"partition", TiDB::TP::TypeDatetime}, {"order", TiDB::TP::TypeDatetime}});
+
+        context.addMockTable(
             {"test_db", "test_table_for_rank"},
-            {{"partition", TiDB::TP::TypeLong}, {"order", TiDB::TP::TypeLong}},
+            {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
             {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
              toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
     }
 };
-
+// todo datetime.... 2 parkey 2 order key
 TEST_F(WindowExecutorTestRunner, Test1)
 try
 {
@@ -68,8 +80,8 @@ try
                        .build(context);
     executeStreams(
         request,
-        {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-         toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+        {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
 
     // null input
@@ -93,8 +105,8 @@ try
 
     executeStreams(
         request,
-        {toVec<String>("partition", {"apple", "apple", "apple", "apple", "banana", "banana", "banana", "banana"}),
-         toVec<String>("order", {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"}),
+        {toNullableVec<String>("partition", {"apple", "apple", "apple", "apple", "banana", "banana", "banana", "banana"}),
+         toNullableVec<String>("order", {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"}),
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
 
     // nullable
@@ -106,17 +118,17 @@ try
          toNullableVec<String>("order", {{}, "apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"}),
          toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})});
 
-    // decimal - sql : select *, row_number() over w1 from test3 window w1 as (partition by partition_float order by order_decimal)
+    // float64 - sql : select *, row_number() over w1 from test3 window w1 as (partition by partition_float order by order_float64)
     request = context
-                  .scan("test_db", "test_table_decimal")
+                  .scan("test_db", "test_table_float64")
                   .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
                   .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .build(context);
 
     executeStreams(
         request,
-        {toVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
-         toVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00}),
+        {toNullableVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
+         toNullableVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00}),
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
 
     // nullable
@@ -128,13 +140,51 @@ try
          toNullableVec<Float64>("order", {{}, 1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00}),
          toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})});
 
+    // datetime - select *, row_number() over w1 from test4 window w1 as (partition by partition_datetime order by order_datetime);
+    request = context
+                  .scan("test_db", "test_table_datetime")
+                  .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
+                  .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+                  .build(context);
+    executeStreamsWithSource(
+        request,
+        {toNullableDatetimeVec("partition", {"20220101010102", "20220101010102", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010101", "20220101010101"}, 0),
+         toDatetimeVec("order", {"20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0)},
+        {toNullableDatetimeVec("partition", {"20220101010101", "20220101010101", "20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010102", "20220101010102"}, 0),
+         toNullableDatetimeVec("order", {"20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0),
+         toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
+
+    // nullable
+    executeStreamsWithSource(
+        request,
+        {toNullableDatetimeVec("partition", {"20220101010102", {}, "20220101010102", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010101", "20220101010101"}, 0),
+         toNullableDatetimeVec("order", {"20220101010101", {}, "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0)},
+        {toNullableDatetimeVec("partition", {{}, "20220101010101", "20220101010101", "20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010102", "20220101010102"}, 0),
+         toNullableDatetimeVec("order", {{}, "20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0),
+         toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})});
+
+    // 2 partiton key and 2 order key
+    // sql : select *, row_number() over w1 from test6 window w1 as (partition by partition_int1, partition_int2 order by order_int1,order_int2)
+    request = context
+                  .scan("test_db", "test_table_more_cols")
+                  .sort({{"partition1", false}, {"order1", false}, {"partition2", false}, {"order2", false}}, true)
+                  .window(RowNumber(), {{"order1", false}, {"order2", false}}, {{"partition1", false}, {"partition2", false}}, buildDefaultRowsFrame())
+                  .build(context);
+
+    executeStreams(
+        request,
+        {toNullableVec<Int64>("partition1", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}),
+         toNullableVec<Int64>("partition2", {1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2}),
+         toNullableVec<Int64>("order1", {1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 2}),
+         toNullableVec<Int64>("order2", {1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2}),
+         toNullableVec<Int64>("row_number", {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3})});
 
     /***** rank, dense_rank *****/
     request = context.scan("test_db", "test_table_for_rank").sort({{"partition", false}, {"order", false}}, true).window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame{}).build(context);
     executeStreams(
         request,
-        {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-         toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+        {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
          toNullableVec<Int64>("rank", {1, 1, 3, 3, 1, 1, 3, 3}),
          toNullableVec<Int64>("dense_rank", {1, 1, 2, 2, 1, 1, 2, 2})});
 

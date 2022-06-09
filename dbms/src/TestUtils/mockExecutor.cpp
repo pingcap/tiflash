@@ -23,8 +23,6 @@
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
 
-#include <unordered_map>
-
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -105,6 +103,8 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
         ret.name = column.first;
+        if (ret.tp == TiDB::TP::TypeNewDecimal)
+            ret.flen = 65;
         ret.id = i++;
         table_info.columns.push_back(std::move(ret));
     }
@@ -291,6 +291,15 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     auto window_func_list = std::make_shared<ASTExpressionList>();
     window_func_list->children.push_back(window_func);
     root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList({partition_by}), buildOrderByItemList({order_by}), frame);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItems order_by_list, MockOrderByItems partition_by_list, MockWindowFrame frame)
+{
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    window_func_list->children.push_back(window_func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(partition_by_list), buildOrderByItemList(order_by_list), frame);
     return *this;
 }
 
