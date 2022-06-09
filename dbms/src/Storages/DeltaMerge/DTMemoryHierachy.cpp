@@ -35,8 +35,8 @@ static MemoryResource::pool_options defaultThreadPoolOptions()
     return thread_opts;
 };
 
-static AllocatorMemoryResource<Allocator<false>> SYSTEM_MEMORY_RESOURCE{};
-static std::optional<boost::container::pmr::synchronized_pool_resource> GLOBAL_MEMORY_POOL = std::nullopt;
+static DefaultNumaResource SYSTEM_MEMORY_RESOURCE{};
+static std::optional<NumaResourcePool> GLOBAL_MEMORY_POOL = std::nullopt;
 static thread_local std::shared_ptr<ThreadMemoryPool> PER_THREAD_MEMORY_POOL = nullptr;
 static MemoryResource::pool_options PER_THREAD_POOL_OPTIONS = defaultThreadPoolOptions();
 static size_t INITIAL_BUFFER_SIZE = 32 * sizeof(void *);
@@ -51,12 +51,12 @@ struct DefaultMemoryInitHook
 
 static DefaultMemoryInitHook hook{};
 
-AllocatorMemoryResource<Allocator<false>> & system_memory_source()
+DefaultNumaResource & system_memory_source()
 {
     return SYSTEM_MEMORY_RESOURCE;
 }
 
-boost::container::pmr::synchronized_pool_resource & global_memory_pool()
+NumaResourcePool & global_memory_pool()
 {
     return *GLOBAL_MEMORY_POOL;
 }
@@ -80,7 +80,7 @@ std::shared_ptr<ThreadMemoryPool> per_thread_memory_pool()
 {
     if (unlikely(!PER_THREAD_MEMORY_POOL))
     {
-        PER_THREAD_MEMORY_POOL = std::make_shared<ThreadMemoryPool>(PER_THREAD_POOL_OPTIONS, &*GLOBAL_MEMORY_POOL);
+        PER_THREAD_MEMORY_POOL = std::make_shared<ThreadMemoryPool>(PER_THREAD_POOL_OPTIONS, GLOBAL_MEMORY_POOL->getPool());
     }
     return PER_THREAD_MEMORY_POOL;
 }

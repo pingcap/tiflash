@@ -14,6 +14,7 @@
 #pragma once
 #include <Common/Allocator.h>
 #include <common/defines.h>
+#include <common/numa.h>
 
 #include <algorithm>
 #include <boost/container/pmr/memory_resource.hpp>
@@ -59,4 +60,22 @@ public:
         UNUSED(other);
     }
 };
+
+template <class BaseResource>
+struct NumaAwareWrapper : BaseResource
+{
+    void * do_allocate(std::size_t bytes, std::size_t alignment) override
+    {
+        static auto page_size = static_cast<size_t>(sysconf(_SC_PAGESIZE));
+        auto memory = this->allocate(bytes, alignment);
+        if (bytes >= page_size)
+        {
+            auto node = common::numa::getNumaNode();
+            common::numa::bindMemoryToNuma(memory, bytes, node);
+        }
+        return memory;
+    }
+};
+
+using DefaultNumaResource = NumaAwareWrapper<AllocatorMemoryResource<Allocator<false>>>;
 } // namespace DB

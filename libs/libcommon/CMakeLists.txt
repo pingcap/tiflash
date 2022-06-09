@@ -82,6 +82,7 @@ add_library (common ${SPLIT_SHARED}
     include/common/detect_features.h
     include/common/aba.h
     include/common/mpmcstack.h
+    include/common/numa.h
 
     include/ext/bit_cast.h
     include/ext/collection_cast.h

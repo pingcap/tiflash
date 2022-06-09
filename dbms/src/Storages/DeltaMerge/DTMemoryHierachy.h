@@ -78,6 +78,17 @@
 /// a message passing and hands in the buffer to a MPMC stack at upstream. Later, when creating a new
 /// buffer from the thread-local pool, one can check if there are pending buffer on the stack. If so, one
 /// can destruct the buffer before returning the new buffer.
+///
+/// Synchronized Pool itself creates a list of sub-pools on each numa.
+///
+///                            ---------- Pool on NUMA 1
+/// ========================  /
+/// |                      |--
+/// |   Synchronized Pool  |-------------- Pool on NUMA 2
+/// |                      |--
+/// ========================  \
+///                            ----------- Pool on NUMA 3
+///
 #pragma once
 #include <Common/AllocatorMemoryResource.h>
 #include <common/logger_useful.h>
@@ -90,12 +101,35 @@
 
 namespace DB::DM::Memory
 {
-AllocatorMemoryResource<Allocator<false>> & system_memory_source();
-MemoryResource::synchronized_pool_resource & global_memory_pool();
+DefaultNumaResource & system_memory_source();
+struct NumaResourcePool & global_memory_pool();
 void replaceGlobalMemoryPool(const MemoryResource::pool_options & options);
 void setPerThreadPoolOptions(const MemoryResource::pool_options & options);
 void setLocalBufferInitialSize(size_t size);
 std::shared_ptr<class ThreadMemoryPool> per_thread_memory_pool();
+
+struct NumaResourcePool
+{
+    using Pool = MemoryResource::synchronized_pool_resource;
+    std::vector<std::unique_ptr<Pool>> pool_list;
+
+    NumaResourcePool(
+        const MemoryResource::pool_options & options,
+        MemoryResource::memory_resource * upstream)
+    {
+        size_t count = common::numa::getNumaCount();
+        for (size_t i = 0; i < count; ++i)
+        {
+            pool_list.emplace_back(std::make_unique<Pool>(options, upstream));
+        }
+    }
+
+    Pool * getPool()
+    {
+        size_t node = common::numa::getNumaNode() % pool_list.size();
+        return pool_list[node].get();
+    }
+};
 
 class ThreadMemoryPool : public MemoryResource::synchronized_pool_resource
 {
