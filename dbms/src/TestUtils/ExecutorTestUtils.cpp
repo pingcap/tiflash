@@ -137,67 +137,16 @@ void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & requ
     executeStreams(request, context.executorIdColumnsMap(), expect_columns, concurrency);
 }
 
-void ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, SourceType type, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
+void ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, SourceType type, size_t concurrency)
 {
     std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
-    String source_name;
-    switch (type)
-    {
-    case TableScan:
-        source_name = "table_scan_0";
-        break;
-    case ExchangeReceiver:
-        source_name = "exchange_receiver_0";
-        break;
-    }
-    source_columns_map[source_name] = source_columns;
+    source_columns_map[getSourceName(type)] = source_columns;
     executeStreams(request, source_columns_map, expect_columns, concurrency);
 }
 
-void ExecutorTest::executeStreamsWithSingleTableScanSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
-{
-    executeStreamsWithSingleSource(request, TableScan, source_columns, expect_columns, concurrency);
-}
-
-void ExecutorTest::executeStreamsWithSingleExchangeReceiverSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
-{
-    executeStreamsWithSingleSource(request, ExchangeReceiver, source_columns, expect_columns, concurrency);
-}
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
 {
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
 }
-
-ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp)
-{
-    std::vector<typename TypeTraits<MyDateTime>::FieldType> vec;
-    for (const auto & value_str : v)
-    {
-        Field value = parseMyDateTime(value_str, fsp);
-        vec.push_back(value.template safeGet<UInt64>());
-    }
-    DataTypePtr data_type = std::make_shared<DataTypeMyDateTime>(fsp);
-    return {makeColumn<MyDateTime>(data_type, vec), data_type, name, 0};
-}
-
-ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp)
-{
-    std::vector<std::optional<typename TypeTraits<MyDateTime>::FieldType>> vec;
-    for (const auto & value_str : v)
-    {
-        if (!value_str.empty())
-        {
-            Field value = parseMyDateTime(value_str, fsp);
-            vec.push_back(value.template safeGet<UInt64>());
-        }
-        else
-        {
-            vec.push_back({});
-        }
-    }
-    DataTypePtr data_type = makeNullable(std::make_shared<DataTypeMyDateTime>(fsp));
-    return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
-}
-
 } // namespace DB::tests

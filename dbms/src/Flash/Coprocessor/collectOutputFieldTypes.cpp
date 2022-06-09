@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <common/types.h>
+#include "common/defines.h"
 
 namespace DB
 {
@@ -45,13 +46,13 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
 {
     for (const auto & expr : agg.agg_func())
     {
-        if (!exprHasValidFieldType(expr))
+        if (unlikely(!exprHasValidFieldType(expr)))
             throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
         output_field_types.push_back(expr.field_type());
     }
     for (const auto & expr : agg.group_by())
     {
-        if (!exprHasValidFieldType(expr))
+        if (unlikely(!exprHasValidFieldType(expr)))
             throw TiFlashException("Group by expression without valid field type", Errors::Coprocessor::BadRequest);
         output_field_types.push_back(expr.field_type());
     }
@@ -62,17 +63,13 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
 bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
     // collect output_field_types of child
-    std::vector<tipb::FieldType> child_output_field_types;
-    getChildren(executor).forEach([&child_output_field_types](const tipb::Executor & child) {
-        traverseExecutorTree(child, [&child_output_field_types](const tipb::Executor & e) { return collectForExecutor(child_output_field_types, e); });
+    getChildren(executor).forEach([&output_field_types](const tipb::Executor & child) {
+        traverseExecutorTree(child, [&output_field_types](const tipb::Executor & e) { return collectForExecutor(output_field_types, e); });
     });
-    for (auto & field_type : child_output_field_types)
-    {
-        output_field_types.push_back(field_type);
-    }
+
     for (const auto & expr : executor.window().func_desc())
     {
-        if (!exprHasValidFieldType(expr))
+        if (unlikely(!exprHasValidFieldType(expr)))
             throw TiFlashException("Window expression without valid field type", Errors::Coprocessor::BadRequest);
         output_field_types.push_back(expr.field_type());
     }

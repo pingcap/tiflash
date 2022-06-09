@@ -15,13 +15,9 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Common/FmtUtils.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
@@ -54,6 +50,27 @@ public:
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
+    enum SourceType
+    {
+        TableScan,
+        ExchangeReceiver
+    };
+
+    static String getSourceName(SourceType type)
+    {
+        String source_name;
+        switch (type)
+        {
+        case TableScan:
+            source_name = "table_scan_0";
+            break;
+        case ExchangeReceiver:
+            source_name = "exchange_receiver_0";
+            break;
+        }
+        return source_name;
+    }
+
     void executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
@@ -64,61 +81,17 @@ public:
         const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
-    enum SourceType
-    {
-        TableScan,
-        ExchangeReceiver
-    };
     void executeStreamsWithSingleSource(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        SourceType type,
         const ColumnsWithTypeAndName & source_columns,
         const ColumnsWithTypeAndName & expect_columns,
-        size_t concurrency = 1);
-
-    void executeStreamsWithSingleTableScanSource(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & source_columns,
-        const ColumnsWithTypeAndName & expect_columns,
-        size_t concurrency = 1);
-
-    void executeStreamsWithSingleExchangeReceiverSource(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & source_columns,
-        const ColumnsWithTypeAndName & expect_columns,
+        SourceType type = TableScan,
         size_t concurrency = 1);
 
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
-
-ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp);
-ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp);
-
-template <typename T>
-ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
-{
-    return createColumn<Nullable<T>>(v);
-}
-
-template <typename T>
-ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
-{
-    return createColumn<T>(v);
-}
-
-template <typename T>
-ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
-{
-    return createColumn<Nullable<T>>(v, name);
-}
-
-template <typename T>
-ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
-{
-    return createColumn<T>(v, name);
-}
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))

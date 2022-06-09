@@ -76,13 +76,13 @@ try
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
 
     // null input
-    executeStreamsWithSingleTableScanSource(
+    executeStreamsWithSingleSource(
         request,
         {toNullableVec<Int64>("partition", {}), toNullableVec<Int64>("order", {})},
         {});
 
     // nullable
-    executeStreamsWithSingleTableScanSource(
+    executeStreamsWithSingleSource(
         request,
         {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}), {toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2})}},
         {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}), toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})});
@@ -101,7 +101,7 @@ try
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
 
     // nullable
-    executeStreamsWithSingleTableScanSource(
+    executeStreamsWithSingleSource(
         request,
         {toNullableVec<String>("partition", {"banana", "banana", "banana", "banana", {}, "apple", "apple", "apple", "apple"}),
          toNullableVec<String>("order", {"apple", "apple", "banana", "banana", {}, "apple", "apple", "banana", "banana"})},
@@ -123,7 +123,7 @@ try
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
 
     // nullable
-    executeStreamsWithSingleTableScanSource(
+    executeStreamsWithSingleSource(
         request,
         {toNullableVec<Float64>("partition", {{}, 1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
          toNullableVec<Float64>("order", {{}, 1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00})},
@@ -137,7 +137,7 @@ try
                   .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
                   .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .build(context);
-    executeStreamsWithSingleTableScanSource(
+    executeStreamsWithSingleSource(
         request,
         {toNullableDatetimeVec("partition", {"20220101010102", "20220101010102", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010101", "20220101010101"}, 0),
          toDatetimeVec("order", {"20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0)},
@@ -146,7 +146,7 @@ try
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
 
     // nullable
-    executeStreamsWithSingleTableScanSource(
+    executeStreamsWithSingleSource(
         request,
         {toNullableDatetimeVec("partition", {"20220101010102", {}, "20220101010102", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010101", "20220101010101"}, 0),
          toNullableDatetimeVec("order", {"20220101010101", {}, "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0)},
@@ -180,7 +180,7 @@ try
          toNullableVec<Int64>("dense_rank", {1, 1, 2, 2, 1, 1, 2, 2})});
 
     // nullable
-    executeStreamsWithSingleTableScanSource(
+    executeStreamsWithSingleSource(
         request,
         {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2})},
@@ -189,7 +189,7 @@ try
          toNullableVec<Int64>("rank", {1, 1, 1, 3, 3, 1, 1, 3, 3}),
          toNullableVec<Int64>("dense_rank", {1, 1, 1, 2, 2, 1, 1, 2, 2})});
 
-    executeStreamsWithSingleTableScanSource(
+    executeStreamsWithSingleSource(
         request,
         {toNullableVec<Int64>("partition", {{}, {}, 1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2})},
