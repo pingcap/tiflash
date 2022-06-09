@@ -64,17 +64,12 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
 bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
 bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
-    // collect output_field_types of children
-    std::vector<std::vector<tipb::FieldType>> children_output_field_types;
-    size_t child_index = 0;
-    children_output_field_types.resize(1);
-    // for join, dag_request.has_root_executor() == true, can use getChildren and traverseExecutorTree directly.
-    getChildren(executor).forEach([&children_output_field_types, &child_index](const tipb::Executor & child) {
-        auto & child_output_field_types = children_output_field_types[child_index++];
+    // collect output_field_types of child
+    std::vector<tipb::FieldType> child_output_field_types;
+    getChildren(executor).forEach([&child_output_field_types](const tipb::Executor & child) {
         traverseExecutorTree(child, [&child_output_field_types](const tipb::Executor & e) { return collectForExecutor(child_output_field_types, e); });
     });
-    assert(child_index == 1);
-    for (auto & field_type : children_output_field_types[0])
+    for (auto & field_type : child_output_field_types)
     {
         output_field_types.push_back(field_type);
     }
