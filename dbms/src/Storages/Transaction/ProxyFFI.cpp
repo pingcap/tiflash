@@ -24,6 +24,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <kvproto/diagnosticspb.pb.h>
 
+#include <ext/scope_guard.h>
+
 #define CHECK_PARSE_PB_BUFF_IMPL(n, a, b, c)                                              \
     do                                                                                    \
     {                                                                                     \

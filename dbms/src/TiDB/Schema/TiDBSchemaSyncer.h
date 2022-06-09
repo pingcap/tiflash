@@ -18,7 +18,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <pingcap/kv/Cluster.h>
@@ -28,6 +27,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int FAIL_POINT_ERROR;
+};
+
 template <bool mock_getter>
 struct TiDBSchemaSyncer : public SchemaSyncer
 {
@@ -177,6 +181,10 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         catch (Exception & e)
         {
+            if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+            {
+                throw;
+            }
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return false;

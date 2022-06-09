@@ -316,7 +316,7 @@ private:
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
     friend class PageDirectoryFactory;
-    friend class PageStorageControl;
+    friend class PageStorageControlV3;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
