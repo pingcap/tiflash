@@ -26,7 +26,7 @@ void ServerInfo::parseCPUInfo(const diagnosticspb::ServerInfoItem & cpu_info_ite
 {
     for (const auto & pair : cpu_info_item.pairs())
     {
-        const auto & key = pair.key(); 
+        const auto & key = pair.key();
         if (key == "cpu-logical-cores")
         {
             cpu_info.logical_cores = static_cast<UInt16>(std::stoi(pair.value()));
@@ -76,7 +76,7 @@ void ServerInfo::parseDiskInfo(const diagnosticspb::ServerInfoItem & disk_info_i
     disk.name = disk_info_item.name();
     for (const auto & pair : disk_info_item.pairs())
     {
-        const auto & key = pair.key(); 
+        const auto & key = pair.key();
         if (key == "type")
         {
             if (pair.value() == "HDD")
