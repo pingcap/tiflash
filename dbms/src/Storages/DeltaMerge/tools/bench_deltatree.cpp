@@ -50,29 +50,29 @@ public:
 template <class Tree>
 static void BM_deltatree(benchmark::State & state)
 {
-    static Tree center;
+    static std::optional<Tree> center = Tree{};
     static std::mutex center_lock;
     static std::atomic_size_t finished;
     for (auto _ : state)
     {
         for (int j = 0; j < 64; ++j)
         {
-            Tree tree;
+            std::optional<Tree> tree;
             {
                 std::unique_lock lock{center_lock};
-                tree = center;
+                tree.template emplace(*center);
             }
             for (int i = 0; i < 8192; ++i)
             {
-                tree.addInsert(i, i);
+                tree->addInsert(i, i);
             }
             for (int i = 0; i < 8192; ++i)
             {
-                tree.addDelete(i);
+                tree->addDelete(i);
             }
             {
                 std::unique_lock lock{center_lock};
-                center.swap(tree);
+                center.template emplace(*tree);
             }
         }
         finished++;
@@ -85,8 +85,11 @@ static void BM_deltatree(benchmark::State & state)
             }
             center = Tree{};
             finished = 0;
-        } else {
-            while (finished.load()) {
+        }
+        else
+        {
+            while (finished.load())
+            {
                 std::this_thread::yield();
             }
         }
