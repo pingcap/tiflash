@@ -126,10 +126,7 @@ void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & requ
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
-    auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
-    FmtBuffer fb;
-    res.in->dumpTree(fb);
-    readBlock(res.in, expect_columns);
+    readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
 }
 
 void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)

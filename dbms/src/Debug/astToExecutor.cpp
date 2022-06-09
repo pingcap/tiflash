@@ -1452,6 +1452,8 @@ void Window::columnPrune(std::unordered_set<String> & used_columns)
         }
     }
     children[0]->columnPrune(used_input_columns);
+    /// update output schema after column prune
+    output_schema = children[0]->output_schema;
 }
 
 bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
@@ -1706,6 +1708,8 @@ ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
     return exchange_receiver;
 }
 
+using ASTPartitionByElement = ASTOrderByElement;
+
 ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame)
 {
     std::vector<ASTPtr> window_exprs;
@@ -1746,7 +1750,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
     {
         for (const auto & child : partition_by_expr_list->children)
         {
-            auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
+            auto * elem = typeid_cast<ASTPartitionByElement *>(child.get());
             if (!elem)
                 throw Exception("Invalid partition by element", ErrorCodes::LOGICAL_ERROR);
             partition_columns.push_back(child);
