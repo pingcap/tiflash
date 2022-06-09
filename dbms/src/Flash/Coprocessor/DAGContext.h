@@ -298,6 +298,10 @@ public:
     }
 
     bool isTest() const { return is_test; }
+    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
+    ColumnsWithTypeAndName columnsForTest(String executor_id);
+
+    bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
 
     void cancelAllExchangeReceiver();
 
@@ -317,8 +321,8 @@ public:
     Clock::time_point read_wait_index_end_timestamp{Clock::duration::zero()};
     String table_scan_executor_id;
     String tidb_host = "Unknown";
-    bool collect_execution_summaries;
-    bool return_executor_id;
+    bool collect_execution_summaries{};
+    bool return_executor_id{};
     bool is_mpp_task = false;
     bool is_root_mpp_task = false;
     bool is_batch_cop = false;
@@ -372,6 +376,7 @@ private:
     std::vector<SubqueriesForSets> subqueries;
 
     bool is_test = false; /// switch for test, do not use it in production.
+    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
 };
 
 } // namespace DB

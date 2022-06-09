@@ -42,6 +42,7 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -159,13 +160,22 @@ AnalysisResult analyzeExpressions(
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    auto names_and_types = genNamesAndTypes(table_scan);
-    auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
-    for (size_t i = 0; i < max_streams; ++i)
+    if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID()).empty())
     {
-        auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size);
-        pipeline.streams.emplace_back(mock_table_scan_stream);
+        auto names_and_types = genNamesAndTypes(table_scan);
+        auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+        for (size_t i = 0; i < max_streams; ++i)
+        {
+            auto mock_table_scan_stream = std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size);
+            pipeline.streams.emplace_back(mock_table_scan_stream);
+        }
+    }
+    else
+    {
+        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getTableScanExecutorID());
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+        pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
 }
 
@@ -266,7 +276,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         stream->setExtraInfo(
             fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
     });
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/true, "for join");
+    // for test, join executor need the return blocks to output.
+    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dagContext().isTest(), "for join");
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
@@ -491,19 +502,29 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
+// for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    for (size_t i = 0; i < max_streams; ++i)
+    if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(query_block.source_name).empty())
     {
-        // use max_block_size / 10 to determine the mock block's size
-        pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(query_block.source->exchange_receiver(), context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
+        for (size_t i = 0; i < max_streams; ++i)
+        {
+            // use max_block_size / 10 to determine the mock block's size
+            pipeline.streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(query_block.source->exchange_receiver(), context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
+        }
+        NamesAndTypes source_columns;
+        for (const auto & col : pipeline.firstStream()->getHeader())
+        {
+            source_columns.emplace_back(col.name, col.type);
+        }
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
     }
-    NamesAndTypes source_columns;
-    for (const auto & col : pipeline.firstStream()->getHeader())
+    else
     {
-        source_columns.emplace_back(col.name, col.type);
+        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, query_block.source_name);
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
+        pipeline.streams.insert(pipeline.streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
     }
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
 void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection)

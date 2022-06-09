@@ -271,4 +271,13 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
 
+ColumnsWithTypeAndName DAGContext::columnsForTest(String executor_id)
+{
+    auto it = columns_for_test_map.find(executor_id);
+    if (unlikely(it == columns_for_test_map.end()))
+    {
+        throw DB::Exception("Don't have columns for mock source executors");
+    }
+    return it->second;
+}
 } // namespace DB
