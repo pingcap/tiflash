@@ -409,7 +409,6 @@ Union: <for test>
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
-
     request = context.scan("test_db", "test_table")
                   .sort({{"s1", true}, {"s2", false}}, true)
                   .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
