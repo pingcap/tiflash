@@ -61,21 +61,38 @@ public:
     }
 };
 
-template <class BaseResource>
-struct NumaAwareWrapper : BaseResource
+struct NumaAwareWrapper : MemoryResource::memory_resource
 {
+    MemoryResource::memory_resource * base;
+    size_t numa;
+    size_t page_size;
+
+    NumaAwareWrapper(MemoryResource::memory_resource * base, size_t numa)
+        : base(base)
+        , numa(numa)
+        , page_size(static_cast<size_t>(sysconf(_SC_PAGESIZE)))
+    {}
+
     void * do_allocate(std::size_t bytes, std::size_t alignment) override
     {
-        static auto page_size = static_cast<size_t>(sysconf(_SC_PAGESIZE));
-        auto memory = this->allocate(bytes, alignment);
+        auto * memory = base->allocate(bytes, alignment);
         if (bytes >= page_size)
         {
-            auto node = common::numa::getNumaNode();
-            common::numa::bindMemoryToNuma(memory, bytes, node);
+            common::numa::bindMemoryToNuma(memory, bytes, numa);
         }
         return memory;
     }
-};
 
-using DefaultNumaResource = NumaAwareWrapper<AllocatorMemoryResource<Allocator<false>>>;
+    void do_deallocate(void * pointer, std::size_t bytes, std::size_t alignment) override
+    {
+        base->deallocate(pointer, bytes, alignment);
+    }
+
+    bool do_is_equal(const MemoryResource::memory_resource & other) const noexcept override
+    {
+        const auto * ptr = dynamic_cast<const NumaAwareWrapper *>(std::addressof(other));
+        return ptr && base == ptr->base;
+    }
+};
+using DefaultSystemResource = AllocatorMemoryResource<Allocator<false>>;
 } // namespace DB

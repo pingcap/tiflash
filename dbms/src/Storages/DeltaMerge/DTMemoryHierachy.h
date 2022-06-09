@@ -101,7 +101,7 @@
 
 namespace DB::DM::Memory
 {
-DefaultNumaResource & system_memory_source();
+DefaultSystemResource & system_memory_source();
 struct NumaResourcePool & global_memory_pool();
 void replaceGlobalMemoryPool(const MemoryResource::pool_options & options);
 void setPerThreadPoolOptions(const MemoryResource::pool_options & options);
@@ -111,6 +111,7 @@ std::shared_ptr<class ThreadMemoryPool> per_thread_memory_pool();
 struct NumaResourcePool
 {
     using Pool = MemoryResource::synchronized_pool_resource;
+    std::vector<NumaAwareWrapper> wrapper_list;
     std::vector<std::unique_ptr<Pool>> pool_list;
 
     NumaResourcePool(
@@ -120,7 +121,11 @@ struct NumaResourcePool
         size_t count = common::numa::getNumaCount();
         for (size_t i = 0; i < count; ++i)
         {
-            pool_list.emplace_back(std::make_unique<Pool>(options, upstream));
+            wrapper_list.emplace_back(upstream, i);
+        }
+        for (size_t i = 0; i < count; ++i)
+        {
+            pool_list.emplace_back(std::make_unique<Pool>(options, &wrapper_list[i]));
         }
     }
 

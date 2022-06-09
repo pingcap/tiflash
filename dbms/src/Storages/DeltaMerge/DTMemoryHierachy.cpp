@@ -35,7 +35,7 @@ static MemoryResource::pool_options defaultThreadPoolOptions()
     return thread_opts;
 };
 
-static DefaultNumaResource SYSTEM_MEMORY_RESOURCE{};
+static DefaultSystemResource SYSTEM_MEMORY_RESOURCE{};
 static std::optional<NumaResourcePool> GLOBAL_MEMORY_POOL = std::nullopt;
 static thread_local std::shared_ptr<ThreadMemoryPool> PER_THREAD_MEMORY_POOL = nullptr;
 static MemoryResource::pool_options PER_THREAD_POOL_OPTIONS = defaultThreadPoolOptions();
@@ -51,7 +51,7 @@ struct DefaultMemoryInitHook
 
 static DefaultMemoryInitHook hook{};
 
-DefaultNumaResource & system_memory_source()
+DefaultSystemResource & system_memory_source()
 {
     return SYSTEM_MEMORY_RESOURCE;
 }
