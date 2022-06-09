@@ -33,9 +33,9 @@ public:
     struct CPUInfo
     {
         /// number of logical CPU cores
-        UInt16 logical_cores = 0;
+        UInt16 logical_cores = 0; // set default value to 0 which means INVALID server info
         /// number of physical CPU cores
-        UInt16 physical_cores = 0;
+        UInt16 physical_cores = 1; // the minimum number of physical_cores is 1
         /// number of L1 cache size
         /// units: Byte
         UInt32 l1_cache_size = 16384; // 16KB (typical value)
