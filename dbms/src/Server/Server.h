@@ -56,8 +56,6 @@ public:
         return BaseDaemon::isCancelled();
     }
 
-    ServerInfo getServerInfo() { return server_info; };
-
 protected:
     void initialize(Application & self) override;
 
