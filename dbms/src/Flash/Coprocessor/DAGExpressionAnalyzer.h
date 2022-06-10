@@ -153,6 +153,7 @@ public:
         const tipb::Window & window,
         size_t window_columns_start_index);
 
+private:
     NamesAndTypes buildOrderColumns(
         const ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
