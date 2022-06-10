@@ -179,7 +179,9 @@ namespace
 namespace CurrentMetrics
 {
 extern const Metric Revision;
-}
+extern const Metric LogicalCPUCores;
+extern const Metric MemoryCapacity;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -1424,6 +1426,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         {
             // on ARM processors it can show only enabled at current moment cores
+            CurrentMetrics::set(CurrentMetrics::LogicalCPUCores, server_info.cpu_info.logical_cores);
+            CurrentMetrics::set(CurrentMetrics::MemoryCapacity, server_info.memory_info.capacity);
             LOG_FMT_INFO(
                 log,
                 "Available RAM = {}; physical cores = {}; logical cores = {}.",
