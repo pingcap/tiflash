@@ -441,9 +441,9 @@ Union: <for test>
 
     request = context.scan("test_db", "test_table_1")
                   .sort({{"s1", true}, {"s2", false}}, true)
-                  .project({"s1","s2", "s3"})
+                  .project({"s1", "s2", "s3"})
                   .window(RowNumber(), {"s1", true}, {"s1", false}, buildDefaultRowsFrame())
-                  .project({"s1", "s2","s3", "RowNumber()"})
+                  .project({"s1", "s2", "s3", "RowNumber()"})
                   .build(context);
     {
         String expected = R"(

@@ -53,7 +53,7 @@ public:
     ~DAGQueryBlockInterpreter() = default;
 
     BlockInputStreams execute();
-    
+
 private:
     void executeImpl(DAGPipeline & pipeline);
     void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
