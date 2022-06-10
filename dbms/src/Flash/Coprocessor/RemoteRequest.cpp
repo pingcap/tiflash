@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Storages/MutableSupport.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
