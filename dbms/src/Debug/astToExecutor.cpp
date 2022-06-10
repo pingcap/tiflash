@@ -24,13 +24,13 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
+using ASTPartitionByElement = ASTOrderByElement;
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
 {
     *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
@@ -1396,9 +1396,9 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
 
     for (const auto & child : partition_by_exprs)
     {
-        auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        auto * elem = typeid_cast<ASTPartitionByElement *>(child.get());
         if (!elem)
-            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Invalid partition by element", ErrorCodes::LOGICAL_ERROR);
         tipb::ByItem * by = window->add_partition_by();
         by->set_desc(elem->direction < 0);
         tipb::Expr * expr = by->mutable_expr();
@@ -1434,28 +1434,6 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-void Window::columnPrune(std::unordered_set<String> & used_columns)
-{
-    output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
-                        output_schema.end());
-    std::unordered_set<String> used_input_columns;
-    for (auto & func : func_descs)
-    {
-        if (used_columns.find(func->getColumnName()) != used_columns.end())
-        {
-            const auto * window_func = typeid_cast<const ASTFunction *>(func.get());
-            if (window_func != nullptr)
-            {
-                for (auto & child : window_func->arguments->children)
-                    collectUsedColumnsFromExpr(children[0]->output_schema, child, used_input_columns);
-            }
-        }
-    }
-    children[0]->columnPrune(used_input_columns);
-    /// update output schema after column prune
-    output_schema = children[0]->output_schema;
-}
-
 bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeSort);
@@ -1478,12 +1456,6 @@ bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-void Sort::columnPrune(std::unordered_set<String> & used_columns)
-{
-    children[0]->columnPrune(used_columns);
-    /// update output schema after column prune
-    output_schema = children[0]->output_schema;
-}
 } // namespace mock
 
 ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, String & table_alias, bool append_pk_column)
@@ -1707,8 +1679,6 @@ ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
     ExecutorPtr exchange_receiver = std::make_shared<mock::ExchangeReceiver>(executor_index, schema);
     return exchange_receiver;
 }
-
-using ASTPartitionByElement = ASTOrderByElement;
 
 ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame)
 {

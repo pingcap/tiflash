@@ -19,6 +19,7 @@
 #include <Debug/MockTiDB.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ParserSelectQuery.h>
@@ -300,9 +301,9 @@ struct Window : Executor
         , frame(frame_)
     {
     }
-
-    void columnPrune(std::unordered_set<String> & used_columns) override;
-
+    // Currently only use Window Executor in Unit Test which don't call columnPrume.
+    // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 
@@ -317,9 +318,9 @@ struct Sort : Executor
         , is_partial_sort(is_partial_sort_)
     {
     }
-
-    void columnPrune(std::unordered_set<String> & used_columns) override;
-
+    // Currently only use Sort Executor in Unit Test which don't call columnPrume.
+    // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 } // namespace mock

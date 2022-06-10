@@ -56,6 +56,7 @@ public:
         ExchangeReceiver
     };
 
+    // for single source query, the source executor name is ${type}_0
     static String getSourceName(SourceType type)
     {
         String source_name;

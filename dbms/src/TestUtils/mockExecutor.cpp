@@ -103,6 +103,7 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
         ret.name = column.first;
+        // TODO: find a way to assign decimal field's flen.
         if (ret.tp == TiDB::TP::TypeNewDecimal)
             ret.flen = 65;
         ret.id = i++;
