@@ -13,11 +13,17 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_during_mpp_write_err_to_tunnel[];
+} // namespace FailPoints
 namespace
 {
 inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & response)
@@ -106,6 +112,51 @@ void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partit
         packet.mutable_data()->clear();
 
     tunnels[partition_id]->write(packet);
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::writeError(const String & msg)
+{
+    for (auto & tunnel : tunnels)
+    {
+        try
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
+            tunnel->write(getPacketWithError(msg), true);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Failed to write error " + msg + " to tunnel: " + tunnel->id());
+            tunnel->close("Failed to write error msg to tunnel");
+        }
+    }
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::close(const String & reason)
+{
+    for (auto & tunnel : tunnels)
+        tunnel->close(reason);
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::finishWrite()
+{
+    for (auto & tunnel : tunnels)
+    {
+        tunnel->writeDone();
+    }
+}
+
+template <typename Tunnel>
+typename MPPTunnelSetBase<Tunnel>::TunnelPtr MPPTunnelSetBase<Tunnel>::getTunnelById(const MPPTaskId & id)
+{
+    auto it = id_to_index_map.find(id);
+    if (it == id_to_index_map.end())
+    {
+        return nullptr;
+    }
+    return tunnels[it->second];
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

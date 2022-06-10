@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -32,6 +33,9 @@ class MPPTunnelSetBase : private boost::noncopyable
 {
 public:
     using TunnelPtr = std::shared_ptr<Tunnel>;
+    MPPTunnelSetBase(const String & req_id)
+        : log(Logger::get("MPPTunnelSet", req_id))
+    {}
 
     void clearExecutionSummaries(tipb::SelectResponse & response);
 
@@ -50,11 +54,19 @@ public:
     // this is a partition writing.
     void write(tipb::SelectResponse & response, int16_t partition_id);
     void write(mpp::MPPDataPacket & packet, int16_t partition_id);
+    void writeError(const String & msg);
+    void close(const String & reason);
+    void finishWrite();
+    TunnelPtr getTunnelById(const MPPTaskId & id);
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
 
-    void addTunnel(const TunnelPtr & tunnel)
+    void registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel)
     {
+        if (id_to_index_map.find(id) != id_to_index_map.end())
+            throw Exception("the tunnel " + tunnel->id() + " has been registered");
+
+        id_to_index_map[id] = tunnels.size();
         tunnels.push_back(tunnel);
         if (!tunnel->isLocal())
         {
@@ -71,6 +83,8 @@ public:
 
 private:
     std::vector<TunnelPtr> tunnels;
+    std::unordered_map<MPPTaskId, size_t> id_to_index_map;
+    const LoggerPtr log;
 
     int remote_tunnel_cnt = 0;
 };
