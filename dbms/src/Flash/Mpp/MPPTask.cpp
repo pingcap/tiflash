@@ -56,6 +56,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , id(meta.start_ts(), meta.task_id())
     , log(Logger::get("MPPTask", id.toString()))
     , mpp_task_statistics(id, meta.address())
+    , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
 {}
 
