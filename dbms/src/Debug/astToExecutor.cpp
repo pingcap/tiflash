@@ -1387,10 +1387,6 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         tipb::ByItem * by = window->add_order_by();
         by->set_desc(elem->direction < 0);
         tipb::Expr * expr = by->mutable_expr();
-        expr->mutable_field_type()->set_flen(11);
-        expr->mutable_field_type()->set_decimal(0);
-        expr->mutable_field_type()->set_charset("binary");
-        expr->mutable_field_type()->set_collate(63);
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
 
@@ -1402,10 +1398,6 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
         tipb::ByItem * by = window->add_partition_by();
         by->set_desc(elem->direction < 0);
         tipb::Expr * expr = by->mutable_expr();
-        expr->mutable_field_type()->set_flen(11);
-        expr->mutable_field_type()->set_decimal(0);
-        expr->mutable_field_type()->set_charset("binary");
-        expr->mutable_field_type()->set_collate(63);
         astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
     }
 
