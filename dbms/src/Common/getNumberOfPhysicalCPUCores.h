@@ -15,5 +15,5 @@
 #pragma once
 
 /// Get number of CPU cores without hyper-threading.
-/// Note: do not support environment under resource isolation mechanism like Docker, cgroup.
+/// Note: do not support environment under resource isolation mechanism like Docker, CGroup.
 unsigned getNumberOfPhysicalCPUCores();
