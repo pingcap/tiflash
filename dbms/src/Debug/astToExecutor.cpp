@@ -1732,7 +1732,8 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
         }
     }
 
-    output_schema.insert(output_schema.end(), input->output_schema.begin(), input->output_schema.end());
+    input->output_schema.insert(input->output_schema.end(), output_schema.begin(), output_schema.end());
+    output_schema = input->output_schema;
 
     ExecutorPtr window = std::make_shared<mock::Window>(
         executor_index,
