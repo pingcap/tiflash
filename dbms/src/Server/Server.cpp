@@ -85,6 +85,7 @@
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
+#include "Storages/BackgroundProcessingPool.h"
 #include "TCPHandlerFactory.h"
 
 #if Poco_NetSSL_FOUND
@@ -1135,6 +1136,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
+    /// Initialize the background thread pool.
+    /// set the background pool & blockable background pool size to the a quarter of of number of logical CPU cores of machine.
+    auto & bg_pool = global_context->setBackgroundPool(server_info.cpu_info.logical_cores / 4);
+    auto & blockable_bg_pool = global_context->setBlockableBackgroundPool(server_info.cpu_info.logical_cores / 4);
+
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
@@ -1251,13 +1257,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
-    Settings & settings = global_context->getSettingsRef();
-
-    /// Initialize the background thread pool.
-    /// It internally depends on settings.background_pool_size,
-    /// so must be called after settings has been load.
-    auto & bg_pool = global_context->getBackgroundPool();
-    auto & blockable_bg_pool = global_context->getBlockableBackgroundPool();
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
@@ -1400,6 +1399,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// setting up elastic thread pool
+    Settings & settings = global_context->getSettingsRef();
     if (settings.enable_elastic_threadpool)
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,

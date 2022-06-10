@@ -71,6 +71,8 @@
 #include <pcg_random.hpp>
 #include <set>
 
+#include "Functions/FunctionBinaryArithmetic.h"
+
 
 namespace ProfileEvents
 {
@@ -1449,12 +1451,30 @@ BackgroundProcessingPool & Context::getBackgroundPool()
     return *shared->background_pool;
 }
 
+BackgroundProcessingPool & Context::setBackgroundPool(UInt16 pool_size)
+{
+    auto lock = getLock();
+    if (!shared->background_pool)
+    {
+        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
+    }
+    return *shared->background_pool;
+}
+
 BackgroundProcessingPool & Context::getBlockableBackgroundPool()
 {
     // TODO: choose a better thread pool size and maybe a better name for the pool
     auto lock = getLock();
     if (!shared->blockable_background_pool)
         shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+    return *shared->blockable_background_pool;
+}
+
+BackgroundProcessingPool & Context::setBlockableBackgroundPool(UInt16 pool_size)
+{
+    auto lock = getLock();
+    if (!shared->blockable_background_pool)
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
     return *shared->blockable_background_pool;
 }
 
