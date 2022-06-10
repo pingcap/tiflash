@@ -86,7 +86,7 @@ std::shared_ptr<ThreadMemoryPool> per_thread_memory_pool()
 }
 
 ThreadMemoryPool::ThreadMemoryPool(MemoryResource::pool_options options, MemoryResource::memory_resource * upstream)
-    : pool(options, upstream)
+    : MemoryResource::unsynchronized_pool_resource(options, upstream)
     , log(&Poco::Logger::get("DeltaTreeThreadMemoryPool"))
 {
     LOG_FMT_TRACE(log, "thread local memory pool created");

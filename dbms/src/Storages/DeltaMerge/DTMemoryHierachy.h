@@ -138,7 +138,7 @@ struct NumaResourcePool
     }
 };
 
-class ThreadMemoryPool : public MemoryResource::synchronized_pool_resource
+class ThreadMemoryPool : public MemoryResource::unsynchronized_pool_resource
 {
 public:
     using DownStream = MemoryResource::monotonic_buffer_resource;
@@ -166,7 +166,6 @@ public:
 
 private:
     common::MPMCStack<Cell> stack{};
-    MemoryResource::synchronized_pool_resource pool;
     Poco::Logger * log;
 
     void recycle(Cell * cell)
