@@ -117,7 +117,17 @@ protected:
         {
             return end - start;
         }
-        return free_map.rbegin()->first;
+
+        const auto & last_node_it = free_map.rbegin();
+
+        // If exist a node with range [xxx ,end]
+        // Then we should return end rather than last node start
+        if (last_node_it->first + last_node_it->second != end)
+        {
+            return end;
+        }
+
+        return last_node_it->first;
     }
 
     bool isMarkUnused(UInt64 offset, size_t length) override
