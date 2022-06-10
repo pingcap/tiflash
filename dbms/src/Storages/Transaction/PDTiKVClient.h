@@ -25,10 +25,11 @@
 #include <pingcap/pd/IClient.h>
 #pragma GCC diagnostic pop
 
-#include <atomic>
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
+
+#include <atomic>
 
 // We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
 // `share` the resource of cluster.
