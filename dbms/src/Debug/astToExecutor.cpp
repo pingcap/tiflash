@@ -1677,8 +1677,33 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
     std::vector<ASTPtr> window_exprs;
     std::vector<ASTPtr> order_columns;
     std::vector<ASTPtr> partition_columns;
-    DAGSchema output_schema;
 
+    if (partition_by_expr_list != nullptr)
+    {
+        for (const auto & child : partition_by_expr_list->children)
+        {
+            auto * elem = typeid_cast<ASTPartitionByElement *>(child.get());
+            if (!elem)
+                throw Exception("Invalid partition by element", ErrorCodes::LOGICAL_ERROR);
+            partition_columns.push_back(child);
+            compileExpr(input->output_schema, elem->children[0]);
+        }
+    }
+
+    if (order_by_expr_list != nullptr)
+    {
+        for (const auto & child : order_by_expr_list->children)
+        {
+            auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
+            if (!elem)
+                throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+            order_columns.push_back(child);
+            compileExpr(input->output_schema, elem->children[0]);
+        }
+    }
+
+    DAGSchema output_schema;
+    output_schema.insert(output_schema.end(), input->output_schema.begin(), input->output_schema.end());
     if (func_desc_list != nullptr)
     {
         for (const auto & expr : func_desc_list->children)
@@ -1708,32 +1733,6 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             output_schema.emplace_back(std::make_pair(func->getColumnName(), ci));
         }
     }
-    if (partition_by_expr_list != nullptr)
-    {
-        for (const auto & child : partition_by_expr_list->children)
-        {
-            auto * elem = typeid_cast<ASTPartitionByElement *>(child.get());
-            if (!elem)
-                throw Exception("Invalid partition by element", ErrorCodes::LOGICAL_ERROR);
-            partition_columns.push_back(child);
-            compileExpr(input->output_schema, elem->children[0]);
-        }
-    }
-
-    if (order_by_expr_list != nullptr)
-    {
-        for (const auto & child : order_by_expr_list->children)
-        {
-            auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
-            if (!elem)
-                throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
-            order_columns.push_back(child);
-            compileExpr(input->output_schema, elem->children[0]);
-        }
-    }
-
-    input->output_schema.insert(input->output_schema.end(), output_schema.begin(), output_schema.end());
-    output_schema = input->output_schema;
 
     ExecutorPtr window = std::make_shared<mock::Window>(
         executor_index,
