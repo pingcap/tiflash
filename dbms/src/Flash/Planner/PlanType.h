@@ -22,7 +22,7 @@ struct PlanType
 {
     enum PlanTypeEnum
     {
-        Source = 0x1,
+        Source = 0,
     };
     PlanTypeEnum enum_value;
 

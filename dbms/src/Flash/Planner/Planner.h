@@ -52,7 +52,7 @@ private:
 
     const DAGQueryBlock & query_block;
 
-    /// How many streams we will do processing.
+    /// Max streams we will do processing.
     size_t max_streams = 1;
 
     LoggerPtr log;
