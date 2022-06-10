@@ -126,9 +126,23 @@ void MPPTunnelSetBase<Tunnel>::writeError(const String & msg)
         }
         catch (...)
         {
-            tryLogCurrentException(log, "Failed to write error " + msg + " to tunnel: " + tunnel->id());
             tunnel->close("Failed to write error msg to tunnel");
+            tryLogCurrentException(log, "Failed to write error " + msg + " to tunnel: " + tunnel->id());
         }
+    }
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel)
+{
+    if (id_to_index_map.find(id) != id_to_index_map.end())
+        throw Exception("the tunnel " + tunnel->id() + " has been registered");
+
+    id_to_index_map[id] = tunnels.size();
+    tunnels.push_back(tunnel);
+    if (!tunnel->isLocal())
+    {
+        remote_tunnel_cnt++;
     }
 }
 

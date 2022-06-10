@@ -57,22 +57,11 @@ public:
     void writeError(const String & msg);
     void close(const String & reason);
     void finishWrite();
+    void registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel);
+
     TunnelPtr getTunnelById(const MPPTaskId & id);
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
-
-    void registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel)
-    {
-        if (id_to_index_map.find(id) != id_to_index_map.end())
-            throw Exception("the tunnel " + tunnel->id() + " has been registered");
-
-        id_to_index_map[id] = tunnels.size();
-        tunnels.push_back(tunnel);
-        if (!tunnel->isLocal())
-        {
-            remote_tunnel_cnt++;
-        }
-    }
 
     int getRemoteTunnelCnt()
     {
