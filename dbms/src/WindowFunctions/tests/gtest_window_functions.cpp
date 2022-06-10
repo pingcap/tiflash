@@ -59,7 +59,7 @@ public:
     }
 };
 
-TEST_F(WindowExecutorTestRunner, Test1)
+TEST_F(WindowExecutorTestRunner, testWindowFunctionByPartitionAndOrder)
 try
 {
     /***** row_number with different types of input *****/
