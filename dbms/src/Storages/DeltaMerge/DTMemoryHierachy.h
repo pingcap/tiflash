@@ -103,12 +103,12 @@
 
 namespace DB::DM::Memory
 {
-DefaultSystemResource & system_memory_source();
-struct NumaResourcePool & global_memory_pool();
+DefaultSystemResource & systemMemoryResource();
+struct NumaResourcePool & globalMemoryPool();
 void replaceGlobalMemoryPool(const MemoryResource::pool_options & options);
 void setPerThreadPoolOptions(const MemoryResource::pool_options & options);
 void setLocalBufferInitialSize(size_t size);
-std::shared_ptr<class ThreadMemoryPool> per_thread_memory_pool();
+std::shared_ptr<class ThreadMemoryPool> perThreadMemoryPool();
 
 struct NumaResourcePool
 {
@@ -138,7 +138,8 @@ struct NumaResourcePool
     }
 };
 
-class ThreadMemoryPool : public MemoryResource::unsynchronized_pool_resource
+class
+    ThreadMemoryPool : public MemoryResource::unsynchronized_pool_resource
 {
 public:
     using DownStream = MemoryResource::monotonic_buffer_resource;

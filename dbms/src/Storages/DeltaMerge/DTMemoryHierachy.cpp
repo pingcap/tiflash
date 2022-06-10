@@ -51,12 +51,12 @@ struct DefaultMemoryInitHook
 
 static DefaultMemoryInitHook hook{};
 
-DefaultSystemResource & system_memory_source()
+DefaultSystemResource & systemMemoryResource()
 {
     return SYSTEM_MEMORY_RESOURCE;
 }
 
-NumaResourcePool & global_memory_pool()
+NumaResourcePool & globalMemoryPool()
 {
     return *GLOBAL_MEMORY_POOL;
 }
@@ -76,7 +76,7 @@ void setLocalBufferInitialSize(size_t size)
     INITIAL_BUFFER_SIZE = size;
 }
 
-std::shared_ptr<ThreadMemoryPool> per_thread_memory_pool()
+std::shared_ptr<ThreadMemoryPool> perThreadMemoryPool()
 {
     if (unlikely(!PER_THREAD_MEMORY_POOL))
     {
@@ -94,7 +94,7 @@ ThreadMemoryPool::ThreadMemoryPool(MemoryResource::pool_options options, MemoryR
 
 LocalAllocatorBuffer LocalAllocatorBuffer::create()
 {
-    std::shared_ptr<ThreadMemoryPool> thread_pool = per_thread_memory_pool();
+    std::shared_ptr<ThreadMemoryPool> thread_pool = perThreadMemoryPool();
 
     /// trigger garbage collect to clean up MPMCStack.
     thread_pool->garbageCollect();
