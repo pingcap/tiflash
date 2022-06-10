@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /// This file describes the multi-level memory hierarchy of delta merge trees. The general structure
-/// is shown the diagram:
+/// for each numa node is shown the diagram:
 ///
 /// \code{.txt}
 ///                              ---------------------
@@ -79,8 +79,7 @@
 /// buffer from the thread-local pool, one can check if there are pending buffer on the stack. If so, one
 /// can destruct the buffer before returning the new buffer.
 ///
-/// Synchronized Pool itself creates a list of sub-pools on each numa.
-///
+/// \code{.txt}
 ///                            ---------- Pool on NUMA 1
 /// ========================  /
 /// |                      |--
@@ -88,7 +87,10 @@
 /// |                      |--
 /// ========================  \
 ///                            ----------- Pool on NUMA 3
-///
+/// \endcode
+/// To make the overall structure numa aware, Synchronized Pool itself consists of sub-pools on each numa.
+/// This helps to reduce the cross numa locking contention and separate memory resource on numa nodes.
+/// Memory blocks larger than page size are bond to numa via syscall and returned back to per numa free list.
 #pragma once
 #include <Common/AllocatorMemoryResource.h>
 #include <common/logger_useful.h>

@@ -15,6 +15,7 @@
 #include <Common/Allocator.h>
 #include <common/defines.h>
 #include <common/numa.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <boost/container/pmr/memory_resource.hpp>
