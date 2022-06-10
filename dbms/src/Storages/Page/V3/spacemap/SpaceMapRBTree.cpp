@@ -744,8 +744,8 @@ UInt64 RBTreeSpaceMap::getRightMargin()
 
     auto * entry = node_to_entry(node);
 
-    // If exist a node with range [xxx ,end]
-    // Then we should return end rather than last node start
+    // If exist a node with a range [xxx, end]
+    // Then we should return `end` rather than last node start
     if (entry->start + entry->count != end)
     {
         return end;
