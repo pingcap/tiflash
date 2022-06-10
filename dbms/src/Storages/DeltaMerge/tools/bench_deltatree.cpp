@@ -13,13 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <benchmark/benchmark.h>
 
-#include <mutex>
 #include <thread>
+
 using namespace DB;
 using namespace DB::DM;
 
@@ -50,17 +49,17 @@ public:
 template <class Tree>
 static void BM_deltatree(benchmark::State & state)
 {
-    static std::optional<Tree> center = Tree{};
+    static std::shared_ptr<Tree> center = std::make_shared<Tree>();
     static std::mutex center_lock;
     static std::atomic_size_t finished;
     for (auto _ : state)
     {
         for (int j = 0; j < 64; ++j)
         {
-            std::optional<Tree> tree;
+            std::shared_ptr<Tree> tree;
             {
                 std::unique_lock lock{center_lock};
-                tree.template emplace(*center);
+                tree = std::make_shared<Tree>(*center);
             }
             for (int i = 0; i < 8192; ++i)
             {
@@ -72,7 +71,7 @@ static void BM_deltatree(benchmark::State & state)
             }
             {
                 std::unique_lock lock{center_lock};
-                center.template emplace(*tree);
+                std::swap(center, tree);
             }
         }
         finished++;
@@ -83,7 +82,7 @@ static void BM_deltatree(benchmark::State & state)
             {
                 std::this_thread::yield();
             }
-            center = Tree{};
+            center = std::make_shared<Tree>();
             finished = 0;
         }
         else
