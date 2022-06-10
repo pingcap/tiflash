@@ -59,17 +59,17 @@ public:
     // for single source query, the source executor name is ${type}_0
     static String getSourceName(SourceType type)
     {
-        String source_name;
         switch (type)
         {
         case TableScan:
-            source_name = "table_scan_0";
-            break;
+            return "table_scan_0";
         case ExchangeReceiver:
-            source_name = "exchange_receiver_0";
-            break;
+            return "exchange_receiver_0";
+        default:
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                            "Unknown Executor Source type {}",
+                            type);
         }
-        return source_name;
     }
 
     void executeStreams(

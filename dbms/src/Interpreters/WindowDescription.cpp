@@ -44,7 +44,7 @@ WindowFrame::FrameType getFrameTypeFromTipb(const tipb::WindowFrameType & type)
         return WindowFrame::FrameType::Groups;
     default:
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                        "Unknowed frame type {}",
+                        "Unknown frame type {}",
                         type);
     }
 }
@@ -61,7 +61,7 @@ void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
     frame.is_default = false;
 }
 
-String frameTypeToString(WindowFrame::FrameType type)
+String frameTypeToString(const WindowFrame::FrameType & type)
 {
     switch (type)
     {
@@ -71,10 +71,14 @@ String frameTypeToString(WindowFrame::FrameType type)
         return "Groups";
     case WindowFrame::FrameType::Ranges:
         return "Ranges";
+    default:
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                        "Unknown frame type {}",
+                        type);
     }
 }
 
-String boundaryTypeToString(WindowFrame::BoundaryType type)
+String boundaryTypeToString(const WindowFrame::BoundaryType & type)
 {
     switch (type)
     {
@@ -84,6 +88,10 @@ String boundaryTypeToString(WindowFrame::BoundaryType type)
         return "Current";
     case WindowFrame::BoundaryType::Offset:
         return "Offset";
+    default:
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                        "Unknown boundary type {}",
+                        type);
     }
 }
 } // namespace DB

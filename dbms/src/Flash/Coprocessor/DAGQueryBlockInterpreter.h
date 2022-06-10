@@ -54,9 +54,6 @@ public:
 
     BlockInputStreams execute();
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
     void executeImpl(DAGPipeline & pipeline);
     void handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);
     void handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline);

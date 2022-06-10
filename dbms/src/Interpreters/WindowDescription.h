@@ -88,8 +88,8 @@ struct WindowFrame
     }
 };
 
-String frameTypeToString(WindowFrame::FrameType type);
-String boundaryTypeToString(WindowFrame::BoundaryType type);
+String frameTypeToString(const WindowFrame::FrameType & type);
+String boundaryTypeToString(const WindowFrame::BoundaryType & type);
 
 class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;

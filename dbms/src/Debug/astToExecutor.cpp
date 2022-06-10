@@ -1716,8 +1716,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             if (!elem)
                 throw Exception("Invalid partition by element", ErrorCodes::LOGICAL_ERROR);
             partition_columns.push_back(child);
-            auto ci = compileExpr(input->output_schema, elem->children[0]);
-            output_schema.emplace_back(std::make_pair(elem->children[0]->getColumnName(), ci));
+            compileExpr(input->output_schema, elem->children[0]);
         }
     }
 
@@ -1729,10 +1728,12 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             if (!elem)
                 throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
             order_columns.push_back(child);
-            auto ci = compileExpr(input->output_schema, elem->children[0]);
-            output_schema.emplace_back(std::make_pair(elem->children[0]->getColumnName(), ci));
+            compileExpr(input->output_schema, elem->children[0]);
         }
     }
+
+    output_schema.insert(output_schema.end(), input->output_schema.begin(), input->output_schema.end());
+
     ExecutorPtr window = std::make_shared<mock::Window>(
         executor_index,
         output_schema,
