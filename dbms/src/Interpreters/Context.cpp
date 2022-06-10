@@ -67,10 +67,8 @@
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
-#include <map>
 #include <pcg_random.hpp>
-#include <set>
-
+#include <unordered_map>
 
 namespace ProfileEvents
 {
@@ -1453,9 +1451,7 @@ BackgroundProcessingPool & Context::setBackgroundPool(UInt16 pool_size)
 {
     auto lock = getLock();
     if (!shared->background_pool)
-    {
         shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
-    }
     return *shared->background_pool;
 }
 

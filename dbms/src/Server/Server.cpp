@@ -53,10 +53,15 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <Server/HTTPHandlerFactory.h>
+#include <Server/MetricsPrometheus.h>
+#include <Server/MetricsTransmitter.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>
 #include <Server/ServerInfo.h>
+#include <Server/StatusFile.h>
 #include <Server/StorageConfigParser.h>
+#include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
@@ -80,13 +85,6 @@
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
-
-#include "HTTPHandlerFactory.h"
-#include "MetricsPrometheus.h"
-#include "MetricsTransmitter.h"
-#include "StatusFile.h"
-#include "Storages/BackgroundProcessingPool.h"
-#include "TCPHandlerFactory.h"
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
