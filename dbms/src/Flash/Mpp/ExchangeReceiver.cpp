@@ -65,26 +65,28 @@ bool pushPacket(size_t source_index,
 
     if (enable_fine_grained_shuffle)
     {
-        if (unlikely(packet->stream_ids().empty()))
-        {
-            // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
-            // This can happen when there are old version nodes when upgrading.
-            LOG_FMT_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary \
-                    (source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. Cannot handle this.", source_index);
-            return false;
-        }
-
-        assert(packet->chunks_size() == packet->stream_ids_size());
         std::vector<std::vector<const String *>> chunks(msg_channels.size());
         if (!packet->chunks().empty())
         {
             // Packet not empty.
+            if (unlikely(packet->stream_ids().empty()))
+            {
+                // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
+                // This can happen when there are old version nodes when upgrading.
+                LOG_FMT_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
+                        "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
+                        "Cannot handle this.", source_index);
+                return false;
+            }
+            assert(packet->chunks_size() == packet->stream_ids_size());
+
             for (int i = 0; i < packet->stream_ids_size(); ++i)
             {
                 UInt32 stream_id = packet->stream_ids(i) % msg_channels.size();
                 chunks[stream_id].push_back(packet->mutable_chunks(i));
             }
         }
+        // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
         for (size_t i = 0; i < msg_channels.size() && push_succeed; ++i)
         {
             if (resp_ptr == nullptr && error_ptr == nullptr && chunks[i].empty())
