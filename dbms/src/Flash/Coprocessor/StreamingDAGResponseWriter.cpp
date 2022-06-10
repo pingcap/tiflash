@@ -334,7 +334,7 @@ void computeHash(const Block & input_block,
     WeakHash32 hash(rows);
 
     // get hash values by all partition key columns
-    for (size_t i = 0; i < partition_col_ids.size(); i++)
+    for (size_t i = 0; i < partition_col_ids.size(); ++i)
     {
         input_block.getByPosition(partition_col_ids[i]).column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
     }

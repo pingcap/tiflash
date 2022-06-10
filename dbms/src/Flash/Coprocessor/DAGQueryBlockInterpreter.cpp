@@ -442,16 +442,16 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
 
 void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc)
 {
-    orderStreams(pipeline, sort_desc, 0);
+    orderStreams(pipeline, sort_desc, 0, dagContext().enableFineGrainedShuffle());
 }
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
-    orderStreams(pipeline, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit);
+    orderStreams(pipeline, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit, false);
 }
 
-void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit)
+void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit, bool enable_fine_grained_shuffle)
 {
     const Settings & settings = context.getSettingsRef();
 
@@ -467,7 +467,7 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
         stream = sorting_stream;
     });
 
-    if (dagContext().enableFineGrainedShuffle())
+    if (enable_fine_grained_shuffle)
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<MergeSortingBlockInputStream>(
                     stream,
