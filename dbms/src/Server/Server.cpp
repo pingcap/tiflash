@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "Server.h"
-
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
@@ -56,6 +54,8 @@
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/Server.h>
+#include <Server/ServerInfo.h>
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
@@ -65,13 +65,13 @@
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
+#include <TiDB/Schema/SchemaSyncer.h>
+#include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
-#include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
@@ -463,7 +463,7 @@ private:
     }
 
     RunRaftStoreProxyParms parms;
-    pthread_t thread;
+    pthread_t thread{};
     Poco::Logger * log;
 };
 
@@ -476,6 +476,11 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
         int err_cnt = 0;
         for (auto & [table_id, storage] : storages)
         {
+            // This will skip the init of storages that do not contain any data. TiFlash now sync the schema and
+            // create all tables regardless the table have define TiFlash replica or not, so there may be lots
+            // of empty tables in TiFlash.
+            // Note that we still need to init stores that contains data (defined by the stable dir of this storage
+            // is exist), or the data used size reported to PD is not correct.
             try
             {
                 init_cnt += storage->initStoreIfDataDirExist() ? 1 : 0;
@@ -497,6 +502,7 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     if (lazily_init_store)
     {
         LOG_FMT_INFO(log, "Lazily init store.");
+        // apply the inited in another thread to shorten the start time of TiFlash
         std::thread(do_init_stores).detach();
     }
     else
@@ -643,30 +649,39 @@ public:
 
     ~FlashGrpcServerHolder()
     {
-        /// Shut down grpc server.
-        LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown();
-        *is_shutdown = true;
-        // Wait all existed MPPTunnels done to prevent crash.
-        // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
-        const int max_wait_cnt = 300;
-        int wait_cnt = 0;
-        while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+        try
+        {
+            /// Shut down grpc server.
+            LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
+            flash_grpc_server->Shutdown();
+            *is_shutdown = true;
+            // Wait all existed MPPTunnels done to prevent crash.
+            // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
+            const int max_wait_cnt = 300;
+            int wait_cnt = 0;
+            while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
+                std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        for (auto & cq : cqs)
-            cq->Shutdown();
-        for (auto & cq : notify_cqs)
-            cq->Shutdown();
-        thread_manager->wait();
-        flash_grpc_server->Wait();
-        flash_grpc_server.reset();
-        LOG_FMT_INFO(log, "Shut down flash grpc server");
+            for (auto & cq : cqs)
+                cq->Shutdown();
+            for (auto & cq : notify_cqs)
+                cq->Shutdown();
+            thread_manager->wait();
+            flash_grpc_server->Wait();
+            flash_grpc_server.reset();
+            LOG_FMT_INFO(log, "Shut down flash grpc server");
 
-        /// Close flash service.
-        LOG_FMT_INFO(log, "Begin to shut down flash service");
-        flash_service.reset();
-        LOG_FMT_INFO(log, "Shut down flash service");
+            /// Close flash service.
+            LOG_FMT_INFO(log, "Begin to shut down flash service");
+            flash_service.reset();
+            LOG_FMT_INFO(log, "Shut down flash service");
+        }
+        catch (...)
+        {
+            auto message = getCurrentExceptionMessage(false);
+            LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
+            std::terminate();
+        }
     }
 
 private:
@@ -989,6 +1004,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     registerFunctions();
     registerAggregateFunctions();
+    registerWindowFunctions();
     registerTableFunctions();
     registerStorages();
 
@@ -1031,6 +1047,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
         proxy_runner.join();
         LOG_FMT_INFO(log, "tiflash proxy thread is joined");
     });
+
+    /// get CPU/memory/disk info of this server
+    if (tiflash_instance_wrap.proxy_helper)
+    {
+        diagnosticspb::ServerInfoRequest request;
+        request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+        diagnosticspb::ServerInfoResponse response;
+        std::string req = request.SerializeAsString();
+        auto * helper = tiflash_instance_wrap.proxy_helper;
+        helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
+        server_info.parseSysInfo(response);
+        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
+    }
+    else
+    {
+        LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+    }
 
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
@@ -1101,13 +1134,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    // must initialize before the following operation:
-    //   1. load data from disk(because this process may depend on the initialization of global StoragePool)
-    //   2. initialize KVStore service
-    //     1) because we need to check whether this is the first startup of this node, and we judge it based on whether there are any files in kvstore directory
-    //     2) KVStore service also choose its data format based on whether the GlobalStoragePool is initialized
-    if (global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool(), storage_config.enable_ps_v3))
-        LOG_FMT_INFO(log, "PageStorage V3 enabled.");
+
+    global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
+    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
@@ -1141,7 +1171,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Try to increase limit on number of open files.
     {
-        rlimit rlim;
+        rlimit rlim{};
         if (getrlimit(RLIMIT_NOFILE, &rlim))
             throw Poco::Exception("Cannot getrlimit");
 
@@ -1396,10 +1426,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // on ARM processors it can show only enabled at current moment cores
             LOG_FMT_INFO(
                 log,
-                "Available RAM = {}; physical cores = {}; threads = {}.",
-                formatReadableSizeWithBinarySuffix(getMemoryAmount()),
-                getNumberOfPhysicalCPUCores(),
-                std::thread::hardware_concurrency());
+                "Available RAM = {}; physical cores = {}; logical cores = {}.",
+                server_info.memory_info.capacity,
+                server_info.cpu_info.physical_cores,
+                server_info.cpu_info.logical_cores);
         }
 
         LOG_FMT_INFO(log, "Ready for connections.");
@@ -1429,6 +1459,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         /// This object will periodically calculate some metrics.
+        /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);
         attachSystemTablesAsync(*global_context->getDatabase("system"), async_metrics);
 

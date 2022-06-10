@@ -23,6 +23,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
@@ -49,12 +50,17 @@ public:
     {
         auto path = getTemporaryPath();
         dropDataOnDisk(path);
+        dir = restoreFromDisk();
+    }
 
+    static PageDirectoryPtr restoreFromDisk()
+    {
+        auto path = getTemporaryPath();
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        dir = factory.create("PageDirectoryTest", provider, delegator);
+        return factory.create("PageDirectoryTest", provider, delegator, WALStore::Config());
     }
 
 protected:
@@ -69,7 +75,7 @@ try
     auto snap0 = dir->createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, 1, snap0);
 
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -79,7 +85,7 @@ try
     auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
 
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(2, entry2);
@@ -96,7 +102,7 @@ try
         EXPECT_ENTRIES_EQ(expected_entries, dir, ids, snap2);
     }
 
-    PageEntryV3 entry2_v2{.file_id = 2 + 102, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2_v2{.file_id = 2 + 102, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.del(2);
@@ -117,7 +123,7 @@ try
     auto snap0 = dir->createSnapshot();
     EXPECT_ENTRY_NOT_EXIST(dir, page_id, snap0);
 
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(page_id, entry1);
@@ -127,7 +133,7 @@ try
     auto snap1 = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, page_id, snap1);
 
-    PageEntryV3 entry2{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x1234, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x1234, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(page_id, entry2);
@@ -145,7 +151,7 @@ try
 
     // Put identical page within one `edit`
     page_id++;
-    PageEntryV3 entry3{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x12345, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x12345, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(page_id, entry1);
@@ -166,8 +172,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyPutDelRead)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -179,8 +185,8 @@ try
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap1);
     EXPECT_ENTRY_EQ(entry2, dir, 2, snap1);
 
-    PageEntryV3 entry3{.file_id = 3, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry4{.file_id = 4, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry4{.file_id = 4, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.del(2);
@@ -211,8 +217,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyUpdateOnRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -230,14 +236,14 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap1);
 
     // Update on ref page is not allowed
-    PageEntryV3 entry_updated{.file_id = 999, .size = 16, .tag = 0, .offset = 0x123, .checksum = 0x123};
+    PageEntryV3 entry_updated{.file_id = 999, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
         edit.put(3, entry_updated);
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
 
-    PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .tag = 0, .offset = 0x123, .checksum = 0x123};
+    PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
         PageEntriesEdit edit;
         edit.put(2, entry_updated2);
@@ -249,8 +255,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyDeleteOnRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -299,8 +305,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyRefOnRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -337,8 +343,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyDuplicatedRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -404,8 +410,8 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyCollapseDuplicatedRefEntries)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -441,9 +447,9 @@ CATCH
 TEST_F(PageDirectoryTest, ApplyRefToNotExistEntry)
 try
 {
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 3, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry1);
@@ -622,18 +628,18 @@ try
 }
 CATCH
 
-#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                             \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
-    entries.createNewEntry(PageVersionType(VERSION), entry_v##VERSION);
+#define INSERT_BLOBID_ENTRY(BLOBID, VERSION)                                                                                               \
+    PageEntryV3 entry_v##VERSION{.file_id = (BLOBID), .size = (VERSION), .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
+    entries.createNewEntry(PageVersion(VERSION), entry_v##VERSION);
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
-#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                        \
-    PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = 100 * (VERSION) + (EPOCH), .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
-    entries.createNewEntry(PageVersionType((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
+#define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                                          \
+    PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = 100 * (VERSION) + (EPOCH), .padded_size = 0, .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
+    entries.createNewEntry(PageVersion((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
 
 class VersionedEntriesTest : public ::testing::Test
 {
 public:
-    using DerefCounter = std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>>;
+    using DerefCounter = std::map<PageIdV3Internal, std::pair<PageVersion, Int64>>;
     std::tuple<bool, PageEntriesV3, DerefCounter> runClean(UInt64 seq)
     {
         DerefCounter deref_counter;
@@ -642,7 +648,7 @@ public:
         return {all_removed, removed_entries, deref_counter};
     }
 
-    std::tuple<bool, PageEntriesV3> runDeref(UInt64 seq, PageVersionType ver, Int64 decrease_num)
+    std::tuple<bool, PageEntriesV3> runDeref(UInt64 seq, PageVersion ver, Int64 decrease_num)
     {
         PageEntriesV3 removed_entries;
         bool all_removed = entries.derefAndClean(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), ver, decrease_num, removed_entries);
@@ -693,7 +699,7 @@ TEST_F(VersionedEntriesTest, InsertGet)
 
     // Insert delete. Can not get entry with seq >= delete_version.
     // But it won't affect reading with old seq.
-    entries.createDelete(PageVersionType(15));
+    entries.createDelete(PageVersion(15));
     ASSERT_FALSE(entries.getEntry(1).has_value());
     ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_gc_v2_1);
     ASSERT_SAME_ENTRY(*entries.getEntry(3), entry_gc_v2_1);
@@ -721,6 +727,126 @@ TEST_F(VersionedEntriesTest, InsertWithLowerVersion)
     ASSERT_SAME_ENTRY(*entries.getEntry(2), entry_v2);
 }
 
+TEST_F(VersionedEntriesTest, EntryIsVisible)
+try
+{
+    // init state
+    ASSERT_FALSE(entries.isVisible(0));
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_FALSE(entries.isVisible(2));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert some entries
+    INSERT_ENTRY(2);
+    INSERT_ENTRY(3);
+    INSERT_ENTRY(5);
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_TRUE(entries.isVisible(6));
+
+    // insert delete
+    entries.createDelete(PageVersion(6));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert entry after delete
+    INSERT_ENTRY(7);
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_TRUE(entries.isVisible(7));
+    ASSERT_TRUE(entries.isVisible(10000));
+}
+CATCH
+
+TEST_F(VersionedEntriesTest, ExternalPageIsVisible)
+try
+{
+    // init state
+    ASSERT_FALSE(entries.isVisible(0));
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_FALSE(entries.isVisible(2));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert some entries
+    entries.createNewExternal(PageVersion(2));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(10000));
+
+    // insert delete
+    entries.createDelete(PageVersion(6));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert entry after delete
+    entries.createNewExternal(PageVersion(7));
+
+    // after re-create external page, the visible for 1~5 has changed
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_TRUE(entries.isVisible(7));
+    ASSERT_TRUE(entries.isVisible(10000));
+}
+CATCH
+
+TEST_F(VersionedEntriesTest, RefPageIsVisible)
+try
+{
+    // init state
+    ASSERT_FALSE(entries.isVisible(0));
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_FALSE(entries.isVisible(2));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert some entries
+    entries.createNewRef(PageVersion(2), buildV3Id(TEST_NAMESPACE_ID, 2));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(10000));
+
+    // insert delete
+    entries.createDelete(PageVersion(6));
+
+    ASSERT_FALSE(entries.isVisible(1));
+    ASSERT_TRUE(entries.isVisible(2));
+    ASSERT_TRUE(entries.isVisible(3));
+    ASSERT_TRUE(entries.isVisible(4));
+    ASSERT_TRUE(entries.isVisible(5));
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_FALSE(entries.isVisible(10000));
+
+    // insert entry after delete
+    entries.createNewRef(PageVersion(7), buildV3Id(TEST_NAMESPACE_ID, 2));
+
+    // after re-create ref page, the visible for 1~5 has changed
+    ASSERT_FALSE(entries.isVisible(6));
+    ASSERT_TRUE(entries.isVisible(7));
+    ASSERT_TRUE(entries.isVisible(10000));
+}
+CATCH
+
 TEST_F(VersionedEntriesTest, GC)
 try
 {
@@ -731,7 +857,7 @@ try
     INSERT_GC_ENTRY(5, 2);
     INSERT_ENTRY(10);
     INSERT_ENTRY(11);
-    entries.createDelete(PageVersionType(15));
+    entries.createDelete(PageVersion(15));
 
     // noting to be removed
     auto [all_removed, removed_entries, deref_counter] = runClean(1);
@@ -784,15 +910,15 @@ CATCH
 TEST_F(VersionedEntriesTest, DeleteMultiTime)
 try
 {
-    entries.createDelete(PageVersionType(1));
+    entries.createDelete(PageVersion(1));
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
-    entries.createDelete(PageVersionType(15));
-    entries.createDelete(PageVersionType(17));
-    entries.createDelete(PageVersionType(16));
+    entries.createDelete(PageVersion(15));
+    entries.createDelete(PageVersion(17));
+    entries.createDelete(PageVersion(16));
 
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     // <2,0> get removed.
@@ -817,13 +943,13 @@ TEST_F(VersionedEntriesTest, DontCleanWhenBeingRef)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersionType(2));
-    entries.incrRefCount(PageVersionType(2));
-    entries.createDelete(PageVersionType(5));
+    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2));
+    entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(4));
@@ -837,13 +963,13 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // decrease 1 ref counting
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 1);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 1);
     ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_FALSE(all_removed); // should not remove this chain
     ASSERT_FALSE(entries.getEntry(5));
 
     // clear all
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 1);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 1);
     ASSERT_EQ(removed_entries.size(), 1);
     ASSERT_SAME_ENTRY(removed_entries[0], entry_v2);
     ASSERT_TRUE(all_removed); // should remove this chain
@@ -855,13 +981,13 @@ TEST_F(VersionedEntriesTest, DontCleanWhenBeingRef2)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersionType(2));
-    entries.incrRefCount(PageVersionType(2));
-    entries.createDelete(PageVersionType(5));
+    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2));
+    entries.createDelete(PageVersion(5));
 
     // <2, 0> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_v2, *entries.getEntry(4));
@@ -875,7 +1001,7 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 2);
     ASSERT_EQ(removed_entries.size(), 1);
     ASSERT_SAME_ENTRY(removed_entries[0], entry_v2);
     ASSERT_TRUE(all_removed); // should remove this chain
@@ -887,12 +1013,12 @@ TEST_F(VersionedEntriesTest, CleanDuplicatedWhenBeingRefAndAppliedUpsert)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersionType(2));
-    entries.incrRefCount(PageVersionType(2));
+    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
 
@@ -909,7 +1035,7 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 2);
     ASSERT_EQ(removed_entries.size(), 0);
     ASSERT_FALSE(all_removed); // should not remove this chain
     ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
@@ -920,15 +1046,15 @@ TEST_F(VersionedEntriesTest, CleanDuplicatedWhenBeingRefAndAppliedUpsert2)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
-    entries.incrRefCount(PageVersionType(2));
-    entries.incrRefCount(PageVersionType(2));
+    entries.incrRefCount(PageVersion(2));
+    entries.incrRefCount(PageVersion(2));
     INSERT_GC_ENTRY(2, 1);
     INSERT_GC_ENTRY(2, 2);
-    entries.createDelete(PageVersionType(5));
+    entries.createDelete(PageVersion(5));
 
     // <2, 2> is not available after seq=5, but not get removed
     ASSERT_SAME_ENTRY(entry_gc_v2_2, *entries.getEntry(4));
@@ -944,7 +1070,7 @@ try
     ASSERT_EQ(deref_counter.size(), 0);
 
     // clear all
-    std::tie(all_removed, removed_entries) = runDeref(5, PageVersionType(2), 2);
+    std::tie(all_removed, removed_entries) = runDeref(5, PageVersion(2), 2);
     ASSERT_EQ(removed_entries.size(), 1);
     ASSERT_SAME_ENTRY(removed_entries[0], entry_gc_v2_2);
     ASSERT_TRUE(all_removed); // should remove this chain
@@ -956,7 +1082,7 @@ TEST_F(VersionedEntriesTest, ReadAfterGcApplied)
 try
 {
     bool all_removed;
-    std::map<PageIdV3Internal, std::pair<PageVersionType, Int64>> deref_counter;
+    std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> deref_counter;
     PageEntriesV3 removed_entries;
 
     INSERT_ENTRY(2);
@@ -1145,12 +1271,12 @@ class PageDirectoryGCTest : public PageDirectoryTest
 {
 };
 
-#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                                        \
-    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
-    {                                                                                                                          \
-        PageEntriesEdit edit;                                                                                                  \
-        edit.put((PAGE_ID), entry_v##VERSION);                                                                                 \
-        dir->apply(std::move(edit));                                                                                           \
+#define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                                                          \
+    PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
+    {                                                                                                                                            \
+        PageEntriesEdit edit;                                                                                                                    \
+        edit.put((PAGE_ID), entry_v##VERSION);                                                                                                   \
+        dir->apply(std::move(edit));                                                                                                             \
     }
 // Insert an entry into mvcc directory
 #define INSERT_ENTRY(PAGE_ID, VERSION) INSERT_ENTRY_TO(PAGE_ID, VERSION, 1)
@@ -1164,6 +1290,60 @@ class PageDirectoryGCTest : public PageDirectoryTest
         edit.del((PAGE_ID));         \
         dir->apply(std::move(edit)); \
     }
+
+TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
+{
+    PageId page_id0 = 50;
+    PageId page_id1 = 51;
+    PageId page_id2 = 52;
+    PageId page_id3 = 53;
+
+    PageEntryV3 last_entry_for_0;
+    constexpr size_t num_edits_test = 50000;
+    for (size_t i = 0; i < num_edits_test; ++i)
+    {
+        {
+            INSERT_ENTRY(page_id0, i);
+            last_entry_for_0 = entry_vi;
+        }
+        {
+            INSERT_ENTRY(page_id1, i);
+        }
+    }
+    INSERT_DELETE(page_id1);
+    EXPECT_TRUE(dir->tryDumpSnapshot());
+    dir.reset();
+
+    dir = restoreFromDisk();
+    {
+        auto snap = dir->createSnapshot();
+        ASSERT_SAME_ENTRY(dir->get(page_id0, snap).second, last_entry_for_0);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
+    }
+
+    PageEntryV3 last_entry_for_2;
+    for (size_t i = 0; i < num_edits_test; ++i)
+    {
+        {
+            INSERT_ENTRY(page_id2, i);
+            last_entry_for_2 = entry_vi;
+        }
+        {
+            INSERT_ENTRY(page_id3, i);
+        }
+    }
+    INSERT_DELETE(page_id3);
+    EXPECT_TRUE(dir->tryDumpSnapshot());
+
+    dir = restoreFromDisk();
+    {
+        auto snap = dir->createSnapshot();
+        ASSERT_SAME_ENTRY(dir->get(page_id0, snap).second, last_entry_for_0);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
+        ASSERT_SAME_ENTRY(dir->get(page_id2, snap).second, last_entry_for_2);
+        EXPECT_ENTRY_NOT_EXIST(dir, page_id3, snap);
+    }
+}
 
 TEST_F(PageDirectoryGCTest, GCPushForward)
 try
@@ -1386,7 +1566,7 @@ try
     INSERT_ENTRY_ACQ_SNAP(page_id, 5);
     INSERT_ENTRY(another_page_id, 6);
     INSERT_ENTRY(another_page_id, 7);
-    PageEntryV3 entry_v8{.file_id = 1, .size = 8, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_v8{.file_id = 1, .size = 8, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.del(page_id);
@@ -1576,7 +1756,7 @@ TEST_F(PageDirectoryGCTest, GCOnRefedEntries)
 try
 {
     // 10->entry1, 11->10=>11->entry1; del 10->entry1
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(10, entry1);
@@ -1613,7 +1793,7 @@ TEST_F(PageDirectoryGCTest, GCOnRefedEntries2)
 try
 {
     // 10->entry1, 11->10=>11->entry1; del 10->entry1
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(10, entry1);
@@ -1656,7 +1836,7 @@ TEST_F(PageDirectoryGCTest, UpsertOnRefedEntries)
 try
 {
     // 10->entry1, 11->10, 12->10
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(10, entry1);
@@ -1680,7 +1860,7 @@ try
     }
 
     // upsert 10->entry2
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         auto full_gc_entries = dir->getEntriesByBlobIds({1});
@@ -1760,23 +1940,94 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, DumpAndRestore)
+
+TEST_F(PageDirectoryGCTest, GCOnRefedExternalEntries2)
 try
 {
+    {
+        PageEntriesEdit edit; // ingest
+        edit.putExternal(352);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(353, 352);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // ingest done
+        edit.del(352);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // split
+        edit.ref(357, 352);
+        edit.ref(359, 352);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // split done
+        edit.del(353);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit; // one of segment delta-merge
+        edit.del(359);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = dir->getNormalPageId(357, snap);
+        EXPECT_EQ(normal_id.low, 352);
+    }
+    dir->gcInMemEntries();
+    {
+        auto snap = dir->createSnapshot();
+        auto normal_id = dir->getNormalPageId(357, snap);
+        EXPECT_EQ(normal_id.low, 352);
+    }
+
+    auto s0 = dir->createSnapshot();
+    auto edit = dir->dumpSnapshotToEdit(s0);
     auto restore_from_edit = [](const PageEntriesEdit & edit) {
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         PageDirectoryFactory factory;
-        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deseri_edit);
+        return d;
+    };
+    {
+        auto restored_dir = restore_from_edit(edit);
+        auto snap = restored_dir->createSnapshot();
+        auto normal_id = restored_dir->getNormalPageId(357, snap);
+        EXPECT_EQ(normal_id.low, 352);
+    }
+}
+CATCH
+
+
+TEST_F(PageDirectoryGCTest, DumpAndRestore)
+try
+{
+    auto restore_from_edit = [](const PageEntriesEdit & edit) {
+        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+        auto ctx = DB::tests::TiFlashTestEnv::getContext();
+        auto provider = ctx.getFileProvider();
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        PageDirectoryFactory factory;
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deseri_edit);
         return d;
     };
 
-    PageEntryV3 entry_1_v1{.file_id = 1, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_1_v2{.file_id = 1, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_2_v1{.file_id = 2, .size = 1, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_2_v2{.file_id = 2, .size = 2, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_1_v1{.file_id = 1, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_1_v2{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_2_v1{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_2_v2{.file_id = 2, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry_1_v1);
@@ -1804,8 +2055,8 @@ try
 
     // 10->ext, 11->10, del 10->ext
     // 50->entry, 51->50, 52->51=>50, del 50
-    PageEntryV3 entry_50{.file_id = 1, .size = 50, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_60{.file_id = 1, .size = 90, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_50{.file_id = 1, .size = 50, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_60{.file_id = 1, .size = 90, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.del(2);
@@ -1967,9 +2218,9 @@ try
     Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
     Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
 
-    PageEntryV3 entry_1_v1{.file_id = file_id1, .size = 7890, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry_5_v1{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x100, .checksum = 0x4567};
-    PageEntryV3 entry_5_v2{.file_id = file_id2, .size = 255, .tag = 0, .offset = 0x400, .checksum = 0x4567};
+    PageEntryV3 entry_1_v1{.file_id = file_id1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_5_v1{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x100, .checksum = 0x4567};
+    PageEntryV3 entry_5_v2{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x400, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(1, entry_1_v1);
@@ -2021,38 +2272,32 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryTest, GetMaxId)
+TEST_F(PageDirectoryGCTest, CleanAfterDecreaseRef)
 try
 {
-    NamespaceId small = 20;
-    NamespaceId medium = 50;
-    NamespaceId large = 100;
-    ASSERT_EQ(dir->getMaxId(small), 0);
-    ASSERT_EQ(dir->getMaxId(medium), 0);
-    ASSERT_EQ(dir->getMaxId(large), 0);
+    PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    auto restore_from_edit = [](const PageEntriesEdit & edit) {
+        auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
+        auto provider = ctx.getFileProvider();
+        auto path = getTemporaryPath();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        PageDirectoryFactory factory;
+        auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
+        return d;
+    };
+
     {
         PageEntriesEdit edit;
-        edit.put(buildV3Id(small, 1), entry1);
-        edit.put(buildV3Id(large, 2), entry2);
-        dir->apply(std::move(edit));
-        ASSERT_EQ(dir->getMaxId(small), 1);
-        ASSERT_EQ(dir->getMaxId(medium), 0);
-        ASSERT_EQ(dir->getMaxId(large), 2);
-    }
-
-    PageEntryV3 entry3{.file_id = 3, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry4{.file_id = 4, .size = 1024, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    {
-        PageEntriesEdit edit;
-        edit.put(buildV3Id(medium, 300), entry1);
-        edit.put(buildV3Id(medium, 320), entry2);
-        dir->apply(std::move(edit));
-        ASSERT_EQ(dir->getMaxId(small), 1);
-        ASSERT_EQ(dir->getMaxId(medium), 320);
-        ASSERT_EQ(dir->getMaxId(large), 2);
+        edit.put(50, entry_50_1);
+        edit.put(50, entry_50_2);
+        edit.ref(51, 50);
+        edit.del(50);
+        edit.del(51);
+        auto restored_dir = restore_from_edit(edit);
+        auto page_ids = restored_dir->getAllPageIds();
+        ASSERT_EQ(page_ids.size(), 0);
     }
 }
 CATCH

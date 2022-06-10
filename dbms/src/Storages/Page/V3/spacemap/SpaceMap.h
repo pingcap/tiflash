@@ -38,7 +38,8 @@ public:
     {
         SMAP64_INVALID = 0,
         SMAP64_RBTREE = 1,
-        SMAP64_STD_MAP = 2
+        SMAP64_STD_MAP = 2,
+        SMAP64_BIG = 3 // support for writebatch bigger than blobstore.config.file_limit_size
     };
 
     /**
@@ -73,6 +74,7 @@ public:
 
     /**
      * Check a span [offset, offset + length) has been used or not.
+     * Only used in tests
      * 
      * ret value:
      *   true: This span is used, or some sub span is used
@@ -86,10 +88,11 @@ public:
      * It will mark that span to be used and also return a hint of the max capacity available in this SpaceMap. 
      * 
      * return value is <insert_offset, max_cap>:
-     *  insert_offset : start offset for the inserted space
-     *  max_cap : A hint of the largest available space this SpaceMap can hold. 
+     *  insert_offset: start offset for the inserted space
+     *  max_cap: A hint of the largest available space this SpaceMap can hold. 
+     *  is_expansion: Whether it is an expansion span
      */
-    virtual std::pair<UInt64, UInt64> searchInsertOffset(size_t size) = 0;
+    virtual std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) = 0;
 
     /**
      * Get the offset of the last free block. `[margin_offset, +∞)` is not used at all.
@@ -138,6 +141,8 @@ public:
             return "RB-Tree";
         case SMAP64_STD_MAP:
             return "STD Map";
+        case SMAP64_BIG:
+            return "STD Big";
         default:
             return "Invalid";
         }

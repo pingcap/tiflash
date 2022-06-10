@@ -18,6 +18,8 @@
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
@@ -52,6 +54,8 @@ public:
     String getTableName() const override;
     String getDatabaseName() const override;
 
+    void clearData() override;
+
     void drop() override;
 
     BlockInputStreams read(
@@ -71,7 +75,17 @@ public:
 
     void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush) override;
 
-    void mergeDelta(const Context & context) override;
+    /// Merge delta into the stable layer for all segments.
+    ///
+    /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
+    void mergeDelta(const Context & context);
+
+    /// Merge delta into the stable layer for one segment located by the specified start key.
+    /// Returns the range of the merged segment, which can be used to merge the remaining segments incrementally (new_start_key = old_end_key).
+    /// If there is no segment found by the start key, nullopt is returned.
+    ///
+    /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread);
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
@@ -137,9 +151,9 @@ public:
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
 
-    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(bool /* need_block */) override;
+    std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool /* need_block */) override;
 
-    void releaseDecodingBlock(Int64 schema_version, BlockUPtr block) override;
+    void releaseDecodingBlock(Int64 block_decoding_schema_version, BlockUPtr block) override;
 
     bool initStoreIfDataDirExist() override;
 
@@ -178,7 +192,10 @@ private:
     DataTypePtr getPKTypeImpl() const override;
 
     DM::DeltaMergeStorePtr & getAndMaybeInitStore();
-    bool storeInited() const { return store_inited.load(std::memory_order_acquire); }
+    bool storeInited() const
+    {
+        return store_inited.load(std::memory_order_acquire);
+    }
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
     bool dataDirExist();
@@ -211,9 +228,9 @@ private:
     DM::DeltaMergeStorePtr _store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
-    bool is_common_handle;
-    bool pk_is_handle;
-    size_t rowkey_column_size;
+    bool is_common_handle = false;
+    bool pk_is_handle = false;
+    size_t rowkey_column_size = 0;
     OrderedNameSet hidden_columns;
 
     // The table schema synced from TiDB
@@ -221,6 +238,11 @@ private:
 
     mutable std::mutex decode_schema_mutex;
     DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
+    // The following two members must be used under the protection of table structure lock
+    bool decoding_schema_changed = false;
+    // internal version for `decoding_schema_snapshot`
+    Int64 decoding_schema_version = 1;
+
     // avoid creating block every time when decoding row
     std::vector<BlockUPtr> cache_blocks;
     // avoid creating too many cached blocks(the typical num should be less and equal than raft apply thread)

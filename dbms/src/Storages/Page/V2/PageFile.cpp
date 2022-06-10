@@ -134,7 +134,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     char * data_pos = data_buffer;
 
     PageUtil::put(meta_pos, meta_write_bytes);
-    PageUtil::put(meta_pos, STORAGE_FORMAT_CURRENT.page);
+    PageUtil::put(meta_pos, PageFormat::V2);
     PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
@@ -411,7 +411,7 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
 
             if (binary_version == PageFormat::V2)
             {
-                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                const auto num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
@@ -471,24 +471,28 @@ PageFile::MetaMergingReader::~MetaMergingReader()
     page_file.free(meta_buffer, meta_size);
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter)
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(
+    PageFile & page_file,
+    size_t max_meta_offset,
+    const ReadLimiterPtr & read_limiter,
+    const bool background)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
-    reader->initialize(max_meta_offset, read_limiter);
+    reader->initialize(max_meta_offset, read_limiter, background);
     return reader;
 }
 
-PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter)
+PageFile::MetaMergingReaderPtr PageFile::MetaMergingReader::createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter, const bool background)
 {
     auto reader = std::make_shared<PageFile::MetaMergingReader>(page_file);
-    reader->initialize(std::nullopt, read_limiter);
+    reader->initialize(std::nullopt, read_limiter, background);
     return reader;
 }
 
 // Try to initiallize access to meta, read the whole metadata to memory.
 // Status -> Finished if metadata size is zero.
 //        -> Opened if metadata successfully load from disk.
-void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter)
+void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter, const bool background)
 {
     if (status == Status::Opened)
         return;
@@ -523,7 +527,7 @@ void PageFile::MetaMergingReader::initialize(std::optional<size_t> max_meta_offs
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
     SCOPE_EXIT({ underlying_file->close(); });
     meta_buffer = static_cast<char *>(page_file.alloc(meta_size));
-    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, read_limiter, background);
     status = Status::Opened;
 }
 
@@ -645,7 +649,7 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 
             if (binary_version == PageFormat::V2)
             {
-                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                const auto num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
                 {
@@ -770,7 +774,7 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
+size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter, bool background)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -788,7 +792,15 @@ size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, cons
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf, bool enable_failpoint) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), write_limiter, enable_failpoint);
+        PageUtil::writeFile(
+            file,
+            offset,
+            buf.begin(),
+            buf.size(),
+            write_limiter,
+            background,
+            /*truncate_if_failed=*/true,
+            /*enable_failpoint=*/enable_failpoint);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
@@ -865,7 +877,7 @@ PageFile::Reader::~Reader()
     data_file->close();
 }
 
-PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter)
+PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter, bool background)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
@@ -892,7 +904,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read, const ReadLimiterPtr 
     PageMap page_map;
     for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(data_file, entry.offset, pos, entry.size, read_limiter);
+        PageUtil::readFile(data_file, entry.offset, pos, entry.size, read_limiter, background);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -995,7 +1007,6 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
     for (auto & [page_id, entry, fields] : to_read)
     {
         (void)page_id;
-        (void)entry;
         // Sort fields to get better read on disk
         std::sort(fields.begin(), fields.end());
         for (const auto field_index : fields)
@@ -1064,6 +1075,75 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
     last_read_time = Clock::now();
 
     return page_map;
+}
+
+Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read_limiter)
+{
+    ProfileEvents::increment(ProfileEvents::PSMReadPages, 1);
+
+    size_t buf_size = 0;
+
+    std::sort(to_read.fields.begin(), to_read.fields.end());
+    for (const auto field_index : to_read.fields)
+    {
+        buf_size += to_read.entry.getFieldSize(field_index);
+    }
+
+    char * data_buf = static_cast<char *>(alloc(buf_size));
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
+
+    Page page_rc;
+    std::set<Page::FieldOffset> fields_offset_in_page;
+
+    size_t read_size_this_entry = 0;
+    char * write_offset = data_buf;
+
+    for (const auto field_index : to_read.fields)
+    {
+        // TODO: Continuously fields can read by one system call.
+        const auto [beg_offset, end_offset] = to_read.entry.getFieldOffsets(field_index);
+        const auto size_to_read = end_offset - beg_offset;
+        PageUtil::readFile(data_file, to_read.entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+        fields_offset_in_page.emplace(field_index, read_size_this_entry);
+
+        if constexpr (PAGE_CHECKSUM_ON_READ)
+        {
+            auto expect_checksum = to_read.entry.field_offsets[field_index].second;
+            auto field_checksum = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
+            if (unlikely(to_read.entry.size != 0 && field_checksum != expect_checksum))
+            {
+                throw Exception(fmt::format("Page [{}] field [{}], entry offset [{}], entry size[{}], checksum not match, "
+                                            "broken file: {},  expected: 0x{:X}, but: 0x{:X}",
+                                            to_read.page_id,
+                                            field_index,
+                                            to_read.entry.offset,
+                                            to_read.entry.size,
+                                            data_file_path,
+                                            expect_checksum,
+                                            field_checksum),
+                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            }
+
+            read_size_this_entry += size_to_read;
+            write_offset += size_to_read;
+        }
+    }
+
+    Page page;
+    page.page_id = to_read.page_id;
+    page.data = ByteBuffer(data_buf, write_offset);
+    page.mem_holder = mem_holder;
+    page.field_offsets.swap(fields_offset_in_page);
+
+    if (unlikely(write_offset != data_buf + buf_size))
+    {
+        throw Exception(fmt::format("Pos not match, expect to read {} bytes, but only {}.", buf_size, write_offset - data_buf),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
+    last_read_time = Clock::now();
+
+    return page;
 }
 
 bool PageFile::Reader::isIdle(const Seconds & max_idle_time)

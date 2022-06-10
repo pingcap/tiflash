@@ -131,6 +131,7 @@ private:
 };
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
+bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 DAGSchema getSelectSchema(Context & context);
 bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg);
@@ -335,60 +336,94 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
     if (args.size() != 1)
         throw Exception("Args not matched, should be: json_dag_path", ErrorCodes::BAD_ARGUMENTS);
 
-    String json_dag_path = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto json_dag_path = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     auto dag = NaturalDag(json_dag_path, &Poco::Logger::get("MockDAG"));
     dag.init();
     dag.build(context);
-    bool unequal_flag = false;
-    String unequal_msg;
+    std::vector<std::pair<int32_t, String>> failed_req_msg_vec;
     int req_idx = 0;
     for (const auto & it : dag.getReqAndRspVec())
     {
         auto && req = it.first;
         auto && res = it.second;
-        kvrpcpb::Context req_context = req.context();
-        RegionID region_id = req_context.region_id();
-        tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(req.data());
-        RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
-        if (!region)
-            throw Exception(fmt::format("No such region: {}", region_id), ErrorCodes::BAD_ARGUMENTS);
-
-        DAGProperties properties = getDAGProperties("");
-        std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
+        int32_t req_id = dag.getReqIDVec()[req_idx];
+        bool unequal_flag = false;
+        bool failed_flag = false;
+        String unequal_msg;
         static auto log = Logger::get("MockDAG");
-        LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
-        tipb::SelectResponse dag_response;
-        TablesRegionsInfo tables_regions_info(true);
-        auto & table_regions_info = tables_regions_info.getSingleTableRegions();
-        table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
-
-        DAGContext dag_context(dag_request);
-        dag_context.tables_regions_info = std::move(tables_regions_info);
-        dag_context.log = log;
-        context.setDAGContext(&dag_context);
-        DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
-        driver.execute();
-
-        auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-        if (!resp_ptr->ParseFromString(res.data()))
+        try
         {
-            throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
+            unequal_flag = runAndCompareDagReq(req, res, context, unequal_msg);
         }
-        else
+        catch (const Exception & e)
         {
-            unequal_flag |= (!dagRspEqual(context, *resp_ptr, dag_response, unequal_msg));
-            if (unequal_flag)
+            failed_flag = true;
+            unequal_msg = e.message();
+        }
+        catch (...)
+        {
+            failed_flag = true;
+            unequal_msg = "Unknown execution exception!";
+        }
+
+        if (unequal_flag || failed_flag)
+        {
+            failed_req_msg_vec.push_back(std::make_pair(req_id, unequal_msg));
+            if (!dag.continueWhenError())
                 break;
         }
         ++req_idx;
     }
-    // It is all right to throw exception above, dag.clean is only to make it better
     dag.clean(context);
-    if (unequal_flag)
+    if (!failed_req_msg_vec.empty())
     {
         output("Invalid");
-        throw Exception(fmt::format("{}th request results are not equal, msg: {}", req_idx, unequal_msg), ErrorCodes::LOGICAL_ERROR);
+        FmtBuffer fmt_buf;
+        fmt_buf.joinStr(
+            failed_req_msg_vec.begin(),
+            failed_req_msg_vec.end(),
+            [](const auto & pair, FmtBuffer & fb) { fb.fmtAppend("request {} failed, msg: {}", pair.first, pair.second); },
+            "\n");
+        throw Exception(fmt_buf.toString(), ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg)
+{
+    const kvrpcpb::Context & req_context = req.context();
+    RegionID region_id = req_context.region_id();
+    tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(req.data());
+    RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
+    if (!region)
+        throw Exception(fmt::format("No such region: {}", region_id), ErrorCodes::BAD_ARGUMENTS);
+
+    bool unequal_flag = false;
+    DAGProperties properties = getDAGProperties("");
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
+    static auto log = Logger::get("MockDAG");
+    LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
+    tipb::SelectResponse dag_response;
+    TablesRegionsInfo tables_regions_info(true);
+    auto & table_regions_info = tables_regions_info.getSingleTableRegions();
+    table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
+
+    DAGContext dag_context(dag_request);
+    dag_context.tables_regions_info = std::move(tables_regions_info);
+    dag_context.log = log;
+    context.setDAGContext(&dag_context);
+    DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+    driver.execute();
+
+    auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+    if (!resp_ptr->ParseFromString(res.data()))
+    {
+        throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
+    }
+    else
+    {
+        unequal_flag |= (!dagRspEqual(context, *resp_ptr, dag_response, unequal_msg));
+    }
+    return unequal_flag;
 }
 
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
@@ -396,7 +431,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     if (args.empty() || args.size() > 3)
         throw Exception("Args not matched, should be: query[, region-id, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
-    String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = InvalidRegionID;
     if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
@@ -429,8 +464,8 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     if (args.size() < 2 || args.size() > 4)
         throw Exception("Args not matched, should be: query, region-id[, start-ts, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
-    String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    RegionID region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     Timestamp start_ts = DEFAULT_MAX_READ_TSO;
     if (args.size() >= 3)
         start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
@@ -636,14 +671,14 @@ const ASTTablesInSelectQueryElement * getJoin(ASTSelectQuery & ast_query)
     if (!ast_query.tables)
         return nullptr;
 
-    const ASTTablesInSelectQuery & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*ast_query.tables);
+    const auto & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*ast_query.tables);
     if (tables_in_select_query.children.empty())
         return nullptr;
 
     const ASTTablesInSelectQueryElement * joined_table = nullptr;
     for (const auto & child : tables_in_select_query.children)
     {
-        const ASTTablesInSelectQueryElement & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*child);
+        const auto & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*child);
         if (tables_element.table_join)
         {
             if (!joined_table)
@@ -702,7 +737,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
             bool append_pk_column = false;
             for (const auto & expr : ast_query.select_expression_list->children)
             {
-                if (ASTIdentifier * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
+                if (auto * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
                 {
                     if (identifier->getColumnName() == MutableSupport::tidb_pk_column_name)
                     {
@@ -721,7 +756,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
         String right_table_alias;
         {
             String database_name, table_name;
-            const ASTTableExpression & table_to_join = static_cast<const ASTTableExpression &>(*joined_table->table_expression);
+            const auto & table_to_join = static_cast<const ASTTableExpression &>(*joined_table->table_expression);
             if (table_to_join.database_and_table_name)
             {
                 auto identifier = static_cast<const ASTIdentifier &>(*table_to_join.database_and_table_name);
@@ -753,7 +788,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
         bool right_append_pk_column = false;
         for (const auto & expr : ast_query.select_expression_list->children)
         {
-            if (ASTIdentifier * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
+            if (auto * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
             {
                 auto names = splitQualifiedName(identifier->getColumnName());
                 if (names.second == MutableSupport::tidb_pk_column_name)
@@ -796,7 +831,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
     bool has_agg_func = false;
     for (const auto & child : ast_query.select_expression_list->children)
     {
-        const ASTFunction * func = typeid_cast<const ASTFunction *>(child.get());
+        const auto * func = typeid_cast<const ASTFunction *>(child.get());
         if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
         {
             has_agg_func = true;

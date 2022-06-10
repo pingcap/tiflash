@@ -32,6 +32,7 @@ struct PageEntryV3
 public:
     BlobFileId file_id = 0; // The id of page data persisted in
     PageSize size = 0; // The size of page data
+    PageSize padded_size = 0; // The extra align size of page data
     UInt64 tag = 0;
     BlobFileOffset offset = 0; // The offset of page data in file
     UInt64 checksum = 0; // The checksum of whole page data
@@ -40,6 +41,27 @@ public:
     PageFieldOffsetChecksums field_offsets{};
 
 public:
+    PageSize getTotalSize() const
+    {
+        return size + padded_size;
+    }
+
+    inline bool isValid() const { return file_id != INVALID_BLOBFILE_ID; }
+
+    size_t getFieldSize(size_t index) const
+    {
+        if (unlikely(index >= field_offsets.size()))
+            throw Exception(fmt::format("Try to getFieldData of PageEntry [blob_id={}] with invalid [index={}] [fields size={}]",
+                                        file_id,
+                                        index,
+                                        field_offsets.size()),
+                            ErrorCodes::LOGICAL_ERROR);
+        else if (index == field_offsets.size() - 1)
+            return size - field_offsets.back().first;
+        else
+            return field_offsets[index + 1].first - field_offsets[index].first;
+    }
+
     // Return field{index} offsets: [begin, end) of page data.
     std::pair<size_t, size_t> getFieldOffsets(size_t index) const
     {
@@ -65,7 +87,13 @@ inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageId p_id)
 
 inline String toDebugString(const PageEntryV3 & entry)
 {
-    return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}}}", entry.file_id, entry.offset, entry.size, entry.checksum);
+    return fmt::format("PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
+                       entry.file_id,
+                       entry.offset,
+                       entry.size,
+                       entry.checksum,
+                       entry.tag,
+                       entry.field_offsets.size());
 }
 
 } // namespace PS::V3

@@ -184,6 +184,19 @@ public:
         std::swap(o.sequence, sequence);
     }
 
+    void copyWrite(const Write write)
+    {
+        writes.emplace_back(write);
+    }
+
+    void copyWrites(const Writes & writes_)
+    {
+        for (const auto & write_ : writes_)
+        {
+            copyWrite(write_);
+        }
+    }
+
     void clear()
     {
         Writes tmp;
@@ -203,21 +216,35 @@ public:
 
     String toString() const
     {
-        String str;
-        for (const auto & w : writes)
-        {
-            if (w.type == WriteType::PUT)
-                str += DB::toString(w.page_id) + ",";
-            else if (w.type == WriteType::REF)
-                str += DB::toString(w.page_id) + ">" + DB::toString(w.ori_page_id) + ",";
-            else if (w.type == WriteType::DEL)
-                str += "X" + DB::toString(w.page_id) + ",";
-            else if (w.type == WriteType::UPSERT)
-                str += "U" + DB::toString(w.page_id) + ",";
-        }
-        if (!str.empty())
-            str.erase(str.size() - 1);
-        return str;
+        FmtBuffer fmt_buffer;
+        fmt_buffer.joinStr(
+            writes.begin(),
+            writes.end(),
+            [this](const auto w, FmtBuffer & fb) {
+                switch (w.type)
+                {
+                case WriteType::PUT:
+                    fb.fmtAppend("{}.{}", namespace_id, w.page_id);
+                    break;
+                case WriteType::REF:
+                    fb.fmtAppend("{}.{} > {}.{}", namespace_id, w.page_id, namespace_id, w.ori_page_id);
+                    break;
+                case WriteType::DEL:
+                    fb.fmtAppend("X{}.{}", namespace_id, w.page_id);
+                    break;
+                case WriteType::UPSERT:
+                    fb.fmtAppend("U{}.{}", namespace_id, w.page_id);
+                    break;
+                case WriteType::PUT_EXTERNAL:
+                    fb.fmtAppend("E{}.{}", namespace_id, w.page_id);
+                    break;
+                default:
+                    fb.fmtAppend("Unknow {}.{}", namespace_id, w.page_id);
+                    break;
+                };
+            },
+            ",");
+        return fmt_buffer.toString();
     }
 
 private:

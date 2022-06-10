@@ -34,14 +34,8 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class BackgroundService;
 using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 
-class MinTSOScheduler;
-using MPPTaskSchedulerPtr = std::unique_ptr<MinTSOScheduler>;
-
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
-
-struct MPPQueryTaskSet;
-using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 
 class GCManager;
 using GCManagerPtr = std::shared_ptr<GCManager>;
@@ -81,12 +75,9 @@ public:
 
     const Context & getContext() const;
 
-    bool isBgFlushDisabled() const { return disable_bg_flush; }
-
     explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
-    void setSchemaSyncer(SchemaSyncerPtr);
 
     pingcap::pd::ClientPtr getPDClient() const;
 
@@ -139,8 +130,6 @@ private:
     MPPTaskManagerPtr mpp_task_manager;
 
     ::TiDB::StorageEngine engine;
-
-    bool disable_bg_flush;
 
     std::atomic_uint64_t replica_read_max_thread;
     std::atomic_uint64_t batch_read_index_timeout_ms;

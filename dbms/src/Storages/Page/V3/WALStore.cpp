@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
@@ -40,30 +41,42 @@ namespace DB::PS::V3
 std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     String storage_name,
     FileProviderPtr & provider,
-    PSDiskDelegatorPtr & delegator)
+    PSDiskDelegatorPtr & delegator,
+    WALStore::Config config)
 {
-    auto reader = WALStoreReader::create(storage_name, provider, delegator);
+    auto reader = WALStoreReader::create(storage_name,
+                                         provider,
+                                         delegator,
+                                         config.getRecoverMode());
     // Create a new LogFile for writing new logs
     auto last_log_num = reader->lastLogNum() + 1; // TODO reuse old file
     return {
-        std::unique_ptr<WALStore>(new WALStore(std::move(storage_name), delegator, provider, last_log_num)),
+        std::unique_ptr<WALStore>(new WALStore(std::move(storage_name), delegator, provider, last_log_num, std::move(config))),
         reader};
 }
 
+WALStoreReaderPtr WALStore::createReaderForFiles(const String & identifier, const LogFilenameSet & log_filenames, const ReadLimiterPtr & read_limiter)
+{
+    return WALStoreReader::create(identifier, provider, log_filenames, config.getRecoverMode(), read_limiter);
+}
+
 WALStore::WALStore(
-    String storage_name,
+    String storage_name_,
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
-    Format::LogNumberType last_log_num_)
-    : delegator(delegator_)
+    Format::LogNumberType last_log_num_,
+    WALStore::Config config_)
+    : storage_name(std::move(storage_name_))
+    , delegator(delegator_)
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
-    , logger(Logger::get("WALStore", std::move(storage_name)))
+    , logger(Logger::get("WALStore", storage_name))
+    , config(config_)
 {
 }
 
-void WALStore::apply(PageEntriesEdit & edit, const PageVersionType & version, const WriteLimiterPtr & write_limiter)
+void WALStore::apply(PageEntriesEdit & edit, const PageVersion & version, const WriteLimiterPtr & write_limiter)
 {
     for (auto & r : edit.getMutRecords())
     {
@@ -81,7 +94,7 @@ void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write
         std::lock_guard lock(log_file_mutex);
         // Roll to a new log file
         // TODO: Make it configurable
-        if (log_file == nullptr || log_file->writtenBytes() > PAGE_META_ROLL_SIZE)
+        if (log_file == nullptr || log_file->writtenBytes() > config.roll_size)
         {
             auto log_num = last_log_num++;
             auto [new_log_file, filename] = createLogWriter({log_num, 0}, false);
@@ -180,7 +193,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
 
     LOG_FMT_INFO(logger, "Saving directory snapshot");
 
-    // Use {largest_log_num + 1, 1} to save the `edit`
+    // Use {largest_log_num, 1} to save the `edit`
     const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
     // Create a temporary file for saving directory snapshot
     auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*manual_flush*/ true);
@@ -189,36 +202,28 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     ReadBufferFromString payload(serialized);
 
     compact_log->addRecord(payload, serialized.size());
-    compact_log->flush(write_limiter);
+    compact_log->flush(write_limiter, /*background*/ true);
     compact_log.reset(); // close fd explicitly before renaming file.
 
     // Rename it to be a normal log file.
     const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);
     const auto normal_fullname = log_filename.fullname(LogFileStage::Normal);
-    LOG_FMT_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
-    auto f = Poco::File{temp_fullname};
-    f.renameTo(normal_fullname);
-    LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
 
-    // #define ARCHIVE_COMPACTED_LOGS // keep for debug
+    LOG_FMT_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
+    // Use `renameFile` from FileProvider that take good care of encryption path
+    provider->renameFile(
+        temp_fullname,
+        EncryptionPath(temp_fullname, ""),
+        normal_fullname,
+        EncryptionPath(normal_fullname, ""),
+        true);
+    LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
 
     // Remove compacted log files.
     for (const auto & filename : files_snap.persisted_log_files)
     {
-        if (auto f = Poco::File(filename.fullname(LogFileStage::Normal)); f.exists())
-        {
-#ifndef ARCHIVE_COMPACTED_LOGS
-            f.remove();
-#else
-            const Poco::Path archive_path(delegator->defaultPath(), "archive");
-            Poco::File archive_dir(archive_path);
-            if (!archive_dir.exists())
-                archive_dir.createDirectory();
-            auto dest = archive_path.toString() + "/" + filename.filename(LogFileStage::Normal);
-            f.moveTo(dest);
-            LOG_FMT_INFO(logger, "archive {} to {}", filename.fullname(LogFileStage::Normal), dest);
-#endif
-        }
+        const auto log_fullname = filename.fullname(LogFileStage::Normal);
+        provider->deleteRegularFile(log_fullname, EncryptionPath(log_fullname, ""));
     }
 
     FmtBuffer fmt_buf;

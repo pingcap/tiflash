@@ -18,16 +18,18 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Core/Types.h>
-#include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/FlashService.h>
+#include <Flash/Management/ManualCompact.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 
@@ -46,29 +48,34 @@ FlashService::FlashService(IServer & server_)
     : server(server_)
     , security_config(server_.securityConfig())
     , log(&Poco::Logger::get("FlashService"))
+    , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(
+          server_.context().getGlobalContext(),
+          server_.context().getGlobalContext().getSettingsRef()))
 {
     auto settings = server_.context().getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
-    size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
+    auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
     cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
 
-    size_t batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
+    auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
 }
 
+FlashService::~FlashService() = default;
+
 // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
-grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
+grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()> job)
 {
     std::packaged_task<grpc::Status()> task(job);
     std::future<grpc::Status> future = task.get_future();
-    pool->schedule([&task] { task(); });
+    pool.schedule([&task] { task(); });
     return future.get();
 }
 
@@ -94,7 +101,7 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    grpc::Status ret = executeInThreadPool(cop_pool, [&] {
+    grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -128,7 +135,7 @@ grpc::Status FlashService::Coprocessor(
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    grpc::Status ret = executeInThreadPool(batch_cop_pool, [&] {
+    grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -213,7 +220,7 @@ grpc::Status FlashService::Coprocessor(
     return status;
 }
 
-::grpc::Status FlashService::EstablishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
+::grpc::Status FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
                                                                const ::mpp::EstablishMPPConnectionRequest * request,
                                                                ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
                                                                EstablishCallData * calldata)
@@ -345,71 +352,11 @@ grpc::Status FlashService::Coprocessor(
     return grpc::Status::OK;
 }
 
-// This function is deprecated.
-grpc::Status FlashService::BatchCommands(
-    grpc::ServerContext * grpc_context,
-    grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
-{
-    CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
-
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
-
-    tikvpb::BatchCommandsRequest request;
-    while (stream->Read(&request))
-    {
-        tikvpb::BatchCommandsResponse response;
-        GET_METRIC(tiflash_coprocessor_request_count, type_batch).Increment();
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Increment();
-        SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Decrement(); });
-        auto start_time = std::chrono::system_clock::now();
-        SCOPE_EXIT({
-            std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_batch).Observe(duration_sec.count());
-            GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
-        });
-
-        LOG_FMT_DEBUG(log, "Handling batch commands: {}", request.DebugString());
-
-        BatchCommandsContext batch_commands_context(
-            *context,
-            [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
-            *grpc_context);
-        BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
-        auto ret = batch_commands_handler.execute();
-        if (!ret.ok())
-        {
-            LOG_FMT_DEBUG(
-                log,
-                "Handle batch commands request done: {}, {}",
-                ret.error_code(),
-                ret.error_message());
-            return ret;
-        }
-
-        if (!stream->Write(response))
-        {
-            LOG_FMT_DEBUG(log, "Write response failed for unknown reason.");
-            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
-        }
-
-        LOG_FMT_DEBUG(log, "Handle batch commands request done: {}, {}", ret.error_code(), ret.error_message());
-    }
-
-    return grpc::Status::OK;
-}
-
 String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
 {
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
-        return it->second.data();
+        return String(it->second.data(), it->second.size());
+
     return default_val;
 }
 
@@ -449,6 +396,14 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         {
             context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
+
+        String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
+        if (!max_threads.empty())
+        {
+            context->setSetting("max_threads", max_threads);
+            LOG_FMT_INFO(log, "set context setting max_threads to {}", max_threads);
+        }
+
         context->setSetting("enable_async_server", is_async ? "true" : "false");
         context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
         context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
@@ -469,6 +424,17 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         LOG_FMT_ERROR(log, "other exception");
         return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
     }
+}
+
+::grpc::Status FlashService::Compact(::grpc::ServerContext * grpc_context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+
+    return manual_compact_manager->handleRequest(request, response);
 }
 
 } // namespace DB

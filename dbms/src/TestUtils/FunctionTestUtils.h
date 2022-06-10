@@ -527,17 +527,24 @@ ColumnWithTypeAndName createConstColumn(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual);
 
+void blockEqual(
+    const Block & expected,
+    const Block & actual);
+
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator = nullptr);
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = false);
 
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
     const ColumnNumbers & argument_column_numbers,
-    const ColumnsWithTypeAndName & columns);
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = false);
 
 template <typename... Args>
 ColumnWithTypeAndName executeFunction(
@@ -554,7 +561,8 @@ DataTypePtr getReturnTypeForFunction(
     Context & context,
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator = nullptr);
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = false);
 
 template <typename T>
 ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")
@@ -675,9 +683,13 @@ public:
         context.setDAGContext(dag_context_ptr.get());
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator = nullptr)
+    ColumnWithTypeAndName executeFunction(
+        const String & func_name,
+        const ColumnsWithTypeAndName & columns,
+        const TiDB::TiDBCollatorPtr & collator = nullptr,
+        bool raw_function_test = false)
     {
-        return DB::tests::executeFunction(context, func_name, columns, collator);
+        return DB::tests::executeFunction(context, func_name, columns, collator, raw_function_test);
     }
 
     template <typename... Args>
@@ -687,9 +699,14 @@ public:
         return executeFunction(func_name, vec);
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+    ColumnWithTypeAndName executeFunction(
+        const String & func_name,
+        const ColumnNumbers & argument_column_numbers,
+        const ColumnsWithTypeAndName & columns,
+        const TiDB::TiDBCollatorPtr & collator = nullptr,
+        bool raw_function_test = false)
     {
-        return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns);
+        return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
     }
 
     template <typename... Args>
@@ -711,5 +728,6 @@ protected:
 };
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
+#define ASSERT_BLOCK_EQ(expected, actual) DB::tests::blockEqual((expected), (actual))
 } // namespace tests
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <RaftStoreProxyFFI/VersionCheck.h>
@@ -55,7 +56,6 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
 {
     None = 0,
     String,
-    PreHandledSnapshotWithBlock,
     PreHandledSnapshotWithFiles,
     WakerNotifier,
 };
@@ -67,8 +67,7 @@ struct RawRustPtrWrap;
 
 struct RawRustPtrWrap : RawRustPtr
 {
-    RawRustPtrWrap(const RawRustPtrWrap &) = delete;
-    RawRustPtrWrap & operator=(const RawRustPtrWrap &) = delete;
+    DISALLOW_COPY(RawRustPtrWrap);
 
     explicit RawRustPtrWrap(RawRustPtr inner);
     ~RawRustPtrWrap();

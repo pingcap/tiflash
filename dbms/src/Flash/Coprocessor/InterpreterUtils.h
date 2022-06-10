@@ -16,9 +16,12 @@
 
 #include <Common/Logger.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
+class Context;
+
 void restoreConcurrency(
     DAGPipeline & pipeline,
     size_t concurrency,
@@ -34,5 +37,11 @@ void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
     const LoggerPtr & log,
-    bool ignore_block = false);
+    bool ignore_block = false,
+    const String & extra_info = "");
+
+ExpressionActionsPtr generateProjectExpressionActions(
+    const BlockInputStreamPtr & stream,
+    const Context & context,
+    const NamesWithAliases & project_cols);
 } // namespace DB
