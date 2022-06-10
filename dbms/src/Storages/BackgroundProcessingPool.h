@@ -96,7 +96,7 @@ public:
     /// 2. thread B also get the same task
     /// 3. thread A finish the execution of the task quickly, release the task and try to update the next schedule time of the task
     /// 4. thread B find the task is not occupied and execute the task again almost immediately
-    TaskHandle addTask(const Task & task,  bool multi = true,  size_t interval_ms = 0);
+    TaskHandle addTask(const Task & task, bool multi = true, size_t interval_ms = 0);
     void removeTask(const TaskHandle & task);
 
     ~BackgroundProcessingPool();
