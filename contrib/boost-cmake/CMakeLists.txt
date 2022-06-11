@@ -18,6 +18,7 @@ endif ()
 
 include(context.cmake)
 include(fiber.cmake)
+include(container.cmake)
 
 file(GLOB BOOST_INTERNAL_SRC
     ${LIBRARY_DIR}/libs/filesystem/src/*.cpp
@@ -30,5 +31,5 @@ target_include_directories (boost_internal BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
 target_compile_definitions (boost_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
 
-target_link_libraries (boost_internal boost_fiber boost_context)
+target_link_libraries (boost_internal boost_fiber boost_context boost_container)
 
