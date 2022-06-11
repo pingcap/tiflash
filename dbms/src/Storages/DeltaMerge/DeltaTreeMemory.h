@@ -16,6 +16,6 @@
 
 namespace DB::DM {
 
-NumaAwareMemoryHierarchy::Client getClient(size_t size);
+NumaAwareMemoryHierarchy::Client getClient(size_t size, size_t alignment);
 
 }

@@ -18,9 +18,19 @@
 
 namespace DB::DM
 {
+TEST(DeltaTreeMemory, GlobalRecycle)
+{
+    auto global = NumaAwareMemoryHierarchy::GlobalPagePool {};
+    auto & list = global.getFreeList();
+    auto * a = list.allocate();
+    list.recycle(a);
+    auto * b = list.allocate();
+    list.recycle(b);
+    EXPECT_EQ(a, b);
+}
 TEST(DeltaTreeMemory, BasicAllocation)
 {
-    auto client = getClient(sizeof(DefaultDeltaTree::Intern));
+    auto client = getClient(sizeof(DefaultDeltaTree::Intern), alignof(DefaultDeltaTree::Intern));
     client.deallocate(client.allocate());
 }
 }

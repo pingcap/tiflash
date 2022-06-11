@@ -29,10 +29,10 @@ static inline std::shared_ptr<NumaAwareMemoryHierarchy::ThreadLocalMemPool> getT
     return THREAD_LOCAL_MEM_POOL;
 }
 
-NumaAwareMemoryHierarchy::Client getClient(size_t size)
+NumaAwareMemoryHierarchy::Client getClient(size_t size, size_t alignment)
 {
     auto upstream = getThreadLocalMemPool();
-    return { upstream, size };
+    return { upstream, size, alignment};
 }
 
 

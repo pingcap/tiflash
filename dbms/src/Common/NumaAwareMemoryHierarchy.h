@@ -190,9 +190,16 @@ struct Client {
     void deallocate(void * p) const {
         return cell->freelist.recycle(p);
     }
-    Client(std::shared_ptr<ThreadLocalMemPool> upstream, size_t client_size)
+
+    static inline size_t alignedSize(size_t size, size_t alignment) {
+        auto delta = size % alignment;
+        auto offset = delta == 0 ? 0 : alignment - delta;
+        return size + offset;
+    }
+
+    Client(std::shared_ptr<ThreadLocalMemPool> upstream, size_t client_size, size_t alignment = 8)
         : upstream_holder(std::move(upstream))
-        , cell(upstream_holder->createCell(client_size))
+        , cell(upstream_holder->createCell(alignedSize(client_size, alignment)))
     {
 
     }
