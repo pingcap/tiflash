@@ -80,6 +80,7 @@ static inline void * allocateOSPages(size_t count)
         ::munmap(begin + count * PAGE_SIZE + offset, PAGE_SIZE - offset);
         result = begin + offset;
     }
+    CurrentMemoryTracker::alloc(count * PAGE_SIZE);
     return result;
 }
 
@@ -93,6 +94,7 @@ void decommitPages(void * pointer, size_t count)
     {
         ::madvise(pointer, count * PAGE_SIZE, MADV_DONTNEED);
     }
+    CurrentMemoryTracker::free(count * PAGE_SIZE);
 }
 
 GlobalPagePool::GlobalPagePool()
@@ -144,7 +146,7 @@ static inline void * allocateFrom(std::mutex & lock, Node *& freelist, size_t nu
 
 static inline void recycleTo(std::mutex & lock, Node *& freelist, void * p)
 {
-    decommitPages(p, 2097152 / PAGE_SIZE);
+    decommitPages(p, SIZE_2MIB / PAGE_SIZE);
     {
         std::unique_lock hold{lock};
         freelist = ::new (p) Node{freelist};
