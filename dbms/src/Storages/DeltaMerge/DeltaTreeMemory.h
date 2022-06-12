@@ -14,8 +14,75 @@
 #pragma once
 #include <Common/NumaAwareMemoryHierarchy.h>
 
-namespace DB::DM {
+namespace DB::DM
+{
 
 NumaAwareMemoryHierarchy::Client getClient(size_t size, size_t alignment);
 
-}
+template <class Leaf, class Intern>
+class MultiLevelAllocator
+{
+private:
+    NumaAwareMemoryHierarchy::Client leaf_client;
+    NumaAwareMemoryHierarchy::Client intern_client;
+
+public:
+    MultiLevelAllocator()
+        : leaf_client(getClient(sizeof(Leaf), alignof(Leaf)))
+        , intern_client(getClient(sizeof(Intern), alignof(Intern)))
+    {}
+
+    void * allocateLeaf()
+    {
+        return leaf_client.allocate();
+    }
+
+    void * allocateIntern()
+    {
+        return intern_client.allocate();
+    }
+
+    void deallocateLeaf(void * p)
+    {
+        return leaf_client.deallocate(p);
+    }
+
+    void deallocateIntern(void * p)
+    {
+        return intern_client.deallocate(p);
+    }
+};
+
+template <class Base, class Leaf, class Intern>
+class ProxyAllocator
+{
+private:
+    Base base;
+
+public:
+    ProxyAllocator()
+        : base()
+    {}
+
+    void * allocateLeaf()
+    {
+        return base.alloc(sizeof(Leaf), alignof(Leaf));
+    }
+
+    void * allocateIntern()
+    {
+        return base.alloc(sizeof(Intern), alignof(Intern));
+    }
+
+    void deallocateLeaf(void * p)
+    {
+        return base.free(p, sizeof(Leaf));
+    }
+
+    void deallocateIntern(void * p)
+    {
+        return base.free(p, sizeof(Intern));
+    }
+};
+
+} // namespace DB::DM
