@@ -16,7 +16,6 @@
 
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/DeltaTreeMemory.h>
 #include <Storages/DeltaMerge/Tuple.h>
 #include <common/logger_useful.h>
 
@@ -641,7 +640,7 @@ public:
     auto end() { return Iterator(entries.end()); }
 };
 
-template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
+template <class ValueSpace, size_t M, size_t F, size_t S, template <class, class> typename Allocator>
 class DeltaTree
 {
 public:
@@ -674,7 +673,7 @@ private:
     size_t num_deletes = 0;
     size_t num_entries = 0;
 
-    Allocator * allocator = nullptr;
+    Allocator<Leaf, Intern> * allocator = nullptr;
     size_t bytes = 0;
 
     Poco::Logger * log = nullptr;
@@ -738,7 +737,10 @@ private:
     template <typename T>
     void freeNode(T * node)
     {
-        allocator->free(reinterpret_cast<char *>(node), sizeof(T));
+        if constexpr (std::is_same_v<T, Intern>)
+            allocator->deallocateIntern(node);
+        else
+            allocator->deallocateLeaf(node);
 
         bytes -= sizeof(T);
     }
@@ -746,7 +748,11 @@ private:
     template <typename T>
     T * createNode()
     {
-        T * n = reinterpret_cast<T *>(allocator->alloc(sizeof(T)));
+        T * n;
+        if constexpr (std::is_same_v<T, Intern>)
+            n = reinterpret_cast<T *>(allocator->allocateIntern());
+        else
+            n = reinterpret_cast<T *>(allocator->allocateLeaf());
         new (n) T();
 
         bytes += sizeof(T);
@@ -776,7 +782,7 @@ private:
 
     void init(const ValueSpacePtr & insert_value_space_)
     {
-        allocator = new Allocator();
+        allocator = new Allocator<Leaf, Intern>();
 
         log = &Poco::Logger::get("DeltaTree");
 
@@ -877,7 +883,7 @@ public:
     void updateTupleId(const TupleRefs & tuple_refs, size_t offset);
 };
 
-#define DT_TEMPLATE template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
+#define DT_TEMPLATE template <class ValueSpace, size_t M, size_t F, size_t S, template <class, class> typename Allocator>
 #define DT_CLASS DeltaTree<ValueSpace, M, F, S, Allocator>
 
 DT_TEMPLATE
@@ -886,7 +892,7 @@ DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
     , num_inserts(o.num_inserts)
     , num_deletes(o.num_deletes)
     , num_entries(o.num_entries)
-    , allocator(new Allocator())
+    , allocator(new Allocator<Leaf, Intern>())
     , log(&Poco::Logger::get("DeltaTree"))
 {
     NodePtr my_root;
