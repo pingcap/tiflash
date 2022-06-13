@@ -1157,7 +1157,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     }
     auto alter_lock = storage->lockForAlter(getThreadName());
     storage->alterFromTiDB(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
-    LOG_FMT_INFO(log, "Tombstoned t able {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_FMT_INFO(log, "Tombstoned table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
 }
 
 template <typename Getter, typename NameMapper>
