@@ -17,6 +17,8 @@ include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 add_headers_and_sources(flash_service .)
 add_headers_and_sources(flash_service ./Coprocessor)
 add_headers_and_sources(flash_service ./Mpp)
+add_headers_and_sources(flash_service ./Planner)
+add_headers_and_sources(flash_service ./Planner/plans)
 add_headers_and_sources(flash_service ./Statistics)
 add_headers_and_sources(flash_service ./Management)
 
