@@ -756,6 +756,7 @@ BlockInputStreams StorageDeltaMerge::read(
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
         query_info.req_id,
+        true,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);

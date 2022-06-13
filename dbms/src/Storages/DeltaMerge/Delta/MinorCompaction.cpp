@@ -29,8 +29,9 @@ MinorCompaction::MinorCompaction(size_t compaction_src_level_, size_t current_co
     , current_compaction_version{current_compaction_version_}
 {}
 
-void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader)
+DeltaIndex::Updates MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader)
 {
+    DeltaIndex::Updates delta_index_updates;
     for (auto & task : tasks)
     {
         if (task.is_trivial_move)
@@ -55,6 +56,11 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
             wbs.removed_log.delPage(t_file->getDataPageId());
         }
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
+        IColumn::Permutation perm;
+        if (sortBlockByPk(getExtraHandleColumnDefine(context.is_common_handle), compact_block, perm))
+        {
+            delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
+        }
         auto compact_rows = compact_block.rows();
         auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
         wbs.writeLogAndData();
@@ -64,6 +70,7 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
         total_compact_rows += compact_rows;
         result_compact_files += 1;
     }
+    return delta_index_updates;
 }
 
 bool MinorCompaction::commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs)

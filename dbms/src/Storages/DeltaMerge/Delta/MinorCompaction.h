@@ -33,7 +33,12 @@ class MinorCompaction : public std::enable_shared_from_this<MinorCompaction>
 public:
     struct Task
     {
-        Task() = default;
+        Task(size_t rows_offset_, size_t deletes_offset_)
+            : rows_offset(rows_offset_), deletes_offset(deletes_offset_) {}
+
+
+        size_t rows_offset = 0;
+        size_t deletes_offset = 0;
 
         ColumnFilePersisteds to_compact;
         size_t total_rows = 0;
@@ -73,7 +78,7 @@ public:
         bool is_trivial_move = false;
         if (task.to_compact.size() == 1)
         {
-            // Maybe this column file is small, but it cannot be merged with other column files, so also remove it's cache if possible.
+            // Maybe this column file is small, but it cannot be merged with other column files, so also remove its cache if possible.
             for (auto & f : task.to_compact)
             {
                 if (auto * t_file = f->tryToTinyFile(); t_file)
@@ -94,7 +99,7 @@ public:
     size_t getCompactionVersion() const { return current_compaction_version; }
 
     /// Create new column file by combining several small `ColumnFileTiny`s
-    void prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
+    DeltaIndex::Updates prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
 
     /// Add new column files and remove old column files in `ColumnFilePersistedSet`
     bool commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs);

@@ -104,7 +104,7 @@ protected:
                 cur_segment = task->segment;
                 if (is_raw)
                 {
-                    cur_stream = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, do_range_filter_for_raw);
+                    cur_stream = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, do_range_filter_for_raw);
                 }
                 else
                 {

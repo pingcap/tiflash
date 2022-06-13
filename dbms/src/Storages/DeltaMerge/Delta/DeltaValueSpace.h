@@ -376,8 +376,8 @@ public:
 class DeltaValueInputStream : public IBlockInputStream
 {
 private:
-    ColumnFileSetInputStream mem_table_input_stream;
-    ColumnFileSetInputStream persisted_files_input_stream;
+    BlockInputStreamPtr mem_table_input_stream;
+    BlockInputStreamPtr persisted_files_input_stream;
 
     bool persisted_files_done = false;
 
@@ -386,25 +386,28 @@ public:
                           const DeltaSnapshotPtr & delta_snap_,
                           const ColumnDefinesPtr & col_defs_,
                           const RowKeyRange & segment_range_)
-        : mem_table_input_stream(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)
-        , persisted_files_input_stream(context_, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_)
+        : mem_table_input_stream{std::make_shared<ColumnFileSetInputStream>(context_, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_)}
+        , persisted_files_input_stream{std::make_shared<ColumnFileSetInputStream>(context_, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_)}
     {}
 
     String getName() const override { return "DeltaValue"; }
-    Block getHeader() const override { return persisted_files_input_stream.getHeader(); }
+    Block getHeader() const override { return persisted_files_input_stream->getHeader(); }
+
+    BlockInputStreamPtr getPersistedFilesInputStream() { return persisted_files_input_stream; }
+    BlockInputStreamPtr getMemTableInputStream() { return mem_table_input_stream; }
 
     Block read() override
     {
         if (persisted_files_done)
-            return mem_table_input_stream.read();
+            return mem_table_input_stream->read();
 
-        Block block = persisted_files_input_stream.read();
+        Block block = persisted_files_input_stream->read();
         if (block)
             return block;
         else
         {
             persisted_files_done = true;
-            return mem_table_input_stream.read();
+            return mem_table_input_stream->read();
         }
     }
 };

@@ -363,6 +363,7 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            const String & tracing_id,
+                           bool is_raw = true,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);

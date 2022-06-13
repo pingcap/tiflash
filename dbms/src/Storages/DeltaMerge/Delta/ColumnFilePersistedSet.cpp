@@ -56,8 +56,11 @@ void ColumnFilePersistedSet::updateColumnFileStats()
     size_t new_rows = 0;
     size_t new_bytes = 0;
     size_t new_deletes = 0;
-    for (auto & file_level : persisted_files_levels)
+    rows_and_deletes_offsets_per_level.clear();
+    for (size_t i = persisted_files_levels.size() - 1; i >= 0; i++)
     {
+        rows_and_deletes_offsets_per_level[i] = std::make_pair(new_rows, new_deletes);
+        auto & file_level = persisted_files_levels[i];
         new_persisted_files_count += file_level.size();
         for (auto & file : file_level)
         {
@@ -343,17 +346,21 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
 
         auto compaction = std::make_shared<MinorCompaction>(next_compaction_level, minor_compaction_version);
         auto & level = persisted_files_levels[next_compaction_level];
+        auto cur_rows_offset = rows_and_deletes_offsets_per_level[next_compaction_level].first;
+        auto cur_deletes_offset = rows_and_deletes_offsets_per_level[next_compaction_level].second;
         if (!level.empty())
         {
             bool is_all_trivial_move = true;
-            MinorCompaction::Task cur_task;
+            MinorCompaction::Task cur_task{cur_rows_offset, cur_deletes_offset};
             for (auto & file : level)
             {
                 auto pack_up_cur_task = [&]() {
                     bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
                     is_all_trivial_move = is_all_trivial_move && is_trivial_move;
-                    cur_task = {};
+                    cur_task = MinorCompaction::Task{cur_rows_offset, cur_deletes_offset};
                 };
+                cur_rows_offset += file->getRows();
+                cur_deletes_offset += file->getDeletes();
 
                 if (auto * t_file = file->tryToTinyFile(); t_file)
                 {

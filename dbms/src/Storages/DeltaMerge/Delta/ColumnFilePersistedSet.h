@@ -56,6 +56,9 @@ public:
 private:
     PageId metadata_id;
     ColumnFilePersistedLevels persisted_files_levels;
+    using RowsAndDeletesOffsets = std::vector<std::pair<size_t, size_t>>;
+    RowsAndDeletesOffsets rows_and_deletes_offsets_per_level;
+
     // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> persisted_files_count = 0;
     std::atomic<size_t> persisted_files_level_count = 0;
