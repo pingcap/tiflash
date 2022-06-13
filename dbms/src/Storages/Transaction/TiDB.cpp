@@ -772,6 +772,36 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
+std::string_view modeToString(TiFlashMode mode)
+{
+    switch (mode)
+    {
+    case TiFlashMode::Normal:
+        return "";
+    case TiFlashMode::Fast:
+        return "fast";
+    default:
+        return "";
+    }
+}
+
+TiFlashMode parseMode(std::string_view mode_str)
+{
+    if (mode_str == "")
+    {
+        return TiFlashMode::Normal;
+    }
+    else if (mode_str == "fast")
+    {
+        return TiFlashMode::Fast;
+    }
+    else
+    {
+        return TiFlashMode::Normal;
+    }
+}
+
+
 ///////////////////////
 ////// TableInfo //////
 ///////////////////////
@@ -839,6 +869,8 @@ try
     json->set("schema_version", schema_version);
 
     json->set("tiflash_replica", replica_info.getJSONObject());
+
+    json->set("tiflash_mode", std::string{modeToString(mode)});
 
     json->stringify(buf);
 
@@ -925,6 +957,11 @@ try
         {
             replica_info.deserialize(replica_obj);
         }
+    }
+    if (obj->has("tiflash_mode"))
+    {
+        auto mode_str = obj->getValue<String>("tiflash_mode");
+        mode = parseMode(mode_str);
     }
     if (is_common_handle && index_infos.size() != 1)
     {
@@ -1127,5 +1164,6 @@ ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
     }
     return ret;
 }
+
 
 } // namespace TiDB

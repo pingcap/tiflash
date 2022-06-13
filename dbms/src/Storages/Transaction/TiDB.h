@@ -323,6 +323,12 @@ struct IndexInfo
     bool is_global;
 };
 
+enum class TiFlashMode
+{
+    Normal,
+    Fast,
+};
+
 struct TableInfo
 {
     TableInfo() = default;
@@ -372,6 +378,8 @@ struct TableInfo
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
+    TiFlashMode mode;
+
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
     ColumnID getColumnID(const String & name) const;
@@ -397,5 +405,8 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+
+std::string_view modeToString(TiFlashMode mode);
+TiFlashMode parseMode(std::string_view mode_str);
 
 } // namespace TiDB
