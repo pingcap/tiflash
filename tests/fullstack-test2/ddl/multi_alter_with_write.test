@@ -23,7 +23,6 @@
 >> DBGInvoke __init_fail_point()
 >> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
 
-
 # -----------------------------------------------------------------------------
 # Order 1 : write cmd 1 | alter cmd 1 | write cmd 2 | alter cmd 2 | write cmd 3
 # -----------------------------------------------------------------------------
@@ -196,7 +195,6 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
 └─────┴──────┴───────┴─────┴─────┘
-
 
 # write cmd 2
 mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
