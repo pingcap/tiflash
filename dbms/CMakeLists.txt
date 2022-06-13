@@ -316,6 +316,7 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
         )
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
+    target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
     target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark clickhouse_functions)
     if (ENABLE_TIFLASH_DTWORKLOAD)
