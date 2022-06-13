@@ -24,4 +24,5 @@ namespace DB::PhysicalPlanHelper
 Names schemaToNames(const NamesAndTypes & schema);
 
 ExpressionActionsPtr newActions(const Block & input_block, const Context & context);
+
 } // namespace DB::PhysicalPlanHelper
