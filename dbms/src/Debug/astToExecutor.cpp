@@ -1674,10 +1674,7 @@ ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
 
 ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame)
 {
-    std::vector<ASTPtr> window_exprs;
-    std::vector<ASTPtr> order_columns;
     std::vector<ASTPtr> partition_columns;
-
     if (partition_by_expr_list != nullptr)
     {
         for (const auto & child : partition_by_expr_list->children)
@@ -1690,6 +1687,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
         }
     }
 
+    std::vector<ASTPtr> order_columns;
     if (order_by_expr_list != nullptr)
     {
         for (const auto & child : order_by_expr_list->children)
@@ -1704,6 +1702,8 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
 
     DAGSchema output_schema;
     output_schema.insert(output_schema.end(), input->output_schema.begin(), input->output_schema.end());
+
+    std::vector<ASTPtr> window_exprs;
     if (func_desc_list != nullptr)
     {
         for (const auto & expr : func_desc_list->children)

@@ -583,7 +583,7 @@ void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
         window_description.window_functions_descriptions.begin(),
         window_description.window_functions_descriptions.end(),
         [&](const auto & func, FmtBuffer & b) {
-            b.fmtAppend("{}", func.window_function->getName());
+            b.append(func.window_function->getName());
         },
         ", ");
     buffer.fmtAppend(

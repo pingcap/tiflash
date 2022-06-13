@@ -245,6 +245,7 @@ ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
 ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp)
 {
     std::vector<typename TypeTraits<MyDateTime>::FieldType> vec;
+    vec.reserve(v.size());
     for (const auto & value_str : v)
     {
         Field value = parseMyDateTime(value_str, fsp);
@@ -257,6 +258,7 @@ ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, 
 ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp)
 {
     std::vector<std::optional<typename TypeTraits<MyDateTime>::FieldType>> vec;
+    vec.reserve(v.size());
     for (const auto & value_str : v)
     {
         if (!value_str.empty())
