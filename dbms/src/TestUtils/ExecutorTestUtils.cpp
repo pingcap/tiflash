@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
+
+#include <functional>
+
 namespace DB::tests
 {
 DAGContext & ExecutorTest::getDAGContext()
@@ -34,15 +38,20 @@ void ExecutorTest::initializeContext()
 
 void ExecutorTest::SetUpTestCase()
 {
-    try
-    {
-        DB::registerFunctions();
-        DB::registerAggregateFunctions();
-    }
-    catch (DB::Exception &)
-    {
-        // Maybe another test has already registered, ignore exception here.
-    }
+    auto register_func = [](std::function<void()> func) {
+        try
+        {
+            func();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registered, ignore exception here.
+        }
+    };
+
+    register_func(DB::registerFunctions);
+    register_func(DB::registerAggregateFunctions);
+    register_func(DB::registerWindowFunctions);
 }
 
 void ExecutorTest::initializeClientInfo()
@@ -123,6 +132,13 @@ void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & requ
 void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
 {
     executeStreams(request, context.executorIdColumnsMap(), expect_columns, concurrency);
+}
+
+void ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, SourceType type, size_t concurrency)
+{
+    std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
+    source_columns_map[getSourceName(type)] = source_columns;
+    executeStreams(request, source_columns_map, expect_columns, concurrency);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
