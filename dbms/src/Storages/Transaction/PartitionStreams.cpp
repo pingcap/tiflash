@@ -164,10 +164,14 @@ static void writeRegionDataToStorage(
     /// decoding data. Check the test case for more details.
     FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_cmd);
 
+    LOG_FMT_TRACE(log, "[for test only] begin decode and write");
     /// Try read then write once.
     {
         if (atomic_read_write(false))
+        {
+            LOG_FMT_TRACE(log, "[for test only] first decode sucess");
             return;
+        }
     }
 
     /// If first try failed, sync schema and force read then write.
@@ -180,6 +184,8 @@ static void writeRegionDataToStorage(
             // TODO: Enrich exception message.
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
                             ErrorCodes::LOGICAL_ERROR);
+
+        LOG_FMT_TRACE(log, "[for test only] second decode sucess");
     }
 }
 

@@ -39,9 +39,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -54,9 +52,7 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # make alter cmd 1 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
 └─────┴──────┴───────┴─────┴─────┘
@@ -67,9 +63,7 @@ mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1);
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
 │ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
@@ -83,9 +77,7 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -97,9 +89,7 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -107,7 +97,6 @@ func> wait_table test t
 └─────┴───────┴─────┴─────┘
 
 >> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
-
 
 # ---------------------------------------------------------------------------------------------
 # Order 2 : write cmd 1 | alter cmd 1 | write cmd 2 | write cmd 3 --> sync schema(alter cmd 2)
@@ -125,9 +114,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -138,9 +125,7 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # make alter cmd 1 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
 └─────┴──────┴───────┴─────┴─────┘
@@ -151,9 +136,7 @@ mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1);
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
 │ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
@@ -170,10 +153,8 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
 # check what happen after write cmd 3 --> call sync schema and get alter cmd 2 happen
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -198,9 +179,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -211,9 +190,7 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # make alter cmd 1 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
 └─────┴──────┴───────┴─────┴─────┘
@@ -227,14 +204,10 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -248,9 +221,7 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -275,9 +246,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -288,7 +257,7 @@ func> wait_table test t
 mysql> alter table test.t add column e decimal(6,1) NULL;
 
 # check no schema change before write cmd 2 take effect
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -299,10 +268,8 @@ mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1);
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
 # check what happen after write cmd 2 --> should call sync schema, get the alter cmd 1 happened.
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
 │ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
@@ -316,9 +283,7 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -330,9 +295,7 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -357,9 +320,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -375,14 +336,14 @@ mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1);
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
 # check what happen after write cmd 2 --> should call sync schema, get the alter cmd 1 happened.
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
 │ 3   │ 0.20 │ ccc   │ 3   │ 0.1 │
 └─────┴──────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
 
 # alter cmd 2
 mysql> alter table test.t drop column b;
@@ -393,10 +354,8 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
 # check what happen after write cmd 3 --> should call sync schema, get the alter cmd 2 happened.
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -421,9 +380,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -442,10 +399,8 @@ mysql> alter table test.t drop column b;
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
 # check what happen after write cmd 2 --> should call sync schema, get the alter cmd 1 && alter cmd 2 happened.
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -459,9 +414,7 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
@@ -469,7 +422,6 @@ func> wait_table test t
 └─────┴───────┴─────┴─────┘
 
 >> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
-
 
 # -------------------------------------------------------------------------------
 # Order 7 : alter cmd 1 | write cmd 1 | write cmd 2 | alter cmd 2 | write cmd 3
@@ -487,9 +439,7 @@ mysql> insert into test.t (a, b, c) values (0, 0, ' ');
  
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 0   │ 0.00 │       │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -503,9 +453,7 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # make alter cmd 1 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 0   │ 0.00 │       │ 0   │ \N  │
 └─────┴──────┴───────┴─────┴─────┘
@@ -516,9 +464,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 0   │ 0.00 │       │ 0   │ \N  │
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
@@ -532,9 +478,7 @@ mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1);
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 0   │ 0.00 │       │ 0   │ \N  │
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
@@ -549,9 +493,7 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 0   │       │ 0   │ \N  │
 │ 1   │ abc   │ 0   │ \N  │
@@ -564,9 +506,7 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 0   │       │ 0   │ \N  │
 │ 1   │ abc   │ 0   │ \N  │
@@ -591,7 +531,7 @@ mysql> insert into test.t (a, b, c) values (0, 0, ' ');
  
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 0   │ 0.00 │       │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -604,9 +544,7 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # make alter cmd 1 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 0   │ 0.00 │       │ 0   │ \N  │
 └─────┴──────┴───────┴─────┴─────┘
@@ -617,9 +555,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 0   │ 0.00 │       │ 0   │ \N  │
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
@@ -633,9 +569,7 @@ mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1);
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 0   │ 0.00 │       │ 0   │ \N  │
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
@@ -653,10 +587,8 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
 # check what happen after write cmd 3 --> should call sync schema, get the alter cmd 2 happened.
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 0   │       │ 0   │ \N  │
 │ 1   │ abc   │ 0   │ \N  │
@@ -681,9 +613,7 @@ mysql> insert into test.t (a, b, c) values (0, 0, ' ');
  
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 0   │ 0.00 │       │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -696,9 +626,7 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # make alter cmd 1 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 0   │ 0.00 │       │ 0   │ \N  │
 └─────┴──────┴───────┴─────┴─────┘
@@ -709,9 +637,7 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┬─e───┐
 │ 0   │ 0.00 │       │ 0   │ \N  │
 │ 1   │ 4.50 │ abc   │ 0   │ \N  │
@@ -728,14 +654,10 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 0   │       │ 0   │ \N  │
 │ 1   │ abc   │ 0   │ \N  │
@@ -748,9 +670,7 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 0   │       │ 0   │ \N  │
 │ 1   │ abc   │ 0   │ \N  │
@@ -776,9 +696,7 @@ mysql> insert into test.t (a, b, c) values (0, 0, ' ');
  
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 0   │ 0.00 │       │ 0   │
 └─────┴──────┴───────┴─────┘
@@ -794,8 +712,6 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # make alter cmd 1 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
 # write cmd 2
 mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
 
@@ -805,14 +721,10 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-func> wait_table test t
-
 # make write cmd 1 and write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 0   │       │ 0   │ \N  │
 │ 1   │ abc   │ 0   │ \N  │
@@ -825,9 +737,7 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
-func> wait_table test t
-
-=> DBGInvoke query_mapped('selraw * from \$d.\$t', test, t)
+=> DBGInvoke query_mapped('select * from \$d.\$t', test, t)
 ┌─a───┬─c─────┬─d───┬─e───┐
 │ 0   │       │ 0   │ \N  │
 │ 1   │ abc   │ 0   │ \N  │
