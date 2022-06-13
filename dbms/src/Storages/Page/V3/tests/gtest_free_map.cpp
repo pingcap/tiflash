@@ -459,6 +459,8 @@ TEST_P(SpaceMapTest, TestGetUsedBoundary)
     {
         auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
         ASSERT_EQ(smap->getUsedBoundary(), 0);
+        ASSERT_TRUE(smap->markUsed(0, 100));
+        ASSERT_EQ(smap->getUsedBoundary(), 100);
     }
 }
 
