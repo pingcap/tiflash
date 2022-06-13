@@ -21,7 +21,6 @@ namespace DB
 {
 void registerTableFunctionMerge(TableFunctionFactory & factory);
 void registerTableFunctionNumbers(TableFunctionFactory & factory);
-void registerTableFunctionFile(TableFunctionFactory & factory);
 
 void registerTableFunctions()
 {
@@ -29,7 +28,6 @@ void registerTableFunctions()
 
     registerTableFunctionMerge(factory);
     registerTableFunctionNumbers(factory);
-    registerTableFunctionFile(factory);
 }
 
 } // namespace DB
