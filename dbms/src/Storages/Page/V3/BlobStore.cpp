@@ -1038,7 +1038,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             if (right_margin != stat->sm_total_size)
             {
                 auto blobfile = getBlobFile(stat->id);
-                LOG_FMT_INFO(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
+                LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
                 blobfile->truncate(right_margin);
                 blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
 
