@@ -107,8 +107,8 @@
 
 #define DEFAULT_HTTP_PORT 8123
 
-const auto PROCESSOR_COUNT = std::thread::hardware_concurrency();
-const auto DBMS_DEFAULT_BACKGROUND_POOL_SIZE = PROCESSOR_COUNT != 0 ? PROCESSOR_COUNT / 4 : 16;
+static const auto PROCESSOR_COUNT = std::thread::hardware_concurrency();
+static const auto DBMS_DEFAULT_BACKGROUND_POOL_SIZE = PROCESSOR_COUNT != 0 ? PROCESSOR_COUNT / 4 : 16;
 #if !defined(__x86_64__) && !defined(__aarch64__)
 //    #error PLATFORM_NOT_SUPPORTED
 #endif

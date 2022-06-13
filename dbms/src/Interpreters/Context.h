@@ -380,9 +380,9 @@ public:
     bool useL0Opt() const;
 
     BackgroundProcessingPool & getBackgroundPool();
-    BackgroundProcessingPool & setBackgroundPool(UInt16 pool_size);
+    BackgroundProcessingPool & initializeBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBlockableBackgroundPool();
-    BackgroundProcessingPool & setBlockableBackgroundPool(UInt16 pool_size);
+    BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 

@@ -1136,8 +1136,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Initialize the background thread pool.
     /// set the background pool & blockable background pool size to the a quarter of of number of logical CPU cores of machine.
-    auto & bg_pool = global_context->setBackgroundPool(server_info.cpu_info.logical_cores / 4);
-    auto & blockable_bg_pool = global_context->setBlockableBackgroundPool(server_info.cpu_info.logical_cores / 4);
+    auto & bg_pool = global_context->initializeBackgroundPool(server_info.cpu_info.logical_cores / 4);
+    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(server_info.cpu_info.logical_cores / 4);
 
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
@@ -1397,7 +1397,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// setting up elastic thread pool
-    Settings & settings = global_context->getSettingsRef();
+    const Settings & settings = global_context->getSettingsRef();
     if (settings.enable_elastic_threadpool)
         DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
             settings.elastic_threadpool_init_cap,
