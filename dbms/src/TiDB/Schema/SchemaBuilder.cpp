@@ -969,7 +969,6 @@ parseColumnsFromTableInfo(const TiDB::TableInfo & table_info, Poco::Logger * log
     std::vector<String> primary_keys;
     for (const auto & column : table_info.columns)
     {
-        LOG_FMT_DEBUG(log, "Analyzing column: {}, type: {}", column.name, static_cast<int>(column.tp));
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(column.name, type);
         if (column.hasPriKeyFlag())
@@ -1158,7 +1157,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     }
     auto alter_lock = storage->lockForAlter(getThreadName());
     storage->alterFromTiDB(alter_lock, commands, db_name, storage->getTableInfo(), name_mapper, context);
-    LOG_FMT_INFO(log, "Tombstoned table {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_FMT_INFO(log, "Tombstoned t able {}.{}", db_name, name_mapper.debugTableName(storage->getTableInfo()));
 }
 
 template <typename Getter, typename NameMapper>
