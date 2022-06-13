@@ -101,15 +101,8 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
     tunnel_set = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
-    auto register_tunnel = [&](const MPPTaskId & task_id, MPPTunnelPtr tunnel_ptr) {
-        if (status != INITIALIZING)
-            throw Exception("the tunnel " + tunnel_ptr->id() + " can not been registered, because the task is not in initializing state");
-
-        RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-        tunnel_set->registerTunnel(task_id, tunnel_ptr);
-    };
-
     const auto & exchange_sender = dag_req.root_executor().exchange_sender();
+
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
@@ -120,7 +113,9 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
-        register_tunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
+        if (status != INITIALIZING)
+            throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is not in initializing state");
+        tunnel_set->registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         if (!dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
