@@ -95,7 +95,9 @@ public:
     virtual std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) = 0;
 
     /**
-     * Get the offset of the last free block. `[margin_offset, +∞)` is not used at all.
+     * Get the right margin of current SpaceMap. 
+     * If last node is [xxx, end]. Then `[margin_offset, +∞)` is not used at all. Return the `start` of last node.
+     * If last node is not [xxx, end]. Then right margin must be `end`.
      */
     virtual UInt64 getRightMargin() = 0;
 

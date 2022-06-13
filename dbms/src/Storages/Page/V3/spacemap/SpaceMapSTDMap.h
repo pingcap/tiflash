@@ -120,8 +120,8 @@ protected:
 
         const auto & last_node_it = free_map.rbegin();
 
-        // If exist a node with a range [xxx, end]
-        // Then we should return end rather than last node start
+        // If last node is not [xxx, end]
+        // Then we should return `end` rather than last node start
         if (last_node_it->first + last_node_it->second != end)
         {
             return end;
