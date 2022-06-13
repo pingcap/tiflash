@@ -98,7 +98,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     DM::ColumnDefines columns_to_read;
     {
         NamesAndTypes source_columns;
-        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info, log->getLog());
+        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
             DAGPreparedSets(),
