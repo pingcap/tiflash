@@ -44,4 +44,10 @@ ExpressionActionsPtr generateProjectExpressionActions(
     const BlockInputStreamPtr & stream,
     const Context & context,
     const NamesWithAliases & project_cols);
+
+void executeExpression(
+    DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log,
+    const String & extra_info = "");
 } // namespace DB

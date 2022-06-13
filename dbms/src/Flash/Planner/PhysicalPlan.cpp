@@ -15,6 +15,7 @@
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Interpreters/Context.h>
@@ -69,5 +70,7 @@ void PhysicalPlan::transform(DAGPipeline & pipeline, Context & context, size_t m
 {
     transformImpl(pipeline, context, max_streams);
     recordProfileStreams(pipeline, context);
+    context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
+    restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
 }
 } // namespace DB

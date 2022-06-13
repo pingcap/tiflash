@@ -24,4 +24,10 @@ Names schemaToNames(const NamesAndTypes & schema)
         names.push_back(column.name);
     return names;
 }
+
+ExpressionActionsPtr newActions(const Block & input_block, const Context & context)
+{
+    const ColumnsWithTypeAndName & actions_input_columns = input_block.getColumnsWithTypeAndName();
+    return std::make_shared<ExpressionActions>(actions_input_columns, context.getSettingsRef());
+}
 } // namespace DB::PhysicalPlanHelper

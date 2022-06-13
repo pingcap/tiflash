@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -101,5 +102,20 @@ ExpressionActionsPtr generateProjectExpressionActions(
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
     project->add(ExpressionAction::project(project_cols));
     return project;
+}
+
+void executeExpression(
+    DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log,
+    const String & extra_info = "")
+{
+    if (expr_actions && !expr_actions->getActions().empty())
+    {
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, expr_actions, log->identifier());
+            stream->setExtraInfo(extra_info);
+        });
+    }
 }
 } // namespace DB

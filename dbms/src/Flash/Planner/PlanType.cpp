@@ -23,6 +23,10 @@ String PlanType::toString() const
     {
     case Source:
         return "Source";
+    case Limit:
+        return "Limit";
+    case TopN:
+        return "TopN";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }

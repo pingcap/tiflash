@@ -548,10 +548,7 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
         output_columns.emplace_back(alias, col.type);
         project_cols.emplace_back(col.name, alias);
     }
-    pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions(), log->identifier());
-        stream->setExtraInfo("before projection");
-    });
+    executeExpression(pipeline, chain.getLastActions(), log, "before projection");
     executeProject(pipeline, project_cols, "projection");
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
@@ -663,7 +660,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,
         pipeline.streams.size());
-    dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
+    dagContext().updateFinalConcurrency(pipeline.streams.size(), max_streams);
 
     if (res.before_aggregation)
     {

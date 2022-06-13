@@ -75,6 +75,11 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
     return profile_streams_map;
 }
 
+void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t max_streams)
+{
+    final_concurrency = std::min(std::max(final_concurrency, cur_streams_size), max_streams);
+}
+
 void DAGContext::initExecutorIdToJoinIdMap()
 {
     // only mpp task has join executor

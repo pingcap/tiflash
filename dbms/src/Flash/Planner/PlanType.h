@@ -23,6 +23,8 @@ struct PlanType
     enum PlanTypeEnum
     {
         Source = 0,
+        Limit = 1,
+        TopN = 2,
     };
     PlanTypeEnum enum_value;
 

@@ -56,6 +56,12 @@ public:
 
     const Context & getContext() const { return context; }
 
+    void reset(const std::vector<NameAndTypePair> & source_columns_)
+    {
+        source_columns = source_columns_;
+        prepared_sets.clear();
+    }
+
     const std::vector<NameAndTypePair> & getCurrentInputColumns() const;
 
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
@@ -153,13 +159,13 @@ public:
         const tipb::Window & window,
         const size_t window_columns_start_index);
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
     NamesAndTypes buildOrderColumns(
         const ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
 
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
     void appendCastAfterAgg(
         const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
