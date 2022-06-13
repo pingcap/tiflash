@@ -254,7 +254,6 @@ public:
         return io;
     }
 
-    int getNewThreadCountOfExchangeReceiver() const;
     UInt64 getFlags() const
     {
         return flags;
@@ -303,10 +302,11 @@ public:
 
     bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
 
-    void cancelAllExchangeReceiver();
-
-    void initExchangeReceiverIfMPP(Context & context, size_t max_streams);
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
+    void setMPPExchangeReceiverMap(std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> * exchange_receiver_map)
+    {
+        mpp_exchange_receiver_map = exchange_receiver_map;
+    }
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
@@ -367,10 +367,8 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
-    int new_thread_count_of_exchange_receiver = 0;
     /// key: executor_id of ExchangeReceiver nodes in dag.
-    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
-    bool mpp_exchange_receiver_map_inited = false;
+    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> * mpp_exchange_receiver_map = nullptr;
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;

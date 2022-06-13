@@ -29,7 +29,6 @@
 #include <unordered_map>
 namespace DB
 {
-
 const Int8 VAR_SIZE = 0;
 
 extern const String uniq_raw_res_name;
@@ -1429,12 +1428,35 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
         return tipb::EncodeType::TypeDefault;
     return encode_type;
 }
+
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
 {
     static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
     if (func_name_sig_map.find(name) == func_name_sig_map.end())
         throw Exception(fmt::format("Unsupported function {}", name));
     return func_name_sig_map[name];
+}
+
+size_t getMaxStreams(const Context & context)
+{
+    size_t max_streams = context.getSettingsRef().max_threads;
+    auto * dag_context = context.getDAGContext();
+    if (dag_context != nullptr)
+    {
+        if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
+            /// for normal cop request, the max_streams should be 1
+            max_streams = 1;
+        else
+        {
+            if (dag_context->isTest())
+                max_streams = dag_context->initialize_concurrency;
+        }
+    }
+    if (max_streams > 1)
+        max_streams *= context.getSettingsRef().max_streams_to_max_threads_ratio;
+    if (max_streams == 0)
+        max_streams = 1;
+    return max_streams;
 }
 
 } // namespace DB
