@@ -385,5 +385,85 @@ CreatingSets
 }
 CATCH
 
+TEST_F(InterpreterExecuteTest, Window)
+try
+{
+    auto request = context
+                       .scan("test_db", "test_table")
+                       .sort({{"s1", true}, {"s2", false}}, true)
+                       .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
+                       .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  SharedQuery: <restore concurrency>
+   Expression: <cast after window>
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+     Expression: <final projection>
+      MergeSorting, limit = 0
+       Union: <for partial order>
+        PartialSorting x 10: limit = 0
+         Expression: <final projection>
+          MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    request = context.scan("test_db", "test_table")
+                  .sort({{"s1", true}, {"s2", false}}, true)
+                  .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
+                  .project({"s1", "s2", "RowNumber()"})
+                  .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <projection>
+   Expression: <before projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
+      Expression: <cast after window>
+       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+        Expression: <final projection>
+         MergeSorting, limit = 0
+          Union: <for partial order>
+           PartialSorting x 10: limit = 0
+            Expression: <final projection>
+             MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+                  .sort({{"s1", true}, {"s2", false}}, true)
+                  .project({"s1", "s2", "s3"})
+                  .window(RowNumber(), {"s1", true}, {"s1", false}, buildDefaultRowsFrame())
+                  .project({"s1", "s2", "s3", "RowNumber()"})
+                  .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <projection>
+   Expression: <before projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
+      Expression: <cast after window>
+       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+        Union: <merge into one for window input>
+         Expression x 10: <final projection>
+          Expression: <projection>
+           Expression: <before projection>
+            SharedQuery: <restore concurrency>
+             Expression: <final projection>
+              MergeSorting, limit = 0
+               Union: <for partial order>
+                PartialSorting x 10: limit = 0
+                 Expression: <final projection>
+                  MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
