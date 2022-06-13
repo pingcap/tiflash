@@ -114,7 +114,7 @@ SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_)
 {
     if (start != 0)
     {
-        throw Exception(fmt::format("SpaceMap not support start is not 0. [start={}], [end={}]", start, end),
+        throw Exception(fmt::format("Invalid range for SpaceMap [start={}] [end={}]", start, end),
                         ErrorCodes::NOT_IMPLEMENTED);
     }
 }
