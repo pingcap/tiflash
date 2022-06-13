@@ -14,6 +14,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
@@ -555,7 +556,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
 
     for (const auto & [page_id_v3, entry] : entries)
     {
-        auto blob_file = read(entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
+        auto blob_file = read(page_id_v3, entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
@@ -635,7 +636,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read = end_offset - beg_offset;
-            auto blob_file = read(entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+            auto blob_file = read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
@@ -732,7 +733,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     PageMap page_map;
     for (const auto & [page_id_v3, entry] : entries)
     {
-        auto blob_file = read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
+        auto blob_file = read(page_id_v3, entry.file_id, entry.offset, pos, entry.size, read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
@@ -797,7 +798,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         free(p, buf_size);
     });
 
-    auto blob_file = read(entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
+    auto blob_file = read(page_id_v3, entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
     if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
     {
         ChecksumClass digest;
@@ -824,11 +825,20 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     return page;
 }
 
-BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
+BlobFilePtr BlobStore::read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
     assert(buffers != nullptr);
-    auto blob_file = getBlobFile(blob_id);
-    blob_file->read(buffers, offset, size, read_limiter, background);
+    BlobFilePtr blob_file = getBlobFile(blob_id);
+    try
+    {
+        blob_file->read(buffers, offset, size, read_limiter, background);
+    }
+    catch (DB::Exception & e)
+    {
+        // add debug message
+        e.addMessage(fmt::format("(error while reading page data [page_id={}] [blob_id={}] [offset={}] [size={}] [background={}])", page_id_v3, blob_id, offset, size, background));
+        e.rethrow();
+    }
     return blob_file;
 }
 
@@ -1117,21 +1127,15 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 std::tie(blobfile_id, file_offset_beg) = getPosFromStats(next_alloc_size);
             }
 
-            PageEntryV3 new_entry;
+            // Read the data into buffer by old entry
+            read(page_id, file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
 
-            read(file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
-
-            // No need do crc again, crc won't be changed.
-            new_entry.checksum = entry.checksum;
-
-            // Need copy the field_offsets
-            new_entry.field_offsets = entry.field_offsets;
-
-            // Entry size won't be changed.
-            new_entry.size = entry.size;
-
+            // Most vars of the entry is not changed, but the file id and offset
+            // need to be updated.
+            PageEntryV3 new_entry = entry;
             new_entry.file_id = blobfile_id;
             new_entry.offset = file_offset_beg + offset_in_data;
+            new_entry.padded_size = 0; // reset padded size to be zero
 
             offset_in_data += new_entry.size;
             data_pos += new_entry.size;
