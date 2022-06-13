@@ -971,7 +971,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 // If current blob empty, the size of in disk blob may not empty
                 // So we need truncate current blob, and let it be reused.
                 auto blobfile = getBlobFile(stat->id);
-                LOG_FMT_WARNING(log, "Truncate empty blob file [blob_id={}] to 0.", stat->id);
+                LOG_FMT_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
                 blobfile->truncate(right_margin);
                 blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
                 continue;
