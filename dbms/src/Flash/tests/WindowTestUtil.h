@@ -27,9 +27,9 @@ inline std::shared_ptr<DB::DAGQueryBlockInterpreter> mockInterpreter(Context & c
     DAGQueryBlock mock_query_block(0, static_cast<const google::protobuf::RepeatedPtrField<tipb::Executor>>(nullptr));
     std::vector<SubqueriesForSets> mock_subqueries_for_sets = {};
     std::shared_ptr<DAGQueryBlockInterpreter> mock_interpreter = std::make_shared<DAGQueryBlockInterpreter>(context,
-            mock_input_streams_vec,
-            mock_query_block,
-            concurrency);
+                                                                                                            mock_input_streams_vec,
+                                                                                                            mock_query_block,
+                                                                                                            concurrency);
     mock_interpreter->analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
     return mock_interpreter;
 }
@@ -67,6 +67,5 @@ inline void mockExecuteWindow(std::shared_ptr<DAGQueryBlockInterpreter> & mock_i
     mockExecuteProject(mock_interpreter, pipeline, final_project);
 }
 
-} // namespace test
+} // namespace tests
 } // namespace DB
-

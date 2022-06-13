@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Flash/tests/bench_exchange.h>
+#include <fmt/core.h>
+
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp> // to include the implementation of StreamingDAGResponseWriter
 #include <Flash/Mpp/ExchangeReceiver.cpp> // to include the implementation of ExchangeReceiver
 #include <Flash/Mpp/MPPTunnel.cpp> // to include the implementation of MPPTunnel
 #include <Flash/Mpp/MPPTunnelSet.cpp> // to include the implementation of MPPTunnelSet
-
-#include <fmt/core.h>
 #include <atomic>
 #include <chrono>
 
@@ -163,8 +163,8 @@ void receivePacket(const PacketQueuePtr & queue)
 }
 
 ReceiverHelper::ReceiverHelper(int concurrency_, int source_num_)
-        : concurrency(concurrency_)
-        , source_num(source_num_)
+    : concurrency(concurrency_)
+    , source_num(source_num_)
 {
     pb_exchange_receiver.set_tp(tipb::Hash);
     for (int i = 0; i < source_num; ++i)
@@ -228,13 +228,13 @@ void ReceiverHelper::finish()
 }
 
 SenderHelper::SenderHelper(
-        int source_num_,
-        int concurrency_,
-        const std::vector<PacketQueuePtr> & queues_,
-        const std::vector<tipb::FieldType> & fields)
-        : source_num(source_num_)
-        , concurrency(concurrency_)
-        , queues(queues_)
+    int source_num_,
+    int concurrency_,
+    const std::vector<PacketQueuePtr> & queues_,
+    const std::vector<tipb::FieldType> & fields)
+    : source_num(source_num_)
+    , concurrency(concurrency_)
+    , queues(queues_)
 {
     mpp::TaskMeta task_meta;
     tunnel_set = std::make_shared<MockTunnelSet>("mock_req_id");
@@ -298,7 +298,7 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std:
     std::vector<BlockInputStreamPtr> send_streams;
     for (int i = 0; i < concurrency; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<MockFixedRowsBlockInputStream>(total_rows/concurrency, blocks);
+        BlockInputStreamPtr stream = std::make_shared<MockFixedRowsBlockInputStream>(total_rows / concurrency, blocks);
         std::unique_ptr<DAGResponseWriter> response_writer(
             new StreamingDAGResponseWriter<MockTunnelSetPtr>(
                 tunnel_set,
@@ -330,8 +330,8 @@ void ExchangeBench::SetUp(const benchmark::State &)
     Poco::Logger::root().setLevel("error");
 
     DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
-            /*fixed_thread_num=*/300,
-            std::chrono::milliseconds(100000));
+        /*fixed_thread_num=*/300,
+        std::chrono::milliseconds(100000));
 
     input_blocks = makeBlocks(/*block_num=*/100, /*row_num=*/1024);
 
@@ -354,29 +354,30 @@ void ExchangeBench::TearDown(const benchmark::State &)
 }
 
 void ExchangeBench::runAndWait(std::shared_ptr<ReceiverHelper> receiver_helper,
-        BlockInputStreamPtr receiver_stream,
-        std::shared_ptr<SenderHelper> & sender_helper,
-        BlockInputStreamPtr sender_stream)
+                               BlockInputStreamPtr receiver_stream,
+                               std::shared_ptr<SenderHelper> & sender_helper,
+                               BlockInputStreamPtr sender_stream)
 {
     std::future<void> sender_future = DynamicThreadPool::global_instance->schedule(/*memory_tracker=*/false,
-            [sender_stream, sender_helper] {
-            sender_stream->readPrefix();
-            while (const auto & block = sender_stream->read()) {}
-            sender_stream->readSuffix();
-            sender_helper->finish();
-    });
+                                                                                   [sender_stream, sender_helper] {
+                                                                                       sender_stream->readPrefix();
+                                                                                       while (const auto & block = sender_stream->read()) {}
+                                                                                       sender_stream->readSuffix();
+                                                                                       sender_helper->finish();
+                                                                                   });
     std::future<void> receiver_future = DynamicThreadPool::global_instance->schedule(/*memory_tracker=*/false,
-            [receiver_stream, receiver_helper] {
-            receiver_stream->readPrefix();
-            while (const auto & block = receiver_stream->read()) {}
-            receiver_stream->readSuffix();
-            receiver_helper->finish();
-    });
+                                                                                     [receiver_stream, receiver_helper] {
+                                                                                         receiver_stream->readPrefix();
+                                                                                         while (const auto & block = receiver_stream->read()) {}
+                                                                                         receiver_stream->readSuffix();
+                                                                                         receiver_helper->finish();
+                                                                                     });
     sender_future.get();
     receiver_future.get();
 }
 
-BENCHMARK_DEFINE_F(ExchangeBench, basic_send_receive)(benchmark::State & state)
+BENCHMARK_DEFINE_F(ExchangeBench, basic_send_receive)
+(benchmark::State & state)
 try
 {
     const int concurrency = state.range(0);
@@ -390,7 +391,9 @@ try
         BlockInputStreamPtr receiver_stream = receiver_helper->buildUnionStream();
 
         std::shared_ptr<SenderHelper> sender_helper = std::make_shared<SenderHelper>(source_num,
-                concurrency, receiver_helper->queues, receiver_helper->fields);
+                                                                                     concurrency,
+                                                                                     receiver_helper->queues,
+                                                                                     receiver_helper->fields);
         BlockInputStreamPtr sender_stream = sender_helper->buildUnionStream(total_rows, input_blocks);
 
         runAndWait(receiver_helper, receiver_stream, sender_helper, sender_stream);
@@ -398,7 +401,7 @@ try
 }
 CATCH
 BENCHMARK_REGISTER_F(ExchangeBench, basic_send_receive)
-    ->Args({8, 1, 1024*1000});
+    ->Args({8, 1, 1024 * 1000});
 
 } // namespace tests
 } // namespace DB

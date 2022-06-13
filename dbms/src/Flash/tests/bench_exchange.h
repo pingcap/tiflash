@@ -19,22 +19,21 @@
 #include <Common/ThreadManager.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
-#include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
+#include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/tests/WindowTestUtil.h>
 #include <Interpreters/Join.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <WindowFunctions/registerWindowFunctions.h>
+#include <benchmark/benchmark.h>
 
 #include <random>
-
-#include <benchmark/benchmark.h>
 
 namespace DB
 {
@@ -246,7 +245,8 @@ struct ReceiverHelper
 
     explicit ReceiverHelper(int concurrency_, int source_num_);
     MockExchangeReceiverPtr buildReceiver();
-    std::vector<BlockInputStreamPtr> buildExchangeReceiverStream();;
+    std::vector<BlockInputStreamPtr> buildExchangeReceiverStream();
+    ;
     BlockInputStreamPtr buildUnionStream();
     BlockInputStreamPtr buildUnionStreamWithHashJoinBuildStream();
     void finish();
@@ -270,9 +270,9 @@ struct SenderHelper
         const std::vector<tipb::FieldType> & fields);
 
     // Using MockBlockInputStream to build streams.
-    BlockInputStreamPtr buildUnionStream(StopFlag & stop_flag,const std::vector<Block> & blocks);
+    BlockInputStreamPtr buildUnionStream(StopFlag & stop_flag, const std::vector<Block> & blocks);
     // Using MockFixedRowsBlockInputStream to build streams.
-    BlockInputStreamPtr buildUnionStream(size_t total_rows, const std::vector<Block> & blocks); 
+    BlockInputStreamPtr buildUnionStream(size_t total_rows, const std::vector<Block> & blocks);
 
     void finish();
 };
@@ -283,9 +283,9 @@ public:
     void SetUp(const benchmark::State &) override;
     void TearDown(const benchmark::State &) override;
     void runAndWait(std::shared_ptr<ReceiverHelper> receiver_helper,
-            BlockInputStreamPtr receiver_stream,
-            std::shared_ptr<SenderHelper> & sender_helper,
-            BlockInputStreamPtr sender_stream);
+                    BlockInputStreamPtr receiver_stream,
+                    std::shared_ptr<SenderHelper> & sender_helper,
+                    BlockInputStreamPtr sender_stream);
 
     std::vector<Block> input_blocks;
 };
