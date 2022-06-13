@@ -111,11 +111,11 @@ protected:
         }
     }
 
-    UInt64 getRightMargin() override
+    UInt64 getUsedBoundary() override
     {
         if (free_map.empty())
         {
-            return end - start;
+            return end;
         }
 
         const auto & last_node_it = free_map.rbegin();
@@ -124,16 +124,17 @@ protected:
         // Then we should return `end` rather than last node start
         //
         // When there is a space with a span of [xxx, end],
-        // Then `getRightMargin` will return an incorrect right margin.
+        // Then `getUsedBoundary` will return an incorrect right margin.
         // ex.
         //  1. Space limit is 100. So current space is [0, 100]
         //  2. Mark a span {offset=90, size=10} as used, then the free range in SpaceMap is [0, 90).
-        //  3. without this check, `getRightMargin` will return 0. This is incorrect.
+        //  3. without this check, `getUsedBoundary` will return 0. This is incorrect.
         if (last_node_it->first + last_node_it->second != end)
         {
             return end;
         }
 
+        // Else we should return the offset of last free node
         return last_node_it->first;
     }
 

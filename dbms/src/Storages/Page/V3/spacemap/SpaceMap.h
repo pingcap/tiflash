@@ -95,11 +95,11 @@ public:
     virtual std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) = 0;
 
     /**
-     * Get the right margin of current SpaceMap. 
+     * Get the used boundary of current SpaceMap. 
      * If last node is [xxx, end]. Then `[margin_offset, +∞)` is not used at all. Return the `start` of last node.
      * If last node is not [xxx, end]. Then right margin must be `end`.
      */
-    virtual UInt64 getRightMargin() = 0;
+    virtual UInt64 getUsedBoundary() = 0;
 
     /**
      * Get the accurate max capacity of the space map.

@@ -428,32 +428,37 @@ TEST_P(SpaceMapTest, TestGetMaxCap)
 }
 
 
-TEST_P(SpaceMapTest, TestGetRightMargin)
+TEST_P(SpaceMapTest, TestGetUsedBoundary)
 {
     {
         auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
         ASSERT_TRUE(smap->markUsed(50, 10));
-        ASSERT_EQ(smap->getRightMargin(), 60);
+        ASSERT_EQ(smap->getUsedBoundary(), 60);
         ASSERT_TRUE(smap->markUsed(80, 10));
-        ASSERT_EQ(smap->getRightMargin(), 90);
+        ASSERT_EQ(smap->getUsedBoundary(), 90);
 
         ASSERT_TRUE(smap->markUsed(90, 10));
-        ASSERT_EQ(smap->getRightMargin(), 100);
+        ASSERT_EQ(smap->getUsedBoundary(), 100);
     }
 
     {
         auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
         ASSERT_TRUE(smap->markUsed(90, 10));
-        ASSERT_EQ(smap->getRightMargin(), 100);
+        ASSERT_EQ(smap->getUsedBoundary(), 100);
 
         ASSERT_TRUE(smap->markUsed(20, 10));
-        ASSERT_EQ(smap->getRightMargin(), 100);
+        ASSERT_EQ(smap->getUsedBoundary(), 100);
 
         ASSERT_TRUE(smap->markFree(90, 10));
-        ASSERT_EQ(smap->getRightMargin(), 30);
+        ASSERT_EQ(smap->getUsedBoundary(), 30);
 
         ASSERT_TRUE(smap->markUsed(90, 10));
-        ASSERT_EQ(smap->getRightMargin(), 100);
+        ASSERT_EQ(smap->getUsedBoundary(), 100);
+    }
+
+    {
+        auto smap = SpaceMap::createSpaceMap(test_type, 0, 100);
+        ASSERT_EQ(smap->getUsedBoundary(), 0);
     }
 }
 

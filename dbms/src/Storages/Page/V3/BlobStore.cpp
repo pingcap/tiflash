@@ -851,8 +851,8 @@ struct BlobStoreGCInfo
                            toTypeString("Read-Only Blob", 0),
                            toTypeString("No GC Blob", 1),
                            toTypeString("Full GC Blob", 2),
-                           toTypeString("Truncated Blob", 3),
-                           toTypeString("Big Blob", 4));
+                           toTypeString("Big Blob", 3),
+                           toTypeTruncateString("Truncated Blob"));
     }
 
     void appendToReadOnlyBlob(const BlobFileId blob_id, double valid_rate)
@@ -870,23 +870,24 @@ struct BlobStoreGCInfo
         blob_gc_info[2].emplace_back(std::make_pair(blob_id, valid_rate));
     }
 
-    void appendToTruncatedBlob(const BlobFileId blob_id, double valid_rate)
+    void appendToBigBlob(const BlobFileId blob_id, double valid_rate)
     {
         blob_gc_info[3].emplace_back(std::make_pair(blob_id, valid_rate));
     }
 
-    void appendToBigBlob(const BlobFileId blob_id, double valid_rate)
+    void appendToTruncatedBlob(const BlobFileId blob_id, UInt64 origin_size, UInt64 truncated_size, double valid_rate)
     {
-        blob_gc_info[4].emplace_back(std::make_pair(blob_id, valid_rate));
+        blob_gc_truncate_info.emplace_back(std::make_tuple(blob_id, origin_size, truncated_size, valid_rate));
     }
 
 private:
     // 1. read only blob
     // 2. no need gc blob
     // 3. full gc blob
-    // 4. need truncate blob
-    // 5. big blob
-    std::vector<std::pair<BlobFileId, double>> blob_gc_info[5];
+    // 4. big blob
+    std::vector<std::pair<BlobFileId, double>> blob_gc_info[4];
+
+    std::vector<std::tuple<BlobFileId, UInt64, UInt64, double>> blob_gc_truncate_info;
 
     String toTypeString(const std::string_view prefix, const size_t index) const
     {
@@ -909,6 +910,32 @@ private:
             fmt_buf.append("]");
         }
 
+        return fmt_buf.toString();
+    }
+
+    String toTypeTruncateString(const std::string_view prefix) const
+    {
+        FmtBuffer fmt_buf;
+        if (blob_gc_truncate_info.empty())
+        {
+            fmt_buf.fmtAppend("{}: [null]", prefix);
+        }
+        else
+        {
+            fmt_buf.fmtAppend("{}: [", prefix);
+            fmt_buf.joinStr(
+                blob_gc_truncate_info.begin(),
+                blob_gc_truncate_info.end(),
+                [](const auto arg, FmtBuffer & fb) {
+                    fb.fmtAppend("{} origin: {} truncate: {} rate: {:.2f}", //
+                                 std::get<0>(arg), // blob id
+                                 std::get<1>(arg), // origin size
+                                 std::get<2>(arg), // truncated size
+                                 std::get<3>(arg)); // valid rate
+                },
+                ", ");
+            fmt_buf.append("]");
+        }
         return fmt_buf.toString();
     }
 };
@@ -953,7 +980,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             }
 
             auto lock = stat->lock();
-            auto right_margin = stat->smap->getRightMargin();
+            auto right_margin = stat->smap->getUsedBoundary();
 
             // Avoid divide by zero
             if (right_margin == 0)
@@ -966,14 +993,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                                                 stat->sm_valid_rate));
                 }
 
-                LOG_FMT_WARNING(log, "Current blob is empty [blob_id={}, total size(all invalid)={}] [valid_rate={}].", stat->id, stat->sm_total_size, stat->sm_valid_rate);
-
                 // If current blob empty, the size of in disk blob may not empty
                 // So we need truncate current blob, and let it be reused.
                 auto blobfile = getBlobFile(stat->id);
                 LOG_FMT_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
                 blobfile->truncate(right_margin);
-                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
+                stat->sm_total_size = right_margin;
                 continue;
             }
 
@@ -1014,9 +1040,10 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 auto blobfile = getBlobFile(stat->id);
                 LOG_FMT_INFO(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
                 blobfile->truncate(right_margin);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
+
                 stat->sm_total_size = right_margin;
                 stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
-                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
             }
         }
     }

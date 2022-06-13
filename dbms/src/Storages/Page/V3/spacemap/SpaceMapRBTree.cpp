@@ -734,7 +734,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::getSizes() const
     }
 }
 
-UInt64 RBTreeSpaceMap::getRightMargin()
+UInt64 RBTreeSpaceMap::getUsedBoundary()
 {
     struct rb_node * node = rb_tree_last(&rb_tree->root);
     if (node == nullptr)
@@ -746,11 +746,19 @@ UInt64 RBTreeSpaceMap::getRightMargin()
 
     // If last node is not [xxx, end]
     // Then we should return `end` rather than last node start
+    //
+    // When there is a space with a span of [xxx, end],
+    // Then `getUsedBoundary` will return an incorrect right margin.
+    // ex.
+    //  1. Space limit is 100. So current space is [0, 100]
+    //  2. Mark a span {offset=90, size=10} as used, then the free range in SpaceMap is [0, 90).
+    //  3. without this check, `getUsedBoundary` will return 0. This is incorrect.
     if (entry->start + entry->count != end)
     {
         return end;
     }
 
+    // Else we should return the offset of last free node
     return entry->start;
 }
 
