@@ -95,9 +95,9 @@ public:
     virtual std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) = 0;
 
     /**
-     * Get the used boundary of current SpaceMap. 
-     * If last node is [xxx, end]. Then `[margin_offset, +∞)` is not used at all. Return the `start` of last node.
-     * If last node is not [xxx, end]. Then right margin must be `end`.
+     * Get the used boundary of this SpaceMap. 
+     * The return value (`used_boundary`) means that `[used_bounary + 1, +∞)` is safe to be truncated.
+     * If the `used_boundary` is equal to the `end` of this SpaceMap, it means that there is no space to be truncated.
      */
     virtual UInt64 getUsedBoundary() = 0;
 
