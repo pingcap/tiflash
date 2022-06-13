@@ -84,7 +84,7 @@ static void rb_get_new_entry(struct SmapRbEntry ** entry, UInt64 start, UInt64 c
 {
     struct SmapRbEntry * new_entry;
 
-    new_entry = static_cast<struct SmapRbEntry *>(calloc(1, sizeof(struct SmapRbEntry)));
+    new_entry = static_cast<struct SmapRbEntry *>(calloc(1, sizeof(struct SmapRbEntry))); // NOLINT
     if (new_entry == nullptr)
     {
         return;
@@ -115,7 +115,7 @@ inline static void rb_free_entry(struct RbPrivate * private_data, struct SmapRbE
         private_data->read_index_next = nullptr;
     }
 
-    free(entry);
+    free(entry); // NOLINT
 }
 
 
@@ -419,7 +419,7 @@ std::shared_ptr<RBTreeSpaceMap> RBTreeSpaceMap::create(UInt64 start, UInt64 end)
 {
     auto ptr = std::shared_ptr<RBTreeSpaceMap>(new RBTreeSpaceMap(start, end));
 
-    ptr->rb_tree = static_cast<struct RbPrivate *>(calloc(1, sizeof(struct RbPrivate)));
+    ptr->rb_tree = static_cast<struct RbPrivate *>(calloc(1, sizeof(struct RbPrivate))); // NOLINT
     if (ptr->rb_tree == nullptr)
     {
         return nullptr;
@@ -435,7 +435,7 @@ std::shared_ptr<RBTreeSpaceMap> RBTreeSpaceMap::create(UInt64 start, UInt64 end)
     if (!rb_insert_entry(start, end, ptr->rb_tree, ptr->log))
     {
         LOG_FMT_ERROR(ptr->log, "Erorr happend, when mark all space free.  [start={}] , [end={}]", start, end);
-        free(ptr->rb_tree);
+        free(ptr->rb_tree); // NOLINT
         return nullptr;
     }
     return ptr;
@@ -451,7 +451,7 @@ static void rb_free_tree(struct rb_root * root)
         next = rb_tree_next(node);
         entry = node_to_entry(node);
         rb_node_remove(node, root);
-        free(entry);
+        free(entry); // NOLINT
     }
 }
 
@@ -460,7 +460,7 @@ void RBTreeSpaceMap::freeSmap()
     if (rb_tree)
     {
         rb_free_tree(&rb_tree->root);
-        free(rb_tree);
+        free(rb_tree); // NOLINT
     }
 }
 
