@@ -76,6 +76,7 @@ public:
 
 private:
     using Self = UnionBlockInputStream<mode>;
+    static constexpr auto NAME = "Union";
 
 public:
     UnionBlockInputStream(
@@ -88,7 +89,7 @@ public:
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, NAME))
     {
         children = inputs;
         if (additional_input_at_end)
@@ -103,7 +104,7 @@ public:
         }
     }
 
-    String getName() const override { return "Union"; }
+    String getName() const override { return NAME; }
 
     ~UnionBlockInputStream() override
     {
@@ -297,7 +298,8 @@ private:
             ///  and the exception is lost.
 
             parent.output_queue.push(exception);
-            parent.cancel(false); /// Does not throw exceptions.
+            /// can not cancel parent inputStream or the exception might be lost
+            parent.processor.cancel(false); /// Does not throw exceptions.
         }
 
         String getName() const

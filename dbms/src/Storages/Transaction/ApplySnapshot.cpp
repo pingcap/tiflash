@@ -79,14 +79,26 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
 
     {
         const auto & new_range = new_region->getRange();
-        handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock &) {
-            for (const auto & region : region_map)
+        handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock & task_lock) {
+            for (const auto & overlapped_region : region_map)
             {
-                if (region.first != region_id)
+                if (overlapped_region.first != region_id)
                 {
-                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": range of region " + std::to_string(region_id)
-                                        + " is overlapped with region " + std::to_string(region.first) + ", should not happen",
-                                    ErrorCodes::LOGICAL_ERROR);
+                    auto state = getProxyHelper()->getRegionLocalState(overlapped_region.first);
+                    if (state.state() != raft_serverpb::PeerState::Tombstone)
+                    {
+                        throw Exception(fmt::format(
+                                            "range of region {} is overlapped with {}, state: {}",
+                                            region_id,
+                                            overlapped_region.first,
+                                            state.ShortDebugString()),
+                                        ErrorCodes::LOGICAL_ERROR);
+                    }
+                    else
+                    {
+                        LOG_INFO(log, "range of region " << region_id << " is overlapped with `Tombstone` region " << overlapped_region.first);
+                        handleDestroy(overlapped_region.first, tmt, task_lock);
+                    }
                 }
             }
         });
@@ -156,20 +168,33 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                 // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
                 auto table_lock = storage->lockForShare(getThreadName());
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                auto key_range = DM::RowKeyRange::fromRegionRange(
+                auto new_key_range = DM::RowKeyRange::fromRegionRange(
                     new_region_wrap->getRange(),
                     table_id,
                     storage->isCommonHandle(),
                     storage->getRowKeyColumnSize());
+                if (old_region)
+                {
+                    auto old_key_range = DM::RowKeyRange::fromRegionRange(
+                        old_region->getRange(),
+                        table_id,
+                        storage->isCommonHandle(),
+                        storage->getRowKeyColumnSize());
+                    if (old_key_range != new_key_range)
+                    {
+                        LOG_INFO(log, "clear region " << region_id << " old range " << old_key_range.toDebugString() << " before apply snapshot of new range " << new_key_range.toDebugString());
+                        dm_storage->deleteRange(old_key_range, context.getSettingsRef());
+                    }
+                }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
                 {
                     // Call `ingestFiles` to delete data for range and ingest external DTFiles.
-                    dm_storage->ingestFiles(key_range, new_region_wrap.ingest_ids, /*clear_data_in_range=*/true, context.getSettingsRef());
+                    dm_storage->ingestFiles(new_key_range, new_region_wrap.ingest_ids, /*clear_data_in_range=*/true, context.getSettingsRef());
                 }
                 else
                 {
                     // Call `deleteRange` to delete data for range
-                    dm_storage->deleteRange(key_range, context.getSettingsRef());
+                    dm_storage->deleteRange(new_key_range, context.getSettingsRef());
                 }
             }
             catch (DB::Exception & e)
