@@ -32,8 +32,6 @@
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
 
-#include "fiu.h"
-
 namespace DB
 {
 namespace FailPoints
