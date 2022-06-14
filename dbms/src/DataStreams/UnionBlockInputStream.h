@@ -26,19 +26,11 @@ struct OutputData<StreamUnionMode::Basic>
     Block block;
     std::exception_ptr exception;
 
-<<<<<<< HEAD
-    OutputData() {}
-    OutputData(Block & block_)
-        : block(block_)
-    {}
-    OutputData(std::exception_ptr & exception_)
-=======
     OutputData() = default;
     explicit OutputData(Block & block_)
         : block(block_)
     {}
     explicit OutputData(const std::exception_ptr & exception_)
->>>>>>> 752793bd7f (fix bug that ExchangeReceiver is not cancelled if exception happens in union/agg block input stream (#4285))
         : exception(exception_)
     {}
 };
@@ -56,11 +48,7 @@ struct OutputData<StreamUnionMode::ExtraInfo>
         : block(block_)
         , extra_info(extra_info_)
     {}
-<<<<<<< HEAD
-    OutputData(std::exception_ptr & exception_)
-=======
     explicit OutputData(const std::exception_ptr & exception_)
->>>>>>> 752793bd7f (fix bug that ExchangeReceiver is not cancelled if exception happens in union/agg block input stream (#4285))
         : exception(exception_)
     {}
 };
@@ -320,19 +308,7 @@ private:
 
         void onException(std::exception_ptr & exception, size_t /*thread_num*/)
         {
-<<<<<<< HEAD
-            //std::cerr << "pushing exception\n";
-
-            /// The order of the rows matters. If it is changed, then the situation is possible,
-            ///  when before exception, an empty block (end of data) will be put into the queue,
-            ///  and the exception is lost.
-
-            parent.output_queue.push(exception);
-            /// can not cancel parent inputStream or the exception might be lost
-            parent.processor.cancel(false); /// Does not throw exceptions.
-=======
             parent.handleException(exception);
->>>>>>> 752793bd7f (fix bug that ExchangeReceiver is not cancelled if exception happens in union/agg block input stream (#4285))
         }
 
         String getName() const
