@@ -13,9 +13,6 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
-#include <DataStreams/ExpressionBlockInputStream.h>
-#include <DataStreams/MergeSortingBlockInputStream.h>
-#include <DataStreams/PartialSortingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -59,32 +56,9 @@ void PhysicalTopN::transformImpl(DAGPipeline & pipeline, Context & context, size
 
     const Settings & settings = context.getSettingsRef();
 
-    executeExpression(pipeline, before_sort_actions, log);
+    executeExpression(pipeline, before_sort_actions, log, "before TopN");
 
-    pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
-
-        /// Limits on sorting
-        IProfilingBlockInputStream::LocalLimits limits;
-        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
-        sorting_stream->setLimits(limits);
-
-        stream = sorting_stream;
-    });
-
-    /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log);
-
-    /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
-        pipeline.firstStream(),
-        order_descr,
-        settings.max_block_size,
-        limit,
-        settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
-        log->identifier());
+    orderStreams(pipeline, order_descr, limit, context, log);
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

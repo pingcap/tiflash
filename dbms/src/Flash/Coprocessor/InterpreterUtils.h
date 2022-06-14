@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Core/SortDescription.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Interpreters/ExpressionActions.h>
 
@@ -50,4 +51,11 @@ void executeExpression(
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log,
     const String & extra_info = "");
+
+void orderStreams(
+    DAGPipeline & pipeline,
+    SortDescription order_descr,
+    Int64 limit,
+    const Context & context,
+    const LoggerPtr & log);
 } // namespace DB

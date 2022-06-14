@@ -268,7 +268,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
 
     /// build side streams
-    executeExpression(build_pipeline, build_side_prepare_actions, "append join key and join filters for build side");
+    executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
     build_pipeline.transform([&](auto & stream) {
@@ -284,7 +284,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
 
     /// probe side streams
-    executeExpression(probe_pipeline, probe_side_prepare_actions, "append join key and join filters for probe side");
+    executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     NamesAndTypes source_columns;
     for (const auto & p : probe_pipeline.firstStream()->getHeader())
         source_columns.emplace_back(p.name, p.type);
@@ -349,7 +349,7 @@ void DAGQueryBlockInterpreter::executeWindow(
     DAGPipeline & pipeline,
     WindowDescription & window_description)
 {
-    executeExpression(pipeline, window_description.before_window, "before window");
+    executeExpression(pipeline, window_description.before_window, log, "before window");
 
     /// If there are several streams, we merge them into one
     executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
@@ -421,56 +421,15 @@ void DAGQueryBlockInterpreter::executeAggregation(
     }
 }
 
-void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, const String & extra_info)
-{
-    if (!expressionActionsPtr->getActions().empty())
-    {
-        pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr, log->identifier());
-            stream->setExtraInfo(extra_info);
-        });
-    }
-}
-
 void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc)
 {
-    orderStreams(pipeline, sort_desc, 0);
+    orderStreams(pipeline, sort_desc, 0, context, log);
 }
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
-    orderStreams(pipeline, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit);
-}
-
-void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit)
-{
-    const Settings & settings = context.getSettingsRef();
-
-    pipeline.transform([&](auto & stream) {
-        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
-
-        /// Limits on sorting
-        IProfilingBlockInputStream::LocalLimits limits;
-        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
-        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
-        sorting_stream->setLimits(limits);
-
-        stream = sorting_stream;
-    });
-
-    /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log, false, "for partial order");
-
-    /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
-        pipeline.firstStream(),
-        order_descr,
-        settings.max_block_size,
-        limit,
-        settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
-        log->identifier());
+    orderStreams(pipeline, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit, context, log);
 }
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
@@ -563,7 +522,7 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
     WindowDescription window_description = dag_analyzer.buildWindowDescription(window);
     executeWindow(pipeline, window_description);
-    executeExpression(pipeline, window_description.after_window, "cast after window");
+    executeExpression(pipeline, window_description.after_window, log, "cast after window");
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
 }
@@ -675,7 +634,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     if (res.before_order_and_select)
     {
-        executeExpression(pipeline, res.before_order_and_select, "before order and select");
+        executeExpression(pipeline, res.before_order_and_select, log, "before order and select");
     }
 
     if (!res.order_columns.empty())
