@@ -123,9 +123,6 @@ private:
 
     MPPTunnelSetPtr tunnel_set;
 
-    // which targeted task we should send data by which tunnel.
-    std::unordered_map<MPPTaskId, MPPTunnelPtr> tunnel_map;
-
     MPPTaskManager * manager = nullptr;
 
     const LoggerPtr log;

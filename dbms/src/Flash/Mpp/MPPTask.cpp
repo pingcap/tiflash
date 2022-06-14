@@ -56,6 +56,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , id(meta.start_ts(), meta.task_id())
     , log(Logger::get("MPPTask", id.toString()))
     , mpp_task_statistics(id, meta.address())
+    , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
 {}
 
@@ -78,18 +79,14 @@ MPPTask::~MPPTask()
 
 void MPPTask::closeAllTunnels(const String & reason)
 {
-    for (auto & it : tunnel_map)
-    {
-        it.second->close(reason);
-    }
+    if (likely(tunnel_set))
+        tunnel_set->close(reason);
 }
 
 void MPPTask::finishWrite()
 {
-    for (const auto & it : tunnel_map)
-    {
-        it.second->writeDone();
-    }
+    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+    tunnel_set->finishWrite();
 }
 
 void MPPTask::run()
@@ -97,15 +94,13 @@ void MPPTask::run()
     newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] { self->runImpl(); });
 }
 
-void MPPTask::registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
+void MPPTask::registerTunnel(const MPPTaskId & task_id, MPPTunnelPtr tunnel)
 {
     if (status == CANCELLED)
         throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is cancelled");
 
-    if (tunnel_map.find(id) != tunnel_map.end())
-        throw Exception("the tunnel " + tunnel->id() + " has been registered");
-
-    tunnel_map[id] = tunnel;
+    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+    tunnel_set->registerTunnel(task_id, tunnel);
 }
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)
@@ -120,8 +115,9 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
     }
 
     MPPTaskId receiver_id{request->receiver_meta().start_ts(), request->receiver_meta().task_id()};
-    auto it = tunnel_map.find(receiver_id);
-    if (it == tunnel_map.end())
+    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+    auto tunnel_ptr = tunnel_set->getTunnelById(receiver_id);
+    if (tunnel_ptr == nullptr)
     {
         auto err_msg = fmt::format(
             "can't find tunnel ({} + {})",
@@ -129,7 +125,7 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
             request->receiver_meta().task_id());
         return {nullptr, err_msg};
     }
-    return {it->second, ""};
+    return {tunnel_ptr, ""};
 }
 
 void MPPTask::unregisterTask()
@@ -211,7 +207,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     }
 
     // register tunnels
-    tunnel_set = std::make_shared<MPPTunnelSet>();
+    tunnel_set = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
 
     for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
@@ -225,7 +221,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
-        tunnel_set->addTunnel(tunnel);
         if (!dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
@@ -369,19 +364,8 @@ void MPPTask::runImpl()
 
 void MPPTask::writeErrToAllTunnels(const String & e)
 {
-    for (auto & it : tunnel_map)
-    {
-        try
-        {
-            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_write_err_to_tunnel);
-            it.second->write(getPacketWithError(e), true);
-        }
-        catch (...)
-        {
-            it.second->close("Failed to write error msg to tunnel");
-            tryLogCurrentException(log, "Failed to write error " + e + " to tunnel: " + it.second->id());
-        }
-    }
+    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+    tunnel_set->writeError(e);
 }
 
 void MPPTask::cancel(const String & reason)
