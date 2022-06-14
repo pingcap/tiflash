@@ -127,7 +127,7 @@ private:
 
     MPPTunnelSetPtr tunnel_set;
     /// key: executor_id of ExchangeReceiver nodes in dag.
-    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
+    ExchangeReceiverMapPtr mpp_exchange_receiver_map;
 
     int new_thread_count_of_exchange_receiver = 0;
 

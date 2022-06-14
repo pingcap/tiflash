@@ -37,6 +37,8 @@ namespace DB
 class Context;
 class MPPTunnelSet;
 class ExchangeReceiver;
+using ExchangeReceiverMap = std::unordered_map<String, std::shared_ptr<ExchangeReceiver>>;
+using ExchangeReceiverMapPtr = std::shared_ptr<std::unordered_map<String, std::shared_ptr<ExchangeReceiver>>>;
 
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
@@ -303,7 +305,7 @@ public:
     bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
 
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
-    void setMPPExchangeReceiverMap(std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> * exchange_receiver_map)
+    void setMPPExchangeReceiverMap(ExchangeReceiverMapPtr & exchange_receiver_map)
     {
         mpp_exchange_receiver_map = exchange_receiver_map;
     }
@@ -368,7 +370,7 @@ private:
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
     /// key: executor_id of ExchangeReceiver nodes in dag.
-    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> * mpp_exchange_receiver_map = nullptr;
+    ExchangeReceiverMapPtr mpp_exchange_receiver_map;
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;

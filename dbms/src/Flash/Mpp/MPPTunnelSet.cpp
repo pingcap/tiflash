@@ -136,7 +136,7 @@ template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id, const TunnelPtr & tunnel)
 {
     if (receiver_task_id_to_index_map.find(receiver_task_id) != receiver_task_id_to_index_map.end())
-        throw Exception("the tunnel " + tunnel->id() + " has been registered");
+        throw Exception(fmt::format("the tunnel {} has been registered", tunnel->id()));
 
     receiver_task_id_to_index_map[receiver_task_id] = tunnels.size();
     tunnels.push_back(tunnel);

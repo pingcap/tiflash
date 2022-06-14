@@ -1437,26 +1437,4 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
     return func_name_sig_map[name];
 }
 
-size_t getMaxStreams(const Context & context)
-{
-    size_t max_streams = context.getSettingsRef().max_threads;
-    auto * dag_context = context.getDAGContext();
-    if (dag_context != nullptr)
-    {
-        if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
-            /// for normal cop request, the max_streams should be 1
-            max_streams = 1;
-        else
-        {
-            if (dag_context->isTest())
-                max_streams = dag_context->initialize_concurrency;
-        }
-    }
-    if (max_streams > 1)
-        max_streams *= context.getSettingsRef().max_streams_to_max_threads_ratio;
-    if (max_streams == 0)
-        max_streams = 1;
-    return max_streams;
-}
-
 } // namespace DB

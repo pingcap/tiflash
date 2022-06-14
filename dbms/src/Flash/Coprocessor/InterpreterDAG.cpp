@@ -24,7 +24,7 @@ namespace DB
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_)
     , dag(dag_)
-    , max_streams(getMaxStreams(context))
+    , max_streams(context.getMaxStreams())
 {
 }
 

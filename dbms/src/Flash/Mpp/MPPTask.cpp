@@ -107,14 +107,14 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
-        if (!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i)))
+        if (unlikely(!task_meta.ParseFromString(exchange_sender.encoded_task_meta(i))))
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         if (status != INITIALIZING)
-            throw Exception("the tunnel " + tunnel->id() + " can not been registered, because the task is not in initializing state");
+            throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
         tunnel_set->registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         if (!dag_context->isRootMPPTask())
         {
@@ -125,6 +125,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 
 void MPPTask::initExchangeReceivers()
 {
+    mpp_exchange_receiver_map = std::make_shared<ExchangeReceiverMap>();
     traverseExecutors(&dag_req, [&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
         {
@@ -140,25 +141,28 @@ void MPPTask::initExchangeReceivers()
                     context->getSettingsRef().enable_local_tunnel,
                     context->getSettingsRef().enable_async_grpc_client),
                 executor.exchange_receiver().encoded_task_meta_size(),
-                getMaxStreams(*context),
+                context->getMaxStreams(),
                 log->identifier(),
                 executor_id);
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
-            mpp_exchange_receiver_map[executor_id] = exchange_receiver;
+            (*mpp_exchange_receiver_map)[executor_id] = exchange_receiver;
             new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
         }
         return true;
     });
-    dag_context->setMPPExchangeReceiverMap(&mpp_exchange_receiver_map);
+    dag_context->setMPPExchangeReceiverMap(mpp_exchange_receiver_map);
 }
 
 void MPPTask::cancelAllExchangeReceivers()
 {
-    for (auto & it : mpp_exchange_receiver_map)
+    if (likely(mpp_exchange_receiver_map != nullptr))
     {
-        it.second->cancel();
+        for (auto & it : *mpp_exchange_receiver_map)
+        {
+            it.second->cancel();
+        }
     }
 }
 
