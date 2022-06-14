@@ -112,11 +112,6 @@ SpaceMap::SpaceMap(UInt64 start_, UInt64 end_, SpaceMapType type_)
     , end(end_)
     , log(&Poco::Logger::get("SpaceMap"))
 {
-    if (start != 0)
-    {
-        throw Exception(fmt::format("SpaceMap not support start is not 0. [start={}], [end={}]", start, end),
-                        ErrorCodes::NOT_IMPLEMENTED);
-    }
 }
 
 } // namespace PS::V3
