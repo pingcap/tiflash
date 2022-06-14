@@ -963,13 +963,12 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
 }
 
 std::tuple<NamesAndTypes, Strings>
-parseColumnsFromTableInfo(const TiDB::TableInfo & table_info, Poco::Logger * log)
+parseColumnsFromTableInfo(const TiDB::TableInfo & table_info)
 {
     NamesAndTypes columns;
     std::vector<String> primary_keys;
     for (const auto & column : table_info.columns)
     {
-        LOG_FMT_DEBUG(log, "Analyzing column: {}, type: {}", column.name, static_cast<int>(column.tp));
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(column.name, type);
         if (column.hasPriKeyFlag())
@@ -999,7 +998,7 @@ String createTableStmt(
     Poco::Logger * log)
 {
     LOG_FMT_DEBUG(log, "Analyzing table info : {}", table_info.serialize());
-    auto [columns, pks] = parseColumnsFromTableInfo(table_info, log);
+    auto [columns, pks] = parseColumnsFromTableInfo(table_info);
 
     String stmt;
     WriteBufferFromString stmt_buf(stmt);

@@ -51,14 +51,16 @@ public:
 
     std::vector<std::unique_lock<std::recursive_mutex>> getLocks(const std::vector<uint64_t> & handles)
     {
-        std::vector<uint64_t> indexes(handles.size());
+        std::vector<uint64_t> indexes;
+        indexes.reserve(handles.size());
         for (const auto & h : handles)
         {
             indexes.push_back(index(h));
         }
         // Sort mutex indexes to avoid dead lock.
         sort(indexes.begin(), indexes.end());
-        std::vector<std::unique_lock<std::recursive_mutex>> locks(indexes.size());
+        std::vector<std::unique_lock<std::recursive_mutex>> locks;
+        locks.reserve(indexes.size());
         for (auto i : indexes)
         {
             locks.push_back(getLockByIndex(i));
