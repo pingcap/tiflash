@@ -146,6 +146,15 @@ struct ExchangeReceiver : Executor
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
 };
 
+struct FakeDataSource : Executor
+{
+    FakeDataSource(size_t & index, const DAGSchema & output)
+        : Executor(index, "FakeDataSource", output)
+    {}
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
+    bool toTiPBExecutor(tipb::Executor *, uint32_t, const MPPInfo &, const Context &) override { return true; }
+};
+
 struct TableScan : public Executor
 {
     TableInfo table_info;

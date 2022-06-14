@@ -39,11 +39,28 @@ inline void mockExecuteProject(std::shared_ptr<DAGQueryBlockInterpreter> & mock_
     mock_interpreter->executeProject(pipeline, final_project);
 }
 
+inline void mockExecuteWindowOrder(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, const tipb::Sort & sort)
+{
+    mock_interpreter->handleWindowOrder(pipeline, sort);
+    mock_interpreter->input_streams_vec[0] = pipeline.streams;
+    NamesWithAliases final_project;
+    for (const auto & column : (*mock_interpreter->analyzer).source_columns)
+    {
+        final_project.push_back({column.name, ""});
+    }
+    mockExecuteProject(mock_interpreter, pipeline, final_project);
+}
+
 inline void mockExecuteWindowOrder(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, const String & sort_json)
 {
     tipb::Sort sort;
     ::google::protobuf::util::JsonStringToMessage(sort_json, &sort);
-    mock_interpreter->handleWindowOrder(pipeline, sort);
+    mockExecuteWindowOrder(mock_interpreter, pipeline, sort);
+}
+
+inline void mockExecuteWindow(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, const tipb::Window & window)
+{
+    mock_interpreter->handleWindow(pipeline, window);
     mock_interpreter->input_streams_vec[0] = pipeline.streams;
     NamesWithAliases final_project;
     for (const auto & column : (*mock_interpreter->analyzer).source_columns)
@@ -57,14 +74,7 @@ inline void mockExecuteWindow(std::shared_ptr<DAGQueryBlockInterpreter> & mock_i
 {
     tipb::Window window;
     google::protobuf::util::JsonStringToMessage(window_json_str, &window);
-    mock_interpreter->handleWindow(pipeline, window);
-    mock_interpreter->input_streams_vec[0] = pipeline.streams;
-    NamesWithAliases final_project;
-    for (const auto & column : (*mock_interpreter->analyzer).source_columns)
-    {
-        final_project.push_back({column.name, ""});
-    }
-    mockExecuteProject(mock_interpreter, pipeline, final_project);
+    mockExecuteWindow(mock_interpreter, pipeline, window);
 }
 
 } // namespace tests

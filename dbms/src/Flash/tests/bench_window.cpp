@@ -13,40 +13,69 @@
 // limitations under the License.
 
 #include <Flash/tests/bench_exchange.h>
+#include <TestUtils/mockExecutor.h>
 
 namespace DB
 {
 namespace tests
 {
-
-std::string window_json = R"({"funcDesc":[{"tp":"RowNumber","sig":"Unspecified","fieldType":{"tp":8,"flag":128,"flen":21,"decimal":-1,"collate":-63,"charset":"binary"},"hasDistinct":false}],"partitionBy":[{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false},{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":100,"decimal":0,"collate":-46,"charset":"utf8mb4"},"hasDistinct":false},"desc":false},{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false}],"orderBy":[{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false}],"frame":{"type":"Rows","start":{"type":"CurrentRow","unbounded":false,"offset":"0"},"end":{"type":"CurrentRow","unbounded":false,"offset":"0"}},"child":{"tp":"TypeSort","executorId":"Sort_17","sort":{"byItems":[{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false},{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":100,"decimal":0,"collate":-46,"charset":"utf8mb4"},"hasDistinct":false},"desc":false},{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false},{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false}],"isPartialSort":true,"child":{"tp":"TypeExchangeReceiver","exchangeReceiver":{"encodedTaskMeta":["CIGAkPqbr7iCBhABIg8xMjcuMC4wLjE6NDA3Njk="],"fieldTypes":[{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},{"tp":15,"flag":0,"flen":100,"decimal":0,"collate":-46,"charset":"utf8mb4"},{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"}]},"executorId":"ExchangeReceiver_16"}}}})";
-std::string sort_json = R"({"byItems":[{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false},{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAE=","sig":"Unspecified","fieldType":{"tp":15,"flag":0,"flen":100,"decimal":0,"collate":-46,"charset":"utf8mb4"},"hasDistinct":false},"desc":false},{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAI=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false},{"expr":{"tp":"ColumnRef","val":"gAAAAAAAAAA=","sig":"Unspecified","fieldType":{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},"hasDistinct":false},"desc":false}],"isPartialSort":true,"child":{"tp":"TypeExchangeReceiver","exchangeReceiver":{"encodedTaskMeta":["CIGAkPqbr7iCBhABIg8xMjcuMC4wLjE6NDA3Njk="],"fieldTypes":[{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"},{"tp":15,"flag":0,"flen":100,"decimal":0,"collate":-46,"charset":"utf8mb4"},{"tp":8,"flag":0,"flen":20,"decimal":0,"collate":-63,"charset":"binary"}]},"executorId":"ExchangeReceiver_16"}})";
-void prepareWindowStream(Context & context, int concurrency, int source_num, int total_rows, const std::vector<Block> & blocks, BlockInputStreamPtr & sender_stream, BlockInputStreamPtr & receiver_stream, std::shared_ptr<SenderHelper> & sender_helper, std::shared_ptr<ReceiverHelper> & receiver_helper)
-{
-    DAGPipeline pipeline;
-    receiver_helper = std::make_shared<ReceiverHelper>(concurrency, source_num);
-    pipeline.streams = receiver_helper->buildExchangeReceiverStream();
-
-    sender_helper = std::make_shared<SenderHelper>(source_num, concurrency, receiver_helper->queues, receiver_helper->fields);
-    sender_stream = sender_helper->buildUnionStream(total_rows, blocks);
-
-    context.setDAGContext(sender_helper->dag_context.get());
-    std::vector<NameAndTypePair> source_columns{
-        NameAndTypePair("c1", makeNullable(std::make_shared<DataTypeInt64>())),
-        NameAndTypePair("c2", makeNullable(std::make_shared<DataTypeString>())),
-        NameAndTypePair("c3", makeNullable(std::make_shared<DataTypeInt64>()))};
-    auto mock_interpreter = mockInterpreter(context, source_columns, concurrency);
-    mock_interpreter->input_streams_vec.push_back(pipeline.streams);
-    mockExecuteWindowOrder(mock_interpreter, pipeline, sort_json);
-    mockExecuteWindow(mock_interpreter, pipeline, window_json);
-    pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, "mock_executor_id_squashing");
-    });
-    receiver_stream = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, nullptr, concurrency, /*req_id=*/"");
-}
-
 class WindowFunctionBench : public ExchangeBench
 {
+public:
+    void SetUp(const benchmark::State & state) override
+    {
+        // build tipb::Window and tipb::Sort.
+        // select row_number() over w1 from t1 window w1 as (partition by c1, c2, c3 order by c1, c2, c3);
+        ExchangeBench::SetUp(state);
+        MockColumnInfos columns{
+            {"c1", TiDB::TP::TypeLongLong},
+            {"c2", TiDB::TP::TypeString},
+            {"c3", TiDB::TP::TypeLongLong},
+        };
+        size_t executor_index = 0;
+        DAGRequestBuilder builder(executor_index);
+        builder
+            .fakeDataSource(executor_index, columns)
+            .sort({{"c1", false}, {"c2", false}, {"c3", false}}, true)
+            .window(RowNumber(),
+                    {{"c1", false}, {"c2", false}, {"c3", false}},
+                    {{"c1", false}, {"c2", false}, {"c3", false}},
+                    buildDefaultRowsFrame());
+        tipb::DAGRequest req;
+        MPPInfo mpp_info(0, -1, -1, {}, std::unordered_map<String, std::vector<Int64>>{});
+        builder.getRoot()->toTiPBExecutor(req.mutable_root_executor(), /*collator_id=*/0, mpp_info, TiFlashTestEnv::getContext());
+        assert(req.root_executor().tp() == tipb::TypeWindow);
+        window = req.root_executor().window();
+        assert(window.child().tp() == tipb::TypeSort);
+        sort = window.child().sort();
+    }
+
+    void prepareWindowStream(Context & context, int concurrency, int source_num, int total_rows, const std::vector<Block> & blocks, BlockInputStreamPtr & sender_stream, BlockInputStreamPtr & receiver_stream, std::shared_ptr<SenderHelper> & sender_helper, std::shared_ptr<ReceiverHelper> & receiver_helper) const
+    {
+        DAGPipeline pipeline;
+        receiver_helper = std::make_shared<ReceiverHelper>(concurrency, source_num);
+        pipeline.streams = receiver_helper->buildExchangeReceiverStream();
+
+        sender_helper = std::make_shared<SenderHelper>(source_num, concurrency, receiver_helper->queues, receiver_helper->fields);
+        sender_stream = sender_helper->buildUnionStream(total_rows, blocks);
+
+        context.setDAGContext(sender_helper->dag_context.get());
+        std::vector<NameAndTypePair> source_columns{
+            NameAndTypePair("c1", makeNullable(std::make_shared<DataTypeInt64>())),
+            NameAndTypePair("c2", makeNullable(std::make_shared<DataTypeString>())),
+            NameAndTypePair("c3", makeNullable(std::make_shared<DataTypeInt64>()))};
+        auto mock_interpreter = mockInterpreter(context, source_columns, concurrency);
+        mock_interpreter->input_streams_vec.push_back(pipeline.streams);
+        mockExecuteWindowOrder(mock_interpreter, pipeline, sort);
+        mockExecuteWindow(mock_interpreter, pipeline, window);
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, "mock_executor_id_squashing");
+        });
+        receiver_stream = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, nullptr, concurrency, /*req_id=*/"");
+    }
+
+    tipb::Window window;
+    tipb::Sort sort;
 };
 
 BENCHMARK_DEFINE_F(WindowFunctionBench, basic_row_number)

@@ -440,4 +440,19 @@ DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name)
     }
     return builder;
 }
+
+DAGRequestBuilder & DAGRequestBuilder::fakeDataSource(size_t & index, const MockColumnInfos & columns)
+{
+    DAGSchema schema;
+    for (const auto & column : columns)
+    {
+        TiDB::ColumnInfo info;
+        info.tp = column.second;
+        info.name = column.first;
+        schema.push_back({column.first, info});
+    }
+
+    root = std::make_shared<mock::FakeDataSource>(index, schema);
+    return *this;
+}
 } // namespace DB::tests

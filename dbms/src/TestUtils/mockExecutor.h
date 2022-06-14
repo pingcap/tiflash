@@ -103,6 +103,9 @@ public:
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort);
     DAGRequestBuilder & sort(MockOrderByItems order_by_list, bool is_partial_sort);
 
+    // Only provide output column information.
+    DAGRequestBuilder & fakeDataSource(size_t & index, const MockColumnInfos & columns);
+
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
