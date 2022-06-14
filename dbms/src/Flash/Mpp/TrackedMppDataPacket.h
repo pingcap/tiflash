@@ -48,21 +48,13 @@ struct TrackedMppDataPacket
     {
         size = estimateAllocatedSize(data);
         alloc();
-        //        if (size)
-        //        {
-        //            CurrentMemoryTracker::alloc(size);
-        //        }
         packet = std::make_shared<mpp::MPPDataPacket>(data);
     }
 
-    TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> &packet_)
+    TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_)
     {
         size = estimateAllocatedSize(*packet_);
         alloc();
-        //        if (size)
-        //        {
-        //            CurrentMemoryTracker::alloc(size);
-        //        }
         packet = packet_;
     }
 
@@ -75,16 +67,8 @@ struct TrackedMppDataPacket
     void setPacket(const std::shared_ptr<mpp::MPPDataPacket> & new_packet)
     {
         free();
-        //        if (size)
-        //        {
-        //            CurrentMemoryTracker::free(size);
-        //        }
         size = estimateAllocatedSize(*new_packet);
         alloc();
-        //        if (size)
-        //        {
-        //            CurrentMemoryTracker::alloc(size);
-        //        }
         packet = new_packet;
     }
 
