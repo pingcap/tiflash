@@ -23,8 +23,6 @@
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
 
-#include <unordered_map>
-
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -52,6 +50,15 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
     auto exp_list = std::make_shared<ASTExpressionList>();
     exp_list->children.insert(exp_list->children.end(), vec.begin(), vec.end());
     return exp_list;
+}
+
+MockWindowFrame buildDefaultRowsFrame()
+{
+    MockWindowFrame frame;
+    frame.type = tipb::WindowFrameType::Rows;
+    frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
+    frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
+    return frame;
 }
 
 // a mock DAGRequest should prepare its time_zone, flags, encode_type and output_schema.
@@ -96,6 +103,9 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
         ret.name = column.first;
+        // TODO: find a way to assign decimal field's flen.
+        if (ret.tp == TiDB::TP::TypeNewDecimal)
+            ret.flen = 65;
         ret.id = i++;
         table_info.columns.push_back(std::move(ret));
     }
@@ -273,6 +283,48 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
 {
     assert(root);
     root = compileAggregation(root, getExecutorIndex(), agg_funcs, group_by_exprs);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame)
+{
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    window_func_list->children.push_back(window_func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList({partition_by}), buildOrderByItemList({order_by}), frame);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame)
+{
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    window_func_list->children.push_back(window_func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(partition_by_list), buildOrderByItemList(order_by_list), frame);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::window(MockAsts window_funcs, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame)
+{
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    for (const auto & func : window_funcs)
+        window_func_list->children.push_back(func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(partition_by_list), buildOrderByItemList(order_by_list), frame);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, bool is_partial_sort)
+{
+    assert(root);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemList({order_by}), is_partial_sort);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItems order_by_list, bool is_partial_sort)
+{
+    assert(root);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemList(order_by_list), is_partial_sort);
     return *this;
 }
 

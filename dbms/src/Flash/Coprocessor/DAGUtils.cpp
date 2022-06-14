@@ -769,6 +769,10 @@ const String & getFunctionName(const tipb::Expr & expr)
     {
         return getAggFunctionName(expr);
     }
+    else if (isWindowFunctionExpr(expr))
+    {
+        return getWindowFunctionName(expr);
+    }
     else
     {
         auto it = scalar_func_map.find(expr.sig());
