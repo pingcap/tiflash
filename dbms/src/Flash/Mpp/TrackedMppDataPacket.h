@@ -96,8 +96,7 @@ struct TrackedMppDataPacket
 
     ~TrackedMppDataPacket()
     {
-        if (size)
-            CurrentMemoryTracker::free(size);
+        free();
     }
 
     int size;
