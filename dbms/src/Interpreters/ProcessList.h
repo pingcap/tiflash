@@ -303,6 +303,15 @@ public:
         , max_size(max_size_)
     {}
 
+    Int64 getMemAlloacted()
+    {
+        return total_memory_tracker.get();
+    }
+    Int64 getMemLimit()
+    {
+        return total_memory_tracker.getLimit();
+    }
+
     using EntryPtr = std::shared_ptr<ProcessListEntry>;
 
     /** Register running query. Returns refcounted object, that will remove element from list in destructor.

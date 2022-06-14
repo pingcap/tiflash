@@ -80,9 +80,12 @@ public:
 
     ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
+    void memCheckJob();
+
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
+    std::atomic<bool> end_syn{false}, end_fin{false};
     IServer & server;
     const TiFlashSecurityConfig & security_config;
     Poco::Logger * log;

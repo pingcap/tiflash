@@ -28,12 +28,18 @@
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ProcessList.h>
 #include <Server/IServer.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
+#if USE_JEMALLOC
+#include <jemalloc/jemalloc.h>
+#endif
 
 #include <ext/scope_guard.h>
+
+#include "Common/ThreadFactory.h"
 
 namespace DB
 {
@@ -66,9 +72,36 @@ FlashService::FlashService(IServer & server_)
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+    std::thread t = ThreadFactory::newThread(false, "MemTrackThread", &FlashService::memCheckJob, this);
+    t.detach();
 }
 
-FlashService::~FlashService() = default;
+void FlashService::memCheckJob()
+{
+    while (!end_syn)
+    {
+        DB::ProcessList & proc_list = server.context().getGlobalContext().getProcessList();
+        size_t tracked_used = static_cast<size_t>(proc_list.getMemAlloacted());
+        size_t limit = static_cast<size_t>(proc_list.getMemAlloacted());
+        size_t value{0};
+#if USE_JEMALLOC
+        size_t size = sizeof(value);
+        mallctl("stats.resident", &value, &size, nullptr, 0);
+#endif
+        LOG_FMT_INFO(log, "mem_check: tracked: {}, limit: {}, real: {}, diff: {}", tracked_used, limit, value, (tracked_used < value ? value - tracked_used : tracked_used - value));
+        usleep(1000000);
+    }
+    end_fin = true;
+}
+
+FlashService::~FlashService()
+{
+    end_syn = true;
+    while (!end_fin)
+    {
+        usleep(10000);
+    }
+}
 
 // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
 grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()> job)

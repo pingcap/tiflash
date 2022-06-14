@@ -70,6 +70,8 @@ public:
 
     Int64 getPeak() const { return peak.load(std::memory_order_relaxed); }
 
+    Int64 getLimit() const { return limit.load(std::memory_order_relaxed); }
+
     void setLimit(Int64 limit_) { limit.store(limit_, std::memory_order_relaxed); }
 
     /** Set limit if it was not set.
