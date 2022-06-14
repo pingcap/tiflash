@@ -952,7 +952,7 @@ protected:
         AggregatedDataWithoutKey & res,
         size_t rows,
         AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena) const;
+        Arena * arena);
 
     template <typename Method>
     void writeToTemporaryFileImpl(
