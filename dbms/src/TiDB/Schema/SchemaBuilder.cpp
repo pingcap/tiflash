@@ -371,7 +371,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         /// Update column infos by applying schema change in this step.
         schema_change.second(orig_table_info);
         /// Update schema version aggressively for the sake of correctness（for read part).
-        /// In read action, we will use table_info.schema_version(storage_version) and TiDBSchemaSyncer.cur_version(global_version) to compare with query_version, to decide whether we can read under this query_version, or we need to make the schema newer. 
+        /// In read action, we will use table_info.schema_version(storage_version) and TiDBSchemaSyncer.cur_version(global_version) to compare with query_version, to decide whether we can read under this query_version, or we need to make the schema newer.
         /// In our comparison logic, we only serve the query when the query schema version meet the criterion: storage_version <= query_version <= global_version(The more detail info you can refer the comments in DAGStorageInterpreter::getAndLockStorages.)
         /// And when apply multi diffs here, we only update global_version when all diffs have been applied.
         /// So the global_version may be less than the actual "global_version" of the local schema in the process of applying schema changes.
