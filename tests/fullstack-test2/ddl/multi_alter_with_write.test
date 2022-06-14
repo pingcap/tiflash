@@ -33,6 +33,8 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
 
+func> wait_table test t 
+
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
@@ -108,6 +110,8 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
 
+func> wait_table test t 
+
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
@@ -172,6 +176,8 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
+
+func> wait_table test t 
 
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
@@ -239,6 +245,8 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
+
+func> wait_table test t 
 
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
@@ -314,6 +322,8 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
 
+func> wait_table test t 
+
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
@@ -374,6 +384,8 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
 
+func> wait_table test t 
+
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
@@ -433,6 +445,7 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
 
+func> wait_table test t 
 
 # add a new pre write to make check the alter cmd 1 more convenient.
 mysql> insert into test.t (a, b, c) values (0, 0, ' ');
@@ -526,6 +539,8 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
 
+func> wait_table test t 
+
 # add a new pre write to make check the alter cmd 1 more convenient.
 mysql> insert into test.t (a, b, c) values (0, 0, ' ');
  
@@ -607,6 +622,8 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
+
+func> wait_table test t 
 
 # add a new pre write to make check the alter cmd 1 more convenient.
 mysql> insert into test.t (a, b, c) values (0, 0, ' ');
@@ -690,6 +707,7 @@ mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar
 mysql> alter table test.t set tiflash replica 1;
 mysql> set session tidb_isolation_read_engines='tiflash';
 
+func> wait_table test t 
 
 # add a new pre write to make check the alter cmd 1 more convenient.
 mysql> insert into test.t (a, b, c) values (0, 0, ' ');
