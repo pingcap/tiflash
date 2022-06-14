@@ -57,7 +57,8 @@ void ColumnFilePersistedSet::updateColumnFileStats()
     size_t new_bytes = 0;
     size_t new_deletes = 0;
     rows_and_deletes_offsets_per_level.clear();
-    for (size_t i = persisted_files_levels.size() - 1; i >= 0; i++)
+    rows_and_deletes_offsets_per_level.resize(persisted_files_levels.size());
+    for (int i = persisted_files_levels.size() - 1; i >= 0; i--)
     {
         rows_and_deletes_offsets_per_level[i] = std::make_pair(new_rows, new_deletes);
         auto & file_level = persisted_files_levels[i];
