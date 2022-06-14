@@ -103,7 +103,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_req.root_executor().exchange_sender();
 
-    for (int i = 0; i < exchange_sender.encoded_task_meta_size(); i++)
+    for (int i = 0; i < exchange_sender.encoded_task_meta_size(); ++i)
     {
         // exchange sender will register the tunnels and wait receiver to found a connection.
         mpp::TaskMeta task_meta;
