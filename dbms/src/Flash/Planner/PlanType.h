@@ -26,6 +26,7 @@ struct PlanType
         Limit = 1,
         TopN = 2,
         Selection = 3,
+        Aggregation = 4,
     };
     PlanTypeEnum enum_value;
 

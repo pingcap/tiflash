@@ -167,13 +167,29 @@ public:
         const ExpressionActionsPtr & actions,
         const std::vector<const tipb::Expr *> & conditions);
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
+    void buildAggFuncs(
+        const tipb::Aggregation & aggregation,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns);
+
+    void buildAggGroupBy(
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
+        const ExpressionActionsPtr & actions,
+        AggregateDescriptions & aggregate_descriptions,
+        NamesAndTypes & aggregated_columns,
+        Names & aggregation_keys,
+        std::unordered_set<String> & agg_key_set,
+        bool group_by_collation_sensitive,
+        TiDB::TiDBCollators & collators);
+
     void appendCastAfterAgg(
         const ExpressionActionsPtr & actions,
         const tipb::Aggregation & agg);
 
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
         SortDescription & sort_desc,
@@ -196,22 +212,6 @@ private:
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
-
-    void buildAggFuncs(
-        const tipb::Aggregation & aggregation,
-        const ExpressionActionsPtr & actions,
-        AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns);
-
-    void buildAggGroupBy(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & group_by,
-        const ExpressionActionsPtr & actions,
-        AggregateDescriptions & aggregate_descriptions,
-        NamesAndTypes & aggregated_columns,
-        Names & aggregation_keys,
-        std::unordered_set<String> & agg_key_set,
-        bool group_by_collation_sensitive,
-        TiDB::TiDBCollators & collators);
 
     void fillArgumentDetail(
         const ExpressionActionsPtr & actions,

@@ -18,7 +18,6 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
-#include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 #include <DataStreams/HashJoinProbeBlockInputStream.h>
@@ -365,10 +364,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     AggregateDescriptions & aggregate_descriptions,
     bool is_final_agg)
 {
-    pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, expression_actions_ptr, log->identifier());
-        stream->setExtraInfo("before aggregation");
-    });
+    executeExpression(pipeline, expression_actions_ptr, log, "before aggregation");
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
 
@@ -670,10 +666,7 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
     if (project_cols.empty())
         return;
     ExpressionActionsPtr project = generateProjectExpressionActions(pipeline.firstStream(), context, project_cols);
-    pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, project, log->identifier());
-        stream->setExtraInfo(extra_info);
-    });
+    executeExpression(pipeline, project, log, extra_info);
 }
 
 void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)

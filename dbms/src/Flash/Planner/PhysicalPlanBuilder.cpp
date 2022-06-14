@@ -32,6 +32,13 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     case tipb::ExecType::TypeTopN:
         cur_plans.push_back(PhysicalTopN::build(context, executor_id, log->identifier(), executor->topn(), popBack()));
         break;
+    case tipb::ExecType::TypeSelection:
+        cur_plans.push_back(PhysicalFilter::build(context, executor_id, log->identifier(), executor->selection(), popBack()));
+        break;
+    case tipb::ExecType::TypeAggregation:
+    case tipb::ExecType::TypeStreamAgg:
+        cur_plans.push_back(PhysicalAggregation::build(context, executor_id, log->identifier(), executor->aggregation(), popBack()));
+        break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }

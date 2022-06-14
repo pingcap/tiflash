@@ -29,6 +29,8 @@ String PlanType::toString() const
         return "TopN";
     case Selection:
         return "Selection";
+    case Aggregation:
+        return "Aggregation";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }
