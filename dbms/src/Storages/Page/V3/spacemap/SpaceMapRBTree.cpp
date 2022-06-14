@@ -744,15 +744,13 @@ UInt64 RBTreeSpaceMap::getUsedBoundary()
 
     auto * entry = node_to_entry(node);
 
-    // If last node is not [xxx, end]
-    // Then we should return `end` rather than last node start
+    // If the `offset+size` of the last free node is not equal to `end`, it means the range `[last_node.offset, end)` is marked as used,
+    // then we should return `end` as the used boundary.
     //
-    // When there is a space with a span of [xxx, end],
-    // Then `getUsedBoundary` will return an incorrect right margin.
-    // ex.
-    //  1. Space limit is 100. So current space is [0, 100]
-    //  2. Mark a span {offset=90, size=10} as used, then the free range in SpaceMap is [0, 90).
-    //  3. without this check, `getUsedBoundary` will return 0. This is incorrect.
+    // eg.
+    //  1. The spacemap manage a space of `[0, 100]`
+    //  2. A span {offset=90, size=10} is marked as used, then the free range in SpaceMap is `[0, 90)`
+    //  3. The return value should be 100
     if (entry->start + entry->count != end)
     {
         return end;
