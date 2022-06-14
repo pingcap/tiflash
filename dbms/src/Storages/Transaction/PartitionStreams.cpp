@@ -168,7 +168,7 @@ static void writeRegionDataToStorage(
     /// we add force_pause_query_until_write_finish failpoint to enable pause_query_until_write_finish here and disable it when write finish to make the query happend until the write totally finished.
     fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
         FailPointHelper::enableFailPoint(FailPoints::pause_query_until_write_finish);
-        //LOG_FMT_INFO(log, "[for test only] enable FailPoints::pause_query_until_write_finish");
+        LOG_FMT_INFO(log, "[for test only] enable FailPoints::pause_query_until_write_finish");
     });
 
     /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
@@ -182,20 +182,20 @@ static void writeRegionDataToStorage(
     //     });
 
 
-    //LOG_FMT_INFO(log, "[for test only] open the pause failpoint pause_before_apply_raft_cmd");
+    LOG_FMT_INFO(log, "[for test only] open the pause failpoint pause_before_apply_raft_cmd");
 
     // ::sleep(3);
 
-    //LOG_FMT_INFO(log, "[for test only] begin decode and write");
+    LOG_FMT_INFO(log, "[for test only] begin decode and write");
     /// Try read then write once.
     {
         if (atomic_read_write(false))
         {
-            //LOG_FMT_INFO(log, "[for test only] first decode sucess");
+            LOG_FMT_INFO(log, "[for test only] first decode sucess");
 
             fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
                 FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
-                //LOG_FMT_INFO(log, "[for test only] disable FailPoints::pause_query_until_write_finish");
+                LOG_FMT_INFO(log, "[for test only] disable FailPoints::pause_query_until_write_finish");
             });
             return;
         }
@@ -212,7 +212,7 @@ static void writeRegionDataToStorage(
             // TODO: Enrich exception message.
             fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
                 FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
-                //LOG_FMT_INFO(log, "[for test only] disable FailPoints::pause_query_until_write_finish");
+                LOG_FMT_INFO(log, "[for test only] disable FailPoints::pause_query_until_write_finish");
             });
 
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
@@ -220,11 +220,11 @@ static void writeRegionDataToStorage(
         }
 
 
-        //LOG_FMT_INFO(log, "[for test only] second decode sucess");
+        LOG_FMT_INFO(log, "[for test only] second decode sucess");
 
         fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
             FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
-            //LOG_FMT_INFO(log, "[for test only] disable FailPoints::pause_query_until_write_finish");
+            LOG_FMT_INFO(log, "[for test only] disable FailPoints::pause_query_until_write_finish");
         });
     }
 }
