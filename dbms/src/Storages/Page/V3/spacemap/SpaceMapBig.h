@@ -74,7 +74,7 @@ protected:
         return std::make_pair(size_in_used, size_in_used);
     }
 
-    UInt64 getRightMargin() override
+    UInt64 getUsedBoundary() override
     {
         return end;
     }
