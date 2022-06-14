@@ -32,6 +32,8 @@
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <common/logger_useful.h>
 
+#include "fiu.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -39,6 +41,8 @@ namespace FailPoints
 extern const char pause_before_apply_raft_cmd[];
 extern const char pause_before_apply_raft_snapshot[];
 extern const char force_set_safepoint_when_decode_block[];
+extern const char force_pause_query_until_write_finish[];
+extern const char pause_query_until_write_finish[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -150,6 +154,7 @@ static void writeRegionDataToStorage(
         default:
             throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
         }
+
         write_part_cost = watch.elapsedMilliseconds();
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
         if (need_decode)
@@ -159,17 +164,37 @@ static void writeRegionDataToStorage(
         return true;
     };
 
+
     /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
     /// There could be a chance that some raft logs come after a table gets tombstoned. Take care of it when
     /// decoding data. Check the test case for more details.
-    FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_cmd);
+    fiu_do_on(
+        FailPoints::pause_before_apply_raft_cmd,
+        {
+            FailPointHelper::wait(FailPoints::pause_before_apply_raft_cmd);
 
-    LOG_FMT_TRACE(log, "[for test only] begin decode and write");
+            /// we add force_pause_query_until_write_finish failpoint to enable pause_query_until_write_finish here and disable it when write finish to make the query happend until the write totally finished.
+            fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
+                FailPointHelper::enableFailPoint(FailPoints::pause_query_until_write_finish);
+                //LOG_FMT_INFO(log, "[for test only] enable FailPoints::pause_query_until_write_finish");
+            });
+        });
+
+
+    // LOG_FMT_INFO(log, "[for test only] open the pause failpoint pause_before_apply_raft_cmd");
+
+    // ::sleep(3);
+
+    // LOG_FMT_INFO(log, "[for test only] begin decode and write");
     /// Try read then write once.
     {
         if (atomic_read_write(false))
         {
-            LOG_FMT_TRACE(log, "[for test only] first decode sucess");
+            //LOG_FMT_INFO(log, "[for test only] first decode sucess");
+
+            fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
+                FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
+            });
             return;
         }
     }
@@ -180,12 +205,24 @@ static void writeRegionDataToStorage(
         tmt.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomic_read_write(true))
+        {
             // Failure won't be tolerated this time.
             // TODO: Enrich exception message.
+            fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
+                FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
+            });
+
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
                             ErrorCodes::LOGICAL_ERROR);
+        }
 
-        LOG_FMT_TRACE(log, "[for test only] second decode sucess");
+
+        //LOG_FMT_INFO(log, "[for test only] second decode sucess");
+
+        fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
+            FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
+            //LOG_FMT_INFO(log, "[for test only] disable FailPoints::pause_query_until_write_finish");
+        });
     }
 }
 

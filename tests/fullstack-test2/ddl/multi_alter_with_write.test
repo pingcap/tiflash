@@ -23,6 +23,9 @@
 >> DBGInvoke __init_fail_point()
 >> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
 
+# Enable the failpoint to make our query only start when the write action finished
+>> DBGInvoke __enable_fail_point(force_pause_query_until_write_finish)
+
 # -----------------------------------------------------------------------------
 # Order 1 : write cmd 1 | alter cmd 1 | write cmd 2 | alter cmd 2 | write cmd 3
 # -----------------------------------------------------------------------------

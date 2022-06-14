@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -53,6 +54,11 @@ extern const int LOGICAL_ERROR;
 extern const int QUERY_IS_TOO_LARGE;
 extern const int INTO_OUTFILE_NOT_ALLOWED;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char pause_query_until_write_finish[];
+} // namespace FailPoints
 
 namespace
 {
@@ -415,6 +421,11 @@ BlockIO executeQuery(
     bool internal,
     QueryProcessingStage::Enum stage)
 {
+    /// Failpoint to make our query begin after the write action finish.
+    FAIL_POINT_PAUSE(FailPoints::pause_query_until_write_finish);
+    // auto execute_query_logger = getLogger(context);
+    // LOG_FMT_INFO(execute_query_logger, "[for test only] Begin ExecuteQuery with query {}", query);
+
     BlockIO streams;
     SQLQuerySource query_src(query.data(), query.data() + query.size());
     std::tie(std::ignore, streams) = executeQueryImpl(query_src, context, internal, stage);

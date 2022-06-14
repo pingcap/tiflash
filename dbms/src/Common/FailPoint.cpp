@@ -87,6 +87,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_slow_page_storage_snapshot_release)              \
     M(force_change_all_blobs_to_read_only)
 
+
 #define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
     M(pause_with_alter_locks_acquired)            \
     M(hang_in_execution)                          \
@@ -103,7 +104,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_when_ingesting_to_dt_store)      \
     M(pause_when_altering_dt_store)          \
     M(pause_after_copr_streams_acquired)     \
-    M(pause_before_server_merge_one_delta)
+    M(pause_before_server_merge_one_delta)   \
+    M(pause_query_until_write_finish)        \
+    M(force_pause_query_until_write_finish)
 
 namespace FailPoints
 {
