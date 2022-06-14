@@ -1141,11 +1141,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         global_context->setSetting("background_pool_size", std::to_string(server_info.cpu_info.logical_cores / 4));
     }
+    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
 
     /// Initialize the background & blockable background thread pool.
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
-    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
 
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
