@@ -35,7 +35,7 @@ public:
         size_t executor_index = 0;
         DAGRequestBuilder builder(executor_index);
         builder
-            .fakeDataSource(executor_index, columns)
+            .mockTable("test", "t1", columns)
             .sort({{"c1", false}, {"c2", false}, {"c3", false}}, true)
             .window(RowNumber(),
                     {{"c1", false}, {"c2", false}, {"c3", false}},
