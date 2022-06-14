@@ -1134,11 +1134,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
-    /// set background & blockable background thread pool size to the a quarter of of number of logical CPU cores of machine.
-    global_context->setSetting("background_pool_size", std::to_string(server_info.cpu_info.logical_cores / 4));
+    /// if default value of background_pool_size is 0
+    /// set it to the a quarter of the number of logical CPU cores of machine.
+    Settings & settings = global_context->getSettingsRef();
+    if (settings.background_pool_size == 0) {
+        global_context->setSetting("background_pool_size", std::to_string(server_info.cpu_info.logical_cores / 4));
+    }
 
     /// Initialize the background & blockable background thread pool.
-    const Settings & settings = global_context->getSettingsRef();
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
     LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
@@ -1410,7 +1413,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         auto size = settings.grpc_completion_queue_pool_size;
         if (size == 0)
-            size = std::thread::hardware_concurrency();
+            size = server_info.cpu_info.logical_cores;
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
     }
 
