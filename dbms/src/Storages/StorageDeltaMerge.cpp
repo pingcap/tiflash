@@ -756,7 +756,7 @@ BlockInputStreams StorageDeltaMerge::read(
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
         query_info.req_id,
-        true,
+        /* is_raw_read */tidb_table_info.mode == TiDB::TiFlashMode::Fast,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
