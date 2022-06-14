@@ -17,6 +17,7 @@
 #include <Poco/Logger.h>
 #include <Storages/Page/PageUtil.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -30,6 +31,7 @@ namespace tests
 static const std::string FileName = "page_util_test";
 
 TEST(PageUtilsTest, ReadWriteFile)
+try
 {
     ::remove(FileName.c_str());
 
@@ -52,6 +54,7 @@ TEST(PageUtilsTest, ReadWriteFile)
 
     ::remove(FileName.c_str());
 }
+CATCH
 
 TEST(PageUtilsTest, FileNotExists)
 {
