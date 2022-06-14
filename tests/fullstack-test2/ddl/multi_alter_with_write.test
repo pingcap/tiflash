@@ -875,3 +875,11 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 └─────┴───────┴─────┴─────┘
 
 >> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
+
+##
+
+=> DBGInvoke __enable_schema_sync_service('true') 
+>> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
+>> DBGInvoke __disable_fail_point(force_pause_query_until_write_finish)
+>> DBGInvoke __disable_fail_point(pause_query_until_write_finish)
