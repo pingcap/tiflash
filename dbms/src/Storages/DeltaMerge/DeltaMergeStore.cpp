@@ -34,6 +34,7 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <common/logger_useful.h>
 
 #include <atomic>
 #include <ext/scope_guard.h>
@@ -1137,9 +1138,11 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     }
 
     fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
-        std::thread thread_hold_snapshots([tasks]() {
+        std::thread thread_hold_snapshots([this, tasks]() {
+            LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
             std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
             (void)tasks;
+            LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
         });
         thread_hold_snapshots.detach();
     });

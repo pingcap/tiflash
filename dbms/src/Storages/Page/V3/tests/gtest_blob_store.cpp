@@ -82,6 +82,7 @@ try
         stats.restoreByEntry(PageEntryV3{
             .file_id = file_id1,
             .size = 128,
+            .padded_size = 0,
             .tag = 0,
             .offset = 1024,
             .checksum = 0x4567,
@@ -89,6 +90,7 @@ try
         stats.restoreByEntry(PageEntryV3{
             .file_id = file_id1,
             .size = 512,
+            .padded_size = 0,
             .tag = 0,
             .offset = 2048,
             .checksum = 0x4567,
@@ -96,6 +98,7 @@ try
         stats.restoreByEntry(PageEntryV3{
             .file_id = file_id2,
             .size = 512,
+            .padded_size = 0,
             .tag = 0,
             .offset = 2048,
             .checksum = 0x4567,
@@ -531,7 +534,8 @@ TEST_F(BlobStoreTest, testWriteRead)
         ASSERT_EQ(record.entry.file_id, 1);
 
         // Read directly from the file
-        blob_store.read(record.entry.file_id,
+        blob_store.read(buildV3Id(TEST_NAMESPACE_ID, page_id),
+                        record.entry.file_id,
                         record.entry.offset,
                         c_buff_read + index * buff_size,
                         record.entry.size,
@@ -631,7 +635,8 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
         {
             for (const auto & record : edits[i].getRecords())
             {
-                blob_store.read(record.entry.file_id,
+                blob_store.read(buildV3Id(TEST_NAMESPACE_ID, page_id),
+                                record.entry.file_id,
                                 record.entry.offset,
                                 c_buff_read + i * buff_size,
                                 record.entry.size,
@@ -809,7 +814,8 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
         ASSERT_EQ(check_field_sizes, offsets);
 
         // Read
-        blob_store.read(record.entry.file_id,
+        blob_store.read(buildV3Id(TEST_NAMESPACE_ID, page_id),
+                        record.entry.file_id,
                         record.entry.offset,
                         c_buff_read + index * buff_size,
                         record.entry.size,
