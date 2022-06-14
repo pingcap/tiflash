@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -36,7 +35,6 @@
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
-#include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <tipb/expression.pb.h>
 #include <tipb/select.pb.h>
@@ -55,11 +53,6 @@ extern const int LOGICAL_ERROR;
 extern const int QUERY_IS_TOO_LARGE;
 extern const int INTO_OUTFILE_NOT_ALLOWED;
 } // namespace ErrorCodes
-
-namespace FailPoints
-{
-extern const char pause_query_until_write_finish[];
-} // namespace FailPoints
 
 namespace
 {
