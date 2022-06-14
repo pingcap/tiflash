@@ -93,11 +93,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
     Int64 send_task_id = -1;
     Int64 recv_task_id = task_meta.task_id();
-<<<<<<< HEAD
-
-=======
     static const Int32 MAX_RETRY_TIMES = 10;
->>>>>>> 8463cef05a (Fix ha test random failure (#3649))
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
