@@ -73,11 +73,11 @@ void AggregatedDataVariants::convertToTwoLevel()
 
     switch (type)
     {
-#define M(NAME)                                                                               \
-    case Type::NAME:                                                                          \
-        NAME##_two_level = std::make_unique<decltype(NAME##_two_level)::element_type>(*NAME); \
-        NAME.reset();                                                                         \
-        type = Type::NAME##_two_level;                                                        \
+#define M(NAME)                                                                                 \
+    case Type::NAME:                                                                            \
+        NAME##_two_level = std::make_unique<decltype(NAME##_two_level)::element_type>(*(NAME)); \
+        (NAME).reset();                                                                         \
+        type = Type::NAME##_two_level;                                                          \
         break;
 
         APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
@@ -585,9 +585,9 @@ bool Aggregator::executeOnBlock(
     else if (result.type == AggregatedDataVariants::Type::NAME) \
         executeImpl(*result.NAME, result.aggregates_pool, num_rows, key_columns, result.collators, aggregate_functions_instructions.data(), no_more_keys, overflow_row_ptr);
 
-        if (false)
+        if (false) // NOLINT
         {
-        } // NOLINT
+        }
         APPLY_FOR_AGGREGATED_VARIANTS(M)
 #undef M
     }
@@ -654,7 +654,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
         writeToTemporaryFileImpl(data_variants, *data_variants.NAME, block_out);
 
-    if (false)
+    if (false) // NOLINT
     {
     }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
@@ -1092,9 +1092,9 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
 #define M(NAME)                                                        \
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
         convertToBlockImpl(*data_variants.NAME, data_variants.NAME->data, key_columns, aggregate_columns, final_aggregate_columns, data_variants.aggregates_pool, final_);
-        if (false)
+        if (false) // NOLINT
         {
-        } // NOLINT
+        }
         APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
 #undef M
         else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -1109,9 +1109,9 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & dat
 #define M(NAME) \
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool);
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -1510,7 +1510,7 @@ protected:
 #define M(NAME)                                                 \
     else if (first->type == AggregatedDataVariants::Type::NAME) \
         aggregator.mergeSingleLevelDataImpl<decltype(first->NAME)::element_type>(data);
-            if (false)
+            if (false) // NOLINT
             {
             }
             APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
@@ -1611,7 +1611,7 @@ private:
             size_t thread_number = static_cast<size_t>(bucket_num) % threads;
             Arena * arena = merged_data.aggregates_pools.at(thread_number).get();
 
-            if (false) {}
+            if (false) {} // NOLINT
 #define M(NAME)                                                                                               \
     else if (method == AggregatedDataVariants::Type::NAME)                                                    \
     {                                                                                                         \
@@ -1971,7 +1971,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
     else if (result.type == AggregatedDataVariants::Type::NAME) \
         mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data.impls[bucket], nullptr, false);
 
-                if (false)
+                if (false) // NOLINT
                 {
                 }
                 APPLY_FOR_VARIANTS_TWO_LEVEL(M)
@@ -1995,7 +1995,9 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             result.aggregates_pools.push_back(std::make_shared<Arena>());
             Arena * aggregates_pool = result.aggregates_pools.back().get();
 
-            auto task = std::bind(merge_bucket, bucket, aggregates_pool);
+            auto task = [&merge_bucket, bucket, aggregates_pool] {
+                return merge_bucket(bucket, aggregates_pool);
+            };
 
             if (thread_pool)
                 thread_pool->schedule(ThreadFactory().newJob(task));
@@ -2211,9 +2213,9 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
         type                                             \
         = AggregatedDataVariants::Type::NAME##_two_level;
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2227,9 +2229,9 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
         num_buckets                                           \
         = data.NAME->data.NUM_BUCKETS;
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2240,9 +2242,9 @@ std::vector<Block> Aggregator::convertBlockToTwoLevel(const Block & block)
     else if (data.type == AggregatedDataVariants::Type::NAME) \
         convertBlockToTwoLevelImpl(*data.NAME, data.aggregates_pool, key_columns, block, splitted_blocks);
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_VARIANTS_TWO_LEVEL(M)
 #undef M
     else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
@@ -2299,9 +2301,9 @@ void Aggregator::destroyAllAggregateStates(AggregatedDataVariants & result)
     else if (result.type == AggregatedDataVariants::Type::NAME) \
         destroyImpl<decltype(result.NAME)::element_type>(result.NAME->data);
 
-    if (false)
+    if (false) // NOLINT
     {
-    } // NOLINT
+    }
     APPLY_FOR_AGGREGATED_VARIANTS(M)
 #undef M
     else if (result.type != AggregatedDataVariants::Type::without_key) throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
