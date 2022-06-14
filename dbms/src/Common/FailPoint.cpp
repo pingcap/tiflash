@@ -127,14 +127,20 @@ public:
 
     void wait()
     {
+        //std::cout << "[for test only] wait line 130" << std::endl;
         std::unique_lock lock(m);
+        //std::cout << "[for test only] wait line 132" << std::endl;
         cv.wait(lock);
+        //std::cout << "[for test only] wait line 134" << std::endl;
     }
 
     void notifyAll()
     {
+        //std::cout << "[for test only] notifyAll line 139" << std::endl;
         std::unique_lock lock(m);
+        //std::cout << "[for test only] notifyAll line 141" << std::endl;
         cv.notify_all();
+        //std::cout << "[for test only] notifyAll line 143" << std::endl;
     }
 
 private:
@@ -183,6 +189,7 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
 
 void FailPointHelper::disableFailPoint(const String & fail_point_name)
 {
+    //std::cout << "[for test only] FailPointHelper::disableFailPoint " << fail_point_name << std::endl;
     if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
     {
         /// can not rely on deconstruction to do the notify_all things, because
@@ -195,6 +202,7 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
 
 void FailPointHelper::wait(const String & fail_point_name)
 {
+    //std::cout << "[for test only] FailPointHelper::wait " << fail_point_name << std::endl;
     if (auto iter = fail_point_wait_channels.find(fail_point_name); iter == fail_point_wait_channels.end())
         throw Exception("Can not find channel for fail point " + fail_point_name);
     else

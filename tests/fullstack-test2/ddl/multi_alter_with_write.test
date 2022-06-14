@@ -126,6 +126,8 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
 
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
 # alter cmd 1
 mysql> alter table test.t add column e decimal(6,1) NULL;
 
@@ -192,6 +194,8 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 ┌─a───┬─b────┬─c─────┬─d───┐
 │ 1   │ 4.50 │ abc   │ 0   │
 └─────┴──────┴───────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
 
 # alter cmd 1
 mysql> alter table test.t add column e decimal(6,1) NULL;
@@ -684,6 +688,8 @@ mysql> alter table test.t drop column b;
 │ 3   │ ccc   │ 3   │ 0.1 │
 └─────┴───────┴─────┴─────┘
 
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
+
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
@@ -751,6 +757,8 @@ mysql> alter table test.t drop column b;
 │ 1   │ abc   │ 0   │ \N  │
 │ 3   │ ccc   │ 3   │ 0.1 │
 └─────┴───────┴─────┴─────┘
+
+>> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
 
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 

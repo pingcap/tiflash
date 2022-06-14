@@ -36,6 +36,7 @@
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
+#include <common/logger_useful.h>
 #include <fmt/core.h>
 #include <tipb/expression.pb.h>
 #include <tipb/select.pb.h>
@@ -421,11 +422,6 @@ BlockIO executeQuery(
     bool internal,
     QueryProcessingStage::Enum stage)
 {
-    /// Failpoint to make our query begin after the write action finish.
-    FAIL_POINT_PAUSE(FailPoints::pause_query_until_write_finish);
-    // auto execute_query_logger = getLogger(context);
-    // LOG_FMT_INFO(execute_query_logger, "[for test only] Begin ExecuteQuery with query {}", query);
-
     BlockIO streams;
     SQLQuerySource query_src(query.data(), query.data() + query.size());
     std::tie(std::ignore, streams) = executeQueryImpl(query_src, context, internal, stage);

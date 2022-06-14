@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/Collator.h>
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Common/typeid_cast.h>
@@ -93,6 +94,12 @@ extern const int SCHEMA_VERSION_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
+
+namespace FailPoints
+{
+extern const char pause_query_until_write_finish[];
+} // namespace FailPoints
+
 InterpreterSelectQuery::InterpreterSelectQuery(
     const ASTPtr & query_ptr_,
     const Context & context_,
@@ -131,6 +138,15 @@ InterpreterSelectQuery::~InterpreterSelectQuery() = default;
 
 void InterpreterSelectQuery::init(const Names & required_result_column_names)
 {
+    /// Failpoint to make our query begin after the write action finish.
+    FAIL_POINT_PAUSE(FailPoints::pause_query_until_write_finish);
+    // fiu_do_on(FailPoints::pause_query_until_write_finish, {
+    //     //LOG_FMT_INFO(log, "[for test only] FAIL_POINT_PAUSE(FailPoints::pause_query_until_write_finish)");
+    //     FailPointHelper::wait(FailPoints::pause_query_until_write_finish);
+    // });
+
+    //LOG_FMT_INFO(log, "[for test only] Begin InterpreterSelectQuery");
+
     ProfileEvents::increment(ProfileEvents::SelectQuery);
 
     if (!context.hasQueryContext())
