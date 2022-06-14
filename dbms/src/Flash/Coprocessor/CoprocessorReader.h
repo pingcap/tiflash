@@ -127,28 +127,16 @@ public:
         std::shared_ptr<tipb::SelectResponse> resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(data))
         {
-<<<<<<< HEAD
+            if (resp->has_error())
+            {
+                return {nullptr, true, resp->error().DebugString(), false};
+            }
             if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock)
                 return {nullptr, true, "Encode type of coprocessor response is not CHBlock, "
                                        "maybe the version of some TiFlash node in the cluster is not match with this one",
                         false};
             auto rows = decodeChunks(resp, block_queue, expected_types, schema);
             return {resp, false, "", false, rows};
-=======
-            if (resp->has_error())
-            {
-                return {nullptr, true, resp->error().DebugString(), false};
-            }
-            else if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock && resp->chunks_size() > 0)
-                return {
-                    nullptr,
-                    true,
-                    "Encode type of coprocessor response is not CHBlock, "
-                    "maybe the version of some TiFlash node in the cluster is not match with this one",
-                    false};
-            auto detail = decodeChunks(resp, block_queue, header, schema);
-            return {resp, false, "", false, detail};
->>>>>>> d37a43d596 (avoid false alert of wrong encode type in CoprocesorReader (#3730))
         }
         else
         {
