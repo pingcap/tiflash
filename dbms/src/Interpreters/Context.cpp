@@ -1442,8 +1442,6 @@ void Context::dropCaches() const
 BackgroundProcessingPool & Context::getBackgroundPool()
 {
     auto lock = getLock();
-    if (!shared->background_pool)
-        shared->background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
     return *shared->background_pool;
 }
 
@@ -1459,8 +1457,6 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
 {
     // TODO: maybe a better name for the pool
     auto lock = getLock();
-    if (!shared->blockable_background_pool)
-        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
     return *shared->blockable_background_pool;
 }
 
