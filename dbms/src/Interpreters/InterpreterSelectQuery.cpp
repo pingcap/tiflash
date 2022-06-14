@@ -141,11 +141,11 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
     /// Failpoint to make our query begin after the write action finish.
     //FAIL_POINT_PAUSE(FailPoints::pause_query_until_write_finish);
     fiu_do_on(FailPoints::pause_query_until_write_finish, {
-        LOG_FMT_INFO(log, "[for test only] FAIL_POINT_PAUSE(FailPoints::pause_query_until_write_finish)");
+        //LOG_FMT_INFO(log, "[for test only] FAIL_POINT_PAUSE(FailPoints::pause_query_until_write_finish)");
         FailPointHelper::wait(FailPoints::pause_query_until_write_finish);
     });
 
-    LOG_FMT_INFO(log, "[for test only] Begin InterpreterSelectQuery");
+    //LOG_FMT_INFO(log, "[for test only] Begin InterpreterSelectQuery");
 
     ProfileEvents::increment(ProfileEvents::SelectQuery);
 
