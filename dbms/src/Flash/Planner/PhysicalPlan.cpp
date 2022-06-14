@@ -70,6 +70,7 @@ void PhysicalPlan::transform(DAGPipeline & pipeline, Context & context, size_t m
 {
     transformImpl(pipeline, context, max_streams);
     recordProfileStreams(pipeline, context);
+    // todo modify logic after supporting window function.
     context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
     restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
 }

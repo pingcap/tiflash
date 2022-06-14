@@ -54,6 +54,7 @@ void executeExpression(
 
 void orderStreams(
     DAGPipeline & pipeline,
+    size_t max_streams,
     SortDescription order_descr,
     Int64 limit,
     const Context & context,

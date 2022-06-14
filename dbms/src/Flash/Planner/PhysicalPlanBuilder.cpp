@@ -18,6 +18,7 @@
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
+#include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
@@ -53,14 +54,36 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     case tipb::ExecType::TypeExchangeReceiver:
     {
         if (unlikely(dagContext().isTest()))
-            cur_plans.push_back(PhysicalMockExchangeReceiver::build(context, executor_id, log->identifier(), popBack(), executor->exchange_receiver()));
+            cur_plans.push_back(PhysicalMockExchangeReceiver::build(context, executor_id, log->identifier(), executor->exchange_receiver()));
         else
             cur_plans.push_back(PhysicalExchangeReceiver::build(context, executor_id, log->identifier()));
         break;
     }
+    case tipb::ExecType::TypeProjection:
+        cur_plans.push_back(PhysicalProjection::build(context, executor_id, log->identifier(), executor->projection(), popBack()));
+        break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }
+}
+
+void PhysicalPlanBuilder::buildFinalProjection(const String & column_prefix, bool is_root)
+{
+    const auto & final_projection = is_root
+        ? PhysicalProjection::buildRootFinal(
+            context,
+            log->identifier(),
+            dagContext().output_field_types,
+            dagContext().output_offsets,
+            column_prefix,
+            dagContext().keep_session_timezone_info,
+            popBack())
+        : PhysicalProjection::buildNonRootFinal(
+            context,
+            log->identifier(),
+            column_prefix,
+            popBack());
+    cur_plans.push_back(final_projection);
 }
 
 DAGContext & PhysicalPlanBuilder::dagContext() const

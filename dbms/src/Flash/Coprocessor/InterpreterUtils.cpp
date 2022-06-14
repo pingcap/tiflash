@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <DataStreams/ExpressionBlockInputStream.h>
-#include <DataStreams/SharedQueryBlockInputStream.h>
-#include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/PartialSortingBlockInputStream.h>
+#include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
@@ -110,7 +110,7 @@ void executeExpression(
     DAGPipeline & pipeline,
     const ExpressionActionsPtr & expr_actions,
     const LoggerPtr & log,
-    const String & extra_info = "")
+    const String & extra_info)
 {
     if (expr_actions && !expr_actions->getActions().empty())
     {
@@ -123,6 +123,7 @@ void executeExpression(
 
 void orderStreams(
     DAGPipeline & pipeline,
+    size_t max_streams,
     SortDescription order_descr,
     Int64 limit,
     const Context & context,

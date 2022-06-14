@@ -108,10 +108,19 @@ public:
         ExpressionActionsChain & chain,
         const String & column_prefix) const;
 
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
+
     // Generate a project action for root DAGQueryBlock,
     // to keep the schema of Block and tidb-schema the same.
     NamesWithAliases appendFinalProjectForRootQueryBlock(
         ExpressionActionsChain & chain,
+        const std::vector<tipb::FieldType> & schema,
+        const std::vector<Int32> & output_offsets,
+        const String & column_prefix,
+        bool keep_session_timezone_info);
+
+    NamesWithAliases buildFinalProjection(
+        const ExpressionActionsPtr & actions,
         const std::vector<tipb::FieldType> & schema,
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,
@@ -284,8 +293,6 @@ private:
     String convertToUInt8(
         const ExpressionActionsPtr & actions,
         const String & column_name);
-
-    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
     NamesWithAliases genRootFinalProjectAliases(
         const String & column_prefix,
