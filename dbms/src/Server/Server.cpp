@@ -1137,7 +1137,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// if default value of background_pool_size is 0
     /// set it to the a quarter of the number of logical CPU cores of machine.
     Settings & settings = global_context->getSettingsRef();
-    if (settings.background_pool_size == 0) {
+    if (settings.background_pool_size == 0)
+    {
         global_context->setSetting("background_pool_size", std::to_string(server_info.cpu_info.logical_cores / 4));
     }
 
