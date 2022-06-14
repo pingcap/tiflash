@@ -50,6 +50,14 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
             cur_plans.push_back(PhysicalExchangeSender::build(executor_id, log->identifier(), executor->exchange_sender(), popBack()));
         break;
     }
+    case tipb::ExecType::TypeExchangeReceiver:
+    {
+        if (unlikely(dagContext().isTest()))
+            cur_plans.push_back(PhysicalMockExchangeReceiver::build(context, executor_id, log->identifier(), popBack(), executor->exchange_receiver()));
+        else
+            cur_plans.push_back(PhysicalExchangeReceiver::build(context, executor_id, log->identifier()));
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }

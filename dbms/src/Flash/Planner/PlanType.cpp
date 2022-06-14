@@ -35,6 +35,10 @@ String PlanType::toString() const
         return "ExchangeSender";
     case MockExchangeSender:
         return "MockExchangeSender";
+    case ExchangeReceiver:
+        return "ExchangeReceiver";
+    case MockExchangeReceiver:
+        return "MockExchangeReceiver";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }

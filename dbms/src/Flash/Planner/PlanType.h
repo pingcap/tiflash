@@ -29,6 +29,8 @@ struct PlanType
         Aggregation = 4,
         ExchangeSender = 5,
         MockExchangeSender = 6,
+        ExchangeReceiver = 7,
+        MockExchangeReceiver = 8,
     };
     PlanTypeEnum enum_value;
 
