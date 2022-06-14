@@ -166,10 +166,10 @@ static void writeRegionDataToStorage(
 
 
     /// we add force_pause_query_until_write_finish failpoint to enable pause_query_until_write_finish here and disable it when write finish to make the query happend until the write totally finished.
-    fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
-        FailPointHelper::enableFailPoint(FailPoints::pause_query_until_write_finish);
-        LOG_FMT_INFO(log, "[for test only] enable FailPoints::pause_query_until_write_finish");
-    });
+    // fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
+    //     FailPointHelper::enableFailPoint(FailPoints::pause_query_until_write_finish);
+    //     LOG_FMT_INFO(log, "[for test only] enable FailPoints::pause_query_until_write_finish");
+    // });
 
     /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
     /// There could be a chance that some raft logs come after a table gets tombstoned. Take care of it when
