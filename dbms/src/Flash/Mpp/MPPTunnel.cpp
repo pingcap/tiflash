@@ -128,7 +128,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    send_queue.push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+                    send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason)));
                     if (!is_local && is_async)
                         writer->tryFlushOne();
                 }
@@ -159,8 +159,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         waitUntilConnectedOrFinished(lk);
         if (finished)
             throw Exception("write to tunnel which is already closed," + consumer_state.getError());
-
-        if (send_queue.push(std::make_shared<mpp::MPPDataPacket>(data)))
+        if (send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(data)))
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -194,7 +193,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
         MPPDataPacketPtr res;
         while (send_queue.pop(res))
         {
-            if (!writer->write(*res))
+            if (!writer->write(*(res->packet)))
             {
                 err_msg = "grpc writes failed.";
                 break;
@@ -252,7 +251,7 @@ std::shared_ptr<mpp::MPPDataPacket> MPPTunnelBase<Writer>::readForLocal()
     RUNTIME_ASSERT(is_local, log, "should not reach readForLocal for remote tunnels");
     MPPDataPacketPtr res;
     if (send_queue.pop(res))
-        return res;
+        return res->packet;
     consumerFinish("");
     return nullptr;
 }

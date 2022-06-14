@@ -119,6 +119,7 @@ public:
     // handle will be called by ExchangeReceiver::reactor.
     void handle()
     {
+        std::string err_info;
         LOG_FMT_TRACE(log, "stage: {}", stage);
         switch (stage)
         {
@@ -139,11 +140,10 @@ public:
             LOG_FMT_TRACE(log, "Received {} packets.", read_packet_index);
             if (read_packet_index > 0)
                 has_data = true;
-
             if (auto packet = getErrorPacket())
                 setDone("Exchange receiver meet error : " + packet->error().msg());
-            else if (!sendPackets())
-                setDone("Exchange receiver meet error : push packets fail");
+            else if (!sendPackets(err_info))
+                setDone("Exchange receiver meet error : push packets fail, " + err_info);
             else if (read_packet_index < batch_packet_count)
             {
                 stage = AsyncRequestStage::WAIT_FINISH;
@@ -248,13 +248,36 @@ private:
             setDone(done_msg);
     }
 
-    bool sendPackets()
+    bool sendPackets(std::string & err_msg)
     {
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
             auto recv_msg = std::make_shared<ReceivedMessage>();
-            recv_msg->packet = std::move(packet);
+            try
+            {
+                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet);
+            }
+            catch (Exception & e)
+            {
+                err_msg = e.displayText();
+                return false;
+            }
+            catch (pingcap::Exception & e)
+            {
+                err_msg = e.message();
+                return false;
+            }
+            catch (std::exception & e)
+            {
+                err_msg = e.what();
+                return false;
+            }
+            catch (...)
+            {
+                err_msg = "unknown error";
+                return false;
+            }
             recv_msg->source_index = request->source_index;
             recv_msg->req_info = req_info;
             if (!msg_channel->push(std::move(recv_msg)))
@@ -473,15 +496,16 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             {
                 LOG_FMT_TRACE(log, "begin next ");
                 auto recv_msg = std::make_shared<ReceivedMessage>();
-                recv_msg->packet = std::make_shared<MPPDataPacket>();
+                std::shared_ptr<mpp::MPPDataPacket> packet = std::make_shared<mpp::MPPDataPacket>();
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = req.source_index;
-                bool success = reader->read(recv_msg->packet);
+                bool success = reader->read(packet);
+                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet);
                 if (!success)
                     break;
                 has_data = true;
-                if (recv_msg->packet->has_error())
-                    throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
+                if (packet->has_error())
+                    throw Exception("Exchange receiver meet error : " + packet->error().msg());
 
                 if (!msg_channel.push(std::move(recv_msg)))
                 {
@@ -552,16 +576,16 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 {
     assert(recv_msg != nullptr);
     DecodeDetail detail;
-
-    int chunk_size = recv_msg->packet->chunks_size();
+    auto & packet = recv_msg->packet->packet;
+    int chunk_size = packet->chunks_size();
     if (chunk_size == 0)
         return detail;
 
-    detail.packet_bytes = recv_msg->packet->ByteSizeLong();
+    detail.packet_bytes = packet->ByteSizeLong();
     /// ExchangeReceiverBase should receive chunks of TypeCHBlock
     for (int i = 0; i < chunk_size; ++i)
     {
-        Block block = CHBlockChunkCodec::decode(recv_msg->packet->chunks(i), header);
+        Block block = CHBlockChunkCodec::decode(packet->chunks(i), header);
         detail.rows += block.rows();
         if (unlikely(block.rows() == 0))
             continue;
@@ -598,16 +622,17 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
     }
     assert(recv_msg != nullptr && recv_msg->packet != nullptr);
     ExchangeReceiverResult result;
-    if (recv_msg->packet->has_error())
+    auto packet = recv_msg->packet->packet;
+    if (packet->has_error())
     {
-        result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, recv_msg->packet->error().msg(), false};
+        result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, packet->error().msg(), false};
     }
     else
     {
-        if (!recv_msg->packet->data().empty()) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
+        if (!packet->data().empty()) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
         {
             auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-            if (!resp_ptr->ParseFromString(recv_msg->packet->data()))
+            if (!resp_ptr->ParseFromString(packet->data()))
             {
                 result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, "decode error", false};
             }
@@ -617,7 +642,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 /// If mocking TiFlash as TiDB, here should decode chunks from resp_ptr.
                 if (!resp_ptr->chunks().empty())
                 {
-                    assert(recv_msg->packet->chunks().empty());
+                    assert(packet->chunks().empty());
                     result.decode_detail = CoprocessorReader::decodeChunks(resp_ptr, block_queue, header, schema);
                 }
             }
@@ -626,7 +651,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
         {
             result = {nullptr, recv_msg->source_index, recv_msg->req_info, false, "", false};
         }
-        if (!result.meet_error && !recv_msg->packet->chunks().empty())
+        if (!result.meet_error && !packet->chunks().empty())
         {
             assert(result.decode_detail.rows == 0);
             result.decode_detail = decodeChunks(recv_msg, block_queue, header);

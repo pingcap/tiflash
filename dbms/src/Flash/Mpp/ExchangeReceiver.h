@@ -35,7 +35,7 @@ namespace DB
 {
 struct ReceivedMessage
 {
-    std::shared_ptr<mpp::MPPDataPacket> packet;
+    std::shared_ptr<TrackedMppDataPacket> packet;
     size_t source_index = 0;
     String req_info;
 };

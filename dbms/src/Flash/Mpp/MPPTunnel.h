@@ -33,6 +33,8 @@
 #include <kvproto/tikvpb.grpc.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Flash/Mpp/TrackedMppDataPacket.h>
+
 #include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
@@ -166,7 +168,7 @@ private:
 
     int input_streams_num;
 
-    using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
+    using MPPDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
     MPMCQueue<MPPDataPacketPtr> send_queue;
 
     std::shared_ptr<ThreadManager> thread_manager;
