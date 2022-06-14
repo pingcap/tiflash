@@ -14,9 +14,12 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
+#include <Flash/Planner/plans/PhysicalAggregation.h>
+#include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
-#include <Flash/Planner/plans/PhysicalTopN.h>
+#include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -39,6 +42,14 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     case tipb::ExecType::TypeStreamAgg:
         cur_plans.push_back(PhysicalAggregation::build(context, executor_id, log->identifier(), executor->aggregation(), popBack()));
         break;
+    case tipb::ExecType::TypeExchangeSender:
+    {
+        if (unlikely(dagContext().isTest()))
+            cur_plans.push_back(PhysicalMockExchangeSender::build(executor_id, log->identifier(), popBack()));
+        else
+            cur_plans.push_back(PhysicalExchangeSender::build(executor_id, log->identifier(), executor->exchange_sender(), popBack()));
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }

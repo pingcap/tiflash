@@ -27,6 +27,8 @@ struct PlanType
         TopN = 2,
         Selection = 3,
         Aggregation = 4,
+        ExchangeSender = 5,
+        MockExchangeSender = 6,
     };
     PlanTypeEnum enum_value;
 

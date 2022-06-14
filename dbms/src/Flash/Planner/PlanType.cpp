@@ -31,6 +31,10 @@ String PlanType::toString() const
         return "Selection";
     case Aggregation:
         return "Aggregation";
+    case ExchangeSender:
+        return "ExchangeSender";
+    case MockExchangeSender:
+        return "MockExchangeSender";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }

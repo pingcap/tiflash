@@ -1,0 +1,54 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Common/Logger.h>
+#include <DataStreams/MockExchangeSenderInputStream.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
+#include <Interpreters/Context.h>
+
+namespace DB
+{
+PhysicalPlanPtr PhysicalMockExchangeSender::build(
+    const String & executor_id,
+    const String & req_id,
+    PhysicalPlanPtr child)
+{
+    assert(child);
+
+    auto physical_mock_exchange_sender = std::make_shared<PhysicalMockExchangeSender>(
+        executor_id,
+        child->getSchema(),
+        req_id);
+    physical_mock_exchange_sender->appendChild(child);
+    return physical_mock_exchange_sender;
+}
+
+void PhysicalMockExchangeSender::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+{
+    child->transform(pipeline, context, max_streams);
+
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<MockExchangeSenderInputStream>(stream, log->identifier()); });
+}
+
+void PhysicalMockExchangeSender::finalize(const Names & parent_require)
+{
+    child->finalize(parent_require);
+}
+
+const Block & PhysicalMockExchangeSender::getSampleBlock() const
+{
+    return child->getSampleBlock();
+}
+} // namespace DB
