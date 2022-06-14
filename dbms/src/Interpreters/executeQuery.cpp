@@ -422,9 +422,6 @@ BlockIO executeQuery(
     bool internal,
     QueryProcessingStage::Enum stage)
 {
-    //auto log = getLogger(context);
-    //LOG_FMT_INFO(log, "[for test only] executeQuery query is {}", query);
-
     BlockIO streams;
     SQLQuerySource query_src(query.data(), query.data() + query.size());
     std::tie(std::ignore, streams) = executeQueryImpl(query_src, context, internal, stage);
