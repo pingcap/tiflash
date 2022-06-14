@@ -25,6 +25,7 @@ struct PlanType
         Source = 0,
         Limit = 1,
         TopN = 2,
+        Selection = 3,
     };
     PlanTypeEnum enum_value;
 

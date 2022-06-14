@@ -163,6 +163,10 @@ public:
         const ExpressionActionsPtr & actions,
         const ::google::protobuf::RepeatedPtrField<tipb::ByItem> & order_by);
 
+    String buildFilterColumn(
+        const ExpressionActionsPtr & actions,
+        const std::vector<const tipb::Expr *> & conditions);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -280,10 +284,6 @@ private:
     String convertToUInt8(
         const ExpressionActionsPtr & actions,
         const String & column_name);
-
-    String buildFilterColumn(
-        const ExpressionActionsPtr & actions,
-        const std::vector<const tipb::Expr *> & conditions);
 
     NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
