@@ -69,9 +69,7 @@ struct MockReceiverContext
             : queue(queue_)
         {}
 
-        void initialize() const
-        {
-        }
+        void initialize() const {}
 
         bool read(PacketPtr & packet [[maybe_unused]]) const
         {
@@ -107,8 +105,7 @@ struct MockReceiverContext
         const std::vector<tipb::FieldType> & field_types_)
         : queues(queues_)
         , field_types(field_types_)
-    {
-    }
+    {}
 
     void fillSchema(DAGSchema & schema) const
     {
@@ -246,7 +243,6 @@ struct ReceiverHelper
     explicit ReceiverHelper(int concurrency_, int source_num_);
     MockExchangeReceiverPtr buildReceiver();
     std::vector<BlockInputStreamPtr> buildExchangeReceiverStream();
-    ;
     BlockInputStreamPtr buildUnionStream();
     BlockInputStreamPtr buildUnionStreamWithHashJoinBuildStream();
     void finish();
