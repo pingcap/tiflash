@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
+
 #include <thread>
 
 namespace DB::tests
