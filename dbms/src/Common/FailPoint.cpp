@@ -85,36 +85,42 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_remote_read_for_batch_cop)                       \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
-    M(force_change_all_blobs_to_read_only)
+    M(force_change_all_blobs_to_read_only)                   \
+    M(unblock_query_init_after_write)
 
 
-#define APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M) \
-    M(pause_with_alter_locks_acquired)            \
-    M(hang_in_execution)                          \
-    M(pause_before_dt_background_delta_merge)     \
-    M(pause_until_dt_background_delta_merge)      \
-    M(pause_before_apply_raft_cmd)                \
-    M(pause_before_apply_raft_snapshot)           \
-    M(pause_until_apply_raft_snapshot)            \
+#define APPLY_FOR_FAILPOINTS_ONCE_WITH_PAUSEABLE(M) \
+    M(pause_with_alter_locks_acquired)              \
+    M(hang_in_execution)                            \
+    M(pause_before_dt_background_delta_merge)       \
+    M(pause_until_dt_background_delta_merge)        \
+    M(pause_before_apply_raft_cmd)                  \
+    M(pause_before_apply_raft_snapshot)             \
+    M(pause_until_apply_raft_snapshot)              \
     M(pause_after_copr_streams_acquired_once)
 
-#define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) \
-    M(pause_when_reading_from_dt_stream)     \
-    M(pause_when_writing_to_dt_store)        \
-    M(pause_when_ingesting_to_dt_store)      \
-    M(pause_when_altering_dt_store)          \
-    M(pause_after_copr_streams_acquired)     \
-    M(pause_before_server_merge_one_delta)   \
-    M(pause_query_until_write_finish)        \
-    M(force_pause_query_until_write_finish)
+/// the usage of pause_query_init and unblock_query_init_after_write :
+/// the failpoint pause_query_init should use with the failpoint unblock_query_init_after_write, to fulfill that the select query action will be blocked before init state to wait the write action finished.
+/// In using, we need enable unblock_query_init_after_write in our test code, and before each write statement take effect, we need enable pause_query_init, and when the write action finished, the pause_query_init will be disabled automatically, and then the select query could be continued.
+/// you can refer multi_alter_with_write.test for an example
+
+#define APPLY_FOR_FAILPOINTS_WITH_PAUSEABLE(M) \
+    M(pause_when_reading_from_dt_stream)       \
+    M(pause_when_writing_to_dt_store)          \
+    M(pause_when_ingesting_to_dt_store)        \
+    M(pause_when_altering_dt_store)            \
+    M(pause_after_copr_streams_acquired)       \
+    M(pause_before_server_merge_one_delta)     \
+    M(pause_query_init)
+
 
 namespace FailPoints
 {
 #define M(NAME) extern const char(NAME)[] = #NAME "";
 APPLY_FOR_FAILPOINTS_ONCE(M)
 APPLY_FOR_FAILPOINTS(M)
-APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
-APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
+APPLY_FOR_FAILPOINTS_ONCE_WITH_PAUSEABLE(M)
+APPLY_FOR_FAILPOINTS_WITH_PAUSEABLE(M)
 #undef M
 } // namespace FailPoints
 
@@ -170,11 +176,11 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
     }
 
 #define M(NAME) SUB_M(NAME, FIU_ONETIME)
-    APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
+    APPLY_FOR_FAILPOINTS_ONCE_WITH_PAUSEABLE(M)
 #undef M
 
 #define M(NAME) SUB_M(NAME, 0)
-    APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
+    APPLY_FOR_FAILPOINTS_WITH_PAUSEABLE(M)
 #undef M
 #undef SUB_M
 

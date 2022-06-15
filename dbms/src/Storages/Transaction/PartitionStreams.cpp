@@ -39,8 +39,8 @@ namespace FailPoints
 extern const char pause_before_apply_raft_cmd[];
 extern const char pause_before_apply_raft_snapshot[];
 extern const char force_set_safepoint_when_decode_block[];
-extern const char force_pause_query_until_write_finish[];
-extern const char pause_query_until_write_finish[];
+extern const char unblock_query_init_after_write[];
+extern const char pause_query_init[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -167,15 +167,17 @@ static void writeRegionDataToStorage(
     /// decoding data. Check the test case for more details.
     FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_cmd);
 
+    /// disable pause_query init when the write action finish, to make the query action continue
+    SCOPE_EXIT({
+        fiu_do_on(FailPoints::unblock_query_init_after_write, {
+            FailPointHelper::disableFailPoint(FailPoints::pause_query_init);
+        });
+    });
+
     /// Try read then write once.
     {
         if (atomic_read_write(false))
         {
-            LOG_FMT_INFO(log, "[for test only] first decode sucess");
-
-            fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
-                FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
-            });
             return;
         }
     }
@@ -189,17 +191,9 @@ static void writeRegionDataToStorage(
         {
             // Failure won't be tolerated this time.
             // TODO: Enrich exception message.
-            fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
-                FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
-            });
-
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
                             ErrorCodes::LOGICAL_ERROR);
         }
-
-        fiu_do_on(FailPoints::force_pause_query_until_write_finish, {
-            FailPointHelper::disableFailPoint(FailPoints::pause_query_until_write_finish);
-        });
     }
 }
 

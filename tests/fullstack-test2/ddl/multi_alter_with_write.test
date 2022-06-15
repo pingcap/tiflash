@@ -24,7 +24,7 @@
 >> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
 
 # Enable the failpoint to make our query only start when the write action finished
->> DBGInvoke __enable_fail_point(force_pause_query_until_write_finish)
+>> DBGInvoke __enable_fail_point(unblock_query_init_after_write)
 
 # -----------------------------------------------------------------------------
 # Order 1 : write cmd 1 | alter cmd 1 | write cmd 2 | alter cmd 2 | write cmd 3
@@ -41,8 +41,8 @@ func> wait_table test t
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -68,8 +68,8 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # write cmd 2
 mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -97,8 +97,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -127,8 +127,8 @@ func> wait_table test t
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -154,8 +154,8 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # write cmd 2
 mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -174,8 +174,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -205,8 +205,8 @@ func> wait_table test t
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -238,8 +238,8 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -255,8 +255,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -285,8 +285,8 @@ func> wait_table test t
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -310,8 +310,8 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # write cmd 2
 mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -340,8 +340,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -370,8 +370,8 @@ func> wait_table test t
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -389,8 +389,8 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # write cmd 2
 mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -410,8 +410,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -441,8 +441,8 @@ func> wait_table test t
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -463,8 +463,8 @@ mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1);
 # alter cmd 2
 mysql> alter table test.t drop column b;
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -481,8 +481,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -511,8 +511,8 @@ func> wait_table test t
 # add a new pre write to make check the alter cmd 1 more convenient.
 mysql> insert into test.t (a, b, c) values (0, 0, ' ');
  
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
@@ -538,8 +538,8 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -556,8 +556,8 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # write cmd 2
 mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -587,8 +587,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -618,8 +618,8 @@ func> wait_table test t
 # add a new pre write to make check the alter cmd 1 more convenient.
 mysql> insert into test.t (a, b, c) values (0, 0, ' ');
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
@@ -644,8 +644,8 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -661,8 +661,8 @@ mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc');
 # write cmd 2
 mysql> insert into test.t values (3, 0.2, 'ccc', 3, 0.1); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -682,8 +682,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -714,8 +714,8 @@ func> wait_table test t
 # add a new pre write to make check the alter cmd 1 more convenient.
 mysql> insert into test.t (a, b, c) values (0, 0, ' ');
  
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
@@ -740,8 +740,8 @@ mysql> alter table test.t add column e decimal(6,1) NULL;
 # write cmd 1
 mysql> insert into test.t (a, b, c) values (1, 4.5, 'abc'); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -763,8 +763,8 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -781,8 +781,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -812,8 +812,8 @@ func> wait_table test t
 # add a new pre write to make check the alter cmd 1 more convenient.
 mysql> insert into test.t (a, b, c) values (0, 0, ' ');
  
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
 
@@ -842,8 +842,8 @@ mysql> alter table test.t drop column b;
 # make alter cmd 2 take effect
 >> DBGInvoke __refresh_schemas()
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 1 and write cmd 2 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -860,8 +860,8 @@ mysql> alter table test.t drop column b;
 # write cmd 3
 mysql> insert into test.t values (4, 'abcd', 10, 0.2); 
 
-# enable pause_query_until_write_finish make query start until write cmd finish
->> DBGInvoke __enable_fail_point(pause_query_until_write_finish)
+# enable pause_query_init make query start until write cmd finish
+>> DBGInvoke __enable_fail_point(pause_query_init)
 
 # make write cmd 3 take effect
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
@@ -881,5 +881,5 @@ mysql> insert into test.t values (4, 'abcd', 10, 0.2);
 
 => DBGInvoke __enable_schema_sync_service('true') 
 >> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
->> DBGInvoke __disable_fail_point(force_pause_query_until_write_finish)
->> DBGInvoke __disable_fail_point(pause_query_until_write_finish)
+>> DBGInvoke __disable_fail_point(unblock_query_init_after_write)
+>> DBGInvoke __disable_fail_point(pause_query_init)

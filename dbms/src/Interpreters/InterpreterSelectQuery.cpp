@@ -97,7 +97,7 @@ extern const int UNKNOWN_EXCEPTION;
 
 namespace FailPoints
 {
-extern const char pause_query_until_write_finish[];
+extern const char pause_query_init[];
 } // namespace FailPoints
 
 InterpreterSelectQuery::InterpreterSelectQuery(
@@ -139,7 +139,7 @@ InterpreterSelectQuery::~InterpreterSelectQuery() = default;
 void InterpreterSelectQuery::init(const Names & required_result_column_names)
 {
     /// Failpoint to make our query begin after the write action finish.
-    FAIL_POINT_PAUSE(FailPoints::pause_query_until_write_finish);
+    FAIL_POINT_PAUSE(FailPoints::pause_query_init);
 
     ProfileEvents::increment(ProfileEvents::SelectQuery);
 
