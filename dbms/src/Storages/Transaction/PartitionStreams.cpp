@@ -167,7 +167,8 @@ static void writeRegionDataToStorage(
     /// decoding data. Check the test case for more details.
     FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_cmd);
 
-    /// disable pause_query init when the write action finish, to make the query action continue
+    /// disable pause_query_init when the write action finish, to make the query action continue.
+    /// the usage of unblock_query_init_after_write and pause_query_init can refer to InterpreterSelectQuery::init
     SCOPE_EXIT({
         fiu_do_on(FailPoints::unblock_query_init_after_write, {
             FailPointHelper::disableFailPoint(FailPoints::pause_query_init);
