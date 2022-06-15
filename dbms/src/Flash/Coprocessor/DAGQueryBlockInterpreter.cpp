@@ -419,13 +419,13 @@ void DAGQueryBlockInterpreter::executeAggregation(
 
 void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc)
 {
-    orderStreams(pipeline, sort_desc, 0, context, log);
+    orderStreams(pipeline, max_streams, sort_desc, 0, context, log);
 }
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
-    orderStreams(pipeline, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit, context, log);
+    orderStreams(pipeline, max_streams, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit, context, log);
 }
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)

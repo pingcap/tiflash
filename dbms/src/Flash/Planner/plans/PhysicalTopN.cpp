@@ -58,7 +58,7 @@ void PhysicalTopN::transformImpl(DAGPipeline & pipeline, Context & context, size
 
     executeExpression(pipeline, before_sort_actions, log, "before TopN");
 
-    orderStreams(pipeline, order_descr, limit, context, log);
+    orderStreams(pipeline, max_streams, order_descr, limit, context, log);
 }
 
 void PhysicalTopN::finalize(const Names & parent_require)

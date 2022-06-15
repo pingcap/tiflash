@@ -45,5 +45,5 @@ private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     size_t limit;
-}
-}
+};
+} // namespace DB
