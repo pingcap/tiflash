@@ -17,8 +17,8 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Common/ColumnsHashing.h>
-#include <Common/typeid_cast.h>
 #include <Common/FailPoint.h>
+#include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
@@ -28,6 +28,7 @@
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
+
 #include "executeQuery.h"
 
 namespace DB

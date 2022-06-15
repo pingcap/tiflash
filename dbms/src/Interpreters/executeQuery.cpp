@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
-#include <Common/FailPoint.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>

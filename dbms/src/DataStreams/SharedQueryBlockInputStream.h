@@ -14,11 +14,11 @@
 
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
-#include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 
 #include <thread>

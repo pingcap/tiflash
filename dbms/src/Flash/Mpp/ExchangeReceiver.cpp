@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/FailPoint.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/MPPTunnel.h>

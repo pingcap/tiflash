@@ -63,6 +63,7 @@ public:
     static void initRandomFailPoints(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
 
     static void enableRandomFailPoint(const String & fail_point_name, double rate);
+
 private:
     static std::unordered_map<String, std::shared_ptr<FailPointChannel>> fail_point_wait_channels;
 };

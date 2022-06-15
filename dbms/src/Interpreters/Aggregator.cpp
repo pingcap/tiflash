@@ -17,9 +17,9 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnTuple.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
-#include <Common/FailPoint.h>
 #include <Common/ThreadManager.h>
 #include <Common/typeid_cast.h>
 #include <Common/wrapInvocable.h>

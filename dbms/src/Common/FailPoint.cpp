@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
+#include <Poco/String.h>
+#include <Poco/StringTokenizer.h>
+#include <Poco/Util/LayeredConfiguration.h>
+#include <common/defines.h>
+#include <common/logger_useful.h>
+
 #include <boost/core/noncopyable.hpp>
 #include <condition_variable>
 #include <mutex>
-#include <Poco/Util/LayeredConfiguration.h>
-#include <Poco/String.h>
-#include <Poco/StringTokenizer.h>
-#include <common/logger_useful.h>
-#include <common/defines.h>
 
 namespace DB
 {
@@ -242,11 +243,11 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
 
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)
 {
-#define SUB_M(NAME)                                                                                   \
-    if (fail_point_name == FailPoints::NAME)                                                                \
-    {                                                                                                       \
-        fiu_enable_random(FailPoints::NAME, 1, nullptr, 0, rate);                                           \
-        return;                                                                                             \
+#define SUB_M(NAME)                                               \
+    if (fail_point_name == FailPoints::NAME)                      \
+    {                                                             \
+        fiu_enable_random(FailPoints::NAME, 1, nullptr, 0, rate); \
+        return;                                                   \
     }
 
 #define M(NAME) SUB_M(NAME)
