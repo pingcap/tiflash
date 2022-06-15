@@ -157,7 +157,7 @@ std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index)
 
 RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value, const DataTypePtr & type)
 {
-    const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
+    const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
 
     const auto * raw_type = type.get();
 
@@ -277,7 +277,7 @@ RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const D
 
 RSResult MinMaxIndex::checkNullableGreater(size_t pack_index, const Field & value, const DataTypePtr & type)
 {
-    const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
+    const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
     const auto * raw_type = type.get();
 
 #define DISPATCH(TYPE)                                                                         \
@@ -394,7 +394,7 @@ RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const
 
 RSResult MinMaxIndex::checkNullableGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type)
 {
-    const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
+    const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
 
     const auto * raw_type = type.get();
 #define DISPATCH(TYPE)                                                                         \

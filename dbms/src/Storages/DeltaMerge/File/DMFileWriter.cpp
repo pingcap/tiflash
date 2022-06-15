@@ -121,7 +121,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
     is_empty_file = false;
-    DMFile::PackStat stat;
+    DMFile::PackStat stat{};
     stat.rows = block.rows();
     stat.not_clean = block_property.not_clean_rows;
     stat.bytes = block.bytes(); // This is bytes of pack data in memory.
@@ -218,7 +218,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                         "Type shouldn be nullable when substream_path's type is NullMap.",
                         Errors::DeltaTree::Internal);
 
-                const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+                const auto & col = static_cast<const ColumnNullable &>(column);
                 col.checkConsistency();
                 DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), single_file_stream->original_layer, 0, rows);
             }
@@ -229,8 +229,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                         "Type shouldn be nullable when substream_path's type is NullableElements.",
                         Errors::DeltaTree::Internal);
 
-                const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(type);
-                const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+                const auto & nullable_type = static_cast<const DataTypeNullable &>(type);
+                const auto & col = static_cast<const ColumnNullable &>(column);
                 nullable_type.getNestedType()->serializeBinaryBulk(col.getNestedColumn(), single_file_stream->original_layer, 0, rows);
             }
             else
