@@ -93,7 +93,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
     Int64 send_task_id = -1;
     Int64 recv_task_id = task_meta.task_id();
-
+    static const Int32 MAX_RETRY_TIMES = 10;
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
@@ -101,7 +101,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < MAX_RETRY_TIMES; i++)
         {
             auto reader = rpc_context->makeReader(req);
             reader->initialize();
@@ -167,9 +167,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             }
             else
             {
+                bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
                 LOG_WARNING(
                     log,
-                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                    "EstablishMPPConnectionRequest meets rpc fail for req " << req_info << ". Err code = " << status.error_code()
+                                                                            << ", err msg = " << status.error_message() << ", retriable = " << retriable);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
