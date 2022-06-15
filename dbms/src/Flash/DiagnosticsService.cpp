@@ -1181,5 +1181,4 @@ grpc::Status searchLog(Poco::Logger * log, ::grpc::ServerWriter<::diagnosticspb:
 
     return ::grpc::Status::OK;
 }
-
 } // namespace DB
