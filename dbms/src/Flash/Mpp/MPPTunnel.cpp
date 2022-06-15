@@ -26,7 +26,6 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , timeout(timeout_)
     , task_cancelled_callback(std::move(callback))
     , tunnel_id(fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()))
-    , send_loop_msg("")
     , input_streams_num(input_steams_num_)
     , send_thread(nullptr)
     , send_queue(std::max(5, input_steams_num_ * 5)) /// the queue should not be too small to push the last nullptr or error msg. TODO(fzh) set a reasonable parameter
@@ -149,7 +148,7 @@ void MPPTunnelBase<Writer>::sendLoop()
                 if (!writer->Write(*res))
                 {
                     finishWithLock();
-                    auto msg = " grpc writes failed.";
+                    const char * msg = " grpc writes failed.";
                     LOG_ERROR(log, msg);
                     throw Exception(tunnel_id + msg);
                 }
@@ -200,6 +199,8 @@ void MPPTunnelBase<Writer>::connect(Writer * writer_)
     std::lock_guard<std::mutex> lk(mu);
     if (connected)
         throw Exception("has connected");
+    if (finished)
+        throw Exception("has finished");
 
     LOG_DEBUG(log, "ready to connect");
     writer = writer_;
