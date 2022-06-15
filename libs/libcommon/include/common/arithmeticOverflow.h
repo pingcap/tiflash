@@ -102,8 +102,6 @@ inline bool mulOverflow(__int128 x, __int128 y, __int128 & res)
 
     return res / x != y; /// whether overflow int128
 }
-<<<<<<< HEAD
-=======
 
 /// Int256 doesn't use the complement representation to express negative values, but uses an extra bit to express the sign flag,
 /// the actual range of Int256 is from -(2^256 - 1) to 2^256 - 1, so 2^255 ~ 2^256-1 do not overflow Int256.
@@ -120,5 +118,4 @@ inline bool mulOverflow(Int256 x, Int256 y, Int256 & res)
     }
     return false;
 }
->>>>>>> 71613fd8c0 (expression: check Overflow int128 (#4762))
 } // namespace common
