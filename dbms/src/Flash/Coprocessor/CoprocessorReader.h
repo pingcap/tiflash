@@ -127,6 +127,10 @@ public:
         std::shared_ptr<tipb::SelectResponse> resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(data))
         {
+            if (resp->has_error())
+            {
+                return {nullptr, true, resp->error().DebugString(), false};
+            }
             if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock)
                 return {nullptr, true, "Encode type of coprocessor response is not CHBlock, "
                                        "maybe the version of some TiFlash node in the cluster is not match with this one",
