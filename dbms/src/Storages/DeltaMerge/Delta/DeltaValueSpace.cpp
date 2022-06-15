@@ -149,7 +149,6 @@ bool DeltaValueSpace::flush(DMContext & context)
 
     ColumnFileFlushTaskPtr flush_task;
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    DeltaIndexPtr cur_delta_index;
     {
         /// Prepare data which will be written to disk.
         std::scoped_lock lock(mutex);
@@ -159,7 +158,6 @@ bool DeltaValueSpace::flush(DMContext & context)
             return false;
         }
         flush_task = mem_table_set->buildFlushTask(context, persisted_file_set->getRows(), persisted_file_set->getDeletes(), persisted_file_set->getCurrentFlushVersion());
-        cur_delta_index = delta_index;
     }
 
     // No update, return successfully.
@@ -174,36 +172,53 @@ bool DeltaValueSpace::flush(DMContext & context)
     DeltaIndexPtr new_delta_index;
     if (!delta_index_updates.empty())
     {
+        // Get current delta index and mark the delta index is updating
+        DeltaIndexPtr cur_delta_index;
+        {
+            std::unique_lock lock(mutex);
+            while (is_delta_index_updating)
+            {
+                delta_index_update_cv.wait(lock);
+            }
+            is_delta_index_updating = true;
+            cur_delta_index = delta_index;
+        }
         LOG_FMT_DEBUG(log, "{} Update index start", simpleInfo());
         new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
         LOG_FMT_DEBUG(log, "{} Update index done", simpleInfo());
     }
 
+    bool success = false;
     {
         /// If this instance is still valid, then commit.
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
         {
-            // Delete written data.
-            wbs.setRollback();
             LOG_FMT_DEBUG(log, "{} Flush stop because abandoned", simpleInfo());
-            return false;
         }
-
-        if (!flush_task->commit(persisted_file_set, wbs))
+        else if (!flush_task->commit(persisted_file_set, wbs))
         {
-            wbs.rollbackWrittenLogAndData();
             LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
-            return false;
         }
-
-        /// Update delta tree
-        if (new_delta_index)
+        else if (new_delta_index)
+        {
+            /// Update delta tree and release the update status of delta index
             delta_index = new_delta_index;
-
-        LOG_FMT_DEBUG(log, "{} Flush end. Flushed {} column files, {} rows and {} deletes.", info(), flush_task->getTaskNum(), flush_task->getFlushRows(), flush_task->getFlushDeletes());
+            success = true;
+        }
+        is_delta_index_updating = false;
+        if (success)
+        {
+            LOG_FMT_DEBUG(log, "{} Flush end. Flushed {} column files, {} rows and {} deletes.", info(), flush_task->getTaskNum(), flush_task->getFlushRows(), flush_task->getFlushDeletes());
+        }
     }
-    return true;
+    delta_index_update_cv.notify_all();
+    if (!success)
+    {
+        // Delete written data.
+        wbs.rollbackWrittenLogAndData();
+    }
+    return success;
 }
 
 bool DeltaValueSpace::compact(DMContext & context)
@@ -243,34 +258,61 @@ bool DeltaValueSpace::compact(DMContext & context)
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
     const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
     auto delta_index_updates = compaction_task->prepare(context, wbs, reader);
-
+    DeltaIndexPtr new_delta_index;
+    if (!delta_index_updates.empty())
+    {
+        // Get current delta index and mark the delta index is updating
+        DeltaIndexPtr cur_delta_index;
+        {
+            std::unique_lock lock(mutex);
+            while (is_delta_index_updating)
+            {
+                delta_index_update_cv.wait(lock);
+            }
+            is_delta_index_updating = true;
+            cur_delta_index = delta_index;
+        }
+        LOG_FMT_DEBUG(log, "{} Update index start", simpleInfo());
+        new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
+        LOG_FMT_DEBUG(log, "{} Update index done", simpleInfo());
+    }
+    bool success = false;
     {
         std::scoped_lock lock(mutex);
 
         /// Check before commit.
         if (abandoned.load(std::memory_order_relaxed))
         {
-            wbs.rollbackWrittenLogAndData();
             LOG_FMT_DEBUG(log, "{} Stop compact because abandoned", simpleInfo());
-            return false;
         }
-        if (!compaction_task->commit(persisted_file_set, wbs))
+        else if (!compaction_task->commit(persisted_file_set, wbs))
         {
             LOG_FMT_WARNING(log, "Structure has been updated during compact");
-            wbs.rollbackWrittenLogAndData();
             LOG_FMT_DEBUG(log, "{} Compact stop because structure got updated", simpleInfo());
             return false;
         }
-
-        /// Update delta tree
-        if (!delta_index_updates.empty())
-            delta_index = std::make_shared<DeltaIndex>();
-
-        LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
+        else if (new_delta_index)
+        {
+            /// Update delta tree
+            delta_index = new_delta_index;
+            success = true;
+        }
+        is_delta_index_updating = false;
+        if (success)
+        {
+            LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
+        }
     }
-    wbs.writeRemoves();
-
-    return true;
+    delta_index_update_cv.notify_all();
+    if (success)
+    {
+        wbs.writeRemoves();
+    }
+    else
+    {
+        wbs.rollbackWrittenLogAndData();
+    }
+    return success;
 }
 } // namespace DM
 } // namespace DB

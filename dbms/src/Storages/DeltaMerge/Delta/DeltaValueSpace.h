@@ -91,6 +91,9 @@ private:
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
+    bool is_delta_index_updating = false;
+    std::condition_variable delta_index_update_cv;
+
     Poco::Logger * log;
 
 public:
