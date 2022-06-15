@@ -22,7 +22,7 @@ FilterBlockInputStream::FilterBlockInputStream(
     const String & filter_column_name,
     const LogWithPrefixPtr & log_)
     : expression(expression_)
-    , log(getMPPTaskLog(log_, getName()))
+    , log(getMPPTaskLog(log_, NAME))
 {
     children.push_back(input);
 
@@ -44,13 +44,6 @@ FilterBlockInputStream::FilterBlockInputStream(
         column_elem.column = column_elem.type->createColumnConst(header.rows(), UInt64(1));
     }
 }
-
-
-String FilterBlockInputStream::getName() const
-{
-    return "Filter";
-}
-
 
 Block FilterBlockInputStream::getTotals()
 {
