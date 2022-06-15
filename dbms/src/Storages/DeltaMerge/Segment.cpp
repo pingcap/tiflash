@@ -491,7 +491,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         data_stream,
         *read_info.read_columns,
-        dm_context.min_version,
+        UINT64_MAX,
         is_common_handle);
 
     return data_stream;
@@ -506,20 +506,13 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                size_t expected_block_size)
 {
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
+    (void)do_range_filter;
+    new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
 
-    if (!do_range_filter)
+    for (const auto & c : columns_to_read)
     {
-        (*new_columns_to_read) = columns_to_read;
-    }
-    else
-    {
-        new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
-
-        for (const auto & c : columns_to_read)
-        {
-            if (c.id != EXTRA_HANDLE_COLUMN_ID)
-                new_columns_to_read->push_back(c);
-        }
+        if (c.id != EXTRA_HANDLE_COLUMN_ID)
+            new_columns_to_read->push_back(c);
     }
 
     DeltaValueInputStream delta_stream(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
@@ -535,17 +528,14 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         expected_block_size,
         false);
 
-    if (do_range_filter)
-    {
-        memtable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(memtable_stream, data_ranges, 0);
-        memtable_stream = std::make_shared<DMColumnFilterBlockInputStream>(memtable_stream, columns_to_read);
+    memtable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(memtable_stream, data_ranges, 0);
+    memtable_stream = std::make_shared<DMColumnFilterBlockInputStream>(memtable_stream, columns_to_read);
 
-        persisted_files_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(persisted_files_stream, data_ranges, 0);
-        persisted_files_stream = std::make_shared<DMColumnFilterBlockInputStream>(persisted_files_stream, columns_to_read);
+    persisted_files_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(persisted_files_stream, data_ranges, 0);
+    persisted_files_stream = std::make_shared<DMColumnFilterBlockInputStream>(persisted_files_stream, columns_to_read);
 
-        stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
-        stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
-    }
+    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
+    stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
 
     BlockInputStreams streams;
 

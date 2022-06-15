@@ -223,7 +223,6 @@ bool DeltaValueSpace::compact(DMContext & context)
 
     MinorCompactionPtr compaction_task;
     PageStorage::SnapshotPtr log_storage_snap;
-    DeltaIndexPtr cur_delta_index;
     {
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
@@ -238,20 +237,12 @@ bool DeltaValueSpace::compact(DMContext & context)
             return true;
         }
         log_storage_snap = context.storage_pool.logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
-        cur_delta_index = delta_index;
     }
 
     // do compaction task
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
     const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
     auto delta_index_updates = compaction_task->prepare(context, wbs, reader);
-    DeltaIndexPtr new_delta_index;
-    if (!delta_index_updates.empty())
-    {
-        LOG_FMT_DEBUG(log, "{} Update index start", simpleInfo());
-        new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
-        LOG_FMT_DEBUG(log, "{} Update index done", simpleInfo());
-    }
 
     {
         std::scoped_lock lock(mutex);
@@ -272,8 +263,8 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
 
         /// Update delta tree
-        if (new_delta_index)
-            delta_index = new_delta_index;
+        if (!delta_index_updates.empty())
+            delta_index = std::make_shared<DeltaIndex>();
 
         LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
     }
