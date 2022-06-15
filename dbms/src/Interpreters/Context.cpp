@@ -1441,6 +1441,7 @@ void Context::dropCaches() const
 
 BackgroundProcessingPool & Context::getBackgroundPool()
 {
+    // Note: shared->background_pool should be initialized first.
     auto lock = getLock();
     return *shared->background_pool;
 }
@@ -1456,6 +1457,7 @@ BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
 BackgroundProcessingPool & Context::getBlockableBackgroundPool()
 {
     // TODO: maybe a better name for the pool
+    // Note: shared->blockable_background_pool should be initialized first.
     auto lock = getLock();
     return *shared->blockable_background_pool;
 }
