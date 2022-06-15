@@ -1,4 +1,4 @@
-include (${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake)
+include (${TiFlash_SOURCE_DIR}/cmake/add_check.cmake)
 
 add_executable (date_lut_init date_lut_init.cpp)
 add_executable (date_lut2 date_lut2.cpp)
