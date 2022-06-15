@@ -93,7 +93,7 @@ inline String decodeString(size_t & cursor, const String & raw_value);
 JsonVar decodeValue(UInt8 type, size_t & cursor, const String & raw_value);
 
 // Below funcs decode via relative offset and base offset does not move
-JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_offset);
+JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_entry_offset);
 inline String decodeString(size_t base, const String & raw_value, size_t length);
 
 template <typename T>
@@ -215,25 +215,25 @@ String DecodeJsonAsString(size_t & cursor, const String & raw_value)
 }
 
 template <bool doDecode>
-struct need_decode
+struct NeedDecode
 {
 };
 
 
 template <>
-struct need_decode<true>
+struct NeedDecode<true>
 {
-    typedef String type;
+    using type = String;
 };
 
 template <>
-struct need_decode<false>
+struct NeedDecode<false>
 {
-    typedef void type;
+    using type = void;
 };
 
 template <bool doDecode>
-typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & raw_value)
+typename NeedDecode<doDecode>::type DecodeJson(size_t & cursor, const String & raw_value)
 {
     size_t base = cursor;
     UInt8 type = raw_value[cursor++];
@@ -268,9 +268,9 @@ typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & 
     size++;
     cursor = base + size;
     if (!doDecode)
-        return static_cast<typename need_decode<doDecode>::type>(0);
+        return static_cast<typename NeedDecode<doDecode>::type>(nullptr);
     else
-        return static_cast<typename need_decode<doDecode>::type>(raw_value.substr(base, size));
+        return static_cast<typename NeedDecode<doDecode>::type>(raw_value.substr(base, size));
 }
 
 void SkipJson(size_t & cursor, const String & raw_value)
