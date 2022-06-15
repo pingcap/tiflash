@@ -268,7 +268,7 @@ typename NeedDecode<doDecode>::type DecodeJson(size_t & cursor, const String & r
     size++;
     cursor = base + size;
     if (!doDecode)
-        return static_cast<typename NeedDecode<doDecode>::type>(nullptr);
+        return static_cast<typename NeedDecode<doDecode>::type>(0); // NOLINT
     else
         return static_cast<typename NeedDecode<doDecode>::type>(raw_value.substr(base, size));
 }
