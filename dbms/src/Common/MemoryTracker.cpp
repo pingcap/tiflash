@@ -184,6 +184,11 @@ void disableThreshold()
     MEMORY_TRACER_SUBMIT_THRESHOLD = 0;
 }
 
+Int64 getLocalDeltaMemory()
+{
+    return local_delta;
+}
+
 void alloc(Int64 size)
 {
     checkSubmitAndUpdateLocalDelta(local_delta + size);
