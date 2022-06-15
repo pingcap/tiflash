@@ -465,5 +465,77 @@ Union: <for test>
 }
 CATCH
 
+TEST_F(InterpreterExecuteTest, FineGrainedShuffle)
+try
+{
+    // fine-grained shuffle is enabled.
+    dag_context_ptr->setFineGrainedShuffleStreamCount(8);
+    auto request = context
+                       .receive("sender_1")
+                       .sort({{"s1", true}, {"s2", false}}, true)
+                       .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
+                       .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <cast after window>
+   Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+    Expression: <final projection>
+     MergeSorting, limit = 0
+      PartialSorting: limit = 0
+       Expression: <final projection>
+        MockExchangeReceiver
+        )";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    auto topn_request = context
+                            .receive("sender_1")
+                            .topN("s2", false, 10)
+                            .build(context);
+    String topn_expected = R"(
+Union: <for test>
+ SharedQuery x 10: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 10: limit = 10
+      MockExchangeReceiver
+    )";
+    ASSERT_BLOCKINPUTSTREAM_EQAUL(topn_expected, topn_request, 10);
+
+    // fine-grained shuffle is disabled.
+    dag_context_ptr->setFineGrainedShuffleStreamCount(0);
+    request = context
+                  .receive("sender_1")
+                  .sort({{"s1", true}, {"s2", false}}, true)
+                  .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
+                  .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  SharedQuery: <restore concurrency>
+   Expression: <cast after window>
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+     Expression: <final projection>
+      MergeSorting, limit = 0
+       Union: <for partial order>
+        PartialSorting x 10: limit = 0
+         Expression: <final projection>
+          MockExchangeReceiver
+        )";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    topn_request = context
+                       .receive("sender_1")
+                       .topN("s2", false, 10)
+                       .build(context);
+    ASSERT_BLOCKINPUTSTREAM_EQAUL(topn_expected, topn_request, 10);
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

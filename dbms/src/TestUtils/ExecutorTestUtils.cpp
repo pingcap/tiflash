@@ -65,6 +65,8 @@ void ExecutorTest::initializeClientInfo()
 void ExecutorTest::executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
+    dag_context.setFineGrainedShuffleStreamCount(dag_context_ptr->getFineGrainedShuffleStreamCount());
+    dag_context.setFineGrainedShuffleBatchSize(dag_context_ptr->getFineGrainedShuffleBatchSize());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in interpreter tests.
     DAGQuerySource dag(context.context);
@@ -123,6 +125,8 @@ void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & requ
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
     dag_context.setColumnsForTest(source_columns_map);
+    dag_context.setFineGrainedShuffleStreamCount(dag_context_ptr->getFineGrainedShuffleStreamCount());
+    dag_context.setFineGrainedShuffleBatchSize(dag_context_ptr->getFineGrainedShuffleBatchSize());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
