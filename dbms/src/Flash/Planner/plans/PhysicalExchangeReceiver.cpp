@@ -68,10 +68,10 @@ void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & c
 {
     auto & dag_context = *context.getDAGContext();
     // todo choose a more reasonable stream number
-    auto & exchange_receiver_io_input_streams = dag_context.getInBoundIOInputStreamsMap()[query_block.source_name];
+    auto & exchange_receiver_io_input_streams = dag_context.getInBoundIOInputStreamsMap()[executor_id];
     for (size_t i = 0; i < max_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), executor_id);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(mpp_exchange_receiver, log->identifier(), executor_id);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         stream->setExtraInfo("squashing after exchange receiver");

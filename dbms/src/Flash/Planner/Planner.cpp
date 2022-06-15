@@ -84,7 +84,7 @@ BlockInputStreams Planner::execute()
     return pipeline.streams;
 }
 
-bool Planner::isSupported(const DAGQueryBlock &)
+bool Planner::isSupported(const DAGQueryBlock & query_block)
 {
     return query_block.source
         && (query_block.source->tp() == tipb::ExecType::TypeProjection

@@ -15,8 +15,11 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
+#include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
+#include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
+#include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
