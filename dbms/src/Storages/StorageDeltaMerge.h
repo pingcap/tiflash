@@ -57,6 +57,8 @@ public:
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
+    UInt64 onSyncGc(Int64) override;
+
     void rename(const String & new_path_to_db,
         const String & new_database_name,
         const String & new_table_name,
