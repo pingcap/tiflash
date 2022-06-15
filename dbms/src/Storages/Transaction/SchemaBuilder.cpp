@@ -45,6 +45,7 @@ extern const char exception_before_step_2_rename_in_exchange_partition[];
 extern const char exception_after_step_2_in_exchange_partition[];
 extern const char exception_before_step_3_rename_in_exchange_partition[];
 extern const char exception_after_step_3_in_exchange_partition[];
+extern const char exception_between_schema_change_in_the_same_diff[];
 } // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
@@ -337,8 +338,16 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
     // Using original table info with updated columns instead of using new_table_info directly,
     // so that other changes (RENAME commands) won't be saved.
     // Also, updating schema_version as altering column is structural.
-    for (const auto & schema_change : schema_changes)
+    for (size_t i = 0; i < schema_changes.size(); i++)
     {
+        if (i > 0)
+        {
+            /// If there are multiple schema change in the same diff,
+            /// the table schema version will be set to the latest schema version after the first schema change is applied.
+            /// Throw exception in the middle of the schema change to mock the case that there is a race between data decoding and applying different schema change.
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_schema_change_in_the_same_diff);
+        }
+        const auto & schema_change = schema_changes[i];
         /// Update column infos by applying schema change in this step.
         schema_change.second(orig_table_info);
         /// Update schema version aggressively for the sake of correctness.
@@ -564,14 +573,14 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     updated_table_info.partition = table_info->partition;
 
     /// Apply changes to physical tables.
-    for (auto orig_def : orig_defs)
+    for (const auto & orig_def : orig_defs)
     {
         if (new_part_id_set.count(orig_def.id) == 0)
         {
             applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), orig_def.id);
         }
     }
-    for (auto new_def : new_defs)
+    for (const auto & new_def : new_defs)
     {
         if (orig_part_id_set.count(new_def.id) == 0)
         {
@@ -979,7 +988,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
     /// Check if this is a RECOVER table.
     {
         auto & tmt_context = context.getTMTContext();
-        if (auto storage = tmt_context.getStorages().get(table_info->id).get(); storage)
+        if (auto * storage = tmt_context.getStorages().get(table_info->id).get(); storage)
         {
             if (!storage->isTombstone())
             {
@@ -1093,7 +1102,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyDropTable(DBInfoPtr db_info, TableID table_id)
 {
     auto & tmt_context = context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(table_id).get();
+    auto * storage = tmt_context.getStorages().get(table_id).get();
     if (storage == nullptr)
     {
         LOG_DEBUG(log, "table " << table_id << " does not exist.");
