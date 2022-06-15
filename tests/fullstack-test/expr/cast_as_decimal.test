@@ -1,5 +1,4 @@
 mysql> drop table if exists test.t1;
-<<<<<<< HEAD
 mysql> create table test.t1(c1 int);
 mysql> insert into test.t1 values(9999), (-9999), (99), (-99);
 mysql> alter table test.t1 set tiflash replica 1;
@@ -16,7 +15,8 @@ cast(c1 as decimal(2, 2))
 -0.99
  0.99
  0.99
-=======
+
+mysql> drop table if exists test.t1;
 mysql> create table test.t1(c1 datetime(5));
 mysql> insert into test.t1 values('2022-10-10 10:10:10.12345');
 mysql> alter table test.t1 set tiflash replica 1;
@@ -39,4 +39,3 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp = 1; 
 +------------------------------------+
 |                 20221010101010.123 |
 +------------------------------------+
->>>>>>> 8a0d0007c4 (Fix cast datetime to decimal wrong result bug (#4152))
