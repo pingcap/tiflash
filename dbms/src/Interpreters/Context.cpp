@@ -28,6 +28,7 @@
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/RateLimiter.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/Context.h>
@@ -1889,6 +1890,30 @@ SharedQueriesPtr Context::getSharedQueries()
     if (!shared->shared_queries)
         shared->shared_queries = std::make_shared<SharedQueries>();
     return shared->shared_queries;
+}
+
+size_t Context::getMaxStreams() const
+{
+    size_t max_streams = settings.max_threads;
+    bool is_cop_request = false;
+    if (dag_context != nullptr)
+    {
+        if (dag_context->isTest())
+            max_streams = dag_context->initialize_concurrency;
+        else if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
+        {
+            is_cop_request = true;
+            max_streams = 1;
+        }
+    }
+    if (max_streams > 1)
+        max_streams *= settings.max_streams_to_max_threads_ratio;
+    if (max_streams == 0)
+        max_streams = 1;
+    if (unlikely(max_streams != 1 && is_cop_request))
+        /// for cop request, the max_streams should be 1
+        throw Exception("Cop request only support running with max_streams = 1");
+    return max_streams;
 }
 
 SessionCleaner::~SessionCleaner()

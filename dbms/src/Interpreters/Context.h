@@ -461,6 +461,8 @@ public:
 
     void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
 
+    size_t getMaxStreams() const;
+
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.
