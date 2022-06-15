@@ -100,9 +100,13 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_after_copr_streams_acquired_once)
 
 /// the usage of pause_query_init and unblock_query_init_after_write :
-/// the failpoint pause_query_init should use with the failpoint unblock_query_init_after_write, to fulfill that the select query action will be blocked before init state to wait the write action finished.
-/// In using, we need enable unblock_query_init_after_write in our test code, and before each write statement take effect, we need enable pause_query_init, and when the write action finished, the pause_query_init will be disabled automatically, and then the select query could be continued.
-/// you can refer multi_alter_with_write.test for an example
+/// the failpoint pause_query_init should use with the failpoint unblock_query_init_after_write,
+/// to fulfill that the select query action will be blocked before init state to wait the write action finished.
+/// In using, we need enable unblock_query_init_after_write in our test code,
+/// and before each write statement take effect, we need enable pause_query_init.
+/// When the write action finished, the pause_query_init will be disabled automatically,
+/// and then the select query could be continued.
+/// you can refer multi_alter_with_write.test for an example.
 
 #define APPLY_FOR_FAILPOINTS_WITH_PAUSEABLE(M) \
     M(pause_when_reading_from_dt_stream)       \
