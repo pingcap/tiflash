@@ -55,6 +55,9 @@ public:
 
     virtual void deleteRows(const Context &, size_t /*rows*/) { throw Exception("Unsupported"); }
 
+    // `limit` is the max number of segments to gc, return value is the number of segments gced
+    virtual UInt64 onSyncGc(Int64 /*limit*/) { throw Exception("Unsupported"); }
+
     virtual void mergeDelta(const Context &) { throw Exception("Unsupported"); }
 
     virtual BlockInputStreamPtr listSegments(const Context &) { throw Exception("Unsupported"); }
