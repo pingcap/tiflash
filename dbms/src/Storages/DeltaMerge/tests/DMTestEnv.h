@@ -273,7 +273,8 @@ public:
                                          DataTypePtr pk_type = EXTRA_HANDLE_COLUMN_INT_TYPE,
                                          bool is_common_handle = false,
                                          size_t rowkey_column_size = 1,
-                                         bool with_internal_columns = true)
+                                         bool with_internal_columns = true,
+                                         bool is_deleted = false)
     {
         Block block;
         const size_t num_rows = (end - beg);
@@ -324,7 +325,7 @@ public:
                 VERSION_COLUMN_ID));
             // tag_col
             block.insert(DB::tests::createColumn<UInt8>(
-                std::vector<UInt64>(num_rows, 0),
+                std::vector<UInt64>(num_rows, is_deleted),
                 TAG_COLUMN_NAME,
                 TAG_COLUMN_ID));
         }
