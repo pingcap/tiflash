@@ -17,18 +17,8 @@ target_link_libraries (date_lut_default_timezone common ${PLATFORM_LIBS})
 target_link_libraries (multi_version common)
 add_check(multi_version)
 
-<<<<<<< HEAD
-add_executable (gtests_libcommon gtest_json_test.cpp gtest_strong_typedef.cpp)
-=======
-add_executable (gtests_libcommon
-    gtest_json_test.cpp
-    gtest_strong_typedef.cpp
-    gtest_mem_utils.cpp
-    gtest_crc64.cpp
-    gtest_logger.cpp
-    gtest_arithmetic_overflow.cpp
-    )
->>>>>>> 71613fd8c0 (expression: check Overflow int128 (#4762))
+add_executable (gtests_libcommon gtest_json_test.cpp gtest_strong_typedef.cpp gtest_arithmetic_overflow.cpp)
+
 target_link_libraries (gtests_libcommon gtest_main common)
 add_check(gtests_libcommon)
 
