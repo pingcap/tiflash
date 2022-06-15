@@ -29,6 +29,8 @@
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
+#include <atomic>
+
 // We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
 // `share` the resource of cluster.
 using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
@@ -49,7 +51,7 @@ struct PDClientHelper
         {
             // In case we cost too much to update safe point from PD.
             std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-            const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - safe_point_last_update_time);
+            const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - safe_point_last_update_time.load());
             const auto min_interval = std::max(Int64(1), safe_point_update_interval_seconds); // at least one second
             if (duration.count() < min_interval)
                 return cached_gc_safe_point;
@@ -73,8 +75,8 @@ struct PDClientHelper
     }
 
 private:
-    static Timestamp cached_gc_safe_point;
-    static std::chrono::time_point<std::chrono::system_clock> safe_point_last_update_time;
+    static std::atomic<Timestamp> cached_gc_safe_point;
+    static std::atomic<std::chrono::time_point<std::chrono::system_clock>> safe_point_last_update_time;
 };
 
 
