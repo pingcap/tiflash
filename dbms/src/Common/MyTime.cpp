@@ -531,11 +531,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         // if tz_sign is empty, it's sure that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
         // therefore we could safely skip this branch.
-<<<<<<< HEAD
-        if (!noAbsorb(seps) && !(tz_minute != "" && tz_sep == ""))
-=======
         if (!no_absorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         {
             // we can't absorb timezone if there is no separate between tz_hour and tz_minute
             if (!tz_hour.empty())
@@ -552,7 +548,6 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
     switch (seps.size())
     {
-<<<<<<< HEAD
         // No delimiter
         case 1:
         {
@@ -561,51 +556,51 @@ Field parseMyDateTime(const String & str, int8_t fsp)
             {
                 case 14: // YYYYMMDDHHMMSS
                 {
-                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     hhmmss = true;
                     break;
                 }
                 case 12: // YYMMDDHHMMSS
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     year = adjustYear(year);
                     hhmmss = true;
                     break;
                 }
                 case 11: // YYMMDDHHMMS
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     year = adjustYear(year);
                     hhmmss = true;
                     break;
                 }
                 case 10: // YYMMDDHHMM
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 9: // YYMMDDHHM
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 8: // YYYYMMDD
                 {
-                    std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day);
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT
                     break;
                 }
                 case 7: // YYMMDDH
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 6: // YYMMDD
                 case 5: // YYMMD
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
@@ -629,18 +624,18 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                     case 1:
                     case 2:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour);
+                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT
                         break;
                     }
                     case 3:
                     case 4:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute);
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT
                         break;
                     }
                     default:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second);
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT
                         break;
                     }
                 }
@@ -654,144 +649,44 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                 }
                 else
                 {
-                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0);
+                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0); //NOLINT
                 }
             }
             if (truncated_or_incorrect)
             {
                 throw TiFlashException("Datetime truncated: " + str, Errors::Types::Truncated);
             }
-=======
-    // No delimiter
-    case 1:
-    {
-        size_t l = seps[0].size();
-        switch (l)
-        {
-        case 14: // YYYYMMDDHHMMSS
-        {
-            std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
-            hhmmss = true;
-            break;
-        }
-        case 12: // YYMMDDHHMMSS
-        {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
-            year = adjustYear(year);
-            hhmmss = true;
-            break;
-        }
-        case 11: // YYMMDDHHMMS
-        {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT
-            year = adjustYear(year);
-            hhmmss = true;
-            break;
-        }
-        case 10: // YYMMDDHHMM
-        {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT
-            year = adjustYear(year);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         case 3:
         {
-<<<<<<< HEAD
             // YYYY-MM-DD
             scanTimeArgs(seps, {&year, &month, &day});
-=======
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT
-            year = adjustYear(year);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         case 4:
         {
-<<<<<<< HEAD
             // YYYY-MM-DD HH
             scanTimeArgs(seps, {&year, &month, &day, &hour});
-=======
-            std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         case 5:
         {
-<<<<<<< HEAD
             // YYYY-MM-DD HH-MM
             scanTimeArgs(seps, {&year, &month, &day, &hour, &minute});
-=======
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT
-            year = adjustYear(year);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         case 6:
         {
-<<<<<<< HEAD
             // We don't have fractional seconds part.
             // YYYY-MM-DD HH-MM-SS
             scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second});
             hhmmss = true;
-=======
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT
-            year = adjustYear(year);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         default:
         {
-<<<<<<< HEAD
             throw Exception("Wrong datetime format");
-=======
-            throw TiFlashException("Wrong datetime format: " + str, Errors::Types::WrongValue);
-        }
-        }
-        if (l == 5 || l == 6 || l == 8)
-        {
-            // YYMMDD or YYYYMMDD
-            // We must handle float => string => datetime, the difference is that fractional
-            // part of float type is discarded directly, while fractional part of string type
-            // is parsed to HH:MM:SS.
-            int ret = 0;
-            switch (frac_str.size())
-            {
-            case 0:
-                ret = 1;
-                is_date = true;
-                break;
-            case 1:
-            case 2:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT
-                break;
-            }
-            case 3:
-            case 4:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT
-                break;
-            }
-            default:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT
-                break;
-            }
-            }
-            truncated_or_incorrect = (ret == 0);
-        }
-        if (l == 9 || l == 10)
-        {
-            if (frac_str.empty())
-            {
-                second = 0;
-            }
-            else
-            {
-                truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0); //NOLINT
-            }
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         }
     }
 
@@ -1049,15 +944,8 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     if (!allow_invalid_date)
     {
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-<<<<<<< HEAD
         static auto is_leap_year = [](UInt16 _year) { return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0); };
-        max_day = max_days_in_month[month - 1];
-=======
-        static auto is_leap_year = [](UInt16 _year) {
-            return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0);
-        };
         max_day = max_days_in_month[month - 1]; // NOLINT
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         if (month == 2 && is_leap_year(year))
         {
             max_day = 29;
@@ -1082,7 +970,6 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
     }
-    return;
 }
 
 bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute,
@@ -1383,28 +1270,19 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
 {
     // Use temp_pos instead of changing `ctx.pos` directly in case of parsing failure
     size_t temp_pos = ctx.pos;
-    auto checkIfEnd = [&temp_pos, &ctx]() -> ParseState {
+    auto check_if_end = [&temp_pos, &ctx]() -> ParseState {
         // To the end
         if (temp_pos == ctx.view.size)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-<<<<<<< HEAD
-    auto skipWhitespaces = [&temp_pos, &ctx, &checkIfEnd]() -> ParseState {
-=======
     auto skip_whitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
-        return checkIfEnd();
+        return check_if_end();
     };
-<<<<<<< HEAD
-    auto parseSep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
-        if (skipWhitespaces() == ParseState::END_OF_FILE)
-=======
     auto parse_sep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
         if (skip_whitespaces() == ParseState::END_OF_FILE)
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1412,7 +1290,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += 1; // move forward
         return ParseState::NORMAL;
     };
-    auto tryParse = [&]() -> ParseState {
+    auto try_parse = [&]() -> ParseState {
         ParseState state = ParseState::NORMAL;
         /// Note that we should update `time` as soon as possible, or we
         /// can not get correct result for incomplete input like "12:13"
@@ -1433,7 +1311,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         time.hour = hour;
         temp_pos += step; // move forward
 
-        if (state = parseSep(); state != ParseState::NORMAL)
+        if (state = parse_sep(); state != ParseState::NORMAL)
             return state;
 
         int32_t minute = 0;
@@ -1445,7 +1323,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         time.minute = minute;
         temp_pos += step; // move forward
 
-        if (state = parseSep(); state != ParseState::NORMAL)
+        if (state = parse_sep(); state != ParseState::NORMAL)
             return state;
 
         int32_t second = 0;
@@ -1484,7 +1362,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += 2; // move forward
         return ParseState::NORMAL;
     };
-    if (auto state = tryParse(); state == ParseState::FAIL)
+    if (auto state = try_parse(); state == ParseState::FAIL)
         return false;
     // Other state, forward the `ctx.pos` and return true
     ctx.pos = temp_pos;
@@ -1496,28 +1374,19 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
 {
     // Use temp_pos instead of changing `ctx.pos` directly in case of parsing failure
     size_t temp_pos = ctx.pos;
-    auto checkIfEnd = [&temp_pos, &ctx]() -> ParseState {
+    auto check_if_end = [&temp_pos, &ctx]() -> ParseState {
         // To the end
         if (temp_pos == ctx.view.size)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-<<<<<<< HEAD
-    auto skipWhitespaces = [&temp_pos, &ctx, &checkIfEnd]() -> ParseState {
-=======
     auto skip_whitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
-        return checkIfEnd();
+        return check_if_end();
     };
-<<<<<<< HEAD
-    auto parseSep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
-        if (skipWhitespaces() == ParseState::END_OF_FILE)
-=======
     auto parse_sep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
         if (skip_whitespaces() == ParseState::END_OF_FILE)
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1525,7 +1394,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += 1; // move forward
         return ParseState::NORMAL;
     };
-    auto tryParse = [&]() -> ParseState {
+    auto try_parse = [&]() -> ParseState {
         ParseState state = ParseState::NORMAL;
         /// Note that we should update `time` as soon as possible, or we
         /// can not get correct result for incomplete input like "12:13"
@@ -1542,7 +1411,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         time.hour = hour;
         temp_pos += step; // move forward
 
-        if (state = parseSep(); state != ParseState::NORMAL)
+        if (state = parse_sep(); state != ParseState::NORMAL)
             return state;
 
         int32_t minute = 0;
@@ -1554,7 +1423,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         time.minute = minute;
         temp_pos += step; // move forward
 
-        if (state = parseSep(); state != ParseState::NORMAL)
+        if (state = parse_sep(); state != ParseState::NORMAL)
             return state;
 
         int32_t second = 0;
@@ -1568,7 +1437,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
 
         return ParseState::NORMAL;
     };
-    if (auto state = tryParse(); state == ParseState::FAIL)
+    if (auto state = try_parse(); state == ParseState::FAIL)
         return false;
     // Other state, forward the `ctx.pos` and return true
     ctx.pos = temp_pos;
