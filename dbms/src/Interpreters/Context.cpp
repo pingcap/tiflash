@@ -68,10 +68,8 @@
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
-#include <map>
 #include <pcg_random.hpp>
-#include <set>
-
+#include <unordered_map>
 
 namespace ProfileEvents
 {
@@ -1444,18 +1442,32 @@ void Context::dropCaches() const
 
 BackgroundProcessingPool & Context::getBackgroundPool()
 {
+    // Note: shared->background_pool should be initialized first.
+    auto lock = getLock();
+    return *shared->background_pool;
+}
+
+BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
+{
     auto lock = getLock();
     if (!shared->background_pool)
-        shared->background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
     return *shared->background_pool;
 }
 
 BackgroundProcessingPool & Context::getBlockableBackgroundPool()
 {
-    // TODO: choose a better thread pool size and maybe a better name for the pool
+    // TODO: maybe a better name for the pool
+    // Note: shared->blockable_background_pool should be initialized first.
+    auto lock = getLock();
+    return *shared->blockable_background_pool;
+}
+
+BackgroundProcessingPool & Context::initializeBlockableBackgroundPool(UInt16 pool_size)
+{
     auto lock = getLock();
     if (!shared->blockable_background_pool)
-        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
     return *shared->blockable_background_pool;
 }
 
