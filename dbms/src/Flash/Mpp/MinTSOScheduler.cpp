@@ -13,11 +13,17 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
+#include <Common/FailPoint.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_min_tso_scheduler_failpoint[];
+} // namespace FailPoints
+
 constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
 constexpr UInt64 OS_THREAD_SOFT_LIMIT = 100000;
 
@@ -193,7 +199,9 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
     }
     else
     {
-        if (tso <= min_tso) /// the min_tso query should fully run, otherwise throw errors here.
+        bool is_tso_min = tso <= min_tso;
+        fiu_do_on(FailPoints::random_min_tso_scheduler_failpoint, is_tso_min = true;);
+        if (is_tso_min) /// the min_tso query should fully run, otherwise throw errors here.
         {
             has_error = true;
             auto msg = fmt::format("threads are unavailable for the query {} ({} min_tso {}) {}, need {}, but used {} of the thread hard limit {}, {} active and {} waiting queries.", tso, tso == min_tso ? "is" : "is newer than", min_tso, isWaiting ? "from the waiting set" : "when directly schedule it", needed_threads, estimated_thread_usage, thread_hard_limit, active_set.size(), waiting_set.size());

@@ -30,16 +30,12 @@
 #include <common/logger_useful.h>
 #include "executeQuery.h"
 
-#ifdef FIU_ENABLE
-#include <Common/randomSeed.h>
-#include <pcg_random.hpp>
-#endif
-
 namespace DB
 {
 namespace FailPoints
 {
-extern const char random_join_failpoint[];
+extern const char random_join_build_failpoint[];
+extern const char random_join_prob_failpoint[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -634,14 +630,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
     }
     for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
     {
-        fiu_do_on(FailPoints::random_join_failpoint, {
-            // Since the code will run very frequently, then other failpoint might have no chance to trigger
-            // so internally low down the possibility to 1/100
-            pcg64 rng(randomSeed());
-            int num = std::uniform_int_distribution(0, 100)(rng);
-            if (num == 31)
-                throw Exception("Fail point join build is triggered.", ErrorCodes::FAIL_POINT_ERROR);
-        });
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
         size_t segment_index = (insert_index + stream_index) % segment_index_info.size();
         if (segment_index == segment_size)
         {
@@ -1534,14 +1523,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     default:
         throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
-    fiu_do_on(FailPoints::random_join_failpoint, {
-        // Since the code will run very frequently, then other failpoint might have no chance to trigger
-        // so internally low down the possibility to 1/100
-        pcg64 rng(randomSeed());
-        int num = std::uniform_int_distribution(0, 100)(rng);
-        if (num == 67)
-            throw Exception("Fail point join prob is triggered.", ErrorCodes::FAIL_POINT_ERROR);
-    });
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & sample_col = sample_block_with_columns_to_add.getByPosition(i);

@@ -27,6 +27,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Common/config.h>
+#include <Common/FailPoint.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
@@ -982,6 +983,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Poco::Logger * log = &logger();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
+    FailPointHelper::initRandomFailPoints(config(), log);
 #endif
 
     UpdateMallocConfig(log);

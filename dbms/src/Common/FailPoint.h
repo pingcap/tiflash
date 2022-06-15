@@ -21,6 +21,15 @@
 
 #include <unordered_map>
 
+namespace Poco
+{
+class Logger;
+namespace Util
+{
+class LayeredConfiguration;
+}
+} // namespace Poco
+
 namespace DB
 {
 namespace ErrorCodes
@@ -35,7 +44,6 @@ extern const int FAIL_POINT_ERROR;
 // When `fail_point` is enabled, wait till it is disabled
 #define FAIL_POINT_PAUSE(fail_point) fiu_do_on(fail_point, FailPointHelper::wait(fail_point);)
 
-
 class FailPointChannel;
 class FailPointHelper
 {
@@ -46,6 +54,15 @@ public:
 
     static void wait(const String & fail_point_name);
 
+    /*
+     * For Server RandomFailPoint test usage. When FIU_ENABLE is defined, this function does the following work:
+     * 1. Return if TiFlash config has empty flash.random_fail_points cfg
+     * 2. Parse flash.random_fail_points, which expect to has "FailPointA-RatioA,FailPointB-RatioB,..." format
+     * 3. Call enableRandomFailPoint method with parsed FailPointName and Rate
+     */
+    static void initRandomFailPoints(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+
+    static void enableRandomFailPoint(const String & fail_point_name, double rate);
 private:
     static std::unordered_map<String, std::shared_ptr<FailPointChannel>> fail_point_wait_channels;
 };

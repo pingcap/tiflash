@@ -21,17 +21,13 @@
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
-#ifdef FIU_ENABLE
-#include <Common/randomSeed.h>
-#include <pcg_random.hpp>
-#endif
-
 namespace DB
 {
 namespace FailPoints
 {
 extern const char exception_during_mpp_close_tunnel[];
-extern const char random_tunnel_failpoint[];
+extern const char random_tunnel_write_failure_failpoint[];
+extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 
 template <typename Writer>
@@ -201,16 +197,7 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
         MPPDataPacketPtr res;
         while (send_queue.pop(res))
         {
-            bool write_success = writer->write(*res);
-            fiu_do_on(FailPoints::random_tunnel_failpoint, {
-                // Since the code will run very frequently, then other failpoint might have no chance to trigger
-                // so internally low down the possibility to 1/100
-                pcg64 rng(randomSeed());
-                int num = std::uniform_int_distribution(0, 100)(rng);
-                if (num == 17)
-                    write_success = false;
-            });
-            if (!write_success)
+            if (!writer->write(*res))
             {
                 err_msg = "grpc writes failed.";
                 break;
@@ -338,7 +325,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
         auto res = cv_for_connected_or_finished.wait_for(lk, timeout, connected_or_finished);
         LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
 
-        fiu_do_on(FailPoints::random_tunnel_failpoint, res = false;);
+        fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, res = false;);
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }

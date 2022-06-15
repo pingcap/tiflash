@@ -13,15 +13,19 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-
+#include <Common/Exception.h>
 #include <boost/core/noncopyable.hpp>
 #include <condition_variable>
 #include <mutex>
+#include <Poco/Util/LayeredConfiguration.h>
+#include <Poco/String.h>
+#include <Poco/StringTokenizer.h>
+#include <common/logger_useful.h>
+#include <common/defines.h>
 
 namespace DB
 {
 std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
-
 #define APPLY_FOR_FAILPOINTS_ONCE(M)                              \
     M(exception_between_drop_meta_and_data)                       \
     M(exception_between_alter_data_and_meta)                      \
@@ -105,17 +109,21 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_after_copr_streams_acquired)     \
     M(pause_before_server_merge_one_delta)
 
-#define APPLY_FOR_RANDOM_FAILPOINTS_ENABLED_OUTSIDE(M) \
-    M(random_tunnel_failpoint)                         \
-    M(random_receiver_failpoint)                       \
-    M(random_limit_check_failpoint)                    \
-    M(random_join_failpoint)                           \
-    M(random_aggregate_failpoint)                      \
-    M(random_sharedquery_failpoint)                    \
-    M(random_thread_failpoint)                         \
-    M(random_interpreter_failpoint)                    \
-    M(random_task_lifecycle_failpoint)                 \
-    M(random_task_manager_failpoint)
+#define APPLY_FOR_RANDOM_FAILPOINTS(M)                  \
+    M(random_tunnel_wait_timeout_failpoint)             \
+    M(random_tunnel_init_rpc_failure_failpoint)         \
+    M(random_receiver_sync_msg_push_failure_failpoint)  \
+    M(random_receiver_async_msg_push_failure_failpoint) \
+    M(random_limit_check_failpoint)                     \
+    M(random_join_build_failpoint)                      \
+    M(random_join_prob_failpoint)                       \
+    M(random_aggregate_create_state_failpoint)          \
+    M(random_aggregate_merge_failpoint)                 \
+    M(random_sharedquery_failpoint)                     \
+    M(random_interpreter_failpoint)                     \
+    M(random_task_lifecycle_failpoint)                  \
+    M(random_task_manager_failpoint)                    \
+    M(random_min_tso_scheduler_failpoint)
 
 namespace FailPoints
 {
@@ -124,7 +132,7 @@ APPLY_FOR_FAILPOINTS_ONCE(M)
 APPLY_FOR_FAILPOINTS(M)
 APPLY_FOR_FAILPOINTS_ONCE_WITH_CHANNEL(M)
 APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
-APPLY_FOR_RANDOM_FAILPOINTS_ENABLED_OUTSIDE(M)
+APPLY_FOR_RANDOM_FAILPOINTS(M)
 #undef M
 } // namespace FailPoints
 
@@ -188,7 +196,7 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
 #undef M
 #undef SUB_M
 
-    throw Exception("Cannot find fail point " + fail_point_name, ErrorCodes::FAIL_POINT_ERROR);
+    throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
 }
 
 void FailPointHelper::disableFailPoint(const String & fail_point_name)
@@ -213,6 +221,40 @@ void FailPointHelper::wait(const String & fail_point_name)
         ptr->wait();
     }
 }
+
+void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+{
+    String random_fail_point_cfg = config.getString("flash.random_fail_points", "");
+    if (random_fail_point_cfg.empty())
+        return;
+
+    Poco::StringTokenizer string_tokens(random_fail_point_cfg, ",");
+    for (const auto & string_token : string_tokens)
+    {
+        Poco::StringTokenizer pair_tokens(string_token, "-");
+        RUNTIME_ASSERT((pair_tokens.count() == 2), log, "RandomFailPoints config should be FailPointA-RatioA,FailPointB-RatioB,... format");
+        double rate = atof(pair_tokens[1].c_str()); //NOLINT(cert-err34-c): check conversion error manually
+        RUNTIME_ASSERT((0 <= rate && rate <= 1.0), log, "RandomFailPoint trigger rate should in [0,1], while {}", rate);
+        enableRandomFailPoint(pair_tokens[0], rate);
+    }
+    LOG_FMT_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
+}
+
+void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)
+{
+#define SUB_M(NAME)                                                                                   \
+    if (fail_point_name == FailPoints::NAME)                                                                \
+    {                                                                                                       \
+        fiu_enable_random(FailPoints::NAME, 1, nullptr, 0, rate);                                           \
+        return;                                                                                             \
+    }
+
+#define M(NAME) SUB_M(NAME)
+    APPLY_FOR_RANDOM_FAILPOINTS(M)
+#undef M
+
+    throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
+}
 #else
 class FailPointChannel
 {
@@ -223,6 +265,10 @@ void FailPointHelper::enableFailPoint(const String &) {}
 void FailPointHelper::disableFailPoint(const String &) {}
 
 void FailPointHelper::wait(const String &) {}
+
+void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & config, Poco::Logger * log) {}
+
+void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate) {}
 #endif
 
 } // namespace DB

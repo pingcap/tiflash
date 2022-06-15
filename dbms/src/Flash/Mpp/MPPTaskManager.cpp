@@ -21,11 +21,6 @@
 #include <thread>
 #include <unordered_map>
 
-#ifdef FIU_ENABLE
-#include <Common/randomSeed.h>
-#include <pcg_random.hpp>
-#endif
-
 namespace DB
 {
 namespace FailPoints
@@ -61,14 +56,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
         it = query_it->second->task_map.find(id);
         return it != query_it->second->task_map.end();
     });
-    fiu_do_on(FailPoints::random_task_manager_failpoint, {
-        // Since the code will run very frequently, then other failpoint might have no chance to trigger
-        // so internally low down the possibility to 1/1000
-        pcg64 rng(randomSeed());
-        int num = std::uniform_int_distribution(0, 1000)(rng);
-        if (num == 127)
-            ret = false;
-    });
+    fiu_do_on(FailPoints::random_task_manager_failpoint, ret = false;);
     if (cancelled)
     {
         errMsg = fmt::format("Task [{},{}] has been cancelled.", meta.start_ts(), meta.task_id());

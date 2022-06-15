@@ -18,11 +18,6 @@
 #include <Common/FailPoint.h>
 #include <string>
 
-#ifdef FIU_ENABLE
-#include <Common/randomSeed.h>
-#include <pcg_random.hpp>
-#endif
-
 namespace DB
 {
 namespace FailPoints
@@ -33,14 +28,7 @@ extern const char random_limit_check_failpoint[];
 bool SizeLimits::check(UInt64 rows, UInt64 bytes, const char * what, int exception_code) const
 {
     bool rows_exceed_limit = max_rows && rows > max_rows;
-    fiu_do_on(FailPoints::random_limit_check_failpoint, {
-        // Since the code will run very frequently, then other failpoint might have no chance to trigger
-        // so internally low down the possibility to 1/100
-        pcg64 rng(randomSeed());
-        int num = std::uniform_int_distribution(0, 100)(rng);
-        if (num == 53)
-            rows_exceed_limit = false;
-    });
+    fiu_do_on(FailPoints::random_limit_check_failpoint, rows_exceed_limit = false;);
     if (rows_exceed_limit)
     {
         if (overflow_mode == OverflowMode::THROW)
