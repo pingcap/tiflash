@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Config/ConfigProcessor.h>
+#include <Poco/AsyncChannel.h>
 #include <Poco/FileChannel.h>
 #include <Poco/Net/SocketAddress.h>
 #include <Poco/NumberFormatter.h>
@@ -39,7 +40,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <Poco/AsyncChannel.h>
 
 /// \brief Base class for applications that can run as daemons.
 ///

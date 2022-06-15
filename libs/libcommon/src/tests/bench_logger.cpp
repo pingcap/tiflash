@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Poco/AsyncChannel.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/Channel.h>
 #include <Poco/ConsoleChannel.h>
@@ -24,8 +25,6 @@
 #include <common/logger_useful.h>
 
 #include <iomanip>
-#include <Poco/AsyncChannel.h>
-#include <ostream>
 
 namespace bench
 {
@@ -68,7 +67,7 @@ public:
         Poco::Logger::root().setChannel(formatting_channel);
         Poco::Logger::root().setLevel(Poco::Message::PRIO_TRACE);
         return &Poco::Logger::get("LoggerMacroBM");
-    } 
+    }
 };
 
 BENCHMARK_DEFINE_F(LoggerMacroBM, ShortOldFmt)
