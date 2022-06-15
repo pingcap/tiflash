@@ -13,25 +13,16 @@
 # limitations under the License.
 
 tmp_path = "/tmp/tiflash/data/tmp"
-display_name = "TiFlash"
-# specify paths used for store data, multiple path should be seperated by comma
 path = "/tmp/tiflash/data/db"
-capacity = "107374182400" 
-# multi-paths example
-# path = "/tmp/tiflash/data/db,/tmp/tiflash1,/tmp/tiflash2"
-# capacity = "0,0,0"
+capacity = "107374182400" # 100GB
 mark_cache_size = 5368709120
 minmax_index_cache_size = 5368709120
 tcp_port = 9000
 http_port = 8123
+
 [logger]
 count = 10
 errorlog = "/tmp/tiflash/log/error.log"
 size = "1000M"
 log = "/tmp/tiflash/log/server.log"
 level = "trace"
-[application]
-runAsDaemon = true
-[raft]
-# specify which storage engine we use. tmt or dt
-storage_engine = "dt"

@@ -24,11 +24,13 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
+#include <thread>
+
 namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
 
-void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_ps_v3)
+void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode)
 {
     // set itself as global context
     global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
@@ -38,6 +40,10 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
+
+    // initialize background & blockable background thread pool
+    global_context->initializeBackgroundPool(std::thread::hardware_concurrency() / 4);
+    global_context->initializeBlockableBackgroundPool(std::thread::hardware_concurrency() / 4);
 
     // Theses global variables should be initialized by the following order
     // 1. capacity
@@ -68,7 +74,7 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, bool enable_
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
-    global_context->setPageStorageRunMode(enable_ps_v3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);
+    global_context->setPageStorageRunMode(ps_run_mode);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_FMT_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 

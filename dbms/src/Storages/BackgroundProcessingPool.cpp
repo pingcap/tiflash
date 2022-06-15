@@ -87,6 +87,9 @@ BackgroundProcessingPool::BackgroundProcessingPool(int size_)
     : size(size_)
     , thread_ids_counter(size_)
 {
+    if (size <= 0)
+        throw Exception("BackgroundProcessingPool size must be greater than 0", ErrorCodes::LOGICAL_ERROR);
+
     LOG_FMT_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with {} threads", size);
 
     threads.resize(size);

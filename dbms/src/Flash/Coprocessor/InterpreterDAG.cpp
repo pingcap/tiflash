@@ -24,19 +24,8 @@ namespace DB
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_)
     , dag(dag_)
+    , max_streams(context.getMaxStreams())
 {
-    const Settings & settings = context.getSettingsRef();
-    if (dagContext().isBatchCop() || (dagContext().isMPPTask() && !dagContext().isTest()))
-        max_streams = settings.max_threads;
-    else if (dagContext().isTest())
-        max_streams = dagContext().initialize_concurrency;
-    else
-        max_streams = 1;
-
-    if (max_streams > 1)
-    {
-        max_streams *= settings.max_streams_to_max_threads_ratio;
-    }
 }
 
 void setRestorePipelineConcurrency(DAGQueryBlock & query_block)
@@ -75,19 +64,17 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
 
 BlockIO InterpreterDAG::execute()
 {
-    /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
-    /// the query plan, so we init mpp exchange receiver before executeQueryBlock
-    dagContext().initExchangeReceiverIfMPP(context, max_streams);
-
     BlockInputStreams streams = executeQueryBlock(*dag.getRootQueryBlock());
     DAGPipeline pipeline;
     pipeline.streams = streams;
     /// add union to run in parallel if needed
-    if (dagContext().isMPPTask())
+    if (unlikely(dagContext().isTest()))
+        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/false, "for test");
+    else if (dagContext().isMPPTask())
         /// MPPTask do not need the returned blocks.
         executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true, "for mpp");
     else
-        executeUnion(pipeline, max_streams, dagContext().log, false, "for non mpp");
+        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/false, "for non mpp");
     if (dagContext().hasSubquery())
     {
         const Settings & settings = context.getSettingsRef();

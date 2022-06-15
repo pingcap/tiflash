@@ -14,12 +14,12 @@
 
 #include <Common/FailPoint.h>
 #include <Flash/Management/ManualCompact.h>
-#include <Poco/Logger.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <common/types.h>
 #include <fmt/ranges.h>
@@ -47,7 +47,6 @@ public:
 
     BasicManualCompactTest()
     {
-        log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
         pk_type = GetParam();
     }
 
@@ -62,7 +61,7 @@ public:
             setupStorage();
 
             // In tests let's only compact one segment.
-            db_context->setSetting("manual_compact_more_until_ms", UInt64(0));
+            db_context->setSetting("manual_compact_more_until_ms", Field(UInt64(0)));
 
             // Split into 4 segments, and prepare some delta data for first 3 segments.
             helper = std::make_unique<DM::tests::MultiSegmentTestUtil>(*db_context);
@@ -115,8 +114,6 @@ protected:
     std::unique_ptr<DB::Management::ManualCompactManager> manager;
 
     DM::tests::DMTestEnv::PkType pk_type;
-
-    [[maybe_unused]] Poco::Logger * log;
 };
 
 
@@ -314,7 +311,7 @@ CATCH
 TEST_P(BasicManualCompactTest, CompactMultiple)
 try
 {
-    db_context->setSetting("manual_compact_more_until_ms", UInt64(60 * 1000)); // Hope it's long enough!
+    db_context->setSetting("manual_compact_more_until_ms", Field(UInt64(60 * 1000))); // Hope it's long enough!
 
     auto request = ::kvrpcpb::CompactRequest();
     request.set_physical_table_id(TABLE_ID);

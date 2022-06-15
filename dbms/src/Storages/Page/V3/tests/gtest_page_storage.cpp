@@ -1408,6 +1408,88 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, TruncateBlobFile)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    auto blob_file = Poco::File(getTemporaryPath() + "/blobfile_1");
+
+    page_storage = reopenWithConfig(config);
+    EXPECT_GT(blob_file.getSize(), 0);
+
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        page_storage->write(std::move(batch));
+    }
+    page_storage = reopenWithConfig(config);
+    page_storage->gc(/*not_skip*/ false, nullptr, nullptr);
+    EXPECT_EQ(blob_file.getSize(), 0);
+}
+CATCH
+
+TEST_F(PageStorageTest, EntryTagAfterFullGC)
+try
+{
+    {
+        PageStorage::Config config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageId page_id = 120;
+    UInt64 tag = 12345;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        auto entry = page_storage->getEntry(page_id);
+        ASSERT_EQ(entry.tag, tag);
+        auto page = page_storage->read(page_id);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    {
+        auto entry = page_storage->getEntry(page_id);
+        ASSERT_EQ(entry.tag, tag);
+        auto page = page_storage->read(page_id);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+}
+CATCH
 
 } // namespace PS::V3::tests
 } // namespace DB

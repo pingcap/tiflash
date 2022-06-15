@@ -22,26 +22,6 @@
 
 namespace DB
 {
-HttpRequestRes HandleHttpRequestTestShow(
-    EngineStoreServerWrap *,
-    std::string_view path,
-    const std::string & api_name,
-    std::string_view query,
-    std::string_view body)
-{
-    auto * res = RawCppString::New(fmt::format(
-        "api_name: {}\npath: {}\nquery: {}\nbody: {}",
-        api_name,
-        path,
-        query,
-        body));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(res, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{res->data(), res->size()}}};
-}
-
 HttpRequestRes HandleHttpRequestSyncStatus(
     EngineStoreServerWrap * server,
     std::string_view path,
@@ -112,8 +92,7 @@ using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(EngineStoreServerWrap *, std::
 
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
-    {"/tiflash/store-status", HandleHttpRequestStoreStatus},
-    {"/tiflash/test-show", HandleHttpRequestTestShow}};
+    {"/tiflash/store-status", HandleHttpRequestStoreStatus}};
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 {

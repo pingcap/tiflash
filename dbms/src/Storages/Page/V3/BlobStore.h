@@ -296,7 +296,7 @@ private:
 
     PageEntriesEdit handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
-    BlobFilePtr read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
+    BlobFilePtr read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
     /**
      *  Ask BlobStats to get a span from BlobStat.
@@ -316,7 +316,7 @@ private:
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
     friend class PageDirectoryFactory;
-    friend class PageStorageControl;
+    friend class PageStorageControlV3;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

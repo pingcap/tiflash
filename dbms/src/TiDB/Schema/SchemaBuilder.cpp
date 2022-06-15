@@ -61,6 +61,7 @@ extern const char exception_before_step_2_rename_in_exchange_partition[];
 extern const char exception_after_step_2_in_exchange_partition[];
 extern const char exception_before_step_3_rename_in_exchange_partition[];
 extern const char exception_after_step_3_in_exchange_partition[];
+extern const char exception_between_schema_change_in_the_same_diff[];
 } // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
@@ -336,6 +337,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         FmtBuffer fmt_buf;
         fmt_buf.fmtAppend("Detected schema changes: {}: ", name_mapper.debugCanonicalName(*db_info, *table_info));
         for (const auto & schema_change : schema_changes)
+        {
             for (const auto & command : schema_change.first)
             {
                 if (command.type == AlterCommand::ADD_COLUMN)
@@ -347,6 +349,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
                 else if (command.type == AlterCommand::RENAME_COLUMN)
                     fmt_buf.fmtAppend("RENAME COLUMN from {} to {}, ", command.column_name, command.new_column_name);
             }
+        }
         return fmt_buf.toString();
     };
     LOG_DEBUG(log, log_str());
@@ -355,11 +358,27 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
     // Using original table info with updated columns instead of using new_table_info directly,
     // so that other changes (RENAME commands) won't be saved.
     // Also, updating schema_version as altering column is structural.
-    for (const auto & schema_change : schema_changes)
+    for (size_t i = 0; i < schema_changes.size(); i++)
     {
+        if (i > 0)
+        {
+            /// If there are multiple schema change in the same diff,
+            /// the table schema version will be set to the latest schema version after the first schema change is applied.
+            /// Throw exception in the middle of the schema change to mock the case that there is a race between data decoding and applying different schema change.
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_schema_change_in_the_same_diff);
+        }
+        const auto & schema_change = schema_changes[i];
         /// Update column infos by applying schema change in this step.
         schema_change.second(orig_table_info);
-        /// Update schema version aggressively for the sake of correctness.
+        /// Update schema version aggressively for the sake of correctness（for read part).
+        /// In read action, we will use table_info.schema_version(storage_version) and TiDBSchemaSyncer.cur_version(global_version) to compare with query_version, to decide whether we can read under this query_version, or we need to make the schema newer.
+        /// In our comparison logic, we only serve the query when the query schema version meet the criterion: storage_version <= query_version <= global_version(The more detail info you can refer the comments in DAGStorageInterpreter::getAndLockStorages.)
+        /// And when apply multi diffs here, we only update global_version when all diffs have been applied.
+        /// So the global_version may be less than the actual "global_version" of the local schema in the process of applying schema changes.
+        /// And if we don't update the storage_version ahead of time, we may meet the following case when apply multiple diffs: storage_version <= global_version < actual "global_version".
+        /// If we receive a query with the same version as global_version, we can have the following scenario: storage_version <= global_version == query_version < actual "global_version".
+        /// And because storage_version <= global_version == query_version meet the criterion of serving the query, the query will be served. But query_version < actual "global_version" indicates that we use a newer schema to server an older query which may cause some inconsistency issue.
+        /// So we update storage_version aggressively to prevent the above scenario happens.
         orig_table_info.schema_version = target_version;
         auto alter_lock = storage->lockForAlter(getThreadName());
         storage->alterFromTiDB(
@@ -952,13 +971,12 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
 }
 
 std::tuple<NamesAndTypes, Strings>
-parseColumnsFromTableInfo(const TiDB::TableInfo & table_info, Poco::Logger * log)
+parseColumnsFromTableInfo(const TiDB::TableInfo & table_info)
 {
     NamesAndTypes columns;
     std::vector<String> primary_keys;
     for (const auto & column : table_info.columns)
     {
-        LOG_FMT_DEBUG(log, "Analyzing column: {}, type: {}", column.name, static_cast<int>(column.tp));
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(column.name, type);
         if (column.hasPriKeyFlag())
@@ -988,7 +1006,7 @@ String createTableStmt(
     Poco::Logger * log)
 {
     LOG_FMT_DEBUG(log, "Analyzing table info : {}", table_info.serialize());
-    auto [columns, pks] = parseColumnsFromTableInfo(table_info, log);
+    auto [columns, pks] = parseColumnsFromTableInfo(table_info);
 
     String stmt;
     WriteBufferFromString stmt_buf(stmt);

@@ -114,14 +114,14 @@ static void writeRegionDataToStorage(
         /// Read region data as block.
         Stopwatch watch;
 
-        Int64 block_schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+        Int64 block_decoding_schema_version = -1;
         BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
             LOG_FMT_TRACE(log, "{} begin to decode table {}, region {}", FUNCTION_NAME, table_id, region->id());
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
-            std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(true);
-            block_schema_version = decoding_schema_snapshot->schema_version;
+            std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
+            block_decoding_schema_version = decoding_schema_snapshot->decoding_schema_version;
 
             auto reader = RegionBlockReader(decoding_schema_snapshot);
             if (!reader.read(*block_ptr, data_list_read, force_decode))
@@ -153,7 +153,7 @@ static void writeRegionDataToStorage(
         write_part_cost = watch.elapsedMilliseconds();
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
         if (need_decode)
-            storage->releaseDecodingBlock(block_schema_version, std::move(block_ptr));
+            storage->releaseDecodingBlock(block_decoding_schema_version, std::move(block_ptr));
 
         LOG_FMT_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
         return true;
@@ -353,60 +353,6 @@ void RegionTable::writeBlockByRegion(
     data_list_to_remove = std::move(*data_list_read);
 }
 
-RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
-                                                                 const ColumnsDescription & columns [[maybe_unused]],
-                                                                 const Names & column_names_to_read,
-                                                                 const RegionPtr & region,
-                                                                 RegionVersion region_version,
-                                                                 RegionVersion conf_version,
-                                                                 bool resolve_locks,
-                                                                 Timestamp start_ts,
-                                                                 const std::unordered_set<UInt64> * bypass_lock_ts,
-                                                                 RegionScanFilterPtr scan_filter)
-{
-    if (!region)
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region is null", ErrorCodes::LOGICAL_ERROR);
-
-    // Tiny optimization for queries that need only handle, tso, delmark.
-    bool need_value = column_names_to_read.size() != 3;
-    auto region_data_lock = resolveLocksAndReadRegionData(
-        table_info.id,
-        region,
-        start_ts,
-        bypass_lock_ts,
-        region_version,
-        conf_version,
-        resolve_locks,
-        need_value);
-
-    return std::visit(variant_op::overloaded{
-                          [&](RegionDataReadInfoList & data_list_read) -> ReadBlockByRegionRes {
-                              /// Read region data as block.
-                              Block block;
-                              // FIXME: remove this deprecated function
-                              assert(0);
-                              {
-                                  auto reader = RegionBlockReader(nullptr);
-                                  bool ok = reader.setStartTs(start_ts)
-                                                .setFilter(scan_filter)
-                                                .read(block, data_list_read, /*force_decode*/ true);
-                                  if (!ok)
-                                      // TODO: Enrich exception message.
-                                      throw Exception("Read region " + std::to_string(region->id()) + " of table "
-                                                          + std::to_string(table_info.id) + " failed",
-                                                      ErrorCodes::LOGICAL_ERROR);
-                              }
-                              return block;
-                          },
-                          [&](LockInfoPtr & lock_value) -> ReadBlockByRegionRes {
-                              assert(lock_value);
-                              throw LockException(region->id(), std::move(lock_value));
-                          },
-                          [](RegionException::RegionReadStatus & s) -> ReadBlockByRegionRes { return s; },
-                      },
-                      region_data_lock);
-}
-
 RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(TMTContext & tmt,
                                                                                    const TiDB::TableID table_id,
                                                                                    const RegionPtr & region,
@@ -509,7 +455,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         }
 
         DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
-        std::tie(decoding_schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(false);
+        std::tie(decoding_schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(lock, false);
         res_block = createBlockSortByColumnID(decoding_schema_snapshot);
         auto reader = RegionBlockReader(decoding_schema_snapshot);
         if (!reader.read(res_block, *data_list_read, force_decode))
@@ -562,7 +508,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
         auto table_lock = storage->lockStructureForShare(getThreadName());
         dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         // only dt storage engine support `getSchemaSnapshotAndBlockForDecoding`, other engine will throw exception
-        std::tie(schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(false);
+        std::tie(schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
         std::tie(std::ignore, drop_lock) = std::move(table_lock).release();
         return true;
     };

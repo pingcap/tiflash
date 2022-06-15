@@ -52,6 +52,15 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items)
     return exp_list;
 }
 
+MockWindowFrame buildDefaultRowsFrame()
+{
+    MockWindowFrame frame;
+    frame.type = tipb::WindowFrameType::Rows;
+    frame.end = {tipb::WindowBoundType::CurrentRow, false, 0};
+    frame.start = {tipb::WindowBoundType::CurrentRow, false, 0};
+    return frame;
+}
+
 // a mock DAGRequest should prepare its time_zone, flags, encode_type and output_schema.
 void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 {
@@ -94,6 +103,9 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
         ret.name = column.first;
+        // TODO: find a way to assign decimal field's flen.
+        if (ret.tp == TiDB::TP::TypeNewDecimal)
+            ret.flen = 65;
         ret.id = i++;
         table_info.columns.push_back(std::move(ret));
     }
@@ -274,52 +286,158 @@ DAGRequestBuilder & DAGRequestBuilder::buildAggregation(ASTPtr agg_funcs, ASTPtr
     return *this;
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columns)
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame)
 {
-    std::vector<MockColumnInfo> v_column_info(columns.size());
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    window_func_list->children.push_back(window_func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList({partition_by}), buildOrderByItemList({order_by}), frame);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame)
+{
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    window_func_list->children.push_back(window_func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(partition_by_list), buildOrderByItemList(order_by_list), frame);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::window(MockAsts window_funcs, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame)
+{
+    assert(root);
+    auto window_func_list = std::make_shared<ASTExpressionList>();
+    for (const auto & func : window_funcs)
+        window_func_list->children.push_back(func);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(partition_by_list), buildOrderByItemList(order_by_list), frame);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, bool is_partial_sort)
+{
+    assert(root);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemList({order_by}), is_partial_sort);
+    return *this;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItems order_by_list, bool is_partial_sort)
+{
+    assert(root);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemList(order_by_list), is_partial_sort);
+    return *this;
+}
+
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columnInfos)
+{
+    std::vector<MockColumnInfo> v_column_info(columnInfos.size());
     size_t i = 0;
-    for (const auto & info : columns)
+    for (const auto & info : columnInfos)
     {
         v_column_info[i++] = std::move(info);
     }
     mock_tables[name.first + "." + name.second] = v_column_info;
 }
 
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfos & columns)
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfos & columnInfos)
 {
-    mock_tables[db + "." + table] = columns;
+    mock_tables[db + "." + table] = columnInfos;
 }
 
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfos & columns)
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfos & columnInfos)
 {
-    mock_tables[name.first + "." + name.second] = columns;
+    mock_tables[name.first + "." + name.second] = columnInfos;
 }
 
-void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfos & columns)
+void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfos & columnInfos)
 {
-    exchange_schemas[name] = columns;
+    exchange_schemas[name] = columnInfos;
 }
 
-void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoList & columns)
+void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoList & columnInfos)
 {
-    std::vector<MockColumnInfo> v_column_info(columns.size());
+    std::vector<MockColumnInfo> v_column_info(columnInfos.size());
     size_t i = 0;
-    for (const auto & info : columns)
+    for (const auto & info : columnInfos)
     {
         v_column_info[i++] = std::move(info);
     }
     exchange_schemas[name] = v_column_info;
 }
 
+void MockDAGRequestContext::addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
+{
+    mock_table_columns[db + "." + table] = columns;
+}
+
+void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns)
+{
+    mock_table_columns[name.first + "." + name.second] = columns;
+}
+
+void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
+{
+    mock_exchange_columns[name] = columns;
+}
+
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns)
+{
+    addMockTable(db, table, columnInfos);
+    addMockTableColumnData(db, table, columns);
+}
+
+void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns)
+{
+    addMockTable(db, table, columnInfos);
+    addMockTableColumnData(db, table, columns);
+}
+
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns)
+{
+    addMockTable(name, columnInfos);
+    addMockTableColumnData(name, columns);
+}
+
+void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns)
+{
+    addMockTable(name, columnInfos);
+    addMockTableColumnData(name, columns);
+}
+
+void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnInfos columnInfos, ColumnsWithTypeAndName columns)
+{
+    addExchangeRelationSchema(name, columnInfos);
+    addExchangeReceiverColumnData(name, columns);
+}
+
+void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnInfoList columnInfos, ColumnsWithTypeAndName columns)
+{
+    addExchangeRelationSchema(name, columnInfos);
+    addExchangeReceiverColumnData(name, columns);
+}
+
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
-    return DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
+    auto builder = DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
+    // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
+    // If user don't want to test executors, it will be safe to run Interpreter Tests.
+    if (mock_table_columns.find(db_name + "." + table_name) != mock_table_columns.end())
+    {
+        executor_id_columns_map[builder.getRoot()->name] = mock_table_columns[db_name + "." + table_name];
+    }
+    return builder;
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name)
 {
     auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name]);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
+    // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
+    // If user don't want to test executors, it will be safe to run Interpreter Tests.
+    if (mock_exchange_columns.find(exchange_name) != mock_exchange_columns.end())
+    {
+        executor_id_columns_map[builder.getRoot()->name] = mock_exchange_columns[exchange_name];
+    }
     return builder;
 }
 } // namespace DB::tests

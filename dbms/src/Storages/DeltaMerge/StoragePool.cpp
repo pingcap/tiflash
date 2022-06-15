@@ -515,21 +515,9 @@ void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks
     }
     case PageStorageRunMode::MIX_MODE:
     {
-        // When PageStorage run as Mix Mode.
-        // We need both get alive pages from V2 and V3 which will feedback for the DM.
-        // But V2 and V3 won't GC in the same time. So V3 need proxy V2 external pages callback.
-        // When V3 GC happend, scan the external pages from V3, in remover will scanner all of external pages from V2.
-        ExternalPageCallbacks mix_mode_callbacks;
-
-        mix_mode_callbacks.scanner = callbacks.scanner;
-        mix_mode_callbacks.remover = [this, callbacks](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
-            // ns_id won't used on V2
-            auto v2_valid_page_ids = data_storage_v2->getAliveExternalPageIds(ns_id);
-            v2_valid_page_ids.insert(valid_ids.begin(), valid_ids.end());
-            callbacks.remover(path_and_ids_vec, v2_valid_page_ids);
-        };
-        mix_mode_callbacks.ns_id = ns_id;
-        data_storage_v3->registerExternalPagesCallbacks(mix_mode_callbacks);
+        // We have transformed all pages from V2 to V3 in `restore`, so
+        // only need to register callbacks for V3.
+        data_storage_v3->registerExternalPagesCallbacks(callbacks);
         break;
     }
     default:
@@ -636,8 +624,8 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
 
         auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
         fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
-            static size_t fail_point_called = 0;
-            if (existed_path.empty() && fail_point_called % 10 == 0)
+            static std::atomic<UInt64> fail_point_called(0);
+            if (existed_path.empty() && fail_point_called.load() % 10 == 0)
             {
                 existed_path = "<mock for existed path>";
             }

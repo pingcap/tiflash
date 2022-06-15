@@ -536,7 +536,7 @@ ColumnWithTypeAndName executeFunction(
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool raw_function_test = true);
+    bool raw_function_test = false);
 
 ColumnWithTypeAndName executeFunction(
     Context & context,
@@ -544,7 +544,7 @@ ColumnWithTypeAndName executeFunction(
     const ColumnNumbers & argument_column_numbers,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool raw_function_test = true);
+    bool raw_function_test = false);
 
 template <typename... Args>
 ColumnWithTypeAndName executeFunction(
@@ -562,7 +562,7 @@ DataTypePtr getReturnTypeForFunction(
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool raw_function_test = true);
+    bool raw_function_test = false);
 
 template <typename T>
 ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")
@@ -654,6 +654,33 @@ ColumnWithTypeAndName createNullableColumn(
     return createNullableColumn<T>(data_type_args, vec, null_map, name, 0);
 }
 
+template <typename T>
+ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v, name);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v, name);
+}
+
+ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp);
+
+ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp);
 class FunctionTest : public ::testing::Test
 {
 protected:
@@ -687,7 +714,7 @@ public:
         const String & func_name,
         const ColumnsWithTypeAndName & columns,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
-        bool raw_function_test = true)
+        bool raw_function_test = false)
     {
         return DB::tests::executeFunction(context, func_name, columns, collator, raw_function_test);
     }
@@ -704,7 +731,7 @@ public:
         const ColumnNumbers & argument_column_numbers,
         const ColumnsWithTypeAndName & columns,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
-        bool raw_function_test = true)
+        bool raw_function_test = false)
     {
         return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
     }

@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/InterpreterTestUtils.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB
 {
 namespace tests
 {
-class MockDAGRequestTest : public DB::tests::InterpreterTest
+class MockDAGRequestTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
     {
-        InterpreterTest::initializeContext();
+        ExecutorTest::initializeContext();
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
@@ -252,5 +252,17 @@ try
 }
 CATCH
 
+TEST_F(MockDAGRequestTest, MockWindow)
+try
+{
+    auto request = context.scan("test_db", "test_table").sort({"s1", false}, true).window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame()).build(context);
+    {
+        String expected = "window_2 | partition_by: {(<1, String>, desc: false)}}, order_by: {(<0, String>, desc: true)}, func_desc: {row_number()}, frame: {start<2, false, 0>, end<2, false, 0>}\n"
+                          " sort_1 | isPartialSort: true, partition_by: {(<0, String>, desc: false)}\n"
+                          "  table_scan_0 | {<0, String>, <1, String>}\n";
+        ASSERT_DAGREQUEST_EQAUL(expected, request);
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB

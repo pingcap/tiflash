@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
@@ -381,7 +380,9 @@ public:
     bool useL0Opt() const;
 
     BackgroundProcessingPool & getBackgroundPool();
+    BackgroundProcessingPool & initializeBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBlockableBackgroundPool();
+    BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 
@@ -460,6 +461,8 @@ public:
 
     void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
 
+    size_t getMaxStreams() const;
+
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.
@@ -504,7 +507,7 @@ private:
 class SessionCleaner
 {
 public:
-    SessionCleaner(Context & context_)
+    explicit SessionCleaner(Context & context_)
         : context{context_}
     {}
     ~SessionCleaner();

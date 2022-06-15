@@ -16,9 +16,7 @@
 
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
-#include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/StorageEngineType.h>
-
 
 namespace TiDB
 {
@@ -26,10 +24,11 @@ struct TableInfo;
 }
 namespace DB
 {
+class Context;
 namespace RegionBench
 {
 extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
-}
+} // namespace RegionBench
 namespace DM
 {
 enum class FileConvertJobType;
@@ -40,7 +39,6 @@ namespace tests
 class RegionKVStoreTest;
 }
 
-class Context;
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
 using ASTs = std::vector<ASTPtr>;
@@ -71,6 +69,8 @@ using RegionPreDecodeBlockDataPtr = std::unique_ptr<RegionPreDecodeBlockData>;
 class ReadIndexWorkerManager;
 using BatchReadIndexRes = std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>;
 class ReadIndexStressTest;
+struct FileUsageStatistics;
+class RegionPersister;
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
@@ -109,12 +109,7 @@ public:
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
-    RegionPreDecodeBlockDataPtr preHandleSnapshotToBlock(
-        RegionPtr new_region,
-        const SSTViewVec,
-        uint64_t index,
-        uint64_t term,
-        TMTContext & tmt);
+
     std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
         RegionPtr new_region,
         const SSTViewVec,
@@ -162,10 +157,7 @@ public:
 
     ~KVStore();
 
-    FileUsageStatistics getFileUsageStatistics() const
-    {
-        return region_persister.getFileUsageStatistics();
-    }
+    FileUsageStatistics getFileUsageStatistics() const;
 
 private:
     friend class MockTiDB;
@@ -234,7 +226,7 @@ private:
 private:
     RegionManager region_manager;
 
-    RegionPersister region_persister;
+    std::unique_ptr<RegionPersister> region_persister;
 
     std::atomic<Timepoint> last_gc_time = Timepoint::min();
 
@@ -247,9 +239,9 @@ private:
 
     Poco::Logger * log;
 
-    std::atomic<UInt64> REGION_COMPACT_LOG_PERIOD;
-    std::atomic<UInt64> REGION_COMPACT_LOG_MIN_ROWS;
-    std::atomic<UInt64> REGION_COMPACT_LOG_MIN_BYTES;
+    std::atomic<UInt64> region_compact_log_period;
+    std::atomic<UInt64> region_compact_log_min_rows;
+    std::atomic<UInt64> region_compact_log_min_bytes;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;
