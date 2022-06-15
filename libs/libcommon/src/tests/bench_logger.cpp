@@ -24,6 +24,8 @@
 #include <common/logger_useful.h>
 
 #include <iomanip>
+#include <Poco/AsyncChannel.h>
+#include <ostream>
 
 namespace bench
 {
@@ -39,7 +41,7 @@ protected:
     size_t num_files = 1024, num_legacy = 1003, num_compact = 2, num_removed = 80;
 
 public:
-    void SetUp(const ::benchmark::State & /*state*/)
+    void SetUp(const ::benchmark::State & /*state*/) override
     {
         if (Poco::File f(log_file_path); f.exists())
         {
@@ -56,21 +58,18 @@ public:
         Poco::Logger::root().setLevel(Poco::Message::PRIO_TRACE);
         return &Poco::Logger::get("LoggerMacroBM");
     }
-};
 
-BENCHMARK_DEFINE_F(LoggerMacroBM, ShortOldStream)
-(benchmark::State & state)
-{
-    auto * log = getLogger();
-    for (auto _ : state)
+    static Poco::Logger * getAsyncLogger()
     {
-        for (size_t i = 0; i < num_repeat; ++i)
-        {
-            LOG_INFO(log, " GC exit within " << elapsed_sec << " sec.");
-        }
-    }
-}
-BENCHMARK_REGISTER_F(LoggerMacroBM, ShortOldStream)->Iterations(200);
+        Poco::AutoPtr<Poco::FileChannel> channel(new Poco::FileChannel(log_file_path));
+        Poco::AutoPtr<Poco::AsyncChannel> async_channel(new Poco::AsyncChannel(channel));
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter("[%H:%M:%S.%i %Z] [%p] [%U(%u)]: %t"));
+        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, async_channel));
+        Poco::Logger::root().setChannel(formatting_channel);
+        Poco::Logger::root().setLevel(Poco::Message::PRIO_TRACE);
+        return &Poco::Logger::get("LoggerMacroBM");
+    } 
+};
 
 BENCHMARK_DEFINE_F(LoggerMacroBM, ShortOldFmt)
 (benchmark::State & state)
@@ -100,27 +99,19 @@ BENCHMARK_DEFINE_F(LoggerMacroBM, ShortFmt)
 }
 BENCHMARK_REGISTER_F(LoggerMacroBM, ShortFmt)->Iterations(200);
 
-BENCHMARK_DEFINE_F(LoggerMacroBM, LoogOldStream)
+BENCHMARK_DEFINE_F(LoggerMacroBM, AsycShortFmt)
 (benchmark::State & state)
 {
-    auto * log = getLogger();
+    auto * log = getAsyncLogger();
     for (auto _ : state)
     {
         for (size_t i = 0; i < num_repeat; ++i)
         {
-            LOG_INFO(
-                log,
-                " GC exit within " << std::setprecision(2) << elapsed_sec << " sec. PageFiles from " //
-                                   << beg.first << "_" << beg.second << " to "
-                                   << end.first << "_" << end.second //
-                                   << ", min writing " << min.first << "_" << min.second
-                                   << ", num files: " << num_files << ", num legacy:" << num_legacy
-                                   << ", compact legacy archive files: " << num_compact
-                                   << ", remove data files: " << num_removed);
+            LOG_FMT_INFO(log, " GC exit within {} sec.", elapsed_sec);
         }
     }
 }
-BENCHMARK_REGISTER_F(LoggerMacroBM, LoogOldStream)->Iterations(200);
+BENCHMARK_REGISTER_F(LoggerMacroBM, AsycShortFmt)->Iterations(200);
 
 BENCHMARK_DEFINE_F(LoggerMacroBM, LoogOldFmt)
 (benchmark::State & state)
@@ -181,5 +172,36 @@ BENCHMARK_DEFINE_F(LoggerMacroBM, LoogFmt)
     }
 }
 BENCHMARK_REGISTER_F(LoggerMacroBM, LoogFmt)->Iterations(200);
+
+BENCHMARK_DEFINE_F(LoggerMacroBM, AsyncLoogFmt)
+(benchmark::State & state)
+{
+    auto * log = getAsyncLogger();
+    double elapsed_sec = 1.2;
+    std::pair<int, int> beg{90, 0}, end{1024, 3}, min{1000, 0};
+    size_t num_files = 1024, num_legacy = 1003, num_compact = 2, num_removed = 80;
+    for (auto _ : state)
+    {
+        for (size_t i = 0; i < num_repeat; ++i)
+        {
+            LOG_FMT_INFO(
+                log,
+                " GC exit within {:.2f} sec. PageFiles from {}_{} to {}_{}, min writing {}_{}"
+                ", num files: {}, num legacy:{}, compact legacy archive files: {}, remove data files: {}",
+                elapsed_sec,
+                beg.first,
+                beg.second,
+                end.first,
+                end.second,
+                min.first,
+                min.second,
+                num_files,
+                num_legacy,
+                num_compact,
+                num_removed);
+        }
+    }
+}
+BENCHMARK_REGISTER_F(LoggerMacroBM, AsyncLoogFmt)->Iterations(200);
 
 } // namespace bench

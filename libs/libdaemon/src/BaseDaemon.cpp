@@ -117,7 +117,7 @@ struct Pipe
 {
     union
     {
-        int fds[2];
+        int fds[2] = {-1, -1};
         struct
         {
             int read_fd;
@@ -129,6 +129,7 @@ struct Pipe
     {
         read_fd = -1;
         write_fd = -1;
+        // fd = {-1, -1};
 
         if (0 != pipe(fds))
             DB::throwFromErrno("Cannot create pipe");
@@ -190,12 +191,12 @@ static void writeSignalIDtoSignalPipe(int sig)
 }
 
 /** Signal handler for HUP / USR1 */
-static void closeLogsSignalHandler(int sig, siginfo_t * info, void * context)
+static void closeLogsSignalHandler(int sig, siginfo_t *  /*info*/, void *  /*context*/)
 {
     writeSignalIDtoSignalPipe(sig);
 }
 
-static void terminateRequestedSignalHandler(int sig, siginfo_t * info, void * context)
+static void terminateRequestedSignalHandler(int sig, siginfo_t *  /*info*/, void *  /*context*/)
 {
     writeSignalIDtoSignalPipe(sig);
 }
@@ -298,7 +299,7 @@ public:
     {
     }
 
-    void run()
+    void run() override
     {
         setThreadName("SignalListener");
 
@@ -604,7 +605,7 @@ static void terminate_handler()
             log << "Terminate called after throwing an instance of " << (status == 0 ? dem : name) << std::endl;
 
             if (status == 0)
-                free(dem);
+                free(dem); // NOLINT
         }
 
         already_printed_stack_trace = true;
@@ -780,7 +781,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
-        log->setChannel(log_file);
+        log_file_async = new Poco::AsyncChannel(log_file);
+        log->setChannel(log_file_async);
         split->addChannel(log);
         log_file->open();
     }
@@ -804,7 +806,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         error_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
-        errorlog->setChannel(error_log_file);
+        error_log_file_async = new Poco::AsyncChannel(error_log_file);
+        errorlog->setChannel(error_log_file_async);
         level->setChannel(errorlog);
         split->addChannel(level);
         errorlog->open();
@@ -830,7 +833,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         tracing_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         tracing_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         tracing_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
-        tracing_log->setChannel(tracing_log_file);
+        tracing_log_file_async = new Poco::AsyncChannel(tracing_log_file);
+        tracing_log->setChannel(tracing_log_file_async);
         source->setChannel(tracing_log);
         split->addChannel(source);
         tracing_log->open();
@@ -883,7 +887,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         // only loggers created after buildLoggers() need to change properties, types of channel in them must be ReloadableSplitterChannel
         if (typeid(*cur_logger_channel) == typeid(Poco::ReloadableSplitterChannel))
         {
-            Poco::ReloadableSplitterChannel * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
+            auto * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
             splitter_channel->changeProperties(config);
         }
     }
@@ -1010,7 +1014,7 @@ void BaseDaemon::initialize(Application & self)
 
     /// Write core dump on crash.
     {
-        struct rlimit rlim;
+        struct rlimit rlim{};
         if (getrlimit(RLIMIT_CORE, &rlim))
             throw Poco::Exception("Cannot getrlimit");
         /// 1 GiB by default. If more - it writes to disk too long.
@@ -1116,7 +1120,7 @@ void BaseDaemon::initialize(Application & self)
     /// Setup signal handlers.
     auto add_signal_handler =
         [](const std::vector<int> & signals, signal_function handler) {
-            struct sigaction sa;
+            struct sigaction sa{};
             memset(&sa, 0, sizeof(sa));
             sa.sa_sigaction = handler;
             sa.sa_flags = SA_SIGINFO;
