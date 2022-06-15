@@ -548,7 +548,6 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
     switch (seps.size())
     {
-<<<<<<< HEAD
         // No delimiter
         case 1:
         {
@@ -557,51 +556,51 @@ Field parseMyDateTime(const String & str, int8_t fsp)
             {
                 case 14: // YYYYMMDDHHMMSS
                 {
-                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     hhmmss = true;
                     break;
                 }
                 case 12: // YYMMDDHHMMSS
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     year = adjustYear(year);
                     hhmmss = true;
                     break;
                 }
                 case 11: // YYMMDDHHMMS
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     year = adjustYear(year);
                     hhmmss = true;
                     break;
                 }
                 case 10: // YYMMDDHHMM
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 9: // YYMMDDHHM
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 8: // YYYYMMDD
                 {
-                    std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day);
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT
                     break;
                 }
                 case 7: // YYMMDDH
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 6: // YYMMDD
                 case 5: // YYMMD
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
@@ -625,18 +624,18 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                     case 1:
                     case 2:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour);
+                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT
                         break;
                     }
                     case 3:
                     case 4:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute);
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT
                         break;
                     }
                     default:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second);
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT
                         break;
                     }
                 }
@@ -650,148 +649,44 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                 }
                 else
                 {
-                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0);
+                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0); //NOLINT
                 }
             }
             if (truncated_or_incorrect)
             {
                 throw TiFlashException("Datetime truncated: " + str, Errors::Types::Truncated);
             }
-=======
-    // No delimiter
-    case 1:
-    {
-        size_t l = seps[0].size();
-        switch (l)
-        {
-        case 14: // YYYYMMDDHHMMSS
-        {
-            std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
-            hhmmss = true;
-            break;
-        }
-        case 12: // YYMMDDHHMMSS
-        {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
-            year = adjustYear(year);
-            hhmmss = true;
-            break;
-        }
-        case 11: // YYMMDDHHMMS
-        {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT
-            year = adjustYear(year);
-            hhmmss = true;
-            break;
-        }
-        case 10: // YYMMDDHHMM
-        {
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT
-            year = adjustYear(year);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         case 3:
         {
-<<<<<<< HEAD
             // YYYY-MM-DD
             scanTimeArgs(seps, {&year, &month, &day});
-=======
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT
-            year = adjustYear(year);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         case 4:
         {
-<<<<<<< HEAD
             // YYYY-MM-DD HH
             scanTimeArgs(seps, {&year, &month, &day, &hour});
-=======
-            std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         case 5:
         {
-<<<<<<< HEAD
             // YYYY-MM-DD HH-MM
             scanTimeArgs(seps, {&year, &month, &day, &hour, &minute});
-=======
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT
-            year = adjustYear(year);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         case 6:
         {
-<<<<<<< HEAD
             // We don't have fractional seconds part.
             // YYYY-MM-DD HH-MM-SS
             scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second});
             hhmmss = true;
-=======
-            std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT
-            year = adjustYear(year);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
             break;
         }
         default:
         {
-<<<<<<< HEAD
             throw Exception("Wrong datetime format");
-=======
-            throw TiFlashException("Wrong datetime format: " + str, Errors::Types::WrongValue);
-        }
-        }
-        if (l == 5 || l == 6 || l == 8)
-        {
-            // YYMMDD or YYYYMMDD
-            // We must handle float => string => datetime, the difference is that fractional
-            // part of float type is discarded directly, while fractional part of string type
-            // is parsed to HH:MM:SS.
-            int ret = 0;
-            switch (frac_str.size())
-            {
-            case 0:
-                ret = 1;
-                is_date = true;
-                break;
-            case 1:
-            case 2:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT
-                break;
-            }
-            case 3:
-            case 4:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT
-                break;
-            }
-            default:
-            {
-                ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT
-                break;
-            }
-            }
-            truncated_or_incorrect = (ret == 0);
-        }
-        if (l == 9 || l == 10)
-        {
-            if (frac_str.empty())
-            {
-                second = 0;
-            }
-            else
-            {
-                truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0); //NOLINT
-            }
-        }
-        if (truncated_or_incorrect)
-        {
-            throw TiFlashException("Datetime truncated: " + str, Errors::Types::Truncated);
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         }
     }
 
@@ -1048,15 +943,8 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     if (!allow_invalid_date)
     {
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-<<<<<<< HEAD
         static auto is_leap_year = [](UInt16 _year) { return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0); };
-        max_day = max_days_in_month[month - 1];
-=======
-        static auto is_leap_year = [](UInt16 _year) {
-            return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0);
-        };
         max_day = max_days_in_month[month - 1]; // NOLINT
->>>>>>> 745bcce2a5 (fix date format identifies '\n' as invalid separator (#4046))
         if (month == 2 && is_leap_year(year))
         {
             max_day = 29;
