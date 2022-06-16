@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Functions/FunctionBinaryArithmetic.h>
+#include <limits>
 
 namespace DB
 {
@@ -29,6 +30,15 @@ struct BitShiftRightImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
+        // It is an undefined behavior for shift operation in c++ that the right operand is greater than
+        // or equal to the number of digits of the bits in the (promoted) shift-expression.
+        // See https://en.cppreference.com/w/cpp/language/operator_arithmetic for details.
+        // Note that we only consider unsigned situation here because other types will all be cast
+        // to uint64 before shift operation according to DAGExpressionAnalyzerHelper::buildBitwiseFunction.
+        if (static_cast<Result>(b) >= std::numeric_limits<B>::digits)
+        {
+            return static_cast<Result>(0);
+        }
         return static_cast<Result>(a) >> static_cast<Result>(b);
     }
     template <typename Result = ResultType>
@@ -41,10 +51,7 @@ struct BitShiftRightImpl<A, B, false>
 template <typename A, typename B>
 struct BitShiftRightImpl<A, B, true>
 {
-    using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
-
-    template <typename Result = ResultType>
-    static Result apply(A a, B b)
+    using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>; template <typename Result = ResultType> static Result apply(A a, B b)
     {
         Result x, y;
         if constexpr (IsDecimal<A>)
