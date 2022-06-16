@@ -112,7 +112,6 @@ void CreatingSetsBlockInputStream::createAll()
             }
         }
         Stopwatch watch;
-        auto thread_manager = newThreadManager();
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
