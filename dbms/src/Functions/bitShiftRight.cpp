@@ -27,7 +27,7 @@ struct BitShiftRightImpl;
 template <typename A, typename B>
 struct BitShiftRightImpl<A, B, false>
 {
-    using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
+    using ResultType = UInt64;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
@@ -41,7 +41,7 @@ struct BitShiftRightImpl<A, B, false>
         {
             return static_cast<Result>(0);
         }
-        return static_cast<UInt64>(a) >> static_cast<UInt64>(b);
+        return static_cast<Result>(a) >> static_cast<Result>(b);
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
