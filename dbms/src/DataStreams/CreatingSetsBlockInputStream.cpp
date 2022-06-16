@@ -172,7 +172,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         {
             if (isCancelled())
             {
-                LOG_FMT_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
+                LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
                 return;
             }
 
@@ -254,7 +254,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             msg << "In " << watch.elapsedSeconds() << " sec. ";
             msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
 
-            LOG_FMT_DEBUG(log, "{}", msg.rdbuf()->str());
+            LOG_DEBUG(log, msg.rdbuf());
         }
         else
         {
