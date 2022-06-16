@@ -53,7 +53,8 @@ struct BitShiftRightImpl<A, B, true>
 {
     using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
     
-    template <typename Result = ResultType> static Result apply(A a, B b)
+    template <typename Result = ResultType>
+    static Result apply(A a, B b)
     {
         Result x, y;
         if constexpr (IsDecimal<A>)
