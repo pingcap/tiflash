@@ -162,7 +162,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     {
         // normalized
         path = getNormalizedPath(path);
-        LOG_FMT_INFO(log, "Raft data candidate path: {}", path);
+        LOG_INFO(log, "Raft data candidate path: " << path);
     }
 }
 
