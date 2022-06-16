@@ -47,13 +47,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(segment_merge_after_ingest_packs)                           \
     M(force_formal_page_file_not_exists)                          \
     M(force_legacy_or_checkpoint_page_file_exists)                \
-<<<<<<< HEAD
-    M(exception_in_creating_set_input_stream)
-=======
     M(exception_in_creating_set_input_stream)                     \
     M(exception_when_read_from_log)                               \
     M(exception_mpp_hash_build)
->>>>>>> cc8a5c51b7 (MPP: update the state of building a hash table when createOnce throw exceptions (#4202))
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(force_set_page_file_write_errno)                       \
