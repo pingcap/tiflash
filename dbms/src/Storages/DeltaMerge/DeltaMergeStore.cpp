@@ -1151,7 +1151,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
-    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(dm_context, columns_to_read, EMPTY_FILTER, std::numeric_limits<UInt64>::max(), DEFAULT_BLOCK_SIZE, true, db_settings.dt_raw_filter_range, std::move(tasks));
+    SegmentReadTaskScheduler::instance().add(read_task_pool);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
@@ -1204,7 +1205,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
-    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(dm_context, columns_to_read, filter, max_version, expected_block_size, false, db_settings.dt_raw_filter_range, std::move(tasks));
+    SegmentReadTaskScheduler::instance().add(read_task_pool);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())

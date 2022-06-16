@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 namespace DB
 {
 class Context;
@@ -31,9 +31,14 @@ class DMFileBlockInputStream : public SkippableBlockInputStream
 public:
     explicit DMFileBlockInputStream(DMFileReader && reader_)
         : reader(std::move(reader_))
-    {}
+    {
+        DMFileReaderPool::instance().add(reader);
+    }
 
-    ~DMFileBlockInputStream() = default;
+    ~DMFileBlockInputStream()
+    {
+        DMFileReaderPool::instance().del(reader);
+    }
 
     String getName() const override { return "DMFile"; }
 

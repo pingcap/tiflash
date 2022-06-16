@@ -86,7 +86,7 @@
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
-
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
@@ -1328,6 +1328,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getTMTContext().reloadConfig(config());
     }
 
+    auto read_thread_pool = std::make_unique<DM::SegmentReadThreadPool>(40);
+
     {
         // Note that this must do before initialize schema sync service.
         do
@@ -1551,6 +1553,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // Set limiters stopping and wakeup threads in waitting queue.
             global_context->getIORateLimiter().setStop();
         }
+        read_thread_pool.reset();
     }
 
     return Application::EXIT_OK;

@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include "common/defines.h"
 
 namespace DB
 {
@@ -84,8 +85,52 @@ protected:
         FilterPtr filter_ignored;
         return readImpl(filter_ignored, false);
     }
+    
+    // TODO: res_filter, return_filter
+    // TODO: after_segment_read
+    Block readImpl([[maybe_unused]]FilterPtr & res_filter, [[maybe_unused]]bool return_filter) override
+    {
+        if (done)
+        {
+            return {};
+        }
+        while (true)
+        {
+            FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
-    Block readImpl(FilterPtr & res_filter, bool return_filter) override
+            Block res;
+            task_pool->popBlock(res);
+            if (res)
+            {
+                if (extra_table_id_index != InvalidColumnID)
+                {
+                    ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
+                    ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
+                    size_t row_number = res.rows();
+                    auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
+                    col.column = std::move(col_data);
+                    res.insert(extra_table_id_index, std::move(col));
+                }
+                if (!res.rows())
+                {
+                    continue;
+                }
+                else
+                {
+                    total_rows += res.rows();
+                    return res;
+                }
+            }
+            else
+            {
+                done = true;
+                return {};
+            }
+        }
+    }
+
+/*
+Block readImpl(FilterPtr & res_filter, bool return_filter) override
     {
         if (done)
             return {};
@@ -151,31 +196,31 @@ protected:
             }
         }
     }
-
+*/
     void readSuffixImpl() override
     {
         LOG_FMT_DEBUG(log, "finish read {} rows from storage", total_rows);
     }
 
 private:
-    DMContextPtr dm_context;
+    [[maybe_unused]]DMContextPtr dm_context;
     SegmentReadTaskPoolPtr task_pool;
-    AfterSegmentRead after_segment_read;
-    ColumnDefines columns_to_read;
-    RSOperatorPtr filter;
+    [[maybe_unused]]AfterSegmentRead after_segment_read;
+    [[maybe_unused]]ColumnDefines columns_to_read;
+    [[maybe_unused]]RSOperatorPtr filter;
     Block header;
-    const UInt64 max_version;
-    const size_t expected_block_size;
-    const bool is_raw;
-    const bool do_range_filter_for_raw;
+    [[maybe_unused]]const UInt64 max_version;
+    [[maybe_unused]]const size_t expected_block_size;
+    [[maybe_unused]]const bool is_raw;
+    [[maybe_unused]]const bool do_range_filter_for_raw;
     // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
     const int extra_table_id_index;
 
     bool done = false;
 
-    BlockInputStreamPtr cur_stream;
+    [[maybe_unused]]BlockInputStreamPtr cur_stream;
 
-    SegmentPtr cur_segment;
+    [[maybe_unused]]SegmentPtr cur_segment;
     TableID physical_table_id;
 
     LoggerPtr log;

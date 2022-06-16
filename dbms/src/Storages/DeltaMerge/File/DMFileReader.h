@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
+#include "common/types.h"
 
 namespace DB
 {
@@ -98,7 +99,12 @@ public:
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
     Block read();
-
+    UInt64 fileId() const
+    {
+        return dmfile->fileId();
+    }
+    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
+    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 private:
     bool shouldSeek(size_t pack_id);
 
@@ -108,7 +114,13 @@ private:
                       size_t read_rows,
                       size_t skip_packs,
                       bool force_seek);
-
+    void readColumn(ColumnDefine & column_define,
+                    ColumnPtr & column,
+                    size_t start_pack_id,
+                    size_t pack_count,
+                    size_t read_rows,
+                    size_t skip_packs,
+                    bool force_seek);
 private:
     DMFilePtr dmfile;
     ColumnDefines read_columns;
@@ -143,6 +155,21 @@ private:
     FileProviderPtr file_provider;
 
     LoggerPtr log;
+
+    struct CachedPackInfo
+    {
+        size_t pack_count{0};
+        ColumnPtr col;
+    };
+    struct CachedColInfo
+    {
+        std::mutex mtx;
+        std::map<size_t, CachedPackInfo> packs;
+    };
+
+    std::unordered_map<ColId, CachedColInfo> cached_cols;
+
+    void delCachedPacks(std::map<size_t, CachedPackInfo> & packs, size_t pack_id);
 };
 
 } // namespace DM

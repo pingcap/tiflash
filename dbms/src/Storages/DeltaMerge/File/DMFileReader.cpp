@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
+#include "Storages/DeltaMerge/File/DMFile.h"
 
 namespace CurrentMetrics
 {
@@ -261,6 +262,7 @@ DMFileReader::DMFileReader(
         };
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
+        cached_cols[cd.id];
     }
 }
 
@@ -416,7 +418,9 @@ Block DMFileReader::read()
                                 {
                                     rows_count += pack_stats[cursor].rows;
                                 }
-                                readFromDisk(cd, column, range.first, rows_count, skip_packs_by_column[i], single_file_mode);
+                                ColumnPtr col;
+                                readColumn(cd, col, range.first, range.second - range.first, rows_count, skip_packs_by_column[i], single_file_mode);
+                                column->insertRangeFrom(*col, 0, col->size());
                                 skip_packs_by_column[i] = 0;
                             }
                             else
@@ -438,8 +442,8 @@ Block DMFileReader::read()
                     else
                     {
                         auto data_type = dmfile->getColumnStat(cd.id).type;
-                        auto column = data_type->createColumn();
-                        readFromDisk(cd, column, start_pack_id, read_rows, skip_packs_by_column[i], single_file_mode);
+                        ColumnPtr column;
+                        readColumn(cd, column, start_pack_id, read_packs, read_rows, skip_packs_by_column[i], single_file_mode);
                         auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
                         res.insert(ColumnWithTypeAndName{std::move(converted_column), cd.type, cd.name, cd.id});
                         skip_packs_by_column[i] = 0;
@@ -508,5 +512,123 @@ void DMFileReader::readFromDisk(
     }
 }
 
+void DMFileReader::readColumn(ColumnDefine & column_define,
+                    ColumnPtr & column,
+                    size_t start_pack_id,
+                    size_t pack_count,
+                    size_t read_rows,
+                    size_t skip_packs,
+                    [[maybe_unused]]bool force_seek)
+{
+    if (!getCachedPacks(column_define.id, start_pack_id, pack_count, read_rows, column))
+    {
+        auto data_type = dmfile->getColumnStat(column_define.id).type;
+        auto col = data_type->createColumn();
+        readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, true /*force_seek*/);
+        column = std::move(col);
+    }
+    DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
+}
+                    
+static std::atomic<size_t> stale_count{0};
+static std::atomic<size_t> add_count{0};
+static std::atomic<size_t> hit_count{0};
+static std::atomic<size_t> miss_count{0};
+static std::atomic<size_t> part_count{0};
+static std::atomic<size_t> copy_count{0};
+static std::atomic<size_t> last_print_time{0};
+
+void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
+{
+    if (next_pack_id >= start_pack_id + pack_count)
+    {
+        stale_count.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    auto itr = cached_cols.find(col_id);
+    if (itr == cached_cols.end())
+    {
+        return;
+    }
+    auto & mtx = itr->second.mtx;
+    auto & packs = itr->second.packs;
+    std::lock_guard lock(mtx);
+    auto & value = packs[start_pack_id];
+    if (value.pack_count < pack_count)
+    {
+        add_count.fetch_add(1, std::memory_order_relaxed);
+        value.pack_count = pack_count;
+        value.col = col;
+    }
+}
+
+bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col)
+{
+    auto t = ::time(nullptr);
+    if (t - last_print_time.load() > 5)
+    {
+        last_print_time.store(t);
+        auto sc = stale_count.load(std::memory_order_relaxed);
+        auto ac = add_count.load(std::memory_order_relaxed);
+        auto hc = hit_count.load(std::memory_order_relaxed);
+        auto mc = miss_count.load(std::memory_order_relaxed);
+        auto pc = part_count.load(std::memory_order_relaxed);
+        auto cc = copy_count.load(std::memory_order_relaxed);
+        LOG_FMT_DEBUG(log, "stale_count {} add_count {} add_ratio {} hit_count {} miss_count {} part_count {} copy_count {} hit_ratio {}",
+            sc, ac, ac * 1.0 / (sc + ac), hc, mc, pc, cc, (hc + cc) * 1.0 / (hc + mc + pc + cc));
+    }
+    auto itr = cached_cols.find(col_id);
+    if (itr == cached_cols.end())
+    {
+        return false;
+    }
+    auto & mtx = itr->second.mtx;
+    auto & packs = itr->second.packs;
+    std::lock_guard lock(mtx);
+    auto target = packs.find(start_pack_id);
+    if (target == packs.end())
+    {
+        miss_count.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+    if (target->second.pack_count < pack_count)
+    {
+        part_count.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+
+    if (target->second.pack_count == pack_count)
+    {
+        hit_count.fetch_add(1, std::memory_order_relaxed);
+        col = target->second.col;
+    }
+    else
+    {
+        copy_count.fetch_add(1, std::memory_order_relaxed);
+        auto data_type = dmfile->getColumnStat(col_id).type;
+        auto column = data_type->createColumn();
+        column->insertRangeFrom(*(target->second.col), 0, read_rows);
+        col = std::move(column);
+    }
+
+    //delCachedPacks(packs, next_pack_id);
+
+    return true;
+}
+
+void DMFileReader::delCachedPacks(std::map<size_t, CachedPackInfo> & packs, size_t pack_id)
+{
+    for (auto itr = packs.begin(); itr != packs.end(); )
+    {
+        if (itr->first + itr->second.pack_count <= pack_id)
+        {
+            itr = packs.erase(itr);
+        }
+        else
+        {
+            break;
+        }
+    }
+}
 } // namespace DM
 } // namespace DB
