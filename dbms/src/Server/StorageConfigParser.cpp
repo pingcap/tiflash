@@ -18,7 +18,6 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/StorageConfigParser.h>
 #include <common/logger_useful.h>
-#include <fmt/core.h>
 
 #include <set>
 #include <sstream>
@@ -53,7 +52,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     auto get_checked_qualified_array = [log](const std::shared_ptr<cpptoml::table> table, const char * key) -> cpptoml::option<Strings> {
         auto throw_invalid_value = [log, key]() {
             String error_msg
-                = fmt::format("The configuration \"storage.{}\" should be an array of strings. Please check your configuration file.", key);
+                = String("The configuration \"storage.") + key + "\" should be an array of strings. Please check your configuration file.";
             LOG_ERROR(log, error_msg);
             throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         };
@@ -92,11 +91,9 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     }
     if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
     {
-        String error_msg = fmt::format("The array size of \"storage.main.dir\"[size={}] "
-                                       "is not equal to \"storage.main.capacity\"[size={}]. "
-                                       "Please check your configuration file.",
-            main_data_paths.size(),
-            main_capacity_quota.size());
+        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(main_data_paths.size())
+            + "] is not equal to \"storage.main.capacity\"[size=" + toString(main_capacity_quota.size())
+            + "]. Please check your configuration file.";
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
@@ -126,11 +123,9 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     }
     if (!latest_capacity_quota.empty() && latest_capacity_quota.size() != latest_data_paths.size())
     {
-        String error_msg = fmt::format("The array size of \"storage.latest.dir\"[size={}] "
-                                       "is not equal to \"storage.latest.capacity\"[size={}]. "
-                                       "Please check your configuration file.",
-            latest_data_paths.size(),
-            latest_capacity_quota.size());
+        String error_msg = "The array size of \"storage.latest.dir\"[size=" + toString(latest_data_paths.size())
+            + "] is not equal to \"storage.latest.capacity\"[size=" + toString(latest_capacity_quota.size())
+            + "]. Please check your configuration file.";
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
@@ -161,30 +156,6 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
         path = getNormalizedPath(path);
         LOG_INFO(log, "Raft data candidate path: " << path);
     }
-}
-
-void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logger * log)
-{
-    std::istringstream ss(storage_section);
-    cpptoml::parser p(ss);
-    auto table = p.parse();
-
-    if (table->contains("bg_task_io_rate_limit"))
-    {
-        LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
-    }
-
-    if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
-    {
-        format_version = *version;
-    }
-
-    if (auto lazily_init = table->get_qualified_as<Int32>("lazily_init_store"); lazily_init)
-    {
-        lazily_init_store = (*lazily_init != 0);
-    }
-
-    LOG_INFO(log, fmt::format("format_version {} lazily_init_store {}", format_version, lazily_init_store));
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const
@@ -279,17 +250,12 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
     // Always try to parse storage miscellaneous configuration when [storage] section exist.
     if (config.has("storage"))
     {
-        storage_config.parseMisc(config.getString("storage"), log);
-    }
-
-    if (config.has("storage.main"))
-    {
         if (config.has("path"))
             LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
         if (config.has("capacity"))
             LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
 
-        storage_config.parseStoragePath(config.getString("storage"), log);
+        storage_config.parse(config.getString("storage"), log);
 
         if (config.has("raft.kvstore_path"))
         {

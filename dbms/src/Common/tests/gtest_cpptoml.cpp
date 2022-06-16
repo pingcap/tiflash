@@ -1,7 +1,6 @@
 #include <Common/Config/cpptoml.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
-#include <fmt/format.h>
 
 #include <sstream>
 
@@ -32,7 +31,7 @@ c = 123.45
     for (size_t i = 0; i < failure_tests.size(); ++i)
     {
         const auto & test_case = failure_tests[i];
-        SCOPED_TRACE(fmt::format("[index={}] [content={}]", i, test_case));
+        SCOPED_TRACE("[index=" + std::to_string(i) + "] [content=" + test_case + "]");
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         std::istringstream ss(test_case);
@@ -71,7 +70,7 @@ c = [123, 456]
     for (size_t i = 0; i < failure_tests.size(); ++i)
     {
         const auto & test_case = failure_tests[i];
-        SCOPED_TRACE(fmt::format("[index={}] [content={}]", i, test_case));
+        SCOPED_TRACE("[index=" + std::to_string(i) + "] [content=" + test_case + "]");
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         std::istringstream ss(test_case);
@@ -114,7 +113,7 @@ c = []
     for (size_t i = 0; i < failure_tests.size(); ++i)
     {
         const auto & test_case = failure_tests[i];
-        SCOPED_TRACE(fmt::format("[index={}] [content={}]", i, test_case));
+        SCOPED_TRACE("[index=" + std::to_string(i) + "] [content=" + test_case + "]");
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         std::istringstream ss(test_case);
