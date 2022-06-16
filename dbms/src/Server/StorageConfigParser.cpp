@@ -85,7 +85,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     if (auto main_capacity = table->get_qualified_array_of<int64_t>("main.capacity"); main_capacity)
     {
         for (const auto & c : *main_capacity)
-            main_capacity_quota.emplace_back((size_t)c);
+            main_capacity_quota.emplace_back(static_cast<size_t>(c));
     }
     if (main_data_paths.empty())
     {
@@ -118,7 +118,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     if (auto latest_capacity = table->get_qualified_array_of<int64_t>("latest.capacity"); latest_capacity)
     {
         for (const auto & c : *latest_capacity)
-            latest_capacity_quota.emplace_back((size_t)c);
+            latest_capacity_quota.emplace_back(static_cast<size_t>(c));
     }
     // If it is empty, use the same dir as "main.dir"
     if (latest_data_paths.empty())
@@ -158,11 +158,11 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
             kvstore_data_path.emplace_back(std::move(path));
         }
     }
-    for (size_t i = 0; i < kvstore_data_path.size(); ++i)
+    for (auto & path : kvstore_data_path)
     {
         // normalized
-        kvstore_data_path[i] = getNormalizedPath(kvstore_data_path[i]);
-        LOG_INFO(log, "Raft data candidate path: " << kvstore_data_path[i]);
+        path = getNormalizedPath(path);
+        LOG_FMT_INFO(log, "Raft data candidate path: {}", path);
     }
 }
 
@@ -221,9 +221,9 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
             ErrorCodes::INVALID_CONFIG_PARAMETER);
     Strings all_normal_path;
     Poco::StringTokenizer string_tokens(paths, ",");
-    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    for (const auto & string_token : string_tokens)
     {
-        all_normal_path.emplace_back(getNormalizedPath(*it));
+        all_normal_path.emplace_back(getNormalizedPath(string_token));
     }
 
     // If you set `path_realtime_mode` to `true` and multiple directories are deployed in the path, the latest data is stored in the first directory and older data is stored in the rest directories.
@@ -357,26 +357,26 @@ void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, Poco:
     cpptoml::parser p(ss);
     auto config = p.parse();
 
-    auto readConfig = [&](const std::string & name, auto & value) {
+    auto read_config = [&](const std::string & name, auto & value) {
         if (auto p = config->get_qualified_as<typename std::remove_reference<decltype(value)>::type>(name); p)
         {
             value = *p;
         }
     };
 
-    readConfig("max_bytes_per_sec", max_bytes_per_sec);
-    readConfig("max_read_bytes_per_sec", max_read_bytes_per_sec);
-    readConfig("max_write_bytes_per_sec", max_write_bytes_per_sec);
-    readConfig("foreground_write_weight", fg_write_weight);
-    readConfig("background_write_weight", bg_write_weight);
-    readConfig("foreground_read_weight", fg_read_weight);
-    readConfig("background_read_weight", bg_read_weight);
-    readConfig("emergency_pct", emergency_pct);
-    readConfig("high_pct", high_pct);
-    readConfig("medium_pct", medium_pct);
-    readConfig("tune_base", tune_base);
-    readConfig("min_bytes_per_sec", min_bytes_per_sec);
-    readConfig("auto_tune_sec", auto_tune_sec);
+    read_config("max_bytes_per_sec", max_bytes_per_sec);
+    read_config("max_read_bytes_per_sec", max_read_bytes_per_sec);
+    read_config("max_write_bytes_per_sec", max_write_bytes_per_sec);
+    read_config("foreground_write_weight", fg_write_weight);
+    read_config("background_write_weight", bg_write_weight);
+    read_config("foreground_read_weight", fg_read_weight);
+    read_config("background_read_weight", bg_read_weight);
+    read_config("emergency_pct", emergency_pct);
+    read_config("high_pct", high_pct);
+    read_config("medium_pct", medium_pct);
+    read_config("tune_base", tune_base);
+    read_config("min_bytes_per_sec", min_bytes_per_sec);
+    read_config("auto_tune_sec", auto_tune_sec);
 
     use_max_bytes_per_sec = (max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0);
 
