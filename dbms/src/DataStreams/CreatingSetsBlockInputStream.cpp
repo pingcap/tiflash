@@ -147,15 +147,13 @@ void CreatingSetsBlockInputStream::createAll()
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
-    auto log_msg = fmt::format("{} for task {}",
-                               subquery.set ? "Creating set. " : subquery.join ? "Creating join. "
-                                   : subquery.table                            ? "Filling temporary table. "
-                                                                               : "null subquery",
-                               mpp_task_id.toString());
     Stopwatch watch;
     try
     {
-        LOG_FMT_DEBUG(log, "{}", log_msg);
+        LOG_DEBUG(log,
+            (subquery.set ? "Creating set. " : "")
+                << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
+                << std::to_string(mpp_task_id));
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
