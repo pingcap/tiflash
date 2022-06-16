@@ -13,6 +13,10 @@ namespace kvrpcpb
 class ReadIndexResponse;
 class ReadIndexRequest;
 } // namespace kvrpcpb
+namespace raft_serverpb
+{
+class RegionLocalState;
+}
 
 namespace DB
 {
@@ -28,8 +32,7 @@ struct EngineStoreServerWrap
     std::atomic<EngineStoreServerStatus> status{EngineStoreServerStatus::Idle};
 };
 
-using BatchReadIndexRes = std::unique_ptr<std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>>;
-static_assert(std::is_same_v<BatchReadIndexRes::pointer, BatchReadIndexRes::element_type *>);
+using BatchReadIndexRes = std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>;
 
 struct FileEncryptionInfo;
 
@@ -54,6 +57,7 @@ struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
     FileEncryptionInfo linkFile(const std::string &, const std::string &) const;
     kvrpcpb::ReadIndexResponse readIndex(const kvrpcpb::ReadIndexRequest &) const;
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &, uint64_t) const;
+    raft_serverpb::RegionLocalState getRegionLocalState(uint64_t region_id) const;
 };
 
 extern "C" {
@@ -72,8 +76,8 @@ RawCppPtr PreHandleSnapshot(
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
-void GcRawCppPtr(EngineStoreServerWrap *, void * ptr, RawCppPtrType type);
-RawVoidPtr GenBatchReadIndexRes(uint64_t cap);
-void InsertBatchReadIndexResp(RawVoidPtr, BaseBuffView, uint64_t);
+void GcRawCppPtr(void * ptr, RawCppPtrType type);
+void SetPBMsByBytes(MsgPBType type, RawVoidPtr ptr, BaseBuffView view);
 }
+
 } // namespace DB
