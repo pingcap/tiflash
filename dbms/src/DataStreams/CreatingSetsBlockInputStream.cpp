@@ -23,9 +23,10 @@ extern const int SET_SIZE_LIMIT_EXCEEDED;
 }
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
-    std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-    const SizeLimits & network_transfer_limits, Int64 mpp_task_id_)
-    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_)
+    std::vector<SubqueriesForSets> && subqueries_for_sets_list_, const SizeLimits & network_transfer_limits, Int64 mpp_task_id_)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)),
+      network_transfer_limits(network_transfer_limits),
+      mpp_task_id(mpp_task_id_)
 {
     init(input);
 }
@@ -91,7 +92,7 @@ void CreatingSetsBlockInputStream::createAll()
     {
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
-            for (auto &elem : subqueries_for_sets)
+            for (auto & elem : subqueries_for_sets)
             {
                 if (elem.second.join)
                     elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
@@ -107,7 +108,8 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
+                    workers.push_back(
+                        std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
@@ -137,6 +139,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
     Stopwatch watch;
     try
     {
+        current_memory_tracker = memory_tracker;
         LOG_DEBUG(log,
             (subquery.set ? "Creating set. " : "")
                 << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
