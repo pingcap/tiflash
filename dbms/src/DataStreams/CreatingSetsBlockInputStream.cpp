@@ -159,7 +159,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
         {
             if (isCancelled())
             {
-                LOG_FMT_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
+                LOG_DEBUG(log, "Query was cancelled during set / join or temporary table creation.");
                 return;
             }
 
