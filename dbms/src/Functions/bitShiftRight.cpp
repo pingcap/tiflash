@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Functions/FunctionBinaryArithmetic.h>
+#include <_types/_uint64_t.h>
 
 #include <limits>
 
@@ -40,7 +41,7 @@ struct BitShiftRightImpl<A, B, false>
         {
             return static_cast<Result>(0);
         }
-        return static_cast<Result>(a) >> static_cast<Result>(b);
+        return static_cast<Result>(a) >> static_cast<uint64_t>(b);
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
