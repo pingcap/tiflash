@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Functions/FunctionBinaryArithmetic.h>
+#include <common/types.h>
 
 #include <limits>
-#include <common/types.h>
 
 namespace DB
 {
@@ -41,7 +41,7 @@ struct BitShiftRightImpl<A, B, false>
         {
             return static_cast<Result>(0);
         }
-        return static_cast<Result>(a) >> static_cast<UInt64>(b);
+        return static_cast<UInt64>(a) >> static_cast<UInt64>(b);
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
