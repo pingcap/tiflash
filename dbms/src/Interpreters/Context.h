@@ -380,7 +380,9 @@ public:
     bool useL0Opt() const;
 
     BackgroundProcessingPool & getBackgroundPool();
+    BackgroundProcessingPool & initializeBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBlockableBackgroundPool();
+    BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 
@@ -505,7 +507,7 @@ private:
 class SessionCleaner
 {
 public:
-    SessionCleaner(Context & context_)
+    explicit SessionCleaner(Context & context_)
         : context{context_}
     {}
     ~SessionCleaner();

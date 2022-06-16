@@ -24,6 +24,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
+#include <thread>
+
 namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
@@ -38,6 +40,10 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
+
+    // initialize background & blockable background thread pool
+    global_context->initializeBackgroundPool(std::thread::hardware_concurrency() / 4);
+    global_context->initializeBlockableBackgroundPool(std::thread::hardware_concurrency() / 4);
 
     // Theses global variables should be initialized by the following order
     // 1. capacity
