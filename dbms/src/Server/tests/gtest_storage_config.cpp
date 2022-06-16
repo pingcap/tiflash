@@ -1,10 +1,13 @@
+#define private public // hack for test
+#include <Storages/PathCapacityMetrics.h>
+#undef private
+
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/TOMLConfiguration.h>
 #include <Interpreters/Quota.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/StorageConfigParser.h>
-#include <Storages/PathCapacityMetrics.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 /// Suppress gcc warning: ‘*((void*)&<anonymous> +4)’ may be used uninitialized in this function

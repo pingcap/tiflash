@@ -47,9 +47,7 @@ private:
 
         CapacityInfo() = default;
         CapacityInfo(String p, uint64_t c) : path(std::move(p)), capacity_bytes(c) {}
-        CapacityInfo(const CapacityInfo & rhs)
-            : path(rhs.path), capacity_bytes(rhs.capacity_bytes), used_bytes(rhs.used_bytes.load())
-        {}
+        CapacityInfo(const CapacityInfo & rhs) : path(rhs.path), capacity_bytes(rhs.capacity_bytes), used_bytes(rhs.used_bytes.load()) {}
     };
 
     // Max quota bytes can be use for this TiFlash instance.
