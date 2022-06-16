@@ -1022,7 +1022,7 @@ Block Aggregator::prepareBlockAndFill(
             aggregate_columns[i] = header.getByName(aggregate_column_name).type->createColumn();
 
             /// The ColumnAggregateFunction column captures the shared ownership of the arena with the aggregate function states.
-            ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
+            auto & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
 
             for (auto & pool : data_variants.aggregates_pools)
                 column_aggregate_func.addArena(pool);
@@ -1508,7 +1508,7 @@ public:
 
     Block getHeader() const override { return aggregator.getHeader(final); }
 
-    ~MergingAndConvertingBlockInputStream()
+    ~MergingAndConvertingBlockInputStream() override
     {
         LOG_FMT_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Waiting for threads to finish");
 

@@ -398,7 +398,7 @@ private:
             if (entry_or_del.isEntry() && it->second->type == EditRecordType::VAR_ENTRY)
             {
                 (void)blob_store;
-                try
+                tryA
                 {
                     PageIDAndEntryV3 to_read_entry;
                     const PageEntryV3 & entry = entry_or_del.entry;
