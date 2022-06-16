@@ -101,5 +101,4 @@ inline bool mulOverflow(__int128 x, __int128 y, __int128 & res)
 
     return res / x != y; /// whether overflow int128
 }
-
 } // namespace common
