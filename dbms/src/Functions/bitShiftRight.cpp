@@ -42,8 +42,8 @@ struct BitShiftRightImpl<A, B, false>
         {
             return static_cast<Result>(0);
         }
-#pragma GCC diagnostic pop
         return static_cast<Result>(a) >> static_cast<Result>(b);
+#pragma GCC diagnostic pop
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
