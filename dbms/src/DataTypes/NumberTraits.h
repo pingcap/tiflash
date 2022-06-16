@@ -276,8 +276,8 @@ struct ResultOfAbs<Decimal<T>>
     using Type = Decimal<T>;
 };
 
-/** For bitwise operations, an unsigned integer is obtained with number of bits is equal to the maximum of the arguments.
-  * Note that MySQL handle only unsigned 64-bit integer argument and result values for bit operations prior to MySQL 8.0.
+/** For bitwise operations, an unsigned int64 integer is obtained.
+  * Note that MySQL handles only unsigned 64-bit integer argument and result values.
     */
 template <typename A, typename B>
 struct ResultOfBit
@@ -285,7 +285,7 @@ struct ResultOfBit
     using Type = typename Construct<
         false,
         false,
-        std::is_floating_point_v<A> || std::is_floating_point_v<B> ? 8 : max(sizeof(A), sizeof(B))>::Type;
+        8>::Type;
 };
 
 template <typename A>
