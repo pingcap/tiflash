@@ -69,7 +69,9 @@ struct MockReceiverContext
             : queue(queue_)
         {}
 
-        void initialize() const {}
+        void initialize() const
+        {
+        }
 
         bool read(PacketPtr & packet [[maybe_unused]]) const
         {
@@ -105,7 +107,8 @@ struct MockReceiverContext
         const std::vector<tipb::FieldType> & field_types_)
         : queues(queues_)
         , field_types(field_types_)
-    {}
+    {
+    }
 
     void fillSchema(DAGSchema & schema) const
     {
@@ -220,8 +223,8 @@ struct MockFixedRowsBlockInputStream : public IProfilingBlockInputStream
     }
 };
 
-Block makeBlock(int row_num);
-std::vector<Block> makeBlocks(int block_num, int row_num);
+Block makeBlock(int row_num, bool skew = false);
+std::vector<Block> makeBlocks(int block_num, int row_num, bool skew = false);
 mpp::MPPDataPacket makePacket(ChunkCodecStream & codec, int row_num);
 std::vector<PacketPtr> makePackets(ChunkCodecStream & codec, int packet_num, int row_num);
 std::vector<PacketQueuePtr> makePacketQueues(int source_num, int queue_size);
@@ -234,17 +237,18 @@ struct ReceiverHelper
 {
     const int concurrency;
     const int source_num;
+    const uint32_t fine_grained_shuffle_stream_count;
     tipb::ExchangeReceiver pb_exchange_receiver;
     std::vector<tipb::FieldType> fields;
     mpp::TaskMeta task_meta;
     std::vector<PacketQueuePtr> queues;
     std::shared_ptr<Join> join_ptr;
 
-    explicit ReceiverHelper(int concurrency_, int source_num_);
+    explicit ReceiverHelper(int concurrency_, int source_num_, uint32_t fine_grained_shuffle_stream_count_);
     MockExchangeReceiverPtr buildReceiver();
     std::vector<BlockInputStreamPtr> buildExchangeReceiverStream();
+    ;
     BlockInputStreamPtr buildUnionStream();
-    BlockInputStreamPtr buildUnionStreamWithHashJoinBuildStream();
     void finish();
 };
 
@@ -252,6 +256,8 @@ struct SenderHelper
 {
     const int source_num;
     const int concurrency;
+    const uint32_t fine_grained_shuffle_stream_count;
+    const int64_t fine_grained_shuffle_batch_size;
 
     std::vector<PacketQueuePtr> queues;
     std::vector<MockWriterPtr> mock_writers;
@@ -262,6 +268,8 @@ struct SenderHelper
     SenderHelper(
         int source_num_,
         int concurrency_,
+        uint32_t fine_grained_shuffle_stream_count_,
+        int64_t fine_grained_shuffle_batch_size_,
         const std::vector<PacketQueuePtr> & queues_,
         const std::vector<tipb::FieldType> & fields);
 
@@ -283,7 +291,8 @@ public:
                     std::shared_ptr<SenderHelper> & sender_helper,
                     BlockInputStreamPtr sender_stream);
 
-    std::vector<Block> input_blocks;
+    std::vector<Block> uniform_blocks;
+    std::vector<Block> skew_blocks;
 };
 
 
