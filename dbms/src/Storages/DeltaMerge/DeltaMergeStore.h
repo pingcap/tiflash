@@ -493,7 +493,8 @@ private:
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,
                                           size_t expected_tasks_count = 1,
-                                          const SegmentIdSet & read_segments = {});
+                                          const SegmentIdSet & read_segments = {},
+                                          bool try_split_task = true);
 
 private:
     void dropAllSegments(bool keep_first_segment);

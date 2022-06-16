@@ -64,6 +64,8 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -1333,6 +1335,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto cluster_config = getClusterConfig(security_config, raft_config);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
+    }
+
+    // Initialize the thread pool of storage before the storage engine is initialized.
+    LOG_FMT_INFO(log, "dt_use_read_thread {}", global_context->getSettingsRef().dt_use_read_thread);
+    if (global_context->getSettingsRef().dt_use_read_thread)
+    {
+        DM::SegmentReaderPoolManager::init(log);
+        DM::SegmentReadTaskScheduler::instance();
     }
 
     {

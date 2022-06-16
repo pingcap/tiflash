@@ -265,6 +265,7 @@ DMFileReader::DMFileReader(
         };
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
+        col_data_cache.addColumn(cd.id);
     }
 }
 
@@ -304,8 +305,10 @@ Block DMFileReader::read()
 
     const auto & use_packs = pack_filter.getUsePacks();
     if (next_pack_id >= use_packs.size())
+    {
+        LOG_FMT_DEBUG(log, "dmfile {} cache stat => {}", dmfile->fileId(), col_data_cache.statString());
         return {};
-
+    }
     // Find max continuing rows we can read.
     size_t start_pack_id = next_pack_id;
     // When single_file_mode is true, or read_one_pack_every_time is true, we can just read one pack every time.
@@ -440,7 +443,9 @@ Block DMFileReader::read()
                                 {
                                     rows_count += pack_stats[cursor].rows;
                                 }
-                                readFromDisk(cd, column, range.first, rows_count, skip_packs_by_column[i], single_file_mode);
+                                ColumnPtr col;
+                                readColumn(cd, col, range.first, range.second - range.first, rows_count, skip_packs_by_column[i], single_file_mode);
+                                column->insertRangeFrom(*col, 0, col->size());
                                 skip_packs_by_column[i] = 0;
                             }
                             else
@@ -462,8 +467,8 @@ Block DMFileReader::read()
                     else
                     {
                         auto data_type = dmfile->getColumnStat(cd.id).type;
-                        auto column = data_type->createColumn();
-                        readFromDisk(cd, column, start_pack_id, read_rows, skip_packs_by_column[i], single_file_mode);
+                        ColumnPtr column;
+                        readColumn(cd, column, start_pack_id, read_packs, read_rows, skip_packs_by_column[i], single_file_mode);
                         auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
 
                         res.insert(ColumnWithTypeAndName{std::move(converted_column), cd.type, cd.name, cd.id});
@@ -534,5 +539,41 @@ void DMFileReader::readFromDisk(
     }
 }
 
+void DMFileReader::readColumn(ColumnDefine & column_define,
+                              ColumnPtr & column,
+                              size_t start_pack_id,
+                              size_t pack_count,
+                              size_t read_rows,
+                              size_t skip_packs,
+                              [[maybe_unused]] bool force_seek)
+{
+    if (!getCachedPacks(column_define.id, start_pack_id, pack_count, read_rows, column))
+    {
+        auto data_type = dmfile->getColumnStat(column_define.id).type;
+        auto col = data_type->createColumn();
+        readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, true /*force_seek*/);
+        column = std::move(col);
+    }
+    DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
+}
+
+void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
+{
+    if (next_pack_id >= start_pack_id + pack_count)
+    {
+        col_data_cache.addStale();
+    }
+    else
+    {
+        col_data_cache.add(col_id, start_pack_id, pack_count, col);
+    }
+}
+
+bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col)
+{
+    auto found = col_data_cache.get(col_id, start_pack_id, pack_count, read_rows, col, dmfile->getColumnStat(col_id).type);
+    col_data_cache.del(col_id, next_pack_id);
+    return found;
+}
 } // namespace DM
 } // namespace DB
