@@ -1,12 +1,12 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 #include <cpptoml.h>
+#include <fmt/format.h>
 
 #include <sstream>
 
 namespace DB::tests
 {
-
 TEST(CPPTomlTest, ContainsQualifiedArray)
 {
     auto * log = &Poco::Logger::get("CPPTomlTest");
@@ -33,7 +33,7 @@ c = 123.45
     {
         const auto & test_case = failure_tests[i];
         SCOPED_TRACE(fmt::format("[index={}] [content={}]", i, test_case));
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         std::istringstream ss(test_case);
         cpptoml::parser p(ss);
@@ -72,7 +72,7 @@ c = [123, 456]
     {
         const auto & test_case = failure_tests[i];
         SCOPED_TRACE(fmt::format("[index={}] [content={}]", i, test_case));
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         std::istringstream ss(test_case);
         cpptoml::parser p(ss);
@@ -115,7 +115,7 @@ c = []
     {
         const auto & test_case = failure_tests[i];
         SCOPED_TRACE(fmt::format("[index={}] [content={}]", i, test_case));
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         std::istringstream ss(test_case);
         cpptoml::parser p(ss);
