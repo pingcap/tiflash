@@ -304,11 +304,11 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
                 LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check \"storage.raft.dir\" for new style.");
                 kvstore_paths.clear();
                 kvstore_paths.emplace_back(getNormalizedPath(deprecated_kvstore_path));
-                for (size_t i = 0; i < kvstore_paths.size(); ++i)
+                for (auto & kvstore_path : kvstore_paths)
                 {
                     LOG_WARNING(log,
                                 "Raft data candidate path: "
-                                    << kvstore_paths[i] << ". The path is overwritten by deprecated configuration for backward compatibility.");
+                                    << kvstore_path << ". The path is overwritten by deprecated configuration for backward compatibility.");
                 }
             }
         }
@@ -325,12 +325,11 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
             Poco::trimInPlace(capacities);
             Poco::StringTokenizer string_tokens(capacities, ",");
             size_t num_token = 0;
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); ++it)
+            for (const auto & string_token : string_tokens)
             {
                 if (num_token == 0)
                 {
-                    const std::string & s = *it;
-                    global_capacity_quota = DB::parse<size_t>(s.data(), s.size());
+                    global_capacity_quota = DB::parse<size_t>(string_token.data(), string_token.size());
                 }
                 num_token++;
             }
