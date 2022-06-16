@@ -133,13 +133,14 @@ void CreatingSetsBlockInputStream::createAll()
         if (!exception_from_workers.empty())
         {
             LOG_ERROR(log,
-                "Creating all tasks of " << std::to_string(mpp_task_id) << " takes " << std::to_string(watch.elapsedSeconds())
-                                         << " sec with exception and rethrow the first of total " << exception_from_workers.size()
-                                         << " exceptions.");            
+                      "Creating all tasks of " << std::to_string(mpp_task_id) << " takes " << std::to_string(watch.elapsedSeconds())
+                                               << " sec with exception and rethrow the first of total " << exception_from_workers.size()
+                                               << " exceptions.");
             std::rethrow_exception(exception_from_workers.front());
         }
         LOG_DEBUG(
-            log, "Creating all tasks of " << std::to_string(mpp_task_id) << " takes " << std::to_string(watch.elapsedSeconds()) << "sec. ");
+            log,
+            "Creating all tasks of " << std::to_string(mpp_task_id) << " takes " << std::to_string(watch.elapsedSeconds()) << "sec. ");
 
         created = true;
     }
@@ -151,9 +152,9 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     try
     {
         LOG_DEBUG(log,
-            (subquery.set ? "Creating set. " : "")
-                << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
-                << std::to_string(mpp_task_id));
+                  (subquery.set ? "Creating set. " : "")
+                      << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
+                      << std::to_string(mpp_task_id));
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
@@ -268,8 +269,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         if (subquery.join)
             subquery.join->setBuildTableState(Join::BuildTableState::FAILED);
         LOG_ERROR(log,
-            "task" << std::to_string(mpp_task_id) << " throw exception: " << getCurrentExceptionMessage(false, true) << " In "
-                   << std::to_string(watch.elapsedSeconds()) << " sec. ");
+                  "task" << std::to_string(mpp_task_id) << " throw exception: " << getCurrentExceptionMessage(false, true) << " In "
+                         << std::to_string(watch.elapsedSeconds()) << " sec. ");
     }
 }
 
