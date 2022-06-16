@@ -31,11 +31,11 @@ struct BitShiftRightImpl<A, B, false>
     static Result apply(A a, B b)
     {
         // It is an undefined behavior for shift operation in c++ that the right operand is greater than
-        // or equal to the number of digits of the bits in the (promoted) shift-expression.
+        // or equal to the number of digits of the bits in the (promoted) left operand.
         // See https://en.cppreference.com/w/cpp/language/operator_arithmetic for details.
         // Note that we only consider unsigned situation here because other types will all be cast
         // to uint64 before shift operation according to DAGExpressionAnalyzerHelper::buildBitwiseFunction.
-        if (static_cast<Result>(b) >= std::numeric_limits<B>::digits)
+        if (static_cast<Result>(b) >= std::numeric_limits<A>::digits)
         {
             return static_cast<Result>(0);
         }
