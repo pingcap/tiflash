@@ -31,6 +31,8 @@ struct BitShiftRightImpl<A, B, false>
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
         // It is an undefined behavior for shift operation in c++ that the right operand is greater than
         // or equal to the number of digits of the bits in the (promoted) left operand.
         // See https://en.cppreference.com/w/cpp/language/operator_arithmetic for details.
@@ -40,6 +42,7 @@ struct BitShiftRightImpl<A, B, false>
         {
             return static_cast<Result>(0);
         }
+#pragma GCC diagnostic pop
         return static_cast<Result>(a) >> static_cast<Result>(b);
     }
     template <typename Result = ResultType>
