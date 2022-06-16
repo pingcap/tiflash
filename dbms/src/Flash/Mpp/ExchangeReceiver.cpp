@@ -130,7 +130,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 recv_msg->source_index = source_index;
                 bool success = reader->read(recv_msg->packet.get());
                 if (!success)
+                {
+                    /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.
+                    returnEmptyMsg(recv_msg);
                     break;
+                }
                 else
                     has_data = true;
                 if (recv_msg->packet->has_error())
@@ -223,7 +227,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg)
 {
-    recv_msg->packet->Clear();
+    if (recv_msg == nullptr)
+        return;
+    if (recv_msg->packet != nullptr)
+        recv_msg->packet->Clear();
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
     res_buffer.pushEmpty(std::move(recv_msg));
