@@ -4,7 +4,7 @@ enable_testing()
 if (TARGET check)
     message (STATUS "Target check already exists")
 else ()
-    include (${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake)
+    include (${TiFlash_SOURCE_DIR}/cmake/add_check.cmake)
 endif ()
 
 install (PROGRAMS clickhouse-test clickhouse-test-server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
