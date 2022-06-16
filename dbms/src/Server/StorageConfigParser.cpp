@@ -43,7 +43,7 @@ static std::string getCanonicalPath(std::string path)
 
 static String getNormalizedPath(const String & s) { return getCanonicalPath(Poco::Path{s}.toString()); }
 
-void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger * log)
+void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
 {
     std::istringstream ss(storage);
     cpptoml::parser p(ss);
