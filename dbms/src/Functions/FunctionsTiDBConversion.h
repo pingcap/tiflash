@@ -798,11 +798,11 @@ struct TiDBConvertToDecimal
         UType scale_mul = getScaleMultiplier<U>(scale);
 
         Int256 scaled_value = static_cast<Int256>(int_value) * static_cast<Int256>(scale_mul);
-        Int256 scaled_max_value = DecimalMaxValue::get(prec);
+        Int256 scaled_max_value = DecimalMaxValue::Get(prec);
 
         if (scaled_value > scaled_max_value || scaled_value < -scaled_max_value)
         {
-            context.getDAGContext()->handleOverflowError("cast to decimal", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast to decimal");
             if (int_value > 0)
                 return static_cast<UType>(scaled_max_value);
             else
