@@ -72,8 +72,7 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
                    global_ctx.getTiFlashMetrics()),
       max_log_page_id(0),
       max_data_page_id(0),
-      max_meta_page_id(0),
-      global_context(global_ctx)
+      max_meta_page_id(0)
 {
 }
 

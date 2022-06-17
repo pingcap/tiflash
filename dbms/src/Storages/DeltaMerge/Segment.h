@@ -116,7 +116,7 @@ public:
 
     bool writeToDisk(DMContext & dm_context, const DeltaPackPtr & pack);
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
-    bool write(DMContext & dm_context, const Block & block); // For test only
+    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
     bool writeRegionSnapshot(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range);
 
@@ -246,6 +246,10 @@ public:
     RowsAndBytes
     getRowsAndBytesInRange(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, const RowKeyRange & check_range, bool is_exact);
 
+    DB::Timestamp getLastCheckGCSafePoint() { return last_check_gc_safe_point.load(std::memory_order_relaxed); }
+
+    void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
+
 private:
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,
@@ -322,6 +326,8 @@ private:
     size_t       rowkey_column_size;
     const PageId segment_id;
     const PageId next_segment_id;
+
+    std::atomic<DB::Timestamp> last_check_gc_safe_point = 0;
 
     const DeltaValueSpacePtr  delta;
     const StableValueSpacePtr stable;

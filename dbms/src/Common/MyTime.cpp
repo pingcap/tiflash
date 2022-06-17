@@ -65,7 +65,8 @@ bool isValidSeperator(char c, int previous_parts)
     if (isPunctuation(c))
         return true;
 
-    return previous_parts == 2 && (c == ' ' || c == 'T');
+    // for https://github.com/pingcap/tics/issues/4036
+    return previous_parts == 2 && (c == 'T' || isWhitespaceASCII(c));
 }
 
 std::vector<String> parseDateFormat(String format)
@@ -508,8 +509,8 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
     bool truncated_or_incorrect = false;
 
-    // noAbsorb tests if can absorb FSP or TZ
-    auto noAbsorb = [](const std::vector<String> & seps) {
+    // no_absorb tests if can absorb FSP or TZ
+    auto no_absorb = [](const std::vector<String> & seps) {
         // if we have more than 5 parts (i.e. 6), the tailing part can't be absorbed
         // or if we only have 1 part, but its length is longer than 4, then it is at least YYMMD, in this case, FSP can
         // not be absorbed, and it will be handled later, and the leading sign prevents TZ from being absorbed, because
@@ -519,7 +520,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
     if (!frac_str.empty())
     {
-        if (!noAbsorb(seps))
+        if (!no_absorb(seps))
         {
             seps.push_back(frac_str);
             frac_str = "";
@@ -530,7 +531,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         // if tz_sign is empty, it's sure that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
         // therefore we could safely skip this branch.
-        if (!noAbsorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
+        if (!no_absorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
         {
             // we can't absorb timezone if there is no separate between tz_hour and tz_minute
             if (!tz_hour.empty())
@@ -555,51 +556,51 @@ Field parseMyDateTime(const String & str, int8_t fsp)
             {
                 case 14: // YYYYMMDDHHMMSS
                 {
-                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     hhmmss = true;
                     break;
                 }
                 case 12: // YYMMDDHHMMSS
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     year = adjustYear(year);
                     hhmmss = true;
                     break;
                 }
                 case 11: // YYMMDDHHMMS
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute, &second); //NOLINT
                     year = adjustYear(year);
                     hhmmss = true;
                     break;
                 }
                 case 10: // YYMMDDHHMM
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 9: // YYMMDDHHM
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%2d%1d", &year, &month, &day, &hour, &minute); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 8: // YYYYMMDD
                 {
-                    std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day);
+                    std::sscanf(seps[0].c_str(), "%4d%2d%2d", &year, &month, &day); //NOLINT
                     break;
                 }
                 case 7: // YYMMDDH
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d%1d", &year, &month, &day, &hour); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
                 case 6: // YYMMDD
                 case 5: // YYMMD
                 {
-                    std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day);
+                    std::sscanf(seps[0].c_str(), "%2d%2d%2d", &year, &month, &day); //NOLINT
                     year = adjustYear(year);
                     break;
                 }
@@ -623,18 +624,18 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                     case 1:
                     case 2:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour);
+                        ret = std::sscanf(frac_str.c_str(), "%2d ", &hour); //NOLINT
                         break;
                     }
                     case 3:
                     case 4:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute);
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d ", &hour, &minute); //NOLINT
                         break;
                     }
                     default:
                     {
-                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second);
+                        ret = std::sscanf(frac_str.c_str(), "%2d%2d%2d ", &hour, &minute, &second); //NOLINT
                         break;
                     }
                 }
@@ -648,7 +649,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                 }
                 else
                 {
-                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0);
+                    truncated_or_incorrect = (std::sscanf(frac_str.c_str(), "%2d ", &second) == 0); //NOLINT
                 }
             }
             if (truncated_or_incorrect)
@@ -943,7 +944,7 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         static auto is_leap_year = [](UInt16 _year) { return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0); };
-        max_day = max_days_in_month[month - 1];
+        max_day = max_days_in_month[month - 1]; // NOLINT
         if (month == 2 && is_leap_year(year))
         {
             max_day = 29;
@@ -1224,13 +1225,8 @@ struct MyDateTimeParser::Context
     // The pos we are parsing from
     size_t pos = 0;
 
-<<<<<<< HEAD
-    Context(StringRef view_) : view(std::move(view_)) {}
-=======
     explicit Context(StringRef view_)
         : view(std::move(view_))
-    {}
->>>>>>> 4b4b8b4240 (Add unittests for str_to_date, fix #3556, #3557 (#3581))
 };
 
 // Try to parse digits with number of `limit` starting from view[pos]
@@ -1279,13 +1275,13 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-    auto skipWhitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
+    auto skip_whitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
         return check_if_end();
     };
-    auto parse_sep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
-        if (skipWhitespaces() == ParseState::END_OF_FILE)
+    auto parse_sep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
+        if (skip_whitespaces() == ParseState::END_OF_FILE)
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1302,7 +1298,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         // hh
         size_t step = 0;
         int32_t hour = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, hour) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || hour > 12 || hour == 0)
@@ -1318,7 +1314,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t minute = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, minute) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || minute > 59)
@@ -1330,7 +1326,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t second = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, second) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || second > 59)
@@ -1339,7 +1335,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += step; // move forward
 
         int meridiem = 0; // 0 - invalid, 1 - am, 2 - pm
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         // "AM"/"PM" must be parsed as a single element
         // "11:13:56a" is an invalid input for "%r".
@@ -1383,13 +1379,13 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-    auto skipWhitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
+    auto skip_whitespaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
         return check_if_end();
     };
-    auto parse_sep = [&temp_pos, &ctx, &skipWhitespaces]() -> ParseState {
-        if (skipWhitespaces() == ParseState::END_OF_FILE)
+    auto parse_sep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
+        if (skip_whitespaces() == ParseState::END_OF_FILE)
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1406,7 +1402,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         // hh
         size_t step = 0;
         int32_t hour = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, hour) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || hour > 23)
@@ -1418,7 +1414,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t minute = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, minute) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || minute > 59)
@@ -1430,7 +1426,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t second = 0;
-        if (state = skipWhitespaces(); state != ParseState::NORMAL)
+        if (state = skip_whitespaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, second) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || second > 59)
@@ -1478,7 +1474,6 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                                 break;
                             }
                         }
-<<<<<<< HEAD
                         if (step == 0)
                             return false;
                         ctx.pos += step;
@@ -1523,150 +1518,10 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                         auto [step, ms] = parseNDigits(ctx.view, ctx.pos, 6);
                         // Empty string is a valid input
                         if (step == 0)
-=======
-                    }
-                    if (step == 0)
-                        return false;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'm':
-                //"%m": Month, numeric (00..12)
-                [[fallthrough]];
-            case 'c':
-            {
-                //"%c": Month, numeric (0..12)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    // To be compatible with TiDB & MySQL, first try to take two digit and parse it as `num`
-                    auto [step, month] = parseNDigits(ctx.view, ctx.pos, 2);
-                    // Then check whether num is valid month
-                    // Note that 0 is valid when sql_mode does not contain NO_ZERO_IN_DATE,NO_ZERO_DATE
-                    if (step == 0 || month > 12)
-                        return false;
-                    time.month = month;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'd': //"%d": Day of the month, numeric (00..31)
-                [[fallthrough]];
-            case 'e': //"%e": Day of the month, numeric (0..31)
-            {
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    auto [step, day] = parseNDigits(ctx.view, ctx.pos, 2);
-                    if (step == 0 || day > 31)
-                        return false;
-                    time.day = day;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'f':
-            {
-                //"%f": Microseconds (000000..999999)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    auto [step, ms] = parseNDigits(ctx.view, ctx.pos, 6);
-                    // Empty string is a valid input
-                    if (step == 0)
-                    {
-                        time.micro_second = 0;
-                        return true;
-                    }
-                    // The suffix '0' can be ignored.
-                    // "9" means 900000
-                    for (size_t i = step; i < 6; i++)
-                    {
-                        ms *= 10;
-                    }
-                    time.micro_second = ms;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'k':
-                //"%k": Hour (0..23)
-                [[fallthrough]];
-            case 'H':
-            {
-                //"%H": Hour (00..23)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    auto [step, hour] = parseNDigits(ctx.view, ctx.pos, 2);
-                    if (step == 0 || hour > 23)
-                        return false;
-                    ctx.state |= MyDateTimeParser::Context::ST_HOUR_0_23;
-                    time.hour = hour;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'l':
-                //"%l": Hour (1..12)
-                [[fallthrough]];
-            case 'I':
-                //"%I": Hour (01..12)
-                [[fallthrough]];
-            case 'h':
-            {
-                //"%h": Hour (01..12)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    auto [step, hour] = parseNDigits(ctx.view, ctx.pos, 2);
-                    if (step == 0 || hour <= 0 || hour > 12)
-                        return false;
-                    ctx.state |= MyDateTimeParser::Context::ST_HOUR_1_12;
-                    time.hour = hour;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'i':
-            {
-                //"%i": Minutes, numeric (00..59)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    auto [step, num] = parseNDigits(ctx.view, ctx.pos, 2);
-                    if (step == 0 || num > 59)
-                        return false;
-                    time.minute = num;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'j':
-            {
-                //"%j": Day of year (001..366)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase &) -> bool {
-                    auto [step, num] = parseNDigits(ctx.view, ctx.pos, 3);
-                    if (step == 0 || num == 0 || num > 366)
-                        return false;
-                    ctx.state |= MyDateTimeParser::Context::ST_DAY_OF_YEAR;
-                    ctx.day_of_year = num;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'M':
-            {
-                //"%M": Month name (January..December)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    auto v = removePrefix(ctx.view, ctx.pos);
-                    size_t step = 0;
-                    for (size_t p = 0; p < 12; p++)
-                    {
-                        if (startsWithCI(v, month_names[p]))
->>>>>>> 4b4b8b4240 (Add unittests for str_to_date, fix #3556, #3557 (#3581))
                         {
                             time.micro_second = 0;
                             return true;
                         }
-<<<<<<< HEAD
                         // The siffix '0' can be ignored.
                         // "9" means 900000
                         while (ms > 0 && ms * 10 < 1000000)
@@ -1801,39 +1656,6 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                         // Check the offset that will visit
                         if (ctx.view.size - ctx.pos < 2)
                             return false;
-=======
-                    }
-                    if (step == 0)
-                        return false;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'S':
-                //"%S": Seconds (00..59)
-                [[fallthrough]];
-            case 's':
-            {
-                //"%s": Seconds (00..59)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    auto [step, second] = parseNDigits(ctx.view, ctx.pos, 2);
-                    if (step == 0 || second > 59)
-                        return false;
-                    time.second = second;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'p':
-            {
-                //"%p": AM or PM
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase &) -> bool {
-                    // Check the offset that will visit
-                    if (ctx.view.size - ctx.pos < 2)
-                        return false;
->>>>>>> 4b4b8b4240 (Add unittests for str_to_date, fix #3556, #3557 (#3581))
 
                         int meridiem = 0; // 0 - invalid, 1 - am, 2 - pm
                         if (toLowerIfAlphaASCII(ctx.view.data[ctx.pos]) == 'a')
