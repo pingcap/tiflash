@@ -24,31 +24,32 @@ int StressWorkload::mainEntry(int argc, char ** argv)
         // we do this to trigger REGISTER_WORKLOAD explicitly.
         void _work_load_register_named_HeavyMemoryCostInGC();
         void (*f)() = _work_load_register_named_HeavyMemoryCostInGC;
-        (void)f;
+        f();
         void _work_load_register_named_HeavyRead();
         f = _work_load_register_named_HeavyRead;
-        (void)f;
+        f();
         void _work_load_register_named_HeavySkewWriteRead();
         f = _work_load_register_named_HeavySkewWriteRead;
-        (void)f;
+        f();
+        ;
         void _work_load_register_named_HeavyWrite();
         f = _work_load_register_named_HeavyWrite;
-        (void)f;
+        f();
         void _work_load_register_named_HighValidBigFileGCWorkload();
         f = _work_load_register_named_HighValidBigFileGCWorkload;
-        (void)f;
+        f();
         void _work_load_register_named_HoldSnapshotsLongTime();
         f = _work_load_register_named_HoldSnapshotsLongTime;
-        (void)f;
+        f();
         void _work_load_register_named_PageStorageInMemoryCapacity();
         f = _work_load_register_named_PageStorageInMemoryCapacity;
-        (void)f;
+        f();
         void _work_load_register_named_NormalWorkload();
         f = _work_load_register_named_NormalWorkload;
-        (void)f;
+        f();
         void _work_load_register_named_ThousandsOfOffset();
         f = _work_load_register_named_ThousandsOfOffset;
-        (void)f;
+        f();
     }
     try
     {
