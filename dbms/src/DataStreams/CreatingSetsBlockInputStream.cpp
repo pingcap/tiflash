@@ -15,16 +15,18 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_in_creating_set_input_stream[];
-}
+extern const char exception_mpp_hash_build[];
+} // namespace FailPoints
 namespace ErrorCodes
 {
 extern const int SET_SIZE_LIMIT_EXCEEDED;
 }
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
-    std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-    const SizeLimits & network_transfer_limits, Int64 mpp_task_id_)
-    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_)
+    std::vector<SubqueriesForSets> && subqueries_for_sets_list_, const SizeLimits & network_transfer_limits, Int64 mpp_task_id_)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)),
+      network_transfer_limits(network_transfer_limits),
+      mpp_task_id(mpp_task_id_)
 {
     init(input);
 }
@@ -90,12 +92,14 @@ void CreatingSetsBlockInputStream::createAll()
     {
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
-            for (auto &elem : subqueries_for_sets)
+            for (auto & elem : subqueries_for_sets)
             {
                 if (elem.second.join)
-                    elem.second.join->setFinishBuildTable(false);
+                    elem.second.join->setBuildTableState(Join::BuildTableState::WAITING);
             }
         }
+
+        Stopwatch watch;
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
             for (auto & elem : subqueries_for_sets)
@@ -104,7 +108,8 @@ void CreatingSetsBlockInputStream::createAll()
                 {
                     if (isCancelledOrThrowIfKilled())
                         return;
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
+                    workers.push_back(
+                        std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
@@ -115,7 +120,15 @@ void CreatingSetsBlockInputStream::createAll()
         }
 
         if (!exception_from_workers.empty())
+        {
+            LOG_ERROR(log,
+                "Creating all tasks of " << std::to_string(mpp_task_id) << " takes " << std::to_string(watch.elapsedSeconds())
+                                         << " sec with exception and rethrow the first of total " << exception_from_workers.size()
+                                         << " exceptions.");
             std::rethrow_exception(exception_from_workers.front());
+        }
+        LOG_DEBUG(
+            log, "Creating all tasks of " << std::to_string(mpp_task_id) << " takes " << std::to_string(watch.elapsedSeconds()) << "sec. ");
 
         created = true;
     }
@@ -123,20 +136,17 @@ void CreatingSetsBlockInputStream::createAll()
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker)
 {
+    Stopwatch watch;
     try
     {
-
         current_memory_tracker = memory_tracker;
         LOG_DEBUG(log,
             (subquery.set ? "Creating set. " : "")
                 << (subquery.join ? "Creating join. " : "") << (subquery.table ? "Filling temporary table. " : "") << " for task "
                 << std::to_string(mpp_task_id));
-        Stopwatch watch;
-
         BlockOutputStreamPtr table_out;
         if (subquery.table)
             table_out = subquery.table->write({}, {});
-
 
         bool done_with_set = !subquery.set;
         bool done_with_join = !subquery.join;
@@ -194,7 +204,10 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
 
 
         if (subquery.join)
-            subquery.join->setFinishBuildTable(true);
+        {
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_build);
+            subquery.join->setBuildTableState(Join::BuildTableState::SUCCEED);
+        }
 
         if (table_out)
             table_out->writeSuffix();
@@ -235,10 +248,15 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTr
             LOG_DEBUG(log, "Subquery has empty result for task " << std::to_string(mpp_task_id) << ".");
         }
     }
-    catch (std::exception & e)
+    catch (...)
     {
         std::unique_lock<std::mutex> lock(exception_mutex);
         exception_from_workers.push_back(std::current_exception());
+        if (subquery.join)
+            subquery.join->setBuildTableState(Join::BuildTableState::FAILED);
+        LOG_ERROR(log,
+            "task" << std::to_string(mpp_task_id) << " throw exception: " << getCurrentExceptionMessage(false, true) << " In "
+                   << std::to_string(watch.elapsedSeconds()) << " sec. ");
     }
 }
 
