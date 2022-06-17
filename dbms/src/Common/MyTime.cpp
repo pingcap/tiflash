@@ -1357,7 +1357,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         // hh
         size_t step = 0;
         int32_t hour = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, hour) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || hour > 12 || hour == 0)
@@ -1373,7 +1373,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t minute = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, minute) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || minute > 59)
@@ -1385,7 +1385,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t second = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, second) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || second > 59)
@@ -1394,7 +1394,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += step; // move forward
 
         int meridiem = 0; // 0 - invalid, 1 - am, 2 - pm
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         // "AM"/"PM" must be parsed as a single element
         // "11:13:56a" is an invalid input for "%r".
@@ -1461,7 +1461,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         // hh
         size_t step = 0;
         int32_t hour = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, hour) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || hour > 23)
@@ -1473,7 +1473,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t minute = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, minute) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || minute > 59)
@@ -1485,7 +1485,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
             return state;
 
         int32_t second = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, second) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || second > 59)
