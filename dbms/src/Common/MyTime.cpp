@@ -1227,6 +1227,7 @@ struct MyDateTimeParser::Context
 
     explicit Context(StringRef view_)
         : view(std::move(view_))
+    {}
 };
 
 // Try to parse digits with number of `limit` starting from view[pos]
