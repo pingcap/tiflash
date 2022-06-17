@@ -371,7 +371,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
             }
             else
             {
-                // if thhere is little data in mem, wait until time interval reached threshold.
+                // if there is little data in mem, wait until time interval reached threshold.
                 // use random period so that lots of regions will not be persisted at same time.
                 auto compact_log_period = std::rand() % region_compact_log_period.load(std::memory_order_relaxed); // NOLINT
                 return !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());

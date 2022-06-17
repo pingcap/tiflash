@@ -530,6 +530,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         break;
     }
     case SchemaActionType::SetTiFlashReplica:
+    case SchemaActionType::UpdateTiFlashReplicaStatus:
     {
         applySetTiFlashReplica(db_info, diff.table_id);
         break;
