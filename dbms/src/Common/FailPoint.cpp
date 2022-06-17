@@ -47,7 +47,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(segment_merge_after_ingest_packs)                           \
     M(force_formal_page_file_not_exists)                          \
     M(force_legacy_or_checkpoint_page_file_exists)                \
-    M(exception_in_creating_set_input_stream)
+    M(exception_in_creating_set_input_stream)                     \
+    M(exception_when_read_from_log)                               \
+    M(exception_mpp_hash_build)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(force_set_page_file_write_errno)                       \
@@ -95,7 +97,7 @@ class FailPointChannel : private boost::noncopyable
 {
 public:
     // wake up all waiting threads when destroy
-    ~FailPointChannel() { notify_all(); }
+    ~FailPointChannel() { notifyAll(); }
 
     void wait()
     {
@@ -103,7 +105,7 @@ public:
         cv.wait(lock);
     }
 
-    void notify_all()
+    void notifyAll()
     {
         std::unique_lock lock(m);
         cv.notify_all();
@@ -159,7 +161,7 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
     {
         /// can not rely on deconstruction to do the notify_all things, because
         /// if someone wait on this, the deconstruct will never be called.
-        iter->second->notify_all();
+        iter->second->notifyAll();
         fail_point_wait_channels.erase(iter);
     }
     fiu_disable(fail_point_name.c_str());
