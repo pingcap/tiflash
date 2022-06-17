@@ -93,7 +93,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 
     Int64 send_task_id = -1;
     Int64 recv_task_id = task_meta.task_id();
-
+    static const Int32 MAX_RETRY_TIMES = 10;
     try
     {
         auto req = rpc_context->makeRequest(source_index, pb_exchange_receiver, task_meta);
@@ -101,7 +101,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
         String req_info = "tunnel" + std::to_string(send_task_id) + "+" + std::to_string(recv_task_id);
         LOG_DEBUG(log, "begin start and read : " << req.debugString());
         auto status = RPCContext::getStatusOK();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < MAX_RETRY_TIMES; i++)
         {
             auto reader = rpc_context->makeReader(req);
             reader->initialize();
@@ -130,7 +130,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
                 recv_msg->source_index = source_index;
                 bool success = reader->read(recv_msg->packet.get());
                 if (!success)
+                {
+                    /// if the first read fails, this for(,,) may retry later, so recv_msg should be returned.
+                    returnEmptyMsg(recv_msg);
                     break;
+                }
                 else
                     has_data = true;
                 if (recv_msg->packet->has_error())
@@ -167,9 +171,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
             }
             else
             {
+                bool retriable = !has_data && i + 1 < MAX_RETRY_TIMES;
                 LOG_WARNING(
                     log,
-                    "EstablishMPPConnectionRequest meets rpc fail. Err msg is: " << status.error_message() << " req info " << req_info);
+                    "EstablishMPPConnectionRequest meets rpc fail for req " << req_info << ". Err code = " << status.error_code()
+                                                                            << ", err msg = " << status.error_message() << ", retriable = " << retriable);
                 // if we have received some data, we should not retry.
                 if (has_data)
                     break;
@@ -221,7 +227,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(size_t source_index)
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::returnEmptyMsg(std::shared_ptr<ReceivedMessage> & recv_msg)
 {
-    recv_msg->packet->Clear();
+    if (recv_msg == nullptr)
+        return;
+    if (recv_msg->packet != nullptr)
+        recv_msg->packet->Clear();
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [&] { return res_buffer.canPushEmpty(); });
     res_buffer.pushEmpty(std::move(recv_msg));

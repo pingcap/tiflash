@@ -1,6 +1,6 @@
 option (USE_INTERNAL_POCO_LIBRARY "Set to FALSE to use system poco library instead of bundled" ${NOT_UNBUNDLED})
 
-if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/poco/CMakeLists.txt")
+if (NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/poco/CMakeLists.txt")
    if (USE_INTERNAL_POCO_LIBRARY)
       message (WARNING "submodule contrib/poco is missing. to fix try run: \n git submodule update --init --recursive")
    endif ()
@@ -24,6 +24,7 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
     set (ENABLE_DATA_SQLITE 0 CACHE BOOL "")
     set (ENABLE_DATA_MYSQL 0 CACHE BOOL "")
     set (ENABLE_DATA_POSTGRESQL 0 CACHE BOOL "")
+    set (ENABLE_DATA_ODBC 0 CACHE BOOL "")
     # new after 2.0.0:
     set (POCO_ENABLE_ZIP 0 CACHE BOOL "")
     set (POCO_ENABLE_PAGECOMPILER 0 CACHE BOOL "")
@@ -42,22 +43,21 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
 
     # used in internal compiler
     list (APPEND Poco_INCLUDE_DIRS
-        "${ClickHouse_SOURCE_DIR}/contrib/poco/Foundation/include/"
-        "${ClickHouse_SOURCE_DIR}/contrib/poco/Util/include/"
+        "${TiFlash_SOURCE_DIR}/contrib/poco/Foundation/include/"
+        "${TiFlash_SOURCE_DIR}/contrib/poco/Util/include/"
     )
 
     if (NOT DEFINED POCO_ENABLE_MONGODB OR POCO_ENABLE_MONGODB)
         set (Poco_MongoDB_FOUND 1)
         set (Poco_MongoDB_LIBRARY PocoMongoDB)
-        set (Poco_MongoDB_INCLUDE_DIRS "${ClickHouse_SOURCE_DIR}/contrib/poco/MongoDB/include/")
+        set (Poco_MongoDB_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/poco/MongoDB/include/")
     endif ()
 
     set (Poco_Data_FOUND 1)
-    set (Poco_Data_INCLUDE_DIRS "${ClickHouse_SOURCE_DIR}/contrib/poco/Data/include")
+    set (Poco_Data_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/poco/Data/include")
     set (Poco_Data_LIBRARY PocoData)
 
-    # TODO! fix internal ssl
-    if (OPENSSL_FOUND AND NOT USE_INTERNAL_SSL_LIBRARY)
+    if (OPENSSL_FOUND)
         set (Poco_NetSSL_FOUND 1)
         set (Poco_NetSSL_LIBRARY PocoNetSSL)
         set (Poco_Crypto_LIBRARY PocoCrypto)
@@ -65,8 +65,8 @@ elseif (NOT MISSING_INTERNAL_POCO_LIBRARY)
 
     if (USE_STATIC_LIBRARIES AND USE_INTERNAL_ZLIB_LIBRARY)
         list (APPEND Poco_INCLUDE_DIRS
-            "${ClickHouse_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
-            "${ClickHouse_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
+            "${TiFlash_SOURCE_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
+            "${TiFlash_BINARY_DIR}/contrib/${INTERNAL_ZLIB_NAME}/"
         )
     endif ()
 

@@ -354,21 +354,21 @@ class PathCapcatity : public DB::base::TiFlashStorageTestBasic
         main_data_path = getTemporaryPath() + "/main";
         createIfNotExist(main_data_path);
 
-        lastest_data_path = getTemporaryPath() + "/lastest";
-        createIfNotExist(lastest_data_path);
+        latest_data_path = getTemporaryPath() + "/lastest";
+        createIfNotExist(latest_data_path);
     }
 
     void TearDown() override
     {
         dropDataOnDisk(main_data_path);
-        dropDataOnDisk(lastest_data_path);
+        dropDataOnDisk(latest_data_path);
         TiFlashStorageTestBasic::TearDown();
     }
 
 protected:
     struct statvfs vfs_info;
     std::string main_data_path;
-    std::string lastest_data_path;
+    std::string latest_data_path;
 };
 
 TEST_F(PathCapcatity, SingleDiskSinglePathTest)
@@ -380,7 +380,7 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
 
     // Single disk with single path
     {
-        auto capacity = PathCapacityMetrics(0, {main_data_path}, {capactity}, {lastest_data_path}, {capactity});
+        auto capacity = PathCapacityMetrics(0, {main_data_path}, {capactity}, {latest_data_path}, {capactity});
 
         capacity.addUsedSize(main_data_path, used);
         auto stats = capacity.getFsStats();
@@ -393,7 +393,7 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
         ASSERT_EQ(main_path_stats.used_size, used);
         ASSERT_EQ(main_path_stats.avail_size, capactity - used);
 
-        auto lastest_path_stats = std::get<0>(capacity.getFsStatsOfPath(lastest_data_path));
+        auto lastest_path_stats = std::get<0>(capacity.getFsStatsOfPath(latest_data_path));
         ASSERT_EQ(lastest_path_stats.capacity_size, capactity);
         ASSERT_EQ(lastest_path_stats.used_size, 0);
         ASSERT_EQ(lastest_path_stats.avail_size, capactity);
@@ -407,11 +407,11 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
         createIfNotExist(lastest_data_path1);
 
         // Not use the capacity limit
-        auto capacity = PathCapacityMetrics(0, {main_data_path, main_data_path1}, {capactity * 2, capactity * 2}, {lastest_data_path, lastest_data_path1}, {capactity, capactity});
+        auto capacity = PathCapacityMetrics(0, {main_data_path, main_data_path1}, {capactity * 2, capactity * 2}, {latest_data_path, lastest_data_path1}, {capactity, capactity});
 
         capacity.addUsedSize(main_data_path, used);
         capacity.addUsedSize(main_data_path1, used);
-        capacity.addUsedSize(lastest_data_path, used);
+        capacity.addUsedSize(latest_data_path, used);
 
         auto stats = capacity.getFsStats();
         ASSERT_EQ(stats.capacity_size, capactity * 6);
@@ -425,7 +425,7 @@ TEST_F(PathCapcatity, SingleDiskSinglePathTest)
 
 TEST_F(PathCapcatity, MultiDiskMultiPathTest)
 {
-    MockPathCapacityMetrics capacity = MockPathCapacityMetrics(0, {main_data_path}, {100}, {lastest_data_path}, {100});
+    MockPathCapacityMetrics capacity = MockPathCapacityMetrics(0, {main_data_path}, {100}, {latest_data_path}, {100});
 
     std::map<FSID, DiskCapacity> disk_capacity_map;
 
@@ -483,6 +483,27 @@ TEST_F(PathCapcatity, MultiDiskMultiPathTest)
     ASSERT_EQ(total_stats.used_size, 16 + 52);
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
 }
+
+TEST_F(PathCapcatity, FsStats)
+try
+{
+    size_t global_capacity_quota = 10;
+    size_t capacity = 100;
+    {
+        PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {capacity}, {latest_data_path}, {capacity});
+
+        FsStats fs_stats = path_capacity.getFsStats();
+        EXPECT_EQ(fs_stats.capacity_size, 2 * capacity); // summing the capacity of main and latest path
+    }
+
+    {
+        PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {}, {latest_data_path}, {});
+
+        FsStats fs_stats = path_capacity.getFsStats();
+        EXPECT_EQ(fs_stats.capacity_size, global_capacity_quota); // Use `global_capacity_quota` when `main_capacity_quota_` is empty
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

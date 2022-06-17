@@ -15,6 +15,8 @@ class ExpressionActions;
   */
 class FilterBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "Filter";
+
 private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
@@ -25,7 +27,7 @@ public:
         const String & filter_column_name_,
         const LogWithPrefixPtr & log_);
 
-    String getName() const override;
+    String getName() const override { return NAME; }
     Block getTotals() override;
     Block getHeader() const override;
 
