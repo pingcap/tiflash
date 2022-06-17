@@ -29,7 +29,6 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
-#include "executeQuery.h"
 
 namespace DB
 {
