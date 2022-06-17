@@ -15,10 +15,10 @@
 #include <Common/CurrentMetrics.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/File/DMFileReader.h>
-
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <mutex>
 
+#include "Common/Exception.h"
 #include "Interpreters/Context.h"
 #include "common/logger_useful.h"
 
@@ -104,11 +104,6 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 BlockInputStreamPtr SegmentReadTaskPool::getInputStream(uint64_t seg_id)
 {
     auto t = getTask(seg_id);
-    if (t == nullptr)
-    {
-        return nullptr;
-    }
-
     auto seg = t->segment;
     BlockInputStreamPtr stream;
     if (is_raw)
@@ -120,21 +115,21 @@ BlockInputStreamPtr SegmentReadTaskPool::getInputStream(uint64_t seg_id)
         auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
         stream = seg->getInputStream(*dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
     }
+    LOG_FMT_DEBUG(log, "getInputStream pool {} seg_id {} succ", id, seg_id);
     return stream;
-}
-
-void SegmentReadTaskPool::activeSegment(UInt64 seg_id)
-{
-    // No need lock
-    active_segment_ids.insert(seg_id);
 }
 
 void SegmentReadTaskPool::finishSegment(UInt64 seg_id)
 {
-    LOG_FMT_DEBUG(log, "seg_id {}", seg_id);
-    std::lock_guard lock(mutex);
-    active_segment_ids.erase(seg_id);
-    if (active_segment_ids.empty() && tasks.empty())
+    bool pool_finished = false;
+    {
+        std::lock_guard lock(mutex);
+        active_segment_ids.erase(seg_id);
+        pool_finished = active_segment_ids.empty() && tasks.empty();
+    }
+    LOG_FMT_DEBUG(log, "finishSegment pool {} seg_id {} pool_finished {}",
+        id, seg_id, pool_finished);
+    if (pool_finished)
     {
         q.finish();
         SegmentReadTaskScheduler::instance().del(id);
@@ -144,81 +139,16 @@ void SegmentReadTaskPool::finishSegment(UInt64 seg_id)
 SegmentReadTaskPtr SegmentReadTaskPool::getTask(uint64_t seg_id)
 {
     std::lock_guard lock(mutex);
+    // TODO(jinhelin): use unordered_map
     auto itr = std::find_if(tasks.begin(), tasks.end(), [seg_id](const SegmentReadTaskPtr & task) { return task->segment->segmentId() == seg_id; });
     if (itr == tasks.end())
     {
-        return nullptr;
+        throw Exception(fmt::format("pool {} seg_id {} not found", id, seg_id));
     }
     auto t = *(itr);
     tasks.erase(itr);
-    activeSegment(seg_id);
+    active_segment_ids.insert(seg_id);
     return t;
-}
-
-
-void SegmentReadTaskScheduler::add(SegmentReadTaskPoolPtr & pool)
-{
-    std::lock_guard lock(mtx);
-    pools[pool->getId()] = pool;
-    std::vector<UInt64> seg_ids;
-    for (const auto & task : pool->getTasks())
-    {
-        segments[task->segment->segmentId()].push_back(pool->getId());
-        seg_ids.push_back(task->segment->segmentId());
-    }
-    LOG_FMT_DEBUG(log, "pool {} segments {} => {}", pool->getId(), seg_ids.size(), seg_ids);
-}
-
-void SegmentReadTaskScheduler::del(UInt64 pool_id)
-{
-    std::lock_guard lock(mtx);
-    pools.erase(pool_id);
-    LOG_FMT_DEBUG(log, "pool {} segments {}", pool_id, segments.size());
-}
-
-DMFileReaderPool & DMFileReaderPool::instance()
-{
-    static DMFileReaderPool reader_pool;
-    return reader_pool;
-}
-
-void DMFileReaderPool::add(DMFileReader & reader)
-{
-    std::lock_guard lock(mtx);
-    readers[reader.fileId()].insert(&reader);
-}
-
-void DMFileReaderPool::del(DMFileReader & reader)
-{
-    std::lock_guard lock(mtx);
-    auto itr = readers.find(reader.fileId());
-    if (itr == readers.end())
-    {
-        return;
-    }
-    itr->second.erase(&reader);
-    if (itr->second.empty())
-    {
-        readers.erase(itr);
-    }
-}
-
-void DMFileReaderPool::set(DMFileReader & from_reader, int64_t col_id, size_t start, size_t count, ColumnPtr & col)
-{
-    std::lock_guard lock(mtx);
-    auto itr = readers.find(from_reader.fileId());
-    if (itr == readers.end())
-    {
-        return;
-    }
-    for (auto * r : itr->second)
-    {
-        if (&from_reader == r)
-        {
-            continue;
-        }
-        r->addCachedPacks(col_id, start, count, col);
-    }
 }
 
 } // namespace DB::DM

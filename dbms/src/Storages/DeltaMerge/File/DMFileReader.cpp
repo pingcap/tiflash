@@ -24,7 +24,11 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
+
+#include <atomic>
+
 #include "Storages/DeltaMerge/File/DMFile.h"
+#include "common/logger_useful.h"
 
 namespace CurrentMetrics
 {
@@ -302,8 +306,10 @@ Block DMFileReader::read()
 
     const auto & use_packs = pack_filter.getUsePacks();
     if (next_pack_id >= use_packs.size())
+    {
+        logCacheStat();
         return {};
-
+    }
     // Find max continuing rows we can read.
     size_t start_pack_id = next_pack_id;
     // When single_file_mode is true, or read_one_pack_every_time is true, we can just read one pack every time.
@@ -513,12 +519,12 @@ void DMFileReader::readFromDisk(
 }
 
 void DMFileReader::readColumn(ColumnDefine & column_define,
-                    ColumnPtr & column,
-                    size_t start_pack_id,
-                    size_t pack_count,
-                    size_t read_rows,
-                    size_t skip_packs,
-                    [[maybe_unused]]bool force_seek)
+                              ColumnPtr & column,
+                              size_t start_pack_id,
+                              size_t pack_count,
+                              size_t read_rows,
+                              size_t skip_packs,
+                              [[maybe_unused]] bool force_seek)
 {
     if (!getCachedPacks(column_define.id, start_pack_id, pack_count, read_rows, column))
     {
@@ -529,20 +535,12 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
     }
     DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
 }
-                    
-static std::atomic<size_t> stale_count{0};
-static std::atomic<size_t> add_count{0};
-static std::atomic<size_t> hit_count{0};
-static std::atomic<size_t> miss_count{0};
-static std::atomic<size_t> part_count{0};
-static std::atomic<size_t> copy_count{0};
-static std::atomic<size_t> last_print_time{0};
 
 void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
 {
     if (next_pack_id >= start_pack_id + pack_count)
     {
-        stale_count.fetch_add(1, std::memory_order_relaxed);
+        stale_count->fetch_add(1, std::memory_order_relaxed);
         return;
     }
     auto itr = cached_cols.find(col_id);
@@ -556,27 +554,35 @@ void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pac
     auto & value = packs[start_pack_id];
     if (value.pack_count < pack_count)
     {
-        add_count.fetch_add(1, std::memory_order_relaxed);
+        add_count->fetch_add(1, std::memory_order_relaxed);
         value.pack_count = pack_count;
         value.col = col;
     }
 }
 
+void DMFileReader::logCacheStat()
+{
+    auto sc = stale_count->load(std::memory_order_relaxed);
+    auto ac = add_count->load(std::memory_order_relaxed);
+    auto hc = hit_count->load(std::memory_order_relaxed);
+    auto mc = miss_count->load(std::memory_order_relaxed);
+    auto pc = part_count->load(std::memory_order_relaxed);
+    auto cc = copy_count->load(std::memory_order_relaxed);
+    LOG_FMT_DEBUG(log, "file_id {} stale_count {} add_count {} add_ratio {} "
+                       "hit_count {} miss_count {} part_count {} copy_count {} hit_ratio {}",
+                  fileId(),
+                  sc,
+                  ac,
+                  (sc + ac) > 0 ? ac * 1.0 / (sc + ac) : 0,
+                  hc,
+                  mc,
+                  pc,
+                  cc,
+                  (hc + mc + pc + cc) > 0 ? (hc + cc) * 1.0 / (hc + mc + pc + cc) : 0);
+}
+
 bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col)
 {
-    auto t = ::time(nullptr);
-    if (t - last_print_time.load() > 5)
-    {
-        last_print_time.store(t);
-        auto sc = stale_count.load(std::memory_order_relaxed);
-        auto ac = add_count.load(std::memory_order_relaxed);
-        auto hc = hit_count.load(std::memory_order_relaxed);
-        auto mc = miss_count.load(std::memory_order_relaxed);
-        auto pc = part_count.load(std::memory_order_relaxed);
-        auto cc = copy_count.load(std::memory_order_relaxed);
-        LOG_FMT_DEBUG(log, "stale_count {} add_count {} add_ratio {} hit_count {} miss_count {} part_count {} copy_count {} hit_ratio {}",
-            sc, ac, ac * 1.0 / (sc + ac), hc, mc, pc, cc, (hc + cc) * 1.0 / (hc + mc + pc + cc));
-    }
     auto itr = cached_cols.find(col_id);
     if (itr == cached_cols.end())
     {
@@ -588,37 +594,37 @@ bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pac
     auto target = packs.find(start_pack_id);
     if (target == packs.end())
     {
-        miss_count.fetch_add(1, std::memory_order_relaxed);
+        miss_count->fetch_add(1, std::memory_order_relaxed);
         return false;
     }
     if (target->second.pack_count < pack_count)
     {
-        part_count.fetch_add(1, std::memory_order_relaxed);
+        part_count->fetch_add(1, std::memory_order_relaxed);
         return false;
     }
 
     if (target->second.pack_count == pack_count)
     {
-        hit_count.fetch_add(1, std::memory_order_relaxed);
+        hit_count->fetch_add(1, std::memory_order_relaxed);
         col = target->second.col;
     }
     else
     {
-        copy_count.fetch_add(1, std::memory_order_relaxed);
+        copy_count->fetch_add(1, std::memory_order_relaxed);
         auto data_type = dmfile->getColumnStat(col_id).type;
         auto column = data_type->createColumn();
         column->insertRangeFrom(*(target->second.col), 0, read_rows);
         col = std::move(column);
     }
 
-    //delCachedPacks(packs, next_pack_id);
+    delCachedPacks(packs, next_pack_id);
 
     return true;
 }
 
 void DMFileReader::delCachedPacks(std::map<size_t, CachedPackInfo> & packs, size_t pack_id)
 {
-    for (auto itr = packs.begin(); itr != packs.end(); )
+    for (auto itr = packs.begin(); itr != packs.end();)
     {
         if (itr->first + itr->second.pack_count <= pack_id)
         {

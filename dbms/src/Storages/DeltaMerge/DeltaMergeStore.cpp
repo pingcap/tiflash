@@ -22,6 +22,8 @@
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -1147,7 +1149,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         thread_hold_snapshots.detach();
     });
 
-    auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
+    [[maybe_unused]]auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
@@ -1160,6 +1162,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
+        /*
         BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
             dm_context,
             read_task_pool,
@@ -1170,6 +1173,12 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             DEFAULT_BLOCK_SIZE,
             true,
             db_settings.dt_raw_filter_range,
+            extra_table_id_index,
+            physical_table_id,
+            req_info);*/
+        BlockInputStreamPtr stream = std::make_shared<UnorderedInputStream>(
+            read_task_pool,
+            columns_to_read,
             extra_table_id_index,
             physical_table_id,
             req_info);
@@ -1198,7 +1207,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
     LOG_FMT_DEBUG(tracing_logger, "Read create segment snapshot done");
 
-    auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
+    [[maybe_unused]] auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
@@ -1214,6 +1223,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
+        /*
         BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
             dm_context,
             read_task_pool,
@@ -1224,6 +1234,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             expected_block_size,
             false,
             db_settings.dt_raw_filter_range,
+            extra_table_id_index,
+            physical_table_id,
+            req_info);*/
+        BlockInputStreamPtr stream = std::make_shared<UnorderedInputStream>(
+            read_task_pool,
+            columns_to_read,
             extra_table_id_index,
             physical_table_id,
             req_info);

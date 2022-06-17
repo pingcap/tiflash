@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 namespace DB
 {
 class Context;

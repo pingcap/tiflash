@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
+
 #include "common/types.h"
 
 namespace DB
@@ -105,6 +106,7 @@ public:
     }
     void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
+
 private:
     bool shouldSeek(size_t pack_id);
 
@@ -121,6 +123,7 @@ private:
                     size_t read_rows,
                     size_t skip_packs,
                     bool force_seek);
+
 private:
     DMFilePtr dmfile;
     ColumnDefines read_columns;
@@ -168,8 +171,20 @@ private:
     };
 
     std::unordered_map<ColId, CachedColInfo> cached_cols;
-
+    using AtomicInt64Ptr = std::unique_ptr<std::atomic<int64_t>>;
+    AtomicInt64Ptr createAtomicInit64Ptr(int64_t initial)
+    {
+        return std::make_unique<std::atomic<int64_t>>(initial);
+    }
+    AtomicInt64Ptr stale_count = createAtomicInit64Ptr(0);
+    AtomicInt64Ptr add_count = createAtomicInit64Ptr(0);
+    AtomicInt64Ptr hit_count = createAtomicInit64Ptr(0);
+    AtomicInt64Ptr miss_count = createAtomicInit64Ptr(0);
+    AtomicInt64Ptr part_count = createAtomicInit64Ptr(0);
+    AtomicInt64Ptr copy_count = createAtomicInit64Ptr(0);
+    AtomicInt64Ptr last_print_time = createAtomicInit64Ptr(0);
     void delCachedPacks(std::map<size_t, CachedPackInfo> & packs, size_t pack_id);
+    void logCacheStat();
 };
 
 } // namespace DM

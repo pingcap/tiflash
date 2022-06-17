@@ -16,52 +16,28 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
-namespace DB
-{
-namespace FailPoints
+namespace DB::FailPoints
 {
 extern const char pause_when_reading_from_dt_stream[];
-} // namespace FailPoints
+}
 
-namespace DM
+namespace DB::DM
 {
-class RSOperator;
-using RSOperatorPtr = std::shared_ptr<RSOperator>;
-
-class DMSegmentThreadInputStream : public IProfilingBlockInputStream
+class UnorderedInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "DeltaMergeSegmentThread";
+    static constexpr auto NAME = "UnorderedInputStream";
 
 public:
-    /// If handle_real_type_ is empty, means do not convert handle column back to real type.
-    DMSegmentThreadInputStream(
-        const DMContextPtr & dm_context_,
+    UnorderedInputStream(
         const SegmentReadTaskPoolPtr & task_pool_,
-        AfterSegmentRead after_segment_read_,
         const ColumnDefines & columns_to_read_,
-        const RSOperatorPtr & filter_,
-        UInt64 max_version_,
-        size_t expected_block_size_,
-        bool is_raw_,
-        bool do_range_filter_for_raw_,
         const int extra_table_id_index,
         const TableID physical_table_id,
         const String & req_id)
-        : dm_context(dm_context_)
-        , task_pool(task_pool_)
-        , after_segment_read(after_segment_read_)
-        , columns_to_read(columns_to_read_)
-        , filter(filter_)
-        , header(toEmptyBlock(columns_to_read))
-        , max_version(max_version_)
-        , expected_block_size(expected_block_size_)
-        , is_raw(is_raw_)
-        , do_range_filter_for_raw(do_range_filter_for_raw_)
+        : task_pool(task_pool_)
+        , header(toEmptyBlock(columns_to_read_))
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
         , log(Logger::get(NAME, req_id))
@@ -85,44 +61,19 @@ protected:
         return readImpl(filter_ignored, false);
     }
 
-    Block readImpl(FilterPtr & res_filter, bool return_filter) override
+    // TODO(jinhelin): res_fiter, return_filter, after_segment_read
+    Block readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/) override
     {
         if (done)
+        {
             return {};
+        }
         while (true)
         {
-            while (!cur_stream)
-            {
-                auto task = task_pool->nextTask();
-                if (!task)
-                {
-                    done = true;
-                    LOG_FMT_DEBUG(log, "Read done");
-                    return {};
-                }
-
-                cur_segment = task->segment;
-                if (is_raw)
-                {
-                    cur_stream = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, do_range_filter_for_raw);
-                }
-                else
-                {
-                    cur_stream = cur_segment->getInputStream(
-                        *dm_context,
-                        columns_to_read,
-                        task->read_snapshot,
-                        task->ranges,
-                        filter,
-                        max_version,
-                        std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
-                }
-                LOG_FMT_TRACE(log, "Start to read segment [{}]", cur_segment->segmentId());
-            }
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
-            Block res = cur_stream->read(res_filter, return_filter);
-
+            Block res;
+            task_pool->popBlock(res);
             if (res)
             {
                 if (extra_table_id_index != InvalidColumnID)
@@ -135,7 +86,9 @@ protected:
                     res.insert(extra_table_id_index, std::move(col));
                 }
                 if (!res.rows())
+                {
                     continue;
+                }
                 else
                 {
                     total_rows += res.rows();
@@ -144,10 +97,8 @@ protected:
             }
             else
             {
-                after_segment_read(dm_context, cur_segment);
-                LOG_FMT_TRACE(log, "Finish reading segment [{}]", cur_segment->segmentId());
-                cur_segment = {};
-                cur_stream = {};
+                done = true;
+                return {};
             }
         }
     }
@@ -158,29 +109,13 @@ protected:
     }
 
 private:
-    DMContextPtr dm_context;
     SegmentReadTaskPoolPtr task_pool;
-    AfterSegmentRead after_segment_read;
-    ColumnDefines columns_to_read;
-    RSOperatorPtr filter;
     Block header;
-    const UInt64 max_version;
-    const size_t expected_block_size;
-    const bool is_raw;
-    const bool do_range_filter_for_raw;
     // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
     const int extra_table_id_index;
-
     bool done = false;
-
-    BlockInputStreamPtr cur_stream;
-
-    SegmentPtr cur_segment;
     TableID physical_table_id;
-
     LoggerPtr log;
     size_t total_rows = 0;
 };
-
-} // namespace DM
-} // namespace DB
+}
