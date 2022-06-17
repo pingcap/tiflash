@@ -172,6 +172,92 @@ try
 }
 CATCH
 
+TEST_F(TestTidbConversion, StrToDateTypeTest)
+try
+{
+    // Arg1 is ColumnVector, Arg2 is ColumnVector
+    auto arg1_column = createColumn<Nullable<String>>({{}, "1/12/2020", "00:59:60 ", "1/12/2020"});
+    auto arg2_column = createColumn<Nullable<String>>({"%d/%c/%Y", {}, "%H:%i:%S ", "%d/%c/%Y"});
+    ColumnWithTypeAndName result_column(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({{}, {}, {}, MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt()}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 is ColumnConst(ColumnNullable(non-null value)), Arg2 is ColumnVector
+    arg1_column = createConstColumn<Nullable<String>>(2, {"1/12/2020"});
+    arg2_column = createColumn<Nullable<String>>({"%d/%c/%Y", "%d/%c/%Y"});
+    result_column = ColumnWithTypeAndName(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt(), MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt()}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 is ColumnConst(ColumnNullable(null value)), Arg2 is ColumnVector
+    arg1_column = createConstColumn<Nullable<String>>(2, {});
+    arg2_column = createColumn<Nullable<String>>({"%d/%c/%Y", "%d/%c/%Y"});
+    result_column = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 is ColumnVector, Arg2 is ColumnConst(ColumnNullable(non-null value))
+    arg1_column = createColumn<Nullable<String>>({"1/12/2020", "1/12/2020"});
+    arg2_column = createConstColumn<Nullable<String>>(2, "%d/%c/%Y");
+    result_column = ColumnWithTypeAndName(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt(), MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt()}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 is ColumnConst(ColumnNullable(non-null value)), Arg2 is ColumnConst(ColumnNullable(non-null value))
+    arg1_column = createConstColumn<Nullable<String>>(2, "1/12/2020");
+    arg2_column = createConstColumn<Nullable<String>>(2, "%d/%c/%Y");
+    result_column = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {MyDateTime{2020, 12, 1, 0, 0, 0, 0}.toPackedUInt()}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 is ColumnConst(ColumnNullable(null value)), Arg2 is ColumnConst(ColumnNullable(non-null value))
+    arg1_column = createConstColumn<Nullable<String>>(2, {});
+    arg2_column = createConstColumn<Nullable<String>>(2, "%d/%c/%Y");
+    result_column = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 is ColumnVector, Arg2 is ColumnConst(ColumnNullable(null value))
+    arg1_column = createColumn<Nullable<String>>({"1/12/2020", "1/12/2020"});
+    arg2_column = createConstColumn<Nullable<String>>(2, {});
+    result_column = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 is ColumnConst(ColumnNullable(non-null value)), Arg2 is ColumnConst(ColumnNullable(null value))
+    arg1_column = createConstColumn<Nullable<String>>(2, {"1/12/2020"});
+    arg2_column = createConstColumn<Nullable<String>>(2, {});
+    result_column = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+
+    // Arg1 is ColumnConst(ColumnNullable(null value)), Arg2 is ColumnConst(ColumnNullable(null value))
+    arg1_column = createConstColumn<Nullable<String>>(2, {});
+    arg2_column = createConstColumn<Nullable<String>>(2, {});
+    result_column = ColumnWithTypeAndName(
+        createConstColumn<Nullable<DataTypeMyDateTime::FieldType>>(2, {}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(0)),
+        "result");
+    ASSERT_COLUMN_EQ(result_column, executeFunction("strToDateDatetime", arg1_column, arg2_column));
+}
+CATCH
+
 // for https://github.com/pingcap/tics/issues/4036
 TEST_F(TestTidbConversion, castStringAsDateTime)
 try
