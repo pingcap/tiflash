@@ -1481,6 +1481,9 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                     });
                     break;
                 }
+		case 'm':
+		                //"%m": Month, numeric (00..12)
+				[[fallthrough]];
                 case 'c':
                 {
                     //"%c": Month, numeric (0..12)
@@ -1522,9 +1525,9 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                             time.micro_second = 0;
                             return true;
                         }
-                        // The siffix '0' can be ignored.
+                        // The suffix '0' can be ignored.
                         // "9" means 900000
-                        while (ms > 0 && ms * 10 < 1000000)
+			for (size_t i = step; i < 6; i++)
                         {
                             ms *= 10;
                         }
@@ -1615,19 +1618,6 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                         }
                         if (step == 0)
                             return false;
-                        ctx.pos += step;
-                        return true;
-                    });
-                    break;
-                }
-                case 'm':
-                {
-                    //"%m": Month, numeric (00..12)
-                    parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                        auto [step, month] = parseNDigits(ctx.view, ctx.pos, 2);
-                        if (step == 0 || month > 12)
-                            return false;
-                        time.month = month;
                         ctx.pos += step;
                         return true;
                     });
