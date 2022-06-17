@@ -1,0 +1,28 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(a int primary key)
+mysql> alter table test.t set tiflash replica 1
+
+func> wait_table test t
+
+mysql> insert into test.t values(1);
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++---+
+| a |
++---+
+| 1 |
++---+
+
+>> DBGInvoke __enable_schema_sync_service('false')
+
+mysql> alter table test.t modify column a bigint;
+
+mysql> insert into test.t values(9223372036854775807);
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++---------------------+
+| a                   |
++---------------------+
+|                   1 |
+| 9223372036854775807 |
++---------------------+

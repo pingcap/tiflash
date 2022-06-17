@@ -24,6 +24,8 @@ namespace DB
   */
 class MergeSortingBlocksBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "MergeSortingBlocks";
+
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
     MergeSortingBlocksBlockInputStream(
@@ -33,7 +35,7 @@ public:
         size_t max_merged_block_size_,
         size_t limit_ = 0);
 
-    String getName() const override { return "MergeSortingBlocks"; }
+    String getName() const override { return NAME; }
 
     bool isGroupedOutput() const override { return true; }
     bool isSortedOutput() const override { return true; }
@@ -71,6 +73,8 @@ private:
 
 class MergeSortingBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "MergeSorting";
+
 public:
     /// limit - if not 0, allowed to return just first 'limit' rows in sorted order.
     MergeSortingBlockInputStream(
@@ -82,7 +86,7 @@ public:
         const std::string & tmp_path_,
         const LogWithPrefixPtr & log_);
 
-    String getName() const override { return "MergeSorting"; }
+    String getName() const override { return NAME; }
 
     bool isGroupedOutput() const override { return true; }
     bool isSortedOutput() const override { return true; }

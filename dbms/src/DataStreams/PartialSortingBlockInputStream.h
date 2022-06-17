@@ -12,6 +12,8 @@ namespace DB
   */
 class PartialSortingBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "PartialSorting";
+
 public:
     /// limit - if not 0, then you can sort each block not completely, but only `limit` first rows by order.
     PartialSortingBlockInputStream(
@@ -21,12 +23,12 @@ public:
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, NAME))
     {
         children.push_back(input_);
     }
 
-    String getName() const override { return "PartialSorting"; }
+    String getName() const override { return NAME; }
 
     bool isGroupedOutput() const override { return true; }
     bool isSortedOutput() const override { return true; }
