@@ -1,7 +1,7 @@
-project (ClickHouse)
+project (TiFlash)
 cmake_minimum_required (VERSION 2.8)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ClickHouse_SOURCE_DIR}/cmake/Modules/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -221,13 +221,6 @@ if (USE_INCLUDE_WHAT_YOU_USE)
     endif()
 endif ()
 
-# when installing to /usr - place configs to /etc but for /usr/local place to /usr/local/etc
-if (CMAKE_INSTALL_PREFIX STREQUAL "/usr")
-    set (CLICKHOUSE_ETC_DIR "/etc")
-else ()
-    set (CLICKHOUSE_ETC_DIR "${CMAKE_INSTALL_PREFIX}/etc")
-endif ()
-
 option (UNBUNDLED "Try find all libraries in system (if fail - use bundled from contrib/)" OFF)
 if (UNBUNDLED)
     set(NOT_UNBUNDLED 0)
@@ -238,6 +231,11 @@ endif ()
 if (UNBUNDLED OR NOT (ARCH_LINUX OR APPLE) OR ARCH_32)
     option (NO_WERROR "Disable -Werror compiler option" ON)
 endif ()
+
+if (PREBUILT_LIBS_ROOT)
+    list(PREPEND CMAKE_SYSTEM_PREFIX_PATH ${PREBUILT_LIBS_ROOT})
+    message(STATUS "Add ${PREBUILT_LIBS_ROOT} to cmake search path for pre-built libraries")
+endif()
 
 message (STATUS "Building for: ${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR} ${CMAKE_LIBRARY_ARCHITECTURE} ; USE_STATIC_LIBRARIES=${USE_STATIC_LIBRARIES} MAKE_STATIC_LIBRARIES=${MAKE_STATIC_LIBRARIES} UNBUNDLED=${UNBUNDLED}")
 
@@ -253,14 +251,6 @@ include (cmake/lib_name.cmake)
 include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
 
-# Clickhouse wants to use internal zlib (contrib/zlib-ng) to speed up by default. But it will conflict with `find_package(ZLIB REQUIRED)` from cmake.
-# If `ENABLE_RDKAFKA` is true, librdkafka will fix the conflict by using the standard one.
-# librdkafka is useless for tiflash, need to set `USE_INTERNAL_ZLIB_LIBRARY` and `ENABLE_RDKAFKA` to OFF.
-set (ENABLE_RDKAFKA OFF CACHE BOOL "" FORCE)
-set (USE_INTERNAL_ZLIB_LIBRARY OFF CACHE BOOL "" FORCE)
-option (ENABLE_ODBC "Set to ON to link odbc libraries if exists" OFF)
-option (ENABLE_CAPNP "Set to ON to link capnp" OFF)
-option (ENABLE_MONGODB "Enable MongoDB" OFF)
 option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
 option (POCO_ENABLE_MONGODB "Enable MongoDB in Poco" OFF)
 option (ENABLE_MYSQL_STORAGE "Set to ON to enable mysql storage" OFF)
@@ -291,9 +281,11 @@ if (ENABLE_CAPNP)
     include (cmake/find_capnp.cmake)
 endif()
 include (cmake/find_llvm.cmake)
+include (cmake/find_protobuf.cmake)
 include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
 include (cmake/find_tipb.cmake)
+include (cmake/find_curl.cmake)
 include (cmake/find_prometheus.cmake)
 include (cmake/find_raftstore_proxy.cmake)
 
@@ -316,16 +308,27 @@ include (libs/libdaemon/cmake/find_unwind.cmake)
 
 include (cmake/print_flags.cmake)
 
-# Directory for Yandex specific files
-set (CLICKHOUSE_PRIVATE_DIR ${ClickHouse_SOURCE_DIR}/private/)
-if (EXISTS ${CLICKHOUSE_PRIVATE_DIR})
-    add_subdirectory (${CLICKHOUSE_PRIVATE_DIR})
+# Enable tests by default when build type is debug
+if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    set (ENABLE_TESTS_DEFAULT ON)
+else ()
+    set (ENABLE_TESTS_DEFAULT OFF)
 endif ()
+option (ENABLE_TESTS "Enables unit tests" ${ENABLE_TESTS_DEFAULT})
 
-add_subdirectory (contrib)
+add_subdirectory (contrib) # Should be done after option ENABLE_TESTS, cause we will disable tests under contrib/
+
 
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
 option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
+
+# Enable failpoint injection by default if ENABLE_TESTS is turn ON.
+if (ENABLE_TESTS)
+    set (ENABLE_FAILPOINTS_DEFAULT "ON")
+else ()
+    set (ENABLE_FAILPOINTS_DEFAULT "OFF")
+endif()
+option (ENABLE_FAILPOINTS "Enables failpoints injection" ${ENABLE_FAILPOINTS_DEFAULT})
 
 # Flags for test coverage
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
