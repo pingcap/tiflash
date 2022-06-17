@@ -440,4 +440,5 @@ DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name)
     }
     return builder;
 }
+
 } // namespace DB::tests
