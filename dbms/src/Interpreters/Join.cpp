@@ -493,7 +493,7 @@ void NO_INLINE insertFromBlockImplTypeCase(
             if (rows_not_inserted_to_map)
             {
                 /// for right/full out join, need to record the rows not inserted to map
-                auto *elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
                 insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
             }
             continue;
@@ -570,7 +570,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
             for (auto index : segment_index_info[segment_index])
             {
                 /// for right/full out join, need to record the rows not inserted to map
-                auto *elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+                auto * elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
                 insertRowToList(rows_not_inserted_to_map, elem, stored_block, index);
             }
         }

@@ -90,7 +90,7 @@ void CreatingSetsBlockInputStream::readPrefixImpl()
 
 Block CreatingSetsBlockInputStream::getTotals()
 {
-    auto *input = dynamic_cast<IProfilingBlockInputStream *>(children.back().get());
+    auto * input = dynamic_cast<IProfilingBlockInputStream *>(children.back().get());
 
     if (input)
         return input->getTotals();
