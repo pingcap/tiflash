@@ -102,7 +102,7 @@ private:
 
     bool parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
 
-    void parseMisc(const String & config, Poco::Logger * log);
+    void parseMisc(const String & storage_section, Poco::Logger * log);
 };
 
 

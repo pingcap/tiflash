@@ -82,6 +82,9 @@ public:
         , write_limiter(write_limiter)
     {}
 
+    WriteBufferByFileProviderBuilder(const WriteBufferByFileProviderBuilder &) = delete;
+    WriteBufferByFileProviderBuilder & operator=(const WriteBufferByFileProviderBuilder &) = delete;
+
     std::unique_ptr<WriteBufferFromFileBase>
     build()
     {
@@ -116,12 +119,12 @@ public:
         }
     };
 
-#define TIFLASH_WBBFPB_CREATE_SETTER(NAME)                          \
-    template <class T>                                              \
-    WriteBufferByFileProviderBuilder with_##NAME(T && NAME##_value) \
-    {                                                               \
-        NAME = NAME##_value;                                        \
-        return *this;                                               \
+#define TIFLASH_WBBFPB_CREATE_SETTER(NAME)                            \
+    template <class T>                                                \
+    WriteBufferByFileProviderBuilder & with_##NAME(T && NAME##_value) \
+    {                                                                 \
+        (NAME) = NAME##_value;                                        \
+        return *this;                                                 \
     }
 
     TIFLASH_WBBFPB_CREATE_SETTER(flags);

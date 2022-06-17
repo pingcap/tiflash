@@ -73,10 +73,11 @@ private:
     void executeLimit(DAGPipeline & pipeline);
     void executeAggregation(
         DAGPipeline & pipeline,
-        const ExpressionActionsPtr & expressionActionsPtr,
-        Names & aggregation_keys,
+        const ExpressionActionsPtr & expr,
+        Names & key_names,
         TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions);
+        AggregateDescriptions & aggregates,
+        bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);

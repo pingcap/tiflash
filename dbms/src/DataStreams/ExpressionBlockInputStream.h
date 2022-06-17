@@ -16,6 +16,7 @@ class ExpressionBlockInputStream : public IProfilingBlockInputStream
 {
 private:
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
+    static constexpr auto NAME = "Expression";
 
 public:
     ExpressionBlockInputStream(
@@ -23,7 +24,7 @@ public:
         const ExpressionActionsPtr & expression_,
         const LogWithPrefixPtr & log);
 
-    String getName() const override;
+    String getName() const override { return NAME; }
     Block getTotals() override;
     Block getHeader() const override;
 

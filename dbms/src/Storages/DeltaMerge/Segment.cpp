@@ -88,7 +88,7 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
 {
     auto dmfile = DMFile::create(file_id, parent_path, flags.isSingleFile(), dm_context.createChecksumConfig(flags.isSingleFile()));
     auto output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap, flags);
-    auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
+    const auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
     output_stream->writePrefix();
@@ -290,7 +290,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
     return delta->appendToCache(dm_context, block, offset, limit);
 }
 
-bool Segment::write(DMContext & dm_context, const Block & block)
+bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cache)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
@@ -300,7 +300,14 @@ bool Segment::write(DMContext & dm_context, const Block & block)
 
     if (delta->appendPack(dm_context, pack))
     {
-        flushCache(dm_context);
+        if (flush_cache)
+        {
+            while (!flushCache(dm_context))
+            {
+                if (hasAbandoned())
+                    return false;
+            }
+        }
         return true;
     }
     else
@@ -440,7 +447,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
                                                          const SegmentSnapshotPtr & segment_snap,
                                                          const RowKeyRange & data_range,
                                                          size_t expected_block_size,
-                                                         bool reorgnize_block) const
+                                                         bool reorganize_block) const
 {
     RowKeyRanges data_ranges{data_range};
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, data_ranges);
@@ -457,7 +464,7 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
 
 
     data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_ranges, 0);
-    if (reorgnize_block)
+    if (reorganize_block)
     {
         data_stream = std::make_shared<PKSquashingBlockInputStream<false>>(data_stream, EXTRA_HANDLE_COLUMN_ID, is_common_handle);
     }
@@ -663,7 +670,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
 
     size_t split_row_index = stable_rows / 2;
 
-    auto & dmfiles = stable_snap->getDMFiles();
+    const auto & dmfiles = stable_snap->getDMFiles();
 
     DMFilePtr read_file;
     size_t file_index = 0;
@@ -673,13 +680,13 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     size_t cur_rows = 0;
     for (size_t index = 0; index < dmfiles.size(); index++)
     {
-        auto & file = dmfiles[index];
+        const auto & file = dmfiles[index];
         size_t rows_in_file = file->getRows();
         cur_rows += rows_in_file;
         if (cur_rows > split_row_index)
         {
             cur_rows -= rows_in_file;
-            auto & pack_stats = file->getPackStats();
+            const auto & pack_stats = file->getPackStats();
             for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
             {
                 cur_rows += pack_stats[pack_id].rows;
@@ -743,7 +750,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
-    auto & pk_col = getExtraHandleColumnDefine(is_common_handle);
+    const auto & pk_col = getExtraHandleColumnDefine(is_common_handle);
     auto pk_col_defs = std::make_shared<ColumnDefines>(ColumnDefines{pk_col});
     // We need to create a new delta_reader here, because the one in read_info is used to read columns other than PK column.
     auto delta_reader = read_info.getDeltaReader(pk_col_defs);
@@ -876,13 +883,15 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         return {};
     }
 
-    GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
+    GenPageId log_gen_page_id = [&]() {
+        return storage_pool.newLogPageId();
+    };
 
     DMFiles my_stable_files;
     DMFiles other_stable_files;
 
     auto delegate = dm_context.path_pool.getStableDiskDelegator();
-    for (auto & dmfile : segment_snap->stable->getDMFiles())
+    for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
         auto ori_ref_id = dmfile->refId();
         auto file_id = dmfile->fileId();
@@ -1018,7 +1027,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     LOG_INFO(log, "prepare other_stable done");
 
     // Remove old stable's files.
-    for (auto & file : stable->getDMFiles())
+    for (const auto & file : stable->getDMFiles())
     {
         // Here we should remove the ref id instead of file_id.
         // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
@@ -1089,6 +1098,29 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
+    /// And only saved data in this segment will be filtered by the segment range in the merge process,
+    /// unsaved data will be directly copied to the new segment.
+    /// So we flush here to make sure that all potential data left by previous split operation is saved.
+    while (!left->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (left->hasAbandoned())
+        {
+            LOG_DEBUG(left->log, "Give up merge segments left [" << left->segmentId() << "], right [" << right->segmentId() << "]");
+            return {};
+        }
+    }
+    while (!right->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (right->hasAbandoned())
+        {
+            LOG_DEBUG(right->log, "Give up merge segments left [" << left->segmentId() << "], right [" << right->segmentId() << "]");
+            return {};
+        }
+    }
+
 
     auto left_snap = left->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
     auto right_snap = right->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
@@ -1109,6 +1141,10 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     return merged;
 }
 
+/// Segments may contain some rows that not belong to its range which is left by previous split operation.
+/// And only saved data in the segment will be filtered by the segment range in the merge process,
+/// unsaved data will be directly copied to the new segment.
+/// So remember to do a flush for the segments before merge.
 StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
                                           const ColumnDefinesPtr & schema_snap,
                                           const SegmentPtr & left,
@@ -1123,7 +1159,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
         throw Exception("The ranges of merge segments are not consecutive: first end: " + left->rowkey_range.getEnd().toDebugString()
                         + ", second start: " + right->rowkey_range.getStart().toDebugString());
 
-    auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
+    auto get_stream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
         auto read_info = segment->getReadInfo(
             dm_context,
             *schema_snap,
@@ -1151,8 +1187,8 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
         return stream;
     };
 
-    auto left_stream = getStream(left, left_snap);
-    auto right_stream = getStream(right, right_snap);
+    auto left_stream = get_stream(left, left_snap);
+    auto right_stream = get_stream(right, right_snap);
 
     BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream}, nullptr);
     // for the purpose to calculate StableProperty of the new segment
@@ -1191,16 +1227,16 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     /// Make sure saved packs are appended before unsaved packs.
     DeltaPacks merged_packs;
 
-    auto L_first_unsaved
+    auto l_first_unsaved
         = std::find_if(left_tail_packs.begin(), left_tail_packs.end(), [](const DeltaPackPtr & p) { return !p->isSaved(); });
-    auto R_first_unsaved
+    auto r_first_unsaved
         = std::find_if(right_tail_packs.begin(), right_tail_packs.end(), [](const DeltaPackPtr & p) { return !p->isSaved(); });
 
-    merged_packs.insert(merged_packs.end(), left_tail_packs.begin(), L_first_unsaved);
-    merged_packs.insert(merged_packs.end(), right_tail_packs.begin(), R_first_unsaved);
+    merged_packs.insert(merged_packs.end(), left_tail_packs.begin(), l_first_unsaved);
+    merged_packs.insert(merged_packs.end(), right_tail_packs.begin(), r_first_unsaved);
 
-    merged_packs.insert(merged_packs.end(), L_first_unsaved, left_tail_packs.end());
-    merged_packs.insert(merged_packs.end(), R_first_unsaved, right_tail_packs.end());
+    merged_packs.insert(merged_packs.end(), l_first_unsaved, left_tail_packs.end());
+    merged_packs.insert(merged_packs.end(), r_first_unsaved, right_tail_packs.end());
 
     auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_packs);
 
@@ -1326,9 +1362,8 @@ ColumnDefinesPtr Segment::arrangeReadColumns(const ColumnDefine & handle, const 
     new_columns_to_read.push_back(getVersionColumnDefine());
     new_columns_to_read.push_back(getTagColumnDefine());
 
-    for (size_t i = 0; i < columns_to_read.size(); ++i)
+    for (const auto & c : columns_to_read)
     {
-        auto & c = columns_to_read[i];
         if (c.id != handle.id && c.id != VERSION_COLUMN_ID && c.id != TAG_COLUMN_ID)
             new_columns_to_read.push_back(c);
     }
@@ -1487,7 +1522,7 @@ bool Segment::placeUpsert(const DMContext & dm_context,
 
     IColumn::Permutation perm;
 
-    auto & handle = getExtraHandleColumnDefine(is_common_handle);
+    const auto & handle = getExtraHandleColumnDefine(is_common_handle);
     bool do_sort = sortBlockByPk(handle, block, perm);
     RowKeyValueRef first_rowkey = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
     RowKeyValueRef range_start = relevant_range.getStart();
@@ -1541,7 +1576,7 @@ bool Segment::placeDelete(const DMContext & dm_context,
 {
     EventRecorder recorder(ProfileEvents::DMPlaceDeleteRange, ProfileEvents::DMPlaceDeleteRangeNS);
 
-    auto & handle = getExtraHandleColumnDefine(is_common_handle);
+    const auto & handle = getExtraHandleColumnDefine(is_common_handle);
 
     RowKeyRanges delete_ranges{delete_range};
     Blocks delete_data;

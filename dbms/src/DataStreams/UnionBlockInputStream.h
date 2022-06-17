@@ -26,11 +26,11 @@ struct OutputData<StreamUnionMode::Basic>
     Block block;
     std::exception_ptr exception;
 
-    OutputData() {}
-    OutputData(Block & block_)
+    OutputData() = default;
+    explicit OutputData(Block & block_)
         : block(block_)
     {}
-    OutputData(std::exception_ptr & exception_)
+    explicit OutputData(const std::exception_ptr & exception_)
         : exception(exception_)
     {}
 };
@@ -43,12 +43,12 @@ struct OutputData<StreamUnionMode::ExtraInfo>
     BlockExtraInfo extra_info;
     std::exception_ptr exception;
 
-    OutputData() {}
+    OutputData() = default;
     OutputData(Block & block_, BlockExtraInfo & extra_info_)
         : block(block_)
         , extra_info(extra_info_)
     {}
-    OutputData(std::exception_ptr & exception_)
+    explicit OutputData(const std::exception_ptr & exception_)
         : exception(exception_)
     {}
 };
@@ -76,6 +76,7 @@ public:
 
 private:
     using Self = UnionBlockInputStream<mode>;
+    static constexpr auto NAME = "Union";
 
 public:
     UnionBlockInputStream(
@@ -88,7 +89,7 @@ public:
         , handler(*this)
         , processor(inputs, additional_input_at_end, max_threads, handler)
         , exception_callback(exception_callback_)
-        , log(getMPPTaskLog(log_, getName()))
+        , log(getMPPTaskLog(log_, NAME))
     {
         children = inputs;
         if (additional_input_at_end)
@@ -103,7 +104,7 @@ public:
         }
     }
 
-    String getName() const override { return "Union"; }
+    String getName() const override { return NAME; }
 
     ~UnionBlockInputStream() override
     {
@@ -262,6 +263,23 @@ private:
       *  otherwise ParallelInputsProcessor can be blocked during insertion into the queue.
       */
     OutputQueue output_queue;
+    std::mutex mu;
+    bool meet_exception = false;
+
+    void handleException(const std::exception_ptr & exception)
+    {
+        std::unique_lock lock(mu);
+        if (meet_exception)
+            return;
+        meet_exception = true;
+        /// The order of the rows matters. If it is changed, then the situation is possible,
+        /// when before exception, an empty block (end of data) will be put into the queue,
+        /// and the exception is lost.
+        output_queue.emplace(exception);
+        /// can not cancel itself or the exception might be lost
+        /// kill the processor so ExchangeReceiver will be closed
+        processor.cancel(true);
+    }
 
     struct Handler
     {
@@ -290,14 +308,7 @@ private:
 
         void onException(std::exception_ptr & exception, size_t /*thread_num*/)
         {
-            //std::cerr << "pushing exception\n";
-
-            /// The order of the rows matters. If it is changed, then the situation is possible,
-            ///  when before exception, an empty block (end of data) will be put into the queue,
-            ///  and the exception is lost.
-
-            parent.output_queue.push(exception);
-            parent.cancel(false); /// Does not throw exceptions.
+            parent.handleException(exception);
         }
 
         String getName() const
