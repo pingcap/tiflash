@@ -1618,13 +1618,8 @@ public:
 
         // TODO: Maybe FixedString?
         if (!removeNullable(arguments[0].type)->isString())
-<<<<<<< HEAD
             throw Exception("First argument for function " + getName() + " must be String, but get " + arguments[0].type->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
-=======
-            throw Exception(fmt::format("First argument for function {} must be String, but get {}", getName(), arguments[0].type->getName()),
-                            ErrorCodes::ILLEGAL_COLUMN);
->>>>>>> 4b4b8b4240 (Add unittests for str_to_date, fix #3556, #3557 (#3581))
         if (!removeNullable(arguments[1].type)->isString())
             throw Exception(fmt::format("Second argument for function {} must be String, but get {}", getName(), arguments[1].type->getName()),
                             ErrorCodes::ILLEGAL_COLUMN);
