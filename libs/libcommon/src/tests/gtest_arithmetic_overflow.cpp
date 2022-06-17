@@ -37,7 +37,7 @@ TEST(OVERFLOW_Suite, SimpleTest)
     /// mul int256
     common::Int256 res256;
     /// 2^254
-    static constexpr common::Int256 int_254 = common::Int256((common::Int256(0x1) << 254));
+    const common::Int256 int_254 = common::Int256((common::Int256(0x1) << 254));
     /// 2^254 << 0 = 2^254
     is_overflow = common::mulOverflow(int_254, common::Int256(1), res256);
     ASSERT_EQ(is_overflow, false);
