@@ -26,14 +26,14 @@ mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tifl
 | 18446744073709551615 |    0 | 18014398509481983 |
 +----------------------+------+-------------------+
 
-mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select a from t where a>>100000=0;
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select a from test.t where a>>100000=0;
 +------+
 | a    |
 +------+
 |   -1 |
 +------+
 
-mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select a from t where a>>63=1;
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select a from test.t where a>>63=1;
 +------+
 | a    |
 +------+
