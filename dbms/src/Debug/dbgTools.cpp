@@ -424,7 +424,7 @@ struct BatchCtrl
     {
         assert(max_strlen >= min_strlen);
         assert(min_strlen >= 1);
-        auto str_len = static_cast<size_t>(arc4random() % (max_strlen - min_strlen + 1) + min_strlen);
+        auto str_len = static_cast<size_t>(random() % (max_strlen - min_strlen + 1) + min_strlen);
         default_str = String(str_len, '_');
     }
 
