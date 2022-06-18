@@ -21,7 +21,7 @@ mysql> insert into test.t values(1,'a'),(2,'b'),(3,'c')
 mysql> alter table test.t set tiflash replica 1
 
 func> wait_table test t
-mysql> analyze table t
+mysql> analyze table test.t
 
 
 # Data.
