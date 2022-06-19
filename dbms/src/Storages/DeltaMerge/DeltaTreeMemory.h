@@ -66,22 +66,28 @@ public:
 
     void * allocateLeaf()
     {
-        return base.alloc(sizeof(Leaf), alignof(Leaf));
+        if constexpr (std::is_invocable_v<decltype(&Base::alloc), Base &, size_t, size_t>)
+            return base.alloc(sizeof(Leaf), alignof(Leaf));
+        else
+            return base.alloc(sizeof(Leaf));
     }
 
     void * allocateIntern()
     {
-        return base.alloc(sizeof(Intern), alignof(Intern));
+        if constexpr (std::is_invocable_v<decltype(&Base::alloc), Base &, size_t, size_t>)
+            return base.alloc(sizeof(Intern), alignof(Intern));
+        else
+            return base.alloc(sizeof(Intern));
     }
 
     void deallocateLeaf(void * p)
     {
-        return base.free(p, sizeof(Leaf));
+        return base.free(static_cast<char *>(p), sizeof(Leaf));
     }
 
     void deallocateIntern(void * p)
     {
-        return base.free(p, sizeof(Intern));
+        return base.free(static_cast<char *>(p), sizeof(Intern));
     }
 };
 
