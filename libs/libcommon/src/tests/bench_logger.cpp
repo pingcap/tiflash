@@ -109,6 +109,7 @@ BENCHMARK_DEFINE_F(LoggerMacroBM, AsycShortFmt)
             LOG_FMT_INFO(log, " GC exit within {} sec.", elapsed_sec);
         }
     }
+    log->close();
 }
 BENCHMARK_REGISTER_F(LoggerMacroBM, AsycShortFmt)->Iterations(200);
 
@@ -200,6 +201,7 @@ BENCHMARK_DEFINE_F(LoggerMacroBM, AsyncLoogFmt)
                 num_removed);
         }
     }
+    log->close();
 }
 BENCHMARK_REGISTER_F(LoggerMacroBM, AsyncLoogFmt)->Iterations(200);
 
