@@ -721,9 +721,12 @@ BaseDaemon::~BaseDaemon()
     writeSignalIDtoSignalPipe(SignalListener::StopThread);
     signal_listener_thread.join();
     signal_pipe.close();
-    log_file_async->close();
-    error_log_file_async->close();
-    tracing_log_file_async->close();
+    if (log_file_async)
+        log_file_async->close();
+    if (error_log_file_async)
+        error_log_file_async->close();
+    if (tracing_log_file_async)
+        tracing_log_file_async->close();
 }
 
 
