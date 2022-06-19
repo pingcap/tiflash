@@ -84,7 +84,7 @@ static inline void * allocateOSPages(size_t count)
     return result;
 }
 
-void decommitPages(void * pointer, size_t count)
+static inline void decommitPages(void * pointer, size_t count)
 {
     int result = -1;
 #if defined(MADV_FREE)

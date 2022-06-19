@@ -21,6 +21,11 @@
 #include <memory>
 #include <mutex>
 #include <type_traits>
+
+#ifndef NDEBUG
+#include <common/logger_useful.h>
+#endif
+
 namespace DB::NumaAwareMemoryHierarchy
 {
 extern const size_t PAGE_SIZE;
@@ -197,9 +202,15 @@ struct Client
 {
     std::shared_ptr<ThreadLocalMemPool> upstream_holder;
     ThreadLocalMemPool::Cell * cell;
+
+#ifndef NDEBUG
+    Poco::Logger * log;
+#endif
+
     void * allocate() const
     {
-        return cell->freelist.allocate();
+        auto * result = cell->freelist.allocate();
+        return result;
     }
     void deallocate(void * p) const
     {
@@ -222,7 +233,13 @@ struct Client
     Client(std::shared_ptr<ThreadLocalMemPool> upstream, size_t client_size, size_t alignment = 8)
         : upstream_holder(std::move(upstream))
         , cell(upstream_holder->createCell(alignedSize(client_size, alignment)))
+#ifndef NDEBUG
+        , log(&Poco::Logger::get("NumaAwareMemoryHierarchy"))
+#endif
     {
+#ifndef NDEBUG
+        LOG_FMT_DEBUG(log, "logger created with block size: {}", cell->freelist.size);
+#endif
     }
     ~Client()
     {

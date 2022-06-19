@@ -826,7 +826,7 @@ public:
 
         std::swap(log, other.log);
 
-        std::swap(allocator, allocator);
+        std::swap(allocator, other.allocator);
 
         insert_value_space.swap(other.insert_value_space);
     }
