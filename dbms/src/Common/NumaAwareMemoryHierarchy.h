@@ -12,6 +12,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// This file describes the multi-level memory hierarchy of delta merge trees. The general structure
+/// for each numa node is shown the diagram:
+///
+/// \code{.txt}
+///                              ---------------------
+///                              |  System Allocator |
+///                              ---------------------
+///                                        |
+///                              ---------------------
+///                              | Synchronized Pool |
+///                              ---------------------
+///                             /                     \
+///                            /         .......       \
+///             ==============/============= ===========\=================
+///             | ThD 1      /             | | ThD N     \               |
+///             |  ----------------------- | | ------------------------- |
+///             |  | Unsynchronized Pool | | | | Unsynchronized Pool   | |
+///             |  ----------------------- | | ------------------------| |
+///             ====/======================= ========================\====
+///                /                                                  \
+///  =============/=================                  =================\=============
+///  | Tree 1    /                 |                  | Tree N          \           |
+///  |   -----------------------   |                  |   -----------------------   |
+///  |   |    Local Buffer     |   |       ....       |   |    Local Buffer     |   |
+///  |   -----------------------   |                  |   -----------------------   |
+///  ===============================                  ===============================
+/// \endcode
+///
+/// As it is shown in the diagram, all delta tree node memory originates from a global system allocator
+/// and then pooled by size in a synchronized pool. Then, each worker threads hold a thread-local cache
+/// which acquires memory from the global pool. To do real allocations, each tree hold a buffer as a
+/// proxy to the thread local cache.
+/// This architecture utilizes the following facts: Delta Tree are updated in a CoW manner and all
+/// modifications happens in a local thread. Hence, thread-local pools and local buffers does not need
+/// thread-safety. This enables fast allocation routine.
+///
+/// However, a particular problem happens when a tree is placed back as an updated copy. How to handle
+/// the memory ownership afterwards?
+///
+/// \code{.txt}
+///   ----------------------  shared pointer  -----------------------
+///   |    Local Buffer    |  --------------> | Unsynchronized Pool |
+///   ----------------------                  -----------------------
+/// \endcode
+///
+/// To address the issue, each `Local Buffer` holds a shared pointer to the `Unsynchronized Pool`.
+/// Therefore, it is guaranteed that the memory can be returned back to the upstream each after the
+/// thread exits unexpectedly.
+///
+/// \code{.txt}
+///   =============================            =============================
+///   | Delta Tree                |            | Thread Local Cache        |
+///   | ----------                |            |        -------------      |
+///   | | Buffer | -----------------------------------> | MPMCStack |      |
+///   | ----------                |            |        -------------      |
+///   =============================            =============================
+/// \endcode
+///
+/// Another problem is that later, when the placed copy destructs, the memory deallocation may not
+/// happen in the same thread where the upstream unsynchronized pool locates in. The solution is to do
+/// a message passing and hands in the buffer to a MPMC stack at upstream. Later, when creating a new
+/// buffer from the thread-local pool, one can check if there are pending buffer on the stack. If so, one
+/// can destruct the buffer before returning the new buffer.
+///
+/// \code{.txt}
+///                            ---------- Pool on NUMA 1
+/// ========================  /
+/// |                      |--
+/// |   Synchronized Pool  |-------------- Pool on NUMA 2
+/// |                      |--
+/// ========================  \
+///                            ----------- Pool on NUMA 3
+/// \endcode
+/// To make the overall structure numa aware, Synchronized Pool itself consists of sub-pools on each numa.
+/// This helps to reduce the cross numa locking contention and separate memory resource on numa nodes.
+/// Memory blocks larger than page size are bond to numa via syscall and returned back to per numa free list.
 #pragma once
 #include <common/mpmcstack.h>
 
