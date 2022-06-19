@@ -96,6 +96,7 @@
 #include <boost/container/pmr/unsynchronized_pool_resource.hpp>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <type_traits>
 
 #ifndef NDEBUG
