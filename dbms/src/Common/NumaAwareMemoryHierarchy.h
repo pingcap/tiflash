@@ -13,13 +13,14 @@
 // limitations under the License.
 
 #pragma once
-#include <type_traits>
+#include <common/mpmcstack.h>
+
+#include <boost/container/pmr/polymorphic_allocator.hpp>
 #include <boost/container/pmr/synchronized_pool_resource.hpp>
 #include <boost/container/pmr/unsynchronized_pool_resource.hpp>
-#include <boost/container/pmr/polymorphic_allocator.hpp>
-#include <common/mpmcstack.h>
 #include <memory>
 #include <mutex>
+#include <type_traits>
 namespace DB::NumaAwareMemoryHierarchy
 {
 extern const size_t PAGE_SIZE;
@@ -31,11 +32,15 @@ struct Node
     Node * next;
 };
 
-struct Chunk {
+struct Chunk
+{
     Chunk * next;
     char * data;
 
-    Chunk(Chunk * next, char * data) : next(next), data(data) {}
+    Chunk(Chunk * next, char * data)
+        : next(next)
+        , data(data)
+    {}
 };
 
 struct GlobalPagePool
@@ -47,7 +52,7 @@ struct GlobalPagePool
         const size_t numa{};
         std::mutex lock_2mb{};
         Node * freelist_2mb{};
-        boost::container::pmr::synchronized_pool_resource internal_resource {};
+        boost::container::pmr::synchronized_pool_resource internal_resource{};
 
         explicit PerNumaFreeList(size_t numa)
             : numa(numa)
@@ -70,8 +75,8 @@ namespace Impl
 {
 
 template <size_t chunk_size, class Upstream>
-struct LocalFreeList {
-
+struct LocalFreeList
+{
     const size_t size;
     Upstream * source = nullptr;
     char * current = nullptr;
@@ -89,7 +94,8 @@ struct LocalFreeList {
     {
     }
 
-    void allocateNewChunk() {
+    void allocateNewChunk()
+    {
         auto * chunk = chunk_allocator.allocate(1);
         chunk_allocator.template construct(chunk, chunk_list, static_cast<char *>(source->allocate()));
         chunk_list = chunk;
@@ -144,18 +150,20 @@ struct ThreadLocalMemPool
     using ThreadLocalList = Impl::LocalFreeList<SIZE_2MIB, Upstream>;
     using ClientList = Impl::LocalFreeList<SIZE_512KIB, ThreadLocalList>;
 
-    struct Cell {
+    struct Cell
+    {
         std::atomic<Cell *> next;
         ClientList freelist;
 
         Cell(ThreadLocalList * upstream, size_t client_size)
             : next(nullptr)
-            , freelist(upstream, client_size) {}
+            , freelist(upstream, client_size)
+        {}
     };
 
     ThreadLocalList thread_local_list;
     boost::container::pmr::polymorphic_allocator<Cell> cell_allocator;
-    common::MPMCStack<Cell> cell_list {};
+    common::MPMCStack<Cell> cell_list{};
 
     explicit ThreadLocalMemPool(Upstream * upstream)
         : thread_local_list(upstream, SIZE_512KIB)
@@ -163,16 +171,20 @@ struct ThreadLocalMemPool
     {
     }
 
-    void garbageCollect() {
-        for (size_t i = 0; i < 5; ++i) {
-            if (auto * cell = cell_list.pop()) {
+    void garbageCollect()
+    {
+        for (size_t i = 0; i < 5; ++i)
+        {
+            if (auto * cell = cell_list.pop())
+            {
                 cell_allocator.destroy(cell);
                 cell_allocator.deallocate(cell, 1);
             }
         }
     }
 
-    Cell* createCell(size_t client_size) {
+    Cell * createCell(size_t client_size)
+    {
         garbageCollect();
         auto * res = cell_allocator.allocate(1);
         cell_allocator.construct(res, &thread_local_list, client_size);
@@ -181,29 +193,39 @@ struct ThreadLocalMemPool
 };
 
 
-struct Client {
+struct Client
+{
     std::shared_ptr<ThreadLocalMemPool> upstream_holder;
     ThreadLocalMemPool::Cell * cell;
-    void * allocate() const {
+    void * allocate() const
+    {
         return cell->freelist.allocate();
     }
-    void deallocate(void * p) const {
+    void deallocate(void * p) const
+    {
         return cell->freelist.recycle(p);
     }
 
-    static inline size_t alignedSize(size_t size, size_t alignment) {
+    static inline size_t nextPowOfTwo(size_t n)
+    {
+        n += !n;
+        return 1ull << (63ull - __builtin_clzll(n + n - 1ull));
+    }
+
+    static inline size_t alignedSize(size_t size, size_t alignment)
+    {
         auto delta = size % alignment;
         auto offset = delta == 0 ? 0 : alignment - delta;
-        return size + offset;
+        return nextPowOfTwo(size + offset);
     }
 
     Client(std::shared_ptr<ThreadLocalMemPool> upstream, size_t client_size, size_t alignment = 8)
         : upstream_holder(std::move(upstream))
         , cell(upstream_holder->createCell(alignedSize(client_size, alignment)))
     {
-
     }
-    ~Client() {
+    ~Client()
+    {
         upstream_holder->cell_list.push(cell);
     }
 };

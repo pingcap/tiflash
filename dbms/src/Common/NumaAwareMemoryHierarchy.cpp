@@ -132,6 +132,9 @@ static inline void * allocateFrom(std::mutex & lock, Node *& freelist, size_t nu
         if (result)
         {
             freelist = result->next;
+#ifndef NDEBUG
+            std::memset(result, 0xCD, SIZE_2MIB);
+#endif
             return result;
         }
     }
@@ -140,7 +143,9 @@ static inline void * allocateFrom(std::mutex & lock, Node *& freelist, size_t nu
         result = static_cast<Node *>(allocateOSPages(SIZE_2MIB / PAGE_SIZE));
         common::numa::bindMemoryToNuma(result, SIZE_2MIB, numa);
     }
-
+#ifndef NDEBUG
+    std::memset(result, 0xCD, SIZE_2MIB);
+#endif
     return result;
 }
 
