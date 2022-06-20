@@ -18,12 +18,15 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 
+<<<<<<< HEAD
 
 namespace ProfileEvents
 {
     extern const Event ExternalAggregationMerge;
 }
 
+=======
+>>>>>>> 40baecabe6 (Reduce some unnecessary prometheus metrics. (#5006))
 namespace DB
 {
 
@@ -55,8 +58,6 @@ Block AggregatingBlockInputStream::readImpl()
             /** If there are temporary files with partially-aggregated data on the disk,
               *  then read and merge them, spending the minimum amount of memory.
               */
-
-            ProfileEvents::increment(ProfileEvents::ExternalAggregationMerge);
 
             if (!isCancelled())
             {

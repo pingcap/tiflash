@@ -16,6 +16,7 @@
 
 
 /// Available events. Add something here as you wish.
+<<<<<<< HEAD
 #define APPLY_FOR_EVENTS(M)                     \
     M(Query)                                    \
     M(SelectQuery)                              \
@@ -166,6 +167,100 @@
                                                 \
     M(ChecksumDigestBytes)                      \
                                                 \
+=======
+#define APPLY_FOR_EVENTS(M)                    \
+    M(Query)                                   \
+    M(FileOpen)                                \
+    M(FileOpenFailed)                          \
+    M(ReadBufferFromFileDescriptorRead)        \
+    M(ReadBufferFromFileDescriptorReadFailed)  \
+    M(ReadBufferFromFileDescriptorReadBytes)   \
+    M(WriteBufferFromFileDescriptorWrite)      \
+    M(WriteBufferFromFileDescriptorWriteBytes) \
+    M(ReadBufferAIORead)                       \
+    M(ReadBufferAIOReadBytes)                  \
+    M(WriteBufferAIOWrite)                     \
+    M(WriteBufferAIOWriteBytes)                \
+                                               \
+    M(UncompressedCacheHits)                   \
+    M(UncompressedCacheMisses)                 \
+    M(UncompressedCacheWeightLost)             \
+    M(MarkCacheHits)                           \
+    M(MarkCacheMisses)                         \
+                                               \
+    M(ExternalAggregationCompressedBytes)      \
+    M(ExternalAggregationUncompressedBytes)    \
+                                               \
+    M(ContextLock)                             \
+                                               \
+    M(RWLockAcquiredReadLocks)                 \
+    M(RWLockAcquiredWriteLocks)                \
+    M(RWLockReadersWaitMilliseconds)           \
+    M(RWLockWritersWaitMilliseconds)           \
+                                               \
+    M(PSMWritePages)                           \
+    M(PSMWriteIOCalls)                         \
+    M(PSV3MBlobExpansion)                      \
+    M(PSV3MBlobReused)                         \
+    M(PSMWriteBytes)                           \
+    M(PSMBackgroundWriteBytes)                 \
+    M(PSMReadPages)                            \
+    M(PSMBackgroundReadBytes)                  \
+                                               \
+    M(PSMReadIOCalls)                          \
+    M(PSMReadBytes)                            \
+    M(PSMWriteFailed)                          \
+    M(PSMReadFailed)                           \
+                                               \
+    M(PSMVCCApplyOnCurrentBase)                \
+    M(PSMVCCApplyOnCurrentDelta)               \
+    M(PSMVCCApplyOnNewDelta)                   \
+    M(PSMVCCCompactOnDelta)                    \
+    M(PSMVCCCompactOnDeltaRebaseRejected)      \
+    M(PSMVCCCompactOnBase)                     \
+                                               \
+    M(DMWriteBytes)                            \
+    M(DMWriteBlock)                            \
+    M(DMWriteBlockNS)                          \
+    M(DMWriteFile)                             \
+    M(DMWriteFileNS)                           \
+    M(DMDeleteRange)                           \
+    M(DMDeleteRangeNS)                         \
+    M(DMAppendDeltaPrepare)                    \
+    M(DMAppendDeltaPrepareNS)                  \
+    M(DMAppendDeltaCommitMemory)               \
+    M(DMAppendDeltaCommitMemoryNS)             \
+    M(DMAppendDeltaCommitDisk)                 \
+    M(DMAppendDeltaCommitDiskNS)               \
+    M(DMAppendDeltaCleanUp)                    \
+    M(DMAppendDeltaCleanUpNS)                  \
+    M(DMPlace)                                 \
+    M(DMPlaceNS)                               \
+    M(DMPlaceUpsert)                           \
+    M(DMPlaceUpsertNS)                         \
+    M(DMPlaceDeleteRange)                      \
+    M(DMPlaceDeleteRangeNS)                    \
+    M(DMDeltaMerge)                            \
+    M(DMDeltaMergeNS)                          \
+    M(DMSegmentSplit)                          \
+    M(DMSegmentSplitNS)                        \
+    M(DMSegmentGetSplitPoint)                  \
+    M(DMSegmentGetSplitPointNS)                \
+    M(DMSegmentMerge)                          \
+    M(DMSegmentMergeNS)                        \
+    M(DMFlushDeltaCache)                       \
+    M(DMFlushDeltaCacheNS)                     \
+    M(DMCleanReadRows)                         \
+                                               \
+    M(FileFSync)                               \
+                                               \
+    M(DMFileFilterNoFilter)                    \
+    M(DMFileFilterAftPKAndPackSet)             \
+    M(DMFileFilterAftRoughSet)                 \
+                                               \
+    M(ChecksumDigestBytes)                     \
+                                               \
+>>>>>>> 40baecabe6 (Reduce some unnecessary prometheus metrics. (#5006))
     M(RaftWaitIndexTimeout)
 
 namespace ProfileEvents

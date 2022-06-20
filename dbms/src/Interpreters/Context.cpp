@@ -76,10 +76,16 @@ namespace ProfileEvents
 extern const Event ContextLock;
 }
 
+#include <set>
+
 namespace CurrentMetrics
 {
+<<<<<<< HEAD
 extern const Metric ContextLockWait;
 extern const Metric MemoryTrackingForMerges;
+=======
+extern const Metric GlobalStorageRunMode;
+>>>>>>> 40baecabe6 (Reduce some unnecessary prometheus metrics. (#5006))
 } // namespace CurrentMetrics
 
 
@@ -304,8 +310,6 @@ Context::~Context()
 
 std::unique_lock<std::recursive_mutex> Context::getLock() const
 {
-    ProfileEvents::increment(ProfileEvents::ContextLock);
-    CurrentMetrics::Increment increment{CurrentMetrics::ContextLockWait};
     return std::unique_lock(shared->mutex);
 }
 

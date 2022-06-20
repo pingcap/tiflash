@@ -19,7 +19,6 @@
 namespace ProfileEvents
 {
 extern const Event WriteBufferFromFileDescriptorWrite;
-extern const Event WriteBufferFromFileDescriptorWriteFailed;
 extern const Event WriteBufferFromFileDescriptorWriteBytes;
 } // namespace ProfileEvents
 
@@ -72,8 +71,7 @@ void WriteBufferFromFileProvider::nextImpl()
 
         if ((-1 == res || 0 == res) && errno != EINTR)
         {
-            ProfileEvents::increment(ProfileEvents::WriteBufferFromFileDescriptorWriteFailed);
-            throwFromErrno("Cannot write to file " + getFileName(), ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR);
+            throwFromErrno("Cannot write to file " + getFileName(), ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR); // NOLINT
         }
 
         if (res > 0)

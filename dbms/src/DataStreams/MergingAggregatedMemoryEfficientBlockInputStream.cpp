@@ -19,13 +19,6 @@
 
 #include <future>
 
-
-namespace CurrentMetrics
-{
-extern const Metric QueryThread;
-}
-
-
 namespace DB
 {
 /** Scheme of operation:
@@ -156,7 +149,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::cancel(bool kill)
 
     for (auto & input : inputs)
     {
-        if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(input.stream.get()))
+        if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(input.stream.get()))
         {
             try
             {
@@ -198,7 +191,6 @@ void MergingAggregatedMemoryEfficientBlockInputStream::start()
 
             reading_pool->schedule(
                 wrapInvocable(true, [&child] {
-                    CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     child->readPrefix();
                 }));
         }
@@ -309,8 +301,6 @@ void MergingAggregatedMemoryEfficientBlockInputStream::finalize()
 
 void MergingAggregatedMemoryEfficientBlockInputStream::mergeThread()
 {
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
-
     try
     {
         while (!parallel_merge_data->finish)
@@ -490,7 +480,6 @@ MergingAggregatedMemoryEfficientBlockInputStream::BlocksToMerge MergingAggregate
             if (need_that_input(input))
             {
                 reading_pool->schedule(wrapInvocable(true, [&input, &read_from_input] {
-                    CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
                     read_from_input(input);
                 }));
             }

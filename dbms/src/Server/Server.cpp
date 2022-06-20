@@ -176,11 +176,6 @@ namespace
 }
 } // namespace
 
-namespace CurrentMetrics
-{
-extern const Metric Revision;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -1032,7 +1027,26 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_FMT_INFO(log, "tiflash proxy thread is joined");
     });
 
+<<<<<<< HEAD
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
+=======
+    /// get CPU/memory/disk info of this server
+    if (tiflash_instance_wrap.proxy_helper)
+    {
+        diagnosticspb::ServerInfoRequest request;
+        request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+        diagnosticspb::ServerInfoResponse response;
+        std::string req = request.SerializeAsString();
+        auto * helper = tiflash_instance_wrap.proxy_helper;
+        helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
+        server_info.parseSysInfo(response);
+        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
+    }
+    else
+    {
+        LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+    }
+>>>>>>> 40baecabe6 (Reduce some unnecessary prometheus metrics. (#5006))
 
     // print necessary grpc log.
     grpc_log = &Poco::Logger::get("grpc");

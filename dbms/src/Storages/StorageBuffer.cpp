@@ -34,24 +34,6 @@
 
 #include <ext/range.h>
 
-
-namespace ProfileEvents
-{
-extern const Event StorageBufferFlush;
-extern const Event StorageBufferErrorOnFlush;
-extern const Event StorageBufferPassedAllMinThresholds;
-extern const Event StorageBufferPassedTimeMaxThreshold;
-extern const Event StorageBufferPassedRowsMaxThreshold;
-extern const Event StorageBufferPassedBytesMaxThreshold;
-} // namespace ProfileEvents
-
-namespace CurrentMetrics
-{
-extern const Metric StorageBufferRows;
-extern const Metric StorageBufferBytes;
-} // namespace CurrentMetrics
-
-
 namespace DB
 {
 namespace ErrorCodes
@@ -170,10 +152,6 @@ static void appendBlock(const Block & from, Block & to)
     to.checkNumberOfRows();
 
     size_t rows = from.rows();
-    size_t bytes = from.bytes();
-
-    CurrentMetrics::add(CurrentMetrics::StorageBufferRows, rows);
-    CurrentMetrics::add(CurrentMetrics::StorageBufferBytes, bytes);
 
     size_t old_rows = to.rows();
 
@@ -431,25 +409,21 @@ bool StorageBuffer::checkThresholdsImpl(size_t rows, size_t bytes, time_t time_p
 {
     if (time_passed > min_thresholds.time && rows > min_thresholds.rows && bytes > min_thresholds.bytes)
     {
-        ProfileEvents::increment(ProfileEvents::StorageBufferPassedAllMinThresholds);
         return true;
     }
 
     if (time_passed > max_thresholds.time)
     {
-        ProfileEvents::increment(ProfileEvents::StorageBufferPassedTimeMaxThreshold);
         return true;
     }
 
     if (rows > max_thresholds.rows)
     {
-        ProfileEvents::increment(ProfileEvents::StorageBufferPassedRowsMaxThreshold);
         return true;
     }
 
     if (bytes > max_thresholds.bytes)
     {
-        ProfileEvents::increment(ProfileEvents::StorageBufferPassedBytesMaxThreshold);
         return true;
     }
 
@@ -496,12 +470,16 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
     buffer.data.swap(block_to_write);
     buffer.first_write_time = 0;
 
+<<<<<<< HEAD
     CurrentMetrics::sub(CurrentMetrics::StorageBufferRows, block_to_write.rows());
     CurrentMetrics::sub(CurrentMetrics::StorageBufferBytes, block_to_write.bytes());
 
     ProfileEvents::increment(ProfileEvents::StorageBufferFlush);
 
     LOG_TRACE(log, "Flushing buffer with " << rows << " rows, " << bytes << " bytes, age " << time_passed << " seconds.");
+=======
+    LOG_FMT_TRACE(log, "Flushing buffer with {} rows, {} bytes, age {} seconds.", rows, bytes, time_passed);
+>>>>>>> 40baecabe6 (Reduce some unnecessary prometheus metrics. (#5006))
 
     if (no_destination)
         return;
@@ -518,13 +496,7 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
     }
     catch (...)
     {
-        ProfileEvents::increment(ProfileEvents::StorageBufferErrorOnFlush);
-
         /// Return the block to its place in the buffer.
-
-        CurrentMetrics::add(CurrentMetrics::StorageBufferRows, block_to_write.rows());
-        CurrentMetrics::add(CurrentMetrics::StorageBufferBytes, block_to_write.bytes());
-
         buffer.data.swap(block_to_write);
 
         if (!buffer.first_write_time)

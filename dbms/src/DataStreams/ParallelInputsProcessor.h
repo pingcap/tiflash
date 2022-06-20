@@ -45,11 +45,6 @@
   *    then read block from source and then put source back to queue of available sources.
   */
 
-namespace CurrentMetrics
-{
-extern const Metric QueryThread;
-}
-
 namespace DB
 {
 /** Union mode.
@@ -200,8 +195,6 @@ private:
     void thread(size_t thread_num)
     {
         std::exception_ptr exception;
-
-        CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
 
         try
         {
