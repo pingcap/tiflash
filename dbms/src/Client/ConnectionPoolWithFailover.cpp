@@ -43,7 +43,7 @@ ConnectionPoolWithFailover::ConnectionPoolWithFailover(
     hostname_differences.resize(nested_pools.size());
     for (size_t i = 0; i < nested_pools.size(); ++i)
     {
-        ConnectionPool & connection_pool = dynamic_cast<ConnectionPool &>(*nested_pools[i]);
+        auto & connection_pool = dynamic_cast<ConnectionPool &>(*nested_pools[i]);
         hostname_differences[i] = getHostNameDifference(local_hostname, connection_pool.getHost());
     }
 }

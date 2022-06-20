@@ -347,8 +347,8 @@ StringRef ComplexKeyCacheDictionary::placeKeysInFixedSizePool(
     const size_t row,
     const Columns & key_columns) const
 {
-    const auto res = fixed_size_keys_pool->alloc();
-    auto place = res;
+    auto * const res = fixed_size_keys_pool->alloc();
+    auto * place = res;
 
     for (const auto & key_column : key_columns)
     {
@@ -369,7 +369,7 @@ StringRef ComplexKeyCacheDictionary::copyIntoArena(StringRef src, Arena & arena)
 
 StringRef ComplexKeyCacheDictionary::copyKey(const StringRef key) const
 {
-    const auto res = key_size_is_fixed ? fixed_size_keys_pool->alloc() : keys_pool->alloc(key.size);
+    auto * const res = key_size_is_fixed ? fixed_size_keys_pool->alloc() : keys_pool->alloc(key.size);
     memcpy(res, key.data, key.size);
 
     return {res, key.size};

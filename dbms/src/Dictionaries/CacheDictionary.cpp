@@ -537,7 +537,7 @@ void CacheDictionary::getItemsNumber(
     PaddedPODArray<OutputType> & out,
     DefaultGetter && get_default) const
 {
-    if (false) {}
+    if (false) {} // NOLINT
 #define DISPATCH(TYPE)                                        \
     else if (attribute.type == AttributeUnderlyingType::TYPE) \
         getItemsNumberImpl<TYPE, OutputType>(attribute, ids, out, std::forward<DefaultGetter>(get_default));
@@ -617,7 +617,7 @@ void CacheDictionary::getItemsNumberImpl(
             const auto attribute_value = attribute_array[cell_idx];
 
             for (const auto row : outdated_ids[id])
-                out[row] = static_cast<OutputType>(attribute_value);
+                out[row] = static_cast<OutputType>(attribute_value); // NOLINT
         },
         [&](const auto id, const auto) {
             for (const auto row : outdated_ids[id])
@@ -772,7 +772,7 @@ void CacheDictionary::update(
 
         while (const auto block = stream->read())
         {
-            const auto id_column = typeid_cast<const ColumnUInt64 *>(block.safeGetByPosition(0).column.get());
+            const auto * id_column = typeid_cast<const ColumnUInt64 *>(block.safeGetByPosition(0).column.get());
             if (!id_column)
                 throw Exception{
                     name + ": id column has type different from UInt64.",
@@ -969,7 +969,7 @@ void CacheDictionary::setAttributeValue(Attribute & attribute, const Key idx, co
         const auto size = string.size();
         if (size != 0)
         {
-            auto string_ptr = string_arena->alloc(size + 1);
+            auto * string_ptr = string_arena->alloc(size + 1);
             std::copy(string.data(), string.data() + size + 1, string_ptr);
             string_ref = StringRef{string_ptr, size};
         }

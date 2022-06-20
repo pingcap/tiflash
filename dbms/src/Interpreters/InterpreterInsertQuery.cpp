@@ -55,7 +55,7 @@ StoragePtr InterpreterInsertQuery::getTable(const ASTInsertQuery & query)
 {
     if (query.table_function)
     {
-        auto table_function = typeid_cast<const ASTFunction *>(query.table_function.get());
+        const auto * table_function = typeid_cast<const ASTFunction *>(query.table_function.get());
         const auto & factory = TableFunctionFactory::instance();
         return factory.get(table_function->name, context)->execute(query.table_function, context);
     }
@@ -64,7 +64,7 @@ StoragePtr InterpreterInsertQuery::getTable(const ASTInsertQuery & query)
     return context.getTable(query.database, query.table);
 }
 
-Block InterpreterInsertQuery::getSampleBlock(const ASTInsertQuery & query, const StoragePtr & table)
+Block InterpreterInsertQuery::getSampleBlock(const ASTInsertQuery & query, const StoragePtr & table) // NOLINT
 {
     Block table_sample_non_materialized;
     if (query.is_import)
