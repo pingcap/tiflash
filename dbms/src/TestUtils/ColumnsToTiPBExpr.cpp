@@ -36,7 +36,6 @@ void columnToTiPBExpr(tipb::Expr * expr, const ColumnWithTypeAndName column, siz
             if (column.column->isColumnNullable())
             {
                 auto [col, null_map] = removeNullable(column.column.get());
-                (void)null_map;
                 is_const = col->isColumnConst();
             }
         }
@@ -98,7 +97,6 @@ void columnsToTiPBExprForTiDBCast(
             if (type_column.column->isColumnNullable())
             {
                 auto [col, null_map] = removeNullable(type_column.column.get());
-                (void)null_map;
                 is_const = col->isColumnConst();
             }
         }
