@@ -11,44 +11,32 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Storages/Page/workload/HeavyMemoryCostInGC.h>
+#include <Storages/Page/workload/HeavyRead.h>
+#include <Storages/Page/workload/HeavySkewWriteRead.h>
+#include <Storages/Page/workload/HeavyWrite.h>
+#include <Storages/Page/workload/HighValidBigFileGC.h>
+#include <Storages/Page/workload/HoldSnapshotsLongTime.h>
+#include <Storages/Page/workload/Normal.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 #include <Storages/Page/workload/PSWorkload.h>
+#include <Storages/Page/workload/PageStorageInMemoryCapacity.h>
+#include <Storages/Page/workload/ThousandsOfOffset.h>
 
 using namespace DB::PS::tests;
 
 int StressWorkload::mainEntry(int argc, char ** argv)
 {
     {
-        // maybe due to sequence of linking, REGISTER_WORKLOAD is not visible to main function in dbms/src/Server/main.cpp
-        // cause that REGISTER_WORKLOAD will not be triggered before mainEntry
-        // we do this to trigger REGISTER_WORKLOAD explicitly.
-        void _work_load_register_named_HeavyMemoryCostInGC();
-        void (*f)() = _work_load_register_named_HeavyMemoryCostInGC;
-        f();
-        void _work_load_register_named_HeavyRead();
-        f = _work_load_register_named_HeavyRead;
-        f();
-        void _work_load_register_named_HeavySkewWriteRead();
-        f = _work_load_register_named_HeavySkewWriteRead;
-        f();
-        void _work_load_register_named_HeavyWrite();
-        f = _work_load_register_named_HeavyWrite;
-        f();
-        void _work_load_register_named_HighValidBigFileGCWorkload();
-        f = _work_load_register_named_HighValidBigFileGCWorkload;
-        f();
-        void _work_load_register_named_HoldSnapshotsLongTime();
-        f = _work_load_register_named_HoldSnapshotsLongTime;
-        f();
-        void _work_load_register_named_PageStorageInMemoryCapacity();
-        f = _work_load_register_named_PageStorageInMemoryCapacity;
-        f();
-        void _work_load_register_named_NormalWorkload();
-        f = _work_load_register_named_NormalWorkload;
-        f();
-        void _work_load_register_named_ThousandsOfOffset();
-        f = _work_load_register_named_ThousandsOfOffset;
-        f();
+        work_load_register<HeavyMemoryCostInGC>();
+        work_load_register<HeavyRead>();
+        work_load_register<HeavySkewWriteRead>();
+        work_load_register<HeavyWrite>();
+        work_load_register<HighValidBigFileGCWorkload>();
+        work_load_register<HoldSnapshotsLongTime>();
+        work_load_register<PageStorageInMemoryCapacity>();
+        work_load_register<NormalWorkload>();
+        work_load_register<ThousandsOfOffset>();
     }
     try
     {

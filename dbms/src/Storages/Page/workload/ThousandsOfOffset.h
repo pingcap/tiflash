@@ -169,6 +169,4 @@ private:
         return true;
     }
 };
-
-REGISTER_WORKLOAD(ThousandsOfOffset)
 } // namespace DB::PS::tests
