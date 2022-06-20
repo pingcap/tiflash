@@ -45,14 +45,31 @@ bool collectForAgg(std::vector<tipb::FieldType> & output_field_types, const tipb
 {
     for (const auto & expr : agg.agg_func())
     {
-        if (!exprHasValidFieldType(expr))
+        if (unlikely(!exprHasValidFieldType(expr)))
             throw TiFlashException("Agg expression without valid field type", Errors::Coprocessor::BadRequest);
         output_field_types.push_back(expr.field_type());
     }
     for (const auto & expr : agg.group_by())
     {
-        if (!exprHasValidFieldType(expr))
+        if (unlikely(!exprHasValidFieldType(expr)))
             throw TiFlashException("Group by expression without valid field type", Errors::Coprocessor::BadRequest);
+        output_field_types.push_back(expr.field_type());
+    }
+    return false;
+}
+
+bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
+bool collectForWindow(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
+{
+    // collect output_field_types of child
+    getChildren(executor).forEach([&output_field_types](const tipb::Executor & child) {
+        traverseExecutorTree(child, [&output_field_types](const tipb::Executor & e) { return collectForExecutor(output_field_types, e); });
+    });
+
+    for (const auto & expr : executor.window().func_desc())
+    {
+        if (unlikely(!exprHasValidFieldType(expr)))
+            throw TiFlashException("Window expression without valid field type", Errors::Coprocessor::BadRequest);
         output_field_types.push_back(expr.field_type());
     }
     return false;
@@ -82,7 +99,6 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
-bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor);
 bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tipb::Executor & executor)
 {
     // collect output_field_types of children
@@ -147,8 +163,8 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
     case tipb::ExecType::TypeWindow:
         // Window will only be pushed down in mpp mode.
         // In mpp mode, ExchangeSender or Sender will return output_field_types directly.
-        // If not in mpp mode, window executor type is invalid.
-        throw TiFlashException("Window executor type is invalid in non-mpp mode, should not reach here.", Errors::Coprocessor::Internal);
+        // If not in mpp mode or debug mode, window executor type is invalid.
+        return collectForWindow(output_field_types, executor);
     case tipb::ExecType::TypeExchangeReceiver:
         return collectForReceiver(output_field_types, executor.exchange_receiver());
     case tipb::ExecType::TypeTableScan:

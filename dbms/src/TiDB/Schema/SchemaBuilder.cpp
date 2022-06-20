@@ -370,7 +370,15 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         const auto & schema_change = schema_changes[i];
         /// Update column infos by applying schema change in this step.
         schema_change.second(orig_table_info);
-        /// Update schema version aggressively for the sake of correctness.
+        /// Update schema version aggressively for the sake of correctness（for read part).
+        /// In read action, we will use table_info.schema_version(storage_version) and TiDBSchemaSyncer.cur_version(global_version) to compare with query_version, to decide whether we can read under this query_version, or we need to make the schema newer.
+        /// In our comparison logic, we only serve the query when the query schema version meet the criterion: storage_version <= query_version <= global_version(The more detail info you can refer the comments in DAGStorageInterpreter::getAndLockStorages.)
+        /// And when apply multi diffs here, we only update global_version when all diffs have been applied.
+        /// So the global_version may be less than the actual "global_version" of the local schema in the process of applying schema changes.
+        /// And if we don't update the storage_version ahead of time, we may meet the following case when apply multiple diffs: storage_version <= global_version < actual "global_version".
+        /// If we receive a query with the same version as global_version, we can have the following scenario: storage_version <= global_version == query_version < actual "global_version".
+        /// And because storage_version <= global_version == query_version meet the criterion of serving the query, the query will be served. But query_version < actual "global_version" indicates that we use a newer schema to server an older query which may cause some inconsistency issue.
+        /// So we update storage_version aggressively to prevent the above scenario happens.
         orig_table_info.schema_version = target_version;
         auto alter_lock = storage->lockForAlter(getThreadName());
         storage->alterFromTiDB(
@@ -963,13 +971,12 @@ void SchemaBuilder<Getter, NameMapper>::applyDropSchema(const String & db_name)
 }
 
 std::tuple<NamesAndTypes, Strings>
-parseColumnsFromTableInfo(const TiDB::TableInfo & table_info, Poco::Logger * log)
+parseColumnsFromTableInfo(const TiDB::TableInfo & table_info)
 {
     NamesAndTypes columns;
     std::vector<String> primary_keys;
     for (const auto & column : table_info.columns)
     {
-        LOG_FMT_DEBUG(log, "Analyzing column: {}, type: {}", column.name, static_cast<int>(column.tp));
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(column.name, type);
         if (column.hasPriKeyFlag())
@@ -999,7 +1006,7 @@ String createTableStmt(
     Poco::Logger * log)
 {
     LOG_FMT_DEBUG(log, "Analyzing table info : {}", table_info.serialize());
-    auto [columns, pks] = parseColumnsFromTableInfo(table_info, log);
+    auto [columns, pks] = parseColumnsFromTableInfo(table_info);
 
     String stmt;
     WriteBufferFromString stmt_buf(stmt);

@@ -204,6 +204,66 @@ void serializeExchangeReceiver(const String & executor_id, const tipb::ExchangeR
     buf.append("}\n");
 }
 
+void serializeWindow(const String & executor_id, const tipb::Window & window [[maybe_unused]], FmtBuffer & buf)
+{
+    buf.fmtAppend("{} | partition_by: {{", executor_id);
+    buf.joinStr(
+        window.partition_by().begin(),
+        window.partition_by().end(),
+        [&](const auto & partition_by, FmtBuffer & fb) {
+            fb.append("(");
+            serializeExpression(partition_by.expr(), buf);
+            fb.fmtAppend(", desc: {})", partition_by.desc());
+        },
+        ", ");
+    buf.append("}}, order_by: {");
+    buf.joinStr(
+        window.order_by().begin(),
+        window.order_by().end(),
+        [&](const auto & order_by, FmtBuffer & fb) {
+            fb.append("(");
+            serializeExpression(order_by.expr(), buf);
+            fb.fmtAppend(", desc: {})", order_by.desc());
+        },
+        ", ");
+    buf.append("}, func_desc: {");
+    buf.joinStr(
+        window.func_desc().begin(),
+        window.func_desc().end(),
+        [&](const auto & func, FmtBuffer &) {
+            serializeExpression(func, buf);
+        },
+        ", ");
+    if (window.has_frame())
+    {
+        buf.append("}, frame: {");
+        if (window.frame().has_start())
+        {
+            buf.fmtAppend("start<{}, {}, {}>", window.frame().start().type(), window.frame().start().unbounded(), window.frame().start().offset());
+        }
+        if (window.frame().has_end())
+        {
+            buf.fmtAppend(", end<{}, {}, {}>", window.frame().end().type(), window.frame().end().unbounded(), window.frame().end().offset());
+        }
+    }
+    buf.append("}\n");
+}
+
+void serializeSort(const String & executor_id, const tipb::Sort & sort [[maybe_unused]], FmtBuffer & buf)
+{
+    buf.fmtAppend("{} | isPartialSort: {}, partition_by: {{", executor_id, sort.ispartialsort());
+    buf.joinStr(
+        sort.byitems().begin(),
+        sort.byitems().end(),
+        [&](const auto & by, FmtBuffer & fb) {
+            fb.append("(");
+            serializeExpression(by.expr(), buf);
+            fb.fmtAppend(", desc: {})", by.desc());
+        },
+        ", ");
+    buf.append("}\n");
+}
+
 void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t level)
 {
     auto append_str = [&level, this](const tipb::Executor & executor) {
@@ -248,9 +308,11 @@ void ExecutorSerializer::serialize(const tipb::Executor & root_executor, size_t 
             serializeExchangeSender(executor.executor_id(), executor.exchange_sender(), buf);
             break;
         case tipb::ExecType::TypeSort:
-            throw TiFlashException("Sort executor is not supported", Errors::Coprocessor::Unimplemented); // todo support sort executor.
+            serializeSort(executor.executor_id(), executor.sort(), buf);
+            break;
         case tipb::ExecType::TypeWindow:
-            throw TiFlashException("Window executor is not supported", Errors::Coprocessor::Unimplemented); // todo support window executor.
+            serializeWindow(executor.executor_id(), executor.window(), buf);
+            break;
         default:
             throw TiFlashException("Should not reach here", Errors::Coprocessor::Internal);
         }

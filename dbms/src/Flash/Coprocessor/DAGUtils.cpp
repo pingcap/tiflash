@@ -29,7 +29,6 @@
 #include <unordered_map>
 namespace DB
 {
-
 const Int8 VAR_SIZE = 0;
 
 extern const String uniq_raw_res_name;
@@ -770,6 +769,10 @@ const String & getFunctionName(const tipb::Expr & expr)
     {
         return getAggFunctionName(expr);
     }
+    else if (isWindowFunctionExpr(expr))
+    {
+        return getWindowFunctionName(expr);
+    }
     else
     {
         auto it = scalar_func_map.find(expr.sig());
@@ -1429,6 +1432,7 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
         return tipb::EncodeType::TypeDefault;
     return encode_type;
 }
+
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
 {
     static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();

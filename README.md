@@ -12,7 +12,7 @@ TiFlash repository is based on [ClickHouse](https://github.com/ClickHouse/ClickH
 
 ### Start with TiDB Cloud
 
-Quickly explore TiFlash with [a free trial of TiDB Cloud](https://tidbcloud.com/signup).
+Quickly explore TiFlash with [a free trial of TiDB Cloud](https://tidbcloud.com/free-trial).
 
 See [TiDB Cloud Quick Start Guide](https://docs.pingcap.com/tidbcloud/tidb-cloud-quickstart).
 
