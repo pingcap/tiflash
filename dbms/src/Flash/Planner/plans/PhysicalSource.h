@@ -23,27 +23,23 @@ class PhysicalSource : public PhysicalLeaf
 {
 public:
     static PhysicalPlanPtr build(
-        const Block & sample_block,
-        const String & req_id)
-    {
-        NamesAndTypes schema;
-        for (const auto & col : sample_block)
-            schema.emplace_back(col.name, col.type);
-        return std::make_shared<PhysicalSource>("source", schema, sample_block, req_id);
-    }
+        const BlockInputStreams & source_streams,
+        const String & req_id);
 
     PhysicalSource(
         const String & executor_id_,
         const NamesAndTypes & schema_,
+        const String & req_id,
         const Block & sample_block_,
-        const String & req_id)
+        const BlockInputStreams & source_streams_)
         : PhysicalLeaf(executor_id_, PlanType::Source, schema_, req_id)
         , sample_block(sample_block_)
+        , source_streams(source_streams_)
     {
         is_record_profile_streams = false;
     }
 
-    void transformImpl(DAGPipeline &, Context &, size_t) override {}
+    void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
     void finalize(const Names &) override {}
 
@@ -51,5 +47,7 @@ public:
 
 private:
     Block sample_block;
+
+    BlockInputStreams source_streams;
 };
 } // namespace DB

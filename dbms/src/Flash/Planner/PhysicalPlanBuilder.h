@@ -35,15 +35,11 @@ public:
 
     void build(const String & executor_id, const tipb::Executor * executor);
 
-    void buildSource(const Block & sample_block);
+    void buildSource(const BlockInputStreams & source_streams);
 
     void buildFinalProjection(const String & column_prefix, bool is_root);
 
-    PhysicalPlanPtr getResult() const
-    {
-        RUNTIME_ASSERT(cur_plans.size() == 1, log, "There can only be one plan output, but here are {}", cur_plans.size());
-        return cur_plans.back();
-    }
+    PhysicalPlanPtr getResult() const;
 
 private:
     PhysicalPlanPtr popBack();

@@ -18,7 +18,6 @@
 #include <Flash/Planner/PhysicalPlanBuilder.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Planner.h>
-#include <Flash/Planner/optimize.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 
@@ -110,7 +109,7 @@ void Planner::executeImpl(DAGPipeline & pipeline)
     for (const auto & input_streams : input_streams_vec)
     {
         RUNTIME_ASSERT(!input_streams.empty(), log, "input streams cannot be empty");
-        builder.buildSource(input_streams.back()->getHeader());
+        builder.buildSource(input_streams);
     }
 
     analyzePhysicalPlan(builder, query_block);
@@ -119,10 +118,9 @@ void Planner::executeImpl(DAGPipeline & pipeline)
 
     LOG_FMT_DEBUG(
         log,
-        "build physical plan tree: \n{}",
+        "build physical plan: \n{}",
         PhysicalPlanVisitor::visitToString(physical_plan));
 
-    physical_plan = optimize(context, physical_plan);
     physical_plan->transform(pipeline, context, max_streams);
 }
 } // namespace DB

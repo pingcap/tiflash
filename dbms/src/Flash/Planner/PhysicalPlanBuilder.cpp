@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
+#include <Flash/Planner/optimize.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
@@ -123,8 +124,16 @@ PhysicalPlanPtr PhysicalPlanBuilder::popBack()
     return back;
 }
 
-void PhysicalPlanBuilder::buildSource(const Block & sample_block)
+void PhysicalPlanBuilder::buildSource(const BlockInputStreams & source_streams)
 {
-    pushBack(PhysicalSource::build(sample_block, log->identifier()));
+    pushBack(PhysicalSource::build(source_streams, log->identifier()));
+}
+
+PhysicalPlanPtr PhysicalPlanBuilder::getResult() const
+{
+    RUNTIME_ASSERT(cur_plans.size() == 1, log, "There can only be one plan output, but here are {}", cur_plans.size());
+    PhysicalPlanPtr physical_plan = cur_plans.back();
+    physical_plan = optimize(context, physical_plan);
+    return physical_plan;
 }
 } // namespace DB

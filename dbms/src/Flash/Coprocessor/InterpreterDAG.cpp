@@ -68,6 +68,7 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
     }
     if (context.getSettingsRef().enable_planner && Planner::isSupported(query_block))
     {
+        LOG_FMT_DEBUG(dagContext().log, "use planer for query block with source {}", query_block.source_name);
         Planner planner(
             context,
             input_streams_vec,
