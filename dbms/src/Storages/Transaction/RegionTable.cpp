@@ -413,6 +413,15 @@ void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::func
         callback(it->second.regions);
 }
 
+void RegionTable::handleInternalRegionCounts(std::function<void(const TableID &, const size_t &)> && callback) const
+{
+    std::lock_guard lock(mutex);
+    for (const auto & [table_id, region] : tables)
+    {
+        callback(table_id, region.regions.size());
+    }
+}
+
 std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const TableID table_id) const
 {
     auto & kvstore = context->getTMTContext().getKVStore();

@@ -74,8 +74,8 @@ HttpRequestRes HandleHttpRequestSyncStatus(
 }
 
 HttpRequestRes HandleHttpRequestAllRegionsStatus(EngineStoreServerWrap * server,
-                                                 std::string_view path,
-                                                 const std::string & api_name,
+                                                 std::string_view,
+                                                 const std::string &,
                                                  std::string_view,
                                                  std::string_view)
 {
@@ -83,26 +83,11 @@ HttpRequestRes HandleHttpRequestAllRegionsStatus(EngineStoreServerWrap * server,
 
     std::stringstream ss;
     auto & tmt = *server->tmt;
-    const auto & table_maps = tmt.getStorages().getAllStorage();
 
-    ss << table_maps.size() << std::endl;
-    for (const auto [table_id, storage] : table_maps)
-    {
-        size_t region_counts = 0;
-        std::vector<RegionID> region_list;
-
-        tmt.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
-            region_counts = regions.size();
-            region_list.reserve(regions.size());
-            for (const auto & region : regions)
-                region_list.push_back(region.first);
+    tmt.getRegionTable().handleInternalRegionCounts(
+        [&](const TableID & table_id, const size_t & region_counts) {
+            ss << fmt::format("%d %d", table_id, region_counts) << std::endl;
         });
-
-        ss << fmt::format("%d %d", table_id, region_counts) << std::endl;
-        for (const auto & region_id : region_list)
-            ss << region_id << ' ';
-        ss << std::endl;
-    }
 
     auto * s = RawCppString::New(ss.str());
     return HttpRequestRes{
