@@ -310,6 +310,11 @@ void MPPTask::runImpl()
         LOG_ERROR(log, "task running meets error " << e.what());
         writeErrToAllTunnel(e.what());
     }
+    catch (pingcap::Exception & e)
+    {
+        LOG_ERROR(log, "task running meets error " << e.message());
+        writeErrToAllTunnel(e.message());
+    }
     catch (...)
     {
         LOG_ERROR(log, "unrecovered error");
