@@ -47,7 +47,7 @@ static inline void * allocateImpl(size_t size)
 {
     static std::atomic_bool hugetlb_allowed{true};
 
-    void * result = MAP_FAILED;
+    void * result = MAP_FAILED; // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
     const int prot_flags = PROT_READ | PROT_WRITE;
     int mmap_flags = MAP_ANONYMOUS | MAP_PRIVATE;
 
@@ -58,18 +58,18 @@ static inline void * allocateImpl(size_t size)
     if (size % SIZE_2MIB == 0 && hugetlb_allowed.load(std::memory_order_relaxed))
     {
 #if defined(__linux__)
-        if (MAP_FAILED == result)
+        if (MAP_FAILED == result) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
         {
             system_allocate(mmap_flags | MAP_HUGETLB | MAP_HUGE_2MB);
         }
-        if (MAP_FAILED == result)
+        if (MAP_FAILED == result) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
         {
             hugetlb_allowed.store(false, std::memory_order_relaxed);
         }
 #endif
     }
 
-    if (MAP_FAILED == result)
+    if (MAP_FAILED == result) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
     {
         system_allocate(mmap_flags);
     }
@@ -133,7 +133,7 @@ GlobalPagePool::~GlobalPagePool()
 
 GlobalPagePool::PerNumaFreeList & GlobalPagePool::getFreeList() const
 {
-    auto numa = common::numa::getNumaNode() % numa_count;
+    auto numa = common::numa::getNumaNode() % numa_count; // NOLINT(clang-analyzer-core.DivideZero)
     return numa_freelists[numa];
 }
 
