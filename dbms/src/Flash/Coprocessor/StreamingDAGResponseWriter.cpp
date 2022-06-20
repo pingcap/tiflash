@@ -49,7 +49,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
     uint32_t fine_grained_shuffle_stream_count_,
-    Int64 fine_grained_shuffle_batch_size_)
+    UInt64 fine_grained_shuffle_batch_size_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
     , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
@@ -109,7 +109,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 
     if (canUseFineGrainedShuffle())
     {
-        if (static_cast<Int64>(rows_in_blocks) >= fine_grained_shuffle_batch_size)
+        if (static_cast<UInt64>(rows_in_blocks) >= fine_grained_shuffle_batch_size)
             batchWriteFineGrainedShuffle<false>();
     }
     else

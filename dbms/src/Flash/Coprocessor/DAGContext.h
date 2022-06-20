@@ -360,7 +360,7 @@ public:
     uint32_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
     Int64 getFineGrainedShuffleBatchSize() const { return fine_grained_shuffle_batch_size; }
     void setFineGrainedShuffleStreamCount(uint32_t count) { fine_grained_shuffle_stream_count = count; }
-    void setFineGrainedShuffleBatchSize(Int64 size) { fine_grained_shuffle_batch_size = size; }
+    void setFineGrainedShuffleBatchSize(UInt64 size) { fine_grained_shuffle_batch_size = size; }
 
 private:
     void initExecutorIdToJoinIdMap();
@@ -395,7 +395,7 @@ private:
     std::vector<SubqueriesForSets> subqueries;
 
     uint32_t fine_grained_shuffle_stream_count;
-    Int64 fine_grained_shuffle_batch_size;
+    UInt64 fine_grained_shuffle_batch_size;
 
     bool is_test = false; /// switch for test, do not use it in production.
     std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources

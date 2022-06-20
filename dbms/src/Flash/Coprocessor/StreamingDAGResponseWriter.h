@@ -47,7 +47,7 @@ public:
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         uint32_t fine_grained_shuffle_stream_count_,
-        Int64 fine_grained_shuffle_batch_size);
+        UInt64 fine_grained_shuffle_batch_size);
     void write(const Block & block) override;
     void finishWrite() override;
 
@@ -81,7 +81,7 @@ private:
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     uint32_t fine_grained_shuffle_stream_count;
-    Int64 fine_grained_shuffle_batch_size;
+    UInt64 fine_grained_shuffle_batch_size;
 };
 
 } // namespace DB
