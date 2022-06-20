@@ -73,7 +73,7 @@ std::vector<String> parseDateFormat(String format)
 {
     format = Poco::trimInPlace(format);
 
-    if (format.size() == 0)
+    if (format.empty())
         return {};
 
     if (!std::isdigit(format[0]) || !std::isdigit(format[format.size() - 1]))
@@ -853,9 +853,8 @@ size_t maxFormattedDateTimeStringLength(const String & format)
 {
     size_t result = 0;
     bool in_pattern_match = false;
-    for (size_t i = 0; i < format.size(); i++)
+    for (char x : format)
     {
-        char x = format[i];
         if (in_pattern_match)
         {
             switch (x)
@@ -990,9 +989,8 @@ bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 &
 MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
 {
     bool in_pattern_match = false;
-    for (size_t i = 0; i < layout.size(); i++)
+    for (char x : layout)
     {
-        char x = layout[i];
         if (in_pattern_match)
         {
             switch (x)
@@ -1227,7 +1225,9 @@ struct MyDateTimeParser::Context
     // The pos we are parsing from
     size_t pos = 0;
 
-    Context(StringRef view_) : view(std::move(view_)) {}
+    explicit Context(StringRef view_)
+        : view(std::move(view_))
+    {}
 };
 
 // Try to parse digits with number of `limit` starting from view[pos]
@@ -1482,6 +1482,9 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                     });
                     break;
                 }
+		case 'm':
+		                //"%m": Month, numeric (00..12)
+				[[fallthrough]];
                 case 'c':
                 {
                     //"%c": Month, numeric (0..12)
@@ -1523,9 +1526,9 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                             time.micro_second = 0;
                             return true;
                         }
-                        // The siffix '0' can be ignored.
+                        // The suffix '0' can be ignored.
                         // "9" means 900000
-                        while (ms > 0 && ms * 10 < 1000000)
+			for (size_t i = step; i < 6; i++)
                         {
                             ms *= 10;
                         }
@@ -1616,19 +1619,6 @@ MyDateTimeParser::MyDateTimeParser(String format_) : format(std::move(format_))
                         }
                         if (step == 0)
                             return false;
-                        ctx.pos += step;
-                        return true;
-                    });
-                    break;
-                }
-                case 'm':
-                {
-                    //"%m": Month, numeric (00..12)
-                    parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                        auto [step, month] = parseNDigits(ctx.view, ctx.pos, 2);
-                        if (step == 0 || month > 12)
-                            return false;
-                        time.month = month;
                         ctx.pos += step;
                         return true;
                     });
@@ -1880,7 +1870,7 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
     MyDateTimeParser::Context ctx(str_view);
 
     // TODO: can we return warnings to TiDB?
-    for (auto & f : parsers)
+    for (const auto & f : parsers)
     {
         // Ignore all prefix white spaces before each pattern match (TODO: handle unicode space?)
         while (ctx.pos < str_view.size && isWhitespaceASCII(str_view.data[ctx.pos]))
@@ -1889,7 +1879,7 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
         if (ctx.pos == ctx.view.size)
             break;
 
-        if (f(ctx, my_time) != true)
+        if (!f(ctx, my_time))
         {
 #ifndef NDEBUG
             LOG_TRACE(&Logger::get("MyDateTimeParser"),
