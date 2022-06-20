@@ -194,7 +194,7 @@ private:
 };
 
 #define REGISTER_WORKLOAD(WORKLOAD)                                              \
-    void __attribute__((constructor)) _work_load_register_named_##WORKLOAD(void) \
+    void _work_load_register_named_##WORKLOAD(void) \
     {                                                                            \
         StressWorkloadManger::getInstance().reg(                                 \
             WORKLOAD::nameFunc(),                                                \

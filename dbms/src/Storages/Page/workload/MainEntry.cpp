@@ -31,7 +31,6 @@ int StressWorkload::mainEntry(int argc, char ** argv)
         void _work_load_register_named_HeavySkewWriteRead();
         f = _work_load_register_named_HeavySkewWriteRead;
         f();
-        ;
         void _work_load_register_named_HeavyWrite();
         f = _work_load_register_named_HeavyWrite;
         f();
