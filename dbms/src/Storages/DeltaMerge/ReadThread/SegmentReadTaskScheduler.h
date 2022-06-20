@@ -14,7 +14,6 @@ public:
     }
 
     void add(SegmentReadTaskPoolPtr & pool);
-    void del(uint64_t pool_id);
 
     std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, SegmentReadTaskPoolPtr>>> getInputStreams();
     
@@ -23,14 +22,33 @@ private:
     SegmentReadTaskPools unsafeGetPools(const std::vector<uint64_t> & pool_ids);
     std::mutex mtx;
     // pool_id -> pool
-    // uint64_t next_pool_id;
-    std::list<SegmentReadTaskPoolPtr> read_pools;
+    std::list<std::weak_ptr<SegmentReadTaskPool>> read_pools;
+    std::list<std::weak_ptr<SegmentReadTaskPool>>::iterator next_read_pool;
+    std::list<std::weak_ptr<SegmentReadTaskPool>>::iterator initReadPool()
+    {
+        if (next_read_pool == read_pools.end())
+        {
+            next_read_pool == read_pools.begin();
+        }
+        return next_read_pool;
+    }
+    std::list<std::weak_ptr<SegmentReadTaskPool>>::iterator nextReadPool()
+    {
+        ++next_read_pool;
+        return initReadPool();
+    }
+    std::list<std::weak_ptr<SegmentReadTaskPool>>::iterator eraseReadPool(std::list<std::weak_ptr<SegmentReadTaskPool>>::iterator itr)
+    {
+        next_read_pool = read_pools.erase(itr);
+        return initReadPool();
+    }
+
     // seg_id -> pool_ids
     std::unordered_map<uint64_t, std::vector<uint64_t>> segments;
 
     Poco::Logger * log;
 
-    SegmentReadTaskScheduler() : log(&Poco::Logger::get("SegmentReadTaskScheduler")) {}
+    SegmentReadTaskScheduler() : next_read_pool(0), log(&Poco::Logger::get("SegmentReadTaskScheduler")) {}
 };
 
 class DMFileReader;
