@@ -55,7 +55,7 @@ PhysicalPlanPtr PhysicalProjection::build(
     if (should_add_project_alias)
         project_actions->add(ExpressionAction::project(project_aliases));
 
-    auto physical_projection = std::make_shared<PhysicalProjection>(executor_id, schema, req_id, project_actions);
+    auto physical_projection = std::make_shared<PhysicalProjection>(executor_id, schema, req_id, "projection", project_actions);
     physical_projection->appendChild(child);
     return physical_projection;
 }
@@ -82,7 +82,7 @@ PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
         schema[i].name = final_project_aliases[i].second;
     }
 
-    auto physical_projection = std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, req_id, project_actions);
+    auto physical_projection = std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, req_id, "final projection", project_actions);
     // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
     physical_projection->appendChild(child);
@@ -122,7 +122,7 @@ PhysicalPlanPtr PhysicalProjection::buildRootFinal(
         schema.emplace_back(alias, type);
     }
 
-    auto physical_projection = std::make_shared<PhysicalProjection>("RootFinalProjection", schema, req_id, project_actions);
+    auto physical_projection = std::make_shared<PhysicalProjection>("RootFinalProjection", schema, req_id, "final projection", project_actions);
     // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
     physical_projection->appendChild(child);
@@ -133,7 +133,7 @@ void PhysicalProjection::transformImpl(DAGPipeline & pipeline, Context & context
 {
     child->transform(pipeline, context, max_streams);
 
-    executeExpression(pipeline, project_actions, log, "projection");
+    executeExpression(pipeline, project_actions, log, extra_info);
 }
 
 void PhysicalProjection::finalize(const Names & parent_require)
