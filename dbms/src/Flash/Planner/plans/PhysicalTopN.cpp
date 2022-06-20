@@ -54,8 +54,6 @@ void PhysicalTopN::transformImpl(DAGPipeline & pipeline, Context & context, size
 {
     child->transform(pipeline, context, max_streams);
 
-    const Settings & settings = context.getSettingsRef();
-
     executeExpression(pipeline, before_sort_actions, log, "before TopN");
 
     orderStreams(pipeline, max_streams, order_descr, limit, context, log);

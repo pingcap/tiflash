@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Planner/FinalizeHelper.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Interpreters/Context.h>
 
@@ -25,21 +26,24 @@ PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(
     const String & executor_id_,
     const NamesAndTypes & schema_,
     const String & req_id,
+    const Block & sample_block_,
     const BlockInputStreams & mock_streams_)
-    : PhysicalLeaf(executor_id_, PlanType::ExchangeReceiver, schema_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::MockExchangeReceiver, schema_, req_id)
+    , sample_block(sample_block_)
     , mock_streams(mock_streams_)
 {}
 
 PhysicalPlanPtr PhysicalMockExchangeReceiver::build(
-    const Context & context,
+    Context & context,
     const String & executor_id,
     const String & req_id,
     const tipb::ExchangeReceiver & exchange_receiver)
 {
     NamesAndTypes schema;
     BlockInputStreams mock_streams;
-    size_t max_streams = context.getDAGContext().initialize_concurrency;
-    if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(executor_id).empty())
+    auto & dag_context = *context.getDAGContext();
+    size_t max_streams = dag_context.initialize_concurrency;
+    if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
     {
         for (size_t i = 0; i < max_streams; ++i)
             // use max_block_size / 10 to determine the mock block's size
@@ -49,29 +53,32 @@ PhysicalPlanPtr PhysicalMockExchangeReceiver::build(
     }
     else
     {
-        std::tie(schema, mock_streams) = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, executor_id);
+        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, dag_context.log, executor_id);
+        schema = std::move(names_and_types);
+        mock_streams.insert(mock_streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
     }
 
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
         executor_id,
         schema,
         req_id,
+        PhysicalPlanHelper::constructBlockFromSchema(schema),
         mock_streams);
     return physical_mock_exchange_receiver;
 }
 
-void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
+void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalExchangeReceiver::finalize(const Names & parent_require)
+void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 }
 
-const Block & PhysicalExchangeReceiver::getSampleBlock() const
+const Block & PhysicalMockExchangeReceiver::getSampleBlock() const
 {
-    return mock_streams.back()->getHeader();
+    return sample_block;
 }
 } // namespace DB
