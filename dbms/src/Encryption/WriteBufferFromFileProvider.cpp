@@ -71,7 +71,7 @@ void WriteBufferFromFileProvider::nextImpl()
 
         if ((-1 == res || 0 == res) && errno != EINTR)
         {
-            throwFromErrno("Cannot write to file " + getFileName(), ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR);
+            throwFromErrno("Cannot write to file " + getFileName(), ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR); // NOLINT
         }
 
         if (res > 0)

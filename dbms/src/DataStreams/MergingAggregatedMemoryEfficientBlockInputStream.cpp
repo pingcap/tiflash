@@ -149,7 +149,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::cancel(bool kill)
 
     for (auto & input : inputs)
     {
-        if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(input.stream.get()))
+        if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(input.stream.get()))
         {
             try
             {
