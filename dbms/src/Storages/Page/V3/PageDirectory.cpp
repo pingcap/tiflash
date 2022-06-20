@@ -1245,7 +1245,7 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
     return done_any_io;
 }
 
-PageEntriesV3 PageDirectory::gcInMemEntries(bool need_remove_blob)
+PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
 {
     UInt64 lowest_seq = sequence.load();
 
@@ -1309,7 +1309,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool need_remove_blob)
         const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
             &normal_entries_to_deref,
-            need_remove_blob ? &all_del_entries : nullptr,
+            return_removed_entries ? &all_del_entries : nullptr,
             iter->second->acquireLock());
 
         {
@@ -1348,7 +1348,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool need_remove_blob)
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
-            need_remove_blob ? &all_del_entries : nullptr);
+            return_removed_entries ? &all_del_entries : nullptr);
 
         if (all_deleted)
         {
