@@ -478,9 +478,8 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
 bool VersionedPageEntries::cleanOutdatedEntries(
     UInt64 lowest_seq,
     std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
-    PageEntriesV3 & entries_removed,
-    const PageLock & /*page_lock*/,
-    bool need_fill_entries_removed)
+    PageEntriesV3 * entries_removed,
+    const PageLock & /*page_lock*/)
 {
     if (type == EditRecordType::VAR_EXTERNAL)
     {
@@ -542,9 +541,9 @@ bool VersionedPageEntries::cleanOutdatedEntries(
             {
                 if (iter->second.being_ref_count == 1)
                 {
-                    if (need_fill_entries_removed)
+                    if (entries_removed)
                     {
-                        entries_removed.emplace_back(iter->second.entry);
+                        entries_removed->emplace_back(iter->second.entry);
                     }
                     iter = entries.erase(iter);
                 }
@@ -555,9 +554,9 @@ bool VersionedPageEntries::cleanOutdatedEntries(
             else
             {
                 // else there are newer "entry" in the version list, the outdated entries should be removed
-                if (need_fill_entries_removed)
+                if (entries_removed)
                 {
-                    entries_removed.emplace_back(iter->second.entry);
+                    entries_removed->emplace_back(iter->second.entry);
                 }
                 iter = entries.erase(iter);
             }
@@ -571,7 +570,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     return entries.empty() || (entries.size() == 1 && entries.begin()->second.isDelete());
 }
 
-bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 & entries_removed, bool need_fill_entries_removed)
+bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 * entries_removed)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
@@ -608,7 +607,7 @@ bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal pag
 
         // Clean outdated entries after decreased the ref-counter
         // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
-        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock, need_fill_entries_removed);
+        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
     }
 
     throw Exception(fmt::format("calling derefAndClean with invalid state [state={}]", toDebugString()));
@@ -1310,9 +1309,8 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool need_remove_blob)
         const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
             &normal_entries_to_deref,
-            all_del_entries,
-            iter->second->acquireLock(),
-            need_remove_blob);
+            need_remove_blob ? &all_del_entries : nullptr,
+            iter->second->acquireLock());
 
         {
             std::unique_lock write_lock(table_rw_mutex);
@@ -1350,8 +1348,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool need_remove_blob)
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
-            all_del_entries,
-            need_remove_blob);
+            need_remove_blob ? &all_del_entries : nullptr);
 
         if (all_deleted)
         {
