@@ -102,7 +102,6 @@ namespace DB
     M(tiflash_tmt_write_parts_count, "Total number of TMT engine write parts", Counter)                                                   \
     M(tiflash_tmt_write_parts_duration_seconds, "Bucketed histogram of TMT engine write parts duration", Histogram,                       \
         F(type_tmt_write_duration, {{"type", "tmt_write_parts_duration"}}, ExpBuckets{0.001, 2, 20}))                                     \
-    M(tiflash_tmt_read_parts_count, "Total number of TMT engine read parts", Gauge)                                                       \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                          \
     M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                              \
         F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.001, 2, 20}))                           \
@@ -154,9 +153,9 @@ namespace DB
         F(type_v3_mvcc_dumped, {"type", "v3_mvcc_dumped"}),                                                                               \
         F(type_v3_bs_full_gc, {"type", "v3_bs_full_gc"}))                                                                                 \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
-        F(type_exec, {{"type", "exec"}}, ExpBuckets{0.001, 2, 20}),                                                                       \
-        F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
-        F(type_v3, {{"type", "v3"}}, ExpBuckets{0.001, 2, 20}))                                                                           \
+        F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}),                                                                      \
+        F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
+        F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                          \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
         F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
     M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
@@ -175,11 +174,11 @@ namespace DB
     M(tiflash_raft_process_keys, "Total number of keys processed in some types of Raft commands", Counter,                                \
         F(type_apply_snapshot, {"type", "apply_snapshot"}), F(type_ingest_sst, {"type", "ingest_sst"}))                                   \
     M(tiflash_raft_apply_write_command_duration_seconds, "Bucketed histogram of applying write command Raft logs", Histogram,             \
-        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 20}), F(type_admin, {{"type", "admin"}}, ExpBuckets{0.001, 2, 20}))       \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}), F(type_admin, {{"type", "admin"}}, ExpBuckets{0.0005, 2, 20}))     \
     M(tiflash_raft_upstream_latency, "The latency that tikv sends raft log to tiflash.", Histogram,                                       \
-        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 20}))                                                                     \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 30}))                                                                     \
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
-        F(type_decode, {{"type", "decode"}}, ExpBuckets{0.001, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 20}))     \
+        F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
         F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                      \
     M(tiflash_object_count, "Number of objects", Gauge,                                                                                   \
