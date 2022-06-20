@@ -161,8 +161,6 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
 
     const auto * raw_type = type.get();
 
-    // if minmaxes_data has null value, the value of minmaxes_data[i] is meaningless and maybe just some random value.
-    // But in checkEqual, we have checked the has_null_marks and ensured that there is no null value in MinMax Indexes.
 #define DISPATCH(TYPE)                                                                         \
     if (typeid_cast<const DataType##TYPE *>(raw_type))                                         \
     {                                                                                          \
@@ -220,6 +218,8 @@ RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const D
     if (!(*has_value_marks)[pack_index])
         return RSResult::None;
 
+    // if minmaxes_data has null value, the value of minmaxes_data[i] is meaningless and maybe just some random value.
+    // But we have checked the has_null_marks above and ensured that there is no null value in MinMax Indexes.
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
     {
