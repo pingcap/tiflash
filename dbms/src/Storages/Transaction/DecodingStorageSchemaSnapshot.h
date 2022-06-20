@@ -125,11 +125,11 @@ struct DecodingStorageSchemaSnapshot
         {
             auto pk_pos_iter = pk_pos_map.begin();
             size_t column_pos_in_block = 0;
-            for (auto iter = sorted_column_id_with_pos.begin(); iter != sorted_column_id_with_pos.end(); iter++)
+            for (auto & column_id_with_pos : sorted_column_id_with_pos)
             {
                 if (pk_pos_iter == pk_pos_map.end())
                     break;
-                if (pk_pos_iter->first == iter->first)
+                if (pk_pos_iter->first == column_id_with_pos.first)
                 {
                     pk_pos_iter->second = column_pos_in_block;
                     pk_pos_iter++;
