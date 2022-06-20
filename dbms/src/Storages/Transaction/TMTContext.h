@@ -34,14 +34,8 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class BackgroundService;
 using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 
-class MinTSOScheduler;
-using MPPTaskSchedulerPtr = std::unique_ptr<MinTSOScheduler>;
-
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
-
-struct MPPQueryTaskSet;
-using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 
 class GCManager;
 using GCManagerPtr = std::shared_ptr<GCManager>;

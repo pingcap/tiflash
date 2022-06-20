@@ -19,6 +19,7 @@
 #include <Debug/MockTiDB.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ParserSelectQuery.h>
@@ -27,6 +28,8 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
+
+#include <optional>
 
 namespace DB
 {
@@ -272,6 +275,54 @@ struct Join : Executor
 
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
+
+using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
+
+struct MockWindowFrame
+{
+    std::optional<tipb::WindowFrameType> type;
+    std::optional<MockWindowFrameBound> start;
+    std::optional<MockWindowFrameBound> end;
+    // TODO: support calcFuncs
+};
+
+struct Window : Executor
+{
+    std::vector<ASTPtr> func_descs;
+    std::vector<ASTPtr> partition_by_exprs;
+    std::vector<ASTPtr> order_by_exprs;
+    MockWindowFrame frame;
+
+    Window(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> func_descs_, std::vector<ASTPtr> partition_by_exprs_, std::vector<ASTPtr> order_by_exprs_, MockWindowFrame frame_)
+        : Executor(index_, "window_" + std::to_string(index_), output_schema_)
+        , func_descs(std::move(func_descs_))
+        , partition_by_exprs(std::move(partition_by_exprs_))
+        , order_by_exprs(order_by_exprs_)
+        , frame(frame_)
+    {
+    }
+    // Currently only use Window Executor in Unit Test which don't call columnPrume.
+    // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+};
+
+struct Sort : Executor
+{
+    std::vector<ASTPtr> by_exprs;
+    bool is_partial_sort;
+
+    Sort(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> by_exprs_, bool is_partial_sort_)
+        : Executor(index_, "sort_" + std::to_string(index_), output_schema_)
+        , by_exprs(by_exprs_)
+        , is_partial_sort(is_partial_sort_)
+    {
+    }
+    // Currently only use Sort Executor in Unit Test which don't call columnPrume.
+    // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+};
 } // namespace mock
 
 using ExecutorPtr = std::shared_ptr<mock::Executor>;
@@ -294,8 +345,9 @@ ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, ti
 
 ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
 
+ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame);
+
+ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort);
+
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
-
-//TODO: add compileWindow
-
 } // namespace DB

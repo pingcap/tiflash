@@ -1223,7 +1223,7 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
         // `being_ref_count` by the function `createSnapshot()`.
         assert(!files_snap.persisted_log_files.empty()); // should not be empty when `needSave` return true
         auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
-        auto identifier = fmt::format("{}_dump_{}", wal->name(), log_num);
+        auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
         auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
         PageDirectoryFactory factory;
         // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that

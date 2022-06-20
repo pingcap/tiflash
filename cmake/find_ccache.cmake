@@ -24,6 +24,20 @@ if (USE_CCACHE AND CCACHE_FOUND AND NOT CMAKE_CXX_COMPILER_LAUNCHER MATCHES "cca
     message ("${CCACHE_CONFIG}")
     set_property (GLOBAL PROPERTY RULE_LAUNCH_COMPILE ${CCACHE_FOUND})
     set_property (GLOBAL PROPERTY RULE_LAUNCH_LINK ${CCACHE_FOUND})
+
+    if (ENABLE_PCH)
+        execute_process (COMMAND ${CCACHE_FOUND} --get-config sloppiness OUTPUT_VARIABLE _CCACHE_SLOPPINESS OUTPUT_STRIP_TRAILING_WHITESPACE)
+        string (FIND "${_CCACHE_SLOPPINESS}" "pch_defines" _CCACHE_SLOPPINESS_RES)
+        if (NOT _CCACHE_SLOPPINESS_RES STREQUAL "-1")
+            string (FIND "${_CCACHE_SLOPPINESS}" "time_macros" _CCACHE_SLOPPINESS_RES)
+        endif ()
+
+        if (_CCACHE_SLOPPINESS_RES STREQUAL "-1")
+            message(WARNING "`Precompiled header` won't be cached by ccache, sloppiness = `${CCACHE_SLOPPINESS}`,please execute `ccache -o sloppiness=pch_defines,time_macros`")
+            set (ENABLE_PCH FALSE CACHE BOOL "" FORCE)
+        endif ()
+    endif ()
+
 else ()
     message (STATUS "Not using ccache ${CCACHE_FOUND}, USE_CCACHE=${USE_CCACHE}")
 endif ()

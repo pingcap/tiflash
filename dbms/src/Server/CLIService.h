@@ -25,7 +25,6 @@
 #include <Server/IServer.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/ProxyFFI.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <daemon/BaseDaemon.h>
 #include <pingcap/Config.h>
 

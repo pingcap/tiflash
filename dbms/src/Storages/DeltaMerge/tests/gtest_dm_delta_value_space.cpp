@@ -18,13 +18,12 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <memory>
-
-#include "dm_basic_include.h"
 
 namespace CurrentMetrics
 {

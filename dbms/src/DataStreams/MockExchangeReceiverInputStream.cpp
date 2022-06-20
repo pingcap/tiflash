@@ -30,6 +30,22 @@ MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(const tipb::Exc
     }
 }
 
+MockExchangeReceiverInputStream::MockExchangeReceiverInputStream(ColumnsWithTypeAndName columns, size_t max_block_size)
+    : columns(columns)
+    , output_index(0)
+    , max_block_size(max_block_size)
+{
+    rows = 0;
+    for (const auto & elem : columns)
+    {
+        if (elem.column)
+        {
+            assert(rows == 0 || rows == elem.column->size());
+            rows = elem.column->size();
+        }
+    }
+}
+
 ColumnPtr MockExchangeReceiverInputStream::makeColumn(ColumnWithTypeAndName elem) const
 {
     auto column = elem.type->createColumn();

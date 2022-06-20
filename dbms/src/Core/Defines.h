@@ -78,7 +78,6 @@
 /// too short a period can cause errors to disappear immediately after creation.
 #define DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_DECREASE_ERROR_PERIOD (2 * DBMS_DEFAULT_SEND_TIMEOUT_SEC)
 #define DEFAULT_QUERIES_QUEUE_WAIT_TIME_MS 5000 /// Maximum waiting time in the request queue.
-#define DBMS_DEFAULT_BACKGROUND_POOL_SIZE 16
 
 #define DBMS_MIN_REVISION_WITH_CLIENT_INFO 54032
 #define DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE 54058

@@ -17,11 +17,12 @@
 #include <Flash/Coprocessor/PushDownFilter.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Storages/Transaction/TiDB.h>
-#include <pingcap/coprocessor/Client.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <kvproto/coprocessor.pb.h>
+#include <pingcap/coprocessor/Client.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 

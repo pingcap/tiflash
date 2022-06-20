@@ -15,7 +15,7 @@
 #pragma once
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/RegionInfo.h>
-#include <Storages/Transaction/TMTContext.h>
+
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -25,6 +25,7 @@
 
 namespace DB
 {
+class TMTContext;
 struct SingleTableRegions
 {
     RegionInfoMap local_regions;

@@ -62,8 +62,6 @@ public:
 
     void run();
 
-    void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
-
     int getNeededThreads();
 
     enum class ScheduleState
@@ -107,6 +105,12 @@ private:
 
     int estimateCountOfNewThreads();
 
+    void registerTunnels(const mpp::DispatchTaskRequest & task_request);
+
+    void initExchangeReceivers();
+
+    void cancelAllExchangeReceivers();
+
     tipb::DAGRequest dag_req;
 
     ContextPtr context;
@@ -122,9 +126,10 @@ private:
     MPPTaskId id;
 
     MPPTunnelSetPtr tunnel_set;
+    /// key: executor_id of ExchangeReceiver nodes in dag.
+    ExchangeReceiverMapPtr mpp_exchange_receiver_map;
 
-    // which targeted task we should send data by which tunnel.
-    std::unordered_map<MPPTaskId, MPPTunnelPtr> tunnel_map;
+    int new_thread_count_of_exchange_receiver = 0;
 
     MPPTaskManager * manager = nullptr;
 

@@ -25,6 +25,7 @@
 #if defined(__clang__)
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #pragma GCC diagnostic ignored "-Wtautological-constant-out-of-range-compare"
 #endif
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"

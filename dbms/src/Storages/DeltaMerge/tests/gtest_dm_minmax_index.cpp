@@ -22,7 +22,7 @@
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 #include <Storages/DeltaMerge/Index/ValueComparison.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
@@ -41,7 +41,7 @@ static const String DEFAULT_COL_NAME = "2020-09-26";
 class DMMinMaxIndexTest : public ::testing::Test
 {
 public:
-    DMMinMaxIndexTest() {}
+    DMMinMaxIndexTest() = default;
 
 protected:
     static void SetUpTestCase() {}

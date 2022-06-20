@@ -48,6 +48,14 @@ endif ()
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 option (USE_CCACHE "Set to OFF to disable ccache" ON)
+if (USE_CCACHE)
+    set(NOT_USE_CCACHE 0)
+else()
+    set(NOT_USE_CCACHE 1)
+endif()
+
+option(ENABLE_PCH "Enable `Precompiled header`" OFF)
+
 include (cmake/find_ccache.cmake)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
@@ -423,9 +431,6 @@ if (ENABLE_FAILPOINTS)
 else (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are disabled")
 endif (ENABLE_FAILPOINTS)
-
-# Enable PageStorage V3 test.
-option (ENABLE_V3_PAGESTORAGE "Enables V3 PageStorage" ON)
 
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)

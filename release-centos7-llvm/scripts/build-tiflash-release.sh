@@ -42,6 +42,7 @@ SRCPATH=$(
 )
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_THINLTO=${ENABLE_THINLTO:-ON}
+ENABLE_PCH=${ENABLE_PCH:-ON}
 
 INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
 rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
@@ -59,6 +60,7 @@ cmake -S "${SRCPATH}" \
   -DRUN_HAVE_STD_REGEX=0 \
   -DENABLE_THINLTO=${ENABLE_THINLTO} \
   -DTHINLTO_JOBS=${NPROC} \
+  -DENABLE_PCH=${ENABLE_PCH} \
   -GNinja
 
 cmake --build . --target tiflash --parallel ${NPROC}

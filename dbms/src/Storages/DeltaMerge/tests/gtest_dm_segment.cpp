@@ -18,15 +18,16 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include <ctime>
 #include <memory>
-
-#include "dm_basic_include.h"
 
 namespace CurrentMetrics
 {
@@ -50,12 +51,10 @@ extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
                                     DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
-class Segment_test : public DB::base::TiFlashStorageTestBasic
+class SegmentTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
-    Segment_test()
-        : storage_pool()
-    {}
+    SegmentTest() = default;
 
 public:
     static void SetUpTestCase() {}
@@ -63,7 +62,7 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
-        table_columns_ = std::make_shared<ColumnDefines>();
+        table_columns = std::make_shared<ColumnDefines>();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -79,43 +78,43 @@ protected:
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
+        return Segment::newSegment(*dm_context, table_columns, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
     }
 
     // setColumns should update dm_context at the same time
     void setColumns(const ColumnDefinesPtr & columns)
     {
-        *table_columns_ = *columns;
+        *table_columns = *columns;
 
-        dm_context_ = std::make_unique<DMContext>(*db_context,
-                                                  *storage_path_pool,
-                                                  *storage_pool,
-                                                  0,
-                                                  /*min_version_*/ 0,
-                                                  settings.not_compress_columns,
-                                                  false,
-                                                  1,
-                                                  db_context->getSettingsRef());
+        dm_context = std::make_unique<DMContext>(*db_context,
+                                                 *storage_path_pool,
+                                                 *storage_pool,
+                                                 0,
+                                                 /*min_version_*/ 0,
+                                                 settings.not_compress_columns,
+                                                 false,
+                                                 1,
+                                                 db_context->getSettingsRef());
     }
 
-    const ColumnDefinesPtr & tableColumns() const { return table_columns_; }
+    const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
-    DMContext & dmContext() { return *dm_context_; }
+    DMContext & dmContext() { return *dm_context; }
 
 protected:
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> storage_path_pool;
     std::unique_ptr<StoragePool> storage_pool;
-    ColumnDefinesPtr table_columns_;
+    ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
-    std::unique_ptr<DMContext> dm_context_;
+    std::unique_ptr<DMContext> dm_context;
 
     // the segment we are going to test
     SegmentPtr segment;
 };
 
-TEST_F(Segment_test, WriteRead)
+TEST_F(SegmentTest, WriteRead)
 try
 {
     const size_t num_rows_write = 100;
@@ -124,11 +123,11 @@ try
         // write to segment
         segment->write(dmContext(), block);
         // estimate segment
-        auto estimatedRows = segment->getEstimatedRows();
-        ASSERT_EQ(estimatedRows, block.rows());
+        auto estimated_rows = segment->getEstimatedRows();
+        ASSERT_EQ(estimated_rows, block.rows());
 
-        auto estimatedBytes = segment->getEstimatedBytes();
-        ASSERT_EQ(estimatedBytes, block.bytes());
+        auto estimated_bytes = segment->getEstimatedBytes();
+        ASSERT_EQ(estimated_bytes, block.bytes());
     }
 
     {
@@ -212,7 +211,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, WriteRead2)
+TEST_F(SegmentTest, WriteRead2)
 try
 {
     const size_t num_rows_write = dmContext().stable_pack_rows;
@@ -249,7 +248,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, WriteReadMultiRange)
+TEST_F(SegmentTest, WriteReadMultiRange)
 try
 {
     const size_t num_rows_write = 100;
@@ -258,11 +257,11 @@ try
         // write to segment
         segment->write(dmContext(), block);
         // estimate segment
-        auto estimatedRows = segment->getEstimatedRows();
-        ASSERT_EQ(estimatedRows, block.rows());
+        auto estimated_rows = segment->getEstimatedRows();
+        ASSERT_EQ(estimated_rows, block.rows());
 
-        auto estimatedBytes = segment->getEstimatedBytes();
-        ASSERT_EQ(estimatedBytes, block.bytes());
+        auto estimated_bytes = segment->getEstimatedBytes();
+        ASSERT_EQ(estimated_bytes, block.bytes());
     }
 
     {
@@ -356,7 +355,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, ReadWithMoreAdvacedDeltaIndex)
+TEST_F(SegmentTest, ReadWithMoreAdvacedDeltaIndex)
 try
 {
     // Test the case that reading rows with an advance DeltaIndex
@@ -421,27 +420,21 @@ try
 }
 CATCH
 
-class SegmentDeletionRelevantPlace_test
-    : public Segment_test
+class SegmentDeletionRelevantPlaceTest
+    : public SegmentTest
     , public testing::WithParamInterface<bool>
 {
-    DB::Settings getSettings()
-    {
-        DB::Settings settings;
-        auto enable_relevant_place = GetParam();
-
-        if (enable_relevant_place)
-            settings.set("dt_enable_relevant_place", "1");
-        else
-            settings.set("dt_enable_relevant_place", "0");
-        return settings;
-    }
 };
 
 
-TEST_P(SegmentDeletionRelevantPlace_test, ShareDelteRangeIndex)
+TEST_P(SegmentDeletionRelevantPlaceTest, ShareDelteRangeIndex)
 try
 {
+    Settings my_settings;
+    const auto enable_relevant_place = GetParam();
+    my_settings.dt_enable_relevant_place = enable_relevant_place;
+    this->reload({}, std::move(my_settings));
+
     const size_t num_rows_write = 300;
     {
         // write to segment
@@ -467,27 +460,54 @@ try
 
     {
         HandleRange remove(100, 200);
-        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
+        segment->write(dmContext(), /*delete_range*/ {RowKeyRange::fromHandleRange(remove)});
     }
 
     // The first call of get_rows below will place the DeleteRange into delta index.
+    // If relevant place is enabled, the placed deletes in delta-tree-index is not
+    // pushed forward since we do not fully apply the delete range [100, 200).
     auto rows1 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 150)));
+    {
+        auto delta = segment->getDelta();
+        auto placed_rows = delta->getPlacedDeltaRows();
+        auto placed_deletes = delta->getPlacedDeltaDeletes();
+        ASSERT_EQ(placed_rows, num_rows_write);
+        EXPECT_EQ(placed_deletes, enable_relevant_place ? 0 : 1);
+    }
     auto rows2 = get_rows(RowKeyRange::fromHandleRange(HandleRange(150, 300)));
+    {
+        auto delta = segment->getDelta();
+        auto placed_rows = delta->getPlacedDeltaRows();
+        auto placed_deletes = delta->getPlacedDeltaDeletes();
+        ASSERT_EQ(placed_rows, num_rows_write);
+        EXPECT_EQ(placed_deletes, enable_relevant_place ? 0 : 1);
+    }
+    // Query with range [0, 300) will push the placed deletes forward no matter
+    // relevant place is enable or not.
+    auto rows3 = get_rows(RowKeyRange::fromHandleRange(HandleRange(0, 300)));
+    {
+        auto delta = segment->getDelta();
+        auto placed_rows = delta->getPlacedDeltaRows();
+        auto placed_deletes = delta->getPlacedDeltaDeletes();
+        ASSERT_EQ(placed_rows, num_rows_write);
+        EXPECT_EQ(placed_deletes, 1);
+    }
 
-    ASSERT_EQ(rows1, (size_t)100);
-    ASSERT_EQ(rows2, (size_t)100);
+    ASSERT_EQ(rows1, 100);
+    ASSERT_EQ(rows2, 100);
+    ASSERT_EQ(rows3, 200);
 }
 CATCH
 
-INSTANTIATE_TEST_CASE_P(WhetherEnableRelevantPlace, SegmentDeletionRelevantPlace_test, testing::Values(true, false));
+INSTANTIATE_TEST_CASE_P(WhetherEnableRelevantPlace, SegmentDeletionRelevantPlaceTest, testing::Values(true, false));
 
-class SegmentDeletion_test
-    : public Segment_test
+class SegmentDeletionTest
+    : public SegmentTest
     , public testing::WithParamInterface<std::tuple<bool, bool>>
 {
 };
 
-TEST_P(SegmentDeletion_test, DeleteDataInDelta)
+TEST_P(SegmentDeletionTest, DeleteDataInDelta)
 try
 {
     const size_t num_rows_write = 100;
@@ -565,7 +585,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentDeletion_test, DeleteDataInStable)
+TEST_P(SegmentDeletionTest, DeleteDataInStable)
 try
 {
     const size_t num_rows_write = 100;
@@ -651,7 +671,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentDeletion_test, DeleteDataInStableAndDelta)
+TEST_P(SegmentDeletionTest, DeleteDataInStableAndDelta)
 try
 {
     const size_t num_rows_write = 100;
@@ -738,9 +758,9 @@ try
 }
 CATCH
 
-INSTANTIATE_TEST_CASE_P(WhetherReadOrMergeDeltaBeforeDeleteRange, SegmentDeletion_test, testing::Combine(testing::Bool(), testing::Bool()));
+INSTANTIATE_TEST_CASE_P(WhetherReadOrMergeDeltaBeforeDeleteRange, SegmentDeletionTest, testing::Combine(testing::Bool(), testing::Bool()));
 
-TEST_F(Segment_test, DeleteRead)
+TEST_F(SegmentTest, DeleteRead)
 try
 {
     const size_t num_rows_write = 64;
@@ -946,7 +966,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, Split)
+TEST_F(SegmentTest, Split)
 try
 {
     const size_t num_rows_write_per_batch = 100;
@@ -1046,7 +1066,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, SplitFail)
+TEST_F(SegmentTest, SplitFail)
 try
 {
     const size_t num_rows_write = 100;
@@ -1066,7 +1086,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, Restore)
+TEST_F(SegmentTest, Restore)
 try
 {
     // compare will compares the given segments.
@@ -1158,7 +1178,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, MassiveSplit)
+TEST_F(SegmentTest, MassiveSplit)
 try
 {
     Settings settings = dmContext().db_context.getSettings();
@@ -1242,52 +1262,51 @@ try
 }
 CATCH
 
-enum Segment_test_Mode
+enum SegmentTestMode
 {
     V1_BlockOnly,
     V2_BlockOnly,
     V2_FileOnly,
 };
 
-String testModeToString(const ::testing::TestParamInfo<Segment_test_Mode> & info)
+String testModeToString(const ::testing::TestParamInfo<SegmentTestMode> & info)
 {
     const auto mode = info.param;
     switch (mode)
     {
-    case Segment_test_Mode::V1_BlockOnly:
+    case SegmentTestMode::V1_BlockOnly:
         return "V1_BlockOnly";
-    case Segment_test_Mode::V2_BlockOnly:
+    case SegmentTestMode::V2_BlockOnly:
         return "V2_BlockOnly";
-    case Segment_test_Mode::V2_FileOnly:
+    case SegmentTestMode::V2_FileOnly:
         return "V2_FileOnly";
     default:
         return "Unknown";
     }
 }
 
-class Segment_test_2 : public Segment_test
-    , public testing::WithParamInterface<Segment_test_Mode>
+class SegmentTest2 : public SegmentTest
+    , public testing::WithParamInterface<SegmentTestMode>
 {
 public:
-    Segment_test_2()
-        : Segment_test()
-    {}
+    SegmentTest2() = default;
+
 
     void SetUp() override
     {
         mode = GetParam();
         switch (mode)
         {
-        case Segment_test_Mode::V1_BlockOnly:
+        case SegmentTestMode::V1_BlockOnly:
             setStorageFormat(1);
             break;
-        case Segment_test_Mode::V2_BlockOnly:
-        case Segment_test_Mode::V2_FileOnly:
+        case SegmentTestMode::V2_BlockOnly:
+        case SegmentTestMode::V2_FileOnly:
             setStorageFormat(2);
             break;
         }
 
-        Segment_test::SetUp();
+        SegmentTest::SetUp();
     }
 
     std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
@@ -1305,7 +1324,7 @@ public:
 
         delegator.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
 
-        auto & pk_column = block.getByPosition(0).column;
+        const auto & pk_column = block.getByPosition(0).column;
         auto min_pk = pk_column->getInt(0);
         auto max_pk = pk_column->getInt(block.rows() - 1);
         HandleRange range(min_pk, max_pk + 1);
@@ -1313,10 +1332,10 @@ public:
         return {RowKeyRange::fromHandleRange(range), {file_id}};
     }
 
-    Segment_test_Mode mode;
+    SegmentTestMode mode;
 };
 
-TEST_P(Segment_test_2, FlushDuringSplitAndMerge)
+TEST_P(SegmentTest2, FlushDuringSplitAndMerge)
 try
 {
     size_t row_offset = 0;
@@ -1327,11 +1346,11 @@ try
             row_offset += 100;
             switch (mode)
             {
-            case Segment_test_Mode::V1_BlockOnly:
-            case Segment_test_Mode::V2_BlockOnly:
+            case SegmentTestMode::V1_BlockOnly:
+            case SegmentTestMode::V2_BlockOnly:
                 segment->write(dmContext(), std::move(block));
                 break;
-            case Segment_test_Mode::V2_FileOnly:
+            case SegmentTestMode::V2_FileOnly:
             {
                 auto delegate = dmContext().path_pool.getStableDiskDelegator();
                 auto file_provider = dmContext().db_context.getFileProvider();
@@ -1430,9 +1449,9 @@ try
 }
 CATCH
 
-INSTANTIATE_TEST_CASE_P(Segment_test_Mode, //
-                        Segment_test_2,
-                        testing::Values(Segment_test_Mode::V1_BlockOnly, Segment_test_Mode::V2_BlockOnly, Segment_test_Mode::V2_FileOnly),
+INSTANTIATE_TEST_CASE_P(SegmentTestMode, //
+                        SegmentTest2,
+                        testing::Values(SegmentTestMode::V1_BlockOnly, SegmentTestMode::V2_BlockOnly, SegmentTestMode::V2_FileOnly),
                         testModeToString);
 
 enum class SegmentWriteType
@@ -1440,12 +1459,12 @@ enum class SegmentWriteType
     ToDisk,
     ToCache
 };
-class Segment_DDL_test
-    : public Segment_test
+class SegmentDDLTest
+    : public SegmentTest
     , public testing::WithParamInterface<std::tuple<SegmentWriteType, bool>>
 {
 };
-String paramToString(const ::testing::TestParamInfo<Segment_DDL_test::ParamType> & info)
+String paramToString(const ::testing::TestParamInfo<SegmentDDLTest::ParamType> & info)
 {
     const auto [write_type, flush_before_ddl] = info.param;
 
@@ -1455,7 +1474,7 @@ String paramToString(const ::testing::TestParamInfo<Segment_DDL_test::ParamType>
 }
 
 /// Mock a col from i8 -> i32
-TEST_P(Segment_DDL_test, AlterInt8ToInt32)
+TEST_P(SegmentDDLTest, AlterInt8ToInt32)
 try
 {
     const String column_name_i8_to_i32 = "i8_to_i32";
@@ -1627,7 +1646,7 @@ try
 }
 CATCH
 
-TEST_P(Segment_DDL_test, AddColumn)
+TEST_P(SegmentDDLTest, AddColumn)
 try
 {
     const String new_column_name = "i8";
@@ -1795,7 +1814,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, CalculateDTFileProperty)
+TEST_F(SegmentTest, CalculateDTFileProperty)
 try
 {
     Settings settings = dmContext().db_context.getSettings();
@@ -1836,7 +1855,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, CalculateDTFilePropertyWithPropertyFileDeleted)
+TEST_F(SegmentTest, CalculateDTFilePropertyWithPropertyFileDeleted)
 try
 {
     Settings settings = dmContext().db_context.getSettings();
@@ -1857,10 +1876,10 @@ try
     }
 
     {
-        auto & stable = segment->getStable();
-        auto & dmfiles = stable->getDMFiles();
+        const auto & stable = segment->getStable();
+        const auto & dmfiles = stable->getDMFiles();
         ASSERT_GT(dmfiles[0]->getPacks(), (size_t)1);
-        auto & dmfile = dmfiles[0];
+        const auto & dmfile = dmfiles[0];
         auto file_path = dmfile->path();
         // check property file exists and then delete it
         ASSERT_EQ(Poco::File(file_path + "/property").exists(), true);
@@ -1877,7 +1896,7 @@ try
         // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
         stable->calculateStableProperty(dmContext(), range, false);
         ASSERT_EQ(stable->isStablePropertyCached(), true);
-        auto & property = stable->getStableProperty();
+        const auto & property = stable->getStableProperty();
         ASSERT_EQ(property.gc_hint_version, std::numeric_limits<UInt64>::max());
         ASSERT_EQ(property.num_versions, num_rows_write_every_round);
         ASSERT_EQ(property.num_puts, num_rows_write_every_round);
@@ -1887,7 +1906,7 @@ try
 CATCH
 
 INSTANTIATE_TEST_CASE_P(SegmentWriteType,
-                        Segment_DDL_test,
+                        SegmentDDLTest,
                         ::testing::Combine( //
                             ::testing::Values(SegmentWriteType::ToDisk, SegmentWriteType::ToCache),
                             ::testing::Bool()),

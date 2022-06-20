@@ -31,6 +31,8 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
@@ -40,8 +42,6 @@
 #include <TestUtils/FunctionTestUtils.h>
 
 #include <limits>
-
-#include "dm_basic_include.h"
 
 namespace DB
 {
