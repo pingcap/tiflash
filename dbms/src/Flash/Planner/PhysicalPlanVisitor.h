@@ -1,5 +1,4 @@
 // Copyright 2022 PingCAP, Ltd.
-// Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Flash/Planner/PhysicalPlan.h>
 
-#include <Core/Block.h>
-#include <Core/NamesAndTypes.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/ExpressionActions.h>
-
-namespace DB::PhysicalPlanHelper
+namespace DB::PhysicalPlanVisitor
 {
-Names schemaToNames(const NamesAndTypes & schema);
+/// visit physical plan tree and apply function.
+/// f: (const PhysicalPlanPtr &) -> bool, return true to continue visit.
+template <typename FF>
+void visit(const PhysicalPlanPtr & plan, FF && f)
+{
+    if (f(plan))
+    {
+        for (size_t i = 0; i < plan->childrenSize(); ++i)
+        {
+            visit(plan->children(i), std::forward<FF>(f));
+        }
+    }
+}
 
-ExpressionActionsPtr newActions(const Block & input_block, const Context & context);
-
-ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Context & context);
-
-Block constructBlockFromSchema(const NamesAndTypes & schema);
-} // namespace DB::PhysicalPlanHelper
+String visitToString(const PhysicalPlanPtr & plan);
+} // namespace DB::PhysicalPlanVisitor

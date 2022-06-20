@@ -94,8 +94,9 @@ Block mergeBlocks(Blocks blocks)
         actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
     return Block(actual_columns);
 }
+} // namespace
 
-void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns)
+void ExecutorTest::readAndAssertBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns)
 {
     Blocks actual_blocks;
     Block except_block(expect_columns);
@@ -108,7 +109,6 @@ void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect
     Block actual_block = mergeBlocks(actual_blocks);
     ASSERT_BLOCK_EQ(except_block, actual_block);
 }
-} // namespace
 
 void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
 {
@@ -117,7 +117,7 @@ void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & requ
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
-    readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
+    readAndAssertBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
 }
 
 void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)

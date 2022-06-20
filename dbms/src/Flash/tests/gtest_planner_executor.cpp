@@ -25,6 +25,9 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
+
+        context.context.setSetting("enable_planner", "true");
+
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),

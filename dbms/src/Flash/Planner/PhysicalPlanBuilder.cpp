@@ -24,10 +24,22 @@
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
+void PhysicalPlanBuilder::build(const tipb::DAGRequest * dag_request)
+{
+    traverseExecutorsReverse(
+        dag_request,
+        [&](const tipb::Executor & executor) {
+            assert(executor.has_executor_id());
+            build(executor.executor_id(), &executor);
+            return true;
+        });
+}
+
 void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor * executor)
 {
     assert(executor);

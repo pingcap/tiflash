@@ -16,9 +16,11 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
+#include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Planner.h>
 #include <Flash/Planner/optimize.h>
 #include <Interpreters/Context.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -114,6 +116,12 @@ void Planner::executeImpl(DAGPipeline & pipeline)
     analyzePhysicalPlan(builder, query_block);
 
     auto physical_plan = builder.getResult();
+
+    LOG_FMT_DEBUG(
+        log,
+        "build physical plan tree: \n{}",
+        PhysicalPlanVisitor::visitToString(physical_plan));
+
     physical_plan = optimize(context, physical_plan);
     physical_plan->transform(pipeline, context, max_streams);
 }

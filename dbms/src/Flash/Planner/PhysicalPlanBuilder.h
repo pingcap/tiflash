@@ -19,6 +19,7 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <common/logger_useful.h>
 #include <tipb/executor.pb.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
@@ -29,6 +30,8 @@ public:
         : context(context_)
         , log(Logger::get("PhysicalPlanBuilder", req_id))
     {}
+
+    void build(const tipb::DAGRequest * dag_request);
 
     void build(const String & executor_id, const tipb::Executor * executor);
 
