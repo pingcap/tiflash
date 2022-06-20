@@ -62,7 +62,7 @@ public:
             final_stream->dumpTree(fb);
             ASSERT_EQ(Poco::trim(expected_streams), Poco::trim(fb.toString()));
         }
-        
+
         readAndAssertBlock(final_stream, expect_columns);
     }
 
@@ -74,16 +74,15 @@ TEST_F(ExecutorTestRunner, Filter)
 try
 {
     auto request = context.receive("exchange1")
-                  .filter(eq(col("s1"), col("s2")))
-                  .build(context);
-    
+                       .filter(eq(col("s1"), col("s2")))
+                       .build(context);
+
     testPhysicalPlan(
         request.get(),
         "",
         "",
         {toNullableVec<String>({"banana"}),
-         toNullableVec<String>({"banana"})}
-    );
+         toNullableVec<String>({"banana"})});
 }
 CATCH
 
@@ -91,16 +90,15 @@ TEST_F(ExecutorTestRunner, Limit)
 try
 {
     auto request = context.receive("exchange1")
-                  .limit(1)
-                  .build(context);
-    
+                       .limit(1)
+                       .build(context);
+
     testPhysicalPlan(
         request.get(),
         "",
         "",
         {toNullableVec<String>({"banana"}),
-         toNullableVec<String>({"apple"})}
-    );
+         toNullableVec<String>({"apple"})});
 }
 CATCH
 
@@ -108,16 +106,15 @@ TEST_F(ExecutorTestRunner, TopN)
 try
 {
     auto request = context.receive("exchange1")
-                  .topN("s2", false, 1)
-                  .build(context);
-    
+                       .topN("s2", false, 1)
+                       .build(context);
+
     testPhysicalPlan(
         request.get(),
         "",
         "",
         {toNullableVec<String>({{}}),
-         toNullableVec<String>({{}})}
-    );
+         toNullableVec<String>({{}})});
 }
 CATCH
 
@@ -125,15 +122,14 @@ TEST_F(ExecutorTestRunner, Aggregation)
 try
 {
     auto request = context.receive("exchange1")
-                  .aggregation(Max(col("s2")), col("s1"))
-                  .build(context);
-    
+                       .aggregation(Max(col("s2")), col("s1"))
+                       .build(context);
+
     testPhysicalPlan(
         request.get(),
         "",
         "",
-        {toNullableVec<String>({"banana"})}
-    );
+        {toNullableVec<String>({"banana"})});
 }
 CATCH
 
@@ -141,15 +137,14 @@ TEST_F(ExecutorTestRunner, Projection)
 try
 {
     auto request = context.receive("exchange1")
-                  .project({col("s1")})
-                  .build(context);
-    
+                       .project({col("s1")})
+                       .build(context);
+
     testPhysicalPlan(
         request.get(),
         "",
         "",
-        {toNullableVec<String>({"banana", {}, "banana"})}
-    );
+        {toNullableVec<String>({"banana", {}, "banana"})});
 }
 CATCH
 
@@ -157,16 +152,15 @@ TEST_F(ExecutorTestRunner, MockExchangeSender)
 try
 {
     auto request = context.receive("exchange1")
-                  .exchangeSender(tipb::Hash)
-                  .build(context);
-    
+                       .exchangeSender(tipb::Hash)
+                       .build(context);
+
     testPhysicalPlan(
         request.get(),
         "",
         "",
         {toNullableVec<String>({"banana", {}, "banana"}),
-         toNullableVec<String>({"apple", {}, "banana"})}
-    );
+         toNullableVec<String>({"apple", {}, "banana"})});
 }
 CATCH
 
@@ -174,15 +168,14 @@ TEST_F(ExecutorTestRunner, MockExchangeReceiver)
 try
 {
     auto request = context.receive("exchange1")
-                  .build(context);
-    
+                       .build(context);
+
     testPhysicalPlan(
         request.get(),
         "",
         "",
         {toNullableVec<String>({"banana", {}, "banana"}),
-         toNullableVec<String>({"apple", {}, "banana"})}
-    );
+         toNullableVec<String>({"apple", {}, "banana"})});
 }
 CATCH
 
