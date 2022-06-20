@@ -330,6 +330,11 @@ void MPPTask::runImpl()
         err_msg = e.displayText();
         LOG_ERROR(log, "task running meets error: " << err_msg << " Stack Trace : " << e.getStackTrace().toString());
     }
+    catch (pingcap::Exception & e)
+    {
+        err_msg = e.message();
+        LOG_ERROR(log, "task running meets error: " << err_msg);
+    }
     catch (std::exception & e)
     {
         err_msg = e.what();
