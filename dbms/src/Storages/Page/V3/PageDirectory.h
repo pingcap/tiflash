@@ -362,7 +362,9 @@ public:
 
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr);
 
-    PageEntriesV3 gcInMemEntries(bool need_remove_blob = true);
+    // Perform a GC for in-memory entries and return the removed entries.
+    // If `return_removed_entries` is false, then just return an empty set.
+    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true);
 
     std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
 
