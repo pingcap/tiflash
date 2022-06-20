@@ -73,6 +73,43 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};
 }
 
+HttpRequestRes HandleHttpRequestAllRegionsStatus(EngineStoreServerWrap * server,
+                                                 std::string_view path,
+                                                 const std::string & api_name,
+                                                 std::string_view,
+                                                 std::string_view)
+{
+    HttpRequestStatus status = HttpRequestStatus::Ok;
+
+    std::stringstream ss;
+    auto & tmt = *server->tmt;
+    const auto & table_maps = tmt.getStorages().getAllStorage();
+
+    ss << table_maps.size() << std::endl;
+    for (const auto [table_id, storage] : table_maps)
+    {
+        size_t region_counts = 0;
+        std::vector<RegionID> region_list;
+
+        tmt.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
+            region_counts = regions.size();
+            region_list.reserve(regions.size());
+            for (const auto & region : regions)
+                region_list.push_back(region.first);
+        });
+
+        ss << fmt::format("%d %d", table_id, region_counts) << std::endl;
+        for (const auto & region_id : region_list)
+            ss << region_id << ' ';
+        ss << std::endl;
+    }
+
+    auto * s = RawCppString::New(ss.str());
+    return HttpRequestRes{
+        .status = status,
+        .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()}}};
+}
+
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
@@ -92,7 +129,8 @@ using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(EngineStoreServerWrap *, std::
 
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
-    {"/tiflash/store-status", HandleHttpRequestStoreStatus}};
+    {"/tiflash/store-status", HandleHttpRequestStoreStatus},
+    {"/tiflash/all-regions-status/", HandleHttpRequestAllRegionsStatus}};
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 {
