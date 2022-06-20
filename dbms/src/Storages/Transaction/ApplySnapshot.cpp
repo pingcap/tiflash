@@ -151,10 +151,22 @@ void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr o
                         // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
                         auto table_lock = storage->lockForShare(getThreadName());
                         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                        auto key_range = DM::RowKeyRange::fromRegionRange(
+                        auto new_key_range = DM::RowKeyRange::fromRegionRange(
                             new_region_wrap->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+                        if (old_region)
+                        {
+                            auto old_key_range = DM::RowKeyRange::fromRegionRange(
+                                old_region->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+                            if (old_key_range != new_key_range)
+                            {
+                                LOG_INFO(log,
+                                    "clear region " << region_id << " old range " << old_key_range.toDebugString()
+                                                    << " before apply snapshot of new range " << new_key_range.toDebugString());
+                                dm_storage->deleteRange(old_key_range, context.getSettingsRef());
+                            }
+                        }
                         // Call `deleteRange` to delete data for range
-                        dm_storage->deleteRange(key_range, context.getSettingsRef());
+                        dm_storage->deleteRange(new_key_range, context.getSettingsRef());
                     }
                     catch (DB::Exception & e)
                     {

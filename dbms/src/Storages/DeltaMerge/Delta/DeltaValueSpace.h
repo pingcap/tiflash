@@ -319,6 +319,8 @@ public:
     size_t getBytes() const { return bytes; }
     size_t getDeletes() const { return deletes; }
 
+    RowKeyRange getSquashDeleteRange() const;
+
     const auto & getStorageSnapshot() { return storage_snap; }
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
 };
