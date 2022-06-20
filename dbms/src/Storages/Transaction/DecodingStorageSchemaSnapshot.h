@@ -17,7 +17,6 @@
 #include <Common/nocopyable.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
-#include <common/logger_useful.h>
 
 
 namespace DB
