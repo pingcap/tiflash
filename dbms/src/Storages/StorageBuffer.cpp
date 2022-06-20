@@ -486,7 +486,6 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
     }
     catch (...)
     {
-
         /// Return the block to its place in the buffer.
         buffer.data.swap(block_to_write);
 

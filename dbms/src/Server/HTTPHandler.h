@@ -14,20 +14,20 @@
 
 #pragma once
 
-#include "IServer.h"
-
-#include <Poco/Net/HTTPRequestHandler.h>
-
 #include <Common/CurrentMetrics.h>
 #include <Common/HTMLForm.h>
+#include <Poco/Net/HTTPRequestHandler.h>
+
+#include "IServer.h"
 
 
-
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
-
 class WriteBufferFromHTTPServerResponse;
 
 
@@ -65,7 +65,7 @@ private:
     IServer & server;
     Poco::Logger * log;
 
-    /// It is the name of the server that will be sent in an http-header X-ClickHouse-Server-Display-Name. 
+    /// It is the name of the server that will be sent in an http-header X-ClickHouse-Server-Display-Name.
     String server_display_name;
 
     /// Also initializes 'used_output'.
@@ -85,4 +85,4 @@ private:
     void pushDelayedResults(Output & used_output);
 };
 
-}
+} // namespace DB

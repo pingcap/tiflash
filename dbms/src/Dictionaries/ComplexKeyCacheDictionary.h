@@ -14,12 +14,6 @@
 
 #pragma once
 
-#include <atomic>
-#include <chrono>
-#include <map>
-#include <tuple>
-#include <vector>
-#include <shared_mutex>
 #include <Columns/ColumnString.h>
 #include <Common/ArenaWithFreeLists.h>
 #include <Common/HashTable/HashMap.h>
@@ -29,10 +23,17 @@
 #include <Dictionaries/IDictionary.h>
 #include <Dictionaries/IDictionarySource.h>
 #include <common/StringRef.h>
+
+#include <atomic>
+#include <chrono>
 #include <ext/bit_cast.h>
 #include <ext/map.h>
 #include <ext/scope_guard.h>
+#include <map>
 #include <pcg_random.hpp>
+#include <shared_mutex>
+#include <tuple>
+#include <vector>
 
 namespace DB
 {
@@ -40,10 +41,10 @@ class ComplexKeyCacheDictionary final : public IDictionaryBase
 {
 public:
     ComplexKeyCacheDictionary(const std::string & name,
-        const DictionaryStructure & dict_struct,
-        DictionarySourcePtr source_ptr,
-        const DictionaryLifetime dict_lifetime,
-        const size_t size);
+                              const DictionaryStructure & dict_struct,
+                              DictionarySourcePtr source_ptr,
+                              const DictionaryLifetime dict_lifetime,
+                              const size_t size);
 
     ComplexKeyCacheDictionary(const ComplexKeyCacheDictionary & other);
 
@@ -130,9 +131,12 @@ public:
 
 /// In all functions below, key_columns must be full (non-constant) columns.
 /// See the requirement in IDataType.h for text-serialization functions.
-#define DECLARE(TYPE) \
-    void get##TYPE(   \
-        const std::string & attribute_name, const Columns & key_columns, const DataTypes & key_types, PaddedPODArray<TYPE> & out) const;
+#define DECLARE(TYPE)                       \
+    void get##TYPE(                         \
+        const std::string & attribute_name, \
+        const Columns & key_columns,        \
+        const DataTypes & key_types,        \
+        PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -150,10 +154,10 @@ public:
 
 #define DECLARE(TYPE)                                  \
     void get##TYPE(const std::string & attribute_name, \
-        const Columns & key_columns,                   \
-        const DataTypes & key_types,                   \
-        const PaddedPODArray<TYPE> & def,              \
-        PaddedPODArray<TYPE> & out) const;
+                   const Columns & key_columns,        \
+                   const DataTypes & key_types,        \
+                   const PaddedPODArray<TYPE> & def,   \
+                   PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -168,17 +172,17 @@ public:
 #undef DECLARE
 
     void getString(const std::string & attribute_name,
-        const Columns & key_columns,
-        const DataTypes & key_types,
-        const ColumnString * const def,
-        ColumnString * const out) const;
+                   const Columns & key_columns,
+                   const DataTypes & key_types,
+                   const ColumnString * const def,
+                   ColumnString * const out) const;
 
 #define DECLARE(TYPE)                                  \
     void get##TYPE(const std::string & attribute_name, \
-        const Columns & key_columns,                   \
-        const DataTypes & key_types,                   \
-        const TYPE def,                                \
-        PaddedPODArray<TYPE> & out) const;
+                   const Columns & key_columns,        \
+                   const DataTypes & key_types,        \
+                   const TYPE def,                     \
+                   PaddedPODArray<TYPE> & out) const;
     DECLARE(UInt8)
     DECLARE(UInt16)
     DECLARE(UInt32)
@@ -193,10 +197,10 @@ public:
 #undef DECLARE
 
     void getString(const std::string & attribute_name,
-        const Columns & key_columns,
-        const DataTypes & key_types,
-        const String & def,
-        ColumnString * const out) const;
+                   const Columns & key_columns,
+                   const DataTypes & key_types,
+                   const String & def,
+                   ColumnString * const out) const;
 
     void has(const Columns & key_columns, const DataTypes & key_types, PaddedPODArray<UInt8> & out) const;
 
@@ -249,17 +253,17 @@ private:
         AttributeUnderlyingType type;
         std::tuple<UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Float32, Float64, String> null_values;
         std::tuple<ContainerPtrType<UInt8>,
-            ContainerPtrType<UInt16>,
-            ContainerPtrType<UInt32>,
-            ContainerPtrType<UInt64>,
-            ContainerPtrType<UInt128>,
-            ContainerPtrType<Int8>,
-            ContainerPtrType<Int16>,
-            ContainerPtrType<Int32>,
-            ContainerPtrType<Int64>,
-            ContainerPtrType<Float32>,
-            ContainerPtrType<Float64>,
-            ContainerPtrType<StringRef>>
+                   ContainerPtrType<UInt16>,
+                   ContainerPtrType<UInt32>,
+                   ContainerPtrType<UInt64>,
+                   ContainerPtrType<UInt128>,
+                   ContainerPtrType<Int8>,
+                   ContainerPtrType<Int16>,
+                   ContainerPtrType<Int32>,
+                   ContainerPtrType<Int64>,
+                   ContainerPtrType<Float32>,
+                   ContainerPtrType<Float64>,
+                   ContainerPtrType<StringRef>>
             arrays;
     };
 
@@ -269,7 +273,10 @@ private:
 
     template <typename OutputType, typename DefaultGetter>
     void getItemsNumber(
-        Attribute & attribute, const Columns & key_columns, PaddedPODArray<OutputType> & out, DefaultGetter && get_default) const
+        Attribute & attribute,
+        const Columns & key_columns,
+        PaddedPODArray<OutputType> & out,
+        DefaultGetter && get_default) const
     {
         if (false)
         {
@@ -294,7 +301,10 @@ private:
 
     template <typename AttributeType, typename OutputType, typename DefaultGetter>
     void getItemsNumberImpl(
-        Attribute & attribute, const Columns & key_columns, PaddedPODArray<OutputType> & out, DefaultGetter && get_default) const
+        Attribute & attribute,
+        const Columns & key_columns,
+        PaddedPODArray<OutputType> & out,
+        DefaultGetter && get_default) const
     {
         /// Mapping: <key> -> { all indices `i` of `key_columns` such that `key_columns[i]` = <key> }
         MapType<std::vector<size_t>> outdated_keys;
@@ -346,19 +356,21 @@ private:
 
         std::vector<size_t> required_rows(outdated_keys.size());
         std::transform(
-            std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair) { return pair.getMapped().front(); });
+            std::begin(outdated_keys),
+            std::end(outdated_keys),
+            std::begin(required_rows),
+            [](auto & pair) { return pair.getMapped().front(); });
 
         /// request new values
-        update(key_columns,
+        update(
+            key_columns,
             keys_array,
             required_rows,
-            [&](const StringRef key, const size_t cell_idx)
-            {
+            [&](const StringRef key, const size_t cell_idx) {
                 for (const auto row : outdated_keys[key])
                     out[row] = static_cast<OutputType>(attribute_array[cell_idx]);
             },
-            [&](const StringRef key, const size_t)
-            {
+            [&](const StringRef key, const size_t) {
                 for (const auto row : outdated_keys[key])
                     out[row] = get_default(row);
             });
@@ -462,16 +474,15 @@ private:
         if (!outdated_keys.empty())
         {
             std::vector<size_t> required_rows(outdated_keys.size());
-            std::transform(std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair)
-            {
+            std::transform(std::begin(outdated_keys), std::end(outdated_keys), std::begin(required_rows), [](auto & pair) {
                 return pair.getMapped().front();
             });
 
-            update(key_columns,
+            update(
+                key_columns,
                 keys_array,
                 required_rows,
-                [&](const StringRef key, const size_t cell_idx)
-                {
+                [&](const StringRef key, const size_t cell_idx) {
                     const StringRef attribute_value = attribute_array[cell_idx];
 
                     /// We must copy key and value to own memory, because it may be replaced with another
@@ -482,8 +493,7 @@ private:
                     map[copied_key] = copied_value;
                     total_length += (attribute_value.size + 1) * outdated_keys[key].size();
                 },
-                [&](const StringRef key, const size_t)
-                {
+                [&](const StringRef key, const size_t) {
                     for (const auto row : outdated_keys[key])
                         total_length += get_default(row).size + 1;
                 });
@@ -495,17 +505,17 @@ private:
         {
             const StringRef key = keys_array[row];
             const auto it = map.find(key);
-            const auto string_ref = it != std::end(map) ? it->getMapped(): get_default(row);
+            const auto string_ref = it != std::end(map) ? it->getMapped() : get_default(row);
             out->insertData(string_ref.data, string_ref.size);
         }
     };
 
     template <typename PresentKeyHandler, typename AbsentKeyHandler>
     void update(const Columns & in_key_columns,
-        const PODArray<StringRef> & in_keys,
-        const std::vector<size_t> & in_requested_rows,
-        PresentKeyHandler && on_cell_updated,
-        AbsentKeyHandler && on_key_not_found) const
+                const PODArray<StringRef> & in_keys,
+                const std::vector<size_t> & in_requested_rows,
+                PresentKeyHandler && on_cell_updated,
+                AbsentKeyHandler && on_key_not_found) const
     {
         MapType<bool> remaining_keys{in_requested_rows.size()};
         for (const auto row : in_requested_rows)
@@ -528,10 +538,11 @@ private:
             {
                 /// cache column pointers
                 const auto key_columns = ext::map<Columns>(
-                    ext::range(0, keys_size), [&](const size_t attribute_idx) { return block.safeGetByPosition(attribute_idx).column; });
+                    ext::range(0, keys_size),
+                    [&](const size_t attribute_idx) { return block.safeGetByPosition(attribute_idx).column; });
 
                 const auto attribute_columns = ext::map<Columns>(ext::range(0, attributes_size),
-                    [&](const size_t attribute_idx) { return block.safeGetByPosition(keys_size + attribute_idx).column; });
+                                                                 [&](const size_t attribute_idx) { return block.safeGetByPosition(keys_size + attribute_idx).column; });
 
                 const auto rows_num = block.rows();
 
@@ -657,10 +668,10 @@ private:
 
     template <typename Arena>
     static StringRef placeKeysInPool(const size_t row,
-        const Columns & key_columns,
-        StringRefs & keys,
-        const std::vector<DictionaryAttribute> & key_attributes,
-        Arena & pool);
+                                     const Columns & key_columns,
+                                     StringRefs & keys,
+                                     const std::vector<DictionaryAttribute> & key_attributes,
+                                     Arena & pool);
 
     StringRef placeKeysInFixedSizePool(const size_t row, const Columns & key_columns) const;
 
@@ -719,4 +730,4 @@ private:
 
     const std::chrono::time_point<std::chrono::system_clock> creation_time = std::chrono::system_clock::now();
 };
-}
+} // namespace DB
