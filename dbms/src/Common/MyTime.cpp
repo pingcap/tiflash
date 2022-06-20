@@ -73,7 +73,7 @@ std::vector<String> parseDateFormat(String format)
 {
     format = Poco::trimInPlace(format);
 
-    if (format.size() == 0)
+    if (format.empty())
         return {};
 
     if (!std::isdigit(format[0]) || !std::isdigit(format[format.size() - 1]))
@@ -538,7 +538,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         // if tz_sign is empty, it's sure that the string literal contains timezone (e.g., 2010-10-10T10:10:10Z),
         // therefore we could safely skip this branch.
-        if (!no_absorb(seps) && !(tz_minute != "" && tz_sep == ""))
+        if (!no_absorb(seps) && !(!tz_minute.empty() && tz_sep.empty()))
         {
             // we can't absorb timezone if there is no separate between tz_hour and tz_minute
             if (!tz_hour.empty())
@@ -910,9 +910,8 @@ size_t maxFormattedDateTimeStringLength(const String & format)
 {
     size_t result = 0;
     bool in_pattern_match = false;
-    for (size_t i = 0; i < format.size(); i++)
+    for (char x : format)
     {
-        char x = format[i];
         if (in_pattern_match)
         {
             switch (x)
@@ -1029,7 +1028,6 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
     }
-    return;
 }
 
 bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute, const UInt64 & second, const UInt64 & microsecond, MyDateTime & result)
@@ -1049,9 +1047,8 @@ bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 &
 MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
 {
     bool in_pattern_match = false;
-    for (size_t i = 0; i < layout.size(); i++)
+    for (char x : layout)
     {
-        char x = layout[i];
         if (in_pattern_match)
         {
             switch (x)
@@ -1286,7 +1283,7 @@ struct MyDateTimeParser::Context
     // The pos we are parsing from
     size_t pos = 0;
 
-    Context(StringRef view_)
+    explicit Context(StringRef view_)
         : view(std::move(view_))
     {}
 };
@@ -1331,19 +1328,19 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
 {
     // Use temp_pos instead of changing `ctx.pos` directly in case of parsing failure
     size_t temp_pos = ctx.pos;
-    auto checkIfEnd = [&temp_pos, &ctx]() -> ParseState {
+    auto check_if_end = [&temp_pos, &ctx]() -> ParseState {
         // To the end
         if (temp_pos == ctx.view.size)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-    auto skip_whitespaces = [&temp_pos, &ctx, &checkIfEnd]() -> ParseState {
+    auto skip_white_spaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
-        return checkIfEnd();
+        return check_if_end();
     };
-    auto parseSep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
-        if (skip_whitespaces() == ParseState::END_OF_FILE)
+    auto parse_sep = [&temp_pos, &ctx, &skip_white_spaces]() -> ParseState {
+        if (skip_white_spaces() == ParseState::END_OF_FILE)
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1351,7 +1348,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += 1; // move forward
         return ParseState::NORMAL;
     };
-    auto tryParse = [&]() -> ParseState {
+    auto try_parse = [&]() -> ParseState {
         ParseState state = ParseState::NORMAL;
         /// Note that we should update `time` as soon as possible, or we
         /// can not get correct result for incomplete input like "12:13"
@@ -1360,7 +1357,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         // hh
         size_t step = 0;
         int32_t hour = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, hour) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || hour > 12 || hour == 0)
@@ -1372,11 +1369,11 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         time.hour = hour;
         temp_pos += step; // move forward
 
-        if (state = parseSep(); state != ParseState::NORMAL)
+        if (state = parse_sep(); state != ParseState::NORMAL)
             return state;
 
         int32_t minute = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, minute) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || minute > 59)
@@ -1384,11 +1381,11 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         time.minute = minute;
         temp_pos += step; // move forward
 
-        if (state = parseSep(); state != ParseState::NORMAL)
+        if (state = parse_sep(); state != ParseState::NORMAL)
             return state;
 
         int32_t second = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, second) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || second > 59)
@@ -1397,7 +1394,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += step; // move forward
 
         int meridiem = 0; // 0 - invalid, 1 - am, 2 - pm
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         // "AM"/"PM" must be parsed as a single element
         // "11:13:56a" is an invalid input for "%r".
@@ -1423,7 +1420,7 @@ static bool parseTime12Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += 2; // move forward
         return ParseState::NORMAL;
     };
-    if (auto state = tryParse(); state == ParseState::FAIL)
+    if (auto state = try_parse(); state == ParseState::FAIL)
         return false;
     // Other state, forward the `ctx.pos` and return true
     ctx.pos = temp_pos;
@@ -1435,19 +1432,19 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
 {
     // Use temp_pos instead of changing `ctx.pos` directly in case of parsing failure
     size_t temp_pos = ctx.pos;
-    auto checkIfEnd = [&temp_pos, &ctx]() -> ParseState {
+    auto check_if_end = [&temp_pos, &ctx]() -> ParseState {
         // To the end
         if (temp_pos == ctx.view.size)
             return ParseState::END_OF_FILE;
         return ParseState::NORMAL;
     };
-    auto skip_whitespaces = [&temp_pos, &ctx, &checkIfEnd]() -> ParseState {
+    auto skip_white_spaces = [&temp_pos, &ctx, &check_if_end]() -> ParseState {
         while (temp_pos < ctx.view.size && isWhitespaceASCII(ctx.view.data[temp_pos]))
             ++temp_pos;
-        return checkIfEnd();
+        return check_if_end();
     };
-    auto parseSep = [&temp_pos, &ctx, &skip_whitespaces]() -> ParseState {
-        if (skip_whitespaces() == ParseState::END_OF_FILE)
+    auto parse_sep = [&temp_pos, &ctx, &skip_white_spaces]() -> ParseState {
+        if (skip_white_spaces() == ParseState::END_OF_FILE)
             return ParseState::END_OF_FILE;
         // parse ":"
         if (ctx.view.data[temp_pos] != ':')
@@ -1455,7 +1452,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         temp_pos += 1; // move forward
         return ParseState::NORMAL;
     };
-    auto tryParse = [&]() -> ParseState {
+    auto try_parse = [&]() -> ParseState {
         ParseState state = ParseState::NORMAL;
         /// Note that we should update `time` as soon as possible, or we
         /// can not get correct result for incomplete input like "12:13"
@@ -1464,7 +1461,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         // hh
         size_t step = 0;
         int32_t hour = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, hour) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || hour > 23)
@@ -1472,11 +1469,11 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         time.hour = hour;
         temp_pos += step; // move forward
 
-        if (state = parseSep(); state != ParseState::NORMAL)
+        if (state = parse_sep(); state != ParseState::NORMAL)
             return state;
 
         int32_t minute = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, minute) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || minute > 59)
@@ -1484,11 +1481,11 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
         time.minute = minute;
         temp_pos += step; // move forward
 
-        if (state = parseSep(); state != ParseState::NORMAL)
+        if (state = parse_sep(); state != ParseState::NORMAL)
             return state;
 
         int32_t second = 0;
-        if (state = skip_whitespaces(); state != ParseState::NORMAL)
+        if (state = skip_white_spaces(); state != ParseState::NORMAL)
             return state;
         std::tie(step, second) = parseNDigits(ctx.view, temp_pos, 2);
         if (step == 0 || second > 59)
@@ -1498,7 +1495,7 @@ static bool parseTime24Hour(MyDateTimeParser::Context & ctx, MyTimeBase & time)
 
         return ParseState::NORMAL;
     };
-    if (auto state = tryParse(); state == ParseState::FAIL)
+    if (auto state = try_parse(); state == ParseState::FAIL)
         return false;
     // Other state, forward the `ctx.pos` and return true
     ctx.pos = temp_pos;
@@ -1544,6 +1541,9 @@ MyDateTimeParser::MyDateTimeParser(String format_)
                 });
                 break;
             }
+            case 'm':
+                //"%m": Month, numeric (00..12)
+                [[fallthrough]];
             case 'c':
             {
                 //"%c": Month, numeric (0..12)
@@ -1585,9 +1585,9 @@ MyDateTimeParser::MyDateTimeParser(String format_)
                         time.micro_second = 0;
                         return true;
                     }
-                    // The siffix '0' can be ignored.
+                    // The suffix '0' can be ignored.
                     // "9" means 900000
-                    while (ms > 0 && ms * 10 < 1000000)
+                    for (size_t i = step; i < 6; i++)
                     {
                         ms *= 10;
                     }
@@ -1678,19 +1678,6 @@ MyDateTimeParser::MyDateTimeParser(String format_)
                     }
                     if (step == 0)
                         return false;
-                    ctx.pos += step;
-                    return true;
-                });
-                break;
-            }
-            case 'm':
-            {
-                //"%m": Month, numeric (00..12)
-                parsers.emplace_back([](MyDateTimeParser::Context & ctx, MyTimeBase & time) -> bool {
-                    auto [step, month] = parseNDigits(ctx.view, ctx.pos, 2);
-                    if (step == 0 || month > 12)
-                        return false;
-                    time.month = month;
                     ctx.pos += step;
                     return true;
                 });
@@ -1942,7 +1929,7 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
     MyDateTimeParser::Context ctx(str_view);
 
     // TODO: can we return warnings to TiDB?
-    for (auto & f : parsers)
+    for (const auto & f : parsers)
     {
         // Ignore all prefix white spaces before each pattern match (TODO: handle unicode space?)
         while (ctx.pos < str_view.size && isWhitespaceASCII(str_view.data[ctx.pos]))
@@ -1951,7 +1938,7 @@ std::optional<UInt64> MyDateTimeParser::parseAsPackedUInt(const StringRef & str_
         if (ctx.pos == ctx.view.size)
             break;
 
-        if (f(ctx, my_time) != true)
+        if (!f(ctx, my_time))
         {
 #ifndef NDEBUG
             LOG_TRACE(&Poco::Logger::get("MyDateTimeParser"),
