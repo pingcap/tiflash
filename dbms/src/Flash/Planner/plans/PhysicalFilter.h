@@ -36,7 +36,7 @@ public:
         const String & req_id,
         const String & filter_column_,
         const ExpressionActionsPtr & before_filter_actions_)
-        : PhysicalUnary(executor_id_, PlanType::Selection, schema_, req_id)
+        : PhysicalUnary(executor_id_, PlanType::Filter, schema_, req_id)
         , filter_column(filter_column_)
         , before_filter_actions(before_filter_actions_)
     {}

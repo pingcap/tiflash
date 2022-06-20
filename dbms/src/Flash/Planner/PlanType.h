@@ -25,7 +25,7 @@ struct PlanType
         Source = 0,
         Limit = 1,
         TopN = 2,
-        Selection = 3,
+        Filter = 3,
         Aggregation = 4,
         ExchangeSender = 5,
         MockExchangeSender = 6,

@@ -57,6 +57,8 @@ PhysicalPlanPtr PhysicalMockExchangeReceiver::build(
         schema = std::move(names_and_types);
         mock_streams.insert(mock_streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
     }
+    assert(!schema.empty());
+    assert(!mock_streams.empty());
 
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
         executor_id,

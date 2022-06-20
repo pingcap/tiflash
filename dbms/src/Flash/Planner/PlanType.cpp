@@ -27,8 +27,8 @@ String PlanType::toString() const
         return "Limit";
     case TopN:
         return "TopN";
-    case Selection:
-        return "Selection";
+    case Filter:
+        return "Filter";
     case Aggregation:
         return "Aggregation";
     case ExchangeSender:

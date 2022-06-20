@@ -45,7 +45,7 @@ String PhysicalPlan::toString()
         return buffer.toString();
     };
     return fmt::format(
-        "type: {}, executor_id: {}, is_record_profile_streams: {}, schema: {}",
+        "<{}, {}> | is_record_profile_streams: {}, schema: {}",
         type.toString(),
         executor_id,
         is_record_profile_streams,

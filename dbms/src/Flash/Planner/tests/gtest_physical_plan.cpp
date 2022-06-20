@@ -38,7 +38,7 @@ public:
                                      toNullableVec<String>("s2", {"apple", {}, "banana"})});
     }
 
-    void testPhysicalPlan(
+    void execute(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const String & expected_physical_plan,
         const String & expected_streams,
@@ -46,8 +46,14 @@ public:
     {
         // TODO support multi-streams.
         size_t max_streams = 1;
+        DAGContext dag_context(*request, "executor_test", max_streams);
+        dag_context.setColumnsForTest(context.executorIdColumnsMap());
+        context.context.setDAGContext(&dag_context);
+
         PhysicalPlanBuilder builder{context.context, log->identifier()};
+        assert(request);
         builder.build(request.get());
+        builder.buildFinalProjection("physical_plan_", true);
         auto physical_plan = builder.getResult();
 
         ASSERT_EQ(Poco::trim(expected_physical_plan), Poco::trim(PhysicalPlanVisitor::visitToString(physical_plan)));
@@ -56,7 +62,8 @@ public:
         {
             DAGPipeline pipeline;
             physical_plan->transform(pipeline, context.context, max_streams);
-            assert(pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.size() == 1);
+            // TODO support non-joined streams.
+            assert(pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty());
             final_stream = pipeline.firstStream();
             FmtBuffer fb;
             final_stream->dumpTree(fb);
@@ -66,114 +73,157 @@ public:
         readAndAssertBlock(final_stream, expect_columns);
     }
 
-protected:
     LoggerPtr log = Logger::get("PhysicalPlanTestRunner", "test_physical_plan");
 };
 
-TEST_F(ExecutorTestRunner, Filter)
+TEST_F(PhysicalPlanTestRunner, Filter)
 try
 {
     auto request = context.receive("exchange1")
                        .filter(eq(col("s1"), col("s2")))
                        .build(context);
 
-    testPhysicalPlan(
-        request.get(),
-        "",
-        "",
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
+ <Filter, selection_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+Expression: <projection>
+ Filter
+  MockExchangeReceiver)",
         {toNullableVec<String>({"banana"}),
          toNullableVec<String>({"banana"})});
 }
 CATCH
 
-TEST_F(ExecutorTestRunner, Limit)
+TEST_F(PhysicalPlanTestRunner, Limit)
 try
 {
     auto request = context.receive("exchange1")
                        .limit(1)
                        .build(context);
 
-    testPhysicalPlan(
-        request.get(),
-        "",
-        "",
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
+ <Limit, limit_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+Expression: <projection>
+ Limit, limit = 1
+  MockExchangeReceiver)",
         {toNullableVec<String>({"banana"}),
          toNullableVec<String>({"apple"})});
 }
 CATCH
 
-TEST_F(ExecutorTestRunner, TopN)
+TEST_F(PhysicalPlanTestRunner, TopN)
 try
 {
     auto request = context.receive("exchange1")
                        .topN("s2", false, 1)
                        .build(context);
 
-    testPhysicalPlan(
-        request.get(),
-        "",
-        "",
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
+ <TopN, topn_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+Expression: <projection>
+ MergeSorting, limit = 1
+  PartialSorting: limit = 1
+   MockExchangeReceiver)",
         {toNullableVec<String>({{}}),
          toNullableVec<String>({{}})});
 }
 CATCH
 
-TEST_F(ExecutorTestRunner, Aggregation)
+// agg's schema = agg funcs + agg group bys
+TEST_F(PhysicalPlanTestRunner, Aggregation)
 try
 {
     auto request = context.receive("exchange1")
                        .aggregation(Max(col("s2")), col("s1"))
                        .build(context);
 
-    testPhysicalPlan(
-        request.get(),
-        "",
-        "",
-        {toNullableVec<String>({"banana"})});
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_max(s2)_collator_0 , Nullable(String)>, <physical_plan_s1, Nullable(String)>
+ <Aggregation, aggregation_1> | is_record_profile_streams: true, schema: <max(s2)_collator_0 , Nullable(String)>, <s1, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+Expression: <projection>
+ Aggregating
+  Concat
+   MockExchangeReceiver)",
+        {toNullableVec<String>({{}, "banana"}),
+         toNullableVec<String>({{}, "banana"})});
 }
 CATCH
 
-TEST_F(ExecutorTestRunner, Projection)
+TEST_F(PhysicalPlanTestRunner, Projection)
 try
 {
     auto request = context.receive("exchange1")
-                       .project({col("s1")})
+                       .project({concat(col("s1"), col("s2"))})
                        .build(context);
 
-    testPhysicalPlan(
-        request.get(),
-        "",
-        "",
-        {toNullableVec<String>({"banana", {}, "banana"})});
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_tidbConcat(s1, s2)_collator_0 , Nullable(String)>
+ <Projection, project_1> | is_record_profile_streams: true, schema: <tidbConcat(s1, s2)_collator_0 , Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+Expression: <projection>
+ Expression: <projection>
+  MockExchangeReceiver)",
+        {toNullableVec<String>({"bananaapple", {}, "bananabanana"})});
 }
 CATCH
 
-TEST_F(ExecutorTestRunner, MockExchangeSender)
+TEST_F(PhysicalPlanTestRunner, MockExchangeSender)
 try
 {
     auto request = context.receive("exchange1")
                        .exchangeSender(tipb::Hash)
                        .build(context);
 
-    testPhysicalPlan(
-        request.get(),
-        "",
-        "",
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
+ <MockExchangeSender, exchange_sender_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+Expression: <projection>
+ MockExchangeSender
+  MockExchangeReceiver)",
         {toNullableVec<String>({"banana", {}, "banana"}),
          toNullableVec<String>({"apple", {}, "banana"})});
 }
 CATCH
 
-TEST_F(ExecutorTestRunner, MockExchangeReceiver)
+TEST_F(PhysicalPlanTestRunner, MockExchangeReceiver)
 try
 {
     auto request = context.receive("exchange1")
                        .build(context);
 
-    testPhysicalPlan(
-        request.get(),
-        "",
-        "",
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
+ <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+Expression: <projection>
+ MockExchangeReceiver)",
         {toNullableVec<String>({"banana", {}, "banana"}),
          toNullableVec<String>({"apple", {}, "banana"})});
 }

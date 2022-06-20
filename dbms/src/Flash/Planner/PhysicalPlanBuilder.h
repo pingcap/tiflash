@@ -48,10 +48,12 @@ public:
 private:
     PhysicalPlanPtr popBack();
 
+    void pushBack(const PhysicalPlanPtr & plan);
+
     DAGContext & dagContext() const;
 
 private:
-    std::vector<PhysicalPlanPtr> cur_plans;
+    std::vector<PhysicalPlanPtr> cur_plans{};
 
     Context & context;
 

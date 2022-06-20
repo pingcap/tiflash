@@ -42,6 +42,7 @@ PhysicalPlanPtr PhysicalFilter::build(
 
     auto physical_filter = std::make_shared<PhysicalFilter>(executor_id, child->getSchema(), req_id, filter_column_name, before_filter_actions);
     physical_filter->appendChild(child);
+
     return physical_filter;
 }
 
