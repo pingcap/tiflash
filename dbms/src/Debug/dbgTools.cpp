@@ -339,9 +339,9 @@ void insert( //
 
         for (size_t i = 0; i < table_info.getPrimaryIndexInfo().idx_cols.size(); i++)
         {
-            const auto & idx_col = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
-            const auto & column_info = table_info.columns[idx_col];
-            auto start_field = RegionBench::convertField(column_info, fields[idx_col]);
+            const auto & col_idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
+            const auto & column_info = table_info.columns[col_idx];
+            auto start_field = RegionBench::convertField(column_info, fields[col_idx]);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             keys.emplace_back(start_datum.field());
         }

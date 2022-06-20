@@ -179,11 +179,6 @@ struct ColumnInfo
 
     ColumnID id = -1;
     String name;
-
-    /// please be very careful when you have to use offset,
-    /// because we never update offset when DDL action changes.
-    /// Thus, our offset will not exactly correspond the order of columns.
-    Int32 offset = -1;
     Poco::Dynamic::Var origin_default_value;
     Poco::Dynamic::Var default_value;
     Poco::Dynamic::Var default_bit_value;
@@ -216,6 +211,12 @@ struct ColumnInfo
     static Int64 getTimeValue(const String &);
     static Int64 getYearValue(const String &);
     static UInt64 getBitValue(const String &);
+
+private:
+    /// please be very careful when you have to use offset,
+    /// because we never update offset when DDL action changes.
+    /// Thus, our offset will not exactly correspond the order of columns.
+    Int32 offset = -1;
 };
 
 enum PartitionType
@@ -302,8 +303,13 @@ struct IndexColumnInfo
     void deserialize(Poco::JSON::Object::Ptr json);
 
     String name;
-    Int32 offset;
     Int32 length;
+
+private:
+    /// please be very careful when you have to use offset,
+    /// because we never update offset when DDL action changes.
+    /// Thus, our offset will not exactly correspond the order of columns.
+    Int32 offset;
 };
 struct IndexInfo
 {
