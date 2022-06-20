@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/CountingBlockOutputStream.h>
 #include <Common/ProfileEvents.h>
+#include <DataStreams/CountingBlockOutputStream.h>
 
 namespace DB
 {
-
 void CountingBlockOutputStream::write(const Block & block)
 {
     stream->write(block);
@@ -32,4 +31,4 @@ void CountingBlockOutputStream::write(const Block & block)
         progress_callback(local_progress);
 }
 
-}
+} // namespace DB
