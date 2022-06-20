@@ -29,7 +29,7 @@ PhysicalPlanPtr PhysicalSource::build(
     return std::make_shared<PhysicalSource>("source", schema, req_id, sample_block, source_streams);
 }
 
-void PhysicalSource::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) 
+void PhysicalSource::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
     pipeline.streams.insert(pipeline.streams.end(), source_streams.begin(), source_streams.end());
 }
