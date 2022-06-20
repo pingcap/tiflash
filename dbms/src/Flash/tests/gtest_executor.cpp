@@ -62,8 +62,7 @@ public:
 
     void executeExecutor(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency = 1)
     {
-        // std::vector<String> enable_planners{"true", "false"};
-        std::vector<String> enable_planners{"false"};
+        std::vector<String> enable_planners{"true", "false"};
         for (auto enable : enable_planners)
         {
             context.context.setSetting("enable_planner", enable);
@@ -81,8 +80,8 @@ try
                        .build(context);
     {
         executeExecutor(request,
-                       {toNullableVec<String>({"banana"}),
-                        toNullableVec<String>({"banana"})});
+                        {toNullableVec<String>({"banana"}),
+                         toNullableVec<String>({"banana"})});
     }
 
     request = context.receive("exchange1")
@@ -90,8 +89,8 @@ try
                   .build(context);
     {
         executeExecutor(request,
-                       {toNullableVec<String>({"banana"}),
-                        toNullableVec<String>({"banana"})});
+                        {toNullableVec<String>({"banana"}),
+                         toNullableVec<String>({"banana"})});
     }
 }
 CATCH
@@ -111,24 +110,24 @@ try
                           "  table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"})},
-                       2);
+                        {toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"})},
+                        2);
 
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"})},
-                       5);
+                        {toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"})},
+                        5);
 
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"})});
+                        {toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"})});
     }
     request = context
                   .scan("test_db", "l_table")
@@ -144,9 +143,9 @@ try
                           "   table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"})},
-                       2);
+                        {toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"})},
+                        2);
     }
 
     request = context
@@ -161,17 +160,17 @@ try
                           "  table_scan_1 | {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
-                        toNullableVec<String>({"apple", "apple", "apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana", "banana", {}}),
-                        toNullableVec<String>({"apple", "apple", "apple", {}})},
-                       2);
+                        {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
+                         toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana", "banana", {}}),
+                         toNullableVec<String>({"apple", "apple", "apple", {}})},
+                        2);
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
-                        toNullableVec<String>({"apple", "apple", "apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana", "banana", {}}),
-                        toNullableVec<String>({"apple", "apple", "apple", {}})},
-                       3);
+                        {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
+                         toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana", "banana", {}}),
+                         toNullableVec<String>({"apple", "apple", "apple", {}})},
+                        3);
     }
 }
 CATCH
@@ -191,24 +190,24 @@ try
                           "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"})},
-                       2);
+                        {toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"})},
+                        2);
 
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"})},
-                       5);
+                        {toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"})},
+                        5);
 
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"})});
+                        {toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"})});
     }
 }
 CATCH
@@ -228,11 +227,11 @@ try
                           "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
         ASSERT_DAGREQUEST_EQAUL(expected, request);
         executeExecutor(request,
-                       {toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"}),
-                        toNullableVec<String>({"banana", "banana"}),
-                        toNullableVec<String>({"apple", "banana"})},
-                       2);
+                        {toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"}),
+                         toNullableVec<String>({"banana", "banana"}),
+                         toNullableVec<String>({"apple", "banana"})},
+                        2);
     }
 }
 CATCH
