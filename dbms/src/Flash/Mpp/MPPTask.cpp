@@ -333,7 +333,7 @@ void MPPTask::runImpl()
     catch (pingcap::Exception & e)
     {
         err_msg = e.message();
-        LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
+        LOG_ERROR(log, "task running meets error: " << err_msg);
     }
     catch (std::exception & e)
     {
