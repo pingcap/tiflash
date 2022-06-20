@@ -29,7 +29,7 @@ extern const char random_limit_check_failpoint[];
 bool SizeLimits::check(UInt64 rows, UInt64 bytes, const char * what, int exception_code) const
 {
     bool rows_exceed_limit = max_rows && rows > max_rows;
-    fiu_do_on(FailPoints::random_limit_check_failpoint, rows_exceed_limit = false;);
+    fiu_do_on(FailPoints::random_limit_check_failpoint, rows_exceed_limit = true;);
     if (rows_exceed_limit)
     {
         if (overflow_mode == OverflowMode::THROW)

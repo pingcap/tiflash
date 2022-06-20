@@ -26,7 +26,6 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_during_mpp_close_tunnel[];
-extern const char random_tunnel_write_failure_failpoint[];
 extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 

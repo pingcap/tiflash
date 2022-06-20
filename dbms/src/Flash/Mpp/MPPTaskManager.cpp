@@ -25,7 +25,7 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char random_task_manager_failpoint[];
+extern const char random_task_manager_find_task_failure_failpoint[];
 } // namespace FailPoints
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
@@ -56,7 +56,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
         it = query_it->second->task_map.find(id);
         return it != query_it->second->task_map.end();
     });
-    fiu_do_on(FailPoints::random_task_manager_failpoint, ret = false;);
+    fiu_do_on(FailPoints::random_task_manager_find_task_failure_failpoint, ret = false;);
     if (cancelled)
     {
         errMsg = fmt::format("Task [{},{}] has been cancelled.", meta.start_ts(), meta.task_id());
