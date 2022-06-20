@@ -72,6 +72,7 @@ DAGDriver<true>::DAGDriver(
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
     bool internal_)
     : context(context_)
+    , dag_response(nullptr)
     , writer(writer_)
     , internal(internal_)
     , log(&Poco::Logger::get("DAGDriver"))

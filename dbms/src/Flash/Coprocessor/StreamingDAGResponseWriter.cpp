@@ -407,6 +407,8 @@ template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
 {
     assert(exchange_type == tipb::ExchangeType::Hash);
+    assert(fine_grained_shuffle_stream_count > 0);
+    assert(fine_grained_shuffle_batch_size > 0);
 
     tipb::SelectResponse response;
     if constexpr (send_exec_summary_at_last)
@@ -415,7 +417,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
     std::vector<mpp::MPPDataPacket> packet(partition_num);
     std::vector<size_t> responses_row_count(partition_num, 0);
 
-    // assert(fine_grained_shuffle_stream_count < 8192);
+    // fine_grained_shuffle_stream_count is in [0, 1024], so will not overflow.
     uint32_t bucket_num = partition_num * fine_grained_shuffle_stream_count;
     handleExecSummary<send_exec_summary_at_last>(blocks, packet, response);
     if (!blocks.empty())
@@ -442,7 +444,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
 
         for (size_t bucket_idx = 0; bucket_idx < bucket_num; bucket_idx += fine_grained_shuffle_stream_count)
         {
-            size_t part_id = bucket_idx / fine_grained_shuffle_stream_count;
+            size_t part_id = bucket_idx / fine_grained_shuffle_stream_count; // NOLINT(clang-analyzer-core.DivideZero)
             size_t row_count_per_part = 0;
             for (uint32_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
             {
