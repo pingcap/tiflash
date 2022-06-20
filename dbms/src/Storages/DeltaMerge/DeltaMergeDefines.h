@@ -57,7 +57,7 @@ using SystemAllocator = ProxyAllocator<Allocator<false>, L, I>;
 template <class L, class I>
 using ArenaAllocator = ProxyAllocator<ArenaWithFreeLists, L, I>;
 
-template <class ValueSpace, size_t M, size_t F, size_t S = 3, template<class, class> typename TAllocator = MultiLevelAllocator>
+template <class ValueSpace, size_t M, size_t F, size_t S = 3, template <class, class> typename TAllocator = MultiLevelAllocator>
 class DeltaTree;
 
 template <size_t M, size_t F, size_t S>

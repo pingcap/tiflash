@@ -15,15 +15,17 @@
 namespace DB::DM
 {
 
-static NumaAwareMemoryHierarchy::GlobalPagePool GLOBAL_PAGE_POOL {};
+static NumaAwareMemoryHierarchy::GlobalPagePool GLOBAL_PAGE_POOL{};
 
-#pragma push_macro  ("thread_local")
+#pragma push_macro("thread_local")
 #undef thread_local
 static thread_local std::shared_ptr<NumaAwareMemoryHierarchy::ThreadLocalMemPool> THREAD_LOCAL_MEM_POOL = nullptr;
-#pragma pop_macro  ("thread_local")
+#pragma pop_macro("thread_local")
 
-static inline std::shared_ptr<NumaAwareMemoryHierarchy::ThreadLocalMemPool> getThreadLocalMemPool() {
-    if (!THREAD_LOCAL_MEM_POOL) {
+static inline std::shared_ptr<NumaAwareMemoryHierarchy::ThreadLocalMemPool> getThreadLocalMemPool()
+{
+    if (!THREAD_LOCAL_MEM_POOL)
+    {
         THREAD_LOCAL_MEM_POOL = std::make_shared<NumaAwareMemoryHierarchy::ThreadLocalMemPool>(&GLOBAL_PAGE_POOL.getFreeList());
     }
     return THREAD_LOCAL_MEM_POOL;
@@ -32,9 +34,8 @@ static inline std::shared_ptr<NumaAwareMemoryHierarchy::ThreadLocalMemPool> getT
 NumaAwareMemoryHierarchy::Client getClient(size_t size, size_t alignment)
 {
     auto upstream = getThreadLocalMemPool();
-    return { upstream, size, alignment};
+    return {upstream, size, alignment};
 }
 
 
-
-}
+} // namespace DB::DM
