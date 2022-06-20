@@ -15,11 +15,11 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
-
 #include <gtest/gtest.h>
+
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <iostream>
 
 namespace DB
@@ -30,60 +30,61 @@ namespace tests
 using BlockPtr = std::shared_ptr<Block>;
 class TestStreamingDAGResponseWriter : public testing::Test
 {
-    protected:
-        void SetUp() override
-        {
-            dag_context_ptr = std::make_unique<DAGContext>(1024);
-            dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
-            dag_context_ptr->is_mpp_task = true;
-            dag_context_ptr->is_root_mpp_task = false;
-            dag_context_ptr->result_field_types = makeFields();
-            context.setDAGContext(dag_context_ptr.get());
-        }
-    public:
-        TestStreamingDAGResponseWriter()
-            : context(TiFlashTestEnv::getContext()),
-              part_col_ids{0},
-              part_col_collators{
-                  TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)
-              } {}
+protected:
+    void SetUp() override
+    {
+        dag_context_ptr = std::make_unique<DAGContext>(1024);
+        dag_context_ptr->encode_type = tipb::EncodeType::TypeCHBlock;
+        dag_context_ptr->is_mpp_task = true;
+        dag_context_ptr->is_root_mpp_task = false;
+        dag_context_ptr->result_field_types = makeFields();
+        context.setDAGContext(dag_context_ptr.get());
+    }
 
-        // Return 10 Int64 column.
-        static std::vector<tipb::FieldType> makeFields()
+public:
+    TestStreamingDAGResponseWriter()
+        : context(TiFlashTestEnv::getContext())
+        , part_col_ids{0}
+        , part_col_collators{
+              TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)}
+    {}
+
+    // Return 10 Int64 column.
+    static std::vector<tipb::FieldType> makeFields()
+    {
+        std::vector<tipb::FieldType> fields(10);
+        for (int i = 0; i < 10; ++i)
         {
-            std::vector<tipb::FieldType> fields(10);
-            for (int i = 0; i < 10; ++i)
+            fields[i].set_tp(TiDB::TypeLongLong);
+        }
+        return fields;
+    }
+
+    // Return a block with **rows** and 10 Int64 column.
+    static BlockPtr prepareBlock(const std::vector<Int64> & rows)
+    {
+        BlockPtr block = std::make_shared<Block>();
+        for (int i = 0; i < 10; ++i)
+        {
+            DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
+            DataTypePtr nullable_int64_data_type = std::make_shared<DataTypeNullable>(int64_data_type);
+            MutableColumnPtr int64_col = nullable_int64_data_type->createColumn();
+            for (Int64 r : rows)
             {
-                fields[i].set_tp(TiDB::TypeLongLong);
+                int64_col->insert(Field(r));
             }
-            return fields;
+            block->insert(ColumnWithTypeAndName{std::move(int64_col),
+                                                nullable_int64_data_type,
+                                                String("col") + std::to_string(i)});
         }
+        return block;
+    }
 
-        // Return a block with **rows** and 10 Int64 column.
-        static BlockPtr prepareBlock(const std::vector<Int64> & rows)
-        {
-            BlockPtr block = std::make_shared<Block>();
-            for (int i = 0; i < 10; ++i)
-            {
-                DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
-                DataTypePtr nullable_int64_data_type = std::make_shared<DataTypeNullable>(int64_data_type);
-                MutableColumnPtr int64_col = nullable_int64_data_type->createColumn();
-                for (Int64 r : rows)
-                {
-                    int64_col->insert(Field(r));
-                }
-                block->insert(ColumnWithTypeAndName{std::move(int64_col),
-                        nullable_int64_data_type,
-                        String("col") + std::to_string(i)});
-            }
-            return block;
-        }
+    Context context;
+    std::vector<Int64> part_col_ids;
+    TiDB::TiDBCollators part_col_collators;
 
-        Context context;
-        std::vector<Int64> part_col_ids;
-        TiDB::TiDBCollators part_col_collators;
-
-        std::unique_ptr<DAGContext> dag_context_ptr;
+    std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
 using MockStreamWriterChecker = std::function<void(mpp::MPPDataPacket &, uint16_t)>;
@@ -91,9 +92,10 @@ using MockStreamWriterChecker = std::function<void(mpp::MPPDataPacket &, uint16_
 struct MockStreamWriter
 {
     MockStreamWriter(MockStreamWriterChecker checker_,
-            uint16_t part_num_)
+                     uint16_t part_num_)
         : checker(checker_)
-        , part_num(part_num_) {}
+        , part_num(part_num_)
+    {}
 
     void write(mpp::MPPDataPacket &) { FAIL() << "cannot reach here, because we only expect hash partition"; }
     void write(mpp::MPPDataPacket & packet, uint16_t part_id) { checker(packet, part_id); }
@@ -101,7 +103,7 @@ struct MockStreamWriter
     void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
     uint16_t getPartitionNum() const { return part_num; }
 
-    private:
+private:
     MockStreamWriterChecker checker;
     uint16_t part_num;
 };
@@ -118,8 +120,8 @@ try
     const Int64 fine_grained_shuffle_batch_size = 4096;
     dag_context_ptr->setFineGrainedShuffleStreamCount(fine_grained_shuffle_stream_count);
     dag_context_ptr->setFineGrainedShuffleBatchSize(fine_grained_shuffle_batch_size);
-    
-    // Set these to 1, because when fine grained shuffle is enabled, 
+
+    // Set these to 1, because when fine grained shuffle is enabled,
     // batchWriteFineGrainedShuffle() only check fine_grained_shuffle_batch_size.
     // records_per_chunk and batch_send_min_limit are useless.
     const Int64 records_per_chunk = 1;
@@ -147,16 +149,16 @@ try
 
     // 3. Start to write.
     auto dag_writer = std::make_shared<StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>>>(
-            mock_writer,
-            part_col_ids,
-            part_col_collators, 
-            tipb::ExchangeType::Hash,
-            records_per_chunk,
-            batch_send_min_limit,
-            should_send_exec_summary_at_last,
-            *dag_context_ptr,
-            fine_grained_shuffle_stream_count,
-            fine_grained_shuffle_batch_size);
+        mock_writer,
+        part_col_ids,
+        part_col_collators,
+        tipb::ExchangeType::Hash,
+        records_per_chunk,
+        batch_send_min_limit,
+        should_send_exec_summary_at_last,
+        *dag_context_ptr,
+        fine_grained_shuffle_stream_count,
+        fine_grained_shuffle_batch_size);
     dag_writer->write(*block);
     dag_writer->finishWrite();
 

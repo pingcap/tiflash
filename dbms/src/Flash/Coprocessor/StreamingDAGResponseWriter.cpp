@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Interpreters/AggregationCommon.h>
+
 #include <iostream>
 
 namespace DB
@@ -245,9 +246,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::handleExecSummary(
-                       const std::vector<Block> & input_blocks,
-                       std::vector<mpp::MPPDataPacket> & packet,
-                       tipb::SelectResponse & response) const
+    const std::vector<Block> & input_blocks,
+    std::vector<mpp::MPPDataPacket> & packet,
+    tipb::SelectResponse & response) const
 {
     if constexpr (send_exec_summary_at_last)
     {

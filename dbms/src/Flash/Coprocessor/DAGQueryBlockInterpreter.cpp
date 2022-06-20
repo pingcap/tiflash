@@ -469,15 +469,16 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
 
     if (enable_fine_grained_shuffle)
     {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<MergeSortingBlockInputStream>(
-                    stream,
-                    order_descr,
-                    settings.max_block_size,
-                    limit,
-                    settings.max_bytes_before_external_sort,
-                    context.getTemporaryPath(),
-                    log->identifier());
-                });
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<MergeSortingBlockInputStream>(
+                stream,
+                order_descr,
+                settings.max_block_size,
+                limit,
+                settings.max_bytes_before_external_sort,
+                context.getTemporaryPath(),
+                log->identifier());
+        });
     }
     else
     {

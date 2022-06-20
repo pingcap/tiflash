@@ -292,7 +292,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                 /*req_id=*/"",
                 /*executor_id=*/"",
                 /*fine_grained_shuffle_stream_count=*/0);
-        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"", /*stream_id*/0);
+        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"", /*stream_id*/ 0);
         return ret;
     }
     else

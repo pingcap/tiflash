@@ -74,8 +74,9 @@ bool pushPacket(size_t source_index,
                 // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
                 // This can happen when there are old version nodes when upgrading.
                 LOG_FMT_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                        "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                        "Cannot handle this.", source_index);
+                                   "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
+                                   "Cannot handle this.",
+                              source_index);
                 return false;
             }
             assert(packet->chunks_size() == packet->stream_ids_size());
@@ -93,7 +94,12 @@ bool pushPacket(size_t source_index,
                 continue;
 
             std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
-                    source_index, req_info, packet, error_ptr, resp_ptr, std::move(chunks[i]));
+                source_index,
+                req_info,
+                packet,
+                error_ptr,
+                resp_ptr,
+                std::move(chunks[i]));
             push_succeed = msg_channels[i]->push(std::move(recv_msg));
 
             // Only the first ExchangeReceiverInputStream need to handle resp.
@@ -111,13 +117,17 @@ bool pushPacket(size_t source_index,
         if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
         {
             std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
-                    source_index, req_info, packet, error_ptr, resp_ptr, std::move(chunks));
+                source_index,
+                req_info,
+                packet,
+                error_ptr,
+                resp_ptr,
+                std::move(chunks));
 
             push_succeed = msg_channels[0]->push(std::move(recv_msg));
         }
     }
-    LOG_FMT_DEBUG(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}",
-            msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
+    LOG_FMT_DEBUG(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
     return push_succeed;
 }
 
@@ -494,8 +504,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, msg_channels, rpc_context, req, exc_log->identifier(),
-                ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count)));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, msg_channels, rpc_context, req, exc_log->identifier(), ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count)));
 
     while (alive_async_connections > 0)
     {
@@ -572,8 +581,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (packet->has_error())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
 
-                if (!pushPacket(req.source_index, req_info, packet, msg_channels,
-                            ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count), log))
+                if (!pushPacket(req.source_index, req_info, packet, msg_channels, ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count), log))
                 {
                     meet_error = true;
                     auto local_state = getState();
