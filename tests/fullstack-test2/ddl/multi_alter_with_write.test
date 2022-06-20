@@ -34,7 +34,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -120,7 +119,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -198,7 +196,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -278,7 +275,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -363,7 +359,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -434,7 +429,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -504,7 +498,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -611,7 +604,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -707,7 +699,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
@@ -805,7 +796,6 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
 
 mysql> alter table test.t set tiflash replica 1;
-mysql> set session tidb_isolation_read_engines='tiflash';
 
 func> wait_table test t 
 
