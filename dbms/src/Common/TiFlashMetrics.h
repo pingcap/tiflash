@@ -96,12 +96,6 @@ namespace DB
         F(type_exchange_partition, {"type", "exchange_partition"}))                                                                       \
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                       \
         F(type_ddl_apply_duration, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.001, 2, 20}))                                            \
-    M(tiflash_tmt_merge_count, "Total number of TMT engine merge", Counter)                                                               \
-    M(tiflash_tmt_merge_duration_seconds, "Bucketed histogram of TMT engine merge duration", Histogram,                                   \
-        F(type_tmt_merge_duration, {{"type", "tmt_merge_duration"}}, ExpBuckets{0.001, 2, 20}))                                           \
-    M(tiflash_tmt_write_parts_count, "Total number of TMT engine write parts", Counter)                                                   \
-    M(tiflash_tmt_write_parts_duration_seconds, "Bucketed histogram of TMT engine write parts duration", Histogram,                       \
-        F(type_tmt_write_duration, {{"type", "tmt_write_parts_duration"}}, ExpBuckets{0.001, 2, 20}))                                     \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                          \
     M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read index duration", Histogram,                              \
         F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.001, 2, 20}))                           \
