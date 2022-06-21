@@ -310,11 +310,11 @@ public:
     bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
 
     ExchangeReceiverPtr getMPPExchangeReceiver(const String & executor_id) const;
-    void setMPPReceiverSet(MPPReceiverSetPtr receiver_set)
+    void setMPPReceiverSet(const MPPReceiverSetPtr & receiver_set)
     {
         mpp_receiver_set = receiver_set;
     }
-    void addCoprocessorReader(CoprocessorReaderPtr coprocessor_reader);
+    void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }

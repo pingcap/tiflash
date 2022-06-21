@@ -214,7 +214,7 @@ ExchangeReceiverPtr DAGContext::getMPPExchangeReceiver(const String & executor_i
     return mpp_receiver_set->getExchangeReceiver(executor_id);
 }
 
-void DAGContext::addCoprocessorReader(CoprocessorReaderPtr coprocessor_reader)
+void DAGContext::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
 {
     if (!isMPPTask())
         return;

@@ -25,8 +25,8 @@ public:
     explicit MPPReceiverSet(const String & req_id)
         : log(Logger::get("MPPReceiverSet", req_id))
     {}
-    void addExchangeReceiver(const String & executor_id, ExchangeReceiverPtr exchange_receiver);
-    void addCoprocessorReader(CoprocessorReaderPtr coprocessor_reader);
+    void addExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & exchange_receiver);
+    void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;
     void cancel();
 

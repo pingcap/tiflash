@@ -17,13 +17,13 @@
 
 namespace DB
 {
-void MPPReceiverSet::addExchangeReceiver(const String & executor_id, ExchangeReceiverPtr exchange_receiver)
+void MPPReceiverSet::addExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & exchange_receiver)
 {
-    RUNTIME_ASSERT(exchange_receiver_map.find(executor_id) == exchange_receiver_map.end(), log, "Duplicate executor_id in DAGRequest");
+    RUNTIME_ASSERT(exchange_receiver_map.find(executor_id) == exchange_receiver_map.end(), log, "Duplicate executor_id: {} in DAGRequest", executor_id);
     exchange_receiver_map[executor_id] = exchange_receiver;
 }
 
-void MPPReceiverSet::addCoprocessorReader(CoprocessorReaderPtr coprocessor_reader)
+void MPPReceiverSet::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
 {
     coprocessor_readers.push_back(coprocessor_reader);
 }
