@@ -207,6 +207,42 @@ try
 }
 CATCH
 
+TEST_F(Segment_test, WriteRead2)
+try
+{
+    const size_t num_rows_write = dmContext().stable_pack_rows;
+    {
+        // write a block with rows all deleted
+        Block block = DMTestEnv::prepareBlockWithIncreasingTso(2, 100, 100 + num_rows_write, true);
+        segment->write(dmContext(), block);
+        // write not deleted rows with larger pk
+        Block block2 = DMTestEnv::prepareBlockWithIncreasingTso(3, 100, 100 + num_rows_write, false);
+        segment->write(dmContext(), block2);
+
+        // flush segment and make sure there is two packs in stable
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+    }
+
+    {
+        Block block = DMTestEnv::prepareBlockWithIncreasingTso(1, 100, 100 + num_rows_write, false);
+        segment->write(dmContext(), block);
+    }
+
+    {
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        // only write two visible pks
+        ASSERT_EQ(num_rows_read, 2);
+    }
+}
+CATCH
 
 TEST_F(Segment_test, ReadWithMoreAdvacedDeltaIndex)
 try
