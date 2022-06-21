@@ -226,6 +226,7 @@ public:
                 }
                 col1.column = std::move(m_col);
             }
+            col1.column_id = EXTRA_HANDLE_COLUMN_ID;
             block.insert(col1);
 
             ColumnWithTypeAndName version_col(VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME);
@@ -238,6 +239,7 @@ public:
                 }
                 version_col.column = std::move(m_col);
             }
+            version_col.column_id = VERSION_COLUMN_ID;
             block.insert(version_col);
 
             ColumnWithTypeAndName tag_col(TAG_COLUMN_TYPE, TAG_COLUMN_NAME);
@@ -251,6 +253,7 @@ public:
                 }
                 tag_col.column = std::move(m_col);
             }
+            tag_col.column_id = TAG_COLUMN_ID;
             block.insert(tag_col);
         }
         return block;
