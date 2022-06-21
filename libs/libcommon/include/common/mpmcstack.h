@@ -28,11 +28,21 @@ class MPMCStack
 
 private:
     alignas(MPMC_STACK_CACHELINE_SIZE) ABAType stack;
-
+#if __has_feature(thread_sanitizer)
+    __attribute__((no_sanitize("thread")))
+    static T * racyRead racy_read(std::atomic<T*>& ptr)
+    {
+        // reinterpret_cast is required as TSAN still instruments
+        // std::atomic operations, even if you disable TSAN on
+        // the function.
+        return *reinterpret_cast<T**>(&ptr);
+    }
+#else
     static T * racyRead(std::atomic<T *> & ptr)
     {
         return ptr.load(std::memory_order_relaxed);
     }
+#endif
 
 public:
     explicit MPMCStack(bool force_generic = false)
