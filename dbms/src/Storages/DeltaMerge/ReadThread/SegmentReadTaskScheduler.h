@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <atomic>
 namespace DB::DM
 {
 
@@ -79,7 +81,6 @@ private:
     ElementIter last_itr;
 };
 
-
 using Task = std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>;
 struct MergedTask
 {
@@ -101,8 +102,29 @@ public:
     void add(SegmentReadTaskPoolPtr & pool);
 
     MergedTaskPtr getMergedTask();
-    SegmentReadTaskPools getPools(const std::vector<uint64_t> & pool_ids);
 private:
+    bool schedule()
+    {
+        auto merged_task = getMergedTask();
+        if (merged_task == nullptr)
+        {
+            return false;
+        }
+        SegmentReadThreadPool::instance().addTask(merged_task);  // TODO(jinhelin): should not be fail.
+        return true;
+    }
+
+    void scheThread()
+    {
+        while (!isStop())
+        {
+            if (!schedule())
+            {
+                ::usleep(2000);
+            }
+        }
+    }
+
     std::pair<uint64_t, SegmentReadTaskPools> getSegment();
     SegmentReadTaskPools unsafeGetPools(const std::vector<uint64_t> & pool_ids);
     std::pair<uint64_t, std::vector<uint64_t>> unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool);
@@ -115,10 +137,34 @@ private:
     // seg_id -> pool_ids
     std::unordered_map<uint64_t, std::vector<uint64_t>> segments;
 
-    
+    std::atomic<bool> stop;
+    std::thread sche_thread;
+
     Poco::Logger * log;
 
-    SegmentReadTaskScheduler() : max_unexpired_pool_count(0), log(&Poco::Logger::get("SegmentReadTaskScheduler")) {}
+    void setStop()
+    {
+        stop.store(true, std::memory_order_relaxed);
+    }
+    
+    bool isStop() const
+    {
+        return stop.load(std::memory_order_relaxed);
+    }
+
+    SegmentReadTaskScheduler() 
+        : max_unexpired_pool_count(0)
+        , stop(false)
+        , log(&Poco::Logger::get("SegmentReadTaskScheduler")) 
+    {
+        sche_thread = std::thread(&SegmentReadTaskScheduler::scheThread, this);
+    }
+
+    ~SegmentReadTaskScheduler()
+    {
+        setStop();
+        sche_thread.join();
+    }
 };
 
 class DMFileReader;

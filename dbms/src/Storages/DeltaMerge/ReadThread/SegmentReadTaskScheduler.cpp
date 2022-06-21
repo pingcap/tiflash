@@ -71,12 +71,6 @@ std::pair<uint64_t, std::vector<uint64_t>> SegmentReadTaskScheduler::unsafeSched
     return target;
 }
 
-SegmentReadTaskPools SegmentReadTaskScheduler::getPools(const std::vector<uint64_t> & pool_ids)
-{
-    std::lock_guard lock(mtx);
-    return unsafeGetPools(pool_ids);
-}
-
 MergedTaskPtr SegmentReadTaskScheduler::getMergedTask()
 {
     uint64_t seg_id = 0;

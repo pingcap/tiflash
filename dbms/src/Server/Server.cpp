@@ -87,6 +87,7 @@
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
@@ -1328,7 +1329,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getTMTContext().reloadConfig(config());
     }
 
-    auto read_thread_pool = std::make_unique<DM::SegmentReadThreadPool>(40);
+    DM::SegmentReadThreadPool::instance();
+    DM::SegmentReadTaskScheduler::instance();
 
     {
         // Note that this must do before initialize schema sync service.
