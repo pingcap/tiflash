@@ -1,14 +1,24 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <unistd.h>
-#include <algorithm>
-#include <limits>
-#include <memory>
-#include <mutex>
-#include "Common/Exception.h"
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+
 namespace DB::DM
 {
+SegmentReadTaskScheduler::SegmentReadTaskScheduler() 
+    : max_unexpired_pool_count(0)
+    , stop(false)
+    , log(&Poco::Logger::get("SegmentReadTaskScheduler")) 
+{
+    sche_thread = std::thread(&SegmentReadTaskScheduler::scheThread, this);
+}
+
+SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
+{
+    setStop();
+    sche_thread.join();
+}
+
 void SegmentReadTaskScheduler::add(SegmentReadTaskPoolPtr & pool)
 {
     std::lock_guard lock(mtx);
@@ -26,6 +36,43 @@ void SegmentReadTaskScheduler::add(SegmentReadTaskPoolPtr & pool)
     LOG_FMT_DEBUG(log, "add pool {} segment count {} segments {} unexpired pool {} expired pool {}",
         pool->getId(), seg_ids.size(), seg_ids, unexpired, expired);
     max_unexpired_pool_count = unexpired;
+}
+
+MergedTaskPtr SegmentReadTaskScheduler::getMergedTask()
+{
+    uint64_t seg_id = 0;
+    SegmentReadTaskPools pools;
+    {
+        std::lock_guard lock(mtx);
+        auto pool = unsafeScheduleSegmentReadTaskPool();
+        if (pool == nullptr)
+        {
+            return {};
+        }
+        auto segment = unsafeScheduleSegment(pool);
+        if (segment.first == 0)
+        {
+            return {};
+        }
+        seg_id = segment.first;
+        pools = unsafeGetPools(segment.second);
+    }
+    
+    std::vector<Task> tasks;
+    tasks.reserve(pools.size());
+    for (auto & pool : pools)
+    {
+        if (pool == nullptr)
+        {
+            continue;
+        }
+        tasks.push_back({pool->getInputStream(seg_id), std::weak_ptr<SegmentReadTaskPool>(pool)});
+    }
+    if (tasks.empty())
+    {
+        return {};
+    }
+    return std::make_shared<MergedTask>(seg_id, std::move(tasks));
 }
 
 SegmentReadTaskPools SegmentReadTaskScheduler::unsafeGetPools(const std::vector<uint64_t> & pool_ids)
@@ -71,41 +118,36 @@ std::pair<uint64_t, std::vector<uint64_t>> SegmentReadTaskScheduler::unsafeSched
     return target;
 }
 
-MergedTaskPtr SegmentReadTaskScheduler::getMergedTask()
+void SegmentReadTaskScheduler::setStop()
 {
-    uint64_t seg_id = 0;
-    SegmentReadTaskPools pools;
+    stop.store(true, std::memory_order_relaxed);
+}
+
+bool SegmentReadTaskScheduler::isStop() const
+{
+    return stop.load(std::memory_order_relaxed);
+}
+
+bool SegmentReadTaskScheduler::schedule()
+{
+    auto merged_task = getMergedTask();
+    if (merged_task == nullptr)
     {
-        std::lock_guard lock(mtx);
-        auto pool = unsafeScheduleSegmentReadTaskPool();
-        if (pool == nullptr)
-        {
-            return {};
-        }
-        auto segment = unsafeScheduleSegment(pool);
-        if (segment.first == 0)
-        {
-            return {};
-        }
-        seg_id = segment.first;
-        pools = unsafeGetPools(segment.second);
+        return false;
     }
-    
-    std::vector<Task> tasks;
-    tasks.reserve(pools.size());
-    for (auto & pool : pools)
+    SegmentReadThreadPool::instance().addTask(merged_task);  // TODO(jinhelin): should not be fail.
+    return true;
+}
+
+void SegmentReadTaskScheduler::scheThread()
+{
+    while (!isStop())
     {
-        if (pool == nullptr)
+        if (!schedule())
         {
-            continue;
+            ::usleep(2000);
         }
-        tasks.push_back({pool->getInputStream(seg_id), std::weak_ptr<SegmentReadTaskPool>(pool)});
     }
-    if (tasks.empty())
-    {
-        return {};
-    }
-    return std::make_shared<MergedTask>(seg_id, std::move(tasks));
 }
 
 DMFileReaderPool & DMFileReaderPool::instance()

@@ -6,6 +6,7 @@
 #include <limits>
 #include "Storages/DeltaMerge/ReadThread/WorkQueue.h"
 #include "common/logger_useful.h"
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 
 namespace DB::DM
 {
