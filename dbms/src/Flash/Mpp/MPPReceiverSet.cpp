@@ -31,7 +31,7 @@ void MPPReceiverSet::addCoprocessorReader(CoprocessorReaderPtr coprocessor_reade
 ExchangeReceiverPtr MPPReceiverSet::getExchangeReceiver(const String & executor_id) const
 {
     auto it = exchange_receiver_map.find(executor_id);
-    if (it == exchange_receiver_map.end())
+    if (unlikely(it == exchange_receiver_map.end()))
         return nullptr;
     return it->second;
 }

@@ -37,8 +37,8 @@ namespace DB
 class Context;
 class MPPTunnelSet;
 class ExchangeReceiver;
-/// key: executor_id of ExchangeReceiver nodes in dag.
 using ExchangeReceiverPtr = std::shared_ptr<ExchangeReceiver>;
+/// key: executor_id of ExchangeReceiver nodes in dag.
 using ExchangeReceiverMap = std::unordered_map<String, ExchangeReceiverPtr>;
 class MPPReceiverSet;
 using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
