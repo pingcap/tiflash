@@ -94,7 +94,7 @@ public:
         while (it != existing_name_map.end())
         {
             ret_name.append("_").append(std::to_string(it->second));
-            ++it->second;
+            it->second++;
             it = existing_name_map.find(ret_name);
         }
         existing_name_map.try_emplace(ret_name, 1);
@@ -105,4 +105,5 @@ public:
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
 tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name);
+
 } // namespace DB
