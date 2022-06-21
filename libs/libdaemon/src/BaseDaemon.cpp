@@ -721,12 +721,6 @@ BaseDaemon::~BaseDaemon()
     writeSignalIDtoSignalPipe(SignalListener::StopThread);
     signal_listener_thread.join();
     signal_pipe.close();
-    if (log_file_async)
-        log_file_async->close();
-    if (error_log_file_async)
-        error_log_file_async->close();
-    if (tracing_log_file_async)
-        tracing_log_file_async->close();
 }
 
 
@@ -787,9 +781,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
-        if (log_file_async)
-            log_file_async->close();
-        log_file_async = new Poco::AsyncChannel(log_file);
+        if (!log_file_async)
+            log_file_async = new Poco::AsyncChannel(log_file);
         log->setChannel(log_file_async);
         split->addChannel(log);
         log_file->open();
@@ -814,9 +807,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         error_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
-        if (error_log_file_async)
-            error_log_file_async->close();
-        error_log_file_async = new Poco::AsyncChannel(error_log_file);
+        if (!error_log_file_async)
+            error_log_file_async = new Poco::AsyncChannel(error_log_file);
         errorlog->setChannel(error_log_file_async);
         level->setChannel(errorlog);
         split->addChannel(level);
@@ -844,9 +836,8 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         tracing_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         tracing_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
         tracing_log_file_async = new Poco::AsyncChannel(tracing_log_file);
-        if (tracing_log_file_async)
-            tracing_log_file_async->close();
-        tracing_log->setChannel(tracing_log_file_async);
+        if (!tracing_log_file_async)
+            tracing_log->setChannel(tracing_log_file_async);
         source->setChannel(tracing_log);
         split->addChannel(source);
         tracing_log->open();
