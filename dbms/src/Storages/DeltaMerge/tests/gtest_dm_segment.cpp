@@ -834,11 +834,17 @@ CATCH
 TEST_F(Segment_test, Split)
 try
 {
-    const size_t num_rows_write = 100;
+    const size_t num_rows_write_per_batch = 100;
+    const size_t num_rows_write = num_rows_write_per_batch * 2;
     {
-        // write to segment
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(dmContext(), std::move(block));
+        // write to segment and flush
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write_per_batch, false);
+        segment->write(dmContext(), std::move(block), true);
+    }
+    {
+        // write to segment and don't flush
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write_per_batch, 2 * num_rows_write_per_batch, false);
+        segment->write(dmContext(), std::move(block), false);
     }
 
     {
@@ -874,7 +880,7 @@ try
     size_t num_rows_seg2 = 0;
     {
         {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -883,7 +889,7 @@ try
             in->readSuffix();
         }
         {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = new_segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -894,9 +900,13 @@ try
         ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
     }
 
+    // delete rows in the right segment
+    {
+        new_segment->write(dmContext(), /*delete_range*/ new_segment->getRowKeyRange());
+        new_segment->flushCache(dmContext());
+    }
+
     // merge segments
-    // TODO: enable merge test!
-    if (false)
     {
         segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
         {
@@ -915,7 +925,7 @@ try
                 num_rows_read += block.rows();
             }
             in->readSuffix();
-            EXPECT_EQ(num_rows_read, num_rows_write);
+            EXPECT_EQ(num_rows_read, num_rows_seg1);
         }
     }
 }
