@@ -213,10 +213,10 @@ try
     const size_t num_rows_write = dmContext().stable_pack_rows;
     {
         // write a block with rows all deleted
-        Block block = DMTestEnv::prepareBlockWithTso(2, 100, 100 + num_rows_write, false, true);
+        Block block = DMTestEnv::prepareBlockWithIncreasingTso(2, 100, 100 + num_rows_write, true);
         segment->write(dmContext(), block);
         // write not deleted rows with larger pk
-        Block block2 = DMTestEnv::prepareBlockWithTso(3, 100, 100 + num_rows_write, false, false);
+        Block block2 = DMTestEnv::prepareBlockWithIncreasingTso(3, 100, 100 + num_rows_write, false);
         segment->write(dmContext(), block2);
 
         // flush segment and make sure there is two packs in stable
@@ -225,7 +225,7 @@ try
     }
 
     {
-        Block block = DMTestEnv::prepareBlockWithTso(1, 100, 100 + num_rows_write, false, false);
+        Block block = DMTestEnv::prepareBlockWithIncreasingTso(1, 100, 100 + num_rows_write, false);
         segment->write(dmContext(), block);
     }
 
