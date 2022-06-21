@@ -43,7 +43,7 @@ private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     Block sample_block;
-    
+
     std::shared_ptr<ExchangeReceiver> mpp_exchange_receiver;
 };
 } // namespace DB

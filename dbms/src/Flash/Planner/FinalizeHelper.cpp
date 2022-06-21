@@ -37,8 +37,8 @@ String schemaToString(const NamesAndTypes & schema)
     FmtBuffer bf;
     bf.append("{");
     bf.joinStr(
-        schema.cbegin(), 
-        schema.cend(), 
+        schema.cbegin(),
+        schema.cend(),
         [](const auto & col, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", col.name, col.type->getName()); },
         ", ");
     bf.append("}");
@@ -50,14 +50,14 @@ String blockToString(const Block & block)
     FmtBuffer bf;
     bf.append("{");
     bf.joinStr(
-        block.cbegin(), 
-        block.cend(), 
+        block.cbegin(),
+        block.cend(),
         [](const ColumnWithTypeAndName & col, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", col.name, col.type->getName()); },
         ", ");
     bf.append("}");
     return bf.toString();
 }
-}
+} // namespace
 
 void prependProjectInputIfNeed(ExpressionActionsPtr & actions, size_t columns_from_previous)
 {
