@@ -147,8 +147,6 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
     /// you can refer multi_alter_with_write.test for an example.
     FAIL_POINT_PAUSE(FailPoints::pause_query_init);
 
-    ProfileEvents::increment(ProfileEvents::SelectQuery);
-
     if (!context.hasQueryContext())
         context.setQueryContext(context);
 
