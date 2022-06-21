@@ -129,6 +129,4 @@ public:
 private:
     UInt64 gc_time_ms = 0;
 };
-
-REGISTER_WORKLOAD(HighValidBigFileGCWorkload)
 } // namespace DB::PS::tests
