@@ -29,7 +29,6 @@ protected:
     Int64 handle_value = 100;
     UInt8 del_mark_value = 0;
     UInt64 version_value = 100;
-    size_t rows = 100;
 
     RegionDataReadInfoList data_list_read;
     std::unordered_map<ColumnID, Field> fields_map;
@@ -47,7 +46,7 @@ protected:
         fields_map.clear();
     }
 
-    void encodeColumns(TableInfo & table_info, std::vector<Field> & fields, RowEncodeVersion row_version)
+    void encodeColumns(TableInfo & table_info, std::vector<Field> & fields, RowEncodeVersion row_version, size_t num_rows)
     {
         // for later check
         std::unordered_map<String, size_t> column_name_columns_index_map;
@@ -98,7 +97,7 @@ protected:
             throw Exception("Unknown row format " + std::to_string(row_version), ErrorCodes::LOGICAL_ERROR);
         }
         auto row_value = std::make_shared<const TiKVValue>(std::move(value_buf.str()));
-        for (size_t i = 0; i < rows; i++)
+        for (size_t i = 0; i < num_rows; i++)
             data_list_read.emplace_back(pk, del_mark_value, version_value, row_value);
     }
 
@@ -126,8 +125,9 @@ protected:
 BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandleWithCheck)
 (benchmark::State & state)
 {
+    size_t num_rows = state.range(0);
     auto [table_info, fields] = getNormalTableInfoFields({2, 3, 4}, true);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
@@ -137,8 +137,9 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandleWithCheck)
 BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandleWithoutCheck)
 (benchmark::State & state)
 {
+    size_t num_rows = state.range(0);
     auto [table_info, fields] = getNormalTableInfoFields({2, 3, 4}, true);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
@@ -149,8 +150,9 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandleWithoutCheck)
 BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)
 (benchmark::State & state)
 {
+    size_t num_rows = state.range(0);
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
@@ -160,8 +162,9 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)
 BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)
 (benchmark::State & state)
 {
+    size_t num_rows = state.range(0);
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
@@ -172,8 +175,9 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)
 BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithCheck)
 (benchmark::State & state)
 {
+    size_t num_rows = state.range(0);
     auto [table_info, fields] = getNormalTableInfoFields({2}, false);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
@@ -182,9 +186,10 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithCheck)
 }
 BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithoutCheck)
 (benchmark::State & state)
-{
+{   
+    size_t num_rows = state.range(0);
     auto [table_info, fields] = getNormalTableInfoFields({2}, false);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
@@ -192,12 +197,14 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithoutCheck)
     }
 }
 
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandleWithCheck)->Iterations(1000);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandleWithoutCheck)->Iterations(1000);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandleWithCheck)->Iterations(1000);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandleWithoutCheck)->Iterations(1000);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)->Iterations(1000);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)->Iterations(1000);
+constexpr size_t num_iterations_test = 1000;
 
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandleWithCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandleWithCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
 
 } // namespace DB::tests
+
