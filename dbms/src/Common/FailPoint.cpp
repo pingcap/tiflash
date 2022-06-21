@@ -253,6 +253,7 @@ void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, doub
 #define M(NAME) SUB_M(NAME)
     APPLY_FOR_RANDOM_FAILPOINTS(M)
 #undef M
+#undef SUB_M
 
     throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
 }
