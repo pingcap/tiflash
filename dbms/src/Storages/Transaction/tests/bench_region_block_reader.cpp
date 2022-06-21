@@ -47,8 +47,6 @@ protected:
         fields_map.clear();
     }
 
-    // void TearDown() override {}
-
     void encodeColumns(TableInfo & table_info, std::vector<Field> & fields, RowEncodeVersion row_version)
     {
         // for later check
