@@ -43,11 +43,11 @@ private:
 
     void readSegments()
     {
-        SharingTask sharing_task;
-        while (sharing_task.tasks.empty())
+        SharingTaskPtr sharing_task;
+        while (sharing_task == nullptr || sharing_task->tasks.empty())
         {
             sharing_task = SegmentReadTaskScheduler::instance().getSharingTask();
-            if (sharing_task.tasks.empty())
+            if (sharing_task == nullptr || sharing_task->tasks.empty())
             {
                 ::usleep(5000); // TODO: use notify
                 if (isStop())
@@ -56,8 +56,8 @@ private:
                 }
             }
         }
-        auto seg_id = sharing_task.seg_id;
-        auto & tasks = sharing_task.tasks;
+        auto seg_id = sharing_task->seg_id;
+        auto & tasks = sharing_task->tasks;
         std::vector<int> dones(tasks.size(), 0);
         size_t done_count = 0;
         while (done_count < tasks.size())

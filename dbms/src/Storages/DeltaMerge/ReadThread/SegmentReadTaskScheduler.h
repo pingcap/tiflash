@@ -80,13 +80,15 @@ private:
 };
 
 
-    using Task = std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>;
-    struct SharingTask
-    {
-        uint64_t seg_id;
-        std::vector<Task> tasks;
-    };
-    
+using Task = std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>;
+struct SharingTask
+{
+    SharingTask(uint64_t seg_id_, std::vector<Task> && tasks_) : seg_id(seg_id_), tasks(std::forward<std::vector<Task>>(tasks_)) {}
+    uint64_t seg_id;
+    std::vector<Task> tasks;
+};
+using SharingTaskPtr = std::shared_ptr<SharingTask>;
+
 class SegmentReadTaskScheduler : private boost::noncopyable
 {
 public:
@@ -98,7 +100,7 @@ public:
 
     void add(SegmentReadTaskPoolPtr & pool);
 
-    SharingTask getSharingTask();
+    SharingTaskPtr getSharingTask();
     SegmentReadTaskPools getPools(const std::vector<uint64_t> & pool_ids);
 private:
     std::pair<uint64_t, SegmentReadTaskPools> getSegment();
@@ -113,6 +115,7 @@ private:
     // seg_id -> pool_ids
     std::unordered_map<uint64_t, std::vector<uint64_t>> segments;
 
+    
     Poco::Logger * log;
 
     SegmentReadTaskScheduler() : max_unexpired_pool_count(0), log(&Poco::Logger::get("SegmentReadTaskScheduler")) {}

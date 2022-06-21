@@ -77,7 +77,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPools(const std::vector<uint64
     return unsafeGetPools(pool_ids);
 }
 
-SharingTask SegmentReadTaskScheduler::getSharingTask()
+SharingTaskPtr SegmentReadTaskScheduler::getSharingTask()
 {
     uint64_t seg_id = 0;
     SegmentReadTaskPools pools;
@@ -111,7 +111,7 @@ SharingTask SegmentReadTaskScheduler::getSharingTask()
     {
         return {};
     }
-    return SharingTask{seg_id, tasks};
+    return std::make_shared<SharingTask>(seg_id, std::move(tasks));
 }
 
 DMFileReaderPool & DMFileReaderPool::instance()
