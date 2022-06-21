@@ -79,6 +79,14 @@ private:
     ElementIter last_itr;
 };
 
+
+    using Task = std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>;
+    struct SharingTask
+    {
+        uint64_t seg_id;
+        std::vector<Task> tasks;
+    };
+    
 class SegmentReadTaskScheduler : private boost::noncopyable
 {
 public:
@@ -90,7 +98,7 @@ public:
 
     void add(SegmentReadTaskPoolPtr & pool);
 
-    std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>>> getInputStreams();
+    SharingTask getSharingTask();
     SegmentReadTaskPools getPools(const std::vector<uint64_t> & pool_ids);
 private:
     std::pair<uint64_t, SegmentReadTaskPools> getSegment();

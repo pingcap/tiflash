@@ -77,8 +77,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPools(const std::vector<uint64
     return unsafeGetPools(pool_ids);
 }
 
-std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>>> 
-    SegmentReadTaskScheduler::getInputStreams()
+SharingTask SegmentReadTaskScheduler::getSharingTask()
 {
     uint64_t seg_id = 0;
     SegmentReadTaskPools pools;
@@ -98,21 +97,21 @@ std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, std::weak_ptr<Seg
         pools = unsafeGetPools(segment.second);
     }
     
-    std::vector<std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>> streams;
-    streams.reserve(pools.size());
+    std::vector<Task> tasks;
+    tasks.reserve(pools.size());
     for (auto & pool : pools)
     {
         if (pool == nullptr)
         {
             continue;
         }
-        streams.push_back({pool->getInputStream(seg_id), std::weak_ptr<SegmentReadTaskPool>(pool)});
+        tasks.push_back({pool->getInputStream(seg_id), std::weak_ptr<SegmentReadTaskPool>(pool)});
     }
-    if (streams.empty())
+    if (tasks.empty())
     {
         return {};
     }
-    return std::pair{seg_id, streams};
+    return SharingTask{seg_id, tasks};
 }
 
 DMFileReaderPool & DMFileReaderPool::instance()
