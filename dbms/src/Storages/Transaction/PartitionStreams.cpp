@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Allocator.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
