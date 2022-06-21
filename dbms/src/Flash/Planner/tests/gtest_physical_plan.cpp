@@ -90,7 +90,7 @@ try
  <Filter, selection_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <projection>
+Expression: <final projection>
  Filter
   MockExchangeReceiver)",
         {toNullableVec<String>({"banana"}),
@@ -112,7 +112,7 @@ try
  <Limit, limit_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <projection>
+Expression: <final projection>
  Limit, limit = 1
   MockExchangeReceiver)",
         {toNullableVec<String>({"banana"}),
@@ -134,7 +134,7 @@ try
  <TopN, topn_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <projection>
+Expression: <final projection>
  MergeSorting, limit = 1
   PartialSorting: limit = 1
    MockExchangeReceiver)",
@@ -158,7 +158,7 @@ try
  <Aggregation, aggregation_1> | is_record_profile_streams: true, schema: <max(s2)_collator_0 , Nullable(String)>, <s1, Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <projection>
+Expression: <final projection>
  Aggregating
   Concat
    MockExchangeReceiver)",
@@ -181,7 +181,7 @@ try
  <Projection, project_1> | is_record_profile_streams: true, schema: <tidbConcat(s1, s2)_collator_0 , Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <projection>
+Expression: <final projection>
  Expression: <projection>
   MockExchangeReceiver)",
         {toNullableVec<String>({"bananaapple", {}, "bananabanana"})});
@@ -202,7 +202,7 @@ try
  <MockExchangeSender, exchange_sender_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <projection>
+Expression: <final projection>
  MockExchangeSender
   MockExchangeReceiver)",
         {toNullableVec<String>({"banana", {}, "banana"}),
@@ -222,7 +222,7 @@ try
 <Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <projection>
+Expression: <final projection>
  MockExchangeReceiver)",
         {toNullableVec<String>({"banana", {}, "banana"}),
          toNullableVec<String>({"apple", {}, "banana"})});
