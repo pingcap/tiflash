@@ -18,7 +18,6 @@
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/SortDescription.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -106,6 +105,4 @@ public:
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
 tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name);
-
-NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
 } // namespace DB
