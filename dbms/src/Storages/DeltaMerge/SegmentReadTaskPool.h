@@ -30,6 +30,7 @@
 #include "Storages/DeltaMerge/StableValueSpace.h"
 #include "boost/core/noncopyable.hpp"
 #include "common/logger_useful.h"
+#include "common/types.h"
 namespace DB
 {
 namespace DM
@@ -178,6 +179,10 @@ public:
         return active_segment_ids.size();
     }
     
+     
+    std::pair<uint64_t, std::vector<uint64_t>> scheduleSegment(
+        const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
+        uint64_t expected_merge_count);
 private:
     SegmentReadTaskPtr getTask(uint64_t seg_id);
 

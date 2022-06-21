@@ -132,7 +132,6 @@ void SegmentReadTaskPool::finishSegment(UInt64 seg_id)
     if (pool_finished)
     {
         q.finish();
-        SegmentReadTaskScheduler::instance().del(id);
     }
 }
 
@@ -149,6 +148,25 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(uint64_t seg_id)
     tasks.erase(itr);
     active_segment_ids.insert(seg_id);
     return t;
+}
+
+ std::pair<uint64_t, std::vector<uint64_t>> SegmentReadTaskPool::scheduleSegment(const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments, uint64_t expected_merge_count)
+{
+    std::pair<uint64_t, std::vector<uint64_t>> target{0, {}};
+    std::lock_guard lock(mutex);
+    for (const auto & task : tasks)
+    {
+        auto itr = segments.find(task->segment->segmentId());
+        if (itr == segments.end())
+        {
+            continue;
+        }
+        if (target.first == 0 || itr->second.size() >= expected_merge_count)
+        {
+            target = *itr;
+        }
+    }
+    return target;
 }
 
 } // namespace DB::DM
