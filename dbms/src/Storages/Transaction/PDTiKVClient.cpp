@@ -14,15 +14,15 @@
 
 #include <Storages/Transaction/PDTiKVClient.h>
 
+#include <chrono>
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
 
 std::atomic<Timestamp> PDClientHelper::cached_gc_safe_point = 0;
-std::atomic<std::chrono::time_point<std::chrono::system_clock>> PDClientHelper::safe_point_last_update_time;
+std::atomic<std::chrono::time_point<std::chrono::system_clock>> PDClientHelper::safe_point_last_update_time = std::chrono::system_clock::now();
 
 } // namespace DB

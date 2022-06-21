@@ -86,7 +86,7 @@ HttpRequestRes HandleHttpRequestAllRegionsStatus(EngineStoreServerWrap * server,
 
     tmt.getRegionTable().handleInternalRegionCounts(
         [&](const TableID & table_id, const size_t & region_counts) {
-            ss << fmt::format("%d %d", table_id, region_counts) << std::endl;
+            ss << fmt::format("{} {}", table_id, region_counts) << std::endl;
         });
 
     auto * s = RawCppString::New(ss.str());
