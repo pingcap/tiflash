@@ -178,11 +178,9 @@ public:
     {
         // generate sample block
         ColumnsWithTypeAndName columns;
-        for (auto & dag_col : remote_reader->getOutputSchema())
+        for (const NameAndTypePair & col : toNamesAndTypes(remote_reader->getOutputSchema()))
         {
-            auto tp = getDataTypeByColumnInfoForComputingLayer(dag_col.second);
-            ColumnWithTypeAndName col(tp, dag_col.first);
-            columns.emplace_back(col);
+            columns.emplace_back(col.type, col.name);
         }
         for (size_t i = 0; i < source_num; i++)
         {

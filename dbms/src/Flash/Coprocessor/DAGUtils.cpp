@@ -1437,4 +1437,14 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
     return func_name_sig_map[name];
 }
 
+NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema)
+{
+    NamesAndTypes names_and_types;
+    for (const auto & col : dag_schema)
+    {
+        auto tp = getDataTypeByColumnInfoForComputingLayer(col.second);
+        names_and_types.emplace_back(col.first, tp);
+    }
+    return names_and_types;
+}
 } // namespace DB

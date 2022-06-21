@@ -30,10 +30,11 @@ PhysicalExchangeReceiver::PhysicalExchangeReceiver(
     const String & executor_id_,
     const NamesAndTypes & schema_,
     const String & req_id,
+    const Block & sample_block_,
     const std::shared_ptr<ExchangeReceiver> & mpp_exchange_receiver_)
     : PhysicalLeaf(executor_id_, PlanType::ExchangeReceiver, schema_, req_id)
+    , sample_block(sample_block_)
     , mpp_exchange_receiver(mpp_exchange_receiver_)
-    , sample_block(PhysicalPlanHelper::constructBlockFromSchema(schema_))
 {}
 
 PhysicalPlanPtr PhysicalExchangeReceiver::build(
@@ -50,16 +51,12 @@ PhysicalPlanPtr PhysicalExchangeReceiver::build(
             Errors::Planner::Internal);
 
     const auto & mpp_exchange_receiver = it->second;
-    NamesAndTypes schema;
-    for (const auto & col : mpp_exchange_receiver->getOutputSchema())
-    {
-        auto tp = getDataTypeByColumnInfoForComputingLayer(col.second);
-        schema.emplace_back(col.first, tp);
-    }
+    NamesAndTypes schema = toNamesAndTypes(mpp_exchange_receiver->getOutputSchema());
     auto physical_exchange_receiver = std::make_shared<PhysicalExchangeReceiver>(
         executor_id,
         schema,
         req_id,
+        PhysicalPlanHelper::constructBlockFromSchema(schema),
         mpp_exchange_receiver);
     return physical_exchange_receiver;
 }

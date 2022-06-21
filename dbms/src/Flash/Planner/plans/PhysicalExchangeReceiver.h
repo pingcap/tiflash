@@ -32,6 +32,7 @@ public:
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
+        const Block & sample_block_,
         const std::shared_ptr<ExchangeReceiver> & mpp_exchange_receiver_);
 
     void finalize(const Names & parent_require) override;
@@ -41,7 +42,8 @@ public:
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
-    std::shared_ptr<ExchangeReceiver> mpp_exchange_receiver;
     Block sample_block;
+    
+    std::shared_ptr<ExchangeReceiver> mpp_exchange_receiver;
 };
 } // namespace DB

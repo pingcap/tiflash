@@ -18,6 +18,7 @@
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/SortDescription.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -94,7 +95,7 @@ public:
         while (it != existing_name_map.end())
         {
             ret_name.append("_").append(std::to_string(it->second));
-            it->second++;
+            ++it->second;
             it = existing_name_map.find(ret_name);
         }
         existing_name_map.try_emplace(ret_name, 1);
@@ -106,4 +107,5 @@ tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
 tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name);
 
+NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
 } // namespace DB

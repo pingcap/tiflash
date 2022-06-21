@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Planner/PhysicalPlanBuilder.h>
+#include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/optimize.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
@@ -133,6 +134,12 @@ PhysicalPlanPtr PhysicalPlanBuilder::getResult() const
 {
     RUNTIME_ASSERT(cur_plans.size() == 1, log, "There can only be one plan output, but here are {}", cur_plans.size());
     PhysicalPlanPtr physical_plan = cur_plans.back();
+
+    LOG_FMT_DEBUG(
+        log,
+        "build unoptimized physical plan: \n{}",
+        PhysicalPlanVisitor::visitToString(physical_plan));
+
     physical_plan = optimize(context, physical_plan);
     return physical_plan;
 }

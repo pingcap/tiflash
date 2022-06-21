@@ -25,6 +25,40 @@
 
 namespace DB::FinalizeHelper
 {
+namespace
+{
+String namesToString(const Names & names)
+{
+    return fmt::format("{{{}}}", fmt::join(names, ","));
+}
+
+String schemaToString(const NamesAndTypes & schema)
+{
+    FmtBuffer bf;
+    bf.append("{");
+    bf.joinStr(
+        schema.cbegin(), 
+        schema.cend(), 
+        [](const auto & col, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", col.name, col.type->getName()); },
+        ", ");
+    bf.append("}");
+    return bf.toString();
+}
+
+String blockToString(const Block & block)
+{
+    FmtBuffer bf;
+    bf.append("{");
+    bf.joinStr(
+        block.cbegin(), 
+        block.cend(), 
+        [](const ColumnWithTypeAndName & col, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", col.name, col.type->getName()); },
+        ", ");
+    bf.append("}");
+    return bf.toString();
+}
+}
+
 void prependProjectInputIfNeed(ExpressionActionsPtr & actions, size_t columns_from_previous)
 {
     if (!actions->getRequiredColumnsWithTypes().empty()
@@ -43,7 +77,7 @@ void checkSchemaContainsParentRequire(const NamesAndTypes & schema, const Names 
     {
         if (unlikely(schema_set.find(parent_require_column) == schema_set.end()))
             throw TiFlashException(
-                fmt::format("schema don't contain parent require column: {}", parent_require_column),
+                fmt::format("schema {} don't contain parent require column: {}", schemaToString(schema), parent_require_column),
                 Errors::Planner::Internal);
     }
 }
@@ -57,7 +91,7 @@ void checkParentRequireContainsSchema(const Names & parent_require, const NamesA
     {
         if (unlikely(parent_require_set.find(schema_column.name) == parent_require_set.end()))
             throw TiFlashException(
-                fmt::format("parent require don't contain schema column: {}", schema_column.name),
+                fmt::format("parent require {} don't contain schema column: {}", namesToString(parent_require), schema_column.name),
                 Errors::Planner::Internal);
     }
 }
@@ -68,7 +102,7 @@ void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTy
     {
         if (unlikely(!sample_block.has(schema_column.name)))
             throw TiFlashException(
-                fmt::format("sample block don't contain schema column: {}", schema_column.name),
+                fmt::format("sample block {} don't contain schema column: {}", blockToString(sample_block), schema_column.name),
                 Errors::Planner::Internal);
 
         const auto & type_in_sample_block = sample_block.getByName(schema_column.name).type->getName();
@@ -94,7 +128,7 @@ void checkSchemaContainsSampleBlock(const NamesAndTypes & schema, const Block & 
         auto it = schema_map.find(sample_block_column.name);
         if (unlikely(it == schema_map.end()))
             throw TiFlashException(
-                fmt::format("schema don't contain sample block column: {}", sample_block_column.name),
+                fmt::format("schema {} don't contain sample block column: {}", schemaToString(schema), sample_block_column.name),
                 Errors::Planner::Internal);
 
         const auto & type_in_schema = it->second->getName();
