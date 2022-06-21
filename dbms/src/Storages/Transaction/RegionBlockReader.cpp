@@ -33,23 +33,23 @@ RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schem
     : schema_snapshot{std::move(schema_snapshot_)}
 {}
 
-bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
+bool RegionBlockReader::read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode, bool with_check)
 {
     switch (schema_snapshot->pk_type)
     {
     case TMTPKType::INT64:
-        return readImpl<TMTPKType::INT64>(block, data_list, force_decode);
+        return readImpl<TMTPKType::INT64>(block, data_list, force_decode, with_check);
     case TMTPKType::UINT64:
-        return readImpl<TMTPKType::UINT64>(block, data_list, force_decode);
+        return readImpl<TMTPKType::UINT64>(block, data_list, force_decode, with_check);
     case TMTPKType::STRING:
-        return readImpl<TMTPKType::STRING>(block, data_list, force_decode);
+        return readImpl<TMTPKType::STRING>(block, data_list, force_decode, with_check);
     default:
-        return readImpl<TMTPKType::UNSPECIFIED>(block, data_list, force_decode);
+        return readImpl<TMTPKType::UNSPECIFIED>(block, data_list, force_decode, with_check);
     }
 }
 
 template <TMTPKType pk_type>
-bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode)
+bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode, bool with_check)
 {
     if (unlikely(block.columns() != schema_snapshot->column_defines->size()))
         throw Exception("block structure doesn't match schema_snapshot.", ErrorCodes::LOGICAL_ERROR);
@@ -208,7 +208,11 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         }
         index++;
     }
-    block.checkNumberOfRows();
+    if (with_check)
+    {
+        block.checkNumberOfRows();
+    }
+
     return true;
 }
 
