@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "RowCodecTestUtils.h"
-#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/Transaction/RegionBlockReader.h>
+#include <benchmark/benchmark.h>
 #include <gtest/gtest.h>
 
-#include <benchmark/benchmark.h>
+#include "RowCodecTestUtils.h"
 
 using TableInfo = TiDB::TableInfo;
 namespace DB::tests
@@ -40,7 +40,7 @@ protected:
     };
 
 protected:
-    void SetUp(const benchmark::State &  /*state*/ ) override
+    void SetUp(const benchmark::State & /*state*/) override
     {
         data_list_read.clear();
         fields_map.clear();
@@ -167,7 +167,7 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
-    {    
+    {
         decodeColumns(decoding_schema, true, false);
     }
 }
@@ -205,4 +205,6 @@ BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandleWithCheck)->Iterati
 BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
 BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
 BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
-}
+
+} // namespace DB::tests
+
