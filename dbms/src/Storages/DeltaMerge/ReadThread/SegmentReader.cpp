@@ -1,12 +1,6 @@
-
-
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
-#include <unistd.h>
-#include <limits>
-#include "Storages/DeltaMerge/ReadThread/WorkQueue.h"
-#include "common/logger_useful.h"
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 
 namespace DB::DM
 {
@@ -21,21 +15,21 @@ public:
     {
         t = std::thread(&SegmentReader::run, this);
     }
-
-    ~SegmentReader()
-    {
-        LOG_FMT_DEBUG(log, "stop begin");
-        setStop();
-        // TODO(jinhelin): notify
-        t.join();
-        LOG_FMT_DEBUG(log, "stop end");
-    }
-
-private:
+    
     void setStop()
     {
         stop.store(true, std::memory_order_relaxed);
     }
+
+    ~SegmentReader()
+    {
+        LOG_FMT_DEBUG(log, "SegmentReader stop begin");
+        t.join();
+        LOG_FMT_DEBUG(log, "SegmentReader stop end");
+    }
+
+private:
+
     bool isStop()
     {
         return stop.load(std::memory_order_relaxed);
@@ -46,7 +40,7 @@ private:
         MergedTaskPtr merged_task;
         if (!task_queue.pop(merged_task))
         {
-            LOG_FMT_INFO(log, "pop fail, finished");
+            LOG_FMT_INFO(log, "pop fail, stop {}", isStop());
             return;
         }
 
@@ -149,23 +143,29 @@ private:
     std::thread t;
 }; 
 
-
-    bool SegmentReadThreadPool::addTask(const MergedTaskPtr & task)
-    {
-        return task_queue.push(task);
-    }
+bool SegmentReadThreadPool::addTask(MergedTaskPtr && task)
+{
+    return task_queue.push(std::forward<MergedTaskPtr>(task));
+}
     
-    SegmentReadThreadPool::SegmentReadThreadPool(int thread_count)
-        : log(&Poco::Logger::get("SegmentReadThreadPool"))
+SegmentReadThreadPool::SegmentReadThreadPool(int thread_count)
+    : log(&Poco::Logger::get("SegmentReadThreadPool"))
+{
+    LOG_FMT_INFO(log, "thread_count {} start", thread_count);
+    for (int i = 0; i < thread_count; i++)
     {
-        LOG_FMT_INFO(log, "thread_count {} start", thread_count);
-        for (int i = 0; i < thread_count; i++)
-        {
-            readers.push_back(std::make_unique<SegmentReader>(task_queue));
-        }
-        LOG_FMT_INFO(log, "thread_count {} end", thread_count);
+        readers.push_back(std::make_unique<SegmentReader>(task_queue));
     }
+    LOG_FMT_INFO(log, "thread_count {} end", thread_count);
+}
 
-    SegmentReadThreadPool::~SegmentReadThreadPool() = default;
+SegmentReadThreadPool::~SegmentReadThreadPool()
+{
+    for (auto & reader : readers)
+    {
+        reader->setStop();
+    }
+    task_queue.finish();
+}
 
 }

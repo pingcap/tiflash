@@ -90,7 +90,7 @@ struct MergedTask
 };
 using MergedTaskPtr = std::shared_ptr<MergedTask>;
 
-class SegmentReadTaskScheduler : private boost::noncopyable
+class SegmentReadTaskScheduler
 {
 public:
     static SegmentReadTaskScheduler & instance()
@@ -100,6 +100,11 @@ public:
     }
 
     ~SegmentReadTaskScheduler();
+    SegmentReadTaskScheduler(const SegmentReadTaskScheduler &) = delete;
+    SegmentReadTaskScheduler & operator=(const SegmentReadTaskScheduler &) = delete;
+    SegmentReadTaskScheduler(SegmentReadTaskScheduler &&) = delete;
+    SegmentReadTaskScheduler & operator=(SegmentReadTaskScheduler &&) = delete;
+
     void add(SegmentReadTaskPoolPtr & pool);
     MergedTaskPtr getMergedTask();
 private:

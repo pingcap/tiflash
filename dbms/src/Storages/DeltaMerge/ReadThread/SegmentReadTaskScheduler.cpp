@@ -135,7 +135,7 @@ bool SegmentReadTaskScheduler::schedule()
     {
         return false;
     }
-    SegmentReadThreadPool::instance().addTask(merged_task);  // TODO(jinhelin): should not be fail.
+    SegmentReadThreadPool::instance().addTask(std::move(merged_task));  // TODO(jinhelin): should not be fail.
     return true;
 }
 
