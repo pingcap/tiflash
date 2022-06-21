@@ -206,12 +206,20 @@ void DAGContext::attachBlockIO(const BlockIO & io_)
     io = io_;
 }
 
-const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext::getMPPExchangeReceiverMap() const
+ExchangeReceiverPtr DAGContext::getMPPExchangeReceiver(const String & executor_id) const
 {
     if (!isMPPTask())
         throw TiFlashException("mpp_exchange_receiver_map is used in mpp only", Errors::Coprocessor::Internal);
-    RUNTIME_ASSERT(mpp_exchange_receiver_map != nullptr, log, "MPPTask without exchange receiver map");
-    return *mpp_exchange_receiver_map;
+    RUNTIME_ASSERT(mpp_receiver_set != nullptr, log, "MPPTask without receiver set");
+    return mpp_receiver_set->getExchangeReceiver(executor_id);
+}
+
+void DAGContext::addCoprocessorReader(CoprocessorReaderPtr coprocessor_reader)
+{
+    if (!isMPPTask())
+        return;
+    RUNTIME_ASSERT(mpp_receiver_set != nullptr, log, "MPPTask without receiver set");
+    return mpp_receiver_set->addCoprocessorReader(coprocessor_reader);
 }
 
 bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
