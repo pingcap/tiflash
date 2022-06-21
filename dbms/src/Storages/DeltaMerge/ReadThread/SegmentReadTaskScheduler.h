@@ -90,7 +90,7 @@ public:
 
     void add(SegmentReadTaskPoolPtr & pool);
 
-    std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, SegmentReadTaskPoolPtr>>> getInputStreams();
+    std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>>> getInputStreams();
     SegmentReadTaskPools getPools(const std::vector<uint64_t> & pool_ids);
 private:
     std::pair<uint64_t, SegmentReadTaskPools> getSegment();

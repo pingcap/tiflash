@@ -35,10 +35,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::unsafeGetPools(const std::vector<
     for (uint64_t id : pool_ids)
     {
         auto sp = read_pools.get([id](const SegmentReadTaskPoolPtr & sp) { return sp->getId() == id; });
-        if (sp != nullptr)
-        {
-            pools.push_back(sp);
-        }
+        pools.push_back(sp);
     }
     return pools;
 }
@@ -80,7 +77,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPools(const std::vector<uint64
     return unsafeGetPools(pool_ids);
 }
 
-std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, SegmentReadTaskPoolPtr>>> 
+std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>>> 
     SegmentReadTaskScheduler::getInputStreams()
 {
     uint64_t seg_id = 0;
@@ -99,17 +96,21 @@ std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, SegmentReadTaskPo
         }
         seg_id = segment.first;
         pools = unsafeGetPools(segment.second);
-        if (pools.empty())
-        {
-            return {};
-        }
     }
     
-    std::vector<std::pair<BlockInputStreamPtr, SegmentReadTaskPoolPtr>> streams;
+    std::vector<std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>> streams;
     streams.reserve(pools.size());
     for (auto & pool : pools)
     {
-        streams.push_back({pool->getInputStream(seg_id), pool});
+        if (pool == nullptr)
+        {
+            continue;
+        }
+        streams.push_back({pool->getInputStream(seg_id), std::weak_ptr<SegmentReadTaskPool>(pool)});
+    }
+    if (streams.empty())
+    {
+        return {};
     }
     return std::pair{seg_id, streams};
 }

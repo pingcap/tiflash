@@ -43,7 +43,7 @@ private:
 
     void readSegments()
     {
-        std::pair<UInt64, std::vector<std::pair<BlockInputStreamPtr, SegmentReadTaskPoolPtr>>> task;
+        std::pair<uint64_t, std::vector<std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>>> task;
         while (task.second.empty())
         {
             task = SegmentReadTaskScheduler::instance().getInputStreams();
@@ -66,13 +66,29 @@ private:
             auto min_pending_block_count = std::numeric_limits<int64_t>::max();
             auto max_pending_block_count = std::numeric_limits<int64_t>::min();
             std::vector<std::pair<uint64_t, int64_t>> pendings;
-            for (auto & pa : streams)
+
+            SegmentReadTaskPools pools(streams.size(), nullptr);
+            for (size_t i = 0; i < streams.size(); i++)
             {
-                auto & pool = pa.second;
-                auto pending_count = pool->pendingBlockCount();
-                pendings.emplace_back(pool->getId(), pending_count);
-                min_pending_block_count = std::min(pending_count, min_pending_block_count);
-                max_pending_block_count = std::max(pending_count, max_pending_block_count);
+                pools[i] = streams[i].second.lock();
+                const auto &  pool = pools[i];
+                if (pool == nullptr)
+                {
+                    done_count++;
+                    dones[i] = 1;
+                }
+                else
+                {
+                    LOG_FMT_DEBUG(log, "stream count {} done count {} ref_count {}", streams.size(), done_count, pool.use_count());
+                    auto pending_count = pool->pendingBlockCount();
+                    pendings.emplace_back(pool->getId(), pending_count);
+                    min_pending_block_count = std::min(pending_count, min_pending_block_count);
+                    max_pending_block_count = std::max(pending_count, max_pending_block_count);
+                }
+            }
+            if (done_count >= streams.size() || isStop())
+            {
+                break;
             }
             if (max_pending_block_count > 200)
             {
@@ -83,7 +99,8 @@ private:
             auto read_count = pending_block_count_limit - max_pending_block_count;  // max or min or ...
             if (read_count <= 0)
             {
-                ::usleep(2000);  // TODO(jinhelin)
+                pools.clear();
+                ::usleep(5000);  // TODO(jinhelin)
                 continue;
             }
             //for (int64_t i = 0; i < read_count; i++)
@@ -98,13 +115,13 @@ private:
                     auto block = stream.first->read();
                     if (!block)
                     {
-                        stream.second->finishSegment(seg_id);
+                        pools[i]->finishSegment(seg_id);
                         dones[i] = 1;
                         done_count++;
                     }
                     else
                     {
-                        stream.second->pushBlock(std::move(block));
+                        pools[i]->pushBlock(std::move(block));
                     }
                 }
             }
