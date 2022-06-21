@@ -28,7 +28,7 @@ template <typename T>
 void encodeLittleEndian(const T & value, WriteBuffer & ss)
 {
     auto v = toLittleEndian(value);
-    ss.write(reinterpret_cast<const char *>(&v), sizeof(v));
+    ss.template writeFixed<T>(&v);
 }
 
 TiDBColumn::TiDBColumn(Int8 element_len_)
