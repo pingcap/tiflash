@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this test focus on the case when multi DDL actions happen closely（ and these DDL actions will be fetched in the same regular sync schema duration.) and there are some corresponding insert(write) actions between these DDL actions. Considering that these write actions and these schema change will arrive at tiflash in a different order, we simulate these different order situation to check that our schema module was working correctly.
+# this test focus on the case when multi DDL actions happen closely
+#（ and these DDL actions will be fetched in the same regular sync schema duration.) 
+# and there are some corresponding insert(write) actions between these DDL actions. 
+# Considering that these write actions and these schema change will arrive at 
+# tiflash in a different order, we simulate these different order situation to check 
+# that our schema module was working correctly.
 
 # TiDB Timeline ： write cmd 1 ｜ alter cmd 1 ｜ write cmd 2 | alter cmd 2 | write cmd 3 
 
