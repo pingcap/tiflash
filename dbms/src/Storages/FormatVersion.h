@@ -118,7 +118,9 @@ inline static const StorageFormatVersion STORAGE_FORMAT_V4 = StorageFormatVersio
     .identifier = 4,
 };
 
-inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V4;
+// Note that we don't enable V4 by default because https://github.com/pingcap/tiflash/issues/5076
+// is not yet figure out.
+inline StorageFormatVersion STORAGE_FORMAT_CURRENT = STORAGE_FORMAT_V3;
 
 inline const StorageFormatVersion & toStorageFormat(UInt64 setting)
 {
