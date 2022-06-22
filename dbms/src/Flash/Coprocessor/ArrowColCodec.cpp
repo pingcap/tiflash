@@ -41,7 +41,7 @@ extern const int NOT_IMPLEMENTED;
 const IColumn * getNestedCol(const IColumn * flash_col)
 {
     if (flash_col->isColumnNullable())
-        return dynamic_cast<const ColumnNullable *>(flash_col)->getNestedColumnPtr().get();
+        return static_cast<const ColumnNullable *>(flash_col)->getNestedColumnPtr().get();
     else
         return flash_col;
 }
@@ -300,7 +300,7 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
         throw TiFlashException("Flash column and TiDB column has different not null flag", Errors::Coprocessor::Internal);
     }
     if (type->isNullable())
-        type = dynamic_cast<const DataTypeNullable *>(type)->getNestedType().get();
+        type = static_cast<const DataTypeNullable *>(type)->getNestedType().get();
 
     switch (tidb_column_info.tp)
     {
@@ -552,7 +552,7 @@ const char * arrowDecimalColToFlashCol(
         pos += 1;
         Int32 word_buf[MAX_WORD_BUF_LEN];
         const DataTypePtr decimal_type
-            = col.type->isNullable() ? dynamic_cast<const DataTypeNullable *>(col.type.get())->getNestedType() : col.type;
+            = col.type->isNullable() ? static_cast<const DataTypeNullable *>(col.type.get())->getNestedType() : col.type;
         for (int j = 0; j < MAX_WORD_BUF_LEN; j++)
         {
             word_buf[j] = toLittleEndian(*(reinterpret_cast<const Int32 *>(pos)));
