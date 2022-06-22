@@ -101,11 +101,11 @@ protected:
             data_list_read.emplace_back(pk, del_mark_value, version_value, row_value);
     }
 
-    bool decodeColumns(DecodingStorageSchemaSnapshotConstPtr decoding_schema, bool force_decode, bool with_check) const
+    bool decodeColumns(DecodingStorageSchemaSnapshotConstPtr decoding_schema, bool force_decode) const
     {
         RegionBlockReader reader{decoding_schema};
         Block block = createBlockSortByColumnID(decoding_schema);
-        return reader.read(block, data_list_read, force_decode, with_check);
+        return reader.read(block, data_list_read, force_decode);
     }
 
     std::pair<TableInfo, std::vector<Field>> getNormalTableInfoFields(const ColumnIDs & handle_ids, bool is_common_handle) const
@@ -122,7 +122,7 @@ protected:
     }
 };
 
-BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandleWithCheck)
+BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandle)
 (benchmark::State & state)
 {
     size_t num_rows = state.range(0);
@@ -131,23 +131,12 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandleWithCheck)
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
-        decodeColumns(decoding_schema, true, true);
-    }
-}
-BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, CommonHandleWithoutCheck)
-(benchmark::State & state)
-{
-    size_t num_rows = state.range(0);
-    auto [table_info, fields] = getNormalTableInfoFields({2, 3, 4}, true);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
-    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
-    {
-        decodeColumns(decoding_schema, true, false);
+        decodeColumns(decoding_schema, true);
     }
 }
 
-BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)
+
+BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandle)
 (benchmark::State & state)
 {
     size_t num_rows = state.range(0);
@@ -156,23 +145,11 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
-        decodeColumns(decoding_schema, true, true);
-    }
-}
-BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)
-(benchmark::State & state)
-{
-    size_t num_rows = state.range(0);
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
-    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
-    {
-        decodeColumns(decoding_schema, true, false);
+        decodeColumns(decoding_schema, true);
     }
 }
 
-BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithCheck)
+BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandle)
 (benchmark::State & state)
 {
     size_t num_rows = state.range(0);
@@ -181,29 +158,14 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithCheck)
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     for (auto _ : state)
     {
-        decodeColumns(decoding_schema, true, true);
-    }
-}
-BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithoutCheck)
-(benchmark::State & state)
-{
-    size_t num_rows = state.range(0);
-    auto [table_info, fields] = getNormalTableInfoFields({2}, false);
-    encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
-    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
-    for (auto _ : state)
-    {
-        decodeColumns(decoding_schema, true, false);
+        decodeColumns(decoding_schema, true);
     }
 }
 
 constexpr size_t num_iterations_test = 1000;
 
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandleWithCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandleWithCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
-BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsHandle)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, CommonHandle)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
+BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandle)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
 
 } // namespace DB::tests
