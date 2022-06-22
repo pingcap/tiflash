@@ -16,22 +16,22 @@
 
 namespace DB::PS::tests
 {
-class HeavyRead : public StressWorkload
-    , public StressWorkloadFunc<HeavyRead>
+class HeavyWrite : public StressWorkload
+    , public StressWorkloadFunc<HeavyWrite>
 {
 public:
-    explicit HeavyRead(const StressEnv & options_)
+    explicit HeavyWrite(const StressEnv & options_)
         : StressWorkload(options_)
     {}
 
     static String name()
     {
-        return "HeavyRead";
+        return "HeavyWrite";
     }
 
     static UInt64 mask()
     {
-        return 1 << 3;
+        return 1 << 2;
     }
 
 private:
@@ -40,9 +40,8 @@ private:
         return fmt::format("Some of options will be ignored"
                            "`paths` will only used first one. which is {}. Data will store in {}"
                            "Please cleanup folder after this test."
-                           "The current workload will force init page in {} and it elapse near 60 seconds",
+                           "The current workload will elapse near 60 seconds",
                            options.paths[0],
-                           options.paths[0] + "/" + name(),
                            options.paths[0] + "/" + name());
     }
 
@@ -50,7 +49,6 @@ private:
     {
         DB::PageStorage::Config config;
         initPageStorage(config, name());
-        PSWriter::fillAllPages(ps);
 
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);
         metrics_dumper->start();
@@ -59,17 +57,19 @@ private:
         stress_time->start();
         {
             stop_watch.start();
-            startReader<PSReader>(options.num_readers, [](std::shared_ptr<PSReader> reader) -> void {
-                // No delay
-                reader->setReadDelay(0);
-                reader->setReadPageRange(MAX_PAGE_ID_DEFAULT);
-                reader->setReadPageNums(10);
+            startWriter<PSCommonWriter>(options.num_writers, [](std::shared_ptr<PSCommonWriter> writer) -> void {
+                writer->setBatchBufferNums(4);
+                writer->setBatchBufferRange(1, 2 * DB::MB);
             });
+
             pool.joinAll();
             stop_watch.stop();
         }
     }
-};
 
-REGISTER_WORKLOAD(HeavyRead)
+    bool verify() override
+    {
+        return true;
+    }
+};
 } // namespace DB::PS::tests

@@ -85,6 +85,4 @@ private:
         return true;
     }
 };
-
-REGISTER_WORKLOAD(HeavySkewWriteRead)
 } // namespace DB::PS::tests
