@@ -175,11 +175,6 @@ namespace
 }
 } // namespace
 
-namespace CurrentMetrics
-{
-extern const Metric Revision;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -1063,8 +1058,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
-
-    CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
     grpc_log = &Poco::Logger::get("grpc");

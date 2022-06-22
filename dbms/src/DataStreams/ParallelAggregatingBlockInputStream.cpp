@@ -20,13 +20,6 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 
-
-namespace ProfileEvents
-{
-extern const Event ExternalAggregationMerge;
-}
-
-
 namespace DB
 {
 ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
@@ -100,8 +93,6 @@ Block ParallelAggregatingBlockInputStream::readImpl()
             /** If there are temporary files with partially-aggregated data on the disk,
                 *  then read and merge them, spending the minimum amount of memory.
                 */
-
-            ProfileEvents::increment(ProfileEvents::ExternalAggregationMerge);
 
             const auto & files = aggregator.getTemporaryFiles();
             BlockInputStreams input_streams;
