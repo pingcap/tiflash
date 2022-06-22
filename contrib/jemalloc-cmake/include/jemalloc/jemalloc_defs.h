@@ -25,8 +25,8 @@
  * present on the system.
  */
 #if !defined(USE_MUSL)
-    #define JEMALLOC_OVERRIDE_MEMALIGN
-    #define JEMALLOC_OVERRIDE_VALLOC
+#define JEMALLOC_OVERRIDE_MEMALIGN
+#define JEMALLOC_OVERRIDE_VALLOC
 #endif
 
 /*
@@ -46,11 +46,11 @@
 #define JEMALLOC_USE_CXX_THROW
 
 #ifdef _MSC_VER
-#  ifdef _WIN64
-#    define LG_SIZEOF_PTR_WIN 3
-#  else
-#    define LG_SIZEOF_PTR_WIN 2
-#  endif
+#ifdef _WIN64
+#define LG_SIZEOF_PTR_WIN 3
+#else
+#define LG_SIZEOF_PTR_WIN 2
+#endif
 #endif
 
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */

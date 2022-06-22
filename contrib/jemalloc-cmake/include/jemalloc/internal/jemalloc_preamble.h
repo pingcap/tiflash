@@ -1,30 +1,30 @@
 #ifndef JEMALLOC_PREAMBLE_H
 #define JEMALLOC_PREAMBLE_H
 
-#include "jemalloc_internal_defs.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"
+#include "jemalloc_internal_defs.h"
 
 #if defined(JEMALLOC_UTRACE) || defined(JEMALLOC_UTRACE_LABEL)
 #include <sys/ktrace.h>
-#  if defined(JEMALLOC_UTRACE)
-#    define UTRACE_CALL(p, l) utrace(p, l)
-#  else
-#    define UTRACE_CALL(p, l) utrace("jemalloc_process", p, l)
-#    define JEMALLOC_UTRACE
-#  endif
+#if defined(JEMALLOC_UTRACE)
+#define UTRACE_CALL(p, l) utrace(p, l)
+#else
+#define UTRACE_CALL(p, l) utrace("jemalloc_process", p, l)
+#define JEMALLOC_UTRACE
+#endif
 #endif
 
 #define JEMALLOC_NO_DEMANGLE
 #ifdef JEMALLOC_JET
-#  undef JEMALLOC_IS_MALLOC
-#  define JEMALLOC_N(n) jet_##n
-#  include "jemalloc/internal/public_namespace.h"
-#  define JEMALLOC_NO_RENAME
-#  include "jemalloc/jemalloc.h"
-#  undef JEMALLOC_NO_RENAME
+#undef JEMALLOC_IS_MALLOC
+#define JEMALLOC_N(n) jet_##n
+#include "jemalloc/internal/public_namespace.h"
+#define JEMALLOC_NO_RENAME
+#include "jemalloc/jemalloc.h"
+#undef JEMALLOC_NO_RENAME
 #else
-#  define JEMALLOC_N(n) je_##n
-#  include "jemalloc/jemalloc.h"
+#define JEMALLOC_N(n) je_##n
+#include "jemalloc/jemalloc.h"
 #endif
 
 #if defined(JEMALLOC_OSATOMIC)
@@ -45,16 +45,16 @@
  * possible.
  */
 #ifndef JEMALLOC_NO_PRIVATE_NAMESPACE
-#  ifndef JEMALLOC_JET
-#    include "jemalloc/internal/private_namespace.h"
-#  else
-#    include "jemalloc/internal/private_namespace_jet.h"
-#  endif
+#ifndef JEMALLOC_JET
+#include "jemalloc/internal/private_namespace.h"
+#else
+#include "jemalloc/internal/private_namespace_jet.h"
+#endif
 #endif
 #include "jemalloc/internal/test_hooks.h"
 
 #ifdef JEMALLOC_DEFINE_MADVISE_FREE
-#  define JEMALLOC_MADV_FREE 8
+#define JEMALLOC_MADV_FREE 8
 #endif
 
 static const bool config_debug =
@@ -213,7 +213,7 @@ static const bool config_enable_cxx =
 #else
     false
 #endif
-;
+    ;
 
 #if defined(_WIN32) || defined(JEMALLOC_HAVE_SCHED_GETCPU)
 /* Currently percpu_arena depends on sched_getcpu. */
