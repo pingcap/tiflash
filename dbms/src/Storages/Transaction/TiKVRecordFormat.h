@@ -121,9 +121,16 @@ inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> key
     memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
     memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
     WriteBufferFromOwnString ss;
+
+    std::unordered_map<String, size_t> column_name_columns_index_map;
+    for (size_t i = 0; i < table_info.columns.size(); i++)
+    {
+        column_name_columns_index_map.emplace(table_info.columns[i].name, i);
+    }
     for (size_t i = 0; i < keys.size(); i++)
     {
-        DB::EncodeDatum(keys[i], table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(), ss);
+        auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
+        DB::EncodeDatum(keys[i], table_info.columns[idx].getCodecFlag(), ss);
     }
     return encodeAsTiKVKey(key + ss.releaseStr());
 }

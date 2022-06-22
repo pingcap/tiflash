@@ -52,3 +52,89 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_2
 
 mysql> drop table test.t_1;
 mysql> drop table test.t_2;
+
+### about issue 5154 to check whether add column/drop column will effect the cluster index decode
+### drop the column between two columns that are cluster index columns 
+
+mysql> drop table if exists test.t_3;
+mysql> create table test.t_3 (A int, B varchar(20), C int, D int, PRIMARY KEY(A,C) CLUSTERED);
+mysql> insert into test.t_3 values (1,'1',1,1),(2,'2',2,2);
+
+mysql> alter table test.t_3 set tiflash replica 1;
+
+func> wait_table test t_3
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_3;
++---+---+---+---+
+| A | B | C | D |
++---+---+---+---+
+| 1 | 1 | 1 | 1 |
+| 2 | 2 | 2 | 2 |
++---+---+---+---+
+
+mysql> alter table test.t_3 drop column B;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_3;
++---+---+---+
+| A | C | D |
++---+---+---+
+| 1 | 1 | 1 |
+| 2 | 2 | 2 |
++---+---+---+
+
+# insert some rows
+mysql> insert into test.t_3 values (3,3,3),(4,4,4);
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_3;
++---+---+---+
+| A | C | D |
++---+---+---+
+| 1 | 1 | 1 |
+| 2 | 2 | 2 |
+| 3 | 3 | 3 |
+| 4 | 4 | 4 |
++---+---+---+
+
+mysql> drop table test.t_3;
+
+### add the column between two columns that are cluster index columns 
+mysql> drop table if exists test.t_4
+mysql> create table test.t_4 (A int, B varchar(20), C int, D int, PRIMARY KEY(A,C) CLUSTERED);
+
+mysql> insert into test.t_4 values (1,'1',1,1),(2,'2',2,2);
+
+mysql> alter table test.t_4 set tiflash replica 1;
+
+func> wait_table test t_4
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_4;
++---+---+---+---+
+| A | B | C | D |
++---+---+---+---+
+| 1 | 1 | 1 | 1 |
+| 2 | 2 | 2 | 2 |
++---+---+---+---+
+
+mysql> alter table test.t_4 Add column E int after B;
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_4;
++---+---+------+---+---+
+| A | B |  E   | C | D |
++---+---+------+---+---+
+| 1 | 1 | NULL | 1 | 1 |
+| 2 | 2 | NULL | 2 | 2 |
++---+---+------+---+---+
+
+mysql> insert into test.t_4 values (3,'3',3,3,3),(4,'4',4,4,4);
+
+mysql> set session tidb_isolation_read_engines='tiflash';select * from test.t_4;
++---+---+------+------+------+
+| A | B |  E   |  C   |   D  |
++---+---+------+------+------+
+| 1 | 1 | NULL |  1   |   1  |
+| 2 | 2 | NULL |  2   |   2  |
+| 3 | 3 |    3 |  3   |   3  |
+| 4 | 4 |    4 |  4   |   4  |
++---+---+------+------+------+
+
+mysql> drop table test.t_4;
