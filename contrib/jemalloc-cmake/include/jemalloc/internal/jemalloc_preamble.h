@@ -4,8 +4,14 @@
 #include "jemalloc_internal_defs.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"
 
-#ifdef JEMALLOC_UTRACE
+#if defined(JEMALLOC_UTRACE) || defined(JEMALLOC_UTRACE_LABEL)
 #include <sys/ktrace.h>
+#  if defined(JEMALLOC_UTRACE)
+#    define UTRACE_CALL(p, l) utrace(p, l)
+#  else
+#    define UTRACE_CALL(p, l) utrace("jemalloc_process", p, l)
+#    define JEMALLOC_UTRACE
+#  endif
 #endif
 
 #define JEMALLOC_NO_DEMANGLE
@@ -21,7 +27,7 @@
 #  include "jemalloc/jemalloc.h"
 #endif
 
-#if (defined(JEMALLOC_OSATOMIC) || defined(JEMALLOC_OSSPIN))
+#if defined(JEMALLOC_OSATOMIC)
 #include <libkern/OSAtomic.h>
 #endif
 
@@ -161,7 +167,55 @@ static const bool config_log =
     false
 #endif
     ;
-#ifdef JEMALLOC_HAVE_SCHED_GETCPU
+/*
+ * Are extra safety checks enabled; things like checking the size of sized
+ * deallocations, double-frees, etc.
+ */
+static const bool config_opt_safety_checks =
+#ifdef JEMALLOC_OPT_SAFETY_CHECKS
+    true
+#elif defined(JEMALLOC_DEBUG)
+    /*
+     * This lets us only guard safety checks by one flag instead of two; fast
+     * checks can guard solely by config_opt_safety_checks and run in debug mode
+     * too.
+     */
+    true
+#else
+    false
+#endif
+    ;
+
+/*
+ * Extra debugging of sized deallocations too onerous to be included in the
+ * general safety checks.
+ */
+static const bool config_opt_size_checks =
+#if defined(JEMALLOC_OPT_SIZE_CHECKS) || defined(JEMALLOC_DEBUG)
+    true
+#else
+    false
+#endif
+    ;
+
+static const bool config_uaf_detection =
+#if defined(JEMALLOC_UAF_DETECTION) || defined(JEMALLOC_DEBUG)
+    true
+#else
+    false
+#endif
+    ;
+
+/* Whether or not the C++ extensions are enabled. */
+static const bool config_enable_cxx =
+#ifdef JEMALLOC_ENABLE_CXX
+    true
+#else
+    false
+#endif
+;
+
+#if defined(_WIN32) || defined(JEMALLOC_HAVE_SCHED_GETCPU)
 /* Currently percpu_arena depends on sched_getcpu. */
 #define JEMALLOC_PERCPU_ARENA
 #endif
@@ -190,23 +244,16 @@ static const bool have_background_thread =
     false
 #endif
     ;
-
-#define JEMALLOC_GCC_U8_ATOMIC_ATOMICS 1
-#define JEMALLOC_GCC_U8_SYNC_ATOMICS 1
-
-/*
- * Are extra safety checks enabled; things like checking the size of sized
- * deallocations, double-frees, etc.
- */
-static const bool config_opt_safety_checks =
-#ifdef JEMALLOC_OPT_SAFETY_CHECKS
+static const bool config_high_res_timer =
+#ifdef JEMALLOC_HAVE_CLOCK_REALTIME
     true
-#elif defined(JEMALLOC_DEBUG)
-    /*
-     * This lets us only guard safety checks by one flag instead of two; fast
-     * checks can guard solely by config_opt_safety_checks and run in debug mode
-     * too.
-     */
+#else
+    false
+#endif
+    ;
+
+static const bool have_memcntl =
+#ifdef JEMALLOC_HAVE_MEMCNTL
     true
 #else
     false
