@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <memory>
 
 namespace DB::DM
 {
@@ -81,12 +82,11 @@ private:
 
 struct MergedTask
 {
-    using Task = std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>;
-    MergedTask(uint64_t seg_id_, std::vector<Task> && tasks_) 
+    MergedTask(uint64_t seg_id_, SegmentReadTaskPools && pools_) 
         : seg_id(seg_id_)
-        , tasks(std::forward<std::vector<Task>>(tasks_)) {}
+        , pools(std::forward<SegmentReadTaskPools>(pools_)) {}
     uint64_t seg_id;
-    std::vector<Task> tasks;
+    SegmentReadTaskPools pools;
 };
 using MergedTaskPtr = std::shared_ptr<MergedTask>;
 

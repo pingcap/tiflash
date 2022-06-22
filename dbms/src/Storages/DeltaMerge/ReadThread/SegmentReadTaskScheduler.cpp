@@ -41,39 +41,18 @@ void SegmentReadTaskScheduler::add(SegmentReadTaskPoolPtr & pool)
 
 MergedTaskPtr SegmentReadTaskScheduler::getMergedTask()
 {
-    uint64_t seg_id = 0;
-    SegmentReadTaskPools pools;
+    std::lock_guard lock(mtx);
+    auto pool = unsafeScheduleSegmentReadTaskPool();
+    if (pool == nullptr)
     {
-        std::lock_guard lock(mtx);
-        auto pool = unsafeScheduleSegmentReadTaskPool();
-        if (pool == nullptr)
-        {
-            return {};
-        }
-        auto segment = unsafeScheduleSegment(pool);
-        if (segment.first == 0)
-        {
-            return {};
-        }
-        seg_id = segment.first;
-        pools = unsafeGetPools(segment.second);
+        return nullptr;
     }
-    
-    std::vector<MergedTask::Task> tasks;
-    tasks.reserve(pools.size());
-    for (auto & pool : pools)
+    auto segment = unsafeScheduleSegment(pool);
+    if (segment.first == 0)
     {
-        if (pool == nullptr)
-        {
-            continue;
-        }
-        tasks.push_back({pool->getInputStream(seg_id), std::weak_ptr<SegmentReadTaskPool>(pool)});
+        return nullptr;
     }
-    if (tasks.empty())
-    {
-        return {};
-    }
-    return std::make_shared<MergedTask>(seg_id, std::move(tasks));
+    return std::make_shared<MergedTask>(segment.first, unsafeGetPools(segment.second));
 }
 
 SegmentReadTaskPools SegmentReadTaskScheduler::unsafeGetPools(const std::vector<uint64_t> & pool_ids)

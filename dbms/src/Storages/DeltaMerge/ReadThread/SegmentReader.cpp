@@ -1,6 +1,7 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include "Debug/DBGInvoker.h"
 
 namespace DB::DM
 {
@@ -45,23 +46,31 @@ private:
         }
 
         auto seg_id = merged_task->seg_id;
-        auto & tasks = merged_task->tasks;
-        std::vector<int> dones(tasks.size(), 0);
+        auto & pools = merged_task->pools;
+        std::vector<BlockInputStreamPtr> streams(pools.size(), nullptr);
+        for (size_t i = 0; i < pools.size(); i++)
+        {
+            if (pools[i] != nullptr)
+            {
+                streams[i] = pools[i]->getInputStream(seg_id);
+            }
+        }
+
+        std::vector<int> dones(pools.size(), 0);
         size_t done_count = 0;
-        while (done_count < tasks.size())
+        while (done_count < pools.size())
         {
             auto min_pending_block_count = std::numeric_limits<int64_t>::max();
             auto max_pending_block_count = std::numeric_limits<int64_t>::min();
-            SegmentReadTaskPools pools(tasks.size(), nullptr);
-            for (size_t i = 0; i < tasks.size(); i++)
+            // SegmentReadTaskPools pools(tasks.size(), nullptr);
+            for (size_t i = 0; i < pools.size(); i++)
             {
                 if (dones[i])
                 {
                     continue;
                 }
 
-                pools[i] = tasks[i].second.lock();
-                const auto &  pool = pools[i];
+                const auto & pool = pools[i];
                 if (pool == nullptr)
                 {
                     done_count++;
@@ -72,9 +81,8 @@ private:
                 auto pending_count = pool->pendingBlockCount();
                 min_pending_block_count = std::min(pending_count, min_pending_block_count);
                 max_pending_block_count = std::max(pending_count, max_pending_block_count);
-                
             }
-            if (done_count >= tasks.size() || isStop())
+            if (done_count >= pools.size() || isStop())
             {
                 break;
             }
@@ -82,20 +90,19 @@ private:
             auto read_count = pending_block_count_limit - max_pending_block_count;  // TODO(jinhelin) max or min or ...
             if (read_count <= 0)
             {
-                pools.clear();
+                //pools.clear();
                 ::usleep(5000);  // TODO(jinhelin)
                 continue;
             }
             for (int c = 0; c < 1; c++)
             {
-                for (size_t i = 0; i < tasks.size(); i++)
+                for (size_t i = 0; i < pools.size(); i++)
                 {
                     if (dones[i])
                     {
                         continue;
                     }
-                    auto & t = tasks[i];
-                    auto block = t.first->read();
+                    auto block = streams[i]->read();
                     if (!block)
                     {
                         pools[i]->finishSegment(seg_id);
