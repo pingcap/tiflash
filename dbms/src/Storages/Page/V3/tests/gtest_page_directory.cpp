@@ -644,14 +644,14 @@ public:
     {
         DerefCounter deref_counter;
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.cleanOutdatedEntries(seq, &deref_counter, removed_entries, entries.acquireLock());
+        bool all_removed = entries.cleanOutdatedEntries(seq, &deref_counter, &removed_entries, entries.acquireLock());
         return {all_removed, removed_entries, deref_counter};
     }
 
     std::tuple<bool, PageEntriesV3> runDeref(UInt64 seq, PageVersion ver, Int64 decrease_num)
     {
         PageEntriesV3 removed_entries;
-        bool all_removed = entries.derefAndClean(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), ver, decrease_num, removed_entries);
+        bool all_removed = entries.derefAndClean(seq, buildV3Id(TEST_NAMESPACE_ID, page_id), ver, decrease_num, &removed_entries);
         return {all_removed, removed_entries};
     }
 
