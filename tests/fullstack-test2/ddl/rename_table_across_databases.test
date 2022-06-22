@@ -52,7 +52,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 +------+------+
 
 # check if table info updated.
->> select tidb_database,tidb_name from system.tables where is_tombstone = 0 and (tidb_database = 'test' and tidb_name='t') or (tidb_database='test_new' and tidb_name='t2')
+>> select tidb_database,tidb_name from system.tables where is_tombstone = 0 and ((tidb_database = 'test' and tidb_name='t') or (tidb_database='test_new' and tidb_name='t2'))
 ┌─tidb_database─┬─tidb_name─┐
 │ test_new      │ t2        │
 └───────────────┴───────────┘
