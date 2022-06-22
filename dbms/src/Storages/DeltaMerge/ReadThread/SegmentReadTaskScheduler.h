@@ -1,9 +1,11 @@
 #pragma once
 
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
+#include "Debug/DBGInvoker.h"
 
 namespace DB::DM
 {
@@ -75,13 +77,90 @@ private:
     std::list<SegmentReadTaskPoolPtr>::iterator last_itr;
 };
 
-struct MergedTask
+class MergedTask
 {
+public:
     MergedTask(uint64_t seg_id_, SegmentReadTaskPools && pools_) 
         : seg_id(seg_id_)
-        , pools(std::forward<SegmentReadTaskPools>(pools_)) {}
+        , pools(std::forward<SegmentReadTaskPools>(pools_))
+        , streams(pools.size(), nullptr)
+        , finished_count(0)
+        , finished(pools.size(), 0) {}
+ 
+    void readOneBlock()
+    {
+        for (size_t i = 0; i < pools.size(); i++)
+        {
+            if (isFinished(i))
+            {
+                continue;
+            }
+
+            auto & pool = pools[i];
+
+            if (pool->expired())
+            {
+                setFinished(i);
+                continue;
+            }
+
+            if (streams[i] == nullptr)
+            {
+                streams[i] = pool->getInputStream(seg_id);
+            }
+
+            auto block = streams[i]->read();
+            if (!block)
+            {
+                setFinished(i);
+                pool->finishSegment(seg_id);
+            }
+            else
+            {
+                pool->pushBlock(std::move(block));
+            }
+        }
+    }
+
+    bool allFinished()
+    {
+        return finished_count >= finished.size();
+    }
+
+    std::pair<int64_t, int64_t> getMinMaxPendingBlockCount()
+    {
+        int64_t min = std::numeric_limits<int64_t>::max();
+        int64_t max = std::numeric_limits<int64_t>::min();
+        for (size_t i = 0; i < pools.size(); i++)
+        {
+            if (!isFinished(i))
+            {
+                auto pbc = pools[i]->pendingBlockCount();
+                min = std::min(min, pbc);
+                max = std::max(max, pbc);
+            }
+        }
+        return {min, max};
+    }
+
     uint64_t seg_id;
     SegmentReadTaskPools pools;
+    BlockInputStreams streams;
+
+     bool isFinished(size_t i)
+    {
+        return finished[i];
+    }
+    void setFinished(size_t i)
+    {
+        if (!isFinished(i))
+        {
+            finished[i] = 1;
+            finished_count++;
+        }
+    }
+    size_t finished_count;
+    std::vector<int8_t> finished;
 };
 using MergedTaskPtr = std::shared_ptr<MergedTask>;
 

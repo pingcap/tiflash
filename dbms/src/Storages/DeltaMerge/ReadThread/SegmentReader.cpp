@@ -96,8 +96,7 @@ private:
             auto read_count = pending_block_count_limit - max_pending_block_count;  // TODO(jinhelin) max or min or ...
             if (read_count <= 0)
             {
-                //pools.clear();
-                ::usleep(5000);  // TODO(jinhelin)
+                ::usleep(5000);  // TODO(jinhelin) 进入等待的次数影响性能？
                 continue;
             }
             for (int c = 0; c < 1; c++)

@@ -6,7 +6,7 @@
 
 namespace DB::DM
 {
-struct MergedTask;
+class MergedTask;
 using MergedTaskPtr = std::shared_ptr<MergedTask>;
 
 class SegmentReader;
