@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
@@ -24,6 +25,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_sharedquery_failpoint[];
+} // namespace FailPoints
+
 /** This block input stream is used by SharedQuery.
   * It enable multiple threads read from one stream.
  */
@@ -136,6 +142,7 @@ protected:
             in->readPrefix();
             while (true)
             {
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_sharedquery_failpoint);
                 Block block = in->read();
                 // in is finished or queue is canceled
                 if (!block || !queue.push(block))

@@ -18,6 +18,7 @@
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
+#include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -977,6 +978,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Poco::Logger * log = &logger();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
+    FailPointHelper::initRandomFailPoints(config(), log);
 #endif
 
     UpdateMallocConfig(log);
