@@ -30,12 +30,31 @@ protected:
     static void SetUpTestCase() {}
 };
 
+TEST_F(SegmentOperationTest, Issue4956)
+try
+{
+    SegmentTestOptions options;
+    reloadWithOptions(options);
+
+    // flush data, make the segment can be split.
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    // write data to cache, reproduce the https://github.com/pingcap/tiflash/issues/4956
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto segment_id = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_TRUE(segment_id.has_value());
+
+    mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id);
+}
+CATCH
+
 TEST_F(SegmentOperationTest, TestSegment)
 try
 {
     SegmentTestOptions options;
     reloadWithOptions(options);
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
     auto segment_id = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
