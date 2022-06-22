@@ -208,6 +208,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         }
         index++;
     }
+    block.checkNumberOfRows();
+
     return true;
 }
 

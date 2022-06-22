@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/Collator.h>
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Common/typeid_cast.h>
@@ -93,6 +94,12 @@ extern const int SCHEMA_VERSION_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
+
+namespace FailPoints
+{
+extern const char pause_query_init[];
+} // namespace FailPoints
+
 InterpreterSelectQuery::InterpreterSelectQuery(
     const ASTPtr & query_ptr_,
     const Context & context_,
@@ -131,6 +138,15 @@ InterpreterSelectQuery::~InterpreterSelectQuery() = default;
 
 void InterpreterSelectQuery::init(const Names & required_result_column_names)
 {
+    /// the failpoint pause_query_init should use with the failpoint unblock_query_init_after_write,
+    /// to fulfill that the select query action will be blocked before init state to wait the write action finished.
+    /// In using, we need enable unblock_query_init_after_write in our test code,
+    /// and before each write statement take effect, we need enable pause_query_init.
+    /// When the write action finished, the pause_query_init will be disabled automatically,
+    /// and then the select query could be continued.
+    /// you can refer multi_alter_with_write.test for an example.
+    FAIL_POINT_PAUSE(FailPoints::pause_query_init);
+
     if (!context.hasQueryContext())
         context.setQueryContext(context);
 
