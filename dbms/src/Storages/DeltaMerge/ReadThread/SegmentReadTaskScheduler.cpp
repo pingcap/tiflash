@@ -2,6 +2,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include "Common/Stopwatch.h"
 
 namespace DB::DM
 {
@@ -58,7 +59,7 @@ MergedTaskPtr SegmentReadTaskScheduler::getMergedTask()
         pools = unsafeGetPools(segment.second);
     }
     
-    std::vector<Task> tasks;
+    std::vector<MergedTask::Task> tasks;
     tasks.reserve(pools.size());
     for (auto & pool : pools)
     {
@@ -130,11 +131,13 @@ bool SegmentReadTaskScheduler::isStop() const
 
 bool SegmentReadTaskScheduler::schedule()
 {
+    Stopwatch sw;
     auto merged_task = getMergedTask();
     if (merged_task == nullptr)
     {
         return false;
     }
+    LOG_FMT_DEBUG(log, "getMergedTask seg_id {} => {} ms", merged_task->seg_id, sw.elapsedMilliseconds());
     SegmentReadThreadPool::instance().addTask(std::move(merged_task));  // TODO(jinhelin): should not be fail.
     return true;
 }

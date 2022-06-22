@@ -20,7 +20,8 @@ public:
         static SegmentReadThreadPool thread_pool(40);  // TODO(jinhelin)
         return thread_pool;
     }
-
+    
+    void init(int thread_count);
     ~SegmentReadThreadPool();
     SegmentReadThreadPool(const SegmentReadThreadPool&) = delete;
     SegmentReadThreadPool & operator=(const SegmentReadThreadPool&) = delete;

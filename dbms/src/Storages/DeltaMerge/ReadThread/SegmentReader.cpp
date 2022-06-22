@@ -52,43 +52,41 @@ private:
         {
             auto min_pending_block_count = std::numeric_limits<int64_t>::max();
             auto max_pending_block_count = std::numeric_limits<int64_t>::min();
-            std::vector<std::pair<uint64_t, int64_t>> pendings;
             SegmentReadTaskPools pools(tasks.size(), nullptr);
             for (size_t i = 0; i < tasks.size(); i++)
             {
+                if (dones[i])
+                {
+                    continue;
+                }
+
                 pools[i] = tasks[i].second.lock();
                 const auto &  pool = pools[i];
                 if (pool == nullptr)
                 {
                     done_count++;
                     dones[i] = 1;
+                    continue;
                 }
-                else
-                {
-                    auto pending_count = pool->pendingBlockCount();
-                    pendings.emplace_back(pool->getId(), pending_count);
-                    min_pending_block_count = std::min(pending_count, min_pending_block_count);
-                    max_pending_block_count = std::max(pending_count, max_pending_block_count);
-                }
+
+                auto pending_count = pool->pendingBlockCount();
+                min_pending_block_count = std::min(pending_count, min_pending_block_count);
+                max_pending_block_count = std::max(pending_count, max_pending_block_count);
+                
             }
             if (done_count >= tasks.size() || isStop())
             {
                 break;
             }
-            if (max_pending_block_count > 200)
-            {
-                LOG_FMT_DEBUG(log, "min_pending {} max_pending {} pendings {}", 
-                    min_pending_block_count, max_pending_block_count, pendings);
-            }
             constexpr int64_t pending_block_count_limit = 100;
-            auto read_count = pending_block_count_limit - max_pending_block_count;  // max or min or ...
+            auto read_count = pending_block_count_limit - max_pending_block_count;  // TODO(jinhelin) max or min or ...
             if (read_count <= 0)
             {
                 pools.clear();
                 ::usleep(5000);  // TODO(jinhelin)
                 continue;
             }
-            //for (int64_t i = 0; i < read_count; i++)
+            for (int c = 0; c < 1; c++)
             {
                 for (size_t i = 0; i < tasks.size(); i++)
                 {
@@ -143,6 +141,16 @@ private:
     std::thread t;
 }; 
 
+void SegmentReadThreadPool::init(int thread_count)
+{
+    LOG_FMT_INFO(log, "thread_count {} start", thread_count);
+    for (int i = 0; i < thread_count; i++)
+    {
+        readers.push_back(std::make_unique<SegmentReader>(task_queue));
+    }
+    LOG_FMT_INFO(log, "thread_count {} end", thread_count);
+}
+
 bool SegmentReadThreadPool::addTask(MergedTaskPtr && task)
 {
     return task_queue.push(std::forward<MergedTaskPtr>(task));
@@ -151,12 +159,7 @@ bool SegmentReadThreadPool::addTask(MergedTaskPtr && task)
 SegmentReadThreadPool::SegmentReadThreadPool(int thread_count)
     : log(&Poco::Logger::get("SegmentReadThreadPool"))
 {
-    LOG_FMT_INFO(log, "thread_count {} start", thread_count);
-    for (int i = 0; i < thread_count; i++)
-    {
-        readers.push_back(std::make_unique<SegmentReader>(task_queue));
-    }
-    LOG_FMT_INFO(log, "thread_count {} end", thread_count);
+    init(thread_count);
 }
 
 SegmentReadThreadPool::~SegmentReadThreadPool()

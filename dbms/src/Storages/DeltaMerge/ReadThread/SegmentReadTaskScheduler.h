@@ -79,9 +79,9 @@ private:
     ElementIter last_itr;
 };
 
-using Task = std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>;
 struct MergedTask
 {
+    using Task = std::pair<BlockInputStreamPtr, std::weak_ptr<SegmentReadTaskPool>>;
     MergedTask(uint64_t seg_id_, std::vector<Task> && tasks_) 
         : seg_id(seg_id_)
         , tasks(std::forward<std::vector<Task>>(tasks_)) {}
