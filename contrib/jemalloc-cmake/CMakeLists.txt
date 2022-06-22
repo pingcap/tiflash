@@ -103,6 +103,7 @@ set (JEMALLOC_INCLUDE_PREFIX)
 
 if (ARCH_LINUX)
     set (JEMALLOC_INCLUDE_PREFIX "include_linux")
+    target_compile_definitions(jemalloc PRIVATE JEMALLOC_MADV_FREE=8)
 elseif (ARCH_FREEBSD)
     set (JEMALLOC_INCLUDE_PREFIX "include_freebsd")
 elseif (APPLE)
