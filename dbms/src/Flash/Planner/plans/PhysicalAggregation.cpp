@@ -33,7 +33,7 @@ namespace DB
 PhysicalPlanPtr PhysicalAggregation::build(
     const Context & context,
     const String & executor_id,
-    const String & req_id,
+    const LoggerPtr & log,
     const tipb::Aggregation & aggregation,
     PhysicalPlanPtr child)
 {
@@ -42,7 +42,7 @@ PhysicalPlanPtr PhysicalAggregation::build(
     if (unlikely(aggregation.group_by_size() == 0 && aggregation.agg_func_size() == 0))
     {
         //should not reach here
-        throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Planner::BadRequest);
     }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
@@ -73,7 +73,7 @@ PhysicalPlanPtr PhysicalAggregation::build(
     auto physical_agg = std::make_shared<PhysicalAggregation>(
         executor_id,
         schema,
-        req_id,
+        log->identifier(),
         before_agg_actions,
         aggregation_keys,
         collators,

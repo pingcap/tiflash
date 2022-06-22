@@ -24,12 +24,12 @@ namespace DB
 {
 PhysicalPlanPtr PhysicalLimit::build(
     const String & executor_id,
-    const String & req_id,
+    const LoggerPtr & log,
     const tipb::Limit & limit,
     PhysicalPlanPtr child)
 {
     assert(child);
-    auto physical_limit = std::make_shared<PhysicalLimit>(executor_id, child->getSchema(), req_id, limit.limit());
+    auto physical_limit = std::make_shared<PhysicalLimit>(executor_id, child->getSchema(), log->identifier(), limit.limit());
     physical_limit->appendChild(child);
     return physical_limit;
 }

@@ -39,7 +39,7 @@ public:
 
     void buildFinalProjection(const String & column_prefix, bool is_root);
 
-    PhysicalPlanPtr getResult() const;
+    PhysicalPlanPtr outputAndOptimize();
 
 private:
     PhysicalPlanPtr popBack();

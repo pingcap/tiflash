@@ -14,19 +14,20 @@
 
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
 PhysicalPlanPtr PhysicalSource::build(
     const BlockInputStreams & source_streams,
-    const String & req_id)
+    const LoggerPtr & log)
 {
-    assert(!source_streams.empty());
+    RUNTIME_ASSERT(!source_streams.empty(), log, "source streams cannot be empty");
     Block sample_block = source_streams.back()->getHeader();
     NamesAndTypes schema;
     for (const auto & col : sample_block)
         schema.emplace_back(col.name, col.type);
-    return std::make_shared<PhysicalSource>("source", schema, req_id, sample_block, source_streams);
+    return std::make_shared<PhysicalSource>("source", schema, log->identifier(), sample_block, source_streams);
 }
 
 void PhysicalSource::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)

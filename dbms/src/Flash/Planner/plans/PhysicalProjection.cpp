@@ -28,7 +28,7 @@ namespace DB
 PhysicalPlanPtr PhysicalProjection::build(
     const Context & context,
     const String & executor_id,
-    const String & req_id,
+    const LoggerPtr & log,
     const tipb::Projection & projection,
     PhysicalPlanPtr child)
 {
@@ -53,14 +53,14 @@ PhysicalPlanPtr PhysicalProjection::build(
     /// https://github.com/pingcap/tiflash/issues/3921
     project_actions->add(ExpressionAction::project(project_aliases));
 
-    auto physical_projection = std::make_shared<PhysicalProjection>(executor_id, schema, req_id, "projection", project_actions);
+    auto physical_projection = std::make_shared<PhysicalProjection>(executor_id, schema, log->identifier(), "projection", project_actions);
     physical_projection->appendChild(child);
     return physical_projection;
 }
 
 PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
     const Context & context,
-    const String & req_id,
+    const LoggerPtr & log,
     const String & column_prefix,
     PhysicalPlanPtr child)
 {
@@ -73,14 +73,14 @@ PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
 
     NamesAndTypes schema = child->getSchema();
     assert(final_project_aliases.size() == schema.size());
-    // replace name by alias.
+    // replace column name of schema by alias.
     for (size_t i = 0; i < final_project_aliases.size(); ++i)
     {
         assert(schema[i].name == final_project_aliases[i].first);
         schema[i].name = final_project_aliases[i].second;
     }
 
-    auto physical_projection = std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, req_id, "final projection", project_actions);
+    auto physical_projection = std::make_shared<PhysicalProjection>("NonRootFinalProjection", schema, log->identifier(), "final projection", project_actions);
     // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
     physical_projection->appendChild(child);
@@ -89,7 +89,7 @@ PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
 
 PhysicalPlanPtr PhysicalProjection::buildRootFinal(
     const Context & context,
-    const String & req_id,
+    const LoggerPtr & log,
     const std::vector<tipb::FieldType> & require_schema,
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
@@ -120,7 +120,7 @@ PhysicalPlanPtr PhysicalProjection::buildRootFinal(
         schema.emplace_back(alias, type);
     }
 
-    auto physical_projection = std::make_shared<PhysicalProjection>("RootFinalProjection", schema, req_id, "final projection", project_actions);
+    auto physical_projection = std::make_shared<PhysicalProjection>("RootFinalProjection", schema, log->identifier(), "final projection", project_actions);
     // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
     physical_projection->appendChild(child);

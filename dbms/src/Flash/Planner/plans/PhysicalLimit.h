@@ -24,7 +24,7 @@ class PhysicalLimit : public PhysicalUnary
 public:
     static PhysicalPlanPtr build(
         const String & executor_id,
-        const String & req_id,
+        const LoggerPtr & log,
         const tipb::Limit & limit,
         PhysicalPlanPtr child);
 

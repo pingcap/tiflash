@@ -114,7 +114,7 @@ void Planner::executeImpl(DAGPipeline & pipeline)
 
     analyzePhysicalPlan(builder, query_block);
 
-    auto physical_plan = builder.getResult();
+    auto physical_plan = builder.outputAndOptimize();
 
     LOG_FMT_DEBUG(
         log,

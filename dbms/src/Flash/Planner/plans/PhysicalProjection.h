@@ -26,19 +26,19 @@ public:
     static PhysicalPlanPtr build(
         const Context & context,
         const String & executor_id,
-        const String & req_id,
+        const LoggerPtr & log,
         const tipb::Projection & projection,
         PhysicalPlanPtr child);
 
     static PhysicalPlanPtr buildNonRootFinal(
         const Context & context,
-        const String & req_id,
+        const LoggerPtr & log,
         const String & column_prefix,
         PhysicalPlanPtr child);
 
     static PhysicalPlanPtr buildRootFinal(
         const Context & context,
-        const String & req_id,
+        const LoggerPtr & log,
         const std::vector<tipb::FieldType> & require_schema,
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,

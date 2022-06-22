@@ -50,36 +50,36 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     switch (executor->tp())
     {
     case tipb::ExecType::TypeLimit:
-        pushBack(PhysicalLimit::build(executor_id, log->identifier(), executor->limit(), popBack()));
+        pushBack(PhysicalLimit::build(executor_id, log, executor->limit(), popBack()));
         break;
     case tipb::ExecType::TypeTopN:
-        pushBack(PhysicalTopN::build(context, executor_id, log->identifier(), executor->topn(), popBack()));
+        pushBack(PhysicalTopN::build(context, executor_id, log, executor->topn(), popBack()));
         break;
     case tipb::ExecType::TypeSelection:
-        pushBack(PhysicalFilter::build(context, executor_id, log->identifier(), executor->selection(), popBack()));
+        pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), popBack()));
         break;
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
-        pushBack(PhysicalAggregation::build(context, executor_id, log->identifier(), executor->aggregation(), popBack()));
+        pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), popBack()));
         break;
     case tipb::ExecType::TypeExchangeSender:
     {
         if (unlikely(dagContext().isTest()))
-            pushBack(PhysicalMockExchangeSender::build(executor_id, log->identifier(), popBack()));
+            pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
         else
-            pushBack(PhysicalExchangeSender::build(executor_id, log->identifier(), executor->exchange_sender(), popBack()));
+            pushBack(PhysicalExchangeSender::build(executor_id, log, executor->exchange_sender(), popBack()));
         break;
     }
     case tipb::ExecType::TypeExchangeReceiver:
     {
         if (unlikely(dagContext().isTest()))
-            pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log->identifier(), executor->exchange_receiver()));
+            pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver()));
         else
-            pushBack(PhysicalExchangeReceiver::build(context, executor_id, log->identifier()));
+            pushBack(PhysicalExchangeReceiver::build(context, executor_id, log));
         break;
     }
     case tipb::ExecType::TypeProjection:
-        pushBack(PhysicalProjection::build(context, executor_id, log->identifier(), executor->projection(), popBack()));
+        pushBack(PhysicalProjection::build(context, executor_id, log, executor->projection(), popBack()));
         break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
@@ -91,7 +91,7 @@ void PhysicalPlanBuilder::buildFinalProjection(const String & column_prefix, boo
     const auto & final_projection = is_root
         ? PhysicalProjection::buildRootFinal(
             context,
-            log->identifier(),
+            log,
             dagContext().output_field_types,
             dagContext().output_offsets,
             column_prefix,
@@ -99,7 +99,7 @@ void PhysicalPlanBuilder::buildFinalProjection(const String & column_prefix, boo
             popBack())
         : PhysicalProjection::buildNonRootFinal(
             context,
-            log->identifier(),
+            log,
             column_prefix,
             popBack());
     pushBack(final_projection);
@@ -127,20 +127,19 @@ PhysicalPlanPtr PhysicalPlanBuilder::popBack()
 
 void PhysicalPlanBuilder::buildSource(const BlockInputStreams & source_streams)
 {
-    pushBack(PhysicalSource::build(source_streams, log->identifier()));
+    pushBack(PhysicalSource::build(source_streams, log));
 }
 
-PhysicalPlanPtr PhysicalPlanBuilder::getResult() const
+PhysicalPlanPtr PhysicalPlanBuilder::outputAndOptimize()
 {
     RUNTIME_ASSERT(cur_plans.size() == 1, log, "There can only be one plan output, but here are {}", cur_plans.size());
-    PhysicalPlanPtr physical_plan = cur_plans.back();
+    auto origin_physical_plan = popBack();
 
     LOG_FMT_DEBUG(
         log,
         "build unoptimized physical plan: \n{}",
-        PhysicalPlanVisitor::visitToString(physical_plan));
+        PhysicalPlanVisitor::visitToString(origin_physical_plan));
 
-    physical_plan = optimize(context, physical_plan);
-    return physical_plan;
+    return optimize(context, origin_physical_plan);
 }
 } // namespace DB

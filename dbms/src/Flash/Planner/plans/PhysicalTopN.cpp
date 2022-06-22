@@ -27,7 +27,7 @@ namespace DB
 PhysicalPlanPtr PhysicalTopN::build(
     const Context & context,
     const String & executor_id,
-    const String & req_id,
+    const LoggerPtr & log,
     const tipb::TopN & top_n,
     PhysicalPlanPtr child)
 {
@@ -36,7 +36,7 @@ PhysicalPlanPtr PhysicalTopN::build(
     if (unlikely(top_n.order_by_size() == 0))
     {
         //should not reach here
-        throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("TopN executor without order by exprs", Errors::Planner::BadRequest);
     }
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
@@ -45,7 +45,7 @@ PhysicalPlanPtr PhysicalTopN::build(
     auto order_columns = analyzer.buildOrderColumns(before_sort_actions, top_n.order_by());
     SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
 
-    auto physical_top_n = std::make_shared<PhysicalTopN>(executor_id, child->getSchema(), req_id, order_descr, before_sort_actions, top_n.limit());
+    auto physical_top_n = std::make_shared<PhysicalTopN>(executor_id, child->getSchema(), log->identifier(), order_descr, before_sort_actions, top_n.limit());
     physical_top_n->appendChild(child);
     return physical_top_n;
 }

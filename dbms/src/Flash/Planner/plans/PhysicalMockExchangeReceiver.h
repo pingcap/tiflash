@@ -26,7 +26,7 @@ public:
     static PhysicalPlanPtr build(
         Context & context,
         const String & executor_id,
-        const String & req_id,
+        const LoggerPtr & log,
         const tipb::ExchangeReceiver & exchange_receiver);
 
     PhysicalMockExchangeReceiver(

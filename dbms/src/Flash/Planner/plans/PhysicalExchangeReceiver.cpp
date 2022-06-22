@@ -41,7 +41,7 @@ PhysicalExchangeReceiver::PhysicalExchangeReceiver(
 PhysicalPlanPtr PhysicalExchangeReceiver::build(
     const Context & context,
     const String & executor_id,
-    const String & req_id)
+    const LoggerPtr & log)
 {
     const auto & mpp_exchange_receiver_map = context.getDAGContext()->getMPPExchangeReceiverMap();
 
@@ -56,7 +56,7 @@ PhysicalPlanPtr PhysicalExchangeReceiver::build(
     auto physical_exchange_receiver = std::make_shared<PhysicalExchangeReceiver>(
         executor_id,
         schema,
-        req_id,
+        log->identifier(),
         PhysicalPlanHelper::constructBlockFromSchema(schema),
         mpp_exchange_receiver);
     return physical_exchange_receiver;

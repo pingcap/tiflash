@@ -26,7 +26,7 @@ namespace DB
 PhysicalPlanPtr PhysicalFilter::build(
     const Context & context,
     const String & executor_id,
-    const String & req_id,
+    const LoggerPtr & log,
     const tipb::Selection & selection,
     PhysicalPlanPtr child)
 {
@@ -40,7 +40,7 @@ PhysicalPlanPtr PhysicalFilter::build(
         conditions.push_back(&c);
     String filter_column_name = analyzer.buildFilterColumn(before_filter_actions, conditions);
 
-    auto physical_filter = std::make_shared<PhysicalFilter>(executor_id, child->getSchema(), req_id, filter_column_name, before_filter_actions);
+    auto physical_filter = std::make_shared<PhysicalFilter>(executor_id, child->getSchema(), log->identifier(), filter_column_name, before_filter_actions);
     physical_filter->appendChild(child);
 
     return physical_filter;

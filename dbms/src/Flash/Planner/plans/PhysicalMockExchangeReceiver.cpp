@@ -36,7 +36,7 @@ PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(
 PhysicalPlanPtr PhysicalMockExchangeReceiver::build(
     Context & context,
     const String & executor_id,
-    const String & req_id,
+    const LoggerPtr & log,
     const tipb::ExchangeReceiver & exchange_receiver)
 {
     NamesAndTypes schema;
@@ -53,7 +53,7 @@ PhysicalPlanPtr PhysicalMockExchangeReceiver::build(
     }
     else
     {
-        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, dag_context.log, executor_id);
+        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, executor_id);
         schema = std::move(names_and_types);
         mock_streams.insert(mock_streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
     }
@@ -63,7 +63,7 @@ PhysicalPlanPtr PhysicalMockExchangeReceiver::build(
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
         executor_id,
         schema,
-        req_id,
+        log->identifier(),
         PhysicalPlanHelper::constructBlockFromSchema(schema),
         mock_streams);
     return physical_mock_exchange_receiver;

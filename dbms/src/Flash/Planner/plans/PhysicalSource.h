@@ -24,7 +24,7 @@ class PhysicalSource : public PhysicalLeaf
 public:
     static PhysicalPlanPtr build(
         const BlockInputStreams & source_streams,
-        const String & req_id);
+        const LoggerPtr & log);
 
     PhysicalSource(
         const String & executor_id_,

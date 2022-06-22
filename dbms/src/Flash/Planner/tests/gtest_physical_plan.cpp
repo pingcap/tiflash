@@ -54,7 +54,7 @@ public:
         assert(request);
         builder.build(request.get());
         builder.buildFinalProjection("physical_plan_", true);
-        auto physical_plan = builder.getResult();
+        auto physical_plan = builder.outputAndOptimize();
 
         ASSERT_EQ(Poco::trim(expected_physical_plan), Poco::trim(PhysicalPlanVisitor::visitToString(physical_plan)));
 

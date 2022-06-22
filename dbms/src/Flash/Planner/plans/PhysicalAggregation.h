@@ -27,7 +27,7 @@ public:
     static PhysicalPlanPtr build(
         const Context & context,
         const String & executor_id,
-        const String & req_id,
+        const LoggerPtr & log,
         const tipb::Aggregation & aggregation,
         PhysicalPlanPtr child);
 

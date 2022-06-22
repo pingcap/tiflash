@@ -26,7 +26,7 @@ namespace DB
 {
 PhysicalPlanPtr PhysicalExchangeSender::build(
     const String & executor_id,
-    const String & req_id,
+    const LoggerPtr & log,
     const tipb::ExchangeSender & exchange_sender,
     PhysicalPlanPtr child)
 {
@@ -38,7 +38,7 @@ PhysicalPlanPtr PhysicalExchangeSender::build(
     auto physical_exchange_sender = std::make_shared<PhysicalExchangeSender>(
         executor_id,
         child->getSchema(),
-        req_id,
+        log->identifier(),
         partition_col_ids,
         partition_col_collators,
         exchange_sender.tp());
