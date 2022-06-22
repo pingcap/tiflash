@@ -835,9 +835,9 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         tracing_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         tracing_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         tracing_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
-        tracing_log_file_async = new Poco::AsyncChannel(tracing_log_file);
         if (!tracing_log_file_async)
-            tracing_log->setChannel(tracing_log_file_async);
+            tracing_log_file_async = new Poco::AsyncChannel(tracing_log_file);
+        tracing_log->setChannel(tracing_log_file_async);
         source->setChannel(tracing_log);
         split->addChannel(source);
         tracing_log->open();
