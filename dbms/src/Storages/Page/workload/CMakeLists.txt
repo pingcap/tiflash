@@ -14,8 +14,7 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-set (page-workload-src HeavyMemoryCostInGC.cpp HeavyRead.cpp HeavySkewWriteRead.cpp HeavyWrite.cpp HighValidBigFileGC.cpp HoldSnapshotsLongTime.cpp Normal.cpp 
-     PageStorageInMemoryCapacity.cpp ThousandsOfOffset.cpp MainEntry.cpp Normal.cpp PageStorageInMemoryCapacity.cpp PSBackground.cpp PSRunnable.cpp PSStressEnv.cpp PSWorkload.cpp)
+set (page-workload-src MainEntry.cpp PSBackground.cpp PSRunnable.cpp PSStressEnv.cpp PSWorkload.cpp)
 
 add_library (page-workload-lib ${page-workload-src})
 target_link_libraries (page-workload-lib dbms clickhouse_functions clickhouse-server-lib)

@@ -14,24 +14,20 @@
 
 #pragma once
 
-#include "IServer.h"
-
-#include <Poco/Net/HTTPRequestHandler.h>
-
 #include <Common/CurrentMetrics.h>
 #include <Common/HTMLForm.h>
+#include <Poco/Net/HTTPRequestHandler.h>
+
+#include "IServer.h"
 
 
-namespace CurrentMetrics
+namespace Poco
 {
-    extern const Metric HTTPConnection;
+class Logger;
 }
-
-namespace Poco { class Logger; }
 
 namespace DB
 {
-
 class WriteBufferFromHTTPServerResponse;
 
 
@@ -69,10 +65,8 @@ private:
     IServer & server;
     Poco::Logger * log;
 
-    /// It is the name of the server that will be sent in an http-header X-ClickHouse-Server-Display-Name. 
+    /// It is the name of the server that will be sent in an http-header X-ClickHouse-Server-Display-Name.
     String server_display_name;
-
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::HTTPConnection};
 
     /// Also initializes 'used_output'.
     void processQuery(
@@ -91,4 +85,4 @@ private:
     void pushDelayedResults(Output & used_output);
 };
 
-}
+} // namespace DB

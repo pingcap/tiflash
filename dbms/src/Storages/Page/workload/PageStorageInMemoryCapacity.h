@@ -174,6 +174,4 @@ private:
                                                 std::round(resident_used) ? (total_mem / ((double)resident_used / page_writen)) : 0));
     }
 };
-
-REGISTER_WORKLOAD(PageStorageInMemoryCapacity)
 } // namespace DB::PS::tests
