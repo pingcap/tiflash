@@ -186,7 +186,7 @@ BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithCheck)
 }
 BENCHMARK_DEFINE_F(RegionBlockReaderBenchTest, PKIsHandleWithoutCheck)
 (benchmark::State & state)
-{   
+{
     size_t num_rows = state.range(0);
     auto [table_info, fields] = getNormalTableInfoFields({2}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2, num_rows);
@@ -207,4 +207,3 @@ BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithCheck)->Iterat
 BENCHMARK_REGISTER_F(RegionBlockReaderBenchTest, PKIsNotHandleWithoutCheck)->Iterations(num_iterations_test)->Arg(1)->Arg(10)->Arg(100);
 
 } // namespace DB::tests
-
