@@ -11,6 +11,8 @@
 # define JEMALLOC_CXX_THROW
 #endif
 
+#include "jemalloc_rename.h"
+
 /*
  * The je_ prefix on the following public symbol declarations is an artifact
  * of namespace management, and should be omitted in application code unless
