@@ -47,22 +47,27 @@ private:
 
         auto seg_id = merged_task->seg_id;
         auto & pools = merged_task->pools;
+        std::vector<int> dones(pools.size(), 0);
+        size_t done_count = 0;
         std::vector<BlockInputStreamPtr> streams(pools.size(), nullptr);
         for (size_t i = 0; i < pools.size(); i++)
         {
-            if (pools[i] != nullptr)
+            if (!pools[i]->expired())
             {
                 streams[i] = pools[i]->getInputStream(seg_id);
             }
+            else
+            {
+                pools[i].reset();
+                done_count++;
+                dones[i] = 1;
+            }
         }
-
-        std::vector<int> dones(pools.size(), 0);
-        size_t done_count = 0;
+        
         while (done_count < pools.size())
         {
             auto min_pending_block_count = std::numeric_limits<int64_t>::max();
             auto max_pending_block_count = std::numeric_limits<int64_t>::min();
-            // SegmentReadTaskPools pools(tasks.size(), nullptr);
             for (size_t i = 0; i < pools.size(); i++)
             {
                 if (dones[i])
@@ -70,9 +75,10 @@ private:
                     continue;
                 }
 
-                const auto & pool = pools[i];
-                if (pool == nullptr)
+                auto & pool = pools[i];
+                if (pool->expired())
                 {
+                    pool.reset();
                     done_count++;
                     dones[i] = 1;
                     continue;

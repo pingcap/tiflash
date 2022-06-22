@@ -129,6 +129,7 @@ public:
         , do_range_filter_for_raw(do_range_filter_for_raw_)
         , tasks(std::move(tasks_))
         , log(&Poco::Logger::get("SegmentReadTaskPool"))
+        , ref_unordered_input_stream_count(0)
     {}
 
     SegmentReadTaskPtr nextTask()
@@ -183,6 +184,19 @@ public:
     std::pair<uint64_t, std::vector<uint64_t>> scheduleSegment(
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
         uint64_t expected_merge_count);
+
+    void increaseRefUnorderedInputStreamCount()
+    {
+        ref_unordered_input_stream_count.fetch_add(1, std::memory_order_relaxed);
+    }
+    void decreaseRefUnorderedInputStreamCount()
+    {
+        ref_unordered_input_stream_count.fetch_sub(1, std::memory_order_relaxed);
+    }
+    bool expired()
+    {
+        return ref_unordered_input_stream_count.load(std::memory_order_relaxed) == 0;
+    }
 private:
     SegmentReadTaskPtr getTask(uint64_t seg_id);
 
@@ -201,6 +215,8 @@ private:
     WorkQueue<Block> q;
     PendingBlockStatistic local_pending_stat;
     Poco::Logger * log;
+
+    std::atomic<int64_t> ref_unordered_input_stream_count;
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static PendingBlockStatistic global_pending_stat;

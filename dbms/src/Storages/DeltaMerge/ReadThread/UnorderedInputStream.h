@@ -48,6 +48,12 @@ public:
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
+        task_pool->increaseRefUnorderedInputStreamCount();
+    }
+
+    ~UnorderedInputStream()
+    {
+        task_pool->decreaseRefUnorderedInputStreamCount();
     }
 
     String getName() const override { return NAME; }

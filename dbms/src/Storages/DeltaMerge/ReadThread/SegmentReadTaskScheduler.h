@@ -2,37 +2,34 @@
 
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <memory>
+#include <utility>
+#include <vector>
 
 namespace DB::DM
 {
-template <typename T>
-class WeakPtrList
+
+class SegmentReadTaskPoolList
 {
 public:
-    using Element = std::weak_ptr<T>;
-    using ElementPtr = std::shared_ptr<T>;
-    using ElementList = std::list<Element>;
-    using ElementIter = typename ElementList::iterator;
+    SegmentReadTaskPoolList() : last_itr(l.end()) {}
 
-    WeakPtrList() : last_itr(l.end()) {}
-
-    void add(Element ptr)
+    void add(const SegmentReadTaskPoolPtr & ptr)
     {
         l.push_back(ptr);
     }
 
-    ElementPtr next()
+    SegmentReadTaskPoolPtr next()
     {
         for (last_itr = nextItr(last_itr); !l.empty(); last_itr = nextItr(last_itr))
         {
-            auto element = last_itr->lock();
-            if (element == nullptr)
+            auto ptr = *last_itr;
+            if (ptr->expired())
             {
                 last_itr = l.erase(last_itr);
             }
             else  
             {
-                return element;
+                return ptr;
             }
         }
         return nullptr;
@@ -42,29 +39,27 @@ public:
     std::pair<int64_t, int64_t> count() const
     {
         int64_t expired_count = 0;
-        for (const auto & wp : l)
+        for (const auto & p : l)
         {
-            expired_count += static_cast<int>(wp.expired());
+            expired_count += static_cast<int>(p->expired());
         }
         return {l.size() - expired_count, expired_count};
     }
 
-    template <typename U>
-    ElementPtr get(U pred)
+    SegmentReadTaskPoolPtr get(uint64_t pool_id) const
     {
-        for (const auto & wp : l)
+        for (const auto & p : l)
         {
-            auto sp = wp.lock();
-            if (sp != nullptr && pred(sp))
+            if (p->getId() == pool_id)
             {
-                return sp;
+                return p;
             }
         }
         return nullptr;
     }
 private:
     
-    ElementIter nextItr(ElementIter itr)
+    std::list<SegmentReadTaskPoolPtr>::iterator nextItr(std::list<SegmentReadTaskPoolPtr>::iterator itr)
     {
         if (itr == l.end() || std::next(itr) == l.end())
         {
@@ -76,8 +71,8 @@ private:
         }
     }
 
-    ElementList l;
-    ElementIter last_itr;
+    std::list<SegmentReadTaskPoolPtr> l;
+    std::list<SegmentReadTaskPoolPtr>::iterator last_itr;
 };
 
 struct MergedTask
@@ -105,7 +100,7 @@ public:
     SegmentReadTaskScheduler(SegmentReadTaskScheduler &&) = delete;
     SegmentReadTaskScheduler & operator=(SegmentReadTaskScheduler &&) = delete;
 
-    void add(SegmentReadTaskPoolPtr & pool);
+    void add(const SegmentReadTaskPoolPtr & pool);
     MergedTaskPtr getMergedTask();
 private:
     SegmentReadTaskScheduler();
@@ -119,7 +114,7 @@ private:
     SegmentReadTaskPoolPtr unsafeScheduleSegmentReadTaskPool();
 
     std::mutex mtx;
-    WeakPtrList<SegmentReadTaskPool> read_pools;
+    SegmentReadTaskPoolList read_pools;
     int64_t max_unexpired_pool_count;
     // seg_id -> pool_ids
     std::unordered_map<uint64_t, std::vector<uint64_t>> segments;

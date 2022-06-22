@@ -20,11 +20,11 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
     sche_thread.join();
 }
 
-void SegmentReadTaskScheduler::add(SegmentReadTaskPoolPtr & pool)
+void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
     std::lock_guard lock(mtx);
     
-    read_pools.add(std::weak_ptr<SegmentReadTaskPool>(pool));
+    read_pools.add(pool);
 
     std::vector<uint64_t> seg_ids;
     for (const auto & task : pool->getTasks())
@@ -52,7 +52,8 @@ MergedTaskPtr SegmentReadTaskScheduler::getMergedTask()
     {
         return nullptr;
     }
-    return std::make_shared<MergedTask>(segment.first, unsafeGetPools(segment.second));
+    auto pools = unsafeGetPools(segment.second);
+    return std::make_shared<MergedTask>(segment.first, std::move(pools));
 }
 
 SegmentReadTaskPools SegmentReadTaskScheduler::unsafeGetPools(const std::vector<uint64_t> & pool_ids)
@@ -61,8 +62,11 @@ SegmentReadTaskPools SegmentReadTaskScheduler::unsafeGetPools(const std::vector<
     pools.reserve(pool_ids.size());
     for (uint64_t id : pool_ids)
     {
-        auto sp = read_pools.get([id](const SegmentReadTaskPoolPtr & sp) { return sp->getId() == id; });
-        pools.push_back(sp);
+        auto p = read_pools.get(id);
+        if (p != nullptr)
+        {
+            pools.push_back(p);
+        }
     }
     return pools;
 }
@@ -116,7 +120,7 @@ bool SegmentReadTaskScheduler::schedule()
     {
         return false;
     }
-    LOG_FMT_DEBUG(log, "getMergedTask seg_id {} => {} ms", merged_task->seg_id, sw.elapsedMilliseconds());
+    LOG_FMT_DEBUG(log, "getMergedTask seg_id {} merged_count {} => {} ms", merged_task->seg_id, merged_task->pools.size(), sw.elapsedMilliseconds());
     SegmentReadThreadPool::instance().addTask(std::move(merged_task));  // TODO(jinhelin): should not be fail.
     return true;
 }
@@ -127,6 +131,7 @@ void SegmentReadTaskScheduler::scheThread()
     {
         if (!schedule())
         {
+            LOG_FMT_DEBUG(log, "Nothing to scheduling");
             ::usleep(2000);
         }
     }
