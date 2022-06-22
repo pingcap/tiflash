@@ -26,13 +26,13 @@ using ColumnIDs = std::vector<ColumnID>;
 class RegionBlockReaderTestFixture : public ::testing::Test
 {
 protected:
-    Int64 handle_value_ = 100;
-    UInt8 del_mark_value_ = 0;
-    UInt64 version_value_ = 100;
-    size_t rows_ = 3;
+    Int64 handle_value = 100;
+    UInt8 del_mark_value = 0;
+    UInt64 version_value = 100;
+    size_t rows = 3;
 
-    RegionDataReadInfoList data_list_read_;
-    std::unordered_map<ColumnID, Field> fields_map_;
+    RegionDataReadInfoList data_list_read;
+    std::unordered_map<ColumnID, Field> fields_map;
 
     enum RowEncodeVersion
     {
@@ -43,8 +43,8 @@ protected:
 protected:
     void SetUp() override
     {
-        data_list_read_.clear();
-        fields_map_.clear();
+        data_list_read.clear();
+        fields_map.clear();
     }
 
     void TearDown() override {}
@@ -52,8 +52,12 @@ protected:
     void encodeColumns(TableInfo & table_info, std::vector<Field> & fields, RowEncodeVersion row_version)
     {
         // for later check
+        std::unordered_map<String, size_t> column_name_columns_index_map;
         for (size_t i = 0; i < table_info.columns.size(); i++)
-            fields_map_.emplace(table_info.columns[i].id, fields[i]);
+        {
+            fields_map.emplace(table_info.columns[i].id, fields[i]);
+            column_name_columns_index_map.emplace(table_info.columns[i].name, i);
+        }
 
         std::vector<Field> value_fields;
         std::vector<Field> pk_fields;
@@ -72,13 +76,13 @@ protected:
             auto & primary_index_info = table_info.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
-                size_t pk_offset = primary_index_info.idx_cols[i].offset;
-                EncodeDatum(pk_fields[i], table_info.columns[pk_offset].getCodecFlag(), pk_buf);
+                auto idx = column_name_columns_index_map[primary_index_info.idx_cols[i].name];
+                EncodeDatum(pk_fields[i], table_info.columns[idx].getCodecFlag(), pk_buf);
             }
         }
         else
         {
-            DB::EncodeInt64(handle_value_, pk_buf);
+            DB::EncodeInt64(handle_value, pk_buf);
         }
         RawTiDBPK pk{std::make_shared<String>(pk_buf.releaseStr())};
         // create value
@@ -96,44 +100,44 @@ protected:
             throw Exception("Unknown row format " + std::to_string(row_version), ErrorCodes::LOGICAL_ERROR);
         }
         auto row_value = std::make_shared<const TiKVValue>(std::move(value_buf.str()));
-        for (size_t i = 0; i < rows_; i++)
-            data_list_read_.emplace_back(pk, del_mark_value_, version_value_, row_value);
+        for (size_t i = 0; i < rows; i++)
+            data_list_read.emplace_back(pk, del_mark_value, version_value, row_value);
     }
 
     void checkBlock(DecodingStorageSchemaSnapshotConstPtr decoding_schema, const Block & block) const
     {
         ASSERT_EQ(block.columns(), decoding_schema->column_defines->size());
-        for (size_t row = 0; row < rows_; row++)
+        for (size_t row = 0; row < rows; row++)
         {
             for (size_t pos = 0; pos < block.columns(); pos++)
             {
-                auto & column_element = block.getByPosition(pos);
+                const auto & column_element = block.getByPosition(pos);
                 if (row == 0)
                 {
-                    ASSERT_EQ(column_element.column->size(), rows_);
+                    ASSERT_EQ(column_element.column->size(), rows);
                 }
                 if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
                 {
                     if (decoding_schema->is_common_handle)
                     {
-                        ASSERT_EQ((*column_element.column)[row], Field(*std::get<0>(data_list_read_[row])));
+                        ASSERT_EQ((*column_element.column)[row], Field(*std::get<0>(data_list_read[row])));
                     }
                     else
                     {
-                        ASSERT_EQ((*column_element.column)[row], Field(handle_value_));
+                        ASSERT_EQ((*column_element.column)[row], Field(handle_value));
                     }
                 }
                 else if (column_element.name == VERSION_COLUMN_NAME)
                 {
-                    ASSERT_EQ((*column_element.column)[row], Field(version_value_));
+                    ASSERT_EQ((*column_element.column)[row], Field(version_value));
                 }
                 else if (column_element.name == TAG_COLUMN_NAME)
                 {
-                    ASSERT_EQ((*column_element.column)[row], Field(NearestFieldType<UInt8>::Type(del_mark_value_)));
+                    ASSERT_EQ((*column_element.column)[row], Field(NearestFieldType<UInt8>::Type(del_mark_value)));
                 }
                 else
                 {
-                    ASSERT_EQ((*column_element.column)[row], fields_map_.at(column_element.column_id));
+                    ASSERT_EQ((*column_element.column)[row], fields_map.at(column_element.column_id));
                 }
             }
         }
@@ -143,7 +147,7 @@ protected:
     {
         RegionBlockReader reader{decoding_schema};
         Block block = createBlockSortByColumnID(decoding_schema);
-        if (!reader.read(block, data_list_read_, force_decode))
+        if (!reader.read(block, data_list_read, force_decode))
             return false;
 
         checkBlock(decoding_schema, block);
@@ -155,7 +159,7 @@ protected:
         return getTableInfoAndFields(
             handle_ids,
             is_common_handle,
-            ColumnIDValue(2, handle_value_),
+            ColumnIDValue(2, handle_value),
             ColumnIDValue(3, std::numeric_limits<UInt64>::max()),
             ColumnIDValue(4, std::numeric_limits<Float32>::min()),
             ColumnIDValue(9, String("aaa")),
@@ -170,7 +174,7 @@ protected:
             handle_ids,
             is_common_handle,
             ColumnIDValue(1, String("")),
-            ColumnIDValue(2, handle_value_),
+            ColumnIDValue(2, handle_value),
             ColumnIDValue(3, std::numeric_limits<UInt64>::max()),
             ColumnIDValue(4, std::numeric_limits<Float32>::min()),
             ColumnIDValue(8, String("")),
@@ -182,12 +186,12 @@ protected:
         // add default value for missing column
         std::vector<ColumnID> missing_column_ids{1, 8, 13};
         String missing_column_default_value = String("default");
-        for (size_t i = 0; i < table_info.columns.size(); i++)
+        for (auto & column : table_info.columns)
         {
-            if (std::find(missing_column_ids.begin(), missing_column_ids.end(), table_info.columns[i].id) != missing_column_ids.end())
+            if (std::find(missing_column_ids.begin(), missing_column_ids.end(), column.id) != missing_column_ids.end())
             {
-                table_info.columns[i].origin_default_value = missing_column_default_value;
-                fields_map_.emplace(table_info.columns[i].id, Field(missing_column_default_value));
+                column.origin_default_value = missing_column_default_value;
+                fields_map.emplace(column.id, Field(missing_column_default_value));
             }
         }
         return table_info;
@@ -199,7 +203,7 @@ protected:
         std::tie(table_info, std::ignore) = getTableInfoAndFields(
             handle_ids,
             is_common_handle,
-            ColumnIDValue(2, handle_value_),
+            ColumnIDValue(2, handle_value),
             ColumnIDValue(4, std::numeric_limits<Float32>::min()),
             ColumnIDValue(9, String("aaa")),
             ColumnIDValue(10, DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4)));
@@ -212,7 +216,7 @@ protected:
         std::tie(table_info, std::ignore) = getTableInfoAndFields(
             handle_ids,
             is_common_handle,
-            ColumnIDValue(2, handle_value_),
+            ColumnIDValue(2, handle_value),
             ColumnIDValue(3, std::numeric_limits<UInt8>::max()),
             ColumnIDValue(4, std::numeric_limits<Float32>::min()),
             ColumnIDValue(9, String("aaa")),
@@ -227,7 +231,7 @@ protected:
         std::tie(table_info, std::ignore) = getTableInfoAndFields(
             handle_ids,
             is_common_handle,
-            ColumnIDValue(2, handle_value_),
+            ColumnIDValue(2, handle_value),
             ColumnIDValue(3, std::numeric_limits<UInt64>::max()),
             ColumnIDValue(4, std::numeric_limits<Float32>::min()),
             ColumnIDValue(9, String("aaa")),
