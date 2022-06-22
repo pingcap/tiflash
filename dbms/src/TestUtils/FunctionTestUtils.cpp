@@ -111,7 +111,7 @@ void blockEqual(
     size_t expected_columns = expected.columns();
 
     ASSERT_TRUE(expected_columns == columns)
-        << std::string("expected: " + std::to_string(expected_columns) + ", actual:" + std::to_string(columns));
+        << fmt::format("Expected: {}, Actual: {}", expected_columns, columns);
 
     for (size_t i = 0; i < columns; ++i)
     {
