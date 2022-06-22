@@ -64,39 +64,18 @@ private:
             }
         }
         
-        while (done_count < pools.size())
+        while (done_count < pools.size() && !isStop())
         {
-            auto min_pending_block_count = std::numeric_limits<int64_t>::max();
-            auto max_pending_block_count = std::numeric_limits<int64_t>::min();
-            for (size_t i = 0; i < pools.size(); i++)
-            {
-                if (dones[i])
-                {
-                    continue;
-                }
-
-                auto & pool = pools[i];
-                if (pool->expired())
-                {
-                    pool.reset();
-                    done_count++;
-                    dones[i] = 1;
-                    continue;
-                }
-
-                auto pending_count = pool->pendingBlockCount();
-                min_pending_block_count = std::min(pending_count, min_pending_block_count);
-                max_pending_block_count = std::max(pending_count, max_pending_block_count);
-            }
-            if (done_count >= pools.size() || isStop())
+            auto [min_pending_block_count, max_pending_block_count] = merged_task->getMinMaxPendingBlockCount();
+            constexpr int64_t pending_block_count_limit = 100;
+            auto read_count = pending_block_count_limit - max_pending_block_count;  // TODO(jinhelin) max or min or ...
+            if (merged_task->allFinished())
             {
                 break;
             }
-            constexpr int64_t pending_block_count_limit = 100;
-            auto read_count = pending_block_count_limit - max_pending_block_count;  // TODO(jinhelin) max or min or ...
             if (read_count <= 0)
             {
-                ::usleep(5000);  // TODO(jinhelin) 进入等待的次数影响性能？
+                ::usleep(1000);  // TODO(jinhelin) 进入等待的次数影响性能？
                 continue;
             }
             for (int c = 0; c < 1; c++)

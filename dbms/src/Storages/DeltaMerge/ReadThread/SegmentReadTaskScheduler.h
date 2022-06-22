@@ -133,12 +133,19 @@ public:
         int64_t max = std::numeric_limits<int64_t>::min();
         for (size_t i = 0; i < pools.size(); i++)
         {
-            if (!isFinished(i))
+            if (isFinished(i))
             {
-                auto pbc = pools[i]->pendingBlockCount();
-                min = std::min(min, pbc);
-                max = std::max(max, pbc);
+                continue;
             }
+            if (pools[i]->expired())
+            {
+                setFinished(i);
+                continue;
+            }
+          
+            auto pbc = pools[i]->pendingBlockCount();
+            min = std::min(min, pbc);
+            max = std::max(max, pbc);
         }
         return {min, max};
     }
