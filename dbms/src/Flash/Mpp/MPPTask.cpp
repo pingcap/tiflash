@@ -81,6 +81,39 @@ MPPTask::~MPPTask()
     LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
+void MPPTask::abortTunnels(const String & message, AbortType abort_type)
+{
+    switch (abort_type)
+    {
+    case AbortType::ONCANCELLATION:
+        closeAllTunnels(message);
+        break;
+    case AbortType::ONERROR:
+        RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+        tunnel_set->writeError(message);
+        break;
+    }
+}
+
+void MPPTask::abortReceivers(const String &, AbortType)
+{
+    cancelAllReceivers();
+}
+
+void MPPTask::abortDataStreams(const String &, AbortType abort_type)
+{
+    switch (abort_type)
+    {
+    case AbortType::ONCANCELLATION:
+        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
+        break;
+    case AbortType::ONERROR:
+        /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
+        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, false);
+        break;
+    }
+}
+
 void MPPTask::closeAllTunnels(const String & reason)
 {
     if (likely(tunnel_set))
@@ -390,9 +423,14 @@ void MPPTask::runImpl()
     }
     else
     {
-        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
-        cancelAllReceivers();
-        writeErrToAllTunnels(err_msg);
+        try
+        {
+            handleError(err_msg);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Meet error while try to handle error in MPPTask");
+        }
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
     // unregister flag is only for FailPoint usage, to produce the situation that MPPTask is destructed
@@ -408,47 +446,65 @@ void MPPTask::runImpl()
     if (switchStatus(RUNNING, FINISHED))
         LOG_INFO(log, "finish task");
     else
-        LOG_WARNING(log, "finish task which was cancelled before");
+        LOG_FMT_WARNING(log, "finish task which is in {} state", taskStatusToString(status));
 
     mpp_task_statistics.end(status.load(), err_msg);
     mpp_task_statistics.logTracingJson();
 }
 
-void MPPTask::writeErrToAllTunnels(const String & e)
+void MPPTask::handleError(const String & error_msg)
 {
-    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-    tunnel_set->writeError(e);
+    abort(error_msg, AbortType::ONERROR);
+}
+
+void MPPTask::abort(const String & message, AbortType abort_type)
+{
+    String abort_type_string;
+    TaskStatus next_task_status;
+    switch (abort_type)
+    {
+    case AbortType::ONCANCELLATION:
+        abort_type_string = "ONCANCELLATION";
+        next_task_status = CANCELLED;
+        break;
+    case AbortType::ONERROR:
+        abort_type_string = "ONERROR";
+        next_task_status = FAILED;
+        break;
+    }
+    LOG_FMT_WARNING(log, "Begin abort task: {}, abort type: {}", id.toString(), abort_type_string);
+    while (true)
+    {
+        auto previous_status = status.load();
+        if (previous_status == FINISHED || previous_status == CANCELLED || previous_status == FAILED)
+        {
+            LOG_FMT_WARNING(log, "task already in {} state", taskStatusToString(previous_status));
+            return;
+        }
+        else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))
+        {
+            abortTunnels(message, abort_type);
+            unregisterTask();
+            LOG_WARNING(log, "Finish abort task from uninitialized");
+            return;
+        }
+        else if (previous_status == RUNNING && switchStatus(RUNNING, next_task_status))
+        {
+            abortTunnels(message, abort_type);
+            abortDataStreams(message, abort_type);
+            abortReceivers(message, abort_type);
+            scheduleThisTask(ScheduleState::FAILED);
+            /// runImpl is running, leave remaining work to runImpl
+            LOG_WARNING(log, "Finish abort task from running");
+            return;
+        }
+    }
 }
 
 void MPPTask::cancel(const String & reason)
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    LOG_FMT_WARNING(log, "Begin cancel task: {}", id.toString());
-    while (true)
-    {
-        auto previous_status = status.load();
-        if (previous_status == FINISHED || previous_status == CANCELLED)
-        {
-            LOG_FMT_WARNING(log, "task already {}", (previous_status == FINISHED ? "finished" : "cancelled"));
-            return;
-        }
-        else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, CANCELLED))
-        {
-            closeAllTunnels(reason);
-            unregisterTask();
-            LOG_WARNING(log, "Finish cancel task from uninitialized");
-            return;
-        }
-        else if (previous_status == RUNNING && switchStatus(RUNNING, CANCELLED))
-        {
-            scheduleThisTask(ScheduleState::FAILED);
-            context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
-            closeAllTunnels(reason);
-            /// runImpl is running, leave remaining work to runImpl
-            LOG_WARNING(log, "Finish cancel task from running");
-            return;
-        }
-    }
+    abort(reason, AbortType::ONCANCELLATION);
 }
 
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
