@@ -19,6 +19,7 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnel.h>
@@ -109,7 +110,7 @@ private:
 
     void initExchangeReceivers();
 
-    void cancelAllExchangeReceivers();
+    void cancelAllReceivers();
 
     tipb::DAGRequest dag_req;
 
@@ -126,8 +127,8 @@ private:
     MPPTaskId id;
 
     MPPTunnelSetPtr tunnel_set;
-    /// key: executor_id of ExchangeReceiver nodes in dag.
-    ExchangeReceiverMapPtr mpp_exchange_receiver_map;
+
+    MPPReceiverSetPtr receiver_set;
 
     int new_thread_count_of_exchange_receiver = 0;
 

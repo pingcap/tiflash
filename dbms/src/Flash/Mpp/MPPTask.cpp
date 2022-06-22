@@ -125,7 +125,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 
 void MPPTask::initExchangeReceivers()
 {
-    mpp_exchange_receiver_map = std::make_shared<ExchangeReceiverMap>();
+    receiver_set = std::make_shared<MPPReceiverSet>(log->identifier());
     traverseExecutors(&dag_req, [&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
         {
@@ -147,22 +147,19 @@ void MPPTask::initExchangeReceivers()
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
-            (*mpp_exchange_receiver_map)[executor_id] = exchange_receiver;
+            receiver_set->addExchangeReceiver(executor_id, exchange_receiver);
             new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
         }
         return true;
     });
-    dag_context->setMPPExchangeReceiverMap(mpp_exchange_receiver_map);
+    dag_context->setMPPReceiverSet(receiver_set);
 }
 
-void MPPTask::cancelAllExchangeReceivers()
+void MPPTask::cancelAllReceivers()
 {
-    if (likely(mpp_exchange_receiver_map != nullptr))
+    if (likely(receiver_set != nullptr))
     {
-        for (auto & it : *mpp_exchange_receiver_map)
-        {
-            it.second->cancel();
-        }
+        receiver_set->cancel();
     }
 }
 
@@ -393,7 +390,7 @@ void MPPTask::runImpl()
     else
     {
         context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
-        cancelAllExchangeReceivers();
+        cancelAllReceivers();
         writeErrToAllTunnels(err_msg);
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
