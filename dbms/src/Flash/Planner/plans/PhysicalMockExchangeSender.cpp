@@ -23,15 +23,15 @@ namespace DB
 PhysicalPlanPtr PhysicalMockExchangeSender::build(
     const String & executor_id,
     const LoggerPtr & log,
-    PhysicalPlanPtr child)
+    const PhysicalPlanPtr & child)
 {
     assert(child);
 
     auto physical_mock_exchange_sender = std::make_shared<PhysicalMockExchangeSender>(
         executor_id,
         child->getSchema(),
-        log->identifier());
-    physical_mock_exchange_sender->appendChild(child);
+        log->identifier(),
+        child);
     return physical_mock_exchange_sender;
 }
 

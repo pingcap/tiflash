@@ -35,7 +35,7 @@ PhysicalPlanPtr PhysicalAggregation::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Aggregation & aggregation,
-    PhysicalPlanPtr child)
+    const PhysicalPlanPtr & child)
 {
     assert(child);
 
@@ -74,13 +74,13 @@ PhysicalPlanPtr PhysicalAggregation::build(
         executor_id,
         schema,
         log->identifier(),
+        child,
         before_agg_actions,
         aggregation_keys,
         collators,
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
         cast_after_agg_actions);
-    physical_agg->appendChild(child);
     return physical_agg;
 }
 

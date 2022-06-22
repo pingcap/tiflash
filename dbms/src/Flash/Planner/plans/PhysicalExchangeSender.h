@@ -27,16 +27,17 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::ExchangeSender & exchange_sender,
-        PhysicalPlanPtr child);
+        const PhysicalPlanPtr & child);
 
     PhysicalExchangeSender(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
+        const PhysicalPlanPtr & child_,
         const std::vector<Int64> & partition_col_ids_,
         const TiDB::TiDBCollators & collators_,
         const tipb::ExchangeType & exchange_type_)
-        : PhysicalUnary(executor_id_, PlanType::ExchangeSender, schema_, req_id)
+        : PhysicalUnary(executor_id_, PlanType::ExchangeSender, schema_, req_id, child_)
         , partition_col_ids(partition_col_ids_)
         , partition_col_collators(collators_)
         , exchange_type(exchange_type_)

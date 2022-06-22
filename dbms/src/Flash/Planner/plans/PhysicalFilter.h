@@ -28,15 +28,16 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Selection & selection,
-        PhysicalPlanPtr child);
+        const PhysicalPlanPtr & child);
 
     PhysicalFilter(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
+        const PhysicalPlanPtr & child_,
         const String & filter_column_,
         const ExpressionActionsPtr & before_filter_actions_)
-        : PhysicalUnary(executor_id_, PlanType::Filter, schema_, req_id)
+        : PhysicalUnary(executor_id_, PlanType::Filter, schema_, req_id, child_)
         , filter_column(filter_column_)
         , before_filter_actions(before_filter_actions_)
     {}

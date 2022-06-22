@@ -29,19 +29,20 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Aggregation & aggregation,
-        PhysicalPlanPtr child);
+        const PhysicalPlanPtr & child);
 
     PhysicalAggregation(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
+        const PhysicalPlanPtr & child_,
         const ExpressionActionsPtr & before_agg_actions_,
         const Names & aggregation_keys_,
         const TiDB::TiDBCollators & aggregation_collators_,
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
         const ExpressionActionsPtr & castAfterAgg_)
-        : PhysicalUnary(executor_id_, PlanType::Aggregation, schema_, req_id)
+        : PhysicalUnary(executor_id_, PlanType::Aggregation, schema_, req_id, child_)
         , before_agg_actions(before_agg_actions_)
         , aggregation_keys(aggregation_keys_)
         , aggregation_collators(aggregation_collators_)

@@ -43,11 +43,6 @@ public:
         throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
     }
 
-    void appendChild(const PhysicalPlanPtr &) override
-    {
-        throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
-    }
-
     size_t childrenSize() const override { return 0; };
 };
 } // namespace DB

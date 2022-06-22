@@ -26,11 +26,15 @@ PhysicalPlanPtr PhysicalLimit::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Limit & limit,
-    PhysicalPlanPtr child)
+    const PhysicalPlanPtr & child)
 {
     assert(child);
-    auto physical_limit = std::make_shared<PhysicalLimit>(executor_id, child->getSchema(), log->identifier(), limit.limit());
-    physical_limit->appendChild(child);
+    auto physical_limit = std::make_shared<PhysicalLimit>(
+        executor_id,
+        child->getSchema(),
+        log->identifier(),
+        child,
+        limit.limit());
     return physical_limit;
 }
 

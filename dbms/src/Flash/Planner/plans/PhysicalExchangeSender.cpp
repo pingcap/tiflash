@@ -28,7 +28,7 @@ PhysicalPlanPtr PhysicalExchangeSender::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::ExchangeSender & exchange_sender,
-    PhysicalPlanPtr child)
+    const PhysicalPlanPtr & child)
 {
     assert(child);
 
@@ -39,10 +39,10 @@ PhysicalPlanPtr PhysicalExchangeSender::build(
         executor_id,
         child->getSchema(),
         log->identifier(),
+        child,
         partition_col_ids,
         partition_col_collators,
         exchange_sender.tp());
-    physical_exchange_sender->appendChild(child);
     return physical_exchange_sender;
 }
 

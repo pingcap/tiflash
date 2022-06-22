@@ -52,8 +52,6 @@ public:
 
     const NamesAndTypes & getSchema() const { return schema; }
 
-    virtual void appendChild(const PhysicalPlanPtr & /*new_child*/) = 0;
-
     virtual size_t childrenSize() const = 0;
 
     virtual void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);

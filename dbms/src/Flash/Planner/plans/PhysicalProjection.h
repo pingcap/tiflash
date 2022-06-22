@@ -28,14 +28,19 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Projection & projection,
-        PhysicalPlanPtr child);
+        const PhysicalPlanPtr & child);
 
+    // Generate a project action to keep the schema of Block and tidb-schema the same,
+    // and guarantee that left/right block of join don't have duplicated column names.
     static PhysicalPlanPtr buildNonRootFinal(
         const Context & context,
         const LoggerPtr & log,
         const String & column_prefix,
-        PhysicalPlanPtr child);
+        const PhysicalPlanPtr & child);
 
+    // Generate a project action for root executor,
+    // to keep the schema of Block and tidb-schema the same.
+    // Because the output of the root executor is sent to other TiFlash or TiDB.
     static PhysicalPlanPtr buildRootFinal(
         const Context & context,
         const LoggerPtr & log,
@@ -49,9 +54,10 @@ public:
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
+        const PhysicalPlanPtr & child_,
         const String & extra_info_,
         const ExpressionActionsPtr & project_actions_)
-        : PhysicalUnary(executor_id_, PlanType::Projection, schema_, req_id)
+        : PhysicalUnary(executor_id_, PlanType::Projection, schema_, req_id, child_)
         , extra_info(extra_info_)
         , project_actions(project_actions_)
     {}

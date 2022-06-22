@@ -26,13 +26,14 @@ public:
     static PhysicalPlanPtr build(
         const String & executor_id,
         const LoggerPtr & log,
-        PhysicalPlanPtr child);
+        const PhysicalPlanPtr & child);
 
     PhysicalMockExchangeSender(
         const String & executor_id_,
         const NamesAndTypes & schema_,
-        const String & req_id)
-        : PhysicalUnary(executor_id_, PlanType::MockExchangeSender, schema_, req_id)
+        const String & req_id,
+        const PhysicalPlanPtr & child_)
+        : PhysicalUnary(executor_id_, PlanType::MockExchangeSender, schema_, req_id, child_)
     {}
 
     void finalize(const Names & parent_require) override;

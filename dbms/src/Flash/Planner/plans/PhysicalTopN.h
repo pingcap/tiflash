@@ -29,16 +29,17 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::TopN & top_n,
-        PhysicalPlanPtr child);
+        const PhysicalPlanPtr & child);
 
     PhysicalTopN(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
+        const PhysicalPlanPtr & child_,
         const SortDescription & order_descr_,
         const ExpressionActionsPtr & before_sort_actions_,
         size_t limit_)
-        : PhysicalUnary(executor_id_, PlanType::TopN, schema_, req_id)
+        : PhysicalUnary(executor_id_, PlanType::TopN, schema_, req_id, child_)
         , order_descr(order_descr_)
         , before_sort_actions(before_sort_actions_)
         , limit(limit_)

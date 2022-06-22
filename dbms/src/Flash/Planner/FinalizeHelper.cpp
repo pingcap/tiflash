@@ -110,7 +110,7 @@ void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTy
         if (unlikely(type_in_sample_block != type_in_schema))
             throw TiFlashException(
                 fmt::format(
-                    "the type of column `{}` in sample block `{}` is difference from the one in schema `{}`",
+                    "the type of column `{}` in sample block `{}` is different from the one in schema `{}`",
                     schema_column.name,
                     type_in_sample_block,
                     type_in_schema),
@@ -136,7 +136,7 @@ void checkSchemaContainsSampleBlock(const NamesAndTypes & schema, const Block & 
         if (unlikely(type_in_sample_block != type_in_schema))
             throw TiFlashException(
                 fmt::format(
-                    "the type of column `{}` in schema `{}` is difference from the one in sample block `{}`",
+                    "the type of column `{}` in schema `{}` is different from the one in sample block `{}`",
                     sample_block_column.name,
                     type_in_schema,
                     type_in_sample_block),

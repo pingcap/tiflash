@@ -29,7 +29,7 @@ PhysicalPlanPtr PhysicalTopN::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::TopN & top_n,
-    PhysicalPlanPtr child)
+    const PhysicalPlanPtr & child)
 {
     assert(child);
 
@@ -45,8 +45,14 @@ PhysicalPlanPtr PhysicalTopN::build(
     auto order_columns = analyzer.buildOrderColumns(before_sort_actions, top_n.order_by());
     SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
 
-    auto physical_top_n = std::make_shared<PhysicalTopN>(executor_id, child->getSchema(), log->identifier(), order_descr, before_sort_actions, top_n.limit());
-    physical_top_n->appendChild(child);
+    auto physical_top_n = std::make_shared<PhysicalTopN>(
+        executor_id,
+        child->getSchema(),
+        log->identifier(),
+        child,
+        order_descr,
+        before_sort_actions,
+        top_n.limit());
     return physical_top_n;
 }
 

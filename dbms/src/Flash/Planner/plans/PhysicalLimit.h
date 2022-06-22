@@ -26,14 +26,15 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Limit & limit,
-        PhysicalPlanPtr child);
+        const PhysicalPlanPtr & child);
 
     PhysicalLimit(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
+        const PhysicalPlanPtr & child_,
         size_t limit_)
-        : PhysicalUnary(executor_id_, PlanType::Limit, schema_, req_id)
+        : PhysicalUnary(executor_id_, PlanType::Limit, schema_, req_id, child_)
         , limit(limit_)
     {}
 

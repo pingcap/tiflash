@@ -28,7 +28,7 @@ PhysicalPlanPtr PhysicalFilter::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Selection & selection,
-    PhysicalPlanPtr child)
+    const PhysicalPlanPtr & child)
 {
     assert(child);
 
@@ -40,8 +40,13 @@ PhysicalPlanPtr PhysicalFilter::build(
         conditions.push_back(&c);
     String filter_column_name = analyzer.buildFilterColumn(before_filter_actions, conditions);
 
-    auto physical_filter = std::make_shared<PhysicalFilter>(executor_id, child->getSchema(), log->identifier(), filter_column_name, before_filter_actions);
-    physical_filter->appendChild(child);
+    auto physical_filter = std::make_shared<PhysicalFilter>(
+        executor_id,
+        child->getSchema(),
+        log->identifier(),
+        child,
+        filter_column_name,
+        before_filter_actions);
 
     return physical_filter;
 }
