@@ -2,17 +2,18 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include "Debug/DBGInvoker.h"
-
+#include <Storages/DeltaMerge/ReadThread/CPU.h>
 namespace DB::DM
 {
 class SegmentReader
 {
 inline static const std::string name{"SegmentReader"};
 public:
-    SegmentReader(WorkQueue<MergedTaskPtr> & task_queue_)
+    SegmentReader(WorkQueue<MergedTaskPtr> & task_queue_, const std::vector<int> & cpus_)
         : task_queue(task_queue_)
         , stop(false)
         , log(&Poco::Logger::get(name))
+        , cpus(cpus_)
     {
         t = std::thread(&SegmentReader::run, this);
     }
@@ -30,6 +31,24 @@ public:
     }
 
 private:
+    void setCPUAffinity()
+    {
+#ifdef __linux__
+        cpu_set_t cpu_set;
+        CPU_ZERO(&cpu_set);
+        for (int i : cpus)
+        {
+            CPU_SET(i, &cpu_set);
+        }
+        int ret = sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
+        if (ret != 0)
+        {
+            LOG_FMT_ERROR(log, "sched_setaffinity fail: {}", std::strerror(errno));
+            throw Exception(fmt::format("sched_setaffinity fail: {}", std::strerror(errno)));
+        }
+        LOG_FMT_DEBUG(log, "sched_setaffinity cpus {} succ", cpus);
+#endif
+    }
 
     bool isStop()
     {
@@ -49,16 +68,12 @@ private:
         auto & pools = merged_task->pools;
         std::vector<int> dones(pools.size(), 0);
         size_t done_count = 0;
-        std::vector<BlockInputStreamPtr> streams(pools.size(), nullptr);
-        for (size_t i = 0; i < pools.size(); i++)
+
+        auto streams = merged_task->init();
+        for (size_t i = 0; i < streams.size(); i++)
         {
-            if (!pools[i]->expired())
+            if (streams[i] == nullptr)
             {
-                streams[i] = pools[i]->getInputStream(seg_id);
-            }
-            else
-            {
-                pools[i].reset();
                 done_count++;
                 dones[i] = 1;
             }
@@ -78,7 +93,7 @@ private:
                 ::usleep(1000);  // TODO(jinhelin) 进入等待的次数影响性能？
                 continue;
             }
-            for (int c = 0; c < 1; c++)
+            for (int c = 0; c < 2; c++)
             {
                 for (size_t i = 0; i < pools.size(); i++)
                 {
@@ -104,6 +119,7 @@ private:
 
     void run()
     {
+        setCPUAffinity();
         setThreadName(name.c_str());
         while (!isStop())
         {
@@ -130,14 +146,16 @@ private:
     std::atomic<bool> stop;
     Poco::Logger * log;
     std::thread t;
+    std::vector<int> cpus;
 }; 
 
 void SegmentReadThreadPool::init(int thread_count)
 {
     LOG_FMT_INFO(log, "thread_count {} start", thread_count);
+    auto numa_nodes = getNumaNodes();
     for (int i = 0; i < thread_count; i++)
     {
-        readers.push_back(std::make_unique<SegmentReader>(task_queue));
+        readers.push_back(std::make_unique<SegmentReader>(task_queue, numa_nodes[i % numa_nodes.size()]));
     }
     LOG_FMT_INFO(log, "thread_count {} end", thread_count);
 }

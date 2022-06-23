@@ -83,10 +83,31 @@ public:
     MergedTask(uint64_t seg_id_, SegmentReadTaskPools && pools_) 
         : seg_id(seg_id_)
         , pools(std::forward<SegmentReadTaskPools>(pools_))
-        , streams(pools.size(), nullptr)
         , finished_count(0)
         , finished(pools.size(), 0) {}
  
+    BlockInputStreams init()
+    {
+        if (!streams.empty())
+        {
+            return streams;
+        }
+        streams.resize(pools.size(), nullptr);
+        for (size_t i = 0; i < pools.size(); i++)
+        {
+            if (pools[i]->expired())
+            {
+                pools[i].reset();
+                setFinished(i);
+            }
+            else 
+            {
+                streams[i] = pools[i]->getInputStream(seg_id);
+            }
+        }
+        return streams;
+    }
+
     void readOneBlock()
     {
         for (size_t i = 0; i < pools.size(); i++)
@@ -100,13 +121,9 @@ public:
 
             if (pool->expired())
             {
+                pool.reset();
                 setFinished(i);
                 continue;
-            }
-
-            if (streams[i] == nullptr)
-            {
-                streams[i] = pool->getInputStream(seg_id);
             }
 
             auto block = streams[i]->read();
