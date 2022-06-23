@@ -1,0 +1,2 @@
+add_executable(bench_deltatree BenchmarkEntry.cpp DeltaTreeMemory.cpp)
+target_link_libraries(bench_deltatree PRIVATE dbms benchmark)
