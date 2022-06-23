@@ -95,12 +95,15 @@ void MPPTask::abortTunnels(const String & message, AbortType abort_type)
     }
 }
 
-void MPPTask::abortReceivers(const String &, AbortType)
+void MPPTask::abortReceivers()
 {
-    cancelAllReceivers();
+    if (likely(receiver_set != nullptr))
+    {
+        receiver_set->cancel();
+    }
 }
 
-void MPPTask::abortDataStreams(const String &, AbortType abort_type)
+void MPPTask::abortDataStreams(AbortType abort_type)
 {
     switch (abort_type)
     {
@@ -187,14 +190,6 @@ void MPPTask::initExchangeReceivers()
         return true;
     });
     dag_context->setMPPReceiverSet(receiver_set);
-}
-
-void MPPTask::cancelAllReceivers()
-{
-    if (likely(receiver_set != nullptr))
-    {
-        receiver_set->cancel();
-    }
 }
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)
@@ -491,8 +486,8 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         else if (previous_status == RUNNING && switchStatus(RUNNING, next_task_status))
         {
             abortTunnels(message, abort_type);
-            abortDataStreams(message, abort_type);
-            abortReceivers(message, abort_type);
+            abortDataStreams(abort_type);
+            abortReceivers();
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish abort task from running");

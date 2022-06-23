@@ -105,8 +105,8 @@ private:
     void abort(const String & message, AbortType abort_type);
 
     void abortTunnels(const String & message, AbortType abort_type);
-    void abortReceivers(const String & message, AbortType abort_type);
-    void abortDataStreams(const String & message, AbortType abort_type);
+    void abortReceivers();
+    void abortDataStreams(AbortType abort_type);
 
     void finishWrite();
 
@@ -121,8 +121,6 @@ private:
     void registerTunnels(const mpp::DispatchTaskRequest & task_request);
 
     void initExchangeReceivers();
-
-    void cancelAllReceivers();
 
     tipb::DAGRequest dag_req;
 
