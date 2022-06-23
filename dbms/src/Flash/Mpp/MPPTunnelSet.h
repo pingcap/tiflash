@@ -59,7 +59,7 @@ public:
     void finishWrite();
     void registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel);
 
-    TunnelPtr getTunnelById(const MPPTaskId & id);
+    TunnelPtr getTunnelByReceiverTaskId(const MPPTaskId & id);
 
     uint16_t getPartitionNum() const { return tunnels.size(); }
 
@@ -72,7 +72,7 @@ public:
 
 private:
     std::vector<TunnelPtr> tunnels;
-    std::unordered_map<MPPTaskId, size_t> id_to_index_map;
+    std::unordered_map<MPPTaskId, size_t> receiver_task_id_to_index_map;
     const LoggerPtr log;
 
     int remote_tunnel_cnt = 0;

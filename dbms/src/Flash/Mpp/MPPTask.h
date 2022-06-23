@@ -19,6 +19,7 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnel.h>
@@ -61,8 +62,6 @@ public:
     void prepare(const mpp::DispatchTaskRequest & task_request);
 
     void run();
-
-    void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
     int getNeededThreads();
 
@@ -107,6 +106,12 @@ private:
 
     int estimateCountOfNewThreads();
 
+    void registerTunnels(const mpp::DispatchTaskRequest & task_request);
+
+    void initExchangeReceivers();
+
+    void cancelAllReceivers();
+
     tipb::DAGRequest dag_req;
 
     ContextPtr context;
@@ -122,6 +127,10 @@ private:
     MPPTaskId id;
 
     MPPTunnelSetPtr tunnel_set;
+
+    MPPReceiverSetPtr receiver_set;
+
+    int new_thread_count_of_exchange_receiver = 0;
 
     MPPTaskManager * manager = nullptr;
 
