@@ -198,12 +198,8 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         }
         for (size_t i = 0; i < handle_column_size; i++)
         {
-<<<<<<< HEAD
-            auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
-=======
             auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
             const auto & column_info = table_info.columns[idx];
->>>>>>> 18325f9eb4 (DDL: Use Column Name Instead of Offset to Find the common handle cluster index (#5166))
             auto start_field = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[1 + i]).value);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             start_keys.emplace_back(start_datum.field());

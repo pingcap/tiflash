@@ -254,50 +254,7 @@ TableID MockTiDB::newTable(
     table_info->id = table_id_allocator++;
     table_info->update_timestamp = tso;
 
-<<<<<<< HEAD
     auto table = std::make_shared<Table>(database_name, databases[database_name], table_name, std::move(*table_info));
-=======
-    version++;
-    SchemaDiff diff;
-    diff.type = SchemaActionType::CreateTables;
-    for (const auto & [table_name, columns, handle_pk_name] : tables)
-    {
-        String qualified_name = database_name + "." + table_name;
-        if (tables_by_name.find(qualified_name) != tables_by_name.end())
-        {
-            throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
-        }
-
-        auto table_info = *parseColumns(table_name, columns, handle_pk_name, engine_type);
-        table_info.id = table_id_allocator++;
-        table_info.update_timestamp = tso;
-
-        auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
-        tables_by_id.emplace(table->table_info.id, table);
-        tables_by_name.emplace(qualified_name, table);
-
-        AffectedOption opt{};
-        opt.schema_id = table->database_id;
-        opt.table_id = table->id();
-        opt.old_schema_id = table->database_id;
-        opt.old_table_id = table->id();
-        diff.affected_opts.push_back(std::move(opt));
-    }
-
-    if (diff.affected_opts.empty())
-        throw Exception("MockTiDB CreateTables should have at lease 1 table", ErrorCodes::LOGICAL_ERROR);
-
-    diff.schema_id = diff.affected_opts[0].schema_id;
-    diff.version = version;
-    version_diff[version] = diff;
-    return 0;
-}
-
-TableID MockTiDB::addTable(const String & database_name, TiDB::TableInfo && table_info)
-{
-    auto table = std::make_shared<Table>(database_name, databases[database_name], table_info.name, std::move(table_info));
-    String qualified_name = database_name + "." + table->table_info.name;
->>>>>>> 18325f9eb4 (DDL: Use Column Name Instead of Offset to Find the common handle cluster index (#5166))
     tables_by_id.emplace(table->table_info.id, table);
     tables_by_name.emplace(qualified_name, table);
 
@@ -527,48 +484,6 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
     version_diff[version] = diff;
 }
 
-<<<<<<< HEAD
-=======
-void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::string, std::string>> & table_name_map)
-{
-    std::lock_guard lock(tables_mutex);
-    version++;
-    SchemaDiff diff;
-    for (const auto & [database_name, table_name, new_table_name] : table_name_map)
-    {
-        TablePtr table = getTableByNameInternal(database_name, table_name);
-        String qualified_name = database_name + "." + table_name;
-        String new_qualified_name = database_name + "." + new_table_name;
-
-        TableInfo new_table_info = table->table_info;
-        new_table_info.name = new_table_name;
-        auto new_table = std::make_shared<Table>(database_name, table->database_id, new_table_name, std::move(new_table_info));
-
-        tables_by_id[new_table->table_info.id] = new_table;
-        tables_by_name.erase(qualified_name);
-        tables_by_name.emplace(new_qualified_name, new_table);
-
-        AffectedOption opt{};
-        opt.schema_id = table->database_id;
-        opt.table_id = new_table->id();
-        opt.old_schema_id = table->database_id;
-        opt.old_table_id = table->id();
-        diff.affected_opts.push_back(std::move(opt));
-    }
-
-    if (diff.affected_opts.empty())
-        throw Exception("renameTables should have at least 1 affected_opts", ErrorCodes::LOGICAL_ERROR);
-
-    diff.type = SchemaActionType::RenameTables;
-    diff.schema_id = diff.affected_opts[0].schema_id;
-    diff.old_schema_id = diff.affected_opts[0].schema_id;
-    diff.table_id = diff.affected_opts[0].table_id;
-    diff.old_table_id = diff.affected_opts[0].old_table_id;
-    diff.version = version;
-    version_diff[version] = diff;
-}
-
->>>>>>> 18325f9eb4 (DDL: Use Column Name Instead of Offset to Find the common handle cluster index (#5166))
 void MockTiDB::truncateTable(const String & database_name, const String & table_name)
 {
     std::lock_guard lock(tables_mutex);
