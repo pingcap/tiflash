@@ -30,12 +30,12 @@ public:
         ExecutorTest::initializeContext();
 
         context.addMockTable({db_name, table_name},
-                            {{col_names[0], TiDB::TP::TypeString},
-                            {col_names[1], TiDB::TP::TypeString},
-                            {col_names[2], TiDB::TP::TypeString}},
-                            {toNullableVec<String>(col_names[0], col0),
-                            toNullableVec<String>(col_names[1], col1),
-                            toNullableVec<String>(col_names[2], col2)});
+                             {{col_names[0], TiDB::TP::TypeString},
+                              {col_names[1], TiDB::TP::TypeString},
+                              {col_names[2], TiDB::TP::TypeString}},
+                             {toNullableVec<String>(col_names[0], col0),
+                              toNullableVec<String>(col_names[1], col1),
+                              toNullableVec<String>(col_names[2], col2)});
     }
 
     std::shared_ptr<tipb::DAGRequest> getRequest(MockColumnNames col_names)
@@ -62,9 +62,11 @@ try
 
     request = getRequest({col_names[0], col_names[1]});
     executeStreams(request,
-                   {toNullableVec<String>(col_names[0], col0),
-                    toNullableVec<String>(col_names[1], col1),});
-    
+                   {
+                       toNullableVec<String>(col_names[0], col0),
+                       toNullableVec<String>(col_names[1], col1),
+                   });
+
     request = getRequest({col_names[0], col_names[1], col_names[2]});
     executeStreams(request,
                    {toNullableVec<String>(col_names[0], col0),

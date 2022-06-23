@@ -31,8 +31,8 @@ public:
         ExecutorTest::initializeContext();
 
         context.addMockTable({db_name, table_name},
-                            {{col_name, TiDB::TP::TypeString}},
-                            {toNullableVec<String>(col_name, col0)});
+                             {{col_name, TiDB::TP::TypeString}},
+                             {toNullableVec<String>(col_name, col0)});
     }
 
     std::shared_ptr<tipb::DAGRequest> getRequest(const String & col_name, bool is_desc, int limit_num)
@@ -64,10 +64,10 @@ try
         else
             sort(col0.begin(), col0.end());
 
-        for (size_t limit_num = 0; limit_num <= col_data_num + 3; limit_num++)        
+        for (size_t limit_num = 0; limit_num <= col_data_num + 3; limit_num++)
         {
             request = getRequest(col_name, is_desc, limit_num);
-            
+
             if (limit_num == 0 || limit_num > col_data_num)
                 expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.end()))};
             else
@@ -81,4 +81,3 @@ CATCH
 
 } // namespace tests
 } // namespace DB
-

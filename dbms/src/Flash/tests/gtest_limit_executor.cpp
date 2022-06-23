@@ -31,8 +31,8 @@ public:
         ExecutorTest::initializeContext();
 
         context.addMockTable({db_name, table_name},
-                            {{col_name, TiDB::TP::TypeString}},
-                            {toNullableVec<String>(col_name, col0)});
+                             {{col_name, TiDB::TP::TypeString}},
+                             {toNullableVec<String>(col_name, col0)});
     }
 
     std::shared_ptr<tipb::DAGRequest> getRequest(size_t limit_num)
@@ -65,7 +65,7 @@ try
             expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.end()))};
         else
             expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + limit_num))};
-        
+
         executeStreams(request, expect_cols);
     }
 }
