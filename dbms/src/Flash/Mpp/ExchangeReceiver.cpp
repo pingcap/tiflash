@@ -590,13 +590,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (packet->has_error())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
 
-<<<<<<< HEAD
                 if (!pushPacket(req.source_index, req_info, packet, msg_channels, ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count), log))
-=======
-                bool push_success = msg_channel.push(std::move(recv_msg));
-                fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_success = false;);
-                if (!push_success)
->>>>>>> 69cbfdf8a6bfb1d98ac76dea6e70d87ab3a1ed84
                 {
                     meet_error = true;
                     auto local_state = getState();
