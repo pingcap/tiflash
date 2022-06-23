@@ -224,10 +224,18 @@ void Block::checkNumberOfRows() const
         if (rows == -1)
             rows = size;
         else if (rows != size)
-            throw Exception("Sizes of columns doesn't match: "
-                                + data.front().name + ": " + toString(rows)
-                                + ", " + elem.name + ": " + toString(size),
+        {
+            auto first_col = data.front();
+            throw Exception(fmt::format(
+                                "Sizes of columns doesn't match: {}(id={}): {}, {}(id={}): {}",
+                                first_col.name,
+                                first_col.column_id,
+                                rows,
+                                elem.name,
+                                elem.column_id,
+                                size),
                             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        }
     }
 }
 

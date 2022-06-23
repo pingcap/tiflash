@@ -173,16 +173,16 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
         if (it != columns.defaults.end())
             default_value = getDefaultValue(it->second.expression);
         table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value, true));
-        for (auto sit = string_tokens.begin(); sit != string_tokens.end(); sit++)
+        for (const auto & string_token : string_tokens)
         {
             // todo support prefix index
-            if (*sit == column.name)
+            if (string_token == column.name)
             {
                 has_pk = true;
                 if (!column.type->isInteger() && !column.type->isUnsignedInteger())
                     has_non_int_pk = true;
                 table_info.columns.back().setPriKeyFlag();
-                pk_column_pos_map[*sit] = i - 2;
+                pk_column_pos_map[string_token] = i - 2;
                 break;
             }
         }
@@ -207,7 +207,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
             {
                 String & name = string_tokens[index];
                 index_info.idx_cols[index].name = name;
-                index_info.idx_cols[index].offset = pk_column_pos_map[name];
                 index_info.idx_cols[index].length = -1;
             }
         }
@@ -540,11 +539,11 @@ TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
 {
     TiDB::DBInfoPtr db_ptr = std::make_shared<TiDB::DBInfo>(TiDB::DBInfo());
     db_ptr->id = db_id;
-    for (auto it = databases.begin(); it != databases.end(); it++)
+    for (auto & database : databases)
     {
-        if (it->second == db_id)
+        if (database.second == db_id)
         {
-            db_ptr->name = it->first;
+            db_ptr->name = database.first;
             break;
         }
     }
