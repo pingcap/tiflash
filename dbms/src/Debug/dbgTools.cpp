@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
@@ -27,7 +26,6 @@ extern const int UNKNOWN_TABLE;
 
 namespace RegionBench
 {
-
 using TiDB::ColumnInfo;
 using TiDB::TableInfo;
 
