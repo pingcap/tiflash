@@ -548,7 +548,7 @@ Int64 concurrentRangeOperate(
 
     std::list<std::thread> threads;
     Int64 tol = 0;
-    for (const auto& region : regions)
+    for (const auto & region : regions)
     {
         const auto range = region->getRange();
         const auto & [ss, ee] = getHandleRangeByTable(range->rawKeys(), table_info.id);
