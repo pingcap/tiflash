@@ -53,7 +53,6 @@ public:
         PhysicalPlanBuilder builder{context.context, log->identifier()};
         assert(request);
         builder.build(request.get());
-        builder.buildFinalProjection("physical_plan_", true);
         auto physical_plan = builder.outputAndOptimize();
 
         ASSERT_EQ(Poco::trim(expected_physical_plan), Poco::trim(PhysicalPlanVisitor::visitToString(physical_plan)));
@@ -81,16 +80,17 @@ try
 {
     auto request = context.receive("exchange1")
                        .filter(eq(col("s1"), col("s2")))
+                       .project({col("s1"), col("s2")})
                        .build(context);
 
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
+<Projection, project_2> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
  <Filter, selection_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <final projection>
+Expression: <projection>
  Filter
   MockExchangeReceiver)",
         {toNullableVec<String>({"banana"}),
@@ -108,13 +108,11 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
- <Limit, limit_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Limit, limit_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
+ <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <final projection>
- Limit, limit = 1
-  MockExchangeReceiver)",
+Limit, limit = 1
+ MockExchangeReceiver)",
         {toNullableVec<String>({"banana"}),
          toNullableVec<String>({"apple"})});
 }
@@ -125,16 +123,17 @@ try
 {
     auto request = context.receive("exchange1")
                        .topN("s2", false, 1)
+                       .project({col("s1"), col("s2")})
                        .build(context);
 
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
+<Projection, project_2> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
  <TopN, topn_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <final projection>
+Expression: <projection>
  MergeSorting, limit = 1
   PartialSorting: limit = 1
    MockExchangeReceiver)",
@@ -154,14 +153,12 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_max(s2)_collator_0 , Nullable(String)>, <physical_plan_s1, Nullable(String)>
- <Aggregation, aggregation_1> | is_record_profile_streams: true, schema: <max(s2)_collator_0 , Nullable(String)>, <s1, Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Aggregation, aggregation_1> | is_record_profile_streams: false, schema: <max(s2)_collator_0 , Nullable(String)>, <s1, Nullable(String)>
+ <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <final projection>
- Aggregating
-  Concat
-   MockExchangeReceiver)",
+Aggregating
+ Concat
+  MockExchangeReceiver)",
         {toNullableVec<String>({{}, "banana"}),
          toNullableVec<String>({{}, "banana"})});
 }
@@ -177,13 +174,11 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_tidbConcat(s1, s2)_collator_0 , Nullable(String)>
- <Projection, project_1> | is_record_profile_streams: true, schema: <tidbConcat(s1, s2)_collator_0 , Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<Projection, project_1> | is_record_profile_streams: true, schema: <tidbConcat(s1, s2)_collator_0 , Nullable(String)>
+ <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <final projection>
- Expression: <projection>
-  MockExchangeReceiver)",
+Expression: <projection>
+ MockExchangeReceiver)",
         {toNullableVec<String>({"bananaapple", {}, "bananabanana"})});
 }
 CATCH
@@ -198,13 +193,11 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
- <MockExchangeSender, exchange_sender_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
-  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<MockExchangeSender, exchange_sender_1> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>
+ <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <final projection>
- MockExchangeSender
-  MockExchangeReceiver)",
+MockExchangeSender
+ MockExchangeReceiver)",
         {toNullableVec<String>({"banana", {}, "banana"}),
          toNullableVec<String>({"apple", {}, "banana"})});
 }
@@ -219,11 +212,9 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, RootFinalProjection> | is_record_profile_streams: false, schema: <physical_plan_s1, Nullable(String)>, <physical_plan_s2, Nullable(String)>
- <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+<MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Expression: <final projection>
- MockExchangeReceiver)",
+MockExchangeReceiver)",
         {toNullableVec<String>({"banana", {}, "banana"}),
          toNullableVec<String>({"apple", {}, "banana"})});
 }
