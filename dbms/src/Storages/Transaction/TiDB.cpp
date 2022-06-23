@@ -631,13 +631,8 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexColumnInfo::IndexColumnInfo(Poco::JSON::Object::Ptr json)
-<<<<<<< HEAD
-    : offset()
-    , length()
-=======
     : length(0)
     , offset(0)
->>>>>>> 18325f9eb4 (DDL: Use Column Name Instead of Offset to Find the common handle cluster index (#5166))
 {
     deserialize(json);
 }
