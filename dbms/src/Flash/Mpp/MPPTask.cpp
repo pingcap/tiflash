@@ -478,6 +478,9 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         }
         else if (previous_status == RUNNING && switchStatus(RUNNING, next_task_status))
         {
+            /// abort the components from top to bottom because if bottom components are aborted
+            /// first, the top components may see an error caused by the abort, which is not
+            /// the original error
             abortTunnels(message, abort_type);
             abortDataStreams(abort_type);
             abortReceivers();
