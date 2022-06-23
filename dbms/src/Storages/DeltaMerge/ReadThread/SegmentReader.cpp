@@ -2,6 +2,7 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include "Debug/DBGInvoker.h"
+#include "common/logger_useful.h"
 #include <Storages/DeltaMerge/ReadThread/CPU.h>
 namespace DB::DM
 {
@@ -64,57 +65,27 @@ private:
             return;
         }
 
-        auto seg_id = merged_task->seg_id;
-        auto & pools = merged_task->pools;
-        std::vector<int> dones(pools.size(), 0);
-        size_t done_count = 0;
-
-        auto streams = merged_task->init();
-        for (size_t i = 0; i < streams.size(); i++)
-        {
-            if (streams[i] == nullptr)
-            {
-                done_count++;
-                dones[i] = 1;
-            }
-        }
-        
-        while (done_count < pools.size() && !isStop())
+        int64_t sleep_times = 0;
+        int64_t read_block_count = 0;
+        merged_task->init();
+        while (!merged_task->allFinished() && !isStop())
         {
             auto [min_pending_block_count, max_pending_block_count] = merged_task->getMinMaxPendingBlockCount();
             constexpr int64_t pending_block_count_limit = 100;
             auto read_count = pending_block_count_limit - max_pending_block_count;  // TODO(jinhelin) max or min or ...
-            if (merged_task->allFinished())
-            {
-                break;
-            }
             if (read_count <= 0)
             {
+                sleep_times++;
                 ::usleep(1000);  // TODO(jinhelin) 进入等待的次数影响性能？
                 continue;
             }
             for (int c = 0; c < 2; c++)
             {
-                for (size_t i = 0; i < pools.size(); i++)
-                {
-                    if (dones[i])
-                    {
-                        continue;
-                    }
-                    auto block = streams[i]->read();
-                    if (!block)
-                    {
-                        pools[i]->finishSegment(seg_id);
-                        dones[i] = 1;
-                        done_count++;
-                    }
-                    else
-                    {
-                        pools[i]->pushBlock(std::move(block));
-                    }
-                }
+                read_block_count++;
+                merged_task->readOneBlock();
             }
         }
+        LOG_FMT_DEBUG(log, "seg_id {} sleep_times {} read_block_count {}", merged_task->seg_id, sleep_times, read_block_count);
     }
 
     void run()
