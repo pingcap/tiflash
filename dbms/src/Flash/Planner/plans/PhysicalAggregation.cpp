@@ -81,6 +81,8 @@ PhysicalPlanPtr PhysicalAggregation::build(
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
         cast_after_agg_actions);
+    // For agg, `recordProfileStreams` has been called in `transformImpl`.
+    physical_agg->disableRecordProfileStreams();
     return physical_agg;
 }
 
@@ -116,6 +118,8 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log->identifier());
         pipeline.streams.resize(1);
+        // should record for agg before restore concurrency. See #3804.
+        recordProfileStreams(pipeline, context);
         restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
     }
     else
@@ -134,6 +138,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
             context.getFileProvider(),
             true,
             log->identifier());
+        recordProfileStreams(pipeline, context);
     }
 
     executeExpression(pipeline, cast_after_agg, log, "cast after aggregation");

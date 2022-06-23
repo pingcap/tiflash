@@ -59,17 +59,15 @@ void PhysicalPlan::finalize()
 
 void PhysicalPlan::recordProfileStreams(DAGPipeline & pipeline, const Context & context)
 {
-    if (is_record_profile_streams)
-    {
-        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
-        pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
-    }
+    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
+    pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
 }
 
 void PhysicalPlan::transform(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     transformImpl(pipeline, context, max_streams);
-    recordProfileStreams(pipeline, context);
+    if (is_record_profile_streams)
+        recordProfileStreams(pipeline, context);
     // todo modify logic after supporting window function.
     context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
     restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
