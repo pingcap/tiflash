@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <stdint.h>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -86,11 +87,11 @@ public:
         , finished_count(0)
         , finished(pools.size(), 0) {}
  
-    BlockInputStreams init()
+    void init()
     {
         if (!streams.empty())
         {
-            return streams;
+            return;
         }
         streams.resize(pools.size(), nullptr);
         for (size_t i = 0; i < pools.size(); i++)
@@ -105,7 +106,6 @@ public:
                 streams[i] = pools[i]->getInputStream(seg_id);
             }
         }
-        return streams;
     }
 
     void readOneBlock()
@@ -139,7 +139,7 @@ public:
         }
     }
 
-    bool allFinished()
+    bool allFinished() const
     {
         return finished_count >= finished.size();
     }
@@ -156,6 +156,7 @@ public:
             }
             if (pools[i]->expired())
             {
+                pools[i].reset();
                 setFinished(i);
                 continue;
             }
@@ -167,11 +168,21 @@ public:
         return {min, max};
     }
 
+    uint64_t getSegmentId() const
+    {
+        return seg_id;
+    }
+
+    size_t getPoolCount() const
+    {
+        return pools.size();
+    }
+private:
     uint64_t seg_id;
     SegmentReadTaskPools pools;
     BlockInputStreams streams;
 
-     bool isFinished(size_t i)
+    bool isFinished(size_t i)
     {
         return finished[i];
     }
@@ -186,6 +197,7 @@ public:
     size_t finished_count;
     std::vector<int8_t> finished;
 };
+
 using MergedTaskPtr = std::shared_ptr<MergedTask>;
 
 class SegmentReadTaskScheduler
@@ -210,7 +222,7 @@ private:
     void setStop();
     bool isStop() const;
     bool schedule();
-    void scheThread();
+    void schedThread();
 
     SegmentReadTaskPools unsafeGetPools(const std::vector<uint64_t> & pool_ids);
     std::pair<uint64_t, std::vector<uint64_t>> unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool);
@@ -223,7 +235,7 @@ private:
     std::unordered_map<uint64_t, std::vector<uint64_t>> segments;
 
     std::atomic<bool> stop;
-    std::thread sche_thread;
+    std::thread sched_thread;
 
     Poco::Logger * log;
 };

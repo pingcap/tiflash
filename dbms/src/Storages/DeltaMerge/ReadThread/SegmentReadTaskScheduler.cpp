@@ -11,13 +11,13 @@ SegmentReadTaskScheduler::SegmentReadTaskScheduler()
     , stop(false)
     , log(&Poco::Logger::get("SegmentReadTaskScheduler")) 
 {
-    sche_thread = std::thread(&SegmentReadTaskScheduler::scheThread, this);
+    sched_thread = std::thread(&SegmentReadTaskScheduler::schedThread, this);
 }
 
 SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 {
     setStop();
-    sche_thread.join();
+    sched_thread.join();
 }
 
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
@@ -120,12 +120,12 @@ bool SegmentReadTaskScheduler::schedule()
     {
         return false;
     }
-    LOG_FMT_DEBUG(log, "getMergedTask seg_id {} merged_count {} => {} ms", merged_task->seg_id, merged_task->pools.size(), sw.elapsedMilliseconds());
+    LOG_FMT_DEBUG(log, "getMergedTask seg_id {} merged_count {} => {} ms", merged_task->getSegmentId(), merged_task->getPoolCount(), sw.elapsedMilliseconds());
     SegmentReadThreadPool::instance().addTask(std::move(merged_task));  // TODO(jinhelin): should not be fail.
     return true;
 }
 
-void SegmentReadTaskScheduler::scheThread()
+void SegmentReadTaskScheduler::schedThread()
 {
     while (!isStop())
     {

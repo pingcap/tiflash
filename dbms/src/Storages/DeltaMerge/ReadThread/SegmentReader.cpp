@@ -85,7 +85,7 @@ private:
                 merged_task->readOneBlock();
             }
         }
-        LOG_FMT_DEBUG(log, "seg_id {} sleep_times {} read_block_count {}", merged_task->seg_id, sleep_times, read_block_count);
+        LOG_FMT_DEBUG(log, "seg_id {} sleep_times {} read_block_count {}", merged_task->getSegmentId(), sleep_times, read_block_count);
     }
 
     void run()
