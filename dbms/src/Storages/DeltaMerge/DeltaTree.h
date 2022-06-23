@@ -1405,7 +1405,7 @@ enum class DeltaTreeVariant
     AVX512
 };
 
-DeltaTreeVariant resolveDeltaTreeVariant()
+static inline DeltaTreeVariant resolveDeltaTreeVariant()
 {
     if (DB::TargetSpecific::AVX512Checker::runtimeSupport())
     {
