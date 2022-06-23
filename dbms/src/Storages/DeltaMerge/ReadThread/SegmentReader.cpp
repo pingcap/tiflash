@@ -76,7 +76,7 @@ private:
             if (read_count <= 0)
             {
                 sleep_times++;
-                ::usleep(1000);  // TODO(jinhelin) 进入等待的次数影响性能？
+                ::usleep(1000);  // TODO(jinhelin): back to MergedTaskPool
                 continue;
             }
             for (int c = 0; c < 2; c++)
