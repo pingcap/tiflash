@@ -272,9 +272,9 @@ void FailPointHelper::disableFailPoint(const String &) {}
 
 void FailPointHelper::wait(const String &) {}
 
-void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & config, Poco::Logger * log) {}
+void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration &, Poco::Logger *) {}
 
-void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate) {}
+void FailPointHelper::enableRandomFailPoint(const String &, double) {}
 #endif
 
 } // namespace DB
