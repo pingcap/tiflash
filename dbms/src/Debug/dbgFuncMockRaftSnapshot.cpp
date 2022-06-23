@@ -291,27 +291,27 @@ SSTReaderPtr fn_get_sst_reader(SSTView v, RaftStoreProxyPtr)
 }
 uint8_t fn_remained(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto *reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
+    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     return reader->ffiRemained();
 }
 BaseBuffView fn_key(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto *reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
+    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     return reader->ffiKey();
 }
 BaseBuffView fn_value(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto *reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
+    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     return reader->ffiVal();
 }
 void fn_next(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto *reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
+    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     reader->ffiNext();
 }
 void fn_gc(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto *reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
+    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     delete reader;
 }
 
