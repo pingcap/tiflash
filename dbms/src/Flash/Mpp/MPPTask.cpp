@@ -387,46 +387,42 @@ void MPPTask::runImpl()
             return_statistics.blocks,
             return_statistics.bytes);
     }
-    catch (Exception & e)
-    {
-        err_msg = e.displayText();
-        LOG_FMT_ERROR(log, "task running meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
-    }
-    catch (pingcap::Exception & e)
-    {
-        err_msg = e.message();
-        LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
-    }
-    catch (std::exception & e)
-    {
-        err_msg = e.what();
-        LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
-    }
     catch (...)
     {
-        err_msg = "unrecovered error";
-        LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
+        err_msg = getCurrentExceptionMessage(true);
     }
+
     if (err_msg.empty())
     {
-        // todo when error happens, should try to update the metrics if it is available
-        auto throughput = dag_context->getTableScanThroughput();
-        if (throughput.first)
-            GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
-        auto process_info = context->getProcessListElement()->getInfo();
-        auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
-        GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
-        mpp_task_statistics.setMemoryPeak(peak_memory);
+        if (switchStatus(RUNNING, FINISHED))
+            LOG_INFO(log, "finish task");
+        else
+            LOG_FMT_WARNING(log, "finish task which is in {} state", taskStatusToString(status));
+        if (status == FINISHED)
+        {
+            // todo when error happens, should try to update the metrics if it is available
+            auto throughput = dag_context->getTableScanThroughput();
+            if (throughput.first)
+                GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
+            auto process_info = context->getProcessListElement()->getInfo();
+            auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+            GET_METRIC(tiflash_coprocessor_request_memory_usage, type_run_mpp_task).Observe(peak_memory);
+            mpp_task_statistics.setMemoryPeak(peak_memory);
+        }
     }
     else
     {
-        try
+        if (status == RUNNING)
         {
-            handleError(err_msg);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Meet error while try to handle error in MPPTask");
+            LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
+            try
+            {
+                handleError(err_msg);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, "Meet error while try to handle error in MPPTask");
+            }
         }
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
@@ -439,11 +435,6 @@ void MPPTask::runImpl()
     });
     if (unregister)
         unregisterTask();
-
-    if (switchStatus(RUNNING, FINISHED))
-        LOG_INFO(log, "finish task");
-    else
-        LOG_FMT_WARNING(log, "finish task which is in {} state", taskStatusToString(status));
 
     mpp_task_statistics.end(status.load(), err_msg);
     mpp_task_statistics.logTracingJson();
