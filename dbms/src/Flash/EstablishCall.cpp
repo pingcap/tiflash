@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
@@ -19,6 +20,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_tunnel_init_rpc_failure_failpoint[];
+} // namespace FailPoints
+
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
     : service(service)
     , cq(cq)
@@ -71,6 +77,7 @@ void EstablishCallData::initRpc()
     std::exception_ptr eptr = nullptr;
     try
     {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
         service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
     }
     catch (...)

@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "Server.h"
-
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
+#include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -56,6 +55,8 @@
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/Server.h>
+#include <Server/ServerInfo.h>
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
@@ -72,7 +73,6 @@
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
-#include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
@@ -176,11 +176,6 @@ namespace
     }
 }
 } // namespace
-
-namespace CurrentMetrics
-{
-extern const Metric Revision;
-}
 
 namespace DB
 {
@@ -983,6 +978,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Poco::Logger * log = &logger();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
+    FailPointHelper::initRandomFailPoints(config(), log);
 #endif
 
     UpdateMallocConfig(log);
@@ -1049,7 +1045,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_FMT_INFO(log, "tiflash proxy thread is joined");
     });
 
-    CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
+    /// get CPU/memory/disk info of this server
+    if (tiflash_instance_wrap.proxy_helper)
+    {
+        diagnosticspb::ServerInfoRequest request;
+        request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+        diagnosticspb::ServerInfoResponse response;
+        std::string req = request.SerializeAsString();
+        auto * helper = tiflash_instance_wrap.proxy_helper;
+        helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
+        server_info.parseSysInfo(response);
+        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
+    }
+    else
+    {
+        LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+    }
 
     // print necessary grpc log.
     grpc_log = &Poco::Logger::get("grpc");
@@ -1410,10 +1421,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // on ARM processors it can show only enabled at current moment cores
             LOG_FMT_INFO(
                 log,
-                "Available RAM = {}; physical cores = {}; threads = {}.",
-                formatReadableSizeWithBinarySuffix(getMemoryAmount()),
-                getNumberOfPhysicalCPUCores(),
-                std::thread::hardware_concurrency());
+                "Available RAM = {}; physical cores = {}; logical cores = {}.",
+                server_info.memory_info.capacity,
+                server_info.cpu_info.physical_cores,
+                server_info.cpu_info.logical_cores);
         }
 
         LOG_FMT_INFO(log, "Ready for connections.");

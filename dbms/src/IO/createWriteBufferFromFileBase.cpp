@@ -19,13 +19,6 @@
 #endif
 #include <Common/ProfileEvents.h>
 
-
-namespace ProfileEvents
-{
-extern const Event CreatedWriteBufferOrdinary;
-extern const Event CreatedWriteBufferAIO;
-} // namespace ProfileEvents
-
 namespace DB
 {
 namespace ErrorCodes
@@ -45,13 +38,11 @@ WriteBufferFromFileBase * createWriteBufferFromFileBase(
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
-        ProfileEvents::increment(ProfileEvents::CreatedWriteBufferOrdinary);
         return new WriteBufferFromFile(filename_, buffer_size_, flags_, mode, existing_memory_, alignment);
     }
     else
     {
 #if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
-        ProfileEvents::increment(ProfileEvents::CreatedWriteBufferAIO);
         return new WriteBufferAIO(filename_, buffer_size_, flags_, mode, existing_memory_);
 #else
         throw Exception("AIO is not implemented yet on MacOS X", ErrorCodes::NOT_IMPLEMENTED);
