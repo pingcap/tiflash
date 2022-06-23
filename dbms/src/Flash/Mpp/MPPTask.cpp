@@ -105,16 +105,18 @@ void MPPTask::abortReceivers()
 
 void MPPTask::abortDataStreams(AbortType abort_type)
 {
+    bool is_kill;
     switch (abort_type)
     {
     case AbortType::ONCANCELLATION:
-        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, true);
+        is_kill = true;
         break;
     case AbortType::ONERROR:
         /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
-        context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, false);
+        is_kill = false;
         break;
     }
+    context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, is_kill);
 }
 
 void MPPTask::closeAllTunnels(const String & reason)
