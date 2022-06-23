@@ -16,7 +16,6 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <benchmark/benchmark.h>
-
 #include <thread>
 
 using namespace DB;
@@ -94,6 +93,35 @@ static void BM_deltatree(benchmark::State & state)
         }
     }
 }
+
 BENCHMARK_TEMPLATE(BM_deltatree, LevelTree)->Threads(std::thread::hardware_concurrency())->Iterations(50);
 BENCHMARK_TEMPLATE(BM_deltatree, SystemTree)->Threads(std::thread::hardware_concurrency())->Iterations(50);
 BENCHMARK_TEMPLATE(BM_deltatree, ArenaTree)->Threads(std::thread::hardware_concurrency())->Iterations(50);
+
+template <bool use_generic>
+static void BM_deltatree_dispatch(benchmark::State & state)
+{
+    if (use_generic)
+    {
+        DB::DM::Impl::DELTA_TREE_VARIANT = DB::DM::Impl::DeltaTreeVariant::Generic;
+    } else {
+        DB::DM::Impl::DELTA_TREE_VARIANT = DB::DM::Impl::resolveDeltaTreeVariant();
+    }
+
+    SystemTree tree;
+    for (auto _ : state)
+    {
+        for (int i = 0; i < 32768; ++i)
+        {
+            tree.addInsert(i, i);
+        }
+        for (int i = 0; i < 32768; ++i)
+        {
+            tree.addDelete(i);
+        }
+
+    }
+}
+
+BENCHMARK_TEMPLATE(BM_deltatree_dispatch, true)->Threads(std::thread::hardware_concurrency())->Iterations(50);
+BENCHMARK_TEMPLATE(BM_deltatree_dispatch, false)->Threads(std::thread::hardware_concurrency())->Iterations(50);
