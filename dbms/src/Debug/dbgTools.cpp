@@ -579,7 +579,7 @@ TableID getTableID(Context & context, const std::string & database_name, const s
         TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
 
         if (table->isPartitionTable())
-            return std::atoi(partition_id.c_str());
+            return std::strtol(partition_id.c_str(), nullptr, 0);
 
         return table->id();
     }
