@@ -27,22 +27,23 @@ struct BitShiftRightImpl;
 template <typename A, typename B>
 struct BitShiftRightImpl<A, B, false>
 {
-    using ResultType = UInt64;
+    using ResultType = typename NumberTraits::ResultOfBit<A, B>::Type;
 
     template <typename Result = ResultType>
     static Result apply(A a, B b)
     {
-        // It is an undefined behavior for shift operation in c++ that the right operand is greater than
+        // It is an undefined behavior for shift operation in c++ that the right operand is negative or greater than
         // or equal to the number of digits of the bits in the (promoted) left operand.
         // See https://en.cppreference.com/w/cpp/language/operator_arithmetic for details.
-        // Note that we only consider unsigned situation here because other types will all be cast
-        // to uint64 before shift operation according to DAGExpressionAnalyzerHelper::buildBitwiseFunction.
-        if (static_cast<Result>(b) >= std::numeric_limits<A>::digits)
+        if (static_cast<Result>(b) >= std::numeric_limits<decltype(static_cast<Result>(a))>::digits)
         {
             return static_cast<Result>(0);
         }
-        // We force to use ResultType, i.e. UInt64, in the right operand to suppress clang-tidy warning.
-        return static_cast<Result>(a) >> static_cast<ResultType>(b);
+        // Note that we do not consider the case that the right operand is negative,
+        // since other types will all be cast to uint64 before shift operation
+        // according to DAGExpressionAnalyzerHelper::buildBitwiseFunction.
+        // Therefore, we simply suppress clang-tidy checking here.
+        return static_cast<Result>(a) >> static_cast<Result>(b); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
     }
     template <typename Result = ResultType>
     static Result apply(A, B, UInt8 &)
