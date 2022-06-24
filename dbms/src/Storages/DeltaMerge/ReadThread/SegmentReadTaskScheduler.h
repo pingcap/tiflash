@@ -158,7 +158,10 @@ public:
     SegmentReadTaskScheduler(SegmentReadTaskScheduler &&) = delete;
     SegmentReadTaskScheduler & operator=(SegmentReadTaskScheduler &&) = delete;
 
+    // Add SegmentReadTaskPool to `read_pools` and index segments into merging_segments.
     void add(const SegmentReadTaskPoolPtr & pool);
+
+    // Choose segment to read.
     MergedTaskPtr scheduleMergedTask();
 
 private:
@@ -170,12 +173,13 @@ private:
 
     // `unsafe*` means these functions are not thread-safe.
     SegmentReadTaskPools unsafeGetPools(const std::vector<uint64_t> & pool_ids);
-    std::pair<uint64_t, std::vector<uint64_t>> unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool);
-    SegmentReadTaskPoolPtr unsafeScheduleSegmentReadTaskPool();
+    // <seg_id, pool_ids>
+    std::pair<uint64_t, std::vector<uint64_t>> unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool, int64_t unexpired_count);
+    // <SegmentReadTaskPool, unexpired_count>
+    std::pair<SegmentReadTaskPoolPtr, int64_t> unsafeScheduleSegmentReadTaskPool();
 
     std::mutex mtx;
     SegmentReadTaskPoolList read_pools;
-    int64_t max_unexpired_pool_count;
     // table_id -> {seg_id -> pool_ids, seg_id -> pool_ids, ...}
     std::unordered_map<int64_t, std::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
 

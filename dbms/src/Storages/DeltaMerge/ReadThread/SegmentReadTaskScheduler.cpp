@@ -6,8 +6,7 @@
 namespace DB::DM
 {
 SegmentReadTaskScheduler::SegmentReadTaskScheduler()
-    : max_unexpired_pool_count(0)
-    , stop(false)
+    : stop(false)
     , log(&Poco::Logger::get("SegmentReadTaskScheduler"))
 {
     sched_thread = std::thread(&SegmentReadTaskScheduler::schedThread, this);
@@ -34,23 +33,26 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 
     auto [unexpired, expired] = read_pools.count();
     LOG_FMT_DEBUG(log, "add pool {} table {} segment count {} segments {} unexpired pool {} expired pool {}", pool->getId(), pool->tableId(), seg_ids.size(), seg_ids, unexpired, expired);
-    max_unexpired_pool_count = unexpired;
 }
 
 MergedTaskPtr SegmentReadTaskScheduler::scheduleMergedTask()
 {
     std::lock_guard lock(mtx);
-    auto pool = unsafeScheduleSegmentReadTaskPool();
+    auto [pool, unexpired_count] = unsafeScheduleSegmentReadTaskPool();
     if (pool == nullptr)
     {
         return nullptr;
     }
-    auto segment = unsafeScheduleSegment(pool);
+    auto segment = unsafeScheduleSegment(pool, unexpired_count);
     if (segment.first == 0)
     {
         return nullptr;
     }
     auto pools = unsafeGetPools(segment.second);
+    if (pools.empty())
+    {
+        return nullptr;
+    }
     return std::make_shared<MergedTask>(segment.first, std::move(pools));
 }
 
@@ -69,29 +71,27 @@ SegmentReadTaskPools SegmentReadTaskScheduler::unsafeGetPools(const std::vector<
     return pools;
 }
 
-SegmentReadTaskPoolPtr SegmentReadTaskScheduler::unsafeScheduleSegmentReadTaskPool()
+std::pair<SegmentReadTaskPoolPtr, int64_t> SegmentReadTaskScheduler::unsafeScheduleSegmentReadTaskPool()
 {
     auto [unexpired, expired] = read_pools.count();
-    LOG_FMT_DEBUG(log, "unsafeScheduleSegmentReadTaskPool unexpired pool {} expired pool {}", unexpired, expired);
-    max_unexpired_pool_count = unexpired;
     for (int64_t i = 0; i < unexpired; i++)
     {
         auto pool = read_pools.next();
         if (pool == nullptr)
         {
-            return nullptr;
+            return {nullptr, 0};
         }
-        if (pool->pendingBlockCount() < 20)
+        if (pool->pendingBlockCount() < 20)   // TODO(jinhelin): not hard code
         {
-            return pool;
+            return {pool, unexpired};
         }
     }
-    return nullptr;
+    return {nullptr, 0};
 }
 
-std::pair<uint64_t, std::vector<uint64_t>> SegmentReadTaskScheduler::unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool)
+std::pair<uint64_t, std::vector<uint64_t>> SegmentReadTaskScheduler::unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool, int64_t unexpired_count)
 {
-    auto expected_merge_seg_count = std::min(max_unexpired_pool_count, 2); // TODO(jinhelin)
+    auto expected_merge_seg_count = std::min(unexpired_count, 2); // TODO(jinhelin): not hard code
     auto itr = merging_segments.find(pool->tableId());
     if (itr == merging_segments.end())
     {
