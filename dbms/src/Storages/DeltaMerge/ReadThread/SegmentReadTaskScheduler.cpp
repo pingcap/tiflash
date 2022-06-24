@@ -3,8 +3,6 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/Segment.h>
 
-#include "Common/Stopwatch.h"
-
 namespace DB::DM
 {
 SegmentReadTaskScheduler::SegmentReadTaskScheduler()

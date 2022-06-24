@@ -1,79 +1,12 @@
 #pragma once
 
+#include <Storages/DeltaMerge/ReadThread/CircularScanList.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB::DM
 {
 
-// SegmentReadTaskPoolList is a special circular list and will check whether the object is expired.
-class SegmentReadTaskPoolList
-{
-public:
-    SegmentReadTaskPoolList()
-        : last_itr(l.end())
-    {}
-
-    void add(const SegmentReadTaskPoolPtr & ptr)
-    {
-        l.push_back(ptr);
-    }
-
-    SegmentReadTaskPoolPtr next()
-    {
-        for (last_itr = nextItr(last_itr); !l.empty(); last_itr = nextItr(last_itr))
-        {
-            auto ptr = *last_itr;
-            if (ptr->expired())
-            {
-                last_itr = l.erase(last_itr);
-            }
-            else
-            {
-                return ptr;
-            }
-        }
-        return nullptr;
-    }
-
-    // <unexpired_count, expired_count>
-    std::pair<int64_t, int64_t> count() const
-    {
-        int64_t expired_count = 0;
-        for (const auto & p : l)
-        {
-            expired_count += static_cast<int>(p->expired());
-        }
-        return {l.size() - expired_count, expired_count};
-    }
-
-    SegmentReadTaskPoolPtr get(uint64_t pool_id) const
-    {
-        for (const auto & p : l)
-        {
-            if (p->getId() == pool_id)
-            {
-                return p;
-            }
-        }
-        return nullptr;
-    }
-
-private:
-    std::list<SegmentReadTaskPoolPtr>::iterator nextItr(std::list<SegmentReadTaskPoolPtr>::iterator itr)
-    {
-        if (itr == l.end() || std::next(itr) == l.end())
-        {
-            return l.begin();
-        }
-        else
-        {
-            return std::next(itr);
-        }
-    }
-
-    std::list<SegmentReadTaskPoolPtr> l;
-    std::list<SegmentReadTaskPoolPtr>::iterator last_itr;
-};
+using SegmentReadTaskPoolList = CircularScanList<SegmentReadTaskPool>;
 
 // MergedTask merges the same segment of different SegmentReadTaskPools.
 // Read segment input streams of different SegmentReadTaskPools sequentially to improve cache sharing.
@@ -203,6 +136,13 @@ using MergedTaskPtr = std::shared_ptr<MergedTask>;
 
 // SegmentReadTaskScheduler is a global singleton.
 // All SegmentReadTaskPool will be added to it and be scheduled by it.
+
+// 1. DeltaMergeStore::read will call SegmentReadTaskScheduler::add to add a SegmentReadTaskPool object to `the read_pools list` and
+// index segments information into `merging_segments`.
+// 2. A schedule-thread will scheduling read tasks:
+//   a. It scans the read_pools list and choosing a SegmentReadTaskPool.
+//   b. Chooses a segment of the SegmentReadTaskPool in step a, and build a MergedTask.
+//   c. Sends the MergedTask to read threads.
 class SegmentReadTaskScheduler
 {
 public:
@@ -228,6 +168,7 @@ private:
     bool schedule();
     void schedThread();
 
+    // `unsafe*` means these functions are not thread-safe.
     SegmentReadTaskPools unsafeGetPools(const std::vector<uint64_t> & pool_ids);
     std::pair<uint64_t, std::vector<uint64_t>> unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool);
     SegmentReadTaskPoolPtr unsafeScheduleSegmentReadTaskPool();
