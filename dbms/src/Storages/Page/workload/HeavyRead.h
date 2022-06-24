@@ -16,22 +16,22 @@
 
 namespace DB::PS::tests
 {
-class HoldSnapshotsLongTime : public StressWorkload
-    , public StressWorkloadFunc<HoldSnapshotsLongTime>
+class HeavyRead : public StressWorkload
+    , public StressWorkloadFunc<HeavyRead>
 {
 public:
-    explicit HoldSnapshotsLongTime(const StressEnv & options_)
+    explicit HeavyRead(const StressEnv & options_)
         : StressWorkload(options_)
     {}
 
     static String name()
     {
-        return "HoldSnapshotsLongTime";
+        return "HeavyRead";
     }
 
     static UInt64 mask()
     {
-        return 1 << 6;
+        return 1 << 3;
     }
 
 private:
@@ -40,60 +40,34 @@ private:
         return fmt::format("Some of options will be ignored"
                            "`paths` will only used first one. which is {}. Data will store in {}"
                            "Please cleanup folder after this test."
-                           "The current workload will elapse near 60 seconds and generator 100 snapshot in memory."
-                           "Then do NORMAL GC + SKIP GC at the last.",
+                           "The current workload will force init page in {} and it elapse near 60 seconds",
                            options.paths[0],
+                           options.paths[0] + "/" + name(),
                            options.paths[0] + "/" + name());
     }
 
     void run() override
     {
-        pool.addCapacity(1 + options.num_writers + options.num_readers);
         DB::PageStorage::Config config;
         initPageStorage(config, name());
+        PSWriter::fillAllPages(ps);
 
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);
         metrics_dumper->start();
 
         stress_time = std::make_shared<StressTimeout>(60);
         stress_time->start();
-
-        scanner = std::make_shared<PSScanner>(ps);
-        scanner->start();
-
-        // 90-100 snapshots will be generated.
         {
             stop_watch.start();
-            startWriter<PSWindowWriter>(options.num_writers, [](std::shared_ptr<PSWindowWriter> writer) -> void {
-                writer->setBatchBufferNums(1);
-                writer->setBatchBufferRange(10 * 1024, 1 * DB::MB);
-                writer->setWindowSize(500);
-                writer->setNormalDistributionSigma(13);
+            startReader<PSReader>(options.num_readers, [](std::shared_ptr<PSReader> reader) -> void {
+                // No delay
+                reader->setReadDelay(0);
+                reader->setReadPageRange(MAX_PAGE_ID_DEFAULT);
+                reader->setReadPageNums(10);
             });
-
-            startReader<PSSnapshotReader>(1, [](std::shared_ptr<PSSnapshotReader> reader) -> void {
-                reader->setSnapshotGetIntervalMs(600);
-            });
-
             pool.joinAll();
             stop_watch.stop();
         }
-
-        gc = std::make_shared<PSGc>(ps);
-        // Normal GC
-        gc->doGcOnce();
-
-        readers.clear();
-
-        // Skip GC
-        gc->doGcOnce();
-    }
-
-    bool verify() override
-    {
-        return true;
     }
 };
-
-REGISTER_WORKLOAD(HoldSnapshotsLongTime)
 } // namespace DB::PS::tests
