@@ -16,10 +16,12 @@
 #ifdef __aarch64__
 #include <aor.h>
 #include <common/detect_features.h>
-namespace aor {
-    static inline void initialize() {
-        enable_sve = common::cpu_feature_flags.sve;
-        enable_mte = common::cpu_feature_flags.mte;
-    }
+namespace aor
+{
+static inline void initialize()
+{
+    enable_sve = common::cpu_feature_flags.sve;
+    enable_mte = common::cpu_feature_flags.mte;
 }
+} // namespace aor
 #endif
