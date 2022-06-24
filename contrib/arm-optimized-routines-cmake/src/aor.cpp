@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #include <aor.h>
-#include <stringlib.h>
-
 #include <utility>
 namespace aor
 {
@@ -38,6 +36,7 @@ __attribute__((always_inline)) inline auto dispatch(
 } // namespace aor
 
 extern "C" {
+#include <stringlib.h>
 void * memcpy(void * __restrict dst, const void * __restrict src, size_t size)
 {
     return aor::dispatch(__memcpy_aarch64_sve, __memcpy_aarch64_simd, __memcpy_aarch64_simd, dst, src, size);
