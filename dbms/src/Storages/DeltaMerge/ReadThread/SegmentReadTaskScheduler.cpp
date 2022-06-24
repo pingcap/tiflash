@@ -1,15 +1,16 @@
-#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
-#include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/Segment.h>
+
 #include "Common/Stopwatch.h"
 
 namespace DB::DM
 {
-SegmentReadTaskScheduler::SegmentReadTaskScheduler() 
+SegmentReadTaskScheduler::SegmentReadTaskScheduler()
     : max_unexpired_pool_count(0)
     , stop(false)
-    , log(&Poco::Logger::get("SegmentReadTaskScheduler")) 
+    , log(&Poco::Logger::get("SegmentReadTaskScheduler"))
 {
     sched_thread = std::thread(&SegmentReadTaskScheduler::schedThread, this);
 }
@@ -23,7 +24,7 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
     std::lock_guard lock(mtx);
-    
+
     read_pools.add(pool);
 
     std::vector<uint64_t> seg_ids;
@@ -34,12 +35,11 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
     }
 
     auto [unexpired, expired] = read_pools.count();
-    LOG_FMT_DEBUG(log, "add pool {} table {} segment count {} segments {} unexpired pool {} expired pool {}",
-        pool->getId(), pool->tableId(), seg_ids.size(), seg_ids, unexpired, expired);
+    LOG_FMT_DEBUG(log, "add pool {} table {} segment count {} segments {} unexpired pool {} expired pool {}", pool->getId(), pool->tableId(), seg_ids.size(), seg_ids, unexpired, expired);
     max_unexpired_pool_count = unexpired;
 }
 
-MergedTaskPtr SegmentReadTaskScheduler::getMergedTask()
+MergedTaskPtr SegmentReadTaskScheduler::scheduleMergedTask()
 {
     std::lock_guard lock(mtx);
     auto pool = unsafeScheduleSegmentReadTaskPool();
@@ -93,7 +93,7 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::unsafeScheduleSegmentReadTaskPo
 
 std::pair<uint64_t, std::vector<uint64_t>> SegmentReadTaskScheduler::unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool)
 {
-    auto expected_merge_seg_count = std::min(max_unexpired_pool_count, 2);  // TODO(jinhelin)
+    auto expected_merge_seg_count = std::min(max_unexpired_pool_count, 2); // TODO(jinhelin)
     auto itr = merging_segments.find(pool->tableId());
     if (itr == merging_segments.end())
     {
@@ -126,13 +126,13 @@ bool SegmentReadTaskScheduler::isStop() const
 bool SegmentReadTaskScheduler::schedule()
 {
     Stopwatch sw;
-    auto merged_task = getMergedTask();
+    auto merged_task = scheduleMergedTask();
     if (merged_task == nullptr)
     {
         return false;
     }
-    LOG_FMT_DEBUG(log, "getMergedTask seg_id {} merged_count {} => {} ms", merged_task->getSegmentId(), merged_task->getPoolCount(), sw.elapsedMilliseconds());
-    SegmentReadThreadPool::instance().addTask(std::move(merged_task));  // TODO(jinhelin): should not be fail.
+    LOG_FMT_DEBUG(log, "scheduleMergedTask seg_id {} merged_count {} => {} ms", merged_task->getSegmentId(), merged_task->getPoolCount(), sw.elapsedMilliseconds());
+    SegmentReadThreadPool::instance().addTask(std::move(merged_task)); // TODO(jinhelin): should not be fail.
     return true;
 }
 
@@ -192,4 +192,4 @@ void DMFileReaderPool::set(DMFileReader & from_reader, int64_t col_id, size_t st
         r->addCachedPacks(col_id, start, count, col);
     }
 }
-}
+} // namespace DB::DM

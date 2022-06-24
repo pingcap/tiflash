@@ -1,20 +1,17 @@
 #pragma once
 
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <stdint.h>
-#include <limits>
-#include <memory>
-#include <utility>
-#include <vector>
-#include "Debug/DBGInvoker.h"
 
 namespace DB::DM
 {
 
+// SegmentReadTaskPoolList is a special circular list and will check whether the object is expired.
 class SegmentReadTaskPoolList
 {
 public:
-    SegmentReadTaskPoolList() : last_itr(l.end()) {}
+    SegmentReadTaskPoolList()
+        : last_itr(l.end())
+    {}
 
     void add(const SegmentReadTaskPoolPtr & ptr)
     {
@@ -30,14 +27,14 @@ public:
             {
                 last_itr = l.erase(last_itr);
             }
-            else  
+            else
             {
                 return ptr;
             }
         }
         return nullptr;
     }
-    
+
     // <unexpired_count, expired_count>
     std::pair<int64_t, int64_t> count() const
     {
@@ -60,15 +57,15 @@ public:
         }
         return nullptr;
     }
+
 private:
-    
     std::list<SegmentReadTaskPoolPtr>::iterator nextItr(std::list<SegmentReadTaskPoolPtr>::iterator itr)
     {
         if (itr == l.end() || std::next(itr) == l.end())
         {
             return l.begin();
         }
-        else 
+        else
         {
             return std::next(itr);
         }
@@ -78,15 +75,18 @@ private:
     std::list<SegmentReadTaskPoolPtr>::iterator last_itr;
 };
 
+// MergedTask merges the same segment of different SegmentReadTaskPools.
+// Read segment input streams of different SegmentReadTaskPools sequentially to improve cache sharing.
 class MergedTask
 {
 public:
-    MergedTask(uint64_t seg_id_, SegmentReadTaskPools && pools_) 
+    MergedTask(uint64_t seg_id_, SegmentReadTaskPools && pools_)
         : seg_id(seg_id_)
         , pools(std::forward<SegmentReadTaskPools>(pools_))
         , finished_count(0)
-        , finished(pools.size(), 0) {}
- 
+        , finished(pools.size(), 0)
+    {}
+
     void init()
     {
         if (!streams.empty())
@@ -101,7 +101,7 @@ public:
                 pools[i].reset();
                 setFinished(i);
             }
-            else 
+            else
             {
                 streams[i] = pools[i]->getInputStream(seg_id);
             }
@@ -160,7 +160,7 @@ public:
                 setFinished(i);
                 continue;
             }
-          
+
             auto pbc = pools[i]->pendingBlockCount();
             min = std::min(min, pbc);
             max = std::max(max, pbc);
@@ -177,6 +177,7 @@ public:
     {
         return pools.size();
     }
+
 private:
     uint64_t seg_id;
     SegmentReadTaskPools pools;
@@ -200,6 +201,8 @@ private:
 
 using MergedTaskPtr = std::shared_ptr<MergedTask>;
 
+// SegmentReadTaskScheduler is a global singleton.
+// All SegmentReadTaskPool will be added to it and be scheduled by it.
 class SegmentReadTaskScheduler
 {
 public:
@@ -216,7 +219,8 @@ public:
     SegmentReadTaskScheduler & operator=(SegmentReadTaskScheduler &&) = delete;
 
     void add(const SegmentReadTaskPoolPtr & pool);
-    MergedTaskPtr getMergedTask();
+    MergedTaskPtr scheduleMergedTask();
+
 private:
     SegmentReadTaskScheduler();
     void setStop();
@@ -249,8 +253,9 @@ public:
     void add(DMFileReader & reader);
     void del(DMFileReader & reader);
     void set(DMFileReader & from_reader, int64_t col_id, size_t start, size_t count, ColumnPtr & col);
+
 private:
     std::mutex mtx;
-    std::unordered_map<uint64_t, std::unordered_set<DMFileReader*>> readers;
+    std::unordered_map<uint64_t, std::unordered_set<DMFileReader *>> readers;
 };
-}
+} // namespace DB::DM
