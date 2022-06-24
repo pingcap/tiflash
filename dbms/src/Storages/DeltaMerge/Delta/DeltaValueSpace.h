@@ -77,7 +77,8 @@ private:
     /// Note that those things can not be done at the same time.
     std::atomic_bool is_updating = false;
 
-    /// Note that it's safe to do multiple flush concurrently but only one of them can succeed.
+    /// Note that it's safe to do multiple flush concurrently but only one of them can succeed,
+    /// and other thread's work is just a waste of resource.
     /// So we only allow one flush task running at any time to aviod waste resource.
     std::atomic_bool is_flushing = false;
 

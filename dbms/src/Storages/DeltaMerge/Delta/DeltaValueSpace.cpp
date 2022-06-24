@@ -142,13 +142,12 @@ bool DeltaValueSpace::ingestColumnFiles(DMContext & /*context*/, const RowKeyRan
 bool DeltaValueSpace::flush(DMContext & context)
 {
     bool v = false;
-    // Other thread is flushing, just return.
     if (!is_flushing.compare_exchange_strong(v, true))
     {
-        LOG_FMT_DEBUG(log, "{}, Flush stop because other thread is flushing", info());
+        // other thread is flushing, just return.
+        LOG_FMT_DEBUG(log, "{}, Flush stop because other thread is flushing", simpleInfo());
         return false;
     }
-
     SCOPE_EXIT({
         bool v = true;
         if (!is_flushing.compare_exchange_strong(v, false))
