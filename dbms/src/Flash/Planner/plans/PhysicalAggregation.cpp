@@ -68,8 +68,10 @@ PhysicalPlanPtr PhysicalAggregation::build(
     auto cast_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns, context);
     analyzer.reset(aggregated_columns);
     analyzer.appendCastAfterAgg(cast_after_agg_actions, aggregation);
-
+    /// project action after aggregation to remove useless columns.
     const NamesAndTypes & schema = analyzer.getCurrentInputColumns();
+    cast_after_agg_actions->add(ExpressionAction::project(PhysicalPlanHelper::schemaToNames(schema)));
+
     auto physical_agg = std::make_shared<PhysicalAggregation>(
         executor_id,
         schema,

@@ -156,9 +156,10 @@ try
 <Aggregation, aggregation_1> | is_record_profile_streams: false, schema: <max(s2)_collator_0 , Nullable(String)>, <s1, Nullable(String)>
  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
-Aggregating
- Concat
-  MockExchangeReceiver)",
+Expression: <cast after aggregation>
+ Aggregating
+  Concat
+   MockExchangeReceiver)",
         {toNullableVec<String>({{}, "banana"}),
          toNullableVec<String>({{}, "banana"})});
 }
