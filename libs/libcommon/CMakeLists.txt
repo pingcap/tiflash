@@ -31,6 +31,10 @@ if (APPLE)
     target_include_directories (apple_rt PUBLIC ${COMMON_INCLUDE_DIR})
 endif ()
 
+set(AOR_CONFIG include/common/aor_config.h)
+if (NOT ARCH_AARCH64)
+    set(AOR_CONFIG)
+endif()
 add_library (common ${SPLIT_SHARED}
     src/DateLUT.cpp
     src/DateLUTImpl.cpp
@@ -93,6 +97,7 @@ add_library (common ${SPLIT_SHARED}
     include/ext/singleton.h
 
     ${CONFIG_COMMON}
+    ${AOR_CONFIG}
 )
 
 # When testing for memory leaks with Valgrind, dont link tcmalloc or jemalloc.
