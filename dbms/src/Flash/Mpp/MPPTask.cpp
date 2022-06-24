@@ -83,15 +83,14 @@ MPPTask::~MPPTask()
 
 void MPPTask::abortTunnels(const String & message, AbortType abort_type)
 {
-    switch (abort_type)
+    if (abort_type == AbortType::ONCANCELLATION)
     {
-    case AbortType::ONCANCELLATION:
         closeAllTunnels(message);
-        break;
-    case AbortType::ONERROR:
+    }
+    else
+    {
         RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
         tunnel_set->writeError(message);
-        break;
     }
 }
 
@@ -105,17 +104,8 @@ void MPPTask::abortReceivers()
 
 void MPPTask::abortDataStreams(AbortType abort_type)
 {
-    bool is_kill;
-    switch (abort_type)
-    {
-    case AbortType::ONCANCELLATION:
-        is_kill = true;
-        break;
-    case AbortType::ONERROR:
-        /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
-        is_kill = false;
-        break;
-    }
+    /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
+    bool is_kill = abort_type == AbortType::ONCANCELLATION;
     context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, is_kill);
 }
 
