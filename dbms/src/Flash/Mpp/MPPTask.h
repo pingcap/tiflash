@@ -131,6 +131,7 @@ private:
     MemoryTracker * memory_tracker = nullptr;
 
     std::atomic<TaskStatus> status{INITIALIZING};
+    String err_string;
 
     mpp::TaskMeta meta;
 
@@ -147,8 +148,6 @@ private:
     const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
-
-    Exception err;
 
     friend class MPPTaskManager;
 

@@ -436,13 +436,14 @@ void MPPTask::runImpl()
     if (unregister)
         unregisterTask();
 
-    mpp_task_statistics.end(status.load(), err_msg);
+    mpp_task_statistics.end(status.load(), err_string);
     mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::handleError(const String & error_msg)
 {
-    abort(error_msg, AbortType::ONERROR);
+    if (manager == nullptr || !manager->isTaskToBeCancelled(id))
+        abort(error_msg, AbortType::ONERROR);
 }
 
 void MPPTask::abort(const String & message, AbortType abort_type)
@@ -471,6 +472,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))
         {
+            err_string = message;
             abortTunnels(message, abort_type);
             unregisterTask();
             LOG_WARNING(log, "Finish abort task from uninitialized");
@@ -481,6 +483,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// abort the components from top to bottom because if bottom components are aborted
             /// first, the top components may see an error caused by the abort, which is not
             /// the original error
+            err_string = message;
             abortTunnels(message, abort_type);
             abortDataStreams(abort_type);
             abortReceivers();
