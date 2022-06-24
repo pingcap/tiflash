@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <aor.h>
+#include <stringlib.h>
 
 #include <utility>
 namespace aor
@@ -73,22 +74,28 @@ int strcmp(const char * a, const char * b)
 {
     return aor::dispatch(__strcmp_aarch64_sve, __strcmp_aarch64, __strcmp_aarch64, a, b);
 }
-char * strchr(const char * haystack, int needle) {
+char * strchr(const char * haystack, int needle)
+{
     return aor::dispatch(__strchr_aarch64_sve, __strchr_aarch64_mte, __strchr_aarch64, haystack, needle);
 }
-char * strrchr(const char * haystack, int needle) {
+char * strrchr(const char * haystack, int needle)
+{
     return aor::dispatch(__strrchr_aarch64_sve, __strrchr_aarch64_mte, __strrchr_aarch64, haystack, needle);
 }
-char * strchrnul(const char * haystack, int needle) {
+char * strchrnul(const char * haystack, int needle)
+{
     return aor::dispatch(__strchrnul_aarch64_sve, __strchrnul_aarch64_mte, __strchrnul_aarch64, haystack, needle);
 }
-size_t strlen(const char * data) {
+size_t strlen(const char * data)
+{
     return aor::dispatch(__strlen_aarch64_sve, __strlen_aarch64_mte, __strlen_aarch64, data);
 }
-size_t strnlen(const char * data, size_t size) {
+size_t strnlen(const char * data, size_t size)
+{
     return aor::dispatch(__strnlen_aarch64_sve, __strnlen_aarch64, __strnlen_aarch64, data, size);
 }
-int strncmp(const char * a, const char * b, size_t size) {
+int strncmp(const char * a, const char * b, size_t size)
+{
     return aor::dispatch(__strncmp_aarch64_sve, __strncmp_aarch64, __strncmp_aarch64, a, b, size);
 }
 }

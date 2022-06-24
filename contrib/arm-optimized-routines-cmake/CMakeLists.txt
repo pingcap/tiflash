@@ -21,7 +21,7 @@ set(TIFLASH_AOR_DIR ../arm-optimized-routines)
 
 file(GLOB TIFLASH_AARCH64_STRING_FILES ${TIFLASH_AOR_DIR}/string/aarch64/*.S)
 add_library(tiflash-aarch64-string STATIC ${TIFLASH_AARCH64_STRING_FILES} src/aor.cpp)
-target_compile_options(tiflash-aarch64-string PRIVATE -march=armv8.8-a+sve)
+target_compile_options(tiflash-aarch64-string PRIVATE -march=armv8-a+sve)
 target_include_directories(tiflash-aarch64-string PRIVATE ${TIFLASH_AOR_DIR}/string/include)
 target_include_directories(tiflash-aarch64-string PUBLIC include)
 
