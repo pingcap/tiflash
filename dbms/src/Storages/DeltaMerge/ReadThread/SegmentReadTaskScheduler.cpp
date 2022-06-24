@@ -29,13 +29,13 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
     std::vector<uint64_t> seg_ids;
     for (const auto & task : pool->getTasks())
     {
-        segments[task->segment->segmentId()].push_back(pool->getId());
+        merging_segments[pool->tableId()][task->segment->segmentId()].push_back(pool->getId());
         seg_ids.push_back(task->segment->segmentId());
     }
 
     auto [unexpired, expired] = read_pools.count();
-    LOG_FMT_DEBUG(log, "add pool {} segment count {} segments {} unexpired pool {} expired pool {}",
-        pool->getId(), seg_ids.size(), seg_ids, unexpired, expired);
+    LOG_FMT_DEBUG(log, "add pool {} table {} segment count {} segments {} unexpired pool {} expired pool {}",
+        pool->getId(), pool->tableId(), seg_ids.size(), seg_ids, unexpired, expired);
     max_unexpired_pool_count = unexpired;
 }
 
@@ -93,11 +93,22 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::unsafeScheduleSegmentReadTaskPo
 
 std::pair<uint64_t, std::vector<uint64_t>> SegmentReadTaskScheduler::unsafeScheduleSegment(const SegmentReadTaskPoolPtr & pool)
 {
-    auto expected_merge_seg_count = std::min(max_unexpired_pool_count, 2);
+    auto expected_merge_seg_count = std::min(max_unexpired_pool_count, 2);  // TODO(jinhelin)
+    auto itr = merging_segments.find(pool->tableId());
+    if (itr == merging_segments.end())
+    {
+        // No segment of tableId left.
+        return {0, {}};
+    }
+    auto & segments = itr->second;
     auto target = pool->scheduleSegment(segments, expected_merge_seg_count);
     if (target.first > 0)
     {
         segments.erase(target.first);
+        if (segments.empty())
+        {
+            merging_segments.erase(itr);
+        }
     }
     return target;
 }

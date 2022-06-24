@@ -111,6 +111,7 @@ class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
     explicit SegmentReadTaskPool(
+        int64_t table_id_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
         const RSOperatorPtr & filter_,
@@ -120,6 +121,7 @@ public:
         bool do_range_filter_for_raw_,
         SegmentReadTasks && tasks_)
         : id(nextPoolId())
+        , table_id(table_id_)
         , dm_context(dm_context_)
         , columns_to_read(columns_to_read_)
         , filter(filter_)
@@ -143,6 +145,8 @@ public:
     }
     
     uint64_t getId() const { return id; }
+    
+    int64_t tableId() const { return table_id; }
 
     const SegmentReadTasks & getTasks() const { return tasks; }
 
@@ -201,6 +205,7 @@ private:
     SegmentReadTaskPtr getTask(uint64_t seg_id);
 
     const uint64_t id;
+    const int64_t table_id;
     DMContextPtr dm_context;
     ColumnDefines columns_to_read;
     RSOperatorPtr filter;

@@ -231,8 +231,8 @@ private:
     std::mutex mtx;
     SegmentReadTaskPoolList read_pools;
     int64_t max_unexpired_pool_count;
-    // seg_id -> pool_ids
-    std::unordered_map<uint64_t, std::vector<uint64_t>> segments;
+    // table_id -> {seg_id -> pool_ids, seg_id -> pool_ids, ...}
+    std::unordered_map<int64_t, std::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
 
     std::atomic<bool> stop;
     std::thread sched_thread;
