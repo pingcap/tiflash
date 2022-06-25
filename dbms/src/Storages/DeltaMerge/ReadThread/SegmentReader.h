@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include "Storages/DeltaMerge/ReadThread/WorkQueue.h"
+#include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <common/logger_useful.h>
 
 namespace DB::DM
@@ -12,30 +12,51 @@ using MergedTaskPtr = std::shared_ptr<MergedTask>;
 class SegmentReader;
 using SegmentReaderUPtr = std::unique_ptr<SegmentReader>;
 
-class SegmentReadThreadPool
+class SegmentReaderPool
 {
 public:
-    static SegmentReadThreadPool & instance()
-    {
-        static SegmentReadThreadPool thread_pool(40);  // TODO(jinhelin)
-        return thread_pool;
-    }
-    
-    void init(int thread_count);
-    ~SegmentReadThreadPool();
-    SegmentReadThreadPool(const SegmentReadThreadPool&) = delete;
-    SegmentReadThreadPool & operator=(const SegmentReadThreadPool&) = delete;
-    SegmentReadThreadPool(SegmentReadThreadPool&&) = delete;
-    SegmentReadThreadPool & operator=(SegmentReadThreadPool&&) = delete;
+    SegmentReaderPool(int thread_count, const std::vector<int> & cpus);
+    ~SegmentReaderPool();
+    SegmentReaderPool(const SegmentReaderPool&) = delete;
+    SegmentReaderPool & operator=(const SegmentReaderPool&) = delete;
+    SegmentReaderPool(SegmentReaderPool&&) = delete;
+    SegmentReaderPool & operator=(SegmentReaderPool&&) = delete;
 
-    bool addTask(MergedTaskPtr && task);
+    void addTask(MergedTaskPtr && task);
 
 private:
-    SegmentReadThreadPool(int thread_count);
+    void init(int thread_count, const std::vector<int> & cpus);
 
     WorkQueue<MergedTaskPtr> task_queue;
     std::vector<SegmentReaderUPtr> readers;
     Poco::Logger * log;
+    std::atomic<int64_t> read_count;
+};
+
+class SegmentReaderPoolManager
+{
+public:
+    static SegmentReaderPoolManager & instance()
+    {
+        static SegmentReaderPoolManager pool_manager;
+        return pool_manager;
+    }
+
+    static void init(Poco::Logger * log);
+
+    void init(Poco::Logger * log, int threads_per_node, const std::vector<std::vector<int>> & numa_nodes);
+
+    SegmentReaderPoolManager();
+    ~SegmentReaderPoolManager();
+    SegmentReaderPoolManager(const SegmentReaderPoolManager &) = delete;
+    SegmentReaderPoolManager & operator=(const SegmentReaderPoolManager &) = delete;
+    SegmentReaderPoolManager(SegmentReaderPoolManager &&) = delete;
+    SegmentReaderPoolManager & operator=(SegmentReaderPoolManager &&) = delete;
+
+    void addTask(MergedTaskPtr && task);
+
+private:
+    std::vector<std::unique_ptr<SegmentReaderPool>> reader_pools;
 };
 
 }

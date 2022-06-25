@@ -25,14 +25,18 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
     read_pools.add(pool);
 
     std::vector<uint64_t> seg_ids;
+    std::hash<uint64_t> hash_func;
+    std::vector<int64_t> counters(2, 0); 
     for (const auto & task : pool->getTasks())
     {
         merging_segments[pool->tableId()][task->segment->segmentId()].push_back(pool->getId());
         seg_ids.push_back(task->segment->segmentId());
+        counters[hash_func(seg_ids.back()) % counters.size()]++;
     }
 
     auto [unexpired, expired] = read_pools.count();
-    LOG_FMT_DEBUG(log, "add pool {} table {} segment count {} segments {} unexpired pool {} expired pool {}", pool->getId(), pool->tableId(), seg_ids.size(), seg_ids, unexpired, expired);
+    LOG_FMT_DEBUG(log, "add pool {} table {} segment count {} segments {} unexpired pool {} expired pool {} counters {}",
+        pool->getId(), pool->tableId(), seg_ids.size(), seg_ids, unexpired, expired, counters);
 }
 
 MergedTaskPtr SegmentReadTaskScheduler::scheduleMergedTask()
@@ -137,7 +141,7 @@ bool SegmentReadTaskScheduler::schedule()
         return false;
     }
     LOG_FMT_DEBUG(log, "scheduleMergedTask seg_id {} merged_count {} => {} ms", merged_task->getSegmentId(), merged_task->getPoolCount(), sw.elapsedMilliseconds());
-    SegmentReadThreadPool::instance().addTask(std::move(merged_task)); // TODO(jinhelin): should not be fail.
+    SegmentReaderPoolManager::instance().addTask(std::move(merged_task)); // TODO(jinhelin): should not be fail.
     return true;
 }
 

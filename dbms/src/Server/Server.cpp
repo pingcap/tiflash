@@ -1329,7 +1329,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getTMTContext().reloadConfig(config());
     }
 
-    DM::SegmentReadThreadPool::instance();
+    // TODO(jinhelin): init routine
+    DM::SegmentReaderPoolManager::init(log);
     DM::SegmentReadTaskScheduler::instance();
 
     {
