@@ -31,10 +31,6 @@ if (APPLE)
     target_include_directories (apple_rt PUBLIC ${COMMON_INCLUDE_DIR})
 endif ()
 
-set(AOR_CONFIG include/common/aor_config.h)
-if (NOT ARCH_AARCH64)
-    set(AOR_CONFIG)
-endif()
 add_library (common ${SPLIT_SHARED}
     src/DateLUT.cpp
     src/DateLUTImpl.cpp
@@ -97,7 +93,6 @@ add_library (common ${SPLIT_SHARED}
     include/ext/singleton.h
 
     ${CONFIG_COMMON}
-    ${AOR_CONFIG}
 )
 
 # When testing for memory leaks with Valgrind, dont link tcmalloc or jemalloc.
@@ -203,7 +198,3 @@ if (ARCH_AMD64)
             src/crc64_sse2_asimd.cpp
             APPEND COMPILE_FLAGS "-mpclmul")
 endif()
-
-if (ARCH_AARCH64)
-    target_link_libraries(common PUBLIC tiflash-aarch64-string tiflash-aarch64-math)
-endif ()

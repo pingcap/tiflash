@@ -166,6 +166,6 @@ add_subdirectory(benchmark)
 set (BUILD_TESTING OFF CACHE BOOL "Disable cpu-features testing" FORCE)
 add_subdirectory(cpu_features)
 
-if (ARCH_AARCH64)
+if (ARCH_AARCH64 AND ARCH_LINUX)
     add_subdirectory(arm-optimized-routines-cmake)
 endif ()

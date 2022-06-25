@@ -14,9 +14,6 @@
 
 #include <Common/FailPoint.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#ifdef __aarch64__
-#include <common/aor_config.h>
-#endif
 
 namespace DB::FailPoints
 {
@@ -26,9 +23,6 @@ extern const char force_set_dtfile_exist_when_acquire_id[];
 // TODO: Optmize set-up & tear-down process which may cost more than 2s. It's NOT friendly for gtest_parallel.
 int main(int argc, char ** argv)
 {
-#ifdef __aarch64__
-    aor::initialize();
-#endif
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
 

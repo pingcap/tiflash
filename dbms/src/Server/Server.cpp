@@ -153,9 +153,6 @@ void loadMiConfig(Logger * log)
 #undef TRY_LOAD_CONF
 #endif
 
-#ifdef __aarch64__
-#include <common/aor_config.h>
-#endif
 namespace
 {
 [[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
@@ -1005,11 +1002,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
-
-#ifdef __aarch64__
-    aor::initialize();
-#endif
-
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
