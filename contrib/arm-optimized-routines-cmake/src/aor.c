@@ -65,6 +65,22 @@ static inline bool sve_supported(void)
     }                                                             \
     RETURN_TYPE NAME ARG_LIST __attribute__((ifunc(STRINGIFY(__tiflash_##NAME##_resolver))));
 
+#undef memcpy
+#undef memmove
+#undef memset
+#undef memchr
+#undef memrchr
+#undef memcmp
+#undef strcpy
+#undef stpcpy
+#undef strcmp
+#undef strchr
+#undef strrchr
+#undef strchrnul
+#undef strlen
+#undef strnlen
+#undef strncmp
+
 DISPATCH(memcpy, void *, (void * __restrict, const void * __restrict, size_t), __memcpy_aarch64_sve, __memcpy_aarch64_simd, __memcpy_aarch64_simd)
 DISPATCH(memmove, void *, (void *, const void *, size_t), __memmove_aarch64_sve, __memmove_aarch64_simd, __memmove_aarch64_simd)
 DISPATCH(memset, void *, (void *, int, size_t), __memset_aarch64, __memset_aarch64, __memset_aarch64)
