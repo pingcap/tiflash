@@ -63,7 +63,7 @@ static inline bool sve_supported(void)
             return MTE;                                        \
         return ASIMD;                                          \
     }                                                          \
-    RETURN_TYPE NAME ARG_LIST __attribute__((ifunc(STRINGIFY(__tiflash_##NAME##_resolver))));
+    extern RETURN_TYPE NAME ARG_LIST __attribute__((ifunc(STRINGIFY(__tiflash_##NAME##_resolver))));
 
 #undef memcpy
 #undef memmove
