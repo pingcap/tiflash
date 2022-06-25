@@ -53,18 +53,17 @@ static inline bool sve_supported(void)
 
 #define STRINGIFY_IMPL(X) #X
 #define STRINGIFY(X) STRINGIFY_IMPL(X)
-#define DISPATCH(NAME, RETURN_TYPE, ARG_LIST, SVE, MTE, ASIMD) \
-    typedef RETURN_TYPE(*__tiflash_##NAME##_t) ARG_LIST;       \
-    __tiflash_##NAME##_t __tiflash_##NAME##_resolver(void)     \
-    {                                                          \
-        if (sve_supported())                                   \
-            return SVE;                                        \
-        if (mte_supported())                                   \
-            return MTE;                                        \
-        return ASIMD;                                          \
-    }                                                          \
-    extern RETURN_TYPE NAME ARG_LIST __attribute__((ifunc(STRINGIFY(__tiflash_##NAME##_resolver))));
-
+#define DISPATCH(NAME, SVE, MTE, ASIMD)                                                                                                             \
+    extern typeof(ASIMD) NAME __attribute__((ifunc(STRINGIFY(__tiflash_##NAME##_resolver))));                                                       \
+    _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-function\"") static typeof(ASIMD) * __tiflash_##NAME##_resolver(void) \
+    {                                                                                                                                               \
+        if (sve_supported())                                                                                                                        \
+            return SVE;                                                                                                                             \
+        if (mte_supported())                                                                                                                        \
+            return MTE;                                                                                                                             \
+        return ASIMD;                                                                                                                               \
+    }                                                                                                                                               \
+    _Pragma("GCC diagnostic pop")
 #undef memcpy
 #undef memmove
 #undef memset
@@ -81,18 +80,18 @@ static inline bool sve_supported(void)
 #undef strnlen
 #undef strncmp
 
-DISPATCH(memcpy, void *, (void * __restrict, const void * __restrict, size_t), __memcpy_aarch64_sve, __memcpy_aarch64_simd, __memcpy_aarch64_simd)
-DISPATCH(memmove, void *, (void *, const void *, size_t), __memmove_aarch64_sve, __memmove_aarch64_simd, __memmove_aarch64_simd)
-DISPATCH(memset, void *, (void *, int, size_t), __memset_aarch64, __memset_aarch64, __memset_aarch64)
-DISPATCH(memchr, void *, (const void *, int, size_t), __memchr_aarch64_sve, __memchr_aarch64_mte, __memchr_aarch64)
-DISPATCH(memrchr, void *, (const void *, int, size_t), __memrchr_aarch64, __memrchr_aarch64, __memrchr_aarch64)
-DISPATCH(memcmp, int, (const void *, const void *, size_t), __memcmp_aarch64_sve, __memcmp_aarch64, __memcmp_aarch64)
-DISPATCH(strcpy, char *, (char * __restrict, const char * __restrict), __strcpy_aarch64_sve, __strcpy_aarch64, __strcpy_aarch64)
-DISPATCH(stpcpy, char *, (char * __restrict, const char * __restrict), __stpcpy_aarch64_sve, __stpcpy_aarch64, __stpcpy_aarch64)
-DISPATCH(strcmp, int, (const char *, const char *), __strcmp_aarch64_sve, __strcmp_aarch64, __strcmp_aarch64)
-DISPATCH(strchr, char *, (const char *, int), __strchr_aarch64_sve, __strchr_aarch64_mte, __strchr_aarch64)
-DISPATCH(strrchr, char *, (const char *, int), __strrchr_aarch64_sve, __strrchr_aarch64_mte, __strrchr_aarch64)
-DISPATCH(strchrnul, char *, (const char *, int), __strchrnul_aarch64_sve, __strchrnul_aarch64_mte, __strchrnul_aarch64)
-DISPATCH(strlen, size_t, (const char *), __strlen_aarch64_sve, __strlen_aarch64_mte, __strlen_aarch64)
-DISPATCH(strnlen, size_t, (const char *, size_t), __strnlen_aarch64_sve, __strnlen_aarch64, __strnlen_aarch64)
-DISPATCH(strncmp, int, (const char *, const char *, size_t), __strncmp_aarch64_sve, __strncmp_aarch64, __strncmp_aarch64)
+DISPATCH(memcpy, __memcpy_aarch64_sve, __memcpy_aarch64_simd, __memcpy_aarch64_simd)
+DISPATCH(memmove, __memmove_aarch64_sve, __memmove_aarch64_simd, __memmove_aarch64_simd)
+DISPATCH(memset, __memset_aarch64, __memset_aarch64, __memset_aarch64)
+DISPATCH(memchr, __memchr_aarch64_sve, __memchr_aarch64_mte, __memchr_aarch64)
+DISPATCH(memrchr, __memrchr_aarch64, __memrchr_aarch64, __memrchr_aarch64)
+DISPATCH(memcmp, __memcmp_aarch64_sve, __memcmp_aarch64, __memcmp_aarch64)
+DISPATCH(strcpy, __strcpy_aarch64_sve, __strcpy_aarch64, __strcpy_aarch64)
+DISPATCH(stpcpy, __stpcpy_aarch64_sve, __stpcpy_aarch64, __stpcpy_aarch64)
+DISPATCH(strcmp, __strcmp_aarch64_sve, __strcmp_aarch64, __strcmp_aarch64)
+DISPATCH(strchr, __strchr_aarch64_sve, __strchr_aarch64_mte, __strchr_aarch64)
+DISPATCH(strrchr, __strrchr_aarch64_sve, __strrchr_aarch64_mte, __strrchr_aarch64)
+DISPATCH(strchrnul, __strchrnul_aarch64_sve, __strchrnul_aarch64_mte, __strchrnul_aarch64)
+DISPATCH(strlen, __strlen_aarch64_sve, __strlen_aarch64_mte, __strlen_aarch64)
+DISPATCH(strnlen, __strnlen_aarch64_sve, __strnlen_aarch64, __strnlen_aarch64)
+DISPATCH(strncmp, __strncmp_aarch64_sve, __strncmp_aarch64, __strncmp_aarch64)
