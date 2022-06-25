@@ -111,6 +111,27 @@ public:
         return pools.size();
     }
 
+    std::vector<uint64_t> getPoolIds() const
+    {
+        std::vector<uint64_t> v;
+        for (const auto & pool : pools)
+        {
+            v.push_back(pool->getId());
+        }
+        return v;
+    }
+    bool containPool(uint64_t pool_id) const
+    {
+        for (const auto & pool : pools)
+        {
+            if (pool != nullptr && pool->getId() == pool_id)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
 private:
     uint64_t seg_id;
     SegmentReadTaskPools pools;
@@ -133,6 +154,49 @@ private:
 };
 
 using MergedTaskPtr = std::shared_ptr<MergedTask>;
+
+class MergedTaskPool
+{
+public:
+    MergedTaskPool()
+        : log(&Poco::Logger::get("MergedTaskPool"))
+    {}
+    MergedTaskPtr pop(uint64_t pool_id)
+    {
+        std::lock_guard lock(mtx);
+        MergedTaskPtr target;
+        for (auto itr = merged_task_pool.begin(); itr != merged_task_pool.end(); ++itr)
+        {
+            if ((*itr)->containPool(pool_id))
+            {
+                target = *itr;
+                merged_task_pool.erase(itr);
+                break;
+            }
+        }
+        if (target != nullptr)
+        {
+            LOG_FMT_DEBUG(log, "MergedTaskPool::pop pool {} seg {} merged_task_pool {}", pool_id, target->getSegmentId(), merged_task_pool.size());
+        }
+        else
+        {
+            LOG_FMT_DEBUG(log, "MergedTaskPool::pop pool {} not found, merged_task_pool {}", pool_id, merged_task_pool.size());
+        }
+        return target;
+    }
+
+    void push(const MergedTaskPtr & t)
+    {
+        std::lock_guard lock(mtx);
+        merged_task_pool.push_back(t);
+        LOG_FMT_DEBUG(log, "MergedTaskPool::push pools {} seg {} merged_task_pool {}", t->getPoolIds(), t->getSegmentId(), merged_task_pool.size());
+    }
+
+private:
+    std::mutex mtx;
+    std::list<MergedTaskPtr> merged_task_pool;
+    Poco::Logger * log;
+};
 
 // SegmentReadTaskScheduler is a global singleton.
 // All SegmentReadTaskPool will be added to it and be scheduled by it.
@@ -164,6 +228,11 @@ public:
     // Choose segment to read.
     MergedTaskPtr scheduleMergedTask();
 
+    void pushMergedTask(const MergedTaskPtr & p)
+    {
+        merged_task_pool.push(p);
+    }
+
 private:
     SegmentReadTaskScheduler();
     void setStop();
@@ -182,6 +251,8 @@ private:
     SegmentReadTaskPoolList read_pools;
     // table_id -> {seg_id -> pool_ids, seg_id -> pool_ids, ...}
     std::unordered_map<int64_t, std::unordered_map<uint64_t, std::vector<uint64_t>>> merging_segments;
+
+    MergedTaskPool merged_task_pool;
 
     std::atomic<bool> stop;
     std::thread sched_thread;

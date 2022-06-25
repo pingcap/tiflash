@@ -43,6 +43,13 @@ MergedTaskPtr SegmentReadTaskScheduler::scheduleMergedTask()
     {
         return nullptr;
     }
+
+    auto merged_task = merged_task_pool.pop(pool->getId());
+    if (merged_task != nullptr)
+    {
+        return merged_task;
+    }
+
     auto segment = unsafeScheduleSegment(pool, unexpired_count);
     if (segment.first == 0)
     {
@@ -81,7 +88,7 @@ std::pair<SegmentReadTaskPoolPtr, int64_t> SegmentReadTaskScheduler::unsafeSched
         {
             return {nullptr, 0};
         }
-        if (pool->pendingBlockCount() < 20)   // TODO(jinhelin): not hard code
+        if (pool->pendingBlockCount() < 20) // TODO(jinhelin): not hard code
         {
             return {pool, unexpired};
         }

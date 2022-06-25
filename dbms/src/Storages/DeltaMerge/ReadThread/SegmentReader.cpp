@@ -1,14 +1,16 @@
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/ReadThread/CPU.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+
 #include "Debug/DBGInvoker.h"
 #include "common/logger_useful.h"
-#include <Storages/DeltaMerge/ReadThread/CPU.h>
 namespace DB::DM
 {
 class SegmentReader
 {
-inline static const std::string name{"SegmentReader"};
+    inline static const std::string name{"SegmentReader"};
+
 public:
     SegmentReader(WorkQueue<MergedTaskPtr> & task_queue_, const std::vector<int> & cpus_)
         : task_queue(task_queue_)
@@ -18,7 +20,7 @@ public:
     {
         t = std::thread(&SegmentReader::run, this);
     }
-    
+
     void setStop()
     {
         stop.store(true, std::memory_order_relaxed);
@@ -65,19 +67,27 @@ private:
             return;
         }
 
-        int64_t sleep_times = 0;
+        SCOPE_EXIT({
+            if (!merged_task->allFinished())
+            {
+                SegmentReadTaskScheduler::instance().pushMergedTask(merged_task);
+            }
+        });
+
+        //int64_t sleep_times = 0;
         int64_t read_block_count = 0;
         merged_task->init();
         while (!merged_task->allFinished() && !isStop())
         {
             auto [min_pending_block_count, max_pending_block_count] = merged_task->getMinMaxPendingBlockCount();
             constexpr int64_t pending_block_count_limit = 100;
-            auto read_count = pending_block_count_limit - max_pending_block_count;  // TODO(jinhelin) max or min or ...
+            auto read_count = pending_block_count_limit - max_pending_block_count; // TODO(jinhelin) max or min or ...
             if (read_count <= 0)
             {
-                sleep_times++;
-                ::usleep(1000);  // TODO(jinhelin): back to MergedTaskPool
-                continue;
+                //sleep_times++;
+                //::usleep(1000);  // TODO(jinhelin): back to MergedTaskPool
+                //continue;
+                break;
             }
             for (int c = 0; c < 2; c++)
             {
@@ -85,7 +95,7 @@ private:
                 merged_task->readOneBlock();
             }
         }
-        LOG_FMT_DEBUG(log, "seg_id {} sleep_times {} read_block_count {}", merged_task->getSegmentId(), sleep_times, read_block_count);
+        LOG_FMT_DEBUG(log, "seg_id {} read_block_count {}", merged_task->getSegmentId(), read_block_count);
     }
 
     void run()
@@ -96,7 +106,7 @@ private:
         {
             try
             {
-                readSegments();  // TODO(jinhelin): how to send exception to upper threads?
+                readSegments(); // TODO(jinhelin): how to send exception to upper threads?
             }
             catch (Exception & e)
             {
@@ -118,7 +128,7 @@ private:
     Poco::Logger * log;
     std::thread t;
     std::vector<int> cpus;
-}; 
+};
 
 void SegmentReadThreadPool::init(int thread_count)
 {
@@ -135,7 +145,7 @@ bool SegmentReadThreadPool::addTask(MergedTaskPtr && task)
 {
     return task_queue.push(std::forward<MergedTaskPtr>(task));
 }
-    
+
 SegmentReadThreadPool::SegmentReadThreadPool(int thread_count)
     : log(&Poco::Logger::get("SegmentReadThreadPool"))
 {
@@ -151,4 +161,4 @@ SegmentReadThreadPool::~SegmentReadThreadPool()
     task_queue.finish();
 }
 
-}
+} // namespace DB::DM
