@@ -54,7 +54,8 @@ static inline bool sve_supported(void)
 #define STRINGIFY_IMPL(X) #X
 #define STRINGIFY(X) STRINGIFY_IMPL(X)
 #define DISPATCH(NAME, SVE, MTE, ASIMD)                                                                                                             \
-    extern typeof(ASIMD) NAME __attribute__((ifunc(STRINGIFY(__tiflash_##NAME##_resolver))));                                                       \
+    extern typeof(ASIMD) __tiflash_##NAME __attribute__((ifunc(STRINGIFY(__tiflash_##NAME##_resolver))));                                           \
+    extern typeof(ASIMD) NAME __attribute__((visibility("hidden"), alias(STRINGIFY(__tiflash_##NAME))));                                            \
     _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-function\"") static typeof(ASIMD) * __tiflash_##NAME##_resolver(void) \
     {                                                                                                                                               \
         if (sve_supported())                                                                                                                        \
