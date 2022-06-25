@@ -57,17 +57,21 @@ public:
     void start()
     {
         start_ns = nanoseconds();
+        last_ns = start_ns;
         is_running = true;
     }
+
     void stop()
     {
         stop_ns = nanoseconds();
         is_running = false;
     }
+
     void reset()
     {
         start_ns = 0;
         stop_ns = 0;
+        last_ns = 0;
         is_running = false;
     }
     void restart() { start(); }
@@ -75,9 +79,28 @@ public:
     UInt64 elapsedMilliseconds() const { return elapsed() / 1000000UL; }
     double elapsedSeconds() const { return static_cast<double>(elapsed()) / 1000000000ULL; }
 
+    UInt64 elapsedFromLastTime()
+    {
+        const auto now_ns = nanoseconds();
+        if (is_running)
+        {
+            auto rc = now_ns - last_ns;
+            last_ns = now_ns;
+            return rc;
+        }
+        else
+        {
+            return stop_ns - last_ns;
+        }
+    };
+
+    UInt64 elapsedMillisecondsFromLastTime() { return elapsedFromLastTime() / 1000000UL; }
+    UInt64 elapsedSecondsFromLastTime() { return elapsedFromLastTime() / 1000000UL; }
+
 private:
     UInt64 start_ns = 0;
     UInt64 stop_ns = 0;
+    UInt64 last_ns = 0;
     clockid_t clock_type;
     bool is_running = false;
 

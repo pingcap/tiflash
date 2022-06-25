@@ -111,9 +111,9 @@ public:
         return *this;
     }
 
-    DMFileBlockInputStreamBuilder & setTracingLogger(const DB::LoggerPtr & logger)
+    DMFileBlockInputStreamBuilder & setTracingID(const String & tracing_id_)
     {
-        tracing_logger = logger;
+        tracing_id = tracing_id_;
         return *this;
     }
 
@@ -155,7 +155,7 @@ private:
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
 
-    DB::LoggerPtr tracing_logger;
+    String tracing_id;
 };
 
 /**

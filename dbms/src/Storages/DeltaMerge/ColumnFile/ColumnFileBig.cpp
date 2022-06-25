@@ -43,7 +43,7 @@ void ColumnFileBig::calculateStat(const DMContext & context)
         {},
         context.db_context.getFileProvider(),
         context.getReadLimiter(),
-        /*tracing_logger*/ nullptr);
+        /*tracing_id*/ context.tracing_id);
 
     std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
 }
@@ -56,7 +56,7 @@ ColumnFileBig::getReader(const DMContext & context, const StorageSnapshotPtr & /
 
 void ColumnFileBig::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) const
 {
-    writeIntBinary(file->refId(), buf);
+    writeIntBinary(file->pageId(), buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
 }
@@ -65,17 +65,17 @@ ColumnFilePersistedPtr ColumnFileBig::deserializeMetadata(DMContext & context, /
                                                           const RowKeyRange & segment_range,
                                                           ReadBuffer & buf)
 {
-    UInt64 file_ref_id;
+    UInt64 file_page_id;
     size_t valid_rows, valid_bytes;
 
-    readIntBinary(file_ref_id, buf);
+    readIntBinary(file_page_id, buf);
     readIntBinary(valid_rows, buf);
     readIntBinary(valid_bytes, buf);
 
-    auto file_id = context.storage_pool.dataReader().getNormalPageId(file_ref_id);
+    auto file_id = context.storage_pool.dataReader()->getNormalPageId(file_page_id);
     auto file_parent_path = context.path_pool.getStableDiskDelegator().getDTFilePath(file_id);
 
-    auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
+    auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, file_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 
     auto * dp_file = new ColumnFileBig(dmfile, valid_rows, valid_bytes, segment_range);
     return std::shared_ptr<ColumnFileBig>(dp_file);
@@ -87,7 +87,9 @@ void ColumnFileBigReader::initStream()
         return;
 
     DMFileBlockInputStreamBuilder builder(context.db_context);
-    file_stream = builder.build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
+    file_stream = builder
+                      .setTracingID(context.tracing_id)
+                      .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
 
     // If we only need to read pk and version columns, then cache columns data in memory.
     if (pk_ver_only)

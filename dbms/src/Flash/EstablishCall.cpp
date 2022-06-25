@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
@@ -19,6 +20,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_tunnel_init_rpc_failure_failpoint[];
+} // namespace FailPoints
+
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
     : service(service)
     , cq(cq)
@@ -31,7 +37,7 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
     // the tag uniquely identifying the request.
-    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
+    service->requestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
 EstablishCallData::~EstablishCallData()
@@ -71,7 +77,8 @@ void EstablishCallData::initRpc()
     std::exception_ptr eptr = nullptr;
     try
     {
-        service->EstablishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
+        service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
     }
     catch (...)
     {

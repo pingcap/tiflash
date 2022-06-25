@@ -17,6 +17,7 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnTuple.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
@@ -37,19 +38,6 @@
 #include <iomanip>
 #include <thread>
 
-
-namespace ProfileEvents
-{
-extern const Event ExternalAggregationWritePart;
-extern const Event ExternalAggregationCompressedBytes;
-extern const Event ExternalAggregationUncompressedBytes;
-} // namespace ProfileEvents
-
-namespace CurrentMetrics
-{
-extern const Metric QueryThread;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -61,6 +49,11 @@ extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char random_aggregate_create_state_failpoint[];
+extern const char random_aggregate_merge_failpoint[];
+} // namespace FailPoints
 
 AggregatedDataVariants::~AggregatedDataVariants()
 {
@@ -330,6 +323,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
               * In order that then everything is properly destroyed, we "roll back" some of the created states.
               * The code is not very convenient.
               */
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_create_state_failpoint);
             aggregate_functions[j]->create(aggregate_data + offsets_of_aggregate_states[j]);
         }
         catch (...)
@@ -522,7 +516,14 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     }
 }
 
-bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider, ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, bool & no_more_keys)
+bool Aggregator::executeOnBlock(
+    const Block & block,
+    AggregatedDataVariants & result,
+    const FileProviderPtr & file_provider,
+    ColumnRawPtrs & key_columns,
+    AggregateColumns & aggregate_columns,
+    Int64 & local_delta_memory,
+    bool & no_more_keys)
 {
     if (isCancelled())
         return true;
@@ -600,7 +601,13 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
     size_t result_size = result.sizeWithoutOverflowRow();
     Int64 current_memory_usage = 0;
     if (current_memory_tracker)
+    {
         current_memory_usage = current_memory_tracker->get();
+        auto updated_local_delta_memory = CurrentMemoryTracker::getLocalDeltaMemory();
+        auto local_delta_memory_diff = updated_local_delta_memory - local_delta_memory;
+        current_memory_usage += (local_memory_usage.fetch_add(local_delta_memory_diff) + local_delta_memory_diff);
+        local_delta_memory = updated_local_delta_memory;
+    }
 
     auto result_size_bytes = current_memory_usage - memory_usage_before_aggregation; /// Here all the results in the sum are taken into account, from different threads.
 
@@ -645,7 +652,6 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     NativeBlockOutputStream block_out(compressed_buf, ClickHouseRevision::get(), getHeader(false));
 
     LOG_FMT_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
-    ProfileEvents::increment(ProfileEvents::ExternalAggregationWritePart);
 
     /// Flush only two-level data and possibly overflow data.
 
@@ -680,9 +686,6 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
         temporary_files.sum_size_uncompressed += uncompressed_bytes;
         temporary_files.sum_size_compressed += compressed_bytes;
     }
-
-    ProfileEvents::increment(ProfileEvents::ExternalAggregationCompressedBytes, compressed_bytes);
-    ProfileEvents::increment(ProfileEvents::ExternalAggregationUncompressedBytes, uncompressed_bytes);
 
     LOG_FMT_TRACE(
         log,
@@ -815,14 +818,14 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_rows += block.rows();
         src_bytes += block.bytes();
 
-        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, no_more_keys))
+        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, params.local_delta_memory, no_more_keys))
             break;
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
-        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, no_more_keys);
+        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, params.local_delta_memory, no_more_keys);
 
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = result.sizeWithoutOverflowRow();
@@ -1003,7 +1006,7 @@ Block Aggregator::prepareBlockAndFill(
             aggregate_columns[i] = header.getByName(aggregate_column_name).type->createColumn();
 
             /// The ColumnAggregateFunction column captures the shared ownership of the arena with the aggregate function states.
-            ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
+            auto & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
 
             for (auto & pool : data_variants.aggregates_pools)
                 column_aggregate_func.addArena(pool);
@@ -1122,10 +1125,14 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
 }
 
 
-BlocksList Aggregator::prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, ThreadPool * thread_pool) const
+BlocksList Aggregator::prepareBlocksAndFillTwoLevel(
+    AggregatedDataVariants & data_variants,
+    bool final,
+    ThreadPoolManager * thread_pool,
+    size_t max_threads) const
 {
 #define M(NAME) \
-    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool);
+    else if (data_variants.type == AggregatedDataVariants::Type::NAME) return prepareBlocksAndFillTwoLevelImpl(data_variants, *data_variants.NAME, final, thread_pool, max_threads);
 
     if (false) // NOLINT
     {
@@ -1141,9 +1148,9 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
     AggregatedDataVariants & data_variants,
     Method & method,
     bool final,
-    ThreadPool * thread_pool) const
+    ThreadPoolManager * thread_pool,
+    size_t max_threads) const
 {
-    size_t max_threads = thread_pool ? thread_pool->size() : 1;
     if (max_threads > data_variants.aggregates_pools.size())
         for (size_t i = data_variants.aggregates_pools.size(); i < max_threads; ++i)
             data_variants.aggregates_pools.push_back(std::make_shared<Arena>());
@@ -1181,7 +1188,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
                 [thread_id, &converter] { return converter(thread_id); });
 
             if (thread_pool)
-                thread_pool->schedule(wrapInvocable(true, [thread_id, &tasks] { tasks[thread_id](); }));
+                thread_pool->schedule(true, [thread_id, &tasks] { tasks[thread_id](); });
             else
                 tasks[thread_id]();
         }
@@ -1227,10 +1234,10 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     if (data_variants.empty())
         return blocks;
 
-    std::unique_ptr<ThreadPool> thread_pool;
+    std::shared_ptr<ThreadPoolManager> thread_pool;
     if (max_threads > 1 && data_variants.sizeWithoutOverflowRow() > 100000 /// TODO Make a custom threshold.
         && data_variants.isTwoLevel()) /// TODO Use the shared thread pool with the `merge` function.
-        thread_pool = std::make_unique<ThreadPool>(max_threads);
+        thread_pool = newThreadPoolManager(max_threads);
 
     if (isCancelled())
         return BlocksList();
@@ -1249,7 +1256,7 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
         if (!data_variants.isTwoLevel())
             blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final));
         else
-            blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, thread_pool.get()));
+            blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, thread_pool.get(), max_threads));
     }
 
     if (!final)
@@ -1485,7 +1492,7 @@ public:
 
     Block getHeader() const override { return aggregator.getHeader(final); }
 
-    ~MergingAndConvertingBlockInputStream()
+    ~MergingAndConvertingBlockInputStream() override
     {
         LOG_FMT_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Waiting for threads to finish");
 
@@ -1503,6 +1510,8 @@ protected:
 
         if (current_bucket_num >= NUM_BUCKETS)
             return {};
+
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_merge_failpoint);
 
         AggregatedDataVariantsPtr & first = data[0];
 
@@ -1619,8 +1628,6 @@ private:
 
     void thread(Int32 bucket_num)
     {
-        CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
-
         try
         {
             /// TODO: add no_more_keys support maybe
@@ -2002,10 +2009,10 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             }
         };
 
-        std::unique_ptr<ThreadPool> thread_pool;
+        std::shared_ptr<ThreadPoolManager> thread_pool;
         if (max_threads > 1 && total_input_rows > 100000 /// TODO Make a custom threshold.
             && has_two_level)
-            thread_pool = std::make_unique<ThreadPool>(max_threads);
+            thread_pool = newThreadPoolManager(max_threads);
 
         for (const auto & bucket_blocks : bucket_to_blocks)
         {
@@ -2022,7 +2029,7 @@ void Aggregator::mergeStream(const BlockInputStreamPtr & stream, AggregatedDataV
             };
 
             if (thread_pool)
-                thread_pool->schedule(wrapInvocable(true, task));
+                thread_pool->schedule(true, task);
             else
                 task();
         }

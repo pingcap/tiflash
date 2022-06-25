@@ -60,7 +60,7 @@ struct SegmentReadTask
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
-    SegmentReadTaskPool(SegmentReadTasks && tasks_)
+    explicit SegmentReadTaskPool(SegmentReadTasks && tasks_)
         : tasks(std::move(tasks_))
     {}
 

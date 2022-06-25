@@ -27,10 +27,10 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/System/StorageSystemTables.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/VirtualColumnUtils.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
 {
@@ -71,7 +71,8 @@ NameAndTypePair tryGetColumn(const ColumnsWithTypeAndName & columns, const Strin
 struct VirtualColumnsProcessor
 {
     explicit VirtualColumnsProcessor(const ColumnsWithTypeAndName & all_virtual_columns_)
-        : all_virtual_columns(all_virtual_columns_), virtual_columns_mask(all_virtual_columns_.size(), 0)
+        : all_virtual_columns(all_virtual_columns_)
+        , virtual_columns_mask(all_virtual_columns_.size(), 0)
     {}
 
     /// Separates real and virtual column names, returns real ones
@@ -131,7 +132,8 @@ protected:
 } // namespace
 
 
-StorageSystemTables::StorageSystemTables(const std::string & name_) : name(name_)
+StorageSystemTables::StorageSystemTables(const std::string & name_)
+    : name(name_)
 {
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
@@ -147,7 +149,8 @@ StorageSystemTables::StorageSystemTables(const std::string & name_) : name(name_
     }));
 
     virtual_columns = {{std::make_shared<DataTypeDateTime>(), "metadata_modification_time"},
-        {std::make_shared<DataTypeString>(), "create_table_query"}, {std::make_shared<DataTypeString>(), "engine_full"}};
+                       {std::make_shared<DataTypeString>(), "create_table_query"},
+                       {std::make_shared<DataTypeString>(), "engine_full"}};
 }
 
 
@@ -164,11 +167,11 @@ static ColumnPtr getFilteredDatabases(const ASTPtr & query, const Context & cont
 
 
 BlockInputStreams StorageSystemTables::read(const Names & column_names,
-    const SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum & processed_stage,
-    const size_t /*max_block_size*/,
-    const unsigned /*num_streams*/)
+                                            const SelectQueryInfo & query_info,
+                                            const Context & context,
+                                            QueryProcessingStage::Enum & processed_stage,
+                                            const size_t /*max_block_size*/,
+                                            const unsigned /*num_streams*/)
 {
     processed_stage = QueryProcessingStage::FetchColumns;
 
@@ -226,7 +229,7 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
                 {
                     if (db_tiflash)
                         tidb_database_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo());
-                    auto & table_info = managed_storage->getTableInfo();
+                    const auto & table_info = managed_storage->getTableInfo();
                     tidb_table_name = mapper.displayTableName(table_info);
                     table_id = table_info.id;
                     tombstone = managed_storage->getTombstone();
@@ -279,7 +282,7 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
     {
         Tables external_tables = context.getSessionContext().getExternalTables();
 
-        for (auto table : external_tables)
+        for (const auto & table : external_tables)
         {
             size_t j = 0;
             res_columns[j++]->insertDefault();

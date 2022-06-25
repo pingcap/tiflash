@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 
@@ -49,15 +50,17 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
         }
     }
 
-    FileEncryptionInfo(const FileEncryptionInfoRaw & src) : FileEncryptionInfoRaw(src) {}
+    FileEncryptionInfo(const FileEncryptionInfoRaw & src)
+        : FileEncryptionInfoRaw(src)
+    {}
     FileEncryptionInfo(const FileEncryptionRes & res_,
-        const EncryptionMethod & method_,
-        RawCppStringPtr key_,
-        RawCppStringPtr iv_,
-        RawCppStringPtr error_msg_)
+                       const EncryptionMethod & method_,
+                       RawCppStringPtr key_,
+                       RawCppStringPtr iv_,
+                       RawCppStringPtr error_msg_)
         : FileEncryptionInfoRaw{res_, method_, key_, iv_, error_msg_}
     {}
-    FileEncryptionInfo(const FileEncryptionInfo &) = delete;
+    DISALLOW_COPY(FileEncryptionInfo);
     FileEncryptionInfo(FileEncryptionInfo && src)
     {
         std::memcpy(this, &src, sizeof(src));
@@ -76,6 +79,3 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
 #pragma GCC diagnostic pop
 
 } // namespace DB
-
-
-

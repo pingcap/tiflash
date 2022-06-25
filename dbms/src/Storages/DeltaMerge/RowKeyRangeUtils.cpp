@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -44,7 +46,7 @@ private:
 
 public:
     explicit MergeRangeHelper(RowKeyRanges && sorted_ranges_)
-        : sorted_ranges(std::move(sorted_ranges_)) //
+        : sorted_ranges(std::move(sorted_ranges_))
     {
         genMergeStats();
     }
@@ -156,7 +158,7 @@ void sortRangesByStartEdge(RowKeyRanges & ranges)
     });
 }
 
-RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_ranges_count, Poco::Logger * log)
+RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_ranges_count, const LoggerPtr & log)
 {
     if (sorted_ranges.size() <= 1)
         return std::move(sorted_ranges);
@@ -169,7 +171,6 @@ RowKeyRanges tryMergeRanges(RowKeyRanges && sorted_ranges, size_t expected_range
 
     /// Try to make the number of merged_ranges result larger or equal to expected_ranges_count.
     do_merge_ranges.trySplit(expected_ranges_count);
-
 
     if (log)
         LOG_FMT_TRACE(log, "[original ranges: {}] [expected ranges: {}] [after merged ranges: {}] [final ranges: {}]", ori_size, expected_ranges_count, after_merge_count, do_merge_ranges.currentRangesCount());

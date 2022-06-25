@@ -47,7 +47,7 @@ public:
         Writer(PageFile &, bool sync_on_write, bool truncate_if_exists = true);
         ~Writer();
 
-        [[nodiscard]] size_t write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
+        [[nodiscard]] size_t write(DB::WriteBatch & wb, PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
         void tryCloseIdleFd(const Seconds & max_idle_time);
 
         const String & parentPath() const;
@@ -80,7 +80,7 @@ public:
 
         /// Read pages from files.
         /// After return, the items in to_read could be reordered, but won't be removed or added.
-        PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter = nullptr);
+        PageMap read(PageIdAndEntries & to_read, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
         void read(PageIdAndEntries & to_read, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr);
 
@@ -98,6 +98,7 @@ public:
         };
         using FieldReadInfos = std::vector<FieldReadInfo>;
         PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
+        Page read(FieldReadInfo & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
         bool isIdle(const Seconds & max_idle_time);
 
@@ -134,8 +135,14 @@ public:
     class MetaMergingReader : private boost::noncopyable
     {
     public:
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, size_t max_meta_offset, const ReadLimiterPtr & read_limiter = nullptr);
-        static MetaMergingReaderPtr createFrom(PageFile & page_file, const ReadLimiterPtr & read_limiter = nullptr);
+        static MetaMergingReaderPtr createFrom(PageFile & page_file,
+                                               size_t max_meta_offset,
+                                               const ReadLimiterPtr & read_limiter = nullptr,
+                                               const bool background = false);
+
+        static MetaMergingReaderPtr createFrom(PageFile & page_file,
+                                               const ReadLimiterPtr & read_limiter = nullptr,
+                                               const bool background = false);
 
         MetaMergingReader(PageFile & page_file_); // should only called by `createFrom`
 
@@ -184,7 +191,7 @@ public:
         }
 
     private:
-        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter);
+        void initialize(std::optional<size_t> max_meta_offset, const ReadLimiterPtr & read_limiter, const bool background = false);
 
     private:
         PageFile & page_file;
@@ -270,7 +277,7 @@ public:
         case Type::Checkpoint:
             return "Checkpoint";
         default:
-            throw Exception("Unexpected PageFile::Type: " + DB::toString((int)type));
+            throw Exception(fmt::format("Unexpected PageFile::Type: {}", static_cast<int>(type)));
         }
     }
 

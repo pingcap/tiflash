@@ -25,6 +25,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_during_mpp_close_tunnel[];
+extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 
 template <typename Writer>
@@ -52,6 +53,28 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
 }
 
 template <typename Writer>
+MPPTunnelBase<Writer>::MPPTunnelBase(
+    const String & tunnel_id_,
+    const std::chrono::seconds timeout_,
+    int input_steams_num_,
+    bool is_local_,
+    bool is_async_,
+    const String & req_id)
+    : connected(false)
+    , finished(false)
+    , is_local(is_local_)
+    , is_async(is_async_)
+    , timeout(timeout_)
+    , tunnel_id(tunnel_id_)
+    , input_streams_num(input_steams_num_)
+    , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
+    , thread_manager(newThreadManager())
+    , log(Logger::get("MPPTunnel", req_id, tunnel_id))
+{
+    RUNTIME_ASSERT(!(is_local && is_async), log, "is_local: {}, is_async: {}.", is_local, is_async);
+}
+
+template <typename Writer>
 MPPTunnelBase<Writer>::~MPPTunnelBase()
 {
     SCOPE_EXIT({
@@ -62,18 +85,25 @@ MPPTunnelBase<Writer>::~MPPTunnelBase()
         {
             std::unique_lock lock(mu);
             if (finished)
+            {
+                LOG_FMT_TRACE(log, "already finished!");
                 return;
+            }
+
             /// make sure to finish the tunnel after it is connected
             waitUntilConnectedOrFinished(lock);
             finishSendQueue();
         }
+        LOG_FMT_TRACE(log, "waiting consumer finish!");
         waitForConsumerFinish(/*allow_throw=*/false);
+        LOG_FMT_TRACE(log, "waiting child thread finished!");
+        thread_manager->wait();
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
-    thread_manager->wait();
+    LOG_FMT_TRACE(log, "destructed tunnel obj!");
 }
 
 template <typename Writer>
@@ -274,9 +304,11 @@ void MPPTunnelBase<Writer>::waitForConsumerFinish(bool allow_throw)
         assert(connected);
     }
 #endif
+    LOG_FMT_TRACE(log, "start wait for consumer finish!");
     String err_msg = consumer_state.getError(); // may blocking
     if (allow_throw && !err_msg.empty())
         throw Exception("Consumer exits unexpected, " + err_msg);
+    LOG_FMT_TRACE(log, "end wait for consumer finish!");
 }
 
 template <typename Writer>
@@ -291,6 +323,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
         auto res = cv_for_connected_or_finished.wait_for(lk, timeout, connected_or_finished);
         LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
 
+        fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, res = false;);
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
@@ -308,8 +341,8 @@ template <typename Writer>
 void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_lock)
 {
     // must finish send_queue outside of the critical area to avoid deadlock with write.
+    LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue.finish();
-
     auto rest_work = [this, &err_msg] {
         // it's safe to call it multiple times
         if (finished && consumer_state.errHasSet())

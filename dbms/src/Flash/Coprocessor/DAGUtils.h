@@ -22,6 +22,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <grpcpp/impl/codegen/status_code_enum.h>
+#include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
 #include <unordered_map>
@@ -35,10 +36,17 @@ Field decodeLiteral(const tipb::Expr & expr);
 bool isFunctionExpr(const tipb::Expr & expr);
 bool isScalarFunctionExpr(const tipb::Expr & expr);
 bool isAggFunctionExpr(const tipb::Expr & expr);
+bool isWindowFunctionExpr(const tipb::Expr & expr);
 const String & getFunctionName(const tipb::Expr & expr);
 const String & getAggFunctionName(const tipb::Expr & expr);
+const String & getWindowFunctionName(const tipb::Expr & expr);
+String getExchangeTypeName(const tipb::ExchangeType & tp);
+String getJoinTypeName(const tipb::JoinType & tp);
+String getFieldTypeName(Int32 tp);
+String getJoinExecTypeName(const tipb::JoinExecType & tp);
 bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
+NameAndTypePair getColumnNameAndTypeForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 bool exprHasValidFieldType(const tipb::Expr & expr);
@@ -62,7 +70,6 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
 TiDB::TiDBCollatorPtr getCollatorFromExpr(const tipb::Expr & expr);
 TiDB::TiDBCollatorPtr getCollatorFromFieldType(const tipb::FieldType & field_type);
 bool hasUnsignedFlag(const tipb::FieldType & tp);
-grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code);
 
 void assertBlockSchema(
     const DataTypes & expected_types,
@@ -97,5 +104,6 @@ public:
 
 tipb::DAGRequest getDAGRequestFromStringWithRetry(const String & s);
 tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context);
+tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name);
 
 } // namespace DB

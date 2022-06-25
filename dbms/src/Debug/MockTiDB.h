@@ -15,10 +15,10 @@
 #pragma once
 
 #include <Storages/ColumnsDescription.h>
-#include <Storages/Transaction/SchemaGetter.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
+#include <TiDB/Schema/SchemaGetter.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #include <atomic>
 
@@ -134,6 +134,8 @@ public:
     std::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
 
     Int64 getVersion() { return version; }
+
+    TableID newTableID() { return table_id_allocator++; }
 
 private:
     TablePtr dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions);

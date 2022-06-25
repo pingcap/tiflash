@@ -132,6 +132,7 @@ public:
     /** Replace columns in a block */
     void setColumns(MutableColumns && columns);
     Block cloneWithColumns(MutableColumns && columns) const;
+    Block cloneWithColumns(Columns && columns) const;
 
     /** Get a block with columns that have been rearranged in the order of their names. */
     Block sortColumns() const;

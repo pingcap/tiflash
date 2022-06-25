@@ -223,6 +223,7 @@ inline bool hasColumn(const ColumnDefines & columns, const ColId & col_id)
     return false;
 }
 
+/// Checks whether two blocks have the same schema.
 template <bool check_default_value = false>
 inline bool isSameSchema(const Block & a, const Block & b)
 {

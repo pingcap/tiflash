@@ -60,10 +60,6 @@ public:
     std::tuple<Result, PageEntriesEdit>
     tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const WritingFilesSnapshot & writing_files);
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#endif
-
     /**
      * Collect valid page of snapshot.
      * Return {
@@ -72,6 +68,9 @@ private:
      * }
      */
     static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#endif
 
     struct CompactCandidates
     {

@@ -91,7 +91,7 @@ enum TP
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(tt, v, cf, ct, w) Type##tt = v,
+#define M(tt, v, cf, ct, w) Type##tt = (v),
     COLUMN_TYPES(M)
 #undef M
 };
@@ -123,7 +123,7 @@ enum ColumnFlag
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(cf, v) ColumnFlag##cf = v,
+#define M(cf, v) ColumnFlag##cf = (v),
     COLUMN_FLAGS(M)
 #undef M
 };
@@ -152,7 +152,7 @@ enum CodecFlag
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(cf, v) CodecFlag##cf = v,
+#define M(cf, v) CodecFlag##cf = (v),
     CODEC_FLAGS(M)
 #undef M
 };
@@ -179,7 +179,6 @@ struct ColumnInfo
 
     ColumnID id = -1;
     String name;
-    Int32 offset = -1;
     Poco::Dynamic::Var origin_default_value;
     Poco::Dynamic::Var default_value;
     Poco::Dynamic::Var default_bit_value;
@@ -197,10 +196,10 @@ struct ColumnInfo
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v)                                                  \
-    inline bool has##f##Flag() const { return (flag & v) != 0; } \
-    inline void set##f##Flag() { flag |= v; }                    \
-    inline void clear##f##Flag() { flag &= (~v); }
+#define M(f, v)                                                    \
+    inline bool has##f##Flag() const { return (flag & (v)) != 0; } \
+    inline void set##f##Flag() { flag |= (v); }                    \
+    inline void clear##f##Flag() { flag &= (~(v)); }
     COLUMN_FLAGS(M)
 #undef M
 
@@ -212,6 +211,12 @@ struct ColumnInfo
     static Int64 getTimeValue(const String &);
     static Int64 getYearValue(const String &);
     static UInt64 getBitValue(const String &);
+
+private:
+    /// please be very careful when you have to use offset,
+    /// because we never update offset when DDL action changes.
+    /// Thus, our offset will not exactly correspond the order of columns.
+    Int32 offset = -1;
 };
 
 enum PartitionType
@@ -225,7 +230,7 @@ struct PartitionDefinition
 {
     PartitionDefinition() = default;
 
-    PartitionDefinition(Poco::JSON::Object::Ptr json);
+    explicit PartitionDefinition(Poco::JSON::Object::Ptr json);
 
     Poco::JSON::Object::Ptr getJSONObject() const;
 
@@ -241,7 +246,7 @@ struct PartitionInfo
 {
     PartitionInfo() = default;
 
-    PartitionInfo(Poco::JSON::Object::Ptr json);
+    explicit PartitionInfo(Poco::JSON::Object::Ptr json);
 
     Poco::JSON::Object::Ptr getJSONObject() const;
 
@@ -264,7 +269,7 @@ struct DBInfo
     SchemaState state;
 
     DBInfo() = default;
-    DBInfo(const String & json) { deserialize(json); }
+    explicit DBInfo(const String & json) { deserialize(json); }
 
     String serialize() const;
 
@@ -298,8 +303,13 @@ struct IndexColumnInfo
     void deserialize(Poco::JSON::Object::Ptr json);
 
     String name;
-    Int32 offset;
     Int32 length;
+
+private:
+    /// please be very careful when you have to use offset,
+    /// because we never update offset when DDL action changes.
+    /// Thus, our offset will not exactly correspond the order of columns.
+    Int32 offset;
 };
 struct IndexInfo
 {
@@ -375,9 +385,9 @@ struct TableInfo
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
     ColumnID getColumnID(const String & name) const;
-    String getColumnName(const ColumnID id) const;
+    String getColumnName(ColumnID id) const;
 
-    const ColumnInfo & getColumnInfo(const ColumnID id) const;
+    const ColumnInfo & getColumnInfo(ColumnID id) const;
 
     std::optional<std::reference_wrapper<const ColumnInfo>> getPKHandleColumn() const;
 
@@ -385,7 +395,12 @@ struct TableInfo
 
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
 
-    /// should not be called if is_common_handle = false
+    /// should not be called if is_common_handle = false.
+    /// when use IndexInfo, please avoid to use the offset info
+    /// the offset value may be wrong in some cases,
+    /// due to we will not update IndexInfo except RENAME DDL action,
+    /// but DDL like add column / drop column may change the offset of columns
+    /// Thus, please be very careful when you must have to use offset information !!!!!
     const IndexInfo & getPrimaryIndexInfo() const { return index_infos[0]; }
 
     IndexInfo & getPrimaryIndexInfo() { return index_infos[0]; }

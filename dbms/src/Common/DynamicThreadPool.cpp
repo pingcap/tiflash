@@ -120,26 +120,30 @@ void DynamicThreadPool::fixedWork(size_t index)
 
 void DynamicThreadPool::dynamicWork(TaskPtr initial_task)
 {
-    UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_thdpool, type_max_threads_of_thdpool);
-    executeTask(initial_task);
-
-    DynamicNode node;
-    while (true)
     {
-        {
-            std::unique_lock lock(dynamic_mutex);
-            if (in_destructing)
-                break;
-            // attach to just after head to reuse hot threads so that cold threads have chance to exit
-            node.appendTo(&dynamic_idle_head);
-            node.cv.wait_for(lock, dynamic_auto_shrink_cooldown);
-            node.detach();
-        }
+        UPDATE_CUR_AND_MAX_METRIC(tiflash_thread_count, type_total_threads_of_thdpool, type_max_threads_of_thdpool);
+        executeTask(initial_task);
 
-        if (!node.task) // may be timeout or cancelled
-            break;
-        executeTask(node.task);
+        DynamicNode node;
+        while (true)
+        {
+            {
+                std::unique_lock lock(dynamic_mutex);
+                if (in_destructing)
+                    break;
+                // attach to just after head to reuse hot threads so that cold threads have chance to exit
+                node.appendTo(&dynamic_idle_head);
+                node.cv.wait_for(lock, dynamic_auto_shrink_cooldown);
+                node.detach();
+            }
+
+            if (!node.task) // may be timeout or cancelled
+                break;
+            executeTask(node.task);
+        }
     }
+    // must decrease counter after scope of `UPDATE_CUR_AND_MAX_METRIC`
+    // to avoid potential data race (#4595)
     alive_dynamic_threads.fetch_sub(1);
 }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
@@ -22,6 +23,12 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_receiver_sync_msg_push_failure_failpoint[];
+extern const char random_receiver_async_msg_push_failure_failpoint[];
+} // namespace FailPoints
+
 namespace
 {
 String getReceiverStateStr(const ExchangeReceiverState & s)
@@ -92,10 +99,14 @@ public:
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
+        {
+            // Use lock to ensure reader is created already in reactor thread
+            std::unique_lock lock(mu);
             if (!ok)
                 reader.reset();
             notifyReactor();
             break;
+        }
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
                 ++read_packet_index;
@@ -115,7 +126,7 @@ public:
     // handle will be called by ExchangeReceiver::reactor.
     void handle()
     {
-        LOG_FMT_TRACE(log, "Enter {}. stage: {}", __PRETTY_FUNCTION__, stage);
+        LOG_FMT_TRACE(log, "stage: {}", stage);
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
@@ -227,6 +238,8 @@ private:
     void start()
     {
         stage = AsyncRequestStage::WAIT_MAKE_READER;
+        // Use lock to ensure async reader is unreachable from grpc thread before this function returns
+        std::unique_lock lock(mu);
         rpc_context->makeAsyncReader(*request, reader, thisAsUnaryCallback());
     }
 
@@ -251,7 +264,9 @@ private:
             recv_msg->packet = std::move(packet);
             recv_msg->source_index = request->source_index;
             recv_msg->req_info = req_info;
-            if (!msg_channel->push(std::move(recv_msg)))
+            bool push_success = msg_channel->push(std::move(recv_msg));
+            fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_success = false;);
+            if (!push_success)
                 return false;
             // can't reuse packet since it is sent to readers.
             packet = std::make_shared<MPPDataPacket>();
@@ -283,6 +298,7 @@ private:
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
     LoggerPtr log;
+    std::mutex mu;
 };
 } // namespace
 
@@ -304,15 +320,38 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , exc_log(Logger::get("ExchangeReceiver", req_id, executor_id))
     , collected(false)
 {
-    rpc_context->fillSchema(schema);
-    setUpConnection();
+    try
+    {
+        rpc_context->fillSchema(schema);
+        setUpConnection();
+    }
+    catch (...)
+    {
+        try
+        {
+            cancel();
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+        }
+        throw;
+    }
 }
 
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    close();
-    thread_manager->wait();
+    try
+    {
+        close();
+        thread_manager->wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(exc_log, __PRETTY_FUNCTION__);
+    }
 }
 
 template <typename RPCContext>
@@ -370,10 +409,10 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     MPMCQueue<AsyncHandler *> ready_requests(alive_async_connections * 2);
     std::vector<AsyncHandler *> waiting_for_retry_requests;
 
-    std::vector<AsyncRequestHandler<RPCContext>> handlers;
+    std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier());
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channel, rpc_context, req, exc_log->identifier()));
 
     while (alive_async_connections > 0)
     {
@@ -453,7 +492,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (recv_msg->packet->has_error())
                     throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
 
-                if (!msg_channel.push(std::move(recv_msg)))
+                bool push_success = msg_channel.push(std::move(recv_msg));
+                fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_success = false;);
+                if (!push_success)
                 {
                     meet_error = true;
                     auto local_state = getState();

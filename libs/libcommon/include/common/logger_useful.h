@@ -18,6 +18,7 @@
 
 #include <Poco/Logger.h>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #ifndef QUERY_PREVIEW_LENGTH
 #define QUERY_PREVIEW_LENGTH 160

@@ -1743,6 +1743,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     return getDatetime(number, result, ctx);
 }
 
+template <typename...>
 class ExecutableFunctionTiDBCast : public IExecutableFunction
 {
 public:
@@ -1782,13 +1783,15 @@ private:
     const Context & context;
 };
 
+using MonotonicityForRange = std::function<IFunctionBase::Monotonicity(const IDataType &, const Field &, const Field &)>;
+
 /// FunctionTiDBCast implements SQL cast function in TiDB
 /// The basic idea is to dispatch according to combinations of <From, To> parameter types
+template <typename...>
 class FunctionTiDBCast final : public IFunctionBase
 {
 public:
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
-    using MonotonicityForRange = std::function<Monotonicity(const IDataType &, const Field &, const Field &)>;
 
     FunctionTiDBCast(const Context & context, const char * name, MonotonicityForRange && monotonicity_for_range, const DataTypes & argument_types, const DataTypePtr & return_type, bool in_union_, const tipb::FieldType & tidb_tp_)
         : context(context)
@@ -1805,7 +1808,7 @@ public:
 
     ExecutableFunctionPtr prepare(const Block & /*sample_block*/) const override
     {
-        return std::make_shared<ExecutableFunctionTiDBCast>(
+        return std::make_shared<ExecutableFunctionTiDBCast<>>(
             prepare(getArgumentTypes()[0], getReturnType()),
             name,
             in_union,
@@ -2341,8 +2344,6 @@ private:
 class FunctionBuilderTiDBCast : public IFunctionBuilder
 {
 public:
-    using MonotonicityForRange = FunctionTiDBCast::MonotonicityForRange;
-
     static constexpr auto name = "tidb_cast";
     static FunctionBuilderPtr create(const Context & context)
     {
@@ -2369,16 +2370,7 @@ protected:
     FunctionBasePtr buildImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & return_type,
-        const TiDB::TiDBCollatorPtr &) const override
-    {
-        DataTypes data_types(arguments.size());
-
-        for (size_t i = 0; i < arguments.size(); ++i)
-            data_types[i] = arguments[i].type;
-
-        auto monotonicity = getMonotonicityInformation(arguments.front().type, return_type.get());
-        return std::make_shared<FunctionTiDBCast>(context, name, std::move(monotonicity), data_types, return_type, in_union, tidb_tp);
-    }
+        const TiDB::TiDBCollatorPtr &) const override;
 
     // use the last const string column's value as the return type name, in string representation like "Float64"
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override

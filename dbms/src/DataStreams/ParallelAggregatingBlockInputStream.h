@@ -50,7 +50,7 @@ public:
 
     Block getHeader() const override;
 
-    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    void collectNewThreadCountOfThisLevel(int & cnt) override
     {
         cnt += processor.getMaxThreads();
     }
@@ -62,6 +62,8 @@ protected:
     }
 
     Block readImpl() override;
+    void appendInfo(FmtBuffer & buffer) const override;
+
 
 private:
     const LoggerPtr log;
@@ -106,6 +108,7 @@ private:
     {
         size_t src_rows = 0;
         size_t src_bytes = 0;
+        Int64 local_delta_memory = 0;
 
         ColumnRawPtrs key_columns;
         Aggregator::AggregateColumns aggregate_columns;

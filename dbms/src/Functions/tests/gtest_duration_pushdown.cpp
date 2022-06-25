@@ -43,8 +43,10 @@ try
         result_col,
         executeFunction(
             "FunctionConvertDurationFromNanos",
-            createColumn<Nullable<Int64>>({-1, 0, 1, {}, INT64_MAX, INT64_MIN, (838 * 3600 + 59 * 60 + 59) * 1000000000L, -(838 * 3600 + 59 * 60 + 59) * 1000000000L}),
-            createConstColumn<Int64>(8, 1)));
+            {createColumn<Nullable<Int64>>({-1, 0, 1, {}, INT64_MAX, INT64_MIN, (838 * 3600 + 59 * 60 + 59) * 1000000000L, -(838 * 3600 + 59 * 60 + 59) * 1000000000L}),
+             createConstColumn<Int64>(8, 1)},
+            nullptr,
+            true));
 
     ColumnWithTypeAndName result_col2(
         createConstColumn<DataTypeMyDuration::FieldType>(3, 3).column,
@@ -54,8 +56,10 @@ try
         result_col2,
         executeFunction(
             "FunctionConvertDurationFromNanos",
-            createConstColumn<Int64>(3, 3),
-            createConstColumn<Int64>(3, 2)));
+            {createConstColumn<Int64>(3, 3),
+             createConstColumn<Int64>(3, 2)},
+            nullptr,
+            true));
 }
 CATCH
 

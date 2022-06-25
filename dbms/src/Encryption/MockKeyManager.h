@@ -20,12 +20,15 @@
 
 namespace DB
 {
-class MockKeyManager : public KeyManager
+class Logger;
+using LoggerPtr = std::shared_ptr<Logger>;
+
+class MockKeyManager final : public KeyManager
 {
 public:
-    ~MockKeyManager() = default;
+    ~MockKeyManager() override = default;
 
-    MockKeyManager(bool encryption_enabled_ = true);
+    explicit MockKeyManager(bool encryption_enabled_ = true);
 
     MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv, bool encryption_enabled_ = true);
 
@@ -50,5 +53,7 @@ private:
     String key;
     String iv;
     bool encryption_enabled;
+
+    LoggerPtr logger;
 };
 } // namespace DB

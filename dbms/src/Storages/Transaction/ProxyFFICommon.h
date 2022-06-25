@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
+
 #include <cstring>
 
 namespace DB
@@ -23,9 +25,13 @@ struct RawCppString : std::string
     using Base = std::string;
     using Base::Base;
     RawCppString() = delete;
-    RawCppString(Base && src) : Base(std::move(src)) {}
-    RawCppString(const Base & src) : Base(src) {}
-    RawCppString(const RawCppString &) = delete;
+    RawCppString(Base && src)
+        : Base(std::move(src))
+    {}
+    RawCppString(const Base & src)
+        : Base(src)
+    {}
+    DISALLOW_COPY(RawCppString);
 
     template <class... Args>
     static RawCppString * New(Args &&... _args)

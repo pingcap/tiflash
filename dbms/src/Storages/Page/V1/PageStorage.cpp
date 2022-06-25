@@ -358,7 +358,7 @@ Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
     return file_reader->read(to_read)[page_id];
 }
 
-PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot)
+PageMap PageStorage::read(const PageIds & page_ids, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {
@@ -391,7 +391,7 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
     return page_map;
 }
 
-void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot)
+void PageStorage::read(const PageIds & page_ids, const PageHandler & handler, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {

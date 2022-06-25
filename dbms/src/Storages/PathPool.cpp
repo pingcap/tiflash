@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Common/escapeForFileName.h>
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
@@ -24,7 +25,6 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
-#include <common/logger_useful.h>
 #include <fmt/core.h>
 
 #include <random>
@@ -64,7 +64,7 @@ PathPool::PathPool(
     , enable_raft_compatible_mode(enable_raft_compatible_mode_)
     , global_capacity(global_capacity_)
     , file_provider(file_provider_)
-    , log(&Poco::Logger::get("PathPool"))
+    , log(Logger::get("PathPool"))
 {
     if (kvstore_paths.empty())
     {
@@ -134,7 +134,7 @@ StoragePathPool::StoragePathPool( //
     , path_need_database_name(path_need_database_name_)
     , global_capacity(std::move(global_capacity_))
     , file_provider(std::move(file_provider_))
-    , log(&Poco::Logger::get("StoragePathPool"))
+    , log(Logger::get("StoragePathPool"))
 {
     if (unlikely(database.empty() || table.empty()))
         throw Exception(fmt::format("Can NOT create StoragePathPool [database={}] [table={}]", database, table), ErrorCodes::LOGICAL_ERROR);
@@ -240,6 +240,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
         {
             if (Poco::File dir(path_info.path); dir.exists())
             {
+                LOG_FMT_INFO(log, "Begin to drop [dir={}] from main_path_infos", path_info.path);
                 file_provider->deleteDirectory(dir.path(), false, recursive);
 
                 // update global used size
@@ -269,6 +270,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
         {
             if (Poco::File dir(path_info.path); dir.exists())
             {
+                LOG_FMT_INFO(log, "Begin to drop [dir={}] from latest_path_infos", path_info.path);
                 file_provider->deleteDirectory(dir.path(), false, recursive);
 
                 // When PageStorage is dropped, it will update the size in global_capacity.
@@ -318,7 +320,7 @@ String genericChoosePath(const std::vector<T> & paths, //
                          const PathCapacityMetricsPtr & global_capacity, //
                          std::function<String(const std::vector<T> & paths, size_t idx)> path_generator, //
                          std::function<String(const T & path_info)> path_getter, //
-                         Poco::Logger * log, //
+                         LoggerPtr log, //
                          const String & log_msg)
 {
     if (paths.size() == 1)

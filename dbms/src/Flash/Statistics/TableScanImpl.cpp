@@ -55,7 +55,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             {
                 auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(io_stream.get());
                 assert(p_stream);
-                cop_table_scan_detail.bytes += p_stream->getProfileInfo().bytes;
+                local_table_scan_detail.bytes += p_stream->getProfileInfo().bytes;
             }
         }
     }

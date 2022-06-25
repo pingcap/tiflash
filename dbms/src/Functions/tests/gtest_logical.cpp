@@ -46,7 +46,7 @@ try
             createColumn<Nullable<UInt8>>({1, 0})));
     // const, const
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<UInt8>>(1, 1),
+        createConstColumn<UInt8>(1, 1),
         executeFunction(
             func_name,
             createConstColumn<Nullable<UInt8>>(1, 1),
@@ -82,7 +82,7 @@ try
             createColumn<Nullable<UInt8>>({1, 0})));
     // const, const
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<UInt8>>(1, 1),
+        createConstColumn<UInt8>(1, 1),
         executeFunction(
             func_name,
             createConstColumn<Nullable<UInt8>>(1, 1),
@@ -118,7 +118,7 @@ try
             createColumn<Nullable<UInt8>>({1, 0})));
     // const, const
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<UInt8>>(1, 0),
+        createConstColumn<UInt8>(1, 0),
         executeFunction(
             func_name,
             createConstColumn<Nullable<UInt8>>(1, 1),
@@ -146,7 +146,7 @@ try
             createColumn<Nullable<UInt8>>({0, 1, {}})));
     // const
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<UInt8>>(1, 0),
+        createConstColumn<UInt8>(1, 0),
         executeFunction(
             func_name,
             createConstColumn<Nullable<UInt8>>(1, 1)));

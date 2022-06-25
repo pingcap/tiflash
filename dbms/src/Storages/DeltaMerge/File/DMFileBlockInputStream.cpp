@@ -54,7 +54,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         read_packs,
         file_provider,
         read_limiter,
-        tracing_logger);
+        tracing_id);
 
     DMFileReader reader(
         dmfile,
@@ -72,7 +72,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         read_limiter,
         rows_threshold_per_read,
         read_one_pack_every_time,
-        tracing_logger);
+        tracing_id);
 
     return std::make_shared<DMFileBlockInputStream>(std::move(reader));
 }

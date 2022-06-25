@@ -46,4 +46,19 @@ void registerFunctionsTiDBConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionBuilderTiDBCast>();
 }
 
+FunctionBasePtr FunctionBuilderTiDBCast::buildImpl(
+    const ColumnsWithTypeAndName & arguments,
+    const DataTypePtr & return_type,
+    const TiDB::TiDBCollatorPtr &) const
+{
+    DataTypes data_types(arguments.size());
+
+    for (size_t i = 0; i < arguments.size(); ++i)
+        data_types[i] = arguments[i].type;
+
+    auto monotonicity = getMonotonicityInformation(arguments.front().type, return_type.get());
+    return std::make_shared<FunctionTiDBCast<>>(context, name, std::move(monotonicity), data_types, return_type, in_union, tidb_tp);
+}
+
+
 } // namespace DB

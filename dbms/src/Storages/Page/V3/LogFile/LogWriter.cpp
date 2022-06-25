@@ -43,7 +43,7 @@ LogWriter::LogWriter(
         path,
         EncryptionPath(path, ""),
         false,
-        /*create_new_encryption_info_*/ false);
+        /*create_new_encryption_info_*/ true);
 
     buffer = static_cast<char *>(alloc(buffer_size));
     write_buffer = WriteBuffer(buffer, buffer_size);
@@ -67,9 +67,16 @@ size_t LogWriter::writtenBytes() const
     return written_bytes;
 }
 
-void LogWriter::flush(const WriteLimiterPtr & write_limiter)
+void LogWriter::flush(const WriteLimiterPtr & write_limiter, const bool background)
 {
-    PageUtil::writeFile(log_file, written_bytes, write_buffer.buffer().begin(), write_buffer.offset(), write_limiter, false);
+    PageUtil::writeFile(log_file,
+                        written_bytes,
+                        write_buffer.buffer().begin(),
+                        write_buffer.offset(),
+                        write_limiter,
+                        /*background=*/background,
+                        /*truncate_if_failed=*/false,
+                        /*enable_failpoint=*/false);
     log_file->fsync();
     written_bytes += write_buffer.offset();
 
@@ -140,7 +147,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
 
     if (!manual_flush)
     {
-        flush(write_limiter);
+        flush(write_limiter, /* background */ false);
     }
 }
 
@@ -152,7 +159,7 @@ void LogWriter::emitPhysicalRecord(Format::RecordType type, ReadBuffer & payload
     static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::CHECKSUM_FIELD_SIZE, "Header size must be greater than the checksum size");
     static_assert(Format::RECYCLABLE_HEADER_SIZE > Format::HEADER_SIZE, "Ensure the min buffer size for physical record");
     constexpr static size_t HEADER_BUFF_SIZE = Format::RECYCLABLE_HEADER_SIZE - Format::CHECKSUM_FIELD_SIZE;
-    char buf[HEADER_BUFF_SIZE];
+    char buf[HEADER_BUFF_SIZE] = {0};
     WriteBuffer header_buff(buf, HEADER_BUFF_SIZE);
 
     // Format the header

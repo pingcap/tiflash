@@ -50,8 +50,20 @@ public:
         return getInternal(source, buf, std::forward<T>(first_identifier), std::forward<Args>(rest)...);
     }
 
+    template <typename T, typename... Args>
+    static LoggerPtr get(Poco::Logger * source_log, T && first_identifier, Args &&... rest)
+    {
+        FmtBuffer buf;
+        return getInternal(source_log, buf, std::forward<T>(first_identifier), std::forward<Args>(rest)...);
+    }
+
     Logger(const std::string & source, const std::string & identifier)
-        : logger(&Poco::Logger::get(source))
+        : Logger(&Poco::Logger::get(source), identifier)
+    {
+    }
+
+    Logger(Poco::Logger * source_log, const std::string & identifier)
+        : logger(source_log)
         , id(identifier)
     {
     }
@@ -112,6 +124,20 @@ private:
     {
         buf.fmtAppend("{}", std::forward<T>(identifier));
         return std::make_shared<Logger>(source, buf.toString());
+    }
+
+    template <typename T, typename... Args>
+    static LoggerPtr getInternal(Poco::Logger * source_log, FmtBuffer & buf, T && first, Args &&... args)
+    {
+        buf.fmtAppend("{} ", std::forward<T>(first));
+        return getInternal(source_log, buf, std::forward<Args>(args)...);
+    }
+
+    template <typename T>
+    static LoggerPtr getInternal(Poco::Logger * source_log, FmtBuffer & buf, T && identifier)
+    {
+        buf.fmtAppend("{}", std::forward<T>(identifier));
+        return std::make_shared<Logger>(source_log, buf.toString());
     }
 
     std::string wrapMsg(const std::string & msg) const

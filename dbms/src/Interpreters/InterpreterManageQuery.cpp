@@ -27,14 +27,14 @@ BlockIO InterpreterManageQuery::execute()
     const ASTManageQuery & ast = typeid_cast<const ASTManageQuery &>(*query_ptr);
 
     StoragePtr table = context.getTable(ast.database, ast.table);
-    IManageableStorage * manageable_storage;
+    StorageDeltaMerge * manageable_storage;
     if (table->getName() == MutableSupport::delta_tree_storage_name)
     {
         manageable_storage = &dynamic_cast<StorageDeltaMerge &>(*table);
     }
     else
     {
-        throw Exception("Manage operation can only be applied to DeltaMerge engine tables");
+        throw Exception("Manage operation can only be applied to DeltaTree engine tables");
     }
 
     switch (ast.operation)

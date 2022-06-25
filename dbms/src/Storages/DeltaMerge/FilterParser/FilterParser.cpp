@@ -106,7 +106,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
     const ColumnDefines & columns_to_read,
     const FilterParser::AttrCreatorByColumnID & creator,
     const TimezoneInfo & timezone_info,
-    Poco::Logger * /* log */)
+    const LoggerPtr & /*log*/)
 {
     if (unlikely(expr.children_size() != 2))
         return createUnsupported(expr.ShortDebugString(),
@@ -247,7 +247,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
                           const ColumnDefines & columns_to_read,
                           const FilterParser::AttrCreatorByColumnID & creator,
                           const TimezoneInfo & timezone_info,
-                          Poco::Logger * log)
+                          const LoggerPtr & log)
 {
     assert(isFunctionExpr(expr));
 
@@ -331,7 +331,7 @@ inline RSOperatorPtr tryParse(const tipb::Expr & filter,
                               const ColumnDefines & columns_to_read,
                               const FilterParser::AttrCreatorByColumnID & creator,
                               const TimezoneInfo & timezone_info,
-                              Poco::Logger * log)
+                              const LoggerPtr & log)
 {
     if (isFunctionExpr(filter))
         return cop::parseTiExpr(filter, columns_to_read, creator, timezone_info, log);
@@ -345,7 +345,7 @@ inline RSOperatorPtr tryParse(const tipb::Expr & filter,
 RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info,
                                           const ColumnDefines & columns_to_read,
                                           FilterParser::AttrCreatorByColumnID && creator,
-                                          Poco::Logger * log)
+                                          const LoggerPtr & log)
 {
     RSOperatorPtr op = EMPTY_FILTER;
     if (dag_info.filters.empty())

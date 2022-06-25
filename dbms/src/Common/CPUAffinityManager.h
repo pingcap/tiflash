@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
+#include <common/defines.h>
+
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -115,17 +118,15 @@ private:
 #endif
 
     // unused except Linux
-    [[maybe_unused]] int query_cpu_percent;
-    [[maybe_unused]] int cpu_cores;
+    MAYBE_UNUSED_MEMBER int query_cpu_percent;
+    MAYBE_UNUSED_MEMBER int cpu_cores;
+
     std::vector<std::string> query_threads;
     Poco::Logger * log;
 
     CPUAffinityManager();
     // Disable copy and move
 public:
-    CPUAffinityManager(const CPUAffinityManager &) = delete;
-    CPUAffinityManager & operator=(const CPUAffinityManager &) = delete;
-    CPUAffinityManager(CPUAffinityManager &&) = delete;
-    CPUAffinityManager & operator=(CPUAffinityManager &&) = delete;
+    DISALLOW_COPY_AND_MOVE(CPUAffinityManager);
 };
 } // namespace DB

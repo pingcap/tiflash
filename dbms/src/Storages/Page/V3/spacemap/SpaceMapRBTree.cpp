@@ -84,7 +84,7 @@ static void rb_get_new_entry(struct SmapRbEntry ** entry, UInt64 start, UInt64 c
 {
     struct SmapRbEntry * new_entry;
 
-    new_entry = static_cast<struct SmapRbEntry *>(calloc(1, sizeof(struct SmapRbEntry)));
+    new_entry = static_cast<struct SmapRbEntry *>(calloc(1, sizeof(struct SmapRbEntry))); // NOLINT
     if (new_entry == nullptr)
     {
         return;
@@ -115,7 +115,7 @@ inline static void rb_free_entry(struct RbPrivate * private_data, struct SmapRbE
         private_data->read_index_next = nullptr;
     }
 
-    free(entry);
+    free(entry); // NOLINT
 }
 
 
@@ -304,7 +304,7 @@ static bool rb_remove_entry(UInt64 start, UInt64 count, struct RbPrivate * priva
     // Root node have not been init
     if (private_data->root.rb_node == nullptr)
     {
-        assert(false);
+        LOG_ERROR(log, "Current spacemap is invalid.");
     }
 
     while (*n)
@@ -419,7 +419,7 @@ std::shared_ptr<RBTreeSpaceMap> RBTreeSpaceMap::create(UInt64 start, UInt64 end)
 {
     auto ptr = std::shared_ptr<RBTreeSpaceMap>(new RBTreeSpaceMap(start, end));
 
-    ptr->rb_tree = static_cast<struct RbPrivate *>(calloc(1, sizeof(struct RbPrivate)));
+    ptr->rb_tree = static_cast<struct RbPrivate *>(calloc(1, sizeof(struct RbPrivate))); // NOLINT
     if (ptr->rb_tree == nullptr)
     {
         return nullptr;
@@ -435,7 +435,7 @@ std::shared_ptr<RBTreeSpaceMap> RBTreeSpaceMap::create(UInt64 start, UInt64 end)
     if (!rb_insert_entry(start, end, ptr->rb_tree, ptr->log))
     {
         LOG_FMT_ERROR(ptr->log, "Erorr happend, when mark all space free.  [start={}] , [end={}]", start, end);
-        free(ptr->rb_tree);
+        free(ptr->rb_tree); // NOLINT
         return nullptr;
     }
     return ptr;
@@ -451,7 +451,7 @@ static void rb_free_tree(struct rb_root * root)
         next = rb_tree_next(node);
         entry = node_to_entry(node);
         rb_node_remove(node, root);
-        free(entry);
+        free(entry); // NOLINT
     }
 }
 
@@ -460,40 +460,32 @@ void RBTreeSpaceMap::freeSmap()
     if (rb_tree)
     {
         rb_free_tree(&rb_tree->root);
-        free(rb_tree);
+        free(rb_tree); // NOLINT
     }
 }
 
-void RBTreeSpaceMap::smapStats()
+String RBTreeSpaceMap::toDebugString()
 {
     struct rb_node * node = nullptr;
     struct SmapRbEntry * entry;
     UInt64 count = 0;
-    UInt64 max_size = 0;
-    UInt64 min_size = ULONG_MAX;
+    FmtBuffer fmt_buffer;
 
     if (rb_tree->root.rb_node == nullptr)
     {
-        LOG_ERROR(log, "Tree have not been inited.");
-        return;
+        fmt_buffer.append("Tree have not been inited.");
+        return fmt_buffer.toString();
     }
 
-    LOG_DEBUG(log, "RB-Tree entries status: ");
+    fmt_buffer.append("    RB-Tree entries status: \n");
     for (node = rb_tree_first(&rb_tree->root); node != nullptr; node = rb_tree_next(node))
     {
         entry = node_to_entry(node);
-        LOG_FMT_DEBUG(log, "  Space: {} start: {} size: {}", count, entry->start, entry->count);
+        fmt_buffer.fmtAppend("      Space: {} start: {} size: {} \n", count, entry->start, entry->count);
         count++;
-        if (entry->count > max_size)
-        {
-            max_size = entry->count;
-        }
-
-        if (entry->count < min_size)
-        {
-            min_size = entry->count;
-        }
     }
+
+    return fmt_buffer.toString();
 }
 
 bool RBTreeSpaceMap::isMarkUnused(UInt64 offset, size_t length)
@@ -508,7 +500,7 @@ bool RBTreeSpaceMap::isMarkUnused(UInt64 offset, size_t length)
 
     if (length == 0 || rb_tree->root.rb_node == nullptr)
     {
-        assert(0);
+        LOG_ERROR(log, "Current spacemap is invalid.");
     }
 
     while (*n)
@@ -551,12 +543,12 @@ bool RBTreeSpaceMap::isMarkUnused(UInt64 offset, size_t length)
     return retval;
 }
 
-std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
+std::tuple<UInt64, UInt64, bool> RBTreeSpaceMap::searchInsertOffset(size_t size)
 {
-    UInt64 offset = UINT64_MAX;
+    UInt64 offset = UINT64_MAX, last_offset = UINT64_MAX;
     UInt64 max_cap = 0;
-    struct rb_node * node = nullptr;
-    struct SmapRbEntry * entry;
+    struct rb_node *node = nullptr, *last_node = nullptr;
+    struct SmapRbEntry *entry, *last_entry;
 
     UInt64 scan_biggest_cap = 0;
     UInt64 scan_biggest_offset = 0;
@@ -566,7 +558,18 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
     {
         LOG_ERROR(log, "Current spacemap is full.");
         biggest_cap = 0;
-        return std::make_pair(offset, biggest_cap);
+        return std::make_tuple(offset, biggest_cap, false);
+    }
+
+    last_node = rb_tree_last(&rb_tree->root);
+    if (last_node != nullptr)
+    {
+        last_entry = node_to_entry(last_node);
+        last_offset = (last_entry->start + last_entry->count == end) ? last_entry->start : UINT64_MAX;
+    }
+    else
+    {
+        LOG_ERROR(log, "Current spacemap is invalid.");
     }
 
     for (; node != nullptr; node = rb_tree_next(node))
@@ -600,7 +603,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
         biggest_range = scan_biggest_offset;
         biggest_cap = scan_biggest_cap;
 
-        return std::make_pair(offset, biggest_cap);
+        return std::make_tuple(offset, biggest_cap, false);
     }
 
     // Update return start
@@ -622,7 +625,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
             rb_node_remove(node, &rb_tree->root);
             rb_free_entry(rb_tree, entry);
             max_cap = biggest_cap;
-            return std::make_pair(offset, max_cap);
+            return std::make_tuple(offset, max_cap, offset == last_offset);
         }
     }
     else // must be entry->count > size
@@ -645,7 +648,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
         else // It not champion, just return
         {
             max_cap = biggest_cap;
-            return std::make_pair(offset, max_cap);
+            return std::make_tuple(offset, max_cap, offset == last_offset);
         }
     }
 
@@ -661,7 +664,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::searchInsertOffset(size_t size)
     biggest_range = scan_biggest_offset;
     biggest_cap = scan_biggest_cap;
     max_cap = biggest_cap;
-    return std::make_pair(offset, max_cap);
+    return std::make_tuple(offset, max_cap, offset == last_offset);
 }
 
 UInt64 RBTreeSpaceMap::updateAccurateMaxCapacity()
@@ -731,7 +734,7 @@ std::pair<UInt64, UInt64> RBTreeSpaceMap::getSizes() const
     }
 }
 
-UInt64 RBTreeSpaceMap::getRightMargin()
+UInt64 RBTreeSpaceMap::getUsedBoundary()
 {
     struct rb_node * node = rb_tree_last(&rb_tree->root);
     if (node == nullptr)
@@ -740,6 +743,20 @@ UInt64 RBTreeSpaceMap::getRightMargin()
     }
 
     auto * entry = node_to_entry(node);
+
+    // If the `offset+size` of the last free node is not equal to `end`, it means the range `[last_node.offset, end)` is marked as used,
+    // then we should return `end` as the used boundary.
+    //
+    // eg.
+    //  1. The spacemap manage a space of `[0, 100]`
+    //  2. A span {offset=90, size=10} is marked as used, then the free range in SpaceMap is `[0, 90)`
+    //  3. The return value should be 100
+    if (entry->start + entry->count != end)
+    {
+        return end;
+    }
+
+    // Else we should return the offset of last free node
     return entry->start;
 }
 

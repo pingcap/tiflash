@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/Collator.h>
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Common/typeid_cast.h>
@@ -55,12 +56,12 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -92,6 +93,12 @@ extern const int NOT_IMPLEMENTED;
 extern const int SCHEMA_VERSION_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
+
+
+namespace FailPoints
+{
+extern const char pause_query_init[];
+} // namespace FailPoints
 
 InterpreterSelectQuery::InterpreterSelectQuery(
     const ASTPtr & query_ptr_,
@@ -131,7 +138,14 @@ InterpreterSelectQuery::~InterpreterSelectQuery() = default;
 
 void InterpreterSelectQuery::init(const Names & required_result_column_names)
 {
-    ProfileEvents::increment(ProfileEvents::SelectQuery);
+    /// the failpoint pause_query_init should use with the failpoint unblock_query_init_after_write,
+    /// to fulfill that the select query action will be blocked before init state to wait the write action finished.
+    /// In using, we need enable unblock_query_init_after_write in our test code,
+    /// and before each write statement take effect, we need enable pause_query_init.
+    /// When the write action finished, the pause_query_init will be disabled automatically,
+    /// and then the select query could be continued.
+    /// you can refer multi_alter_with_write.test for an example.
+    FAIL_POINT_PAUSE(FailPoints::pause_query_init);
 
     if (!context.hasQueryContext())
         context.setQueryContext(context);
@@ -496,7 +510,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
         {
             if (expressions.has_join)
             {
-                const ASTTableJoin & join = static_cast<const ASTTableJoin &>(*query.join()->table_join);
+                const auto & join = static_cast<const ASTTableJoin &>(*query.join()->table_join);
                 if (join.kind == ASTTableJoin::Kind::Full || join.kind == ASTTableJoin::Kind::Right)
                     pipeline.stream_with_non_joined_data = expressions.before_join->createStreamWithNonJoinedDataIfFullOrRightJoin(
                         pipeline.firstStream()->getHeader(),
@@ -816,7 +830,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
             for (size_t i = 0; i < arr->size(); i++)
             {
-                String str = arr->getElement<String>(i);
+                auto str = arr->getElement<String>(i);
                 ::metapb::Region region;
                 ::google::protobuf::TextFormat::ParseFromString(str, &region);
 
@@ -839,7 +853,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         }
 
         /// PARTITION SELECT only supports MergeTree family now.
-        if (const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
+        if (const auto * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
         {
             if (select_query->partition_expression_list)
             {
@@ -860,7 +874,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
                 managed_storage && managed_storage->engineType() == TiDB::StorageEngine::DT)
             {
-                if (const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
+                if (const auto * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
                 {
                     // With `no_kvsotre` is true, we do not do learner read
                     if (likely(!select_query->no_kvstore))
@@ -910,7 +924,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             QuotaForIntervals & quota = context.getQuota();
 
             pipeline.transform([&](auto & stream) {
-                if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
                 {
                     p_stream->setLimits(limits);
 
@@ -1275,7 +1289,7 @@ void InterpreterSelectQuery::executeLimitBy(Pipeline & pipeline) // NOLINT
     for (const auto & elem : query.limit_by_expression_list->children)
         columns.emplace_back(elem->getColumnName());
 
-    size_t value = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*query.limit_by_value).value);
+    auto value = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*query.limit_by_value).value);
 
     pipeline.transform([&](auto & stream) {
         stream = std::make_shared<LimitByBlockInputStream>(stream, value, columns);
@@ -1347,7 +1361,7 @@ void InterpreterSelectQuery::executeExtremes(Pipeline & pipeline)
         return;
 
     pipeline.transform([&](auto & stream) {
-        if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
             p_stream->enableExtremes();
     });
 }

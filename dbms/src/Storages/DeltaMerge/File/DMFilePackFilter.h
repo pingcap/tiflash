@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
@@ -49,9 +50,9 @@ public:
         const IdSetPtr & read_packs,
         const FileProviderPtr & file_provider,
         const ReadLimiterPtr & read_limiter,
-        const DB::LoggerPtr & tracing_logger)
+        const String & tracing_id)
     {
-        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_logger);
+        auto pack_filter = DMFilePackFilter(dmfile, index_cache, set_cache_if_miss, rowkey_ranges, filter, read_packs, file_provider, read_limiter, tracing_id);
         pack_filter.init();
         return pack_filter;
     }
@@ -109,7 +110,7 @@ private:
                      const IdSetPtr & read_packs_, // filter by pack index
                      const FileProviderPtr & file_provider_,
                      const ReadLimiterPtr & read_limiter_,
-                     const DB::LoggerPtr & tracing_logger)
+                     const String & tracing_id)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
@@ -119,7 +120,7 @@ private:
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
         , use_packs(dmfile->getPacks())
-        , log(tracing_logger ? tracing_logger : DB::Logger::get("DMFilePackFilter"))
+        , log(Logger::get("DMFilePackFilter", tracing_id))
         , read_limiter(read_limiter_)
     {
     }
@@ -253,7 +254,7 @@ private:
                                                                             dmfile->configuration->getChecksumFrameLength());
                 index_buf->seek(dmfile->colIndexOffset(file_name_base));
                 auto header_size = dmfile->configuration->getChecksumHeaderLength();
-                auto frame_total_size = dmfile->configuration->getChecksumFrameLength();
+                auto frame_total_size = dmfile->configuration->getChecksumFrameLength() + header_size;
                 auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
                 return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
             }
@@ -299,7 +300,7 @@ private:
     std::vector<RSResult> handle_res;
     std::vector<UInt8> use_packs;
 
-    DB::LoggerPtr log;
+    LoggerPtr log;
     ReadLimiterPtr read_limiter;
 };
 

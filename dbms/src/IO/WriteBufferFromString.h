@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/BitHelpers.h>
+#include <Common/nocopyable.h>
 #include <IO/WriteBufferFromVector.h>
 #include <common/StringRef.h>
 
@@ -60,8 +61,7 @@ public:
         , WriteBufferFromString(value)
     {}
 
-    WriteBufferFromOwnString(WriteBufferFromOwnString && rhs) = delete;
-    WriteBufferFromOwnString & operator=(WriteBufferFromOwnString && rhs) = delete;
+    DISALLOW_MOVE(WriteBufferFromOwnString);
 
     StringRef stringRef() const { return isFinished() ? StringRef(value) : StringRef(value.data(), pos - value.data()); }
 

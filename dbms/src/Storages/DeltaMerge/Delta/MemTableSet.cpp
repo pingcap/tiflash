@@ -33,7 +33,7 @@ namespace DM
 {
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
-    // If this column file's schema is identical to last_schema, then use the last_schema instance,
+    // If this column file's schema is identical to last_schema, then use the last_schema instance (instead of the one in `column_file`),
     // so that we don't have to serialize my_schema instance.
     if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
     {
@@ -54,6 +54,8 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 
     if (!column_files.empty())
     {
+        // As we are now appending a new column file (which can be used for new appends),
+        // let's simply mark the last column file as not appendable.
         auto & last_column_file = column_files.back();
         if (last_column_file->isAppendable())
             last_column_file->disableAppend();
@@ -102,11 +104,14 @@ ColumnFiles MemTableSet::cloneColumnFiles(DMContext & context, const RowKeyRange
         else if (auto * f = column_file->tryToBigFile(); f)
         {
             auto delegator = context.path_pool.getStableDiskDelegator();
-            auto new_ref_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            auto new_page_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            // Note that the file id may has already been mark as deleted. We must
+            // create a reference to the page id itself instead of create a reference
+            // to the file id.
+            wbs.data.putRefPage(new_page_id, f->getDataPageId());
             auto file_id = f->getFile()->fileId();
-            wbs.data.putRefPage(new_ref_id, file_id);
             auto file_parent_path = delegator.getDTFilePath(file_id);
-            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* ref_id= */ new_ref_id, file_parent_path, DMFile::ReadMetaMode::all());
+            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* page_id= */ new_page_id, file_parent_path, DMFile::ReadMetaMode::all());
 
             auto new_column_file = f->cloneWith(context, new_file, target_range);
             cloned_column_files.push_back(new_column_file);
@@ -212,7 +217,7 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
     if (column_files.empty())
         return nullptr;
 
-    // make the last column file not appendable
+    // Mark the last ColumnFile not appendable, so that `appendToCache` will not reuse it and we will be safe to flush it to disk.
     if (column_files.back()->isAppendable())
         column_files.back()->disableAppend();
 
@@ -224,6 +229,8 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
         auto & task = flush_task->addColumnFile(column_file);
         if (auto * m_file = column_file->tryToInMemoryFile(); m_file)
         {
+            // If the ColumnFile is not yet persisted in the disk, it will contain block data.
+            // In this case, let's write the block data in the flush process as well.
             task.rows_offset = cur_rows_offset;
             task.deletes_offset = cur_deletes_offset;
             task.block_data = m_file->readDataForFlush();

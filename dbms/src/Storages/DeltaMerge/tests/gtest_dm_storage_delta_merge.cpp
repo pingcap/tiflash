@@ -31,19 +31,25 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <TestUtils/FunctionTestUtils.h>
 
 #include <limits>
 
-#include "dm_basic_include.h"
-
 namespace DB
 {
+namespace FailPoints
+{
+extern const char exception_before_drop_segment[];
+extern const char exception_after_drop_segment[];
+} // namespace FailPoints
 namespace DM
 {
 namespace tests
@@ -163,6 +169,8 @@ try
     }
     EXPECT_EQ(total_segment_rows, num_rows_read);
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -247,6 +255,8 @@ try
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -310,6 +320,8 @@ try
     ASSERT_EQ(sort_desc.front().nulls_direction, sort_desc2.front().nulls_direction);
 
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 
@@ -604,6 +616,8 @@ try
     sample.insert(DB::tests::createColumn<String>(
         Strings(100, "a"),
         "col2"));
+    constexpr TiDB::TableID table_id = 1;
+    const String table_name = fmt::format("t_{}", table_id);
 
     Context ctx = DMTestEnv::getContext();
     std::shared_ptr<StorageDeltaMerge> storage;
@@ -626,12 +640,11 @@ try
             path.remove(true);
 
         // primary_expr_ast
-        const String table_name = "t_1233";
         ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         TiDB::TableInfo tidb_table_info;
-        tidb_table_info.id = 1;
+        tidb_table_info.id = table_id;
 
         storage = StorageDeltaMerge::create("TiFlash",
                                             /* db_name= */ "default",
@@ -687,8 +700,8 @@ try
                 {
                     Field res;
                     c->get(i, res);
-                    ASSERT(!res.isNull());
-                    ASSERT(res.get<Int64>() == 1);
+                    ASSERT_TRUE(!res.isNull());
+                    ASSERT_EQ(res.get<Int64>(), table_id);
                 }
             }
         }
@@ -696,6 +709,170 @@ try
     in->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
     storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
+}
+CATCH
+
+TEST(StorageDeltaMergeTest, RestoreAfterClearData)
+try
+{
+    auto & global_settings = ::DB::tests::TiFlashTestEnv::getGlobalContext().getSettingsRef();
+    // store the old value to restore global_context settings after the test finish to avoid influence other tests
+    auto old_global_settings = global_settings;
+    SCOPE_EXIT({
+        global_settings = old_global_settings;
+    });
+    // change the settings to make it more easy to trigger splitting segments
+    Settings settings;
+    settings.dt_segment_limit_rows = 11;
+    settings.dt_segment_limit_size = 20;
+    settings.dt_segment_delta_limit_rows = 7;
+    settings.dt_segment_delta_limit_size = 20;
+    settings.dt_segment_force_split_size = 100;
+    settings.dt_segment_delta_cache_limit_size = 20;
+
+    // we need change the settings in both the ctx we get just below and the global_context above.
+    // because when processing write request, `DeltaMergeStore` will call `checkSegmentUpdate` with the context we just get below.
+    // and when initialize `DeltaMergeStore`, it will call `checkSegmentUpdate` with the global_context above.
+    // so we need to make the settings in these two contexts consistent.
+    global_settings = settings;
+    Context ctx = DMTestEnv::getContext(settings);
+    std::shared_ptr<StorageDeltaMerge> storage;
+    DataTypes data_types;
+    Names column_names;
+    // create table
+    auto create_table = [&]() {
+        NamesAndTypesList names_and_types_list{
+            {"col1", std::make_shared<DataTypeInt64>()},
+            {"col2", std::make_shared<DataTypeString>()},
+        };
+        for (const auto & name_type : names_and_types_list)
+        {
+            data_types.push_back(name_type.type);
+            column_names.push_back(name_type.name);
+        }
+
+        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath("StorageDeltaMerge_RestoreAfterClearData");
+        if (Poco::File path(path_name); path.exists())
+            path.remove(true);
+
+        // primary_expr_ast
+        const String table_name = "t_1233";
+        ASTPtr astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        astptr->children.emplace_back(new ASTIdentifier("col1"));
+
+        // table_info.id is used as the ns_id
+        TiDB::TableInfo table_info;
+        table_info.id = 1233;
+        table_info.is_common_handle = false;
+        table_info.pk_is_handle = false;
+
+        storage = StorageDeltaMerge::create("TiFlash",
+                                            /* db_name= */ "default",
+                                            table_name,
+                                            table_info,
+                                            ColumnsDescription{names_and_types_list},
+                                            astptr,
+                                            0,
+                                            ctx);
+        storage->startup();
+    };
+    auto write_data = [&](Int64 start, Int64 limit) {
+        ASTPtr insertptr(new ASTInsertQuery());
+        BlockOutputStreamPtr output = storage->write(insertptr, ctx.getSettingsRef());
+        // prepare block data
+        Block sample;
+        sample.insert(DB::tests::createColumn<Int64>(
+            createNumbers<Int64>(start, start + limit),
+            "col1"));
+        sample.insert(DB::tests::createColumn<String>(
+            Strings(limit, "a"),
+            "col2"));
+
+        output->writePrefix();
+        output->write(sample);
+        output->writeSuffix();
+    };
+    auto read_data = [&]() {
+        QueryProcessingStage::Enum stage2;
+        SelectQueryInfo query_info;
+        query_info.query = std::make_shared<ASTSelectQuery>();
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
+        Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
+        BlockInputStreams ins = storage->read(read_columns, query_info, ctx, stage2, 8192, 1);
+        BlockInputStreamPtr in = ins[0];
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        return num_rows_read;
+    };
+
+    // create table
+    create_table();
+    size_t num_rows_write = 0;
+    // write until split and use a big enough finite for loop to make sure the test won't hang forever
+    for (size_t i = 0; i < 100000; i++)
+    {
+        write_data(num_rows_write, 1000);
+        num_rows_write += 1000;
+        if (storage->getStore()->getSegmentStats().size() > 1)
+            break;
+    }
+    {
+        ASSERT_GT(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_EQ(read_data(), num_rows_write);
+    }
+    storage->flushCache(ctx);
+    // throw exception before drop first segment
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::exception_before_drop_segment);
+    ASSERT_ANY_THROW(storage->clearData());
+    storage->removeFromTMTContext();
+
+    // restore the table and make sure no data has been dropped
+    create_table();
+    {
+        ASSERT_EQ(read_data(), num_rows_write);
+    }
+    // write more data make sure segments more than 1
+    for (size_t i = 0; i < 100000; i++)
+    {
+        if (storage->getStore()->getSegmentStats().size() > 1)
+            break;
+        write_data(num_rows_write, 1000);
+        num_rows_write += 1000;
+    }
+    {
+        ASSERT_GT(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_EQ(read_data(), num_rows_write);
+    }
+    storage->flushCache(ctx);
+    // throw exception after drop first segment
+    DB::FailPointHelper::enableFailPoint(DB::FailPoints::exception_after_drop_segment);
+    ASSERT_ANY_THROW(storage->clearData());
+    storage->removeFromTMTContext();
+
+    // restore the table and make sure some data has been dropped
+    create_table();
+    {
+        ASSERT_LT(read_data(), num_rows_write);
+    }
+    storage->clearData();
+    storage->removeFromTMTContext();
+
+    // restore the table and make sure there is just one segment left
+    create_table();
+    {
+        ASSERT_EQ(storage->getStore()->getSegmentStats().size(), 1);
+        ASSERT_LT(read_data(), num_rows_write);
+    }
+    storage->drop();
+    // remove the storage from TiFlash context manually
+    storage->removeFromTMTContext();
 }
 CATCH
 

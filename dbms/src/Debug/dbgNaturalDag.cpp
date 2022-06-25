@@ -35,6 +35,7 @@ namespace ErrorCodes
 extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
 
+static const String CONTINUE_WHEN_ERROR = "continue_when_error";
 static const String TABLE_IDS = "table_of_interest";
 static const String TABLE_DATA = "table_data";
 static const String TABLE_META = "meta";
@@ -47,6 +48,7 @@ static const String TIKV_KEY = "key";
 static const String TIKV_VALUE = "value";
 static const String REQ_RSP_DATA = "request_data";
 static const String REQ_TYPE = "type";
+static const String REQ_ID = "req_id";
 static const String REQUEST = "request";
 static const String RESPONSE = "response";
 static const String DEFAULT_DATABASE_NAME = "test";
@@ -87,6 +89,12 @@ void NaturalDag::init()
     LOG_FMT_INFO(log, "Succeed parsing json file: {}", json_dag_path);
 
     const auto & obj = result.extract<JSONObjectPtr>();
+
+    if (obj->has(CONTINUE_WHEN_ERROR))
+    {
+        continue_when_error = obj->getValue<bool>(CONTINUE_WHEN_ERROR);
+        LOG_FMT_INFO(log, "Succeed load continue_when_error flag: {}!", continue_when_error);
+    }
     loadTables(obj);
     LOG_FMT_INFO(log, "Succeed loading table data!");
     loadReqAndRsp(obj);
@@ -96,6 +104,7 @@ void NaturalDag::init()
 void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
 {
     auto req_data_json = obj->getArray(REQ_RSP_DATA);
+    int32_t default_req_id = 0;
     for (const auto & req_data_json_obj : *req_data_json)
     {
         auto req_data_obj = req_data_json_obj.extract<JSONObjectPtr>();
@@ -114,6 +123,12 @@ void NaturalDag::loadReqAndRsp(const NaturalDag::JSONObjectPtr & obj)
         if (!cop_response.ParseFromString(response))
             throw Exception("Incorrect response data!", ErrorCodes::BAD_ARGUMENTS);
         req_rsp.emplace_back(std::make_pair(std::move(cop_request), std::move(cop_response)));
+
+        if (req_data_obj->has(REQ_ID))
+            req_id_vec.push_back(req_data_obj->getValue<int32_t>(REQ_ID));
+        else
+            req_id_vec.push_back(default_req_id);
+        ++default_req_id;
     }
 }
 void NaturalDag::loadTables(const NaturalDag::JSONObjectPtr & obj)

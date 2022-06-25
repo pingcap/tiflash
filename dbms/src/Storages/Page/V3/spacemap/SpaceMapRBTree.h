@@ -40,13 +40,13 @@ public:
 
     static std::shared_ptr<RBTreeSpaceMap> create(UInt64, UInt64 end);
 
-    std::pair<UInt64, UInt64> searchInsertOffset(size_t size) override;
+    std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) override;
 
     UInt64 updateAccurateMaxCapacity() override;
 
     std::pair<UInt64, UInt64> getSizes() const override;
 
-    UInt64 getRightMargin() override;
+    UInt64 getUsedBoundary() override;
 
 protected:
     RBTreeSpaceMap(UInt64 start, UInt64 end)
@@ -56,7 +56,7 @@ protected:
 
     void freeSmap();
 
-    void smapStats() override;
+    String toDebugString() override;
 
     bool isMarkUnused(UInt64 offset, size_t length) override;
 

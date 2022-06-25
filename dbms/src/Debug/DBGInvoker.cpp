@@ -121,6 +121,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("search_log_for_key", dbgFuncSearchLogForKey);
     regSchemalessFunc("tidb_dag", dbgFuncTiDBQueryFromNaturalDag);
+    regSchemalessFunc("gc_global_storage_pool", dbgFuncTriggerGlobalPageStorageGC);
 
     regSchemalessFunc("read_index_stress_test", ReadIndexStressTest::dbgFuncStressTest);
 }

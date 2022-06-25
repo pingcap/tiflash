@@ -190,6 +190,8 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args)
         LOG_FMT_INFO(logger, "source version: {}", (src_file->getConfiguration() ? 2 : 1));
         LOG_FMT_INFO(logger, "source bytes: {}", src_file->getBytesOnDisk());
         LOG_FMT_INFO(logger, "migration temporary directory: {}", keeper.migration_temp_dir.path().c_str());
+        LOG_FMT_INFO(logger, "target version: {}", args.version);
+        LOG_FMT_INFO(logger, "target frame size: {}", args.frame);
         DB::DM::DMConfigurationOpt option{};
 
         // if new format is the target, we construct a config file.

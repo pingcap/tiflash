@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MPMCQueue.h>
+#include <Common/nocopyable.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <chrono>
@@ -465,13 +466,15 @@ protected:
     struct ThrowInjectable
     {
         ThrowInjectable() = default;
-        ThrowInjectable(const ThrowInjectable &) = delete;
+
+        DISALLOW_COPY(ThrowInjectable);
+
         ThrowInjectable(ThrowInjectable && rhs)
         {
             throwOrMove(std::move(rhs));
         }
 
-        ThrowInjectable & operator=(const ThrowInjectable &) = delete;
+
         ThrowInjectable & operator=(ThrowInjectable && rhs)
         {
             if (this != &rhs)

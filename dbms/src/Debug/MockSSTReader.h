@@ -14,9 +14,11 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Transaction/ProxyFFI.h>
 
 #include <map>
+
 
 namespace DB
 {
@@ -35,8 +37,7 @@ struct MockSSTReader
     using Key = std::pair<std::string, ColumnFamilyType>;
     struct Data : std::vector<std::pair<std::string, std::string>>
     {
-        Data(const Data &) = delete;
-        Data & operator=(const Data &) = delete;
+        DISALLOW_COPY(Data);
         Data(Data &&) = default;
         Data & operator=(Data &&) = default;
         Data() = default;

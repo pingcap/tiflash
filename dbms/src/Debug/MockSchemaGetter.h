@@ -15,14 +15,13 @@
 #pragma once
 
 #include <Debug/MockTiDB.h>
-#include <Storages/Transaction/SchemaGetter.h>
+#include <TiDB/Schema/SchemaGetter.h>
 
 namespace DB
 {
 
 struct MockSchemaGetter
 {
-
     TiDB::DBInfoPtr getDatabase(DatabaseID db_id) { return MockTiDB::instance().getDBInfoByID(db_id); }
 
     Int64 getVersion() { return MockTiDB::instance().getVersion(); }

@@ -600,37 +600,37 @@ try
 {
     // trim(const)
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(5, "x"),
+        createConstColumn<String>(5, "x"),
         executeFunction("tidbTrim", createConstColumn<Nullable<String>>(5, " x ")));
 
     // trim(const from const)
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(5, "a"),
+        createConstColumn<String>(5, "a"),
         executeFunction("tidbTrim",
                         createConstColumn<Nullable<String>>(5, "xax"),
                         createConstColumn<Nullable<String>>(5, "x")));
 
     // trim(leading|trailing|both const from const)
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(5, "a"),
+        createConstColumn<String>(5, "a"),
         executeFunction("tidbTrim",
                         createConstColumn<Nullable<String>>(5, "xax"),
                         createConstColumn<Nullable<String>>(5, "x"),
                         createConstColumn<Nullable<Int8>>(5, 0)));
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(5, "a"),
+        createConstColumn<String>(5, "a"),
         executeFunction("tidbTrim",
                         createConstColumn<Nullable<String>>(5, "xax"),
                         createConstColumn<Nullable<String>>(5, "x"),
                         createConstColumn<Nullable<Int8>>(5, 1)));
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(5, "ax"),
+        createConstColumn<String>(5, "ax"),
         executeFunction("tidbTrim",
                         createConstColumn<Nullable<String>>(5, "xax"),
                         createConstColumn<Nullable<String>>(5, "x"),
                         createConstColumn<Nullable<Int8>>(5, 2)));
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<String>>(5, "xa"),
+        createConstColumn<String>(5, "xa"),
         executeFunction("tidbTrim",
                         createConstColumn<Nullable<String>>(5, "xax"),
                         createConstColumn<Nullable<String>>(5, "x"),
@@ -955,7 +955,7 @@ try
                  res_itr++, input_itr++)
             {
                 ASSERT_COLUMN_EQ(
-                    createConstColumn<Nullable<String>>(5, *res_itr),
+                    input_itr->has_value() ? createConstColumn<String>(5, res_itr->value()) : createConstColumn<Nullable<String>>(5, *res_itr),
                     executeFunction("tidbTrim",
                                     createConstColumn<Nullable<String>>(5, *input_itr),
                                     createConstColumn<Nullable<String>>(5, "啊啊"),

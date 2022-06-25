@@ -35,7 +35,7 @@ struct MPPQueryTaskSet
     bool to_be_cancelled = false;
     MPPTaskMap task_map;
     /// only used in scheduler
-    std::queue<MPPTaskPtr> waiting_tasks;
+    std::queue<MPPTaskId> waiting_tasks;
 };
 
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;

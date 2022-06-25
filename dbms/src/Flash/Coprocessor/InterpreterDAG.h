@@ -21,16 +21,9 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/DAGUtils.h>
-#include <Interpreters/AggregateDescription.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
-#include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
 {
@@ -50,9 +43,9 @@ public:
     BlockIO execute() override;
 
 private:
-    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueries_for_sets);
+    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block);
 
-    DAGContext & dagContext() const { return *context.getDAGContext(); }
+    DAGContext & dagContext() const;
 
     Context & context;
     const DAGQuerySource & dag;
