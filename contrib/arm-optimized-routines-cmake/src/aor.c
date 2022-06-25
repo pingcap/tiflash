@@ -55,7 +55,7 @@ static inline bool sve_supported(void)
 #define STRINGIFY(X) STRINGIFY_IMPL(X)
 #define DISPATCH(NAME, RETURN_TYPE, ARG_LIST, SVE, MTE, ASIMD)    \
     typedef RETURN_TYPE(*__tiflash_##NAME##_t) ARG_LIST;          \
-    static __tiflash_##NAME##_t __tiflash_##NAME##_resolver(void) \
+    __tiflash_##NAME##_t __tiflash_##NAME##_resolver(void) \
     {                                                             \
         if (sve_supported())                                      \
             return SVE;                                           \
