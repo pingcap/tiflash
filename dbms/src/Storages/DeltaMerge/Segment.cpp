@@ -1333,9 +1333,7 @@ bool Segment::compactDelta(DMContext & dm_context)
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaCompact};
     GET_METRIC(tiflash_storage_subtask_count, type_delta_compact).Increment();
     Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_compact).Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_compact).Observe(watch.elapsedSeconds()); });
 
     return delta->compact(dm_context);
 }

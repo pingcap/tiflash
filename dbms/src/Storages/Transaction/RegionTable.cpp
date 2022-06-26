@@ -230,10 +230,7 @@ void removeObsoleteDataInStorage(
         auto rowkey_range
             = DM::RowKeyRange::fromRegionRange(handle_range, table_id, table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
         dm_storage->deleteRange(rowkey_range, context->getSettingsRef());
-        // flush to disk and keep try until success
-        while (!dm_storage->flushCache(*context, rowkey_range))
-        {
-        }
+        dm_storage->flushCache(*context, rowkey_range, /*try_until_succeed*/ true); // flush to disk
     }
     catch (DB::Exception & e)
     {
