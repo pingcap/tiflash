@@ -57,6 +57,8 @@ try
     const size_t col_data_num = col0.size();
     for (size_t limit_num = 0; limit_num <= col_data_num + 3; ++limit_num)
     {
+        if (limit_num == col_data_num + 3)
+            limit_num = INT_MAX;
         request = getRequest(limit_num);
 
         if (limit_num == 0)
