@@ -43,18 +43,18 @@ public:
                               toNullableVec<Int32>(col_names[4], col4)});
     }
 
-    template<typename T>
+    template <typename T>
     std::shared_ptr<tipb::DAGRequest> getRequest(T param)
     {
         return context.scan(db_name, table_name).project(param).build(context);
     };
 
     /// Prepare column data
-    const ColDataString col0{"col0-0", "col0-1",       "", "col0-2",       {}, "col0-3",       ""};
-    const ColDataString col1{"col1-0",       {},       "", "col1-1",       "", "col1-2", "col1-3"};
-    const ColDataString col2{      "", "col2-0", "col2-1",       {}, "col2-3",       {}, "col2-4"};
-    const ColDataInt32  col3{1, {},  0, -111111, {},     0,   9999};
-    const ColDataInt32  col4{0,  5, {},    -234, {}, 24353,   9999};
+    const ColDataString col0{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""};
+    const ColDataString col1{"col1-0", {}, "", "col1-1", "", "col1-2", "col1-3"};
+    const ColDataString col2{"", "col2-0", "col2-1", {}, "col2-3", {}, "col2-4"};
+    const ColDataInt32 col3{1, {}, 0, -111111, {}, 0, 9999};
+    const ColDataInt32 col4{0, 5, {}, -234, {}, 24353, 9999};
 
     /// Prepare some names
     std::vector<String> col_names{"col0", "col1", "col2", "col3", "col4"};
@@ -72,8 +72,9 @@ try
     /// Check multi columns
     request = getRequest<MockColumnNames>({col_names[0], col_names[4]});
     executeStreams(request,
-                   {toNullableVec<String>(col_names[0], col0),
-                    toNullableVec<String>(col_names[4], col1),
+                   {
+                       toNullableVec<String>(col_names[0], col0),
+                       toNullableVec<String>(col_names[4], col1),
                    });
     /// Check multi columns
     request = getRequest<MockColumnNames>({col_names[0], col_names[1], col_names[3]});
@@ -81,7 +82,7 @@ try
                    {toNullableVec<String>(col_names[0], col0),
                     toNullableVec<String>(col_names[1], col1),
                     toNullableVec<String>(col_names[3], col2)});
-    
+
     /// Check duplicate columns
     request = getRequest<MockColumnNames>({col_names[1], col_names[1], col_names[1]});
     executeStreams(request,
@@ -101,7 +102,7 @@ try
             projection_input.push_back(col_names[1]);
             columns.push_back(expect_column);
         }
-        
+
         request = getRequest<MockColumnNamesVec>(projection_input);
         executeStreams(request, columns);
     }
@@ -117,101 +118,101 @@ try
         {
             /// Data type: TypeString
             request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[0]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1})});
-            
-            request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({0, {}, 1, 0, {}, 0, 0})});
-        }
+    executeStreams(request,
+                   {toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1})});
 
-        {
-            /// Data type: TypeLong
-            request = getRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({0, {}, {}, 0, {}, 0, 1})});
-        }
+    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1]))});
+    executeStreams(request,
+                   {toNullableVec<UInt64>({0, {}, 1, 0, {}, 0, 0})});
+}
+
+{
+    /// Data type: TypeLong
+    request = getRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4]))});
+    executeStreams(request,
+                   {toNullableVec<UInt64>({0, {}, {}, 0, {}, 0, 1})});
+}
+} // namespace tests
+
+{
+    /// Test "greater" function
+    {
+        /// Data type: TypeString
+        request = getRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1]))});
+executeStreams(request,
+               {toNullableVec<UInt64>({0, {}, 0, 0, {}, 0, 0})});
+
+request = getRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0]))});
+executeStreams(request,
+               {toNullableVec<UInt64>({1, {}, 0, 1, {}, 1, 1})});
+} // namespace DB
+
+{
+    /// Data type: TypeLong
+    request = getRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4]))});
+    executeStreams(request,
+                   {toNullableVec<UInt64>({1, {}, {}, 0, {}, 0, 0})});
+
+    request = getRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3]))});
+    executeStreams(request,
+                   {toNullableVec<UInt64>({0, {}, {}, 1, {}, 1, 0})});
+}
+}
+
+{
+    /// Test "and" function
+    {
+        /// Data type: TypeString
+        request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[0]))});
+executeStreams(request,
+               {toNullableVec<UInt64>({0, 0, 0, 0, {}, 0, 0})});
+
+request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[1]))});
+executeStreams(request,
+               {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0})});
+}
+
+{
+    /// Data type: TypeLong
+    request = getRequest<MockAsts>({And(col(col_names[3]), col(col_names[4]))});
+    executeStreams(request,
+                   {toNullableVec<UInt64>({0, {}, 0, 1, {}, 0, 1})});
+}
+}
+
+{
+    /// Test "not" function
+    {
+        /// Data type: TypeString
+        request = getRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2]))});
+executeStreams(request,
+               {toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
+                toNullableVec<UInt64>({1, {}, 1, 1, 1, 1, 1}),
+                toNullableVec<UInt64>({1, 1, 1, {}, 1, {}, 1})});
+}
+
+{
+    /// Data type: TypeLong
+    request = getRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4]))});
+    executeStreams(request,
+                   {toNullableVec<UInt64>({0, {}, 1, 0, {}, 1, 0}),
+                    toNullableVec<UInt64>({1, 0, {}, 0, {}, 0, 0})});
+}
+}
+
+{
+    /// Test "max" function
+    /// TODO wait for the implementation of the max aggregation
+    {
+        /// Data type: TypeString
     }
 
     {
-        /// Test "greater" function
-        {
-            /// Data type: TypeString
-            request = getRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({0, {}, 0, 0, {}, 0, 0})});
-
-            request = getRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({1, {}, 0, 1, {}, 1, 1})});
-        }
-
-        {
-            /// Data type: TypeLong
-            request = getRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({1, {}, {}, 0, {}, 0, 0})});
-
-            request = getRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({0, {}, {}, 1, {}, 1, 0})});
-        }
+        /// Data type: TypeLong
     }
+}
 
-    {
-        /// Test "and" function
-        {
-            /// Data type: TypeString
-            request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[0]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({0, 0, 0, 0, {}, 0, 0})});
-
-            request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[1]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0})});
-        }
-
-        {
-            /// Data type: TypeLong
-            request = getRequest<MockAsts>({And(col(col_names[3]), col(col_names[4]))});
-            executeStreams(request,
-                        {toNullableVec<UInt64>({0, {}, 0, 1, {}, 0, 1})});
-        }
-    }
-
-    {
-        /// Test "not" function
-        {       
-            /// Data type: TypeString
-            request = getRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2]))});
-            executeStreams(request,
-                           {toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
-                            toNullableVec<UInt64>({1, {}, 1, 1, 1, 1, 1}),
-                            toNullableVec<UInt64>({1, 1, 1, {}, 1, {}, 1})});
-        }
-
-        {
-            /// Data type: TypeLong
-            request = getRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4]))});
-            executeStreams(request,
-                           {toNullableVec<UInt64>({0, {}, 1, 0, {}, 1, 0}),
-                            toNullableVec<UInt64>({1, 0, {}, 0, {}, 0, 0})});
-        }
-    }
-
-    {
-        /// Test "max" function
-        /// TODO wait for the implementation of the max aggregation
-        {
-            /// Data type: TypeString
-        }
-
-        {
-            /// Data type: TypeLong
-        }
-    }
-
-    /// TODO more functions
+/// TODO more functions
 }
 CATCH
 

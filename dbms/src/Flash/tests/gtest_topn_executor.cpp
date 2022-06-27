@@ -45,7 +45,6 @@ public:
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
                               toNullableVec<Int32>(col_name[3], c0l_salary)});
-        
     }
 
     std::shared_ptr<tipb::DAGRequest> getRequest(const String & table_name, const String & col_name, bool is_desc, int limit_num)
@@ -70,10 +69,10 @@ public:
 
     const String table_name{"clerk"};
     const std::vector<String> col_name{"age", "gender", "country", "salary"};
-    ColumnWithInt32  col_age    {{},       27,       32,     36,       {},      34};
-    ColumnWithString col_gender {"female", "female", "male", "female", "male",  "male"};
-    ColumnWithString col_country{"korea",  "usa",    "usa",  "china",  "china", "china"};
-    ColumnWithInt32  c0l_salary {1300,     0,        {},     900,      {},      -300};
+    ColumnWithInt32 col_age{{}, 27, 32, 36, {}, 34};
+    ColumnWithString col_gender{"female", "female", "male", "female", "male", "male"};
+    ColumnWithString col_country{"korea", "usa", "usa", "china", "china", "china"};
+    ColumnWithInt32 c0l_salary{1300, 0, {}, 900, {}, -300};
 };
 
 TEST_F(ExecutorTopNTestRunner, TopN)
@@ -122,10 +121,10 @@ try
                         toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
                         toNullableVec<String>(col_name[2], ColumnWithString{"usa", "china", "china", "usa", "china", "korea"}),
                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{{}, {}, -300, 0, 900, 1300})},
-                        {toNullableVec<Int32>(col_name[0], ColumnWithInt32{34, {}, 32, 36, {}, 27}),
-                         toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
-                         toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "china", "korea", "usa"}),
-                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{-300, {}, {}, 900, 1300, 0})}};
+                       {toNullableVec<Int32>(col_name[0], ColumnWithInt32{34, {}, 32, 36, {}, 27}),
+                        toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
+                        toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "china", "korea", "usa"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{-300, {}, {}, 900, 1300, 0})}};
 
         MockOrderByItems order_by_items;
 
@@ -160,27 +159,26 @@ try
     std::vector<ColumnsWithTypeAndName> expect_cols;
     MockColumnNames output_projection{col_name[0], col_name[1], col_name[2], col_name[3]};
     MockAsts func_projection; // Do function operation for topn
-    auto col0_ast = col(col_name[0]);
-    auto col1_ast = col(col_name[1]);
-    auto col2_ast = col(col_name[2]);
-    auto col3_ast = col(col_name[3]);
+    MockOrderByItems order_by_items;
+    ASTPtr col0_ast = col(col_name[0]);
+    ASTPtr col1_ast = col(col_name[1]);
+    ASTPtr col2_ast = col(col_name[2]);
+    ASTPtr col3_ast = col(col_name[3]);
+    ASTPtr func_ast;
 
     {
         /// "and" function
-        /// and(col0, col0)
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, 32, {}, 27, 36, 34}),
+        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, {}, 32, 27, 36, 34}),
                         toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"korea", "usa", "china", "usa", "china", "china"}),
+                        toNullableVec<String>(col_name[2], ColumnWithString{"korea", "china", "usa", "usa", "china", "china"}),
                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 0, 900, -300})}};
-        
-        MockOrderByItems order_by_items;
 
         {
-            /// select * from clerk order by age and salary ASC;
+            /// select * from clerk order by age and salary ASC limit 100;
             order_by_items = {MockOrderByItem("and(age, salary)", false)};
-            auto and_ast = And(col(col_name[0]), col(col_name[3]));
-            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, and_ast};
-            
+            func_ast = And(col(col_name[0]), col(col_name[3]));
+            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
+
             request = getRequest(table_name, order_by_items, 100, func_projection, output_projection);
             executeStreams(request, expect_cols[0]);
         }
@@ -188,12 +186,38 @@ try
 
     {
         /// "equal" function
-        /// equals(col0, col1)
+        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{27, 36, 34, 32, {}, {}}),
+                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "female", "male", "male", "female", "male"}),
+                        toNullableVec<String>(col_name[2], ColumnWithString{"usa", "china", "china", "usa", "korea", "china"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{0, 900, -300, {}, 1300, {}})}};
+
+        {
+            /// select age, salary from clerk order by age = salary DESC limit 100;
+            order_by_items = {MockOrderByItem("equals(age, salary)", true)};
+            func_ast = eq(col(col_name[0]), col(col_name[3]));
+            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
+
+            request = getRequest(table_name, order_by_items, 100, func_projection, output_projection);
+            executeStreams(request, expect_cols[0]);
+        }
     }
 
     {
         /// "greater" function
-        /// greater(col0, col1)
+        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, 32, {}, 36, 27, 34}),
+                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
+                        toNullableVec<String>(col_name[2], ColumnWithString{"korea", "usa", "china", "china", "usa", "china"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 900, 0, -300})}};
+
+        {
+            /// select age, gender, country, salary from clerk order by age > salary ASC limit 100;
+            order_by_items = {MockOrderByItem("greater(age, salary)", false)};
+            func_ast = gt(col(col_name[0]), col(col_name[3]));
+            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
+
+            request = getRequest(table_name, order_by_items, 100, func_projection, output_projection);
+            executeStreams(request, expect_cols[0]);
+        }
     }
 
     /// TODO more functions...
