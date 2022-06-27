@@ -30,9 +30,11 @@ public:
             auto ptr = *last_itr;
             if (ptr->expired())
             {
-                auto del_itr = last_itr;
-                last_itr = nextItr(last_itr);
-                l.erase(del_itr);
+                last_itr = l.erase(last_itr);
+                if (last_itr == l.end())
+                {
+                    last_itr = l.begin();
+                }
             }
             else
             {

@@ -31,7 +31,7 @@ private:
     bool e;
 };
 
-TEST(CircularScanList_test, CircularScanList)
+TEST(CircularScanList_test, Normal)
 {
     CircularScanList<Node> lst;
 
@@ -95,5 +95,23 @@ TEST(CircularScanList_test, CircularScanList)
     }
 
     ASSERT_EQ(lst.next(), nullptr);
+}
+
+TEST(CircularScanList_test, Expired)
+{
+    CircularScanList<Node> l;
+    l.add(std::make_shared<Node>(1, false));
+
+    ASSERT_EQ(l.next()->getId(), 1);
+    ASSERT_EQ(l.next()->getId(), 1);
+
+    l.next()->setExpire();
+
+    ASSERT_EQ(l.next(), nullptr);
+    ASSERT_EQ(l.next(), nullptr);
+    l.add(std::make_shared<Node>(2, false));
+
+    ASSERT_EQ(l.next()->getId(), 2);
+    ASSERT_EQ(l.next()->getId(), 2);
 }
 } // namespace DB::DM::tests
