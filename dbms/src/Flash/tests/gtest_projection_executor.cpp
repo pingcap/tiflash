@@ -49,13 +49,6 @@ public:
         return context.scan(db_name, table_name).project(param).build(context);
     };
 
-    void executeDifferentConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        executeStreams(request, expect_columns, 1);
-        // for (size_t i = 1; i < 10; i += 2)
-        //     executeStreams(request, expect_columns, i);
-    }
-
     /// Prepare column data
     const ColDataString col0{"col0-0", "col0-1",       "", "col0-2",       {}, "col0-3",       ""};
     const ColDataString col1{"col1-0",       {},       "", "col1-1",       "", "col1-2", "col1-3"};
@@ -74,7 +67,7 @@ try
 {
     /// Check single column
     auto request = getRequest<MockColumnNames>({col_names[2]});
-    executeDifferentConcurrency(request, {toNullableVec<String>(col_names[2], col2)});
+    executeStreams(request, {toNullableVec<String>(col_names[2], col2)});
 
     /// Check multi columns
     request = getRequest<MockColumnNames>({col_names[0], col_names[4]});

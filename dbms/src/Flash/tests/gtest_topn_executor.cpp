@@ -53,9 +53,12 @@ public:
         return context.scan(db_name, table_name).topN(col_name, is_desc, limit_num).build(context);
     }
 
-    std::shared_ptr<tipb::DAGRequest> getRequest(const String & table_name, MockOrderByItems order_by_items, int limit)
+    std::shared_ptr<tipb::DAGRequest> getRequest(const String & table_name, MockOrderByItems order_by_items, int limit, MockAsts func_proj_ast = {}, MockColumnNames out_proj_ast = {})
     {
-        return context.scan(db_name, table_name).topN(order_by_items, limit).build(context);
+        if (func_proj_ast.size() == 0)
+            return context.scan(db_name, table_name).topN(order_by_items, limit).build(context);
+        else
+            return context.scan(db_name, table_name).project(func_proj_ast).topN(order_by_items, limit).project(out_proj_ast).build(context);
     }
 
     /// Prepare some names
@@ -155,17 +158,42 @@ try
 {
     std::shared_ptr<tipb::DAGRequest> request;
     std::vector<ColumnsWithTypeAndName> expect_cols;
+    MockColumnNames output_projection{col_name[0], col_name[1], col_name[2], col_name[3]};
+    MockAsts func_projection; // Do function operation for topn
+    auto col0_ast = col(col_name[0]);
+    auto col1_ast = col(col_name[1]);
+    auto col2_ast = col(col_name[2]);
+    auto col3_ast = col(col_name[3]);
 
     {
         /// "and" function
+        /// and(col0, col0)
+        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, 32, {}, 27, 36, 34}),
+                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
+                        toNullableVec<String>(col_name[2], ColumnWithString{"korea", "usa", "china", "usa", "china", "china"}),
+                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 0, 900, -300})}};
+        
+        MockOrderByItems order_by_items;
+
+        {
+            /// select * from clerk order by age and salary ASC;
+            order_by_items = {MockOrderByItem("and(age, salary)", false)};
+            auto and_ast = And(col(col_name[0]), col(col_name[3]));
+            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, and_ast};
+            
+            request = getRequest(table_name, order_by_items, 100, func_projection, output_projection);
+            executeStreams(request, expect_cols[0]);
+        }
     }
 
     {
         /// "equal" function
+        /// equals(col0, col1)
     }
 
     {
         /// "greater" function
+        /// greater(col0, col1)
     }
 
     /// TODO more functions...

@@ -1629,8 +1629,10 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
             }
         }
     }
-
     auto project = std::make_shared<mock::Project>(executor_index, output_schema, std::move(exprs));
+    for (int i = 0; i < project->exprs.size(); ++i) {
+        std::cout << "Output: " << project->exprs[i]->getColumnName() << std::endl;
+    }
     project->children.push_back(input);
     return project;
 }
