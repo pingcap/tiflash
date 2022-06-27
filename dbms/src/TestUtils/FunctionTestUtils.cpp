@@ -82,6 +82,24 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
     ASSERT_EQUAL(expected->size(), actual->size(), "Column size mismatch");
 
+    std::cout << "Expect: "
+              << " ";
+    for (size_t i = 0, size = expected->size(); i < size; ++i)
+    {
+        auto expected_field = (*expected)[i];
+        std::cout << expected_field.toString() << " ";
+    }
+
+    std::cout << std::endl
+              << "Actual: "
+              << " ";
+    for (size_t i = 0, size = actual->size(); i < size; ++i)
+    {
+        auto actual_field = (*actual)[i];
+        std::cout << actual_field.toString() << " ";
+    }
+    std::cout << std::endl;
+
     for (size_t i = 0, size = expected->size(); i < size; ++i)
     {
         auto expected_field = (*expected)[i];

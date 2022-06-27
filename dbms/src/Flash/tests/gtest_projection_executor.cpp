@@ -44,17 +44,33 @@ public:
     }
 
     template <typename T>
-    std::shared_ptr<tipb::DAGRequest> getRequest(T param)
+    std::shared_ptr<tipb::DAGRequest> getRequest(T param, const String & sort_col)
     {
-        return context.scan(db_name, table_name).project(param).build(context);
+        /// topN is introduced, so that we can get stable results in concurrency environment.
+        return context.scan(db_name, table_name).project(param).topN(sort_col, false, 100).build(context);
     };
+
+    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
+    {
+        // executeStreams(request, expect_columns, 1);
+        for (size_t i = 1; i < 10; i += 2)
+        {
+            std::cout << "Expect loop " << i << std::endl;
+            executeStreams(request, expect_columns, i);
+        }
+    }
 
     /// Prepare column data
     const ColDataString col0{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""};
     const ColDataString col1{"col1-0", {}, "", "col1-1", "", "col1-2", "col1-3"};
     const ColDataString col2{"", "col2-0", "col2-1", {}, "col2-3", {}, "col2-4"};
     const ColDataInt32 col3{1, {}, 0, -111111, {}, 0, 9999};
-    const ColDataInt32 col4{0, 5, {}, -234, {}, 24353, 9999};
+
+    /** Each value in col4 should be different from each other so that topn 
+     *  could sort the columns into an unique result, or multi-results could
+     *  be right.
+     */
+    const ColDataInt32 col4{0, 5, -123, -234, {}, 24353, 9999};
 
     /// Prepare some names
     std::vector<String> col_names{"col0", "col1", "col2", "col3", "col4"};
@@ -65,46 +81,54 @@ public:
 TEST_F(ExecutorProjectionTestRunner, Projection)
 try
 {
+    /// Results after sorted by col4
+    const ColDataString col0_sorted_asc{{}, "col0-2", "", "col0-0", "col0-1", "", "col0-3"};
+    const ColDataString col1_sorted_asc{"", "col1-1", "", "col1-0", {}, "col1-3", "col1-2"};
+    const ColDataString col2_sorted_asc{"col2-3", {}, "col2-1", "", "col2-0", "col2-4", {}};
+    const ColDataInt32 col3_sorted_asc{{}, -111111, 0, 1, {}, 9999, 0};
+    const ColDataInt32 col4_sorted_asc{{}, -234, -123, 0, 5, 9999, 24353};
+    std::cout << "Expect<1>" << std::endl;
     /// Check single column
-    auto request = getRequest<MockColumnNames>({col_names[2]});
-    executeStreams(request, {toNullableVec<String>(col_names[2], col2)});
-
+    auto request = getRequest<MockColumnNames>({col_names[4]}, col_names[4]);
+    executeWithConcurrency(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    std::cout << "Expect<2>" << std::endl;
     /// Check multi columns
-    request = getRequest<MockColumnNames>({col_names[0], col_names[4]});
-    executeStreams(request,
-                   {
-                       toNullableVec<String>(col_names[0], col0),
-                       toNullableVec<String>(col_names[4], col1),
-                   });
+    request = getRequest<MockColumnNames>({col_names[0], col_names[4]}, col_names[4]);
+    executeWithConcurrency(request,
+                           {
+                               toNullableVec<String>(col_names[0], col0_sorted_asc),
+                               toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                           });
+    std::cout << "Expect<3>" << std::endl;
     /// Check multi columns
-    request = getRequest<MockColumnNames>({col_names[0], col_names[1], col_names[3]});
-    executeStreams(request,
-                   {toNullableVec<String>(col_names[0], col0),
-                    toNullableVec<String>(col_names[1], col1),
-                    toNullableVec<String>(col_names[3], col2)});
-
+    request = getRequest<MockColumnNames>({col_names[0], col_names[1], col_names[4]}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<String>(col_names[0], col0_sorted_asc),
+                            toNullableVec<String>(col_names[1], col1_sorted_asc),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    std::cout << "Expect<4>" << std::endl;
     /// Check duplicate columns
-    request = getRequest<MockColumnNames>({col_names[1], col_names[1], col_names[1]});
-    executeStreams(request,
-                   {toNullableVec<String>(col_names[1], col1),
-                    toNullableVec<String>(col_names[1], col1),
-                    toNullableVec<String>(col_names[1], col1)});
-
+    request = getRequest<MockColumnNames>({col_names[4], col_names[4], col_names[4]}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    std::cout << "Expect<5>" << std::endl;
     {
         /// Check large number of columns
         const size_t col_num = 100;
         MockColumnNamesVec projection_input;
         ColumnsWithTypeAndName columns;
-        auto expect_column = toNullableVec<String>(col_names[1], col1);
+        auto expect_column = toNullableVec<Int32>(col_names[4], col4_sorted_asc);
 
         for (size_t i = 0; i < col_num; ++i)
         {
-            projection_input.push_back(col_names[1]);
+            projection_input.push_back(col_names[4]);
             columns.push_back(expect_column);
         }
 
-        request = getRequest<MockColumnNamesVec>(projection_input);
-        executeStreams(request, columns);
+        request = getRequest<MockColumnNamesVec>(projection_input, col_names[4]);
+        executeWithConcurrency(request, columns);
     }
 }
 CATCH
@@ -113,106 +137,77 @@ TEST_F(ExecutorProjectionTestRunner, ProjectionFunction)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
-    {
-        /// Test "equal" function
-        {
-            /// Data type: TypeString
-            request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[0]))});
-    executeStreams(request,
-                   {toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1})});
 
-    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1]))});
+    /// Test "equal" function
+    std::cout << "Expect<1.1>" << std::endl;
+    /// Data type: TypeString
+    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[0]))}, "equals(col0, col0)");
     executeStreams(request,
-                   {toNullableVec<UInt64>({0, {}, 1, 0, {}, 0, 0})});
-}
-
-{
+                   {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1})});
+    std::cout << "Expect<1.2>" << std::endl;
+    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1]))}, "equals(col0, col1)");
+    executeStreams(request,
+                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 0, 1})});
+    std::cout << "Expect<1.3>" << std::endl;
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4]))});
+    request = getRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4]))}, "equals(col3, col4)");
     executeStreams(request,
-                   {toNullableVec<UInt64>({0, {}, {}, 0, {}, 0, 1})});
-}
-} // namespace tests
+                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 0, 1})});
 
-{
+
     /// Test "greater" function
-    {
-        /// Data type: TypeString
-        request = getRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1]))});
-executeStreams(request,
-               {toNullableVec<UInt64>({0, {}, 0, 0, {}, 0, 0})});
-
-request = getRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0]))});
-executeStreams(request,
-               {toNullableVec<UInt64>({1, {}, 0, 1, {}, 1, 1})});
-} // namespace DB
-
-{
+    std::cout << "Expect<2.1>" << std::endl;
+    /// Data type: TypeString
+    request = getRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1]))}, "greater(col0, col1)");
+    executeStreams(request,
+                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 0, 0})});
+    std::cout << "Expect<2.2>" << std::endl;
+    request = getRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0]))}, "greater(col1, col0)");
+    executeStreams(request,
+                   {toNullableVec<UInt64>({{}, {}, 0, 1, 1, 1, 1})});
+    std::cout << "Expect<2.3>" << std::endl;
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4]))});
+    request = getRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4]))}, "greater(col3, col4)");
     executeStreams(request,
-                   {toNullableVec<UInt64>({1, {}, {}, 0, {}, 0, 0})});
-
-    request = getRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3]))});
+                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
+    std::cout << "Expect<2.4>" << std::endl;
+    request = getRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3]))}, "greater(col4, col3)");
     executeStreams(request,
-                   {toNullableVec<UInt64>({0, {}, {}, 1, {}, 1, 0})});
-}
-}
+                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
 
-{
+
     /// Test "and" function
-    {
-        /// Data type: TypeString
-        request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[0]))});
-executeStreams(request,
-               {toNullableVec<UInt64>({0, 0, 0, 0, {}, 0, 0})});
-
-request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[1]))});
-executeStreams(request,
-               {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0})});
-}
-
-{
-    /// Data type: TypeLong
-    request = getRequest<MockAsts>({And(col(col_names[3]), col(col_names[4]))});
+    std::cout << "Expect<3.1>" << std::endl;
+    /// Data type: TypeString
+    request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[0]))}, "and(col0, col0)");
     executeStreams(request,
-                   {toNullableVec<UInt64>({0, {}, 0, 1, {}, 0, 1})});
-}
-}
+                   {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0})});
+    std::cout << "Expect<3.2>" << std::endl;
+    request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[1]))}, "and(col0, col1)");
+    executeStreams(request,
+                   {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0})});
+    std::cout << "Expect<3.3>" << std::endl;
+    /// Data type: TypeLong
+    request = getRequest<MockAsts>({And(col(col_names[3]), col(col_names[4]))}, "and(col3, col4)");
+    executeStreams(request,
+                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
 
-{
     /// Test "not" function
-    {
-        /// Data type: TypeString
-        request = getRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2]))});
-executeStreams(request,
-               {toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
-                toNullableVec<UInt64>({1, {}, 1, 1, 1, 1, 1}),
-                toNullableVec<UInt64>({1, 1, 1, {}, 1, {}, 1})});
-}
-
-{
-    /// Data type: TypeLong
-    request = getRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4]))});
+    std::cout << "Expect<4.1>" << std::endl;
+    /// Data type: TypeString
+    request = getRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2]))}, "not(col2)");
     executeStreams(request,
-                   {toNullableVec<UInt64>({0, {}, 1, 0, {}, 1, 0}),
-                    toNullableVec<UInt64>({1, 0, {}, 0, {}, 0, 0})});
-}
-}
+                   {toNullableVec<UInt64>({1, 1, 1, 1, 1, {}, 1}),
+                    toNullableVec<UInt64>({1, 1, 1, {}, 1, 1, 1}),
+                    toNullableVec<UInt64>({{}, {}, 1, 1, 1, 1, 1})});
+    std::cout << "Expect<4.2>" << std::endl;
+    /// Data type: TypeLong
+    request = getRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4]))}, "not(col3)");
+    executeStreams(request,
+                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1}),
+                    toNullableVec<UInt64>({{}, 0, 1, 0, 0, 0, 0})});
 
-{
-    /// Test "max" function
-    /// TODO wait for the implementation of the max aggregation
-    {
-        /// Data type: TypeString
-    }
-
-    {
-        /// Data type: TypeLong
-    }
-}
-
-/// TODO more functions
+    /// TODO more functions...
 }
 CATCH
 
