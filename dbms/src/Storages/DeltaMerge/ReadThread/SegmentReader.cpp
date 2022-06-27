@@ -2,9 +2,6 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <unistd.h>
-#include <atomic>
-#include "common/logger_useful.h"
 
 namespace DB::DM
 {
@@ -13,12 +10,11 @@ class SegmentReader
     inline static const std::string name{"SegmentReader"};
 
 public:
-    SegmentReader(WorkQueue<MergedTaskPtr> & task_queue_, const std::vector<int> & cpus_, std::atomic<int64_t> & read_count_)
+    SegmentReader(WorkQueue<MergedTaskPtr> & task_queue_, const std::vector<int> & cpus_)
         : task_queue(task_queue_)
         , stop(false)
         , log(&Poco::Logger::get(name))
         , cpus(cpus_)
-        , read_blk_count(read_count_)
     {
         t = std::thread(&SegmentReader::run, this);
     }
@@ -76,8 +72,6 @@ private:
             }
         });
 
-        //int64_t sleep_times = 0;
-        int64_t read_block_count = 0;
         merged_task->init();
         while (!merged_task->allFinished() && !isStop())
         {
@@ -90,12 +84,9 @@ private:
             }
             for (int c = 0; c < 2; c++)
             {
-                read_block_count++;
-                read_blk_count.fetch_add(1, std::memory_order_relaxed);
                 merged_task->readOneBlock();
             }
         }
-        LOG_FMT_DEBUG(log, "seg_id {} read_block_count {}", merged_task->getSegmentId(), read_block_count);
     }
 
     void run()
@@ -128,33 +119,29 @@ private:
     Poco::Logger * log;
     std::thread t;
     std::vector<int> cpus;
-    std::atomic<int64_t> & read_blk_count;
 };
-
-void SegmentReaderPool::init(int thread_count, const std::vector<int> & cpus)
-{
-    LOG_FMT_INFO(log, "SegmentReaderPool::init thread_count {} cpus {} start", thread_count, cpus);
-    for (int i = 0; i < thread_count; i++)
-    {
-        readers.push_back(std::make_unique<SegmentReader>(task_queue, cpus, read_count));
-    }
-    LOG_FMT_INFO(log, "SegmentReaderPool::init thread_count {} cpus {} end", thread_count, cpus);
-}
 
 void SegmentReaderPool::addTask(MergedTaskPtr && task)
 {
-    task_queue.push(std::forward<MergedTaskPtr>(task));  // TODO(jinhelin): check return value.
+    if (!task_queue.push(std::forward<MergedTaskPtr>(task)))
+    {
+        throw Exception("addTask fail");
+    }
 }
 
 SegmentReaderPool::SegmentReaderPool(int thread_count, const std::vector<int> & cpus)
     : log(&Poco::Logger::get("SegmentReaderPool"))
 {
-    init(thread_count, cpus);
+    LOG_FMT_INFO(log, "Create SegmentReaderPool thread_count {} cpus {} start", thread_count, cpus);
+    for (int i = 0; i < thread_count; i++)
+    {
+        readers.push_back(std::make_unique<SegmentReader>(task_queue, cpus));
+    }
+    LOG_FMT_INFO(log, "Create SegmentReaderPool thread_count {} cpus {} end", thread_count, cpus);
 }
 
 SegmentReaderPool::~SegmentReaderPool()
 {
-    LOG_FMT_DEBUG(log, "read_count {}", read_count.load(std::memory_order_relaxed));
     for (auto & reader : readers)
     {
         reader->setStop();
@@ -174,8 +161,7 @@ SegmentReaderPoolManager::~SegmentReaderPoolManager() = default;
 
 void SegmentReaderPoolManager::init(Poco::Logger * log, int threads_per_node, const std::vector<std::vector<int>> & numa_nodes)
 {
-    LOG_FMT_DEBUG(log, "SegmentReaderPoolManager::init threads_per_node {} numa_nodes {}",
-        threads_per_node, numa_nodes.size());
+    LOG_FMT_DEBUG(log, "SegmentReaderPoolManager::init threads_per_node {} numa_nodes {}", threads_per_node, numa_nodes.size());
     for (const auto & node : numa_nodes)
     {
         reader_pools.push_back(std::make_unique<SegmentReaderPool>(threads_per_node, node));

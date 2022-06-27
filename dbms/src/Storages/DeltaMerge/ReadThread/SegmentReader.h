@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <common/logger_useful.h>
 
 namespace DB::DM
@@ -17,10 +17,10 @@ class SegmentReaderPool
 public:
     SegmentReaderPool(int thread_count, const std::vector<int> & cpus);
     ~SegmentReaderPool();
-    SegmentReaderPool(const SegmentReaderPool&) = delete;
-    SegmentReaderPool & operator=(const SegmentReaderPool&) = delete;
-    SegmentReaderPool(SegmentReaderPool&&) = delete;
-    SegmentReaderPool & operator=(SegmentReaderPool&&) = delete;
+    SegmentReaderPool(const SegmentReaderPool &) = delete;
+    SegmentReaderPool & operator=(const SegmentReaderPool &) = delete;
+    SegmentReaderPool(SegmentReaderPool &&) = delete;
+    SegmentReaderPool & operator=(SegmentReaderPool &&) = delete;
 
     void addTask(MergedTaskPtr && task);
 
@@ -30,7 +30,6 @@ private:
     WorkQueue<MergedTaskPtr> task_queue;
     std::vector<SegmentReaderUPtr> readers;
     Poco::Logger * log;
-    std::atomic<int64_t> read_count;
 };
 
 class SegmentReaderPoolManager
@@ -59,4 +58,4 @@ private:
     std::vector<std::unique_ptr<SegmentReaderPool>> reader_pools;
 };
 
-}
+} // namespace DB::DM
