@@ -39,6 +39,7 @@ class StringReverse : public DB::tests::FunctionTest
 {
 public:
     static constexpr auto func_name = "reverse";
+
 protected:
     ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
     {
@@ -51,11 +52,10 @@ TEST_F(StringReverse, strAndStrTest)
 try
 {
     ASSERT_COLUMN_EQ(
-        toVec({"olleh", "dlrow,olleh","", "pacgnip.www", "。。。试.测.文中"}),
+        toVec({"olleh", "dlrow,olleh", "", "pacgnip.www", "。。。试.测.文中"}),
         executeFunction(
             func_name,
-            toVec({"hello", "hello,world","", "www.pingcap", "中文.测.试。。。"}),
-            ));
+            toVec({"hello", "hello,world", "", "www.pingcap", "中文.测.试。。。"}), ));
 }
 CATCH
 
@@ -66,8 +66,7 @@ TEST_F(StringLength, nullTest)
         toVec({"", {}}),
         executeFunction(
             func_name,
-            toVec({"", {}}),
-            ));
+            toVec({"", {}}), ));
 }
 
 } // namespace tests
