@@ -52,10 +52,8 @@ public:
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
-        // executeStreams(request, expect_columns, 1);
         for (size_t i = 1; i < 10; i += 2)
         {
-            std::cout << "Expect loop " << i << std::endl;
             executeStreams(request, expect_columns, i);
         }
     }
@@ -87,11 +85,11 @@ try
     const ColDataString col2_sorted_asc{"col2-3", {}, "col2-1", "", "col2-0", "col2-4", {}};
     const ColDataInt32 col3_sorted_asc{{}, -111111, 0, 1, {}, 9999, 0};
     const ColDataInt32 col4_sorted_asc{{}, -234, -123, 0, 5, 9999, 24353};
-    std::cout << "Expect<1>" << std::endl;
+
     /// Check single column
     auto request = getRequest<MockColumnNames>({col_names[4]}, col_names[4]);
     executeWithConcurrency(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
-    std::cout << "Expect<2>" << std::endl;
+
     /// Check multi columns
     request = getRequest<MockColumnNames>({col_names[0], col_names[4]}, col_names[4]);
     executeWithConcurrency(request,
@@ -99,21 +97,21 @@ try
                                toNullableVec<String>(col_names[0], col0_sorted_asc),
                                toNullableVec<Int32>(col_names[4], col4_sorted_asc),
                            });
-    std::cout << "Expect<3>" << std::endl;
+
     /// Check multi columns
     request = getRequest<MockColumnNames>({col_names[0], col_names[1], col_names[4]}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<String>(col_names[0], col0_sorted_asc),
                             toNullableVec<String>(col_names[1], col1_sorted_asc),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
-    std::cout << "Expect<4>" << std::endl;
+
     /// Check duplicate columns
     request = getRequest<MockColumnNames>({col_names[4], col_names[4], col_names[4]}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<Int32>(col_names[4], col4_sorted_asc),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
-    std::cout << "Expect<5>" << std::endl;
+
     {
         /// Check large number of columns
         const size_t col_num = 100;
@@ -139,16 +137,16 @@ try
     std::shared_ptr<tipb::DAGRequest> request;
 
     /// Test "equal" function
-    std::cout << "Expect<1.1>" << std::endl;
+
     /// Data type: TypeString
     request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[0]))}, "equals(col0, col0)");
     executeStreams(request,
                    {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1})});
-    std::cout << "Expect<1.2>" << std::endl;
+
     request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1]))}, "equals(col0, col1)");
     executeStreams(request,
                    {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 0, 1})});
-    std::cout << "Expect<1.3>" << std::endl;
+
     /// Data type: TypeLong
     request = getRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4]))}, "equals(col3, col4)");
     executeStreams(request,
@@ -156,51 +154,51 @@ try
 
 
     /// Test "greater" function
-    std::cout << "Expect<2.1>" << std::endl;
+
     /// Data type: TypeString
     request = getRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1]))}, "greater(col0, col1)");
     executeStreams(request,
                    {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 0, 0})});
-    std::cout << "Expect<2.2>" << std::endl;
+
     request = getRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0]))}, "greater(col1, col0)");
     executeStreams(request,
                    {toNullableVec<UInt64>({{}, {}, 0, 1, 1, 1, 1})});
-    std::cout << "Expect<2.3>" << std::endl;
+
     /// Data type: TypeLong
     request = getRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4]))}, "greater(col3, col4)");
     executeStreams(request,
                    {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
-    std::cout << "Expect<2.4>" << std::endl;
+
     request = getRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3]))}, "greater(col4, col3)");
     executeStreams(request,
                    {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
 
 
     /// Test "and" function
-    std::cout << "Expect<3.1>" << std::endl;
+
     /// Data type: TypeString
     request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[0]))}, "and(col0, col0)");
     executeStreams(request,
                    {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0})});
-    std::cout << "Expect<3.2>" << std::endl;
+
     request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[1]))}, "and(col0, col1)");
     executeStreams(request,
                    {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0})});
-    std::cout << "Expect<3.3>" << std::endl;
+
     /// Data type: TypeLong
     request = getRequest<MockAsts>({And(col(col_names[3]), col(col_names[4]))}, "and(col3, col4)");
     executeStreams(request,
                    {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
 
     /// Test "not" function
-    std::cout << "Expect<4.1>" << std::endl;
+
     /// Data type: TypeString
     request = getRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2]))}, "not(col2)");
     executeStreams(request,
                    {toNullableVec<UInt64>({1, 1, 1, 1, 1, {}, 1}),
                     toNullableVec<UInt64>({1, 1, 1, {}, 1, 1, 1}),
                     toNullableVec<UInt64>({{}, {}, 1, 1, 1, 1, 1})});
-    std::cout << "Expect<4.2>" << std::endl;
+
     /// Data type: TypeLong
     request = getRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4]))}, "not(col3)");
     executeStreams(request,
