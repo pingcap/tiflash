@@ -124,10 +124,10 @@ CATCH
             createColumn<Nullable<Int64>>({0, 1, 1, std::nullopt}),                                                        \
             executeFunction("isTrueWithNull", createColumn<Nullable<TYPE>>({0, 1, static_cast<TYPE>(-1), std::nullopt}))); \
         ASSERT_COLUMN_EQ(                                                                                                  \
-            createConstColumn<Nullable<Int64>>(5, 0),                                                                      \
+            createConstColumn<Int64>(5, 0),                                                                                \
             executeFunction("isTrueWithNull", createConstColumn<Nullable<TYPE>>(5, 0)));                                   \
         ASSERT_COLUMN_EQ(                                                                                                  \
-            createConstColumn<Nullable<Int64>>(5, 1),                                                                      \
+            createConstColumn<Int64>(5, 1),                                                                                \
             executeFunction("isTrueWithNull", createConstColumn<Nullable<TYPE>>(5, 2)));                                   \
         ASSERT_COLUMN_EQ(                                                                                                  \
             createConstColumn<Nullable<Int64>>(5, std::nullopt),                                                           \
@@ -194,10 +194,10 @@ CATCH
             createColumn<Nullable<Int64>>({1, 0, 0, std::nullopt}),                                                         \
             executeFunction("isFalseWithNull", createColumn<Nullable<TYPE>>({0, 1, static_cast<TYPE>(-1), std::nullopt}))); \
         ASSERT_COLUMN_EQ(                                                                                                   \
-            createConstColumn<Nullable<Int64>>(5, 1),                                                                       \
+            createConstColumn<Int64>(5, 1),                                                                                 \
             executeFunction("isFalseWithNull", createConstColumn<Nullable<TYPE>>(5, 0)));                                   \
         ASSERT_COLUMN_EQ(                                                                                                   \
-            createConstColumn<Nullable<Int64>>(5, 0),                                                                       \
+            createConstColumn<Int64>(5, 0),                                                                                 \
             executeFunction("isFalseWithNull", createConstColumn<Nullable<TYPE>>(5, 2)));                                   \
         ASSERT_COLUMN_EQ(                                                                                                   \
             createConstColumn<Nullable<Int64>>(5, std::nullopt),                                                            \

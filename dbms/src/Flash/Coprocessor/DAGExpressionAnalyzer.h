@@ -151,7 +151,7 @@ public:
     void appendCastAfterWindow(
         const ExpressionActionsPtr & actions,
         const tipb::Window & window,
-        const size_t window_columns_start_index);
+        size_t window_columns_start_index);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -274,10 +274,6 @@ private:
     String convertToUInt8(
         const ExpressionActionsPtr & actions,
         const String & column_name);
-
-    String buildFunction(
-        const tipb::Expr & expr,
-        const ExpressionActionsPtr & actions);
 
     String buildFilterColumn(
         const ExpressionActionsPtr & actions,

@@ -87,6 +87,10 @@ struct WindowFrame
             && other.end_preceding == end_preceding;
     }
 };
+
+String frameTypeToString(const WindowFrame::FrameType & type);
+String boundaryTypeToString(const WindowFrame::BoundaryType & type);
+
 class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 struct WindowDescription

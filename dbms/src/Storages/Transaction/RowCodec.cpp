@@ -314,7 +314,7 @@ bool appendRowV2ToBlock(
     ColumnID pk_handle_id,
     bool force_decode)
 {
-    UInt8 row_flag = readLittleEndian<UInt8>(&raw_value[1]);
+    auto row_flag = readLittleEndian<UInt8>(&raw_value[1]);
     bool is_big = row_flag & RowV2::BigRowMask;
     return is_big ? appendRowV2ToBlockImpl<true>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode)
                   : appendRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode);
@@ -360,9 +360,10 @@ bool appendRowV2ToBlockImpl(
     decodeUInts<ColumnID, typename RowV2::Types<is_big>::ColumnIDType>(cursor, raw_value, num_null_columns, null_column_ids);
     decodeUInts<size_t, typename RowV2::Types<is_big>::ValueOffsetType>(cursor, raw_value, num_not_null_columns, value_offsets);
     size_t values_start_pos = cursor;
-    size_t id_not_null = 0, id_null = 0;
+    size_t idx_not_null = 0;
+    size_t idx_null = 0;
     // Merge ordered not null/null columns to keep order.
-    while (id_not_null < not_null_column_ids.size() || id_null < null_column_ids.size())
+    while (idx_not_null < not_null_column_ids.size() || idx_null < null_column_ids.size())
     {
         if (column_ids_iter == column_ids_iter_end)
         {
@@ -371,24 +372,31 @@ bool appendRowV2ToBlockImpl(
         }
 
         bool is_null;
-        if (id_not_null < not_null_column_ids.size() && id_null < null_column_ids.size())
-            is_null = not_null_column_ids[id_not_null] > null_column_ids[id_null];
+        if (idx_not_null < not_null_column_ids.size() && idx_null < null_column_ids.size())
+            is_null = not_null_column_ids[idx_not_null] > null_column_ids[idx_null];
         else
-            is_null = id_null < null_column_ids.size();
+            is_null = idx_null < null_column_ids.size();
 
-        auto next_datum_column_id = is_null ? null_column_ids[id_null] : not_null_column_ids[id_not_null];
+        auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
         if (column_ids_iter->first > next_datum_column_id)
         {
-            // extra column
+            // The next column id to read is bigger than the column id of next datum in encoded row.
+            // It means this is the datum of extra column. May happen when reading after dropping
+            // a column.
             if (!force_decode)
                 return false;
+            // Ignore the extra column and continue to parse other datum
             if (is_null)
-                id_null++;
+                idx_null++;
             else
-                id_not_null++;
+                idx_not_null++;
         }
         else if (column_ids_iter->first < next_datum_column_id)
         {
+            // The next column id to read is less than the column id of next datum in encoded row.
+            // It means this is the datum of missing column. May happen when reading after adding
+            // a column.
+            // Fill with default value and continue to read data for next column id.
             const auto & column_info = column_infos[column_ids_iter->second];
             if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
                 return false;
@@ -397,7 +405,7 @@ bool appendRowV2ToBlockImpl(
         }
         else
         {
-            // if pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
+            // If pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
             // we can just ignore the pk value encoded in value part
             if (unlikely(column_ids_iter->first == pk_handle_id))
             {
@@ -405,15 +413,16 @@ bool appendRowV2ToBlockImpl(
                 block_column_pos++;
                 if (is_null)
                 {
-                    id_null++;
+                    idx_null++;
                 }
                 else
                 {
-                    id_not_null++;
+                    idx_not_null++;
                 }
                 continue;
             }
 
+            // Parse the datum.
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             const auto & column_info = column_infos[column_ids_iter->second];
             if (is_null)
@@ -432,15 +441,15 @@ bool appendRowV2ToBlockImpl(
                 }
                 // ColumnNullable::insertDefault just insert a null value
                 raw_column->insertDefault();
-                id_null++;
+                idx_null++;
             }
             else
             {
-                size_t start = id_not_null ? value_offsets[id_not_null - 1] : 0;
-                size_t length = value_offsets[id_not_null] - start;
+                size_t start = idx_not_null ? value_offsets[idx_not_null - 1] : 0;
+                size_t length = value_offsets[idx_not_null] - start;
                 if (!raw_column->decodeTiDBRowV2Datum(values_start_pos + start, raw_value, length, force_decode))
                     return false;
-                id_not_null++;
+                idx_not_null++;
             }
             column_ids_iter++;
             block_column_pos++;

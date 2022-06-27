@@ -146,7 +146,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
 DMFilePtr DMFile::restore(
     const FileProviderPtr & file_provider,
     UInt64 file_id,
-    UInt64 ref_id,
+    UInt64 page_id,
     const String & parent_path,
     const ReadMetaMode & read_meta_mode)
 {
@@ -154,7 +154,7 @@ DMFilePtr DMFile::restore(
     bool single_file_mode = Poco::File(path).isFile();
     DMFilePtr dmfile(new DMFile(
         file_id,
-        ref_id,
+        page_id,
         parent_path,
         single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER,
         Status::READABLE,
@@ -556,7 +556,7 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
         DB::readIntBinary(footer.sub_file_num, buf);
         // initialize sub file state
         buf.seek(footer.sub_file_stat_offset, SEEK_SET);
-        SubFileStat sub_file_stat;
+        SubFileStat sub_file_stat{};
         for (UInt32 i = 0; i < footer.sub_file_num; i++)
         {
             String name;

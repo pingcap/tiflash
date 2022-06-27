@@ -21,8 +21,12 @@
 #include <IO/UncompressedCache.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MarkCache.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <common/config_common.h>
 
 #include <chrono>
@@ -125,6 +129,26 @@ static void calculateMaxAndSum(Max & max, Sum & sum, T x)
         max = x;
 }
 
+FileUsageStatistics AsynchronousMetrics::getPageStorageFileUsage()
+{
+    // Get from RegionPersister
+    auto & tmt = context.getTMTContext();
+    auto & kvstore = tmt.getKVStore();
+    FileUsageStatistics usage = kvstore->getFileUsageStatistics();
+
+    // Get the blob file status from all PS V3 instances
+    if (auto global_storage_pool = context.getGlobalStoragePool(); global_storage_pool != nullptr)
+    {
+        const auto log_usage = global_storage_pool->log_storage->getFileUsageStatistics();
+        const auto meta_usage = global_storage_pool->meta_storage->getFileUsageStatistics();
+        const auto data_usage = global_storage_pool->data_storage->getFileUsageStatistics();
+
+        usage.total_file_num += log_usage.total_file_num + meta_usage.total_file_num + data_usage.total_file_num;
+        usage.total_disk_size += log_usage.total_disk_size + meta_usage.total_disk_size + data_usage.total_disk_size;
+        usage.total_valid_size += log_usage.total_valid_size + meta_usage.total_valid_size + data_usage.total_valid_size;
+    }
+    return usage;
+}
 
 void AsynchronousMetrics::update()
 {
@@ -147,6 +171,7 @@ void AsynchronousMetrics::update()
     set("Uptime", context.getUptimeSeconds());
 
     {
+        // Get the snapshot status from all delta tree tables
         auto databases = context.getDatabases();
 
         double max_dt_stable_oldest_snapshot_lifetime = 0.0;
@@ -175,6 +200,13 @@ void AsynchronousMetrics::update()
         set("MaxDTDeltaOldestSnapshotLifetime", max_dt_delta_oldest_snapshot_lifetime);
         set("MaxDTMetaOldestSnapshotLifetime", max_dt_meta_oldest_snapshot_lifetime);
         set("MaxDTBackgroundTasksLength", max_dt_background_tasks_length);
+    }
+
+    {
+        const FileUsageStatistics usage = getPageStorageFileUsage();
+        set("BlobFileNums", usage.total_file_num);
+        set("BlobDiskBytes", usage.total_disk_size);
+        set("BlobValidBytes", usage.total_valid_size);
     }
 
 #if USE_TCMALLOC

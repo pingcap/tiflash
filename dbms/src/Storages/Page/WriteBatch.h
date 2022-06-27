@@ -184,6 +184,19 @@ public:
         std::swap(o.sequence, sequence);
     }
 
+    void copyWrite(const Write write)
+    {
+        writes.emplace_back(write);
+    }
+
+    void copyWrites(const Writes & writes_)
+    {
+        for (const auto & write_ : writes_)
+        {
+            copyWrite(write_);
+        }
+    }
+
     void clear()
     {
         Writes tmp;

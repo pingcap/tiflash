@@ -28,8 +28,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SSTReader.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
 
@@ -261,75 +261,6 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
 extern RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
 
-/// `preHandleSnapshotToBlock` read data from SSTFiles and predoced the data as a block
-RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshotToBlock(
-    RegionPtr new_region,
-    const SSTViewVec snaps,
-    uint64_t /*index*/,
-    uint64_t /*term*/,
-    TMTContext & tmt)
-{
-    RegionPreDecodeBlockDataPtr cache{nullptr};
-    {
-        decltype(bg_gc_region_data)::value_type tmp;
-        std::lock_guard lock(bg_gc_region_data_mutex);
-        if (!bg_gc_region_data.empty())
-        {
-            tmp.swap(bg_gc_region_data.back());
-            bg_gc_region_data.pop_back();
-        }
-    }
-
-    Stopwatch watch;
-    auto & ctx = tmt.getContext();
-    SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
-
-    {
-        LOG_FMT_INFO(log, "Pre-handle snapshot {} with {} TiKV sst files", new_region->toString(false), snaps.len);
-        // Iterator over all SST files and insert key-values into `new_region`
-        for (UInt64 i = 0; i < snaps.len; ++i)
-        {
-            const auto & snapshot = snaps.views[i];
-            auto sst_reader = SSTReader{proxy_helper, snapshot};
-
-            uint64_t kv_size = 0;
-            while (sst_reader.remained())
-            {
-                auto key = sst_reader.key();
-                auto value = sst_reader.value();
-                new_region->insert(snaps.views[i].type, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
-                ++kv_size;
-                sst_reader.next();
-            }
-
-            LOG_FMT_INFO(log,
-                         "Decode {} got [cf: {}, kv size: {}]",
-                         std::string_view(snapshot.path.data, snapshot.path.len),
-                         CFToName(snapshot.type),
-                         kv_size);
-            // Note that number of keys in different cf will be aggregated into one metrics
-            GET_METRIC(tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
-        }
-        {
-            LOG_FMT_INFO(log, "Start to pre-decode {} into block", new_region->toString());
-            auto block_cache = GenRegionPreDecodeBlockData(new_region, ctx);
-            if (block_cache)
-            {
-                std::stringstream ss;
-                block_cache->toString(ss);
-                LOG_FMT_INFO(log, "Got pre-decode block cache {}", ss.str());
-            }
-            else
-                LOG_FMT_INFO(log, "Got empty pre-decode block cache");
-
-            cache = std::move(block_cache);
-        }
-        LOG_FMT_INFO(log, "Pre-handle snapshot {} cost {}ms", new_region->toString(false), watch.elapsedMilliseconds());
-    }
-
-    return cache;
-}
-
 std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
@@ -473,8 +404,8 @@ void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContex
     LOG_FMT_INFO(log, "{} apply snapshot success", new_region->toString(false));
 }
 
-template void KVStore::handlePreApplySnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TMTContext &);
 template void KVStore::handlePreApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
+
 template void KVStore::checkAndApplySnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TMTContext &);
 template void KVStore::checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
 template void KVStore::onSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, RegionPtr, UInt64, TMTContext &);
@@ -521,10 +452,7 @@ void KVStore::handleApplySnapshot(
     TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    if (snapshot_apply_method == TiDB::SnapshotApplyMethod::Block)
-        handlePreApplySnapshot(RegionPtrWithBlock{new_region, preHandleSnapshotToBlock(new_region, snaps, index, term, tmt)}, tmt);
-    else
-        handlePreApplySnapshot(RegionPtrWithSnapshotFiles{new_region, preHandleSnapshotToFiles(new_region, snaps, index, term, tmt)}, tmt);
+    handlePreApplySnapshot(RegionPtrWithSnapshotFiles{new_region, preHandleSnapshotToFiles(new_region, snaps, index, term, tmt)}, tmt);
 }
 
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
@@ -543,15 +471,12 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
 
     fiu_do_on(FailPoints::force_set_sst_decode_rand, {
         static int num_call = 0;
-        switch (num_call++ % 3)
+        switch (num_call++ % 2)
         {
         case 0:
-            snapshot_apply_method = TiDB::SnapshotApplyMethod::Block;
-            break;
-        case 1:
             snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Directory;
             break;
-        case 2:
+        case 1:
             snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
             break;
         default:
@@ -576,15 +501,6 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         }
     };
 
-    if (snapshot_apply_method == TiDB::SnapshotApplyMethod::Block)
-    {
-        // try to flush remain data in memory.
-        func_try_flush();
-        region->handleIngestSSTInMemory(snaps, index, term);
-        // after `handleIngestSSTInMemory`, all data are stored in `region`, try to flush committed data into storage
-        func_try_flush();
-    }
-    else
     {
         // try to flush remain data in memory.
         func_try_flush();

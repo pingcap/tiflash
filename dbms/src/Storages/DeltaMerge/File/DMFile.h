@@ -141,7 +141,9 @@ public:
 
     struct SubFileStat
     {
-        SubFileStat() = default;
+        SubFileStat()
+            : SubFileStat(0, 0)
+        {}
         SubFileStat(UInt64 offset_, UInt64 size_)
             : offset{offset_}
             , size{size_}
@@ -195,7 +197,7 @@ public:
     static DMFilePtr restore(
         const FileProviderPtr & file_provider,
         UInt64 file_id,
-        UInt64 ref_id,
+        UInt64 page_id,
         const String & parent_path,
         const ReadMetaMode & read_meta_mode);
 
@@ -216,8 +218,10 @@ public:
     void enableGC();
     void remove(const FileProviderPtr & file_provider);
 
+    // The ID for locating DTFile on disk
     UInt64 fileId() const { return file_id; }
-    UInt64 refId() const { return ref_id; }
+    // The PageID for locating this object in the StoragePool.data
+    UInt64 pageId() const { return page_id; }
 
     String path() const;
 
@@ -289,14 +293,14 @@ public:
 
 private:
     DMFile(UInt64 file_id_,
-           UInt64 ref_id_,
+           UInt64 page_id_,
            String parent_path_,
            Mode mode_,
            Status status_,
            Poco::Logger * log_,
            DMConfigurationOpt configuration_ = std::nullopt)
         : file_id(file_id_)
-        , ref_id(ref_id_)
+        , page_id(page_id_)
         , parent_path(std::move(parent_path_))
         , mode(mode_)
         , status(status_)
@@ -395,8 +399,10 @@ private:
     void initializeIndices();
 
 private:
+    // The id to construct the file path on disk.
     UInt64 file_id;
-    UInt64 ref_id; // It is a reference to file_id, could be the same.
+    // It is the page_id that represent this file in the PageStorage. It could be the same as file id.
+    UInt64 page_id;
     String parent_path;
 
     PackStats pack_stats;

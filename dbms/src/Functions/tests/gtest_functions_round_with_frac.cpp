@@ -312,9 +312,10 @@ TEST_F(TestFunctionsRoundWithFrac, IntConstInput)
         // const signed - const frac
         for (size_t i = 0; i < size; ++i)
         {
-            ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(1, int32_result[i]),
+            bool frac_data_null = !frac_data[i].has_value();
+            ASSERT_COLUMN_EQ(frac_data_null ? createConstColumn<Nullable<Int64>>(1, int32_result[i]) : createConstColumn<Int64>(1, int32_result[i].value()),
                              execute(createConstColumn<Int32>(1, int32_input), createConstColumn<Nullable<Int64>>(1, frac_data[i])));
-            ASSERT_COLUMN_EQ(createConstColumn<Nullable<UInt64>>(1, uint32_result[i]),
+            ASSERT_COLUMN_EQ(frac_data_null ? createConstColumn<Nullable<UInt64>>(1, uint32_result[i]) : createConstColumn<UInt64>(1, uint32_result[i].value()),
                              execute(createConstColumn<UInt32>(1, uint32_input), createConstColumn<Nullable<Int64>>(1, frac_data[i])));
             ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(1, {}),
                              execute(createConstColumn<Nullable<Int64>>(1, {}), createConstColumn<Nullable<Int64>>(1, frac_data[i])));
@@ -441,22 +442,22 @@ try
     {
         auto frac = createColumn<Nullable<Int64>>({3, 2, 1, 0, -1, -2, -3, -4, -5, -6, {}});
 
-        ASSERT_COLUMN_EQ(column({max_prec, 3},
-                                {"98765.432", "98765.430", "98765.400", "98765.000", "98770.000", "98800.000", "99000.000", "100000.000", "100000.000", "0.000", {}}),
+        ASSERT_COLUMN_EQ(createColumn<Nullable<Decimal32>>(std::make_tuple(9, 3),
+                                                           {"98765.432", "98765.430", "98765.400", "98765.000", "98770.000", "98800.000", "99000.000", "100000.000", "100000.000", "0.000", {}}),
                          this->execute(constColumn({max_prec - 1, 3}, 11, "98765.432"), frac));
         ASSERT_COLUMN_EQ(constColumn({max_prec, 3}, 11, {}), this->execute(constColumn({max_prec - 1, 3}, 11, {}), frac));
     }
 
     // const input & frac
 
-    ASSERT_COLUMN_EQ(constColumn({max_prec - 1, 2}, 1, "0.03"),
+    ASSERT_COLUMN_EQ(createConstColumn<Decimal32>(std::make_tuple(3, 2), 1, "0.03"),
                      this->execute(constColumn({max_prec - 1, 3}, 1, "0.025"), createConstColumn<Int64>(1, 2)));
     ASSERT_COLUMN_EQ(
         constColumn({max_prec - 1, 2}, 1, {}),
         this->execute(constColumn({max_prec - 1, 3}, 1, {}), createConstColumn<Int64>(1, 2)));
-    ASSERT_COLUMN_EQ(constColumn({max_prec - 3, 0}, 1, {}),
+    ASSERT_COLUMN_EQ(createConstColumn<Nullable<Decimal32>>(std::make_tuple(1, 0), 1, {}, "", 0),
                      this->execute(constColumn({max_prec - 1, 3}, 1, "0.025"), createConstColumn<Nullable<Int64>>(1, {})));
-    ASSERT_COLUMN_EQ(createConstColumn<Decimal>(std::make_tuple(max_prec, 5), 100, "1." + String(5, '0')),
+    ASSERT_COLUMN_EQ(createConstColumn<Decimal32>(std::make_tuple(6, 5), 100, "1." + String(5, '0')),
                      this->execute(createConstColumn<Decimal>(std::make_tuple(max_prec - 5, 0), 100, "1"), createConstColumn<Int64>(100, 5)));
 }
 CATCH

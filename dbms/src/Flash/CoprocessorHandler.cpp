@@ -18,11 +18,12 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Flash/ServiceUtils.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
 

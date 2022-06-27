@@ -25,8 +25,10 @@
 #include <Storages/Transaction/ReadIndexWorker.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
+#include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <common/likely.h>
 
 namespace DB
 {
@@ -37,15 +39,15 @@ extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
 KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
-    : region_persister(context, region_manager)
+    : region_persister(std::make_unique<RegionPersister>(context, region_manager))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , snapshot_apply_method(snapshot_apply_method_)
     , log(&Poco::Logger::get("KVStore"))
+    , region_compact_log_period(120)
+    , region_compact_log_min_rows(40 * 1024)
+    , region_compact_log_min_bytes(32 * 1024 * 1024)
 {
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
-    REGION_COMPACT_LOG_PERIOD = 120;
-    REGION_COMPACT_LOG_MIN_ROWS = 40 * 1024;
-    REGION_COMPACT_LOG_MIN_BYTES = 32 * 1024 * 1024;
 }
 
 void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
@@ -54,7 +56,7 @@ void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
     auto manage_lock = genRegionWriteLock(task_lock);
 
     this->proxy_helper = proxy_helper;
-    manage_lock.regions = region_persister.restore(proxy_helper);
+    manage_lock.regions = region_persister->restore(proxy_helper);
 
     LOG_FMT_INFO(log, "Restored {} regions", manage_lock.regions.size());
 
@@ -129,35 +131,33 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
 
 void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log)
 {
-    if (tmt.isBgFlushDisabled())
+    auto table_id = region.getMappedTableID();
+    auto storage = tmt.getStorages().get(table_id);
+    if (unlikely(storage == nullptr))
     {
-        auto table_id = region.getMappedTableID();
-        auto storage = tmt.getStorages().get(table_id);
-        if (storage == nullptr)
-        {
-            LOG_WARNING(log,
-                        "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
-                            + " with table id: " + DB::toString(table_id) + ", ignored");
-            return;
-        }
+        LOG_FMT_WARNING(log,
+                        "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
+                        region.toString(),
+                        table_id);
+        return;
+    }
 
-        try
-        {
-            // Acquire `drop_lock` so that no other threads can drop the storage during `flushCache`. `alter_lock` is not required.
-            auto storage_lock = storage->lockForShare(getThreadName());
-            auto rowkey_range = DM::RowKeyRange::fromRegionRange(
-                region.getRange(),
-                region.getRange()->getMappedTableID(),
-                storage->isCommonHandle(),
-                storage->getRowKeyColumnSize());
-            storage->flushCache(tmt.getContext(), rowkey_range);
-        }
-        catch (DB::Exception & e)
-        {
-            // We can ignore if storage is already dropped.
-            if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
-                throw;
-        }
+    try
+    {
+        // Acquire `drop_lock` so that no other threads can drop the storage during `flushCache`. `alter_lock` is not required.
+        auto storage_lock = storage->lockForShare(getThreadName());
+        auto rowkey_range = DM::RowKeyRange::fromRegionRange(
+            region.getRange(),
+            region.getRange()->getMappedTableID(),
+            storage->isCommonHandle(),
+            storage->getRowKeyColumnSize());
+        storage->flushCache(tmt.getContext(), rowkey_range);
+    }
+    catch (DB::Exception & e)
+    {
+        // We can ignore if storage is already dropped.
+        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+            throw;
     }
 }
 
@@ -167,7 +167,7 @@ void KVStore::tryPersist(RegionID region_id)
     if (region)
     {
         LOG_FMT_INFO(log, "Try to persist {}", region->toString(false));
-        region_persister.persist(*region);
+        region_persister->persist(*region);
         LOG_FMT_INFO(log, "After persisted {}, cache {} bytes", region->toString(false), region->dataSize());
     }
 }
@@ -183,7 +183,7 @@ void KVStore::gcRegionPersistedCache(Seconds gc_persist_period)
     if (now < (last_gc_time.load() + gc_persist_period))
         return;
     last_gc_time = now;
-    region_persister.gc();
+    region_persister->gc();
 }
 
 void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & region_table, const KVStoreTaskLock & task_lock, const RegionTaskLock & region_lock)
@@ -204,7 +204,7 @@ void KVStore::removeRegion(RegionID region_id, bool remove_data, RegionTable & r
         }
     }
 
-    region_persister.drop(region_id, region_lock);
+    region_persister->drop(region_id, region_lock);
     LOG_FMT_INFO(log, "Persisted [region {}] deleted", region_id);
 
     region_table.removeRegion(region_id, remove_data, region_lock);
@@ -307,9 +307,9 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
 
 void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
 {
-    REGION_COMPACT_LOG_PERIOD = sec;
-    REGION_COMPACT_LOG_MIN_ROWS = rows;
-    REGION_COMPACT_LOG_MIN_BYTES = bytes;
+    region_compact_log_period = sec;
+    region_compact_log_min_rows = rows;
+    region_compact_log_min_bytes = bytes;
 
     LOG_FMT_INFO(
         log,
@@ -322,7 +322,7 @@ void KVStore::setRegionCompactLogConfig(UInt64 sec, UInt64 rows, UInt64 bytes)
 void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller)
 {
     LOG_FMT_INFO(log, "Start to persist {}, cache size: {} bytes for `{}`", region.toString(true), region.dataSize(), caller);
-    region_persister.persist(region, region_task_lock);
+    region_persister->persist(region, region_task_lock);
     LOG_FMT_DEBUG(log, "Persist {} done", region.toString(false));
 }
 
@@ -363,8 +363,8 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
             LOG_FMT_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}", curr_region.toString(false), rows, size_bytes);
 
-            if (rows >= REGION_COMPACT_LOG_MIN_ROWS.load(std::memory_order_relaxed)
-                || size_bytes >= REGION_COMPACT_LOG_MIN_BYTES.load(std::memory_order_relaxed))
+            if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed)
+                || size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
             {
                 // if rows or bytes more than threshold, flush cache and perist mem data.
                 return true;
@@ -373,7 +373,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
             {
                 // if thhere is little data in mem, wait until time interval reached threshold.
                 // use random period so that lots of regions will not be persisted at same time.
-                auto compact_log_period = std::rand() % REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed); // NOLINT
+                auto compact_log_period = std::rand() % region_compact_log_period.load(std::memory_order_relaxed); // NOLINT
                 return !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());
             }
         }
@@ -444,21 +444,13 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         // After region split / merge, try to flush it
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
-            if (tmt.isBgFlushDisabled())
+            try
             {
-                try
-                {
-                    tmt.getRegionTable().tryFlushRegion(region, false);
-                }
-                catch (const Exception & e)
-                {
-                    tryLogCurrentException(__PRETTY_FUNCTION__);
-                }
+                tmt.getRegionTable().tryFlushRegion(region, false);
             }
-            else
+            catch (...)
             {
-                if (region->writeCFCount() >= 8192)
-                    tmt.getBackgroundService().addRegionToFlush(region);
+                tryLogCurrentException(__PRETTY_FUNCTION__);
             }
         };
 
@@ -772,6 +764,11 @@ void KVStore::StoreMeta::update(Base && base_)
 KVStore::~KVStore()
 {
     releaseReadIndexWorkers();
+}
+
+FileUsageStatistics KVStore::getFileUsageStatistics() const
+{
+    return region_persister->getFileUsageStatistics();
 }
 
 } // namespace DB

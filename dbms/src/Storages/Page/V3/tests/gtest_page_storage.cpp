@@ -66,6 +66,7 @@ public:
         return storage;
     }
 
+
 protected:
     FileProviderPtr file_provider;
     std::unique_ptr<StoragePathPool> path_pool;
@@ -180,7 +181,7 @@ try
                                                                         rate_target,
                                                                         LimiterType::UNKNOW);
 
-        std::vector<PageId> page_ids;
+        PageIds page_ids;
         for (size_t i = 0; i < wb_nums; ++i)
         {
             page_ids.emplace_back(page_id + i);
@@ -1297,6 +1298,196 @@ try
     fields.emplace_back(field);
 
     ASSERT_NO_THROW(page_storage->read(fields));
+}
+CATCH
+
+
+TEST_F(PageStorageTest, putExternalAfterRestore)
+try
+{
+    {
+        WriteBatch batch;
+        batch.putExternal(1999, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    auto alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 1);
+    ASSERT_EQ(*alive_ids.begin(), 1999);
+
+    {
+        WriteBatch batch;
+        batch.putExternal(1999, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 1);
+    ASSERT_EQ(*alive_ids.begin(), 1999);
+}
+CATCH
+
+TEST_F(PageStorageTest, GetMaxId)
+try
+{
+    NamespaceId small = 20;
+    NamespaceId medium = 50;
+    NamespaceId large = 100;
+
+    {
+        WriteBatch batch{small};
+        batch.putExternal(1, 0);
+        batch.putExternal(1999, 0);
+        batch.putExternal(2000, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        WriteBatch batch{medium};
+        batch.putExternal(1, 0);
+        batch.putExternal(100, 0);
+        batch.putExternal(200, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 2000);
+    }
+
+    {
+        WriteBatch batch{large};
+        batch.putExternal(1, 0);
+        batch.putExternal(20000, 0);
+        batch.putExternal(20001, 0);
+        page_storage->write(std::move(batch));
+        ASSERT_EQ(page_storage->getMaxId(), 20001);
+    }
+
+    {
+        page_storage = reopenWithConfig(config);
+        ASSERT_EQ(page_storage->getMaxId(), 20001);
+    }
+}
+CATCH
+
+TEST_F(PageStorageTest, CleanAfterDecreaseRef)
+try
+{
+    // Make it in log_1_0
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        page_storage->write(std::move(batch));
+    }
+
+    page_storage = reopenWithConfig(config);
+
+    // Make it in log_2_0
+    {
+        WriteBatch batch;
+        batch.putExternal(1, 0);
+        batch.putRefPage(2, 1);
+        batch.delPage(1);
+        batch.delPage(2);
+        page_storage->write(std::move(batch));
+    }
+    page_storage = reopenWithConfig(config);
+
+    auto alive_ids = page_storage->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+    ASSERT_EQ(alive_ids.size(), 0);
+}
+CATCH
+
+TEST_F(PageStorageTest, TruncateBlobFile)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    auto blob_file = Poco::File(getTemporaryPath() + "/blobfile_1");
+
+    page_storage = reopenWithConfig(config);
+    EXPECT_GT(blob_file.getSize(), 0);
+
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        page_storage->write(std::move(batch));
+    }
+    page_storage = reopenWithConfig(config);
+    page_storage->gc(/*not_skip*/ false, nullptr, nullptr);
+    EXPECT_EQ(blob_file.getSize(), 0);
+}
+CATCH
+
+TEST_F(PageStorageTest, EntryTagAfterFullGC)
+try
+{
+    {
+        PageStorage::Config config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageId page_id = 120;
+    UInt64 tag = 12345;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        auto entry = page_storage->getEntry(page_id);
+        ASSERT_EQ(entry.tag, tag);
+        auto page = page_storage->read(page_id);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    {
+        auto entry = page_storage->getEntry(page_id);
+        ASSERT_EQ(entry.tag, tag);
+        auto page = page_storage->read(page_id);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
 }
 CATCH
 

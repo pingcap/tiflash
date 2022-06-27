@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include "types.h"
 
 namespace common
 {
@@ -113,11 +114,11 @@ inline bool mulOverflow(__int128 x, __int128 y, __int128 & res)
     if (!x || !y)
         return false;
 
-    unsigned __int128 a = (x > 0) ? x : -x;
-    unsigned __int128 b = (y > 0) ? y : -y;
-    return (a * b) / b != a;
+    return res / x != y; /// whether overflow int128
 }
 
+/// Int256 doesn't use the complement representation to express negative values, but uses an extra bit to express the sign flag,
+/// the actual range of Int256 is from -(2^256 - 1) to 2^256 - 1, so 2^255 ~ 2^256-1 do not overflow Int256.
 template <>
 inline bool mulOverflow(Int256 x, Int256 y, Int256 & res)
 {

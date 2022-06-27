@@ -336,7 +336,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
     if (args.size() != 1)
         throw Exception("Args not matched, should be: json_dag_path", ErrorCodes::BAD_ARGUMENTS);
 
-    String json_dag_path = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto json_dag_path = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     auto dag = NaturalDag(json_dag_path, &Poco::Logger::get("MockDAG"));
     dag.init();
     dag.build(context);
@@ -431,7 +431,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     if (args.empty() || args.size() > 3)
         throw Exception("Args not matched, should be: query[, region-id, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
-    String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = InvalidRegionID;
     if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
@@ -464,8 +464,8 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     if (args.size() < 2 || args.size() > 4)
         throw Exception("Args not matched, should be: query, region-id[, start-ts, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
-    String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    RegionID region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    auto query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     Timestamp start_ts = DEFAULT_MAX_READ_TSO;
     if (args.size() >= 3)
         start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
@@ -671,14 +671,14 @@ const ASTTablesInSelectQueryElement * getJoin(ASTSelectQuery & ast_query)
     if (!ast_query.tables)
         return nullptr;
 
-    const ASTTablesInSelectQuery & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*ast_query.tables);
+    const auto & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*ast_query.tables);
     if (tables_in_select_query.children.empty())
         return nullptr;
 
     const ASTTablesInSelectQueryElement * joined_table = nullptr;
     for (const auto & child : tables_in_select_query.children)
     {
-        const ASTTablesInSelectQueryElement & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*child);
+        const auto & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*child);
         if (tables_element.table_join)
         {
             if (!joined_table)
@@ -737,7 +737,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
             bool append_pk_column = false;
             for (const auto & expr : ast_query.select_expression_list->children)
             {
-                if (ASTIdentifier * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
+                if (auto * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
                 {
                     if (identifier->getColumnName() == MutableSupport::tidb_pk_column_name)
                     {
@@ -756,7 +756,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
         String right_table_alias;
         {
             String database_name, table_name;
-            const ASTTableExpression & table_to_join = static_cast<const ASTTableExpression &>(*joined_table->table_expression);
+            const auto & table_to_join = static_cast<const ASTTableExpression &>(*joined_table->table_expression);
             if (table_to_join.database_and_table_name)
             {
                 auto identifier = static_cast<const ASTIdentifier &>(*table_to_join.database_and_table_name);
@@ -788,7 +788,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
         bool right_append_pk_column = false;
         for (const auto & expr : ast_query.select_expression_list->children)
         {
-            if (ASTIdentifier * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
+            if (auto * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
             {
                 auto names = splitQualifiedName(identifier->getColumnName());
                 if (names.second == MutableSupport::tidb_pk_column_name)
@@ -831,7 +831,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
     bool has_agg_func = false;
     for (const auto & child : ast_query.select_expression_list->children)
     {
-        const ASTFunction * func = typeid_cast<const ASTFunction *>(child.get());
+        const auto * func = typeid_cast<const ASTFunction *>(child.get());
         if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
         {
             has_agg_func = true;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include <Common/FmtUtils.h>
 #include <DataStreams/HashJoinBuildBlockInputStream.h>
 namespace DB
 {
@@ -25,4 +26,26 @@ Block HashJoinBuildBlockInputStream::readImpl()
     return block;
 }
 
+void HashJoinBuildBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    static const std::unordered_map<ASTTableJoin::Kind, String> join_type_map{
+        {ASTTableJoin::Kind::Inner, "Inner"},
+        {ASTTableJoin::Kind::Left, "Left"},
+        {ASTTableJoin::Kind::Right, "Right"},
+        {ASTTableJoin::Kind::Full, "Full"},
+        {ASTTableJoin::Kind::Cross, "Cross"},
+        {ASTTableJoin::Kind::Comma, "Comma"},
+        {ASTTableJoin::Kind::Anti, "Anti"},
+        {ASTTableJoin::Kind::LeftSemi, "Left_Semi"},
+        {ASTTableJoin::Kind::LeftAnti, "Left_Anti"},
+        {ASTTableJoin::Kind::Cross_Left, "Cross_Left"},
+        {ASTTableJoin::Kind::Cross_Right, "Cross_Right"},
+        {ASTTableJoin::Kind::Cross_Anti, "Cross_Anti"},
+        {ASTTableJoin::Kind::Cross_LeftSemi, "Cross_LeftSemi"},
+        {ASTTableJoin::Kind::Cross_LeftAnti, "Cross_LeftAnti"}};
+    auto join_type_it = join_type_map.find(join->getKind());
+    if (join_type_it == join_type_map.end())
+        throw TiFlashException("Unknown join type", Errors::Coprocessor::Internal);
+    buffer.fmtAppend(", join_kind = {}", join_type_it->second);
+}
 } // namespace DB

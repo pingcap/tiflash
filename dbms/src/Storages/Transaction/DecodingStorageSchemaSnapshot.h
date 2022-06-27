@@ -67,19 +67,22 @@ struct DecodingStorageSchemaSnapshot
     bool pk_is_handle;
     bool is_common_handle;
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
-    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+    // an internal increasing version for `DecodingStorageSchemaSnapshot`, has no relation with the table schema version
+    Int64 decoding_schema_version;
 
-    DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_)
+    DecodingStorageSchemaSnapshot(DM::ColumnDefinesPtr column_defines_, const TiDB::TableInfo & table_info_, const DM::ColumnDefine & original_handle_, Int64 decoding_schema_version_)
         : column_defines{std::move(column_defines_)}
         , pk_is_handle{table_info_.pk_is_handle}
         , is_common_handle{table_info_.is_common_handle}
-        , schema_version{table_info_.schema_version}
+        , decoding_schema_version{decoding_schema_version_}
     {
         std::unordered_map<ColumnID, size_t> column_lut;
+        std::unordered_map<String, ColumnID> column_name_id_map;
         for (size_t i = 0; i < table_info_.columns.size(); i++)
         {
             const auto & ci = table_info_.columns[i];
             column_lut.emplace(ci.id, i);
+            column_name_id_map.emplace(ci.name, ci.id);
         }
         for (size_t i = 0; i < column_defines->size(); i++)
         {
@@ -87,7 +90,7 @@ struct DecodingStorageSchemaSnapshot
             sorted_column_id_with_pos.insert({cd.id, i});
             if (cd.id != TiDBPkColumnID && cd.id != VersionColumnID && cd.id != DelMarkColumnID)
             {
-                auto & columns = table_info_.columns;
+                const auto & columns = table_info_.columns;
                 column_infos.push_back(columns[column_lut.at(cd.id)]);
             }
             else
@@ -99,10 +102,14 @@ struct DecodingStorageSchemaSnapshot
         // create pk related metadata if needed
         if (is_common_handle)
         {
-            const auto & primary_index_info = table_info_.getPrimaryIndexInfo();
-            for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
+            /// we will not update the IndexInfo except Rename DDL.
+            /// When the add column / drop column action happenes, the offset of each column may change
+            /// Thus, we should not use offset to get the column we want,
+            /// but use to compare the column name to get the column id.
+            const auto & primary_index_cols = table_info_.getPrimaryIndexInfo().idx_cols;
+            for (const auto & col : primary_index_cols)
             {
-                auto pk_column_id = table_info_.columns[primary_index_info.idx_cols[i].offset].id;
+                auto pk_column_id = column_name_id_map[col.name];
                 pk_column_ids.emplace_back(pk_column_id);
                 pk_pos_map.emplace(pk_column_id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
             }
@@ -124,11 +131,11 @@ struct DecodingStorageSchemaSnapshot
         {
             auto pk_pos_iter = pk_pos_map.begin();
             size_t column_pos_in_block = 0;
-            for (auto iter = sorted_column_id_with_pos.begin(); iter != sorted_column_id_with_pos.end(); iter++)
+            for (auto & column_id_with_pos : sorted_column_id_with_pos)
             {
                 if (pk_pos_iter == pk_pos_map.end())
                     break;
-                if (pk_pos_iter->first == iter->first)
+                if (pk_pos_iter->first == column_id_with_pos.first)
                 {
                     pk_pos_iter->second = column_pos_in_block;
                     pk_pos_iter++;

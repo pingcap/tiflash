@@ -1279,15 +1279,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, const Expressi
     }
     else if (isScalarFunctionExpr(expr))
     {
-        const String & func_name = getFunctionName(expr);
-        if (DAGExpressionAnalyzerHelper::function_builder_map.count(func_name) != 0)
-        {
-            ret = DAGExpressionAnalyzerHelper::function_builder_map[func_name](this, expr, actions);
-        }
-        else
-        {
-            ret = buildFunction(expr, actions);
-        }
+        ret = DAGExpressionAnalyzerHelper::buildFunction(this, expr, actions);
     }
     else
     {
@@ -1339,20 +1331,6 @@ String DAGExpressionAnalyzer::buildTupleFunctionForGroupConcat(
     sort_desc = getSortDescription(order_columns, expr.order_by());
 
     return applyFunction(func_name, argument_names, actions, nullptr);
-}
-
-String DAGExpressionAnalyzer::buildFunction(
-    const tipb::Expr & expr,
-    const ExpressionActionsPtr & actions)
-{
-    const String & func_name = getFunctionName(expr);
-    Names argument_names;
-    for (const auto & child : expr.children())
-    {
-        String name = getActions(child, actions);
-        argument_names.push_back(name);
-    }
-    return applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
 } // namespace DB

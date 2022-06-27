@@ -234,7 +234,9 @@ public:
     /// Flush the data of column files which haven't write to disk yet, and also save the metadata of column files.
     bool flush(DMContext & context);
 
-    /// Compacts fragment column files into bigger one, to save some IOPS during reading.
+    /// Compact fragment column files in the delta layer into bigger column files, to save some IOPS during reading.
+    /// It does not merge the delta into stable layer.
+    /// a.k.a. minor compaction.
     bool compact(DMContext & context);
 
     /// Create a constant snapshot for read.

@@ -25,10 +25,10 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
-#include <Storages/Transaction/SchemaBuilder-internal.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/SchemaBuilder-internal.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
 
 #include <optional>
@@ -98,7 +98,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     DM::ColumnDefines columns_to_read;
     {
         NamesAndTypes source_columns;
-        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info, log->getLog());
+        std::tie(source_columns, std::ignore) = parseColumnsFromTableInfo(table_info);
         dag_query = std::make_unique<DAGQueryInfo>(
             conditions,
             DAGPreparedSets(),

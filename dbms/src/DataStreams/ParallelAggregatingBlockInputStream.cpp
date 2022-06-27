@@ -13,16 +13,12 @@
 // limitations under the License.
 
 #include <Common/ClickHouseRevision.h>
+#include <Common/FmtUtils.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
-
-
-namespace ProfileEvents
-{
-extern const Event ExternalAggregationMerge;
-}
-
 
 namespace DB
 {
@@ -97,8 +93,6 @@ Block ParallelAggregatingBlockInputStream::readImpl()
             /** If there are temporary files with partially-aggregated data on the disk,
                 *  then read and merge them, spending the minimum amount of memory.
                 */
-
-            ProfileEvents::increment(ProfileEvents::ExternalAggregationMerge);
 
             const auto & files = aggregator.getTemporaryFiles();
             BlockInputStreams input_streams;
@@ -273,6 +267,11 @@ void ParallelAggregatingBlockInputStream::execute()
             threads_data[0].aggregate_columns,
             threads_data[0].local_delta_memory,
             no_more_keys);
+}
+
+void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    buffer.fmtAppend(", max_threads: {}, final: {}", max_threads, final ? "true" : "false");
 }
 
 } // namespace DB

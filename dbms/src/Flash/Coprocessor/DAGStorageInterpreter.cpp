@@ -19,6 +19,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/MultiplexInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -33,7 +34,8 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -51,6 +53,7 @@ extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_with_alter_locks_acquired[];
 extern const char force_remote_read_for_batch_cop[];
 extern const char pause_after_copr_streams_acquired[];
+extern const char pause_after_copr_streams_acquired_once[];
 } // namespace FailPoints
 
 namespace
@@ -185,7 +188,7 @@ void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
     QuotaForIntervals & quota = context.getQuota();
 
     pipeline.transform([&](auto & stream) {
-        if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
         {
             p_stream->setLimits(limits);
             p_stream->setQuota(quota);
@@ -295,6 +298,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     /// Set the limits and quota for reading data, the speed and time of the query.
     setQuotaAndLimitsOnTableScan(context, pipeline);
     FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired);
+    FAIL_POINT_PAUSE(FailPoints::pause_after_copr_streams_acquired_once);
 
     /// handle timezone/duration cast for local and remote table scan.
     executeCastAfterTableScan(remote_read_streams_start_index, pipeline);
@@ -371,8 +375,10 @@ void DAGStorageInterpreter::executePushedDownFilter(
     {
         auto & stream = pipeline.streams[i];
         stream = std::make_shared<FilterBlockInputStream>(stream, before_where, filter_column_name, log->identifier());
+        stream->setExtraInfo("push down filter");
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
+        stream->setExtraInfo("projection after push down filter");
     }
 }
 
@@ -410,6 +416,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         {
             auto & stream = pipeline.streams[i++];
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
+            stream->setExtraInfo("cast after local tableScan");
         }
         // remote streams
         if (i < pipeline.streams.size())
@@ -422,6 +429,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             {
                 auto & stream = pipeline.streams[i++];
                 stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
+                stream->setExtraInfo("cast after remote tableScan");
             }
         }
     }
@@ -478,6 +486,7 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
         std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID());
         pipeline.streams.push_back(input);
         task_start = task_end;
@@ -627,6 +636,9 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
     if (total_local_region_num == 0)
         return;
     const auto table_query_infos = generateSelectQueryInfos();
+    bool has_multiple_partitions = table_query_infos.size() > 1;
+    // MultiPartitionStreamPool will be disabled in no partition mode or single-partition case
+    std::shared_ptr<MultiPartitionStreamPool> stream_pool = has_multiple_partitions ? std::make_shared<MultiPartitionStreamPool>() : nullptr;
     for (const auto & table_query_info : table_query_infos)
     {
         DAGPipeline current_pipeline;
@@ -635,9 +647,6 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
         if (region_num == 0)
             continue;
-        /// calculate weighted max_streams for each partition, note at least 1 stream is needed for each partition
-        size_t current_max_streams = table_query_infos.size() == 1 ? max_streams : (max_streams * region_num + total_local_region_num - 1) / total_local_region_num;
-
         QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
         assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
         auto & storage = storages_with_structure_lock[table_id].storage;
@@ -647,7 +656,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         {
             try
             {
-                current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, current_max_streams);
+                current_pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
 
                 // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
                 // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
@@ -771,7 +780,19 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
                 throw;
             }
         }
-        pipeline.streams.insert(pipeline.streams.end(), current_pipeline.streams.begin(), current_pipeline.streams.end());
+        if (has_multiple_partitions)
+            stream_pool->addPartitionStreams(current_pipeline.streams);
+        else
+            pipeline.streams.insert(pipeline.streams.end(), current_pipeline.streams.begin(), current_pipeline.streams.end());
+    }
+    if (has_multiple_partitions)
+    {
+        String req_info = dag_context.isMPPTask() ? dag_context.getMPPTaskId().toString() : "";
+        int exposed_streams_cnt = std::min(static_cast<int>(max_streams), stream_pool->addedStreamsCnt());
+        for (int i = 0; i < exposed_streams_cnt; ++i)
+        {
+            pipeline.streams.push_back(std::make_shared<MultiplexInputStream>(stream_pool, req_info));
+        }
     }
 }
 

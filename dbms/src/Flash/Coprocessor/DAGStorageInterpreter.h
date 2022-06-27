@@ -24,7 +24,6 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/Transaction/LearnerRead.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/Types.h>
 #include <pingcap/coprocessor/Client.h>
@@ -33,6 +32,7 @@
 
 namespace DB
 {
+class TMTContext;
 using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<const RegionInfoMap>>;
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
 /// It's only intended to be used by DAGQueryBlockInterpreter.
