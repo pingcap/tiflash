@@ -1,0 +1,59 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t;
+mysql> create table if not exists test.t(a char(20), b int, c double);
+
+mysql> insert into test.t values('www.pingcap.com', 12345, 123.45);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select space(40) from test.t;
++------------------------------------------+
+| space(40)                                |
++------------------------------------------+
+|                                          |
+|                                          |
+|                                          |
++------------------------------------------+
+
+
+mysql> select space('') from test.t;
++-----------+
+| space('') |
++-----------+
+|           |
+|           |
+|           |
++-----------+
+
+mysql> select space(NULL) from test.t;
++-------------+
+| space(NULL) |
++-------------+
+| NULL        |
+| NULL        |
+| NULL        |
++-------------+
+
+mysql> explain select space(40) from test.t;
++---------------------------+---------+--------------+---------------+----------------------------------------------------+
+| id                        | estRows | task         | access object | operator info                                      |
++---------------------------+---------+--------------+---------------+----------------------------------------------------+
+| TableReader_9             | 3.00    | root         |               | data:ExchangeSender_8                              |
+| └─ExchangeSender_8        | 3.00    | mpp[tiflash] |               | ExchangeType: PassThrough                          |
+|   └─Projection_4          | 3.00    | mpp[tiflash] |               |                                         ->Column#3 |
+|     └─TableFullScan_7     | 3.00    | mpp[tiflash] | table:t       | keep order:false, stats:pseudo                     |
++---------------------------+---------+--------------+---------------+----------------------------------------------------+
+
