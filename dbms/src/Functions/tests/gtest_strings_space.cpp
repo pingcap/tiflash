@@ -62,6 +62,7 @@ CATCH
 
 // test NULL
 TEST_F(StringLength, nullTest)
+try
 {
     ASSERT_COLUMN_EQ(
         toVec({"", {}}),
@@ -69,6 +70,7 @@ TEST_F(StringLength, nullTest)
             func_name,
             toVec({"", {}})));
 }
+CATCH
 
 } // namespace tests
 } // namespace DB
