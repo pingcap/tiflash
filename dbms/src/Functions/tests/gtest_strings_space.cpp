@@ -55,8 +55,7 @@ try
         toVec({"  ", "", "          "}),
         executeFunction(
             func_name,
-            toVec({2, 0, 10})
-            ));
+            toVec({2, 0, 10})));
 }
 CATCH
 
