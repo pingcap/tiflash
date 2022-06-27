@@ -76,13 +76,13 @@ private:
         while (!merged_task->allFinished() && !isStop())
         {
             auto [min_pending_block_count, max_pending_block_count] = merged_task->getMinMaxPendingBlockCount();
-            constexpr int64_t pending_block_count_limit = 100;
-            auto read_count = pending_block_count_limit - max_pending_block_count; // TODO(jinhelin) max or min or ...
+            constexpr int64_t pending_block_count_limit = 20;
+            auto read_count = pending_block_count_limit - min_pending_block_count;
             if (read_count <= 0)
             {
                 break;
             }
-            for (int c = 0; c < 2; c++)
+            for (int c = 0; c < 1; c++)
             {
                 merged_task->readOneBlock();
             }

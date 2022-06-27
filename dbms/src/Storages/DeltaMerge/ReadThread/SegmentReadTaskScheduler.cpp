@@ -54,6 +54,10 @@ MergedTaskPtr SegmentReadTaskScheduler::scheduleMergedTask()
         return merged_task;
     }
 
+    if (MergedTask::getGlobalActiveSegmentCount() > 60)
+    {
+        return nullptr;
+    }
     auto segment = unsafeScheduleSegment(pool, unexpired_count);
     if (segment.first == 0)
     {
@@ -147,11 +151,16 @@ bool SegmentReadTaskScheduler::schedule()
 
 void SegmentReadTaskScheduler::schedThread()
 {
+    int64_t last_time_print = 0;
     while (!isStop())
     {
+        if (auto cur = ::time(nullptr); cur - last_time_print >= 3)
+        {
+            last_time_print = cur;
+            LOG_FMT_DEBUG(log, "active_segment_count {}", MergedTask::getGlobalActiveSegmentCount());
+        }
         if (!schedule())
         {
-            LOG_FMT_DEBUG(log, "Nothing to scheduling");
             ::usleep(2000);
         }
     }

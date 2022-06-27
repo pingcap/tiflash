@@ -13,13 +13,23 @@ using SegmentReadTaskPoolList = CircularScanList<SegmentReadTaskPool>;
 class MergedTask
 {
 public:
+    static int64_t getGlobalActiveSegmentCount()
+    {
+        return active_segment_count.load(std::memory_order_relaxed);
+    }
+
     MergedTask(uint64_t seg_id_, SegmentReadTaskPools && pools_)
         : seg_id(seg_id_)
         , pools(std::forward<SegmentReadTaskPools>(pools_))
         , finished_count(0)
         , finished(pools.size(), 0)
-    {}
-
+    {
+        active_segment_count.fetch_add(pools.size(), std::memory_order_relaxed);
+    }
+    ~MergedTask()
+    {
+        active_segment_count.fetch_sub(pools.size(), std::memory_order_relaxed);
+    }
     void init()
     {
         if (!streams.empty())
@@ -151,6 +161,8 @@ private:
     }
     size_t finished_count;
     std::vector<int8_t> finished;
+
+    inline static std::atomic<int64_t> active_segment_count{0};
 };
 
 using MergedTaskPtr = std::shared_ptr<MergedTask>;

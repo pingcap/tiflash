@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include <queue>
 #include <mutex>
 #include <condition_variable>
@@ -17,6 +18,10 @@ class WorkQueue
     std::queue<T> queue_;
     bool done_;
     std::size_t maxSize_;
+
+    std::size_t peak_queue_size;
+    int64_t pop_times;
+    int64_t pop_empty_times;
     // Must have lock to call this function
     bool full() const
     {
@@ -37,6 +42,9 @@ public:
     WorkQueue(std::size_t maxSize = 0)
         : done_(false)
         , maxSize_(maxSize)
+        , peak_queue_size(0)
+        , pop_times(0)
+        , pop_empty_times(0)
     {}
     /**
    * Push an item onto the work queue.  Notify a single thread that work is
@@ -61,6 +69,7 @@ public:
                 return false;
             }
             queue_.push(std::forward<U>(item));
+            peak_queue_size = std::max(queue_.size(), peak_queue_size);
         }
         readerCv_.notify_one();
         return true;
@@ -78,8 +87,10 @@ public:
     {
         {
             std::unique_lock<std::mutex> lock(mutex_);
+            pop_times++;
             while (queue_.empty() && !done_)
             {
+                pop_empty_times++;
                 readerCv_.wait(lock);
             }
             if (queue_.empty())
@@ -135,6 +146,11 @@ public:
     {
         std::lock_guard<std::mutex> lock(mutex_);
         return queue_.size();
+    }
+
+    std::tuple<int64_t, int64_t, size_t> getStat() const
+    {
+        return std::tuple<int64_t, int64_t, size_t>{pop_times, pop_empty_times, peak_queue_size};
     }
 };
 }

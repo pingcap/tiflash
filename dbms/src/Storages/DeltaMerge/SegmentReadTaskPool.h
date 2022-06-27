@@ -74,37 +74,53 @@ class PendingBlockStatistic
 {
 public:
     explicit PendingBlockStatistic() 
-        : block_count(0)
-        , block_byte(0) {}
+        : pending_block_count(0)
+        , pending_block_byte(0)
+        , total_block_count(0)
+        , total_block_byte(0) {}
 
     void push(const Block & block)
     {
-        block_count.fetch_add(1, std::memory_order_relaxed);
-        block_byte.fetch_add(block.bytes(), std::memory_order_relaxed);
+        pending_block_count.fetch_add(1, std::memory_order_relaxed);
+        total_block_count.fetch_add(1, std::memory_order_relaxed);
+
+        auto b = block.bytes();
+        pending_block_byte.fetch_add(b, std::memory_order_relaxed);
+        total_block_byte.fetch_add(b, std::memory_order_relaxed);
     }
 
     void pop(const Block & block)
     {
         if (likely(block))
         {
-            block_count.fetch_sub(1, std::memory_order_relaxed);
-            block_byte.fetch_sub(block.bytes(), std::memory_order_relaxed);
+            pending_block_count.fetch_sub(1, std::memory_order_relaxed);
+            pending_block_byte.fetch_sub(block.bytes(), std::memory_order_relaxed);
         }
     }
 
     int64_t count() const
     {
-        return block_count.load(std::memory_order_relaxed);
+        return pending_block_count.load(std::memory_order_relaxed);
     }
 
     int64_t byte() const
     {
-        return block_byte.load(std::memory_order_relaxed);
+        return pending_block_byte.load(std::memory_order_relaxed);
     }
 
+    int64_t totalCount() const
+    {
+        return total_block_count.load(std::memory_order_relaxed);
+    }
+    int64_t totalByte() const
+    {
+        return total_block_byte.load(std::memory_order_relaxed);
+    }
 private:
-    std::atomic<int64_t> block_count;
-    std::atomic<int64_t> block_byte;
+    std::atomic<int64_t> pending_block_count;
+    std::atomic<int64_t> pending_block_byte;
+    std::atomic<int64_t> total_block_count;
+    std::atomic<int64_t> total_block_byte;
 };
 
 class SegmentReadTaskPool : private boost::noncopyable
@@ -133,6 +149,16 @@ public:
         , log(&Poco::Logger::get("SegmentReadTaskPool"))
         , unordered_input_stream_ref_count(0)
     {}
+
+    ~SegmentReadTaskPool()
+    {
+        auto [pop_times, pop_empty_times, peak_queue_size] = q.getStat();
+        auto total_count = local_pending_stat.totalCount();
+        auto total_byte = local_pending_stat.totalByte();
+        auto avg_byte = total_count > 0 ? total_byte / total_count : 0;
+        LOG_FMT_DEBUG(log, "pool {} pop_times {} pop_empty_times {} pop_empty_ratio {} peak_queue_size {} block_avg_bytes {} => {} MB",
+            id, pop_times, pop_empty_times, pop_empty_times * 1.0 / pop_times, peak_queue_size, avg_byte, peak_queue_size * avg_byte * 1.0 / 1024 / 1024);
+    }
 
     SegmentReadTaskPtr nextTask()
     {
