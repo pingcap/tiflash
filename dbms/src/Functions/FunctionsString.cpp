@@ -4192,6 +4192,7 @@ class FunctionSpace : public IFunction
 {
 public:
     static constexpr auto name = "space";
+
     FunctionSpace() = default;
 
     static FunctionPtr create(const Context & /*context*/)
@@ -4264,7 +4265,7 @@ public:
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
         const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
-        Field c0_field;
+        Field c0_field; 
 
         const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
         const ColumnConst * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
