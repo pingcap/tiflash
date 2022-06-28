@@ -14,7 +14,6 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -22,17 +21,13 @@
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
-
-#if __SSE2__
-#include <emmintrin.h>
-#endif
-
+#include <common/simd.h>
 
 namespace DB
 {
 void DataTypeString::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
-    const String & s = get<const String &>(field);
+    const auto & s = get<const String &>(field);
     writeVarUInt(s.size(), ostr);
     writeString(s, ostr);
 }
@@ -43,7 +38,7 @@ void DataTypeString::deserializeBinary(Field & field, ReadBuffer & istr) const
     UInt64 size;
     readVarUInt(size, istr);
     field = String();
-    String & s = get<String &>(field);
+    auto & s = get<String &>(field);
     s.resize(size);
     istr.readStrict(&s[0], size);
 }
@@ -59,7 +54,7 @@ void DataTypeString::serializeBinary(const IColumn & column, size_t row_num, Wri
 
 void DataTypeString::deserializeBinary(IColumn & column, ReadBuffer & istr) const
 {
-    ColumnString & column_string = static_cast<ColumnString &>(column);
+    auto & column_string = static_cast<ColumnString &>(column);
     ColumnString::Chars_t & data = column_string.getChars();
     ColumnString::Offsets & offsets = column_string.getOffsets();
 
@@ -117,8 +112,8 @@ void DataTypeString::serializeBinaryBulk(const IColumn & column, WriteBuffer & o
 }
 
 
-template <int UNROLL_TIMES>
-static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit)
+template <size_t BLOCK_SIZE>
+static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit)
 {
     size_t offset = data.size();
     for (size_t i = 0; i < limit; ++i)
@@ -134,52 +129,92 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
 
         data.resize(offset);
 
+#ifdef __x86_64__
+        // The intel reference manual states that for sizes larger than 128, using REP MOVSB will give identical performance with other variants.
+        // Beginning from 2048 bytes, REP MOVSB gives an even better performance.
+        if constexpr (BLOCK_SIZE >= 256)
+        {
+            /*
+             * According to intel's reference manual:
+             *
+             * On older microarchitecture (ivy bridge), a REP MOVSB implementation of memcpy can achieve throughput at
+             * slightly better than the 128-bit SIMD implementation when copying thousands of bytes.
+             *
+             * On newer microarchitecture (haswell), using REP MOVSB to implement memcpy operation for large copy length
+             * can take advantage the 256-bit store data path and deliver throughput of more than 20 bytes per cycle.
+             * For copy length that are smaller than a few hundred bytes, REP MOVSB approach is still slower than those
+             * SIMD approaches.
+             */
+            if (size >= 1024 && common::cpu_feature_flags.erms && istr.position() + size <= istr.buffer().end())
+            {
+                const auto * src = reinterpret_cast<const char *>(istr.position());
+                auto * dst = reinterpret_cast<char *>(&data[offset - size - 1]);
+                /*
+                 *  For destination buffer misalignment:
+                 *  The impact on Enhanced REP MOVSB and STOSB implementation can be 25%
+                 *  degradation, while 128-bit AVX implementation of memcpy may degrade only
+                 *  5%, relative to 16-byte aligned scenario.
+                 *
+                 *  Therefore, we manually align up the destination buffer before startup.
+                 */
+                __builtin_memcpy_inline(dst, src, 64);
+                auto address = reinterpret_cast<uintptr_t>(dst);
+                auto shift = 64 - (address % 64);
+                dst += shift;
+                src += shift;
+                size -= shift;
+                asm volatile("rep movsb"
+                             : "+D"(dst), "+S"(src), "+c"(size)
+                             :
+                             : "memory");
+                istr.position() += size + shift;
+                data[offset - 1] = 0;
+                return;
+            }
+        }
+#endif
         if (size)
         {
-#if __SSE2__
             /// An optimistic branch in which more efficient copying is possible.
-            if (offset + 16 * UNROLL_TIMES <= data.capacity() && istr.position() + size + 16 * UNROLL_TIMES <= istr.buffer().end())
+            if (offset + BLOCK_SIZE <= data.capacity() && istr.position() + size + BLOCK_SIZE <= istr.buffer().end())
             {
-                const __m128i * sse_src_pos = reinterpret_cast<const __m128i *>(istr.position());
-                const __m128i * sse_src_end = sse_src_pos + (size + (16 * UNROLL_TIMES - 1)) / 16 / UNROLL_TIMES * UNROLL_TIMES;
-                __m128i * sse_dst_pos = reinterpret_cast<__m128i *>(&data[offset - size - 1]);
+                const auto * src = reinterpret_cast<const char *>(istr.position());
+                const auto * target = src + (size + BLOCK_SIZE - 1) / BLOCK_SIZE * BLOCK_SIZE;
+                auto * dst = reinterpret_cast<char *>(&data[offset - size - 1]);
 
-                while (sse_src_pos < sse_src_end)
+                while (src < target)
                 {
-                    /// NOTE gcc 4.9.2 unrolls the loop, but for some reason uses only one xmm register.
-                    /// for (size_t j = 0; j < UNROLL_TIMES; ++j)
-                    ///    _mm_storeu_si128(sse_dst_pos + j, _mm_loadu_si128(sse_src_pos + j));
-
-                    sse_src_pos += UNROLL_TIMES;
-                    sse_dst_pos += UNROLL_TIMES;
-
-                    if (UNROLL_TIMES >= 4)
-                        __asm__("movdqu %0, %%xmm0" ::"m"(sse_src_pos[-4]));
-                    if (UNROLL_TIMES >= 3)
-                        __asm__("movdqu %0, %%xmm1" ::"m"(sse_src_pos[-3]));
-                    if (UNROLL_TIMES >= 2)
-                        __asm__("movdqu %0, %%xmm2" ::"m"(sse_src_pos[-2]));
-                    if (UNROLL_TIMES >= 1)
-                        __asm__("movdqu %0, %%xmm3" ::"m"(sse_src_pos[-1]));
-
-                    if (UNROLL_TIMES >= 4)
-                        __asm__("movdqu %%xmm0, %0"
-                                : "=m"(sse_dst_pos[-4]));
-                    if (UNROLL_TIMES >= 3)
-                        __asm__("movdqu %%xmm1, %0"
-                                : "=m"(sse_dst_pos[-3]));
-                    if (UNROLL_TIMES >= 2)
-                        __asm__("movdqu %%xmm2, %0"
-                                : "=m"(sse_dst_pos[-2]));
-                    if (UNROLL_TIMES >= 1)
-                        __asm__("movdqu %%xmm3, %0"
-                                : "=m"(sse_dst_pos[-1]));
+                    /**
+                     * Compiler expands the builtin memcpy perfectly. There is no need to
+                     * manually write SSE2 code for x86 here; moreover, this method can also bring
+                     * optimization to aarch64 targets.
+                     *
+                     * (x86 loop body for 64 bytes version with XMM registers)
+                     *     movups  xmm0, xmmword ptr [rsi]
+                     *     movups  xmm1, xmmword ptr [rsi + 16]
+                     *     movups  xmm2, xmmword ptr [rsi + 32]
+                     *     movups  xmm3, xmmword ptr [rsi + 48]
+                     *     movups  xmmword ptr [rdi + 48], xmm3
+                     *     movups  xmmword ptr [rdi + 32], xmm2
+                     *     movups  xmmword ptr [rdi + 16], xmm1
+                     *     movups  xmmword ptr [rdi], xmm0
+                     *
+                     * (aarch64 loop body for 64 bytes version with Q registers)
+                     *     ldp     q0, q1, [x1]
+                     *     ldp     q2, q3, [x1, #32]
+                     *     stp     q0, q1, [x0]
+                     *     add     x1, x1, #64
+                     *     cmp     x1, x8
+                     *     stp     q2, q3, [x0, #32]
+                     *     add     x0, x0, #64
+                     */
+                    tiflash_compiler_builtin_memcpy(dst, src, BLOCK_SIZE);
+                    src += BLOCK_SIZE;
+                    dst += BLOCK_SIZE;
                 }
-
                 istr.position() += size;
             }
             else
-#endif
             {
                 istr.readStrict(reinterpret_cast<char *>(&data[offset - size - 1]), size);
             }
@@ -188,7 +223,23 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars_t & data, Column
         data[offset - 1] = 0;
     }
 }
+#define TIFLASH_DESERIALIZE_VARIANT(SIZE)                                                                 \
+    TIFLASH_MULTIVERSIONED_VECTORIZATION(                                                                 \
+        void,                                                                                             \
+        deserializeBinaryBlock##SIZE,                                                                     \
+        (ColumnString::Chars_t & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit), \
+        (data, offsets, istr, limit),                                                                     \
+        {                                                                                                 \
+            return deserializeBinaryBlockImpl<SIZE>(data, offsets, istr, limit);                          \
+        })
 
+TIFLASH_DESERIALIZE_VARIANT(16)
+TIFLASH_DESERIALIZE_VARIANT(32)
+TIFLASH_DESERIALIZE_VARIANT(48)
+TIFLASH_DESERIALIZE_VARIANT(64)
+TIFLASH_DESERIALIZE_VARIANT(128)
+TIFLASH_DESERIALIZE_VARIANT(256)
+#undef TIFLASH_DESERIALIZE_VARIANT
 
 void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
 {
@@ -215,14 +266,18 @@ void DataTypeString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, 
 
     offsets.reserve(offsets.size() + limit);
 
-    if (avg_chars_size >= 64)
-        deserializeBinarySSE2<4>(data, offsets, istr, limit);
+    if (avg_chars_size >= 256)
+        deserializeBinaryBlock256TiFlashMultiVersion::invoke(data, offsets, istr, limit);
+    else if (avg_chars_size >= 128)
+        deserializeBinaryBlock128TiFlashMultiVersion::invoke(data, offsets, istr, limit);
+    else if (avg_chars_size >= 64)
+        deserializeBinaryBlock64TiFlashMultiVersion::invoke(data, offsets, istr, limit);
     else if (avg_chars_size >= 48)
-        deserializeBinarySSE2<3>(data, offsets, istr, limit);
+        deserializeBinaryBlock48TiFlashMultiVersion::invoke(data, offsets, istr, limit);
     else if (avg_chars_size >= 32)
-        deserializeBinarySSE2<2>(data, offsets, istr, limit);
+        deserializeBinaryBlock32TiFlashMultiVersion::invoke(data, offsets, istr, limit);
     else
-        deserializeBinarySSE2<1>(data, offsets, istr, limit);
+        deserializeBinaryBlock16TiFlashMultiVersion::invoke(data, offsets, istr, limit);
 }
 
 
@@ -241,7 +296,7 @@ void DataTypeString::serializeTextEscaped(const IColumn & column, size_t row_num
 template <typename Reader>
 static inline void read(IColumn & column, Reader && reader)
 {
-    ColumnString & column_string = static_cast<ColumnString &>(column);
+    auto & column_string = static_cast<ColumnString &>(column);
     ColumnString::Chars_t & data = column_string.getChars();
     ColumnString::Offsets & offsets = column_string.getOffsets();
 
