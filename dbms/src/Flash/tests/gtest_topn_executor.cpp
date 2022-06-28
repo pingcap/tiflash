@@ -47,12 +47,12 @@ public:
                               toNullableVec<Int32>(col_name[3], c0l_salary)});
     }
 
-    std::shared_ptr<tipb::DAGRequest> getRequest(const String & table_name, const String & col_name, bool is_desc, int limit_num)
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, const String & col_name, bool is_desc, int limit_num)
     {
         return context.scan(db_name, table_name).topN(col_name, is_desc, limit_num).build(context);
     }
 
-    std::shared_ptr<tipb::DAGRequest> getRequest(const String & table_name, MockOrderByItems order_by_items, int limit, MockAsts func_proj_ast = {}, MockColumnNames out_proj_ast = {})
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, MockOrderByItems order_by_items, int limit, MockAsts func_proj_ast = {}, MockColumnNames out_proj_ast = {})
     {
         if (func_proj_ast.size() == 0)
             return context.scan(db_name, table_name).topN(order_by_items, limit).build(context);
@@ -95,7 +95,7 @@ try
 
             for (size_t limit_num = 0; limit_num <= col_data_num + 5; ++limit_num)
             {
-                request = getRequest(table_single_name, single_col_name, is_desc, limit_num);
+                request = buildDAGRequest(table_single_name, single_col_name, is_desc, limit_num);
 
                 expect_cols.clear();
                 if (limit_num == 0 || limit_num > col_data_num)
@@ -126,27 +126,20 @@ try
                         toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "china", "korea", "usa"}),
                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{-300, {}, {}, 900, 1300, 0})}};
 
-        MockOrderByItems order_by_items;
-
-        {
+        std::vector<MockOrderByItems> order_by_items{
             /// select * from clerk order by age DESC, gender DESC;
-            order_by_items = {MockOrderByItem(col_name[0], true), MockOrderByItem(col_name[1], true)};
-            request = getRequest(table_name, order_by_items, 100);
-            executeStreams(request, expect_cols[0]);
-        }
-
-        {
+            {MockOrderByItem(col_name[0], true), MockOrderByItem(col_name[1], true)},
             /// select * from clerk order by gender DESC, salary ASC;
-            order_by_items = {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[3], false)};
-            request = getRequest(table_name, order_by_items, 100);
-            executeStreams(request, expect_cols[1]);
-        }
-
-        {
+            {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[3], false)},
             /// select * from clerk order by gender DESC, country ASC, salary DESC;
-            order_by_items = {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[2], false), MockOrderByItem(col_name[3], true)};
-            request = getRequest(table_name, order_by_items, 100);
-            executeStreams(request, expect_cols[2]);
+            {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[2], false), MockOrderByItem(col_name[3], true)}};
+
+        size_t test_num = expect_cols.size();
+
+        for (size_t i = 0; i < test_num; ++i)
+        {
+            request = buildDAGRequest(table_name, order_by_items[i], 100);
+            executeStreams(request, expect_cols[i]);
         }
     }
 }
@@ -179,7 +172,7 @@ try
             func_ast = And(col(col_name[0]), col(col_name[3]));
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
-            request = getRequest(table_name, order_by_items, 100, func_projection, output_projection);
+            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
             executeStreams(request, expect_cols[0]);
         }
     }
@@ -197,7 +190,7 @@ try
             func_ast = eq(col(col_name[0]), col(col_name[3]));
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
-            request = getRequest(table_name, order_by_items, 100, func_projection, output_projection);
+            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
             executeStreams(request, expect_cols[0]);
         }
     }
@@ -215,7 +208,7 @@ try
             func_ast = gt(col(col_name[0]), col(col_name[3]));
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
-            request = getRequest(table_name, order_by_items, 100, func_projection, output_projection);
+            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
             executeStreams(request, expect_cols[0]);
         }
     }

@@ -44,7 +44,7 @@ public:
     }
 
     template <typename T>
-    std::shared_ptr<tipb::DAGRequest> getRequest(T param, const String & sort_col)
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(T param, const String & sort_col)
     {
         /// topN is introduced, so that we can get stable results in concurrency environment.
         return context.scan(db_name, table_name).project(param).topN(sort_col, false, 100).build(context);
@@ -87,11 +87,11 @@ TEST_F(ExecutorProjectionTestRunner, Projection)
 try
 {
     /// Check single column
-    auto request = getRequest<MockColumnNames>({col_names[4]}, col_names[4]);
+    auto request = buildDAGRequest<MockColumnNames>({col_names[4]}, col_names[4]);
     executeWithConcurrency(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Check multi columns
-    request = getRequest<MockColumnNames>({col_names[0], col_names[4]}, col_names[4]);
+    request = buildDAGRequest<MockColumnNames>({col_names[0], col_names[4]}, col_names[4]);
     executeWithConcurrency(request,
                            {
                                toNullableVec<String>(col_names[0], col0_sorted_asc),
@@ -99,14 +99,14 @@ try
                            });
 
     /// Check multi columns
-    request = getRequest<MockColumnNames>({col_names[0], col_names[1], col_names[4]}, col_names[4]);
+    request = buildDAGRequest<MockColumnNames>({col_names[0], col_names[1], col_names[4]}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<String>(col_names[0], col0_sorted_asc),
                             toNullableVec<String>(col_names[1], col1_sorted_asc),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Check duplicate columns
-    request = getRequest<MockColumnNames>({col_names[4], col_names[4], col_names[4]}, col_names[4]);
+    request = buildDAGRequest<MockColumnNames>({col_names[4], col_names[4], col_names[4]}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<Int32>(col_names[4], col4_sorted_asc),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc),
@@ -125,7 +125,7 @@ try
             columns.push_back(expect_column);
         }
 
-        request = getRequest<MockColumnNamesVec>(projection_input, col_names[4]);
+        request = buildDAGRequest<MockColumnNamesVec>(projection_input, col_names[4]);
         executeWithConcurrency(request, columns);
     }
 }
@@ -139,18 +139,18 @@ try
     /// Test "equal" function
 
     /// Data type: TypeString
-    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[0])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({eq(col(col_names[0]), col(col_names[0])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 0}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 1, 0}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
@@ -159,23 +159,23 @@ try
     /// Test "greater" function
 
     /// Data type: TypeString
-    request = getRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 0, 0}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-    request = getRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 1, 0, 1, {}, 1, 1}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 0, 1, 1, {}, 0, 0}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-    request = getRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 0, 1}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
@@ -184,18 +184,18 @@ try
     /// Test "and" function
 
     /// Data type: TypeString
-    request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[0])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({And(col(col_names[0]), col(col_names[0])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-    request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({And(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({And(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({And(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 1, 0}),
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
@@ -203,7 +203,7 @@ try
     /// Test "not" function
 
     /// Data type: TypeString
-    request = getRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
                             toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
@@ -211,7 +211,7 @@ try
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4])), col(col_names[4])}, col_names[4]);
+    request = buildDAGRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4])), col(col_names[4])}, col_names[4]);
     executeWithConcurrency(request,
                            {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 1}),
                             toNullableVec<UInt64>({{}, 0, 0, 1, 0, 0, 0}),

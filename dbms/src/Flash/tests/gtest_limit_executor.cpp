@@ -35,7 +35,7 @@ public:
                              {toNullableVec<String>(col_name, col0)});
     }
 
-    std::shared_ptr<tipb::DAGRequest> getRequest(size_t limit_num)
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(size_t limit_num)
     {
         return context.scan(db_name, table_name).limit(limit_num).build(context);
     }
@@ -59,7 +59,7 @@ try
     {
         if (limit_num == col_data_num + 3)
             limit_num = INT_MAX;
-        request = getRequest(limit_num);
+        request = buildDAGRequest(limit_num);
 
         if (limit_num == 0)
             expect_cols = {};
