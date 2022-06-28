@@ -113,12 +113,13 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_applying).Set(0.0); });
 
         GET_METRIC(tiflash_schema_apply_count, type_diff).Increment();
-        if (!tryLoadSchemaDiffs(getter, version, context))
+        Int64 version_after_load_diff = 0;
+        if (version_after_load_diff = tryLoadSchemaDiffs(getter, version, context); version_after_load_diff == -1)
         {
             GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
             loadAllSchema(getter, version, context);
         }
-        cur_version = version;
+        cur_version = version_after_load_diff;
         GET_METRIC(tiflash_schema_version).Set(cur_version);
         LOG_FMT_INFO(log, "end sync schema, version has been updated to {}", cur_version);
         return true;
@@ -144,7 +145,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return it->second;
     }
 
-    bool tryLoadSchemaDiffs(Getter & getter, Int64 version, Context & context)
+    Int64 tryLoadSchemaDiffs(Getter & getter, Int64 version, Context & context)
     {
         if (isTooOldSchema(cur_version, version))
         {
@@ -156,52 +157,55 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
 
         Int64 used_version = cur_version;
-        std::vector<SchemaDiff> diffs;
         while (used_version < version)
         {
             used_version++;
-            diffs.push_back(getter.getSchemaDiff(used_version));
-        }
-        LOG_FMT_DEBUG(log, "end load schema diffs with total {} entries.", diffs.size());
-        try
-        {
-            for (const auto & diff : diffs)
+            auto schema_diff = getter.getSchemaDiff(used_version);
+            if (!schema_diff)
             {
-                builder.applyDiff(diff);
+                LOG_FMT_DEBUG(log, "End load a part of schema diffs, current version is {} ", used_version);
+                return used_version;
             }
-        }
-        catch (TiFlashException & e)
-        {
-            if (!e.getError().is(Errors::DDL::StaleSchema))
+
+            try
+            {
+                builder.applyDiff(*schema_diff);
+            }
+            catch (TiFlashException & e)
+            {
+                if (!e.getError().is(Errors::DDL::StaleSchema))
+                {
+                    GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
+                }
+                LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+                return -1;
+            }
+            catch (Exception & e)
+            {
+                if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+                {
+                    throw;
+                }
+                GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
+                LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+                return -1;
+            }
+            catch (Poco::Exception & e)
             {
                 GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
+                LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.displayText());
+                return -1;
             }
-            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
-            return false;
-        }
-        catch (Exception & e)
-        {
-            if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
+            catch (std::exception & e)
             {
-                throw;
+                GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
+                LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.what());
+                return -1;
             }
-            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
-            return false;
         }
-        catch (Poco::Exception & e)
-        {
-            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.displayText());
-            return false;
-        }
-        catch (std::exception & e)
-        {
-            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.what());
-            return false;
-        }
-        return true;
+
+        LOG_FMT_DEBUG(log, "End load all of schema diffs, current version is {} ", used_version);
+        return used_version;
     }
 
     void loadAllSchema(Getter & getter, Int64 version, Context & context)

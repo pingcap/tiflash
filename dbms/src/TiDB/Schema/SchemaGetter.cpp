@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int SCHEMA_SYNC_ERROR;
@@ -193,13 +192,14 @@ String SchemaGetter::getSchemaDiffKey(Int64 ver)
     return std::string(schemaDiffPrefix) + ":" + std::to_string(ver);
 }
 
-SchemaDiff SchemaGetter::getSchemaDiff(Int64 ver)
+std::optional<SchemaDiff> SchemaGetter::getSchemaDiff(Int64 ver)
 {
     String key = getSchemaDiffKey(ver);
     String data = TxnStructure::get(snap, key);
     if (data.empty())
     {
-        throw TiFlashException("cannot find schema diff for version: " + std::to_string(ver), Errors::Table::SyncError);
+        LOG_FMT_WARNING(log, "The schema diff for version {}, key {} is empty, waitting for next round to load schema diff", ver, key);
+        return std::nullopt;
     }
     SchemaDiff diff;
     diff.deserialize(data);
