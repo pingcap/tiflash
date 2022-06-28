@@ -77,7 +77,7 @@ private:
         {
             auto [min_pending_block_count, max_pending_block_count] = merged_task->getMinMaxPendingBlockCount();
             constexpr int64_t pending_block_count_limit = 20;
-            auto read_count = pending_block_count_limit - min_pending_block_count;
+            auto read_count = pending_block_count_limit - max_pending_block_count;  // TODO(jinhelin): This could cause the fast read request wait for the slow read request.
             if (read_count <= 0)
             {
                 break;
