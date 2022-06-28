@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Columns/ColumnArray.h>
-#include <Common/hex.h>
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/Volnitsky.h>
+#include <Common/hex.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -4945,9 +4945,9 @@ public:
     template <typename T>
     static void executeOneUIntOrInt(T xx, char *& out, bool skip_leading_zero = true, bool auto_close = true)
     {
-	long long x = static_cast<long long>(xx);
-	bool was_nonzero = false;
-	bool was_first_nonzero_byte = true;
+        long long x = static_cast<long long>(xx);
+        bool was_nonzero = false;
+        bool was_first_nonzero_byte = true;
         for (int offset = (sizeof(long long) - 1) * 8; offset >= 0; offset -= 8)
         {
             UInt8 byte = x >> offset;
@@ -4955,16 +4955,16 @@ public:
             if (byte == 0 && !was_nonzero && offset && skip_leading_zero) //-V560
                 continue;
             was_nonzero = true;
-	    if (was_first_nonzero_byte)
-	    {
-		out += writeNoZeroPrefixBinByte(byte, out);
-		was_first_nonzero_byte = false;
-	    }
-	    else
-	    {
+            if (was_first_nonzero_byte)
+            {
+                out += writeNoZeroPrefixBinByte(byte, out);
+                was_first_nonzero_byte = false;
+            }
+            else
+            {
                 writeBinByte(byte, out);
                 out += word_size;
-	    }
+            }
         }
         if (auto_close)
         {
@@ -4977,7 +4977,7 @@ public:
     bool tryExecuteUIntOrInt(const IColumn * col, ColumnPtr & col_res) const
     {
         const ColumnVector<T> * col_vec = checkAndGetColumn<ColumnVector<T>>(col);
-        static constexpr size_t MAX_LENGTH = sizeof(Int64) * word_size + 1;    /// Including trailing zero byte.
+        static constexpr size_t MAX_LENGTH = sizeof(Int64) * word_size + 1; /// Including trailing zero byte.
         if (col_vec)
         {
             auto col_str = ColumnString::create();
@@ -4986,7 +4986,7 @@ public:
             const typename ColumnVector<T>::Container & in_vec = col_vec->getData();
             size_t size = in_vec.size();
             out_offsets.resize(size);
-            out_vec.resize(size * (word_size+1) + MAX_LENGTH); /// word_size+1 is length of one byte in hex/bin plus zero byte.
+            out_vec.resize(size * (word_size + 1) + MAX_LENGTH); /// word_size+1 is length of one byte in hex/bin plus zero byte.
             size_t pos = 0;
             for (size_t i = 0; i < size; ++i)
             {
@@ -4996,7 +4996,7 @@ public:
                 char * begin = reinterpret_cast<char *>(&out_vec[pos]);
                 char * end = begin;
                 executeOneUIntOrInt(in_vec[i], end);
-		pos += end - begin;
+                pos += end - begin;
                 out_offsets[i] = pos;
             }
             out_vec.resize(pos);
@@ -5013,22 +5013,15 @@ public:
     {
         const IColumn * column = block.getByPosition(arguments[0]).column.get();
         ColumnPtr res_column;
-        if (tryExecuteUIntOrInt<UInt8>(column, res_column) ||
-            tryExecuteUIntOrInt<UInt16>(column, res_column) ||
-            tryExecuteUIntOrInt<UInt32>(column, res_column) ||
-            tryExecuteUIntOrInt<UInt64>(column, res_column) ||
-	    tryExecuteUIntOrInt<Int8>(column, res_column) ||
-            tryExecuteUIntOrInt<Int16>(column, res_column) ||
-            tryExecuteUIntOrInt<Int32>(column, res_column) ||
-            tryExecuteUIntOrInt<Int64>(column, res_column))
-	{
-	    block.getByPosition(result).column = std::move(res_column);
-	    return;
-	}
-	else
-	{
+        if (tryExecuteUIntOrInt<UInt8>(column, res_column) || tryExecuteUIntOrInt<UInt16>(column, res_column) || tryExecuteUIntOrInt<UInt32>(column, res_column) || tryExecuteUIntOrInt<UInt64>(column, res_column) || tryExecuteUIntOrInt<Int8>(column, res_column) || tryExecuteUIntOrInt<Int16>(column, res_column) || tryExecuteUIntOrInt<Int32>(column, res_column) || tryExecuteUIntOrInt<Int64>(column, res_column))
+        {
+            block.getByPosition(result).column = std::move(res_column);
+            return;
+        }
+        else
+        {
             throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-	}
+        }
     }
 
 private:
