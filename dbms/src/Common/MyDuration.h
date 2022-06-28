@@ -91,6 +91,6 @@ public:
 };
 
 // returns seconds since '00:00:00'
-UInt64 calcSeconds(int hour, int minute, int second);
+UInt64 calcSeconds(Int32 hour, Int32 minute, Int32 second);
 
 } // namespace DB

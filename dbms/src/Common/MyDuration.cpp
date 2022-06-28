@@ -68,7 +68,7 @@ String MyDuration::toString() const
     return fmt::format(fmt_str, sign > 0 ? "" : "-", hour, minute, second, frac_str);
 }
 
-UInt64 calcSeconds(int hour, int minute, int second)
+UInt64 calcSeconds(Int32 hour, Int32 minute, Int32 second)
 {
     return hour * 3600 + minute * 60 + second;
 }
