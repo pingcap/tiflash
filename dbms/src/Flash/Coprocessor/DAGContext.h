@@ -192,7 +192,7 @@ public:
     }
 
     void attachBlockIO(const BlockIO & io_);
-    std::unordered_map<String, BlockInputStreams> & getProfileStreamsMap();
+    std::map<String, BlockInputStreams> & getProfileStreamsMap();
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -349,7 +349,9 @@ private:
     /// Hold io for correcting the destruction order.
     BlockIO io;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams
-    std::unordered_map<String, BlockInputStreams> profile_streams_map;
+    /// The order of map.key is necessary for the executor summary of executor list which without executor_id.
+    /// It uses `${i}_${type}` as executor_id to ensure the order of map.keys is consistent.
+    std::map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
