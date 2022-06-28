@@ -277,10 +277,7 @@ inline TiKVValue encodeLockCfValue(
     TiKV::writeVarInt(static_cast<Int64>(primary.size()), res);
     res.write(primary.data(), primary.size());
     TiKV::writeVarUInt(lock_version, res);
-    if (ttl)
-    {
-        TiKV::writeVarUInt(ttl, res);
-    }
+    TiKV::writeVarUInt(ttl, res);
     if (short_value)
     {
         res.write(SHORT_VALUE_PREFIX);
@@ -312,10 +309,10 @@ inline TiKVValue encodeLockCfValue(
 
 struct DecodedLockCFValue : boost::noncopyable
 {
-    DecodedLockCFValue(std::shared_ptr<const TiKVKey> & key_, std::shared_ptr<const TiKVValue> & value_);
+    DecodedLockCFValue(std::shared_ptr<const TiKVKey> & key_, std::shared_ptr<const TiKVValue> & val_);
     std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
     void intoLockInfo(kvrpcpb::LockInfo &) const;
-    std::shared_ptr<const TiKVValue> getLockCfValue() const;
+    std::shared_ptr<const TiKVValue> getTiKVValuePtr() const;
 
     std::shared_ptr<const TiKVKey> key;
     UInt64 lock_version{0};

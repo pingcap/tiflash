@@ -166,7 +166,7 @@ TEST(TiKVKeyValueTest, PortedTests)
             }
         }
         {
-            auto lock_cf_value_ptr = lock.getLockCfValue();
+            auto lock_cf_value_ptr = lock.getTiKVValuePtr();
             auto new_lock_info = RecordKVFormat::DecodedLockCFValue(ori_key, lock_cf_value_ptr);
             auto & lock_info = lock;
             ASSERT_TRUE(new_lock_info.lock_type == lock_info.lock_type);
