@@ -347,11 +347,12 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
 
 void DAGQueryBlockInterpreter::executeWindow(
     DAGPipeline & pipeline,
-    WindowDescription & window_description)
+    WindowDescription & window_description,
+    bool enable_fine_grained_shuffle)
 {
     executeExpression(pipeline, window_description.before_window, "before window");
 
-    if (dagContext().enableFineGrainedShuffle())
+    if (enable_fine_grained_shuffle)
     {
         // fine_grained_shuffle_stream_count is logical, no need to be equal to real stream count.
         pipeline.transform([&](auto & stream) { stream = std::make_shared<WindowBlockInputStream>(stream, window_description, log->identifier()); });
@@ -440,9 +441,9 @@ void DAGQueryBlockInterpreter::executeExpression(DAGPipeline & pipeline, const E
     }
 }
 
-void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc)
+void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle)
 {
-    orderStreams(pipeline, sort_desc, 0, dagContext().enableFineGrainedShuffle());
+    orderStreams(pipeline, sort_desc, 0, enable_fine_grained_shuffle);
 }
 
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
@@ -513,7 +514,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
     size_t stream_id = 0;
     for (size_t i = 0; i < max_streams; ++i)
     {
-        if (dagContext().enableFineGrainedShuffle())
+        if (enableFineGrainedShuffle(exchange_receiver->getFineGrainedShuffleStreamCount()))
             stream_id = i;
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, log->identifier(), query_block.source_name, stream_id);
         exchange_receiver_io_input_streams.push_back(stream);
@@ -583,7 +584,7 @@ void DAGQueryBlockInterpreter::handleProjection(DAGPipeline & pipeline, const ti
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
 }
 
-void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::Window & window)
+void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::Window & window, bool enable_fine_grained_shuffle)
 {
     NamesAndTypes input_columns;
     assert(input_streams_vec.size() == 1);
@@ -592,13 +593,13 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
     WindowDescription window_description = dag_analyzer.buildWindowDescription(window);
-    executeWindow(pipeline, window_description);
+    executeWindow(pipeline, window_description, enable_fine_grained_shuffle);
     executeExpression(pipeline, window_description.after_window, "cast after window");
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(window_description.after_window_columns, context);
 }
 
-void DAGQueryBlockInterpreter::handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort)
+void DAGQueryBlockInterpreter::handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort, bool enable_fine_grained_shuffle)
 {
     NamesAndTypes input_columns;
     assert(input_streams_vec.size() == 1);
@@ -607,7 +608,7 @@ void DAGQueryBlockInterpreter::handleWindowOrder(DAGPipeline & pipeline, const t
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
     auto order_columns = dag_analyzer.buildWindowOrderColumns(window_sort);
-    executeWindowOrder(pipeline, getSortDescription(order_columns, window_sort.byitems()));
+    executeWindowOrder(pipeline, getSortDescription(order_columns, window_sort.byitems()), enable_fine_grained_shuffle);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(input_columns), context);
 }
@@ -655,13 +656,13 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeWindow)
     {
-        handleWindow(pipeline, query_block.source->window());
+        handleWindow(pipeline, query_block.source->window(), enableFineGrainedShuffle(query_block.source->fine_grained_shuffle_stream_count()));
         recordProfileStreams(pipeline, query_block.source_name);
         restorePipelineConcurrency(pipeline);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeSort)
     {
-        handleWindowOrder(pipeline, query_block.source->sort());
+        handleWindowOrder(pipeline, query_block.source->sort(), enableFineGrainedShuffle(query_block.source->fine_grained_shuffle_stream_count()));
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else
@@ -782,8 +783,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             context.getSettingsRef().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dagContext(),
-            dagContext().getFineGrainedShuffleStreamCount(),
-            dagContext().getFineGrainedShuffleBatchSize());
+            query_block.exchange_sender->fine_grained_shuffle_stream_count(),
+            query_block.exchange_sender->fine_grained_shuffle_batch_size());
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
     });
 }

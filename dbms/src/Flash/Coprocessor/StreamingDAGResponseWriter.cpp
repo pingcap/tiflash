@@ -82,17 +82,27 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
     if (should_send_exec_summary_at_last)
     {
-        if (canUseFineGrainedShuffle())
+        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+        {
+            assert(exchange_type == tipb::ExchangeType::Hash);
             batchWriteFineGrainedShuffle<true>();
+        }
         else
+        {
             batchWrite<true>();
+        }
     }
     else
     {
-        if (canUseFineGrainedShuffle())
+        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+        {
+            assert(exchange_type == tipb::ExchangeType::Hash);
             batchWriteFineGrainedShuffle<false>();
+        }
         else
+        {
             batchWrite<false>();
+        }
     }
 }
 
@@ -108,8 +118,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (canUseFineGrainedShuffle())
+    if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
     {
+        assert(exchange_type == tipb::ExchangeType::Hash);
         if (static_cast<UInt64>(rows_in_blocks) >= fine_grained_shuffle_batch_size)
             batchWriteFineGrainedShuffle<false>();
     }
@@ -118,13 +129,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
         if (static_cast<Int64>(rows_in_blocks) > (dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk - 1))
             batchWrite<false>();
     }
-}
-
-template <class StreamWriterPtr>
-bool StreamingDAGResponseWriter<StreamWriterPtr>::canUseFineGrainedShuffle() const
-{
-    // Fine grained shuffle will only be enabled when exchange_type is Hash.
-    return enableFineGrainedShuffle(fine_grained_shuffle_stream_count) && exchange_type == tipb::ExchangeType::Hash;
 }
 
 template <class StreamWriterPtr>

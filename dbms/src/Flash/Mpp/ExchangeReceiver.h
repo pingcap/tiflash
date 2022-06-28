@@ -129,6 +129,7 @@ public:
         UInt32 stream_id);
 
     size_t getSourceNum() const { return source_num; }
+    uint32_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
 
     int computeNewThreadCount() const { return thread_count; }
 
