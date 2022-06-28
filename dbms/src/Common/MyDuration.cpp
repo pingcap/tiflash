@@ -67,10 +67,4 @@ String MyDuration::toString() const
     auto frac_str = fmt::format("{:06}", microsecond);
     return fmt::format(fmt_str, sign > 0 ? "" : "-", hour, minute, second, frac_str);
 }
-
-UInt64 calcSeconds(Int32 hour, Int32 minute, Int32 second)
-{
-    return hour * 3600 + minute * 60 + second;
-}
-
 } // namespace DB

@@ -194,7 +194,7 @@ struct TiDBTimeToSecTransformerImpl
         {
             sign = -1;
         }
-        return sign * calcSeconds(val.hours(), val.minutes(), val.seconds());
+        return sign * (val.hours() * 3600 + val.minutes() * 60 + val.seconds());
     }
 };
 

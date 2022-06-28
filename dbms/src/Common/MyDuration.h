@@ -89,8 +89,4 @@ public:
 
     String toString() const;
 };
-
-// returns seconds since '00:00:00'
-UInt64 calcSeconds(Int32 hour, Int32 minute, Int32 second);
-
 } // namespace DB
