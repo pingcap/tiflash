@@ -243,6 +243,9 @@ public:
     /// Returns empty if this instance is abandoned, you should try again.
     /// for_update: true means this snapshot is created for Segment split/merge, delta merge, or flush.
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
+
+private:
+    void updateDeltaTree(DeltaIndex::Updates delta_index_update);
 };
 
 class DeltaValueSnapshot

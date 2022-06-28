@@ -33,11 +33,16 @@ class MinorCompaction : public std::enable_shared_from_this<MinorCompaction>
 public:
     struct Task
     {
-        Task() = default;
+        Task(size_t rows_offset_, size_t deletes_offset_): 
+            rows_offset(rows_offset_), deletes_offset(deletes_offset_) {}
+
 
         ColumnFilePersisteds to_compact;
         size_t total_rows = 0;
         size_t total_bytes = 0;
+
+        size_t rows_offset = 0;
+        size_t deletes_offset = 0;
 
         bool is_trivial_move = false;
         ColumnFilePersistedPtr result;
@@ -65,7 +70,7 @@ public:
     MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);
 
     // Add new task and return whether this task is a trivial move
-    inline bool packUpTask(Task && task)
+    inline bool packUpTask(Task && task) //所以就是如果只有一个文件的，就是不重要的移动
     {
         if (task.to_compact.empty())
             return true;
@@ -73,12 +78,12 @@ public:
         bool is_trivial_move = false;
         if (task.to_compact.size() == 1)
         {
-            // Maybe this column file is small, but it cannot be merged with other column files, so also remove it's cache if possible.
+            // Maybe this column file is small, but it cannot be merged with other column files, so also remove its cache if possible.
             for (auto & f : task.to_compact)
             {
                 if (auto * t_file = f->tryToTinyFile(); t_file)
                 {
-                    t_file->clearCache();
+                    t_file->clearCache(); //为什么需要做这个？
                 }
             }
             is_trivial_move = true;
@@ -94,7 +99,7 @@ public:
     size_t getCompactionVersion() const { return current_compaction_version; }
 
     /// Create new column file by combining several small `ColumnFileTiny`s
-    void prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
+    DeltaIndex::Updates prepare(DMContext & context, WriteBatches & wbs, const PageReader & reader);
 
     /// Add new column files and remove old column files in `ColumnFilePersistedSet`
     bool commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs);
