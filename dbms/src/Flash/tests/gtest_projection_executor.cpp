@@ -70,6 +70,13 @@ public:
      */
     const ColDataInt32 col4{0, 5, -123, -234, {}, 24353, 9999};
 
+    /// Results after sorted by col4
+    const ColDataString col0_sorted_asc{{}, "col0-2", "", "col0-0", "col0-1", "", "col0-3"};
+    const ColDataString col1_sorted_asc{"", "col1-1", "", "col1-0", {}, "col1-3", "col1-2"};
+    const ColDataString col2_sorted_asc{"col2-3", {}, "col2-1", "", "col2-0", "col2-4", {}};
+    const ColDataInt32 col3_sorted_asc{{}, -111111, 0, 1, {}, 9999, 0};
+    const ColDataInt32 col4_sorted_asc{{}, -234, -123, 0, 5, 9999, 24353};
+
     /// Prepare some names
     std::vector<String> col_names{"col0", "col1", "col2", "col3", "col4"};
     const String db_name{"test_db"};
@@ -79,13 +86,6 @@ public:
 TEST_F(ExecutorProjectionTestRunner, Projection)
 try
 {
-    /// Results after sorted by col4
-    const ColDataString col0_sorted_asc{{}, "col0-2", "", "col0-0", "col0-1", "", "col0-3"};
-    const ColDataString col1_sorted_asc{"", "col1-1", "", "col1-0", {}, "col1-3", "col1-2"};
-    const ColDataString col2_sorted_asc{"col2-3", {}, "col2-1", "", "col2-0", "col2-4", {}};
-    const ColDataInt32 col3_sorted_asc{{}, -111111, 0, 1, {}, 9999, 0};
-    const ColDataInt32 col4_sorted_asc{{}, -234, -123, 0, 5, 9999, 24353};
-
     /// Check single column
     auto request = getRequest<MockColumnNames>({col_names[4]}, col_names[4]);
     executeWithConcurrency(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
@@ -139,71 +139,83 @@ try
     /// Test "equal" function
 
     /// Data type: TypeString
-    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[0]))}, "equals(col0, col0)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1})});
+    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[0])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1]))}, "equals(col0, col1)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 0, 1})});
+    request = getRequest<MockAsts>({eq(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4]))}, "equals(col3, col4)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 0, 1})});
+    request = getRequest<MockAsts>({eq(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 1, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
 
     /// Test "greater" function
 
     /// Data type: TypeString
-    request = getRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1]))}, "greater(col0, col1)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 0, 0})});
+    request = getRequest<MockAsts>({gt(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-    request = getRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0]))}, "greater(col1, col0)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, {}, 0, 1, 1, 1, 1})});
+    request = getRequest<MockAsts>({gt(col(col_names[1]), col(col_names[0])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 0, 1, {}, 1, 1}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4]))}, "greater(col3, col4)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
+    request = getRequest<MockAsts>({gt(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 1, 1, {}, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-    request = getRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3]))}, "greater(col4, col3)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
+    request = getRequest<MockAsts>({gt(col(col_names[4]), col(col_names[3])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 0, 1}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
 
     /// Test "and" function
 
     /// Data type: TypeString
-    request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[0]))}, "and(col0, col0)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0})});
+    request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[0])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-    request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[1]))}, "and(col0, col1)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0})});
+    request = getRequest<MockAsts>({And(col(col_names[0]), col(col_names[1])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({And(col(col_names[3]), col(col_names[4]))}, "and(col3, col4)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1})});
+    request = getRequest<MockAsts>({And(col(col_names[3]), col(col_names[4])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 1, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Test "not" function
 
     /// Data type: TypeString
-    request = getRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2]))}, "not(col2)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({1, 1, 1, 1, 1, {}, 1}),
-                    toNullableVec<UInt64>({1, 1, 1, {}, 1, 1, 1}),
-                    toNullableVec<UInt64>({{}, {}, 1, 1, 1, 1, 1})});
+    request = getRequest<MockAsts>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
+                            toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
+                            toNullableVec<UInt64>({1, {}, 1, 1, 1, 1, {}}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
-    request = getRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4]))}, "not(col3)");
-    executeStreams(request,
-                   {toNullableVec<UInt64>({{}, {}, 0, 0, 0, 1, 1}),
-                    toNullableVec<UInt64>({{}, 0, 1, 0, 0, 0, 0})});
+    request = getRequest<MockAsts>({NOT(col(col_names[3])), NOT(col(col_names[4])), col(col_names[4])}, col_names[4]);
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 1}),
+                            toNullableVec<UInt64>({{}, 0, 0, 1, 0, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// TODO more functions...
 }
