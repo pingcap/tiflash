@@ -64,6 +64,8 @@ public:
 
     void disableRecordProfileStreams() { is_record_profile_streams = false; }
 
+    void disableRestoreConcurrency() { is_record_profile_streams = false; }
+
     String toString();
 
 protected:
@@ -75,6 +77,7 @@ protected:
     PlanType type;
     NamesAndTypes schema;
     bool is_record_profile_streams = true;
+    bool is_restore_concurrency = true;
 
     LoggerPtr log;
 };

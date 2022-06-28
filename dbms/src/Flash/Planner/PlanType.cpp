@@ -41,6 +41,10 @@ String PlanType::toString() const
         return "MockExchangeReceiver";
     case Projection:
         return "Projection";
+    case Window:
+        return "Window";
+    case PartialSort:
+        return "PartialSort";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }
