@@ -255,19 +255,4 @@ private:
 
     Poco::Logger * log;
 };
-
-class DMFileReader;
-class DMFileReaderPool
-{
-public:
-    static DMFileReaderPool & instance();
-
-    void add(DMFileReader & reader);
-    void del(DMFileReader & reader);
-    void set(DMFileReader & from_reader, int64_t col_id, size_t start, size_t count, ColumnPtr & col);
-
-private:
-    std::mutex mtx;
-    std::unordered_map<uint64_t, std::unordered_set<DMFileReader *>> readers;
-};
 } // namespace DB::DM

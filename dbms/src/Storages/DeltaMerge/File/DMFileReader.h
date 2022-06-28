@@ -23,8 +23,7 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
-
-#include "common/types.h"
+#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 
 namespace DB
 {
@@ -159,32 +158,7 @@ private:
 
     LoggerPtr log;
 
-    struct CachedPackInfo
-    {
-        size_t pack_count{0};
-        ColumnPtr col;
-    };
-    struct CachedColInfo
-    {
-        std::mutex mtx;
-        std::map<size_t, CachedPackInfo> packs;
-    };
-
-    std::unordered_map<ColId, CachedColInfo> cached_cols;
-    using AtomicInt64Ptr = std::unique_ptr<std::atomic<int64_t>>;
-    AtomicInt64Ptr createAtomicInit64Ptr(int64_t initial)
-    {
-        return std::make_unique<std::atomic<int64_t>>(initial);
-    }
-    AtomicInt64Ptr stale_count = createAtomicInit64Ptr(0);
-    AtomicInt64Ptr add_count = createAtomicInit64Ptr(0);
-    AtomicInt64Ptr hit_count = createAtomicInit64Ptr(0);
-    AtomicInt64Ptr miss_count = createAtomicInit64Ptr(0);
-    AtomicInt64Ptr part_count = createAtomicInit64Ptr(0);
-    AtomicInt64Ptr copy_count = createAtomicInit64Ptr(0);
-    AtomicInt64Ptr last_print_time = createAtomicInit64Ptr(0);
-    void delCachedPacks(std::map<size_t, CachedPackInfo> & packs, size_t pack_id);
-    void logCacheStat();
+    ColumnSharingCacheMap col_data_cache;
 };
 
 } // namespace DM

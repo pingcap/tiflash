@@ -266,7 +266,7 @@ DMFileReader::DMFileReader(
         };
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
-        cached_cols[cd.id];
+        col_data_cache.addColumn(cd.id);
     }
 }
 
@@ -307,7 +307,7 @@ Block DMFileReader::read()
     const auto & use_packs = pack_filter.getUsePacks();
     if (next_pack_id >= use_packs.size())
     {
-        logCacheStat();
+        LOG_FMT_DEBUG(log, "dmfile {} cache stat => {}", dmfile->fileId(), col_data_cache.statString());
         return {};
     }
     // Find max continuing rows we can read.
@@ -538,103 +538,22 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
 
 void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
 {
+    
     if (next_pack_id >= start_pack_id + pack_count)
     {
-        stale_count->fetch_add(1, std::memory_order_relaxed);
-        return;
+        col_data_cache.addStale();
     }
-    auto itr = cached_cols.find(col_id);
-    if (itr == cached_cols.end())
+    else
     {
-        return;
+        col_data_cache.add(col_id, start_pack_id, pack_count, col);
     }
-    auto & mtx = itr->second.mtx;
-    auto & packs = itr->second.packs;
-    std::lock_guard lock(mtx);
-    auto & value = packs[start_pack_id];
-    if (value.pack_count < pack_count)
-    {
-        add_count->fetch_add(1, std::memory_order_relaxed);
-        value.pack_count = pack_count;
-        value.col = col;
-    }
-}
-
-void DMFileReader::logCacheStat()
-{
-    auto sc = stale_count->load(std::memory_order_relaxed);
-    auto ac = add_count->load(std::memory_order_relaxed);
-    auto hc = hit_count->load(std::memory_order_relaxed);
-    auto mc = miss_count->load(std::memory_order_relaxed);
-    auto pc = part_count->load(std::memory_order_relaxed);
-    auto cc = copy_count->load(std::memory_order_relaxed);
-    LOG_FMT_DEBUG(log, "file_id {} stale_count {} add_count {} add_ratio {} "
-                       "hit_count {} miss_count {} part_count {} copy_count {} hit_ratio {}",
-                  fileId(),
-                  sc,
-                  ac,
-                  (sc + ac) > 0 ? ac * 1.0 / (sc + ac) : 0,
-                  hc,
-                  mc,
-                  pc,
-                  cc,
-                  (hc + mc + pc + cc) > 0 ? (hc + cc) * 1.0 / (hc + mc + pc + cc) : 0);
 }
 
 bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col)
 {
-    auto itr = cached_cols.find(col_id);
-    if (itr == cached_cols.end())
-    {
-        return false;
-    }
-    auto & mtx = itr->second.mtx;
-    auto & packs = itr->second.packs;
-    std::lock_guard lock(mtx);
-    auto target = packs.find(start_pack_id);
-    if (target == packs.end())
-    {
-        miss_count->fetch_add(1, std::memory_order_relaxed);
-        return false;
-    }
-    if (target->second.pack_count < pack_count)
-    {
-        part_count->fetch_add(1, std::memory_order_relaxed);
-        return false;
-    }
-
-    if (target->second.pack_count == pack_count)
-    {
-        hit_count->fetch_add(1, std::memory_order_relaxed);
-        col = target->second.col;
-    }
-    else
-    {
-        copy_count->fetch_add(1, std::memory_order_relaxed);
-        auto data_type = dmfile->getColumnStat(col_id).type;
-        auto column = data_type->createColumn();
-        column->insertRangeFrom(*(target->second.col), 0, read_rows);
-        col = std::move(column);
-    }
-
-    delCachedPacks(packs, next_pack_id);
-
-    return true;
-}
-
-void DMFileReader::delCachedPacks(std::map<size_t, CachedPackInfo> & packs, size_t pack_id)
-{
-    for (auto itr = packs.begin(); itr != packs.end();)
-    {
-        if (itr->first + itr->second.pack_count <= pack_id)
-        {
-            itr = packs.erase(itr);
-        }
-        else
-        {
-            break;
-        }
-    }
+    auto found = col_data_cache.get(col_id, start_pack_id, pack_count, read_rows, col, dmfile->getColumnStat(col_id).type);
+    col_data_cache.del(next_pack_id);
+    return found;
 }
 } // namespace DM
 } // namespace DB
