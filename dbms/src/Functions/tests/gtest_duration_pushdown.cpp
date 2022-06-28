@@ -230,7 +230,7 @@ try
     std::random_device rd;
     std::default_random_engine gen = std::default_random_engine(rd());
     std::uniform_int_distribution<int> sign_dis(0, 1), hour_dis(0, 838), minute_dis(0, 59), second_dis(0, 59), microSecond_dis(0, 999999);
-    for (int i = 0; i < rowNum; i++)
+    for (int i = 0; i < rowNum; ++i)
     {
         auto sign = (sign_dis(gen) == 0) ? 1 : -1;
         auto hour = hour_dis(gen);

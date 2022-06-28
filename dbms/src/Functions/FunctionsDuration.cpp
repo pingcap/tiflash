@@ -103,7 +103,7 @@ DataTypePtr FunctionMyDurationToSec<Impl>::getReturnTypeImpl(const ColumnsWithTy
     if (!arguments[0].type->isMyTime())
     {
         throw Exception(
-            fmt::format("Illegal type {} of first argument of function {}", arguments[0].type->getName(), getName()),
+            fmt::format("Illegal type {} of the first argument of function {}", arguments[0].type->getName(), getName()),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
     return std::make_shared<DataTypeInt64>();
@@ -117,7 +117,7 @@ void FunctionMyDurationToSec<Impl>::executeImpl(Block & block, const ColumnNumbe
     {
         throw Exception(
             fmt::format(
-                "Illegal column {} of first argument of function {}",
+                "Illegal column {} of the first argument of function {}",
                 block.getByPosition(arguments[0]).column->getName(),
                 name),
             ErrorCodes::ILLEGAL_COLUMN);
@@ -132,7 +132,7 @@ void FunctionMyDurationToSec<Impl>::executeImpl(Block & block, const ColumnNumbe
         auto col_to = ColumnVector<Int64>::create(size);
         typename ColumnVector<Int64>::Container & vec_to = col_to->getData();
 
-        for (size_t i = 0; i < vec_from.size(); ++i)
+        for (size_t i = 0; i < size; ++i)
         {
             MyDuration val(vec_from[i], from_type->getFsp());
             vec_to[i] = Impl::apply(val);
@@ -142,7 +142,7 @@ void FunctionMyDurationToSec<Impl>::executeImpl(Block & block, const ColumnNumbe
     else
         throw Exception(
             fmt::format(
-                "Illegal column {} of first argument of function {}",
+                "Illegal column {} of the first argument of function {}",
                 block.getByPosition(arguments[0]).column->getName(),
                 name),
             ErrorCodes::ILLEGAL_COLUMN);
