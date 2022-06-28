@@ -108,14 +108,15 @@ void blockEqual(
     const Block & actual)
 {
     size_t columns = actual.columns();
+    size_t expected_columns = expected.columns();
 
-    ASSERT_TRUE(expected.columns() == columns);
+    ASSERT_EQ(expected_columns, columns);
 
     for (size_t i = 0; i < columns; ++i)
     {
         const auto & expected_col = expected.getByPosition(i);
         const auto & actual_col = actual.getByPosition(i);
-        ASSERT_TRUE(actual_col.type->getName() == expected_col.type->getName());
+        ASSERT_EQ(actual_col.type->getName(), expected_col.type->getName());
         ASSERT_COLUMN_EQ(expected_col.column, actual_col.column);
     }
 }
