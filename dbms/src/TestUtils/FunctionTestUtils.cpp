@@ -275,5 +275,53 @@ ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<Strin
     DataTypePtr data_type = makeNullable(std::make_shared<DataTypeMyDateTime>(fsp));
     return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
 }
+
+void printColumns(const ColumnsWithTypeAndName & cols)
+{
+    if (cols.size() <= 0) return;
+    printColumns(cols, 0, cols[0].column->size() - 1);
+}
+
+void printColumns(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
+{
+    const size_t col_num = cols.size();
+    if (col_num <= 0) return;
+
+    const size_t col_size = cols[0].column->size();
+    assert(begin <= end);
+    assert(col_size > end);
+    assert(col_size > begin);
+
+    bool is_same = true;
+
+    for (size_t i = 1; i < col_num; ++i)
+    {
+        if (cols[i].column->size() != col_size)
+            is_same = false;
+    }
+
+    assert(is_same); /// Ensure the sizes of columns in cols are the same
+
+    String output;
+    String col_name;
+    for (size_t i = 0; i < col_num; ++i)
+    {
+        /// Push the column name
+        output = fmt::format("{}{}: (", output, cols[i].name);
+        for (size_t j = begin; j <= end; ++j)
+        {
+            if (j != begin)
+                output = fmt::format("{}, ", output); /// Add comma to seperate different values
+
+            /// Add value
+            output = fmt::format("{}{}: {}", output, j, (*cols[i].column)[j].toString());
+        }
+
+        output = fmt::format("{})\n", output);
+    }
+
+    std::cout << output << std::endl;
+}
+
 } // namespace tests
 } // namespace DB
