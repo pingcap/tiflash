@@ -195,16 +195,6 @@ bool DeltaValueSpace::flush(DMContext & context)
     return true;
 }
 
-// updateDeltaTree should be used under lock.
-void DeltaValueSpace::updateDeltaTree(DeltaIndex::Updates delta_index_updates){
-    if (!delta_index_updates.empty())
-    {
-        LOG_FMT_DEBUG(log, "{} Update index start", simpleInfo());
-        delta_index = delta_index->cloneWithUpdates(delta_index_updates);
-        LOG_FMT_DEBUG(log, "{} Update index done", simpleInfo());
-    }
-}
-
 bool DeltaValueSpace::compact(DMContext & context)
 {
     bool v = false;
@@ -242,7 +232,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
     const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
     
-    compaction_task->prepare(context, wbs, reader);
+    auto delta_index_updates = compaction_task->prepare(context, wbs, reader);
 
     {
         std::scoped_lock lock(mutex);
@@ -262,11 +252,25 @@ bool DeltaValueSpace::compact(DMContext & context)
             return false;
         }
 
+        /// Update delta tree
+        updateDeltaTree(delta_index_updates);
+
         LOG_FMT_DEBUG(log, "{} {}", simpleInfo(), compaction_task->info());
     }
     wbs.writeRemoves();
 
     return true;
 }
+
+// updateDeltaTree should be used under lock.
+void DeltaValueSpace::updateDeltaTree(DeltaIndex::Updates delta_index_updates){
+    if (!delta_index_updates.empty())
+    {
+        LOG_FMT_DEBUG(log, "{} Update index start", simpleInfo());
+        delta_index = delta_index->cloneWithUpdates(delta_index_updates);
+        LOG_FMT_DEBUG(log, "{} Update index done", simpleInfo());
+    }
+}
+
 } // namespace DM
 } // namespace DB

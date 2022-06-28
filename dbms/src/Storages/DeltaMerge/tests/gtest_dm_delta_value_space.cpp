@@ -128,9 +128,9 @@ protected:
     static constexpr size_t num_rows_write_per_batch = 100;
 };
 
-Block appendBlockToDeltaValueSpace(DMContext & context, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, UInt64 tso = 2)
+Block appendBlockToDeltaValueSpace(DMContext & context, DeltaValueSpacePtr delta, size_t rows_start, size_t rows_num, UInt64 tso = 2, bool reversed = false)
 {
-    Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, tso);
+    Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, reversed, tso);
     delta->appendToCache(context, block, 0, block.rows());
     return block;
 }
@@ -382,7 +382,8 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     {
         for (size_t i = 0; i < 20; i++)
         {
-            appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
+            // insert data as reversed order for check sorted later.
+            appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch, 2, true); 
             total_rows_write += num_rows_write_per_batch;
             delta->flush(dmContext());
             while (true)
@@ -397,6 +398,20 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             wbs.writeRemoves();
             ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
             ASSERT_EQ(persisted_file_set->getDeletes(), 1);
+        }
+
+        // check each column file in persist is sorted.
+        auto snapshot = delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        DeltaValueInputStream delta_stream(dmContext(), snapshot, table_columns, RowKeyRange::newAll(false, 1));
+        while (true)
+        {
+            auto block = delta_stream.read();
+            if (!block)
+                break;
+            // check each block is sorted
+            auto handle = getExtraHandleColumnDefine(dmContext().is_common_handle);
+            SortDescription sort = getPkSort(handle);
+            ASSERT_TRUE(isAlreadySorted(block, sort));
         }
     }
 }

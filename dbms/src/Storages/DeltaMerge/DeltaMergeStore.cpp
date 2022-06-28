@@ -1608,6 +1608,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         }
         case TaskType::Compact:
             task.segment->compactDelta(*task.dm_context);
+            task.segment->placeDeltaIndex(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;

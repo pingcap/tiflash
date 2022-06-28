@@ -146,6 +146,7 @@ public:
     bool installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs);
 
     ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap);
+
 };
 
 } // namespace DM

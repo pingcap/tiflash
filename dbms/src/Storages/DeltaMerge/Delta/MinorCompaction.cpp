@@ -57,6 +57,7 @@ DeltaIndex::Updates MinorCompaction::prepare(DMContext & context, WriteBatches &
         }
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
         
+        // make sorted during minor compaction, and update the delta_index
         IColumn::Permutation perm;
         if (sortBlockByPk(getExtraHandleColumnDefine(context.is_common_handle), compact_block, perm))
         {
