@@ -4945,10 +4945,10 @@ public:
     template <typename T>
     static void executeOneUIntOrInt(T xx, char *& out, bool skip_leading_zero = true, bool auto_close = true)
     {
-        long long x = static_cast<long long>(xx);
+        auto x = static_cast<int64>(xx);
         bool was_nonzero = false;
         bool was_first_nonzero_byte = true;
-        for (int offset = (sizeof(long long) - 1) * 8; offset >= 0; offset -= 8)
+        for (int offset = (sizeof(int64) - 1) * 8; offset >= 0; offset -= 8)
         {
             UInt8 byte = x >> offset;
             /// Skip leading zeros
@@ -4976,7 +4976,7 @@ public:
     template <typename T>
     bool tryExecuteUIntOrInt(const IColumn * col, ColumnPtr & col_res) const
     {
-        const ColumnVector<T> * col_vec = checkAndGetColumn<ColumnVector<T>>(col);
+        auto ColumnVector<T> * col_vec = checkAndGetColumn<ColumnVector<T>>(col);
         static constexpr size_t MAX_LENGTH = sizeof(Int64) * word_size + 1; /// Including trailing zero byte.
         if (col_vec)
         {
