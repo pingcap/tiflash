@@ -305,7 +305,6 @@ void printColumns(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
     assert(is_same); /// Ensure the sizes of columns in cols are the same
 
     String output;
-    String col_name;
     for (size_t i = 0; i < col_num; ++i)
     {
         /// Push the column name
