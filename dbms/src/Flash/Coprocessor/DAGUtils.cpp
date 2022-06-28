@@ -603,7 +603,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::TimestampDiff, "tidbTimestampDiff"},
 
     //{tipb::ScalarFuncSig::BitLength, "cast"},
-    //{tipb::ScalarFuncSig::Bin, "cast"},
+    {tipb::ScalarFuncSig::Bin, "bin"},
     {tipb::ScalarFuncSig::ASCII, "ascii"},
     //{tipb::ScalarFuncSig::Char, "cast"},
     {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"},
