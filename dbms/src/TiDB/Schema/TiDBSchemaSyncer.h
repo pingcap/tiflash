@@ -145,26 +145,41 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return it->second;
     }
 
-    Int64 tryLoadSchemaDiffs(Getter & getter, Int64 version, Context & context)
+    Int64 tryLoadSchemaDiffs(Getter & getter, Int64 lastest_version, Context & context)
     {
-        if (isTooOldSchema(cur_version, version))
+        if (isTooOldSchema(cur_version, lastest_version))
         {
             return false;
         }
 
         LOG_FMT_DEBUG(log, "try load schema diffs.");
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, lastest_version);
 
         Int64 used_version = cur_version;
-        while (used_version < version)
+        while (used_version < lastest_version)
         {
             used_version++;
             auto schema_diff = getter.getSchemaDiff(used_version);
             if (!schema_diff)
             {
+                // If `schema diff` from `lastest_version` got empty `schema diff`
+                // Then we won't apply to `lastest_version`, but we will apply to `lastest_version - 1`
+                // If `schema diff` from [`cur_version`, `lastest_version - 1`] got empty `schema diff`
+                // Then we should just skip it.
+                //
+                // example:
+                //  - `cur_version` is 1, `lastest_version` is 10
+                //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
+                //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9
+                if (used_version != lastest_version)
+                {
+                    LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", used_version);
+                    continue;
+                } // else (used_version == lastest_version)
+
                 LOG_FMT_DEBUG(log, "End load a part of schema diffs, current version is {} ", used_version);
-                return used_version;
+                return used_version - 1;
             }
 
             try
