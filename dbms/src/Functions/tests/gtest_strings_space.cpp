@@ -48,7 +48,7 @@ protected:
 };
 
 // test string and string
-TEST_F(StringReverse, strAndStrTest)
+TEST_F(StringSpace, strAndStrTest)
 try
 {
     ASSERT_COLUMN_EQ(
@@ -60,7 +60,7 @@ try
 CATCH
 
 // test NULL
-TEST_F(StringLength, nullTest)
+TEST_F(StringSpace, nullTest)
 try
 {
     ASSERT_COLUMN_EQ(

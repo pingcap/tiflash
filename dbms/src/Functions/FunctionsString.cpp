@@ -4221,7 +4221,7 @@ public:
         const auto * column_space_num = checkAndGetColumn<ColumnConst>(c0_col.get());
         Int64 space_num = 0;
 
-        if (column_space_num)
+        if (!column_space_num)
         {
             space_num = column_space_num->getInt(0);
         }
