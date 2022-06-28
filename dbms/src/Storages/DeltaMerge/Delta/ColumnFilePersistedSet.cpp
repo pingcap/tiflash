@@ -308,7 +308,7 @@ bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_vers
 bool ColumnFilePersistedSet::appendPersistedColumnFilesToLevel0(const ColumnFilePersisteds & column_files, WriteBatches & wbs)
 {
     ColumnFilePersistedLevels new_persisted_files_levels;
-    for (auto & level : persisted_files_levels)
+    for (auto & level : persisted_files_levels) //为什么不能在原来上面做改动
     {
         auto & new_level = new_persisted_files_levels.emplace_back();
         for (auto & file : level)
@@ -362,8 +362,6 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
                     is_all_trivial_move = is_all_trivial_move && is_trivial_move;
                     cur_task = MinorCompaction::Task{cur_rows_offset, cur_deletes_offset};    
                 };
-                cur_rows_offset += file->getRows();
-                cur_deletes_offset += file->getDeletes();
 
                 if (auto * t_file = file->tryToTinyFile(); t_file)
                 {
@@ -387,6 +385,9 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
                     pack_up_cur_task();
                     cur_task.addColumnFile(file);
                 }
+
+                cur_rows_offset += file->getRows();
+                cur_deletes_offset += file->getDeletes();
             }
             bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
             is_all_trivial_move = is_all_trivial_move && is_trivial_move;

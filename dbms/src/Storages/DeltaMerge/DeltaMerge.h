@@ -178,43 +178,51 @@ public:
     }
 
 private:
-    void beforeReturnBlock(const Block & block)
+    void beforeReturnBlock(const Block & block) // 这个感觉是用来 check block 是不是按序排的
     {
-        if constexpr (DM_RUN_CHECK)
-        {
-            // In some cases like Segment::getSplitPointSlow, only handle column in block.
-            if (block.columns() < 2 //
-                || block.getByPosition(0).column_id != EXTRA_HANDLE_COLUMN_ID //
-                || block.getByPosition(1).column_id != VERSION_COLUMN_ID)
-                return;
-
-            ++num_read;
-
-            auto rowkey_column = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
-            const auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
-            for (size_t i = 0; i < rowkey_column.column->size(); ++i)
+        try {
+            if constexpr (DM_RUN_CHECK)
             {
-                auto rowkey_value = rowkey_column.getRowKeyValue(i);
-                auto version = version_column[i];
-                int cmp_result = compare(rowkey_value, last_value_ref);
-                if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
+                // In some cases like Segment::getSplitPointSlow, only handle column in block.
+                if (block.columns() < 2 //
+                    || block.getByPosition(0).column_id != EXTRA_HANDLE_COLUMN_ID //
+                    || block.getByPosition(1).column_id != VERSION_COLUMN_ID)
+                    return;
+                ++num_read;
+
+                auto rowkey_column = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
+                const auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
+
+                for (size_t i = 0; i < rowkey_column.column->size(); ++i)
                 {
-                    throw Exception("DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
-                                    + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                                    + "] is expected >= last_handle[" + last_value_ref.toDebugString() + "]last_version["
-                                    + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
-                                    + DB::toString(last_handle_pos) + "]");
+                    auto rowkey_value = rowkey_column.getRowKeyValue(i);
+                    auto version = version_column[i];
+                    int cmp_result = compare(rowkey_value, last_value_ref);
+                    if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
+                    {
+                        throw Exception("DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
+                                        + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
+                                        + "] is expected >= last_handle[" + last_value_ref.toDebugString() + "]last_version["
+                                        + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
+                                        + DB::toString(last_handle_pos) + "]");
+                    }
+
+                    last_value_ref = rowkey_value;
+                    last_version = version;
+                    last_handle_pos = i;
+                    last_handle_read_num = num_read;
                 }
-                last_value_ref = rowkey_value;
-                last_version = version;
-                last_handle_pos = i;
-                last_handle_read_num = num_read;
+                /// last_value is based on block, when block is released, it will
+                /// become invalid, so need to update last_value here
+                last_value = last_value_ref.toRowKeyValue();
+                last_value_ref = last_value.toRowKeyValueRef();
             }
-            /// last_value is based on block, when block is released, it will
-            /// become invalid, so need to update last_value here
-            last_value = last_value_ref.toRowKeyValue();
-            last_value_ref = last_value.toRowKeyValueRef();
+        } catch (const DB::Exception & e)
+        {
+            std::cout << "error is " << e.code() << std::endl;
+            std::cout << e.displayText() << std::endl;
         }
+
     }
 
     Block doRead()
