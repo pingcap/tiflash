@@ -14,35 +14,22 @@
 
 #pragma once
 
-#include <Common/setThreadName.h>
-#include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
-#include <atomic>
-#include <cstdint>
-#include <mutex>
-#include <queue>
-#include <unordered_map>
+#include <Storages/DeltaMerge/RowKeyRangeUtils.h>
+#include <common/logger_useful.h>
 
-#include "Common/Exception.h"
-#include "Core/Block.h"
-#include "Debug/DBGInvoker.h"
-#include "Storages/DeltaMerge/DMContext.h"
-#include "Storages/DeltaMerge/StableValueSpace.h"
-#include "boost/core/noncopyable.hpp"
-#include "common/logger_useful.h"
-#include "common/types.h"
 namespace DB
 {
 namespace DM
 {
-struct DMContext;
 struct SegmentReadTask;
 class Segment;
 using SegmentPtr = std::shared_ptr<Segment>;
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 
-using DMContextPtr = std::shared_ptr<DMContext>;
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
 using SegmentReadTasks = std::list<SegmentReadTaskPtr>;
 using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
@@ -73,11 +60,12 @@ struct SegmentReadTask
 class PendingBlockStatistic
 {
 public:
-    explicit PendingBlockStatistic() 
+    explicit PendingBlockStatistic()
         : pending_block_count(0)
         , pending_block_byte(0)
         , total_block_count(0)
-        , total_block_byte(0) {}
+        , total_block_byte(0)
+    {}
 
     void push(const Block & block)
     {
@@ -116,6 +104,7 @@ public:
     {
         return total_block_byte.load(std::memory_order_relaxed);
     }
+
 private:
     std::atomic<int64_t> pending_block_count;
     std::atomic<int64_t> pending_block_byte;
@@ -156,8 +145,7 @@ public:
         auto total_count = local_pending_stat.totalCount();
         auto total_byte = local_pending_stat.totalByte();
         auto avg_byte = total_count > 0 ? total_byte / total_count : 0;
-        LOG_FMT_DEBUG(log, "pool {} pop_times {} pop_empty_times {} pop_empty_ratio {} peak_queue_size {} block_avg_bytes {} => {} MB",
-            id, pop_times, pop_empty_times, pop_empty_times * 1.0 / pop_times, peak_queue_size, avg_byte, peak_queue_size * avg_byte * 1.0 / 1024 / 1024);
+        LOG_FMT_DEBUG(log, "pool {} pop_times {} pop_empty_times {} pop_empty_ratio {} peak_queue_size {} block_avg_bytes {} => {} MB", id, pop_times, pop_empty_times, pop_empty_times * 1.0 / pop_times, peak_queue_size, avg_byte, peak_queue_size * avg_byte * 1.0 / 1024 / 1024);
     }
 
     SegmentReadTaskPtr nextTask()
@@ -169,9 +157,9 @@ public:
         tasks.pop_front();
         return task;
     }
-    
+
     uint64_t getId() const { return id; }
-    
+
     int64_t tableId() const { return table_id; }
 
     const SegmentReadTasks & getTasks() const { return tasks; }
@@ -180,15 +168,15 @@ public:
 
     void finishSegment(UInt64 seg_id);
 
-    void pushBlock(Block && block) 
-    { 
+    void pushBlock(Block && block)
+    {
         local_pending_stat.push(block);
         global_pending_stat.push(block);
-        q.push(std::move(block)); 
+        q.push(std::move(block));
     }
 
-    void popBlock(Block & block) 
-    { 
+    void popBlock(Block & block)
+    {
         q.pop(block);
         local_pending_stat.pop(block);
         global_pending_stat.pop(block);
@@ -209,8 +197,8 @@ public:
         std::lock_guard lock(mutex);
         return active_segment_ids.size();
     }
-    
-     
+
+
     std::pair<uint64_t, std::vector<uint64_t>> scheduleSegment(
         const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments,
         uint64_t expected_merge_count);
@@ -227,6 +215,7 @@ public:
     {
         return unordered_input_stream_ref_count.load(std::memory_order_relaxed) == 0;
     }
+
 private:
     SegmentReadTaskPtr getTask(uint64_t seg_id);
 
@@ -258,7 +247,6 @@ private:
 };
 
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
-using SegmentReadTaskPoolWeakPtr = std::weak_ptr<SegmentReadTaskPool>;
 using SegmentReadTaskPools = std::vector<SegmentReadTaskPoolPtr>;
 
 } // namespace DM
