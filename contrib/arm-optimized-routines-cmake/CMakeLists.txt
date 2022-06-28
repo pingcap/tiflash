@@ -12,12 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This library is to override performance-critical routines for aarch64 targets.
+# The implementations are imported from official ARM repo.
+# To reduce dispatching cost, indirect function technique is utilized. Therefore,
+# this library should only be enabled with ELF targets.
+
+# Considerations:
+# - By Jun, 2022, most enterprise OSs (CentOS 7, CentOS Stream 8 and RHEL 8) still
+#   use relatively old glibc on ARM64, where ASIMD, MTE, DC ZVA and SVE are not
+#   fully utilized. However, it is becoming increasingly common to use ARM64 instances
+#   in cloud-native situations.
+# - `optimized-routines` repo is actively maintained by ARM officials. Therefore,
+#   the qualities can be ensured while using it also enables us to keep sync with latest
+#   acceleration techniques.
+
 ENABLE_LANGUAGE(C)
 ENABLE_LANGUAGE(ASM)
 set(TIFLASH_AOR_DIR ../arm-optimized-routines)
-
-# GCC/Clang enables ASIMD for Armv8-a by default, we let us use
-# ASIMD variant anyway
 
 file(GLOB TIFLASH_AARCH64_STRING_FILES ${TIFLASH_AOR_DIR}/string/aarch64/*.S)
 add_library(tiflash-aarch64-string STATIC ${TIFLASH_AARCH64_STRING_FILES} src/aor.c)
