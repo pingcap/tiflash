@@ -215,6 +215,12 @@ public:
     {
         return unordered_input_stream_ref_count.load(std::memory_order_relaxed) == 0;
     }
+    int64_t getFreeBlockCount() const
+    {
+        constexpr auto block_limit_count_scale = 1;
+        int64_t block_limit_count = unordered_input_stream_ref_count.load(std::memory_order_relaxed) * block_limit_count_scale;
+        return block_limit_count - pendingBlockCount();
+    }
 
 private:
     SegmentReadTaskPtr getTask(uint64_t seg_id);

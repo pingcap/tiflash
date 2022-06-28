@@ -51,8 +51,9 @@ public:
         }
     }
 
-    void readOneBlock()
+    int readOneBlock()
     {
+        int read_block_count = 0;
         for (size_t i = 0; i < pools.size(); i++)
         {
             if (isFinished(i))
@@ -69,6 +70,11 @@ public:
                 continue;
             }
 
+            if (pool->getFreeBlockCount() <= 0)
+            {
+                continue;
+            }
+
             auto block = streams[i]->read();
             if (!block)
             {
@@ -77,38 +83,16 @@ public:
             }
             else
             {
+                read_block_count++;
                 pool->pushBlock(std::move(block));
             }
         }
+        return read_block_count;
     }
 
     bool allFinished() const
     {
         return finished_count >= finished.size();
-    }
-
-    std::pair<int64_t, int64_t> getMinMaxPendingBlockCount()
-    {
-        int64_t min = std::numeric_limits<int64_t>::max();
-        int64_t max = std::numeric_limits<int64_t>::min();
-        for (size_t i = 0; i < pools.size(); i++)
-        {
-            if (isFinished(i))
-            {
-                continue;
-            }
-            if (pools[i]->expired())
-            {
-                pools[i].reset();
-                setFinished(i);
-                continue;
-            }
-
-            auto pbc = pools[i]->pendingBlockCount();
-            min = std::min(min, pbc);
-            max = std::max(max, pbc);
-        }
-        return {min, max};
     }
 
     uint64_t getSegmentId() const
