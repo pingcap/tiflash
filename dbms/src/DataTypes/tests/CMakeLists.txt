@@ -21,3 +21,6 @@ target_link_libraries (data_types_number_fixed dbms)
 
 add_executable (data_type_string data_type_string.cpp ${SRCS})
 target_link_libraries (data_type_string dbms)
+
+add_executable (bench_string_deserialize bench_string_deserialize.cpp)
+
