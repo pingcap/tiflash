@@ -152,6 +152,7 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
 namespace
 {
 [[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
@@ -967,7 +968,10 @@ public:
             LOG_DEBUG(log, debug_msg);
     }
 
-    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const { return servers; }
+    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const
+    {
+        return servers;
+    }
 
 private:
     Server & server;
@@ -1003,7 +1007,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
-
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
