@@ -4976,7 +4976,7 @@ public:
     template <typename T>
     bool tryExecuteUIntOrInt(const IColumn * col, ColumnPtr & col_res) const
     {
-        auto* col_vec = checkAndGetColumn<ColumnVector<T>>(col);
+        auto * col_vec = checkAndGetColumn<ColumnVector<T>>(col);
         static constexpr size_t MAX_LENGTH = sizeof(Int64) * word_size + 1; /// Including trailing zero byte.
         if (col_vec)
         {
