@@ -169,7 +169,7 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
                              : "memory");
                 istr.position() += size + shift;
                 data[offset - 1] = 0;
-                return;
+                continue;
             }
         }
 #endif
