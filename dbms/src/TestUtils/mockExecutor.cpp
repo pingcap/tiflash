@@ -220,6 +220,11 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockAsts exprs)
 
 DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNames col_names)
 {
+    return project(MockColumnNamesVec(col_names));
+}
+
+DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNamesVec col_names)
+{
     assert(root);
     auto exp_list = std::make_shared<ASTExpressionList>();
     for (const auto & name : col_names)
