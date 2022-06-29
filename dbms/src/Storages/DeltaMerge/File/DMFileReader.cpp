@@ -538,7 +538,6 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
 
 void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
 {
-    
     if (next_pack_id >= start_pack_id + pack_count)
     {
         col_data_cache.addStale();
@@ -552,7 +551,7 @@ void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pac
 bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col)
 {
     auto found = col_data_cache.get(col_id, start_pack_id, pack_count, read_rows, col, dmfile->getColumnStat(col_id).type);
-    col_data_cache.del(next_pack_id);
+    col_data_cache.del(col_id, next_pack_id);
     return found;
 }
 } // namespace DM

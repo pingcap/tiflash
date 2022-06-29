@@ -127,11 +127,12 @@ public:
         return status == ColumnCacheStatus::GET_HIT || status == ColumnCacheStatus::GET_COPY;
     }
 
-    void del(size_t upper_start_pack_id)
+    void del(int64_t col_id, size_t upper_start_pack_id)
     {
-        for (auto & pa : cols)
+        auto itr = cols.find(col_id);
+        if (itr != cols.end())
         {
-            pa.second.del(upper_start_pack_id);
+            itr->second.del(upper_start_pack_id);
         }
     }
 
