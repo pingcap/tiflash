@@ -134,6 +134,14 @@ void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & requ
     executeStreams(request, context.executorIdColumnsMap(), expect_columns, concurrency);
 }
 
+void ExecutorTest::executeStreamsWithMultiConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t max_concurrency, size_t step)
+{
+    for (size_t i = 1; i < max_concurrency; i += step)
+    {
+        executeStreams(request, expect_columns, i);
+    }
+}
+
 void ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, SourceType type, size_t concurrency)
 {
     std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;

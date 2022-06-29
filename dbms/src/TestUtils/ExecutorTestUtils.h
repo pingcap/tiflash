@@ -89,6 +89,12 @@ public:
         SourceType type = TableScan,
         size_t concurrency = 1);
 
+    void executeStreamsWithMultiConcurrency(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & expect_columns,
+        size_t max_concurrency = 10,
+        size_t step = 2);
+
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
