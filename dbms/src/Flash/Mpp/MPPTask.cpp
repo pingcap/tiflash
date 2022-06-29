@@ -463,7 +463,9 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))
         {
             err_string = message;
-            abortTunnels(message, abort_type);
+            /// if the task is in initializing state, mpp task can return error to TiDB directly,
+            /// so just close all tunnels here
+            closeAllTunnels(message);
             unregisterTask();
             LOG_WARNING(log, "Finish abort task from uninitialized");
             return;
