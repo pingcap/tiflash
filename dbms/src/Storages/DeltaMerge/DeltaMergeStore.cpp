@@ -22,12 +22,12 @@
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
-#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
-#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -40,6 +40,8 @@
 
 #include <atomic>
 #include <ext/scope_guard.h>
+
+#include "Debug/DBGInvoker.h"
 
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
@@ -1149,7 +1151,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         thread_hold_snapshots.detach();
     });
 
-    [[maybe_unused]]auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
+    [[maybe_unused]] auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
@@ -1215,6 +1217,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(physical_table_id, dm_context, columns_to_read, filter, max_version, expected_block_size, false, db_settings.dt_raw_filter_range, std::move(tasks));
+    auto use_read_thread = db_context.getSettingsRef().dt_use_read_thread;
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
@@ -1222,29 +1225,38 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        /*
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
-            dm_context,
-            read_task_pool,
-            after_segment_read,
-            columns_to_read,
-            filter,
-            max_version,
-            expected_block_size,
-            false,
-            db_settings.dt_raw_filter_range,
-            extra_table_id_index,
-            physical_table_id,
-            req_info);*/
-        BlockInputStreamPtr stream = std::make_shared<UnorderedInputStream>(
-            read_task_pool,
-            columns_to_read,
-            extra_table_id_index,
-            physical_table_id,
-            req_info);
+        BlockInputStreamPtr stream;
+        if (use_read_thread)
+        {
+            stream = std::make_shared<UnorderedInputStream>(
+                read_task_pool,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id,
+                req_info);
+        }
+        else
+        {
+            stream = std::make_shared<DMSegmentThreadInputStream>(
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                filter,
+                max_version,
+                expected_block_size,
+                false,
+                db_settings.dt_raw_filter_range,
+                extra_table_id_index,
+                physical_table_id,
+                req_info);
+        }
         res.push_back(stream);
     }
-    SegmentReadTaskScheduler::instance().add(read_task_pool);
+    if (use_read_thread)
+    {
+        SegmentReadTaskScheduler::instance().add(read_task_pool);
+    }
     LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
 
     return res;

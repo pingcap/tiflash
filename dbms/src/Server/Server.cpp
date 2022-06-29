@@ -58,6 +58,8 @@
 #include <Server/ServerInfo.h>
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -86,8 +88,6 @@
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
-#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
-#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
@@ -1329,9 +1329,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getTMTContext().reloadConfig(config());
     }
 
-    // TODO(jinhelin): init routine
-    DM::SegmentReaderPoolManager::init(log);
-    DM::SegmentReadTaskScheduler::instance();
+    // Initialize the thread pool of storage before the storage engine is initialized.
+    LOG_FMT_INFO(log, "dt_use_read_thread {}", global_context->getSettingsRef().dt_use_read_thread);
+    if (global_context->getSettingsRef().dt_use_read_thread)
+    {
+        DM::SegmentReaderPoolManager::init(log);
+        DM::SegmentReadTaskScheduler::instance();
+    }
 
     {
         // Note that this must do before initialize schema sync service.
