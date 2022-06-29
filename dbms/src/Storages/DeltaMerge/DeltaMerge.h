@@ -187,11 +187,11 @@ private:
                 || block.getByPosition(0).column_id != EXTRA_HANDLE_COLUMN_ID //
                 || block.getByPosition(1).column_id != VERSION_COLUMN_ID)
                 return;
+
             ++num_read;
 
             auto rowkey_column = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
             const auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
-
             for (size_t i = 0; i < rowkey_column.column->size(); ++i)
             {
                 auto rowkey_value = rowkey_column.getRowKeyValue(i);
@@ -205,7 +205,6 @@ private:
                                     + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
                                     + DB::toString(last_handle_pos) + "]");
                 }
-
                 last_value_ref = rowkey_value;
                 last_version = version;
                 last_handle_pos = i;
