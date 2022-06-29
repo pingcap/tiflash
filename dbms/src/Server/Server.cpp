@@ -625,7 +625,7 @@ public:
         flash_grpc_server = builder.BuildAndStart();
         if (!flash_grpc_server)
         {
-            throw Exception("Exception happens when start grpc server, the flash.service_addr may be wrong, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
+            throw Exception("Exception happens when start grpc server, the flash.service_addr may be invalid, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
         }
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
