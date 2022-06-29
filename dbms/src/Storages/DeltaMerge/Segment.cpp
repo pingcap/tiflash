@@ -511,7 +511,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     }
     else
     {
-        //所以这边是不会读 del 和 version 是么？
         new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
 
         for (const auto & c : columns_to_read)

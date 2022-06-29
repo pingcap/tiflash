@@ -308,7 +308,7 @@ bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_vers
 bool ColumnFilePersistedSet::appendPersistedColumnFilesToLevel0(const ColumnFilePersisteds & column_files, WriteBatches & wbs)
 {
     ColumnFilePersistedLevels new_persisted_files_levels;
-    for (auto & level : persisted_files_levels) //为什么不能在原来上面做改动
+    for (auto & level : persisted_files_levels)
     {
         auto & new_level = new_persisted_files_levels.emplace_back();
         for (auto & file : level)

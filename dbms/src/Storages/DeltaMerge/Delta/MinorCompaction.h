@@ -70,7 +70,7 @@ public:
     MinorCompaction(size_t compaction_src_level_, size_t current_compaction_version_);
 
     // Add new task and return whether this task is a trivial move
-    inline bool packUpTask(Task && task) //所以就是如果只有一个文件的，就是不重要的移动
+    inline bool packUpTask(Task && task)
     {
         if (task.to_compact.empty())
             return true;
@@ -83,7 +83,7 @@ public:
             {
                 if (auto * t_file = f->tryToTinyFile(); t_file)
                 {
-                    t_file->clearCache(); //为什么需要做这个？
+                    t_file->clearCache();
                 }
             }
             is_trivial_move = true;
