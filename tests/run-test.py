@@ -199,10 +199,13 @@ class MySQLCompare:
             b = MySQLCompare.parse_excepted_outputs(matches)
             return a == b
         else:
-            if len(outputs) != len(matches):
+            if len(outputs) > len(matches):
                 return False
             for i in range(0, len(outputs)):
                 if not compare_line(outputs[i], matches[i]):
+                    return False
+            for i in range(len(outputs), len(matches)):
+                if not compare_line("", matches[i]):
                     return False
             return True
 
@@ -217,10 +220,13 @@ def matched(outputs, matches, fuzz):
         b = parse_table_parts(matches, fuzz)
         return a == b
     else:
-        if len(outputs) != len(matches):
+        if len(outputs) > len(matches):
             return False
         for i in range(0, len(outputs)):
             if not compare_line(outputs[i], matches[i]):
+                return False
+        for i in range(len(outputs), len(matches)):
+            if not compare_line("", matches[i]):
                 return False
         return True
 

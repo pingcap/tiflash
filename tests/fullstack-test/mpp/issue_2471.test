@@ -40,6 +40,10 @@ ERROR 1105 (HY000) at line 1: other error for mpp stream: Code: 10007, e.display
 {#LINE}
 {#LINE}
 {#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
 
 => DBGInvoke __disable_fail_point(exception_in_creating_set_input_stream)
 
