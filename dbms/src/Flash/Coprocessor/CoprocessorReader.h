@@ -79,14 +79,14 @@ public:
     CoprocessorReader(
         const DAGSchema & schema_,
         pingcap::kv::Cluster * cluster,
-        std::vector<pingcap::coprocessor::copTask> tasks,
+        std::vector<pingcap::coprocessor::CopTask> tasks,
         bool has_enforce_encode_type_,
-        int concurrency)
+        int concurrency_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
+        , resp_iter(std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"))
         , collected(false)
-        , concurrency_(concurrency)
+        , concurrency(concurrency_)
     {
         resp_iter.open();
     }
@@ -173,7 +173,7 @@ public:
 
     size_t getSourceNum() const { return 1; }
 
-    int computeNewThreadCount() const { return concurrency_; }
+    int computeNewThreadCount() const { return concurrency; }
 
     void collectNewThreadCount(int & cnt)
     {
@@ -192,6 +192,6 @@ public:
     void close() {}
 
     bool collected = false;
-    int concurrency_;
+    int concurrency;
 };
 } // namespace DB

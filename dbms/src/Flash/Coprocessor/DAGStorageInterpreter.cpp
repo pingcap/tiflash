@@ -38,6 +38,11 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
+#include "Flash/Coprocessor/BatchCoprocessorReader.h"
+#include "pingcap/coprocessor/Client.h"
+#include "pingcap/kv/Backoff.h"
+#include "pingcap/kv/RegionCache.h"
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
@@ -479,40 +484,73 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
             throw Exception("Schema mismatch between different partitions for partition table");
     }
 #endif
-    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
-    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    std::vector<pingcap::coprocessor::copTask> all_tasks;
-    for (const auto & remote_request : remote_requests)
+    if (!is_read_node)
     {
-        pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
-        remote_request.dag_request.SerializeToString(&(req->data));
-        req->tp = pingcap::coprocessor::ReqType::DAG;
-        req->start_ts = context.getSettingsRef().read_tso;
-        req->schema_version = context.getSettingsRef().schema_version;
+        // build cop request streams
+        bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
+        pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+        std::vector<pingcap::coprocessor::CopTask> all_tasks;
+        for (const auto & remote_request : remote_requests)
+        {
+            pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
+            remote_request.dag_request.SerializeToString(&(req->data));
+            req->tp = pingcap::coprocessor::ReqType::DAG;
+            req->start_ts = context.getSettingsRef().read_tso;
+            req->schema_version = context.getSettingsRef().schema_version;
+
+            pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+            pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
+            auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+            all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
+        }
+
+        const size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
+        const size_t task_per_thread = all_tasks.size() / concurrent_num;
+        const size_t rest_task = all_tasks.size() % concurrent_num;
+        for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
+        {
+            size_t task_end = task_start + task_per_thread;
+            if (i < rest_task)
+                task_end++;
+            if (task_end == task_start)
+                continue;
+            std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+
+            auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+            context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+            BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
+            pipeline.streams.push_back(input);
+            task_start = task_end;
+        }
+    }
+    else
+    {
+        // build batch cop request streams
+        pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+        std::vector<pingcap::coprocessor::CopTask> all_tasks;
+        for (const auto & remote_request : remote_requests)
+        {
+            auto req = std::make_shared<pingcap::coprocessor::Request>();
+            remote_request.dag_request.SerializeToString(&req->data);
+            req->tp = pingcap::coprocessor::ReqType::DAG;
+            req->start_ts = context.getSettingsRef().read_tso;
+            req->schema_version = context.getSettingsRef().schema_version;
+            // FIXME: req->table_regions for partition table?
+
+            pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+            pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
+            auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/batch_coprocessor"));
+            all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
+        }
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-        pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-        all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
-    }
-
-    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
-    size_t task_per_thread = all_tasks.size() / concurrent_num;
-    size_t rest_task = all_tasks.size() % concurrent_num;
-    for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
-    {
-        size_t task_end = task_start + task_per_thread;
-        if (i < rest_task)
-            task_end++;
-        if (task_end == task_start)
-            continue;
-        std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
-
-        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
-        pipeline.streams.push_back(input);
-        task_start = task_end;
+        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, all_tasks, &Poco::Logger::get("pingcap/coprocessor"));
+        for (const auto & batch_task : all_batch_tasks)
+        {
+            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, /*concurrency*/ 1);
+            BlockInputStreamPtr input = std::make_shared<BatchCoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID());
+            pipeline.streams.emplace_back(std::move(input));
+        }
     }
 }
 
@@ -1055,6 +1093,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         retry_regions_map[region_id_to_table_id_map[r.get().region_id]].emplace_back(r);
     }
 
+    // Build different remote request for different physical table
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & retry_regions = retry_regions_map[physical_table_id];

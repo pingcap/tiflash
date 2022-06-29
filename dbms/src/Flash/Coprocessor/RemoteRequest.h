@@ -31,7 +31,7 @@
 namespace DB
 {
 using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
-using DAGColumnInfo = std::pair<String, ColumnInfo>;
+using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 
 struct RemoteRequest
@@ -44,11 +44,11 @@ struct RemoteRequest
         , schema(std::move(schema_))
         , key_ranges(std::move(key_ranges_))
     {}
+
     tipb::DAGRequest dag_request;
     DAGSchema schema;
     /// the sorted key ranges
     std::vector<pingcap::coprocessor::KeyRange> key_ranges;
-
 
     static RemoteRequest build(
         const RegionRetryList & retry_regions,

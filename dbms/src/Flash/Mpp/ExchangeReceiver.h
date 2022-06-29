@@ -87,6 +87,21 @@ struct ExchangeReceiverResult
     ExchangeReceiverResult()
         : ExchangeReceiverResult(nullptr, 0)
     {}
+
+    static ExchangeReceiverResult newOk(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_)
+    {
+        return {resp_, call_index_, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false};
+    }
+
+    static ExchangeReceiverResult newEOF(const String & req_info_)
+    {
+        return {/*resp*/ nullptr, 0, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ true};
+    }
+
+    static ExchangeReceiverResult newError(size_t call_index, const String & req_info, const String & error_msg)
+    {
+        return {/*resp*/ nullptr, call_index, req_info, /*meet_error*/ true, error_msg, /*eof*/ false};
+    }
 };
 
 enum class ExchangeReceiverState
