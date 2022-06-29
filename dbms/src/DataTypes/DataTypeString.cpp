@@ -149,6 +149,7 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
             {
                 const auto * src = reinterpret_cast<const char *>(istr.position());
                 auto * dst = reinterpret_cast<char *>(&data[offset - size - 1]);
+                istr.position() += size;
                 /*
                  *  For destination buffer misalignment:
                  *  The impact on Enhanced REP MOVSB and STOSB implementation can be 25%
@@ -167,7 +168,6 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
                              : "+D"(dst), "+S"(src), "+c"(size)
                              :
                              : "memory");
-                istr.position() += size + shift;
                 data[offset - 1] = 0;
                 continue;
             }
