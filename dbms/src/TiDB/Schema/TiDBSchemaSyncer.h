@@ -147,78 +147,90 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return it->second;
     }
 
-    Int64 tryLoadSchemaDiffs(Getter & getter, Int64 lastest_version, Context & context)
+    // Return Values
+    // - if lastest schema diff is not empty, return the (latest_version)
+    // - if lastest schema diff is empty, return the (latest_version - 1)
+    // - if error happend, return (-1)
+    Int64 tryLoadSchemaDiffs(Getter & getter, Int64 latest_version, Context & context)
     {
-        if (isTooOldSchema(cur_version, lastest_version))
+        if (isTooOldSchema(cur_version, latest_version))
         {
             return -1;
         }
 
         LOG_FMT_DEBUG(log, "try load schema diffs.");
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, lastest_version);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, latest_version);
 
         Int64 used_version = cur_version;
-        while (used_version < lastest_version)
+        std::vector<std::optional<SchemaDiff>> diffs;
+        while (used_version < latest_version)
         {
             used_version++;
-            auto schema_diff = getter.getSchemaDiff(used_version);
-            if (!schema_diff)
+            diffs.push_back(getter.getSchemaDiff(used_version));
+        }
+        LOG_FMT_DEBUG(log, "end load schema diffs with total {} entries.", diffs.size());
+
+        try
+        {
+            for (size_t diff_index = 0; diff_index < diffs.size(); diff_index++)
             {
-                // If `schema diff` from `lastest_version` got empty `schema diff`
-                // Then we won't apply to `lastest_version`, but we will apply to `lastest_version - 1`
-                // If `schema diff` from [`cur_version`, `lastest_version - 1`] got empty `schema diff`
-                // Then we should just skip it.
-                //
-                // example:
-                //  - `cur_version` is 1, `lastest_version` is 10
-                //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
-                //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9
-                if (used_version != lastest_version)
+                auto schema_diff = diffs[diff_index];
+
+                if (!schema_diff)
                 {
-                    LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", used_version);
-                    continue;
-                } // else (used_version == lastest_version)
+                    // If `schema diff` from `latest_version` got empty `schema diff`
+                    // Then we won't apply to `latest_version`, but we will apply to `latest_version - 1`
+                    // If `schema diff` from [`cur_version`, `latest_version - 1`] got empty `schema diff`
+                    // Then we should just skip it.
+                    //
+                    // example:
+                    //  - `cur_version` is 1, `latest_version` is 10
+                    //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
+                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9
+                    if (diff_index != diffs.size() - 1)
+                    {
+                        LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", used_version);
+                        continue;
+                    } // else (diff_index == diffs.size() - 1)
 
-                LOG_FMT_DEBUG(log, "End load a part of schema diffs, current version is {} ", used_version - 1);
-                return used_version - 1;
-            }
+                    LOG_FMT_DEBUG(log, "End load schema diffs without latest one, current version is {} ", used_version - 1);
+                    return used_version - 1;
+                }
 
-            try
-            {
                 builder.applyDiff(*schema_diff);
             }
-            catch (TiFlashException & e)
-            {
-                if (!e.getError().is(Errors::DDL::StaleSchema))
-                {
-                    GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-                }
-                LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
-                return -1;
-            }
-            catch (Exception & e)
-            {
-                if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
-                {
-                    throw;
-                }
-                GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-                LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
-                return -1;
-            }
-            catch (Poco::Exception & e)
+        }
+        catch (TiFlashException & e)
+        {
+            if (!e.getError().is(Errors::DDL::StaleSchema))
             {
                 GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-                LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.displayText());
-                return -1;
             }
-            catch (std::exception & e)
+            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            return -1;
+        }
+        catch (Exception & e)
+        {
+            if (e.code() == ErrorCodes::FAIL_POINT_ERROR)
             {
-                GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-                LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.what());
-                return -1;
+                throw;
             }
+            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
+            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            return -1;
+        }
+        catch (Poco::Exception & e)
+        {
+            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
+            LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.displayText());
+            return -1;
+        }
+        catch (std::exception & e)
+        {
+            GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
+            LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.what());
+            return -1;
         }
 
         LOG_FMT_DEBUG(log, "End load all of schema diffs, current version is {} ", used_version);
