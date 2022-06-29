@@ -149,7 +149,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         if (isTooOldSchema(cur_version, lastest_version))
         {
-            return false;
+            return -1;
         }
 
         LOG_FMT_DEBUG(log, "try load schema diffs.");
@@ -178,7 +178,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     continue;
                 } // else (used_version == lastest_version)
 
-                LOG_FMT_DEBUG(log, "End load a part of schema diffs, current version is {} ", used_version);
+                LOG_FMT_DEBUG(log, "End load a part of schema diffs, current version is {} ", used_version - 1);
                 return used_version - 1;
             }
 

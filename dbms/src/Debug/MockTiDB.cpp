@@ -302,7 +302,7 @@ int MockTiDB::newTables(
         tables_by_id.emplace(table->table_info.id, table);
         tables_by_name.emplace(qualified_name, table);
 
-        AffectedOption opt;
+        AffectedOption opt{};
         opt.schema_id = table->database_id;
         opt.table_id = table->id();
         opt.old_schema_id = table->database_id;
@@ -571,7 +571,7 @@ void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::strin
         tables_by_name.erase(qualified_name);
         tables_by_name.emplace(new_qualified_name, new_table);
 
-        AffectedOption opt;
+        AffectedOption opt{};
         opt.schema_id = table->database_id;
         opt.table_id = new_table->id();
         opt.old_schema_id = table->database_id;
