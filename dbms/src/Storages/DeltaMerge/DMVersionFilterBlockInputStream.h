@@ -33,6 +33,9 @@ static constexpr int DM_VERSION_FILTER_MODE_MVCC = 0;
 /// 2. for the rows with smaller verion than version_limit, then take the biggest one of them, if it is not deleted.
 static constexpr int DM_VERSION_FILTER_MODE_COMPACT = 1;
 
+struct MVCCReadTiFlashMultiVersion;
+struct CompactReadTiFlashMultiVersion;
+
 template <int MODE>
 class DMVersionFilterBlockInputStream : public IBlockInputStream
 {
@@ -194,6 +197,10 @@ private:
 
         return matched ? cur_version : std::numeric_limits<UInt64>::max();
     }
+
+    __attribute__((always_inline)) inline Block readInlined(FilterPtr & res_filter, bool return_filter);
+    friend MVCCReadTiFlashMultiVersion;
+    friend CompactReadTiFlashMultiVersion;
 
 private:
     const UInt64 version_limit;

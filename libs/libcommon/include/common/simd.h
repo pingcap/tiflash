@@ -214,3 +214,10 @@ static inline void rep_movsb(void * dst, const void * src, size_t size)
         __attribute__((always_inline)) static inline RETURN invoke ARG_LIST BODY;     \
     };
 #endif
+
+#ifdef __clang__
+/// Hint the compiler to vectorize the loop, use scalable vector if targets permit
+#define TIFLASH_LOOP_VECTORIZE _Pragma("clang loop vectorize(enable) interleave(enable) vectorize_predicate(enable) vectorize_width(scalable)")
+#elif defined(__GNUC__)
+#define TIFLASH_LOOP_VECTORIZE _Pragma("ivdep")
+#endif

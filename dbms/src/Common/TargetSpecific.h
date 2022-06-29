@@ -54,6 +54,10 @@
         _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2\"))),apply_to=function)")
 #   define TIFLASH_BEGIN_SSE4_SPECIFIC_CODE \
         _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt\"))),apply_to=function)")
+#   define TIFLASH_BEGIN_SVE_SPECIFIC_CODE \
+        _Pragma("clang attribute push(__attribute__((target(\"sve\"))),apply_to=function)")
+#   define TIFLASH_BEGIN_SVE2_SPECIFIC_CODE \
+        _Pragma("clang attribute push(__attribute__((target(\"sve2\"))),apply_to=function)")
 #   define TIFLASH_END_TARGET_SPECIFIC_CODE \
         _Pragma("clang attribute pop")
 #else
@@ -66,6 +70,12 @@
 #   define TIFLASH_BEGIN_SSE4_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
         _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,tune=native\")")
+#   define TIFLASH_BEGIN_SVE_SPECIFIC_CODE \
+        _Pragma("GCC push_options") \
+        _Pragma("GCC target(\"+sve,tune=native\")")
+#   define TIFLASH_BEGIN_SVE2_SPECIFIC_CODE \
+        _Pragma("GCC push_options") \
+        _Pragma("GCC target(\"+sve2,tune=native\")")
 #   define TIFLASH_END_TARGET_SPECIFIC_CODE \
         _Pragma("GCC pop_options")
 #endif

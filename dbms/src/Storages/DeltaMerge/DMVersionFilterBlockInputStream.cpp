@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <common/simd.h>
 
 namespace ProfileEvents
 {
@@ -44,7 +45,7 @@ void DMVersionFilterBlockInputStream<MODE>::readSuffix()
 static constexpr size_t UNROLL_BATCH = 64;
 
 template <int MODE>
-Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool return_filter)
+__attribute__((always_inline)) inline Block DMVersionFilterBlockInputStream<MODE>::readInlined(FilterPtr & res_filter, bool return_filter)
 {
     while (true)
     {
@@ -389,6 +390,36 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             return res;
         }
     }
+}
+
+TIFLASH_MULTIVERSIONED_VECTORIZATION(
+    Block,
+    MVCCRead,
+    (DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC> & stream, FilterPtr & res_filter, bool return_filter),
+    (stream, res_filter, return_filter),
+    {
+        return stream.readInlined(res_filter, return_filter);
+    })
+
+TIFLASH_MULTIVERSIONED_VECTORIZATION(
+    Block,
+    CompactRead,
+    (DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> & stream, FilterPtr & res_filter, bool return_filter),
+    (stream, res_filter, return_filter),
+    {
+        return stream.readInlined(res_filter, return_filter);
+    })
+
+template <>
+Block DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>::read(FilterPtr & res_filter, bool return_filter)
+{
+    return MVCCReadTiFlashMultiVersion::invoke(*this, res_filter, return_filter);
+}
+
+template <>
+Block DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>::read(FilterPtr & res_filter, bool return_filter)
+{
+    return CompactReadTiFlashMultiVersion::invoke(*this, res_filter, return_filter);
 }
 
 template class DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>;
