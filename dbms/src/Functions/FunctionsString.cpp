@@ -4945,19 +4945,7 @@ public:
     template <typename T>
     static void executeOneUIntOrInt(T xx, char *& out, bool skip_leading_zero = true, bool auto_close = true)
     {
-        Int64 x = 0;
-        if (typeid(T) == typeid(Int8))
-        {
-            auto t_x = static_cast<UInt8>(xx);
-            x = static_cast<Int64>(t_x);
-            if (xx < Int8(0))
-                x |= (UINT64_MAX << 8);
-        }
-        else
-        {
-            x = static_cast<Int64>(xx);
-        }
-        //auto x = static_cast<Int64>(xx);
+        auto x = static_cast<Int64>(xx);  // NOLINT
         bool was_nonzero = false;
         bool was_first_nonzero_byte = true;
         for (int offset = (sizeof(Int64) - 1) * 8; offset >= 0; offset -= 8)
