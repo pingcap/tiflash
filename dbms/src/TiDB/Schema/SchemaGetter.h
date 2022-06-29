@@ -140,6 +140,8 @@ struct SchemaGetter
 
     Int64 getVersion();
 
+    bool checkSchemaDiffExists(Int64 ver);
+
     std::optional<SchemaDiff> getSchemaDiff(Int64 ver);
 
     static String getSchemaDiffKey(Int64 ver);

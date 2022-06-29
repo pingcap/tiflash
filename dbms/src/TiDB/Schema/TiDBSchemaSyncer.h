@@ -118,6 +118,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         {
             GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
             loadAllSchema(getter, version, context);
+            // After loadAllSchema, we need update `version_after_load_diff` by last diff value exist or not
+            version_after_load_diff = getter.checkSchemaDiffExists(version) ? version : version - 1;
         }
         cur_version = version_after_load_diff;
         GET_METRIC(tiflash_schema_version).Set(cur_version);

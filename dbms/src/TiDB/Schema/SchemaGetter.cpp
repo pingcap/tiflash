@@ -187,6 +187,13 @@ Int64 SchemaGetter::getVersion()
     return std::stoll(ver);
 }
 
+bool SchemaGetter::checkSchemaDiffExists(Int64 ver)
+{
+    String key = getSchemaDiffKey(ver);
+    String data = TxnStructure::get(snap, key);
+    return !data.empty();
+}
+
 String SchemaGetter::getSchemaDiffKey(Int64 ver)
 {
     return std::string(schemaDiffPrefix) + ":" + std::to_string(ver);
