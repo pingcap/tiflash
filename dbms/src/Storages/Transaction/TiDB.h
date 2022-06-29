@@ -333,6 +333,12 @@ struct IndexInfo
     bool is_global;
 };
 
+enum class TiFlashMode
+{
+    Normal,
+    Fast,
+};
+
 struct TableInfo
 {
     TableInfo() = default;
@@ -381,6 +387,8 @@ struct TableInfo
 
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
+
+    TiFlashMode mode;
 
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 

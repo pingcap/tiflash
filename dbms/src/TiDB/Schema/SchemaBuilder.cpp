@@ -1238,6 +1238,51 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(
     LOG_FMT_INFO(log, "Updated replica info for {}", name_mapper.debugCanonicalName(*db_info, table_info));
 }
 
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(TiDB::DBInfoPtr db_info, TableID table_id)
+{
+    auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
+    if (unlikely(latest_table_info == nullptr))
+    {
+        throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
+    }
+    auto & tmt_context = context.getTMTContext();
+    auto storage = tmt_context.getStorages().get(latest_table_info->id);
+    if (unlikely(storage == nullptr))
+    {
+        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *latest_table_info)),
+                               Errors::DDL::MissingTable);
+    }
+
+    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    if (unlikely(!managed_storage))
+        throw Exception(fmt::format("{} is not a ManageableStorage", name_mapper.debugCanonicalName(*db_info, *latest_table_info)));
+
+    applySetTiFlashMode(db_info, latest_table_info, managed_storage);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(
+    TiDB::DBInfoPtr db_info,
+    TiDB::TableInfoPtr latest_table_info,
+    ManageableStoragePtr storage)
+{
+    if (storage->getTableInfo().mode == latest_table_info->mode)
+        return;
+
+    TiDB::TableInfo table_info = storage->getTableInfo();
+    table_info.mode = latest_table_info->mode;
+    AlterCommands commands;
+
+    LOG_FMT_INFO(log, "Updating tiflash mode for {}", name_mapper.debugCanonicalName(*db_info, table_info));
+
+    auto alter_lock = storage->lockForAlter(getThreadName());
+    storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
+    LOG_FMT_INFO(log, "Updated tiflash mode for {}", name_mapper.debugCanonicalName(*db_info, table_info));
+}
+
+
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 {
