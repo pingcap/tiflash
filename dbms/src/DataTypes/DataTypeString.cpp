@@ -157,7 +157,7 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
                  *
                  *  Therefore, we manually align up the destination buffer before startup.
                  */
-                __builtin_memcpy_inline(dst, src, 64);
+                tiflash_compiler_builtin_memcpy(dst, src, 64);
                 auto address = reinterpret_cast<uintptr_t>(dst);
                 auto shift = 64 - (address % 64);
                 dst += shift;
