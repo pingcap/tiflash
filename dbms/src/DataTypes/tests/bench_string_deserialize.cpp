@@ -1,6 +1,17 @@
+// Copyright 2022 PingCAP, Ltd.
 //
-// Created by schrodinger on 6/29/22.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -8,6 +19,7 @@
 #include <iostream>
 #include <random>
 #include <vector>
+using namespace std::chrono;
 
 struct ReadBuffer
 {
@@ -196,8 +208,11 @@ void bench(size_t average)
     auto buffer = ReadBuffer{"/tmp/data-test", buffer_size};
     std::vector<char> data;
     std::vector<size_t> offsets;
-
+#ifdef __x86_64__
     auto start = __builtin_readcyclecounter();
+#else
+    auto start = high_resolution_clock::now();
+#endif
     if (average >= 256)
     {
         deserializeBinaryBlockImpl<256>(buffer, offsets, data, count);
@@ -222,9 +237,13 @@ void bench(size_t average)
     {
         deserializeBinaryBlockImpl<16>(buffer, offsets, data, count);
     }
-
+#ifdef __x86_64__
     auto end = __builtin_readcyclecounter();
     std::cout << "cycle count: " << end - start << std::endl;
+#else
+    auto end = high_resolution_clock::now();
+    std::cout << "time count: " << duration_cast<nanoseconds>(end - start).count() << std::endl;
+#endif
 }
 
 int main()
