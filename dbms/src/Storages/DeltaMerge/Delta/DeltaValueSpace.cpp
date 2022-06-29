@@ -231,7 +231,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     // do compaction task
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
     const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
-    
+
     auto delta_index_updates = compaction_task->prepare(context, wbs, reader);
 
     {
@@ -263,7 +263,8 @@ bool DeltaValueSpace::compact(DMContext & context)
 }
 
 // updateDeltaTree should be used under lock.
-void DeltaValueSpace::updateDeltaTree(DeltaIndex::Updates delta_index_updates){
+void DeltaValueSpace::updateDeltaTree(DeltaIndex::Updates delta_index_updates)
+{
     if (!delta_index_updates.empty())
     {
         LOG_FMT_DEBUG(log, "{} Update index start", simpleInfo());

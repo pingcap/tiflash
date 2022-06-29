@@ -60,7 +60,7 @@ void ColumnFilePersistedSet::updateColumnFileStats()
     rows_and_deletes_offsets_per_level.clear();
     rows_and_deletes_offsets_per_level.resize(persisted_files_levels.size());
     for (int i = persisted_files_levels.size() - 1; i >= 0; i--)
-    {	
+    {
         rows_and_deletes_offsets_per_level[i] = std::make_pair(new_rows, new_deletes);
         auto & file_level = persisted_files_levels[i];
         new_persisted_files_count += file_level.size();
@@ -360,7 +360,7 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
                 auto pack_up_cur_task = [&]() {
                     bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
                     is_all_trivial_move = is_all_trivial_move && is_trivial_move;
-                    cur_task = MinorCompaction::Task{cur_rows_offset, cur_deletes_offset};    
+                    cur_task = MinorCompaction::Task{cur_rows_offset, cur_deletes_offset};
                 };
 
                 if (auto * t_file = file->tryToTinyFile(); t_file)

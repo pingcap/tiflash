@@ -383,7 +383,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         for (size_t i = 0; i < 20; i++)
         {
             // insert data as reversed order for check sorted later.
-            appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch, 2, true); 
+            appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch, 2, true);
             total_rows_write += num_rows_write_per_batch;
             delta->flush(dmContext());
             while (true)

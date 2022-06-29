@@ -33,8 +33,10 @@ class MinorCompaction : public std::enable_shared_from_this<MinorCompaction>
 public:
     struct Task
     {
-        Task(size_t rows_offset_, size_t deletes_offset_): 
-            rows_offset(rows_offset_), deletes_offset(deletes_offset_) {}
+        Task(size_t rows_offset_, size_t deletes_offset_)
+            : rows_offset(rows_offset_)
+            , deletes_offset(deletes_offset_)
+        {}
 
 
         ColumnFilePersisteds to_compact;

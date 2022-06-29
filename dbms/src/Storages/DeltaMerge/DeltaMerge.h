@@ -216,7 +216,6 @@ private:
             last_value = last_value_ref.toRowKeyValue();
             last_value_ref = last_value.toRowKeyValueRef();
         }
-
     }
 
     Block doRead()

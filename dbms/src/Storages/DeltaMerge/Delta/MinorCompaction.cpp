@@ -56,14 +56,14 @@ DeltaIndex::Updates MinorCompaction::prepare(DMContext & context, WriteBatches &
             wbs.removed_log.delPage(t_file->getDataPageId());
         }
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
-        
+
         // make sorted during minor compaction, and update the delta_index
         IColumn::Permutation perm;
         if (sortBlockByPk(getExtraHandleColumnDefine(context.is_common_handle), compact_block, perm))
         {
             delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
         }
-        
+
         auto compact_rows = compact_block.rows();
         auto compact_column_file = ColumnFileTiny::writeColumnFile(context, compact_block, 0, compact_rows, wbs, task.to_compact.front()->tryToTinyFile()->getSchema());
         wbs.writeLogAndData();
