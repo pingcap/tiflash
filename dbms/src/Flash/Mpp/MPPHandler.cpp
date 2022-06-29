@@ -31,7 +31,7 @@ void MPPHandler::handleError(const MPPTaskPtr & task, String error)
     try
     {
         if (task)
-            task->cancel(error);
+            task->handleError(error);
     }
     catch (...)
     {

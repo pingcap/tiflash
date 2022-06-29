@@ -29,6 +29,8 @@ StringRef taskStatusToString(const TaskStatus & status)
         return "FINISHED";
     case CANCELLED:
         return "CANCELLED";
+    case FAILED:
+        return "FAILED";
     default:
         throw Exception("Unknown TaskStatus");
     }
