@@ -15,6 +15,7 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -25,6 +26,9 @@
 namespace DB::tests
 {
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
+
+::testing::AssertionResult check_columns_equality(const ColumnsWithTypeAndName & expected, const ColumnsWithTypeAndName & actual, bool _restrict);
+
 class ExecutorTest : public ::testing::Test
 {
 protected:
@@ -72,20 +76,17 @@ public:
         }
     }
 
-    void executeStreams(
+    ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
-        const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
-    void executeStreams(
+    ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
-    void executeStreamsWithSingleSource(
+    ColumnsWithTypeAndName executeStreamsWithSingleSource(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const ColumnsWithTypeAndName & source_columns,
-        const ColumnsWithTypeAndName & expect_columns,
         SourceType type = TableScan,
         size_t concurrency = 1);
 
