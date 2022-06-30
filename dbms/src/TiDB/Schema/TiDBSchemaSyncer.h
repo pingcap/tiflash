@@ -148,8 +148,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     }
 
     // Return Values
-    // - if lastest schema diff is not empty, return the (latest_version)
-    // - if lastest schema diff is empty, return the (latest_version - 1)
+    // - if latest schema diff is not empty, return the (latest_version)
+    // - if latest schema diff is empty, return the (latest_version - 1)
     // - if error happend, return (-1)
     Int64 tryLoadSchemaDiffs(Getter & getter, Int64 latest_version, Context & context)
     {
@@ -175,7 +175,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         {
             for (size_t diff_index = 0; diff_index < diffs.size(); diff_index++)
             {
-                auto schema_diff = diffs[diff_index];
+                const auto & schema_diff = diffs[diff_index];
 
                 if (!schema_diff)
                 {
@@ -190,7 +190,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9
                     if (diff_index != diffs.size() - 1)
                     {
-                        LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", used_version);
+                        LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
                         continue;
                     } // else (diff_index == diffs.size() - 1)
 
@@ -233,7 +233,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return -1;
         }
 
-        LOG_FMT_DEBUG(log, "End load all of schema diffs, current version is {} ", used_version);
         return used_version;
     }
 
