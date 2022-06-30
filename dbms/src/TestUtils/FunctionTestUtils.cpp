@@ -147,11 +147,11 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
         r.resize(cols_size, true);
     }
 
-    for (auto const & [col_num, col] : ext::enumerate(cols))
+    for (auto const & [col_id, col] : ext::enumerate(cols))
     {
         for (size_t i = 0, size = col.column->size(); i < size; ++i)
         {
-            new (rows[i].place(col_num)) Field((*col.column)[i]);
+            new (rows[i].place(col_id)) Field((*col.column)[i]);
         }
     }
     return {std::make_move_iterator(rows.begin()), std::make_move_iterator(rows.end())};
@@ -185,7 +185,38 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
     auto const actual_row_set = columnsToRowSet(actual);
 
     if (expected_row_set != actual_row_set)
-        return testing::AssertionFailure() << "Columns data set mismatch";
+    {
+        auto expect_it = expected_row_set.begin();
+        auto actual_it = actual_row_set.begin();
+        auto ret = testing::AssertionFailure() << "Columns row set mismatch\n";
+        auto fmt_row = [](auto const & r) {
+            String ret;
+            for (auto const & v : r)
+            {
+                ret += v.toString() + " ";
+            }
+            return ret;
+        };
+
+        ret << "expected_row_set:\n";
+        for (; expect_it != expected_row_set.end(); ++expect_it, ++actual_it)
+        {
+            ret << fmt_row(*expect_it) << "\n";
+            if (*expect_it != *actual_it)
+                break;
+        }
+
+        ++actual_it;
+
+        ret << "...\nactual_row_set:\n";
+        for (auto it = actual_row_set.begin(); it != actual_it; ++it)
+        {
+            ret << fmt_row(*it) << "\n";
+        }
+        ret << "...\n";
+
+        return ret;
+    }
 
     return testing::AssertionSuccess();
 }
