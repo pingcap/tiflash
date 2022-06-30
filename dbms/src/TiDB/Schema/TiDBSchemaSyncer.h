@@ -113,6 +113,13 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_applying).Set(0.0); });
 
         GET_METRIC(tiflash_schema_apply_count, type_diff).Increment();
+        // After the feature concurrent DDL, TiDB does `update schema version` before `set schema diff`, and they are done in separate transactions.
+        // So TiFlash may see a schema version X but no schema diff X, meaning that the transaction of schema diff X has not been committed or has
+        // been aborted.
+        // However, TiDB makes sure that if we get a schema version X, then the schema diff X-1 must exist. Otherwise the transaction of schema diff
+        // X-1 is aborted and we can safely ignore it.
+        // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
+        // to X-1 and try to fetch the schema diff X next time.
         Int64 version_after_load_diff = 0;
         if (version_after_load_diff = tryLoadSchemaDiffs(getter, version, context); version_after_load_diff == -1)
         {
