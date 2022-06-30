@@ -29,8 +29,6 @@
 
 #include <cmath>
 
-#include "common/types.h"
-
 namespace DB
 {
 namespace ErrorCodes
