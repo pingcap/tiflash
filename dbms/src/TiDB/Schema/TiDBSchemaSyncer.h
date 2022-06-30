@@ -130,7 +130,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         cur_version = version_after_load_diff;
         GET_METRIC(tiflash_schema_version).Set(cur_version);
-        LOG_FMT_INFO(log, "end sync schema, version has been updated to {}", cur_version);
+        LOG_FMT_INFO(log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
         return true;
     }
 
@@ -201,7 +201,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                         continue;
                     } // else (diff_index == diffs.size() - 1)
 
-                    LOG_FMT_DEBUG(log, "End load schema diffs without latest one, current version is {} ", used_version - 1);
                     return used_version - 1;
                 }
 
