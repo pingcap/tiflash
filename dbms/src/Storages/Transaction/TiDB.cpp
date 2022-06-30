@@ -25,8 +25,11 @@
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <common/logger_useful.h>
 
 #include <cmath>
+
+#include "common/types.h"
 
 namespace DB
 {
@@ -772,6 +775,38 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
+String TiFlashModeToString(TiFlashMode tiflash_mode)
+{
+    switch (tiflash_mode)
+    {
+    case TiFlashMode::Normal:
+        return "normal";
+    case TiFlashMode::Fast:
+        return "fast";
+    default:
+        LOG_FMT_WARNING(&Poco::Logger::get("TiDB"), "TiFlashModeToString with invalid tiflash mode {}", tiflash_mode);
+        return "";
+    }
+}
+
+TiFlashMode parseTiFlashMode(String mode_str)
+{
+    if (mode_str == "normal")
+    {
+        return TiFlashMode::Normal;
+    }
+    else if (mode_str == "fast")
+    {
+        return TiFlashMode::Fast;
+    }
+    else
+    {
+        // 这种抛 exception 合适吗？
+        throw DB::Exception(
+            std::string(__PRETTY_FUNCTION__)
+            + " ParseTiFlashMode Failed. mode " + mode_str + " is unvalid, please set mode as fast/normal");
+    }
+}
 ///////////////////////
 ////// TableInfo //////
 ///////////////////////
@@ -839,6 +874,8 @@ try
     json->set("schema_version", schema_version);
 
     json->set("tiflash_replica", replica_info.getJSONObject());
+
+    json->set("tiflash_mode", std::string(TiFlashModeToString(tiflash_mode)));
 
     json->stringify(buf);
 
@@ -924,6 +961,14 @@ try
         if (auto replica_obj = obj->getObject("tiflash_replica"); !replica_obj.isNull())
         {
             replica_info.deserialize(replica_obj);
+        }
+    }
+    if (obj->has("tiflash_mode"))
+    {
+        auto mode = obj->getValue<String>("tiflash_mode");
+        if (!mode.empty())
+        {
+            tiflash_mode = parseTiFlashMode(mode);
         }
     }
     if (is_common_handle && index_infos.size() != 1)

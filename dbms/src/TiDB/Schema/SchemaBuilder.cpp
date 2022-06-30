@@ -542,6 +542,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         applySetTiFlashReplica(db_info, diff.table_id);
         break;
     }
+    case SchemaActionType::SetTiFlashMode:
+    {
+        applySetTiFlashMode(db_info, diff.table_id);
+        break;
+    }
     default:
     {
         if (diff.type < SchemaActionType::MaxRecognizedType)
@@ -1242,7 +1247,9 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(TiDB::DBInfoPtr db_info, TableID table_id)
 {
+    LOG_FMT_INFO(log, "INTO applySetTiFlashMode function with table_id", table_id);
     auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
+
     if (unlikely(latest_table_info == nullptr))
     {
         throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
@@ -1258,11 +1265,11 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(TiDB::DBInfoPtr db_i
     }
 
     applySetTiFlashMode(db_info, latest_table_info);
-
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info){
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info)
+{
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (unlikely(storage == nullptr))
@@ -1279,18 +1286,17 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(TiDB::DBInfoPtr db_i
 }
 
 
-
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(
     TiDB::DBInfoPtr db_info,
     TiDB::TableInfoPtr latest_table_info,
     ManageableStoragePtr storage)
 {
-    if (storage->getTableInfo().mode == latest_table_info->mode)
+    if (storage->getTableInfo().tiflash_mode == latest_table_info->tiflash_mode)
         return;
 
     TiDB::TableInfo table_info = storage->getTableInfo();
-    table_info.mode = latest_table_info->mode;
+    table_info.tiflash_mode = latest_table_info->tiflash_mode;
     AlterCommands commands;
 
     LOG_FMT_INFO(log, "Updating tiflash mode for {}", name_mapper.debugCanonicalName(*db_info, table_info));
@@ -1370,6 +1376,8 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             applyRenameLogicalTable(db, table, storage);
             /// Update replica info if needed.
             applySetTiFlashReplica(db, table, storage);
+            /// Update tiflash mode if needed.
+            applySetTiFlashMode(db, table);
             /// Alter if needed.
             applyAlterLogicalTable(db, table, storage);
             LOG_FMT_DEBUG(log, "Table {} synced during sync all schemas", name_mapper.debugCanonicalName(*db, *table));

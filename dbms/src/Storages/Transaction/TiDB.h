@@ -388,7 +388,7 @@ struct TableInfo
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
-    TiFlashMode mode;
+    TiFlashMode tiflash_mode = TiFlashMode::Normal;
 
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
@@ -420,5 +420,8 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+
+String TiFlashModeToString(TiFlashMode tiflash_mode);
+TiFlashMode parseTiFlashMode(String mode_str);
 
 } // namespace TiDB
