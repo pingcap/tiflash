@@ -518,7 +518,7 @@ ColumnWithTypeAndName createConstColumn(
 // since preprocessor recognizes `{col1, col2, col3}` as three arguments instead of one.
 // E.g. preprocessor does not allow us to write `ASSERT_COLUMNS_EQ_R({col1, col2, col3}, actual_cols)`,
 //  but with this func we can write `ASSERT_COLUMNS_EQ_R(createColumns{col1, col2, col3}, actual_cols)` instead.
-ColumnsWithTypeAndName createColumns(ColumnsWithTypeAndName cols);
+ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
 
 
 ::testing::AssertionResult dataTypeEqual(

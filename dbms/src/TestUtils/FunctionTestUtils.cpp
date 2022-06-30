@@ -345,7 +345,7 @@ ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<Strin
     return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
 }
 
-ColumnsWithTypeAndName createColumns(ColumnsWithTypeAndName cols)
+ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols)
 {
     return cols;
 }
