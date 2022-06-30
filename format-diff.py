@@ -96,9 +96,6 @@ def main():
             else:
                 print("Format check passed")
         else:
-            cmd = 'clang-format -i {}'.format(' '.join(files_to_format))
-            if subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait():
-                exit(-1)
             print("Finish code format")
     else:
         print('No file to format')
