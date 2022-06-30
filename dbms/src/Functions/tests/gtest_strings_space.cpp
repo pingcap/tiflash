@@ -45,6 +45,10 @@ protected:
     {
         return createColumn<Nullable<String>>(v);
     }
+    ColumnWithTypeAndName toVecInt(const std::vector<std::optional<Int64>> & v)
+    {
+        return createColumn<Nullable<Int64>>(v);
+    }
 };
 
 // test string and string
@@ -55,7 +59,7 @@ try
         toVec({"  ", "", "          "}),
         executeFunction(
             func_name,
-            toVec({2, 0, 10})));
+            toVecInt({2, 0, 10})));
 }
 CATCH
 
