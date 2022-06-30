@@ -398,7 +398,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     size_t max_streams_,
     const String & req_id,
     const String & executor_id,
-    uint32_t fine_grained_shuffle_stream_count_)
+    uint64_t fine_grained_shuffle_stream_count_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)

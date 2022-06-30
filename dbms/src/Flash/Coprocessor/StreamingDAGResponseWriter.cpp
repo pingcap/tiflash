@@ -49,7 +49,7 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     Int64 batch_send_min_limit_,
     bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
-    uint32_t fine_grained_shuffle_stream_count_,
+    uint64_t fine_grained_shuffle_stream_count_,
     UInt64 fine_grained_shuffle_batch_size_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)

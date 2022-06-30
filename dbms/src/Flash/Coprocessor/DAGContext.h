@@ -116,7 +116,7 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
-inline bool enableFineGrainedShuffle(uint32_t stream_count)
+inline bool enableFineGrainedShuffle(uint64_t stream_count)
 {
     return stream_count > 0;
 }

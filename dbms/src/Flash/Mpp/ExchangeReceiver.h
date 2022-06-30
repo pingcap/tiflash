@@ -113,7 +113,7 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint32_t fine_grained_shuffle_stream_count);
+        uint64_t fine_grained_shuffle_stream_count);
 
     ~ExchangeReceiverBase();
 
@@ -129,7 +129,7 @@ public:
         UInt32 stream_id);
 
     size_t getSourceNum() const { return source_num; }
-    uint32_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
+    uint64_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
 
     int computeNewThreadCount() const { return thread_count; }
 
@@ -192,7 +192,7 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    uint32_t fine_grained_shuffle_stream_count;
+    uint64_t fine_grained_shuffle_stream_count;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>
