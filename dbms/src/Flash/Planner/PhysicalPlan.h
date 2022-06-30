@@ -64,7 +64,7 @@ public:
 
     void disableRecordProfileStreams() { is_record_profile_streams = false; }
 
-    void disableRestoreConcurrency() { is_record_profile_streams = false; }
+    void disableRestoreConcurrency() { is_restore_concurrency = false; }
 
     String toString();
 

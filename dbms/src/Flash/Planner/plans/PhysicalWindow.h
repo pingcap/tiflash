@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Interpreters/WindowDescription.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -33,8 +34,10 @@ public:
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_)
+        const PhysicalPlanPtr & child_,
+        const WindowDescription & window_description_)
         : PhysicalUnary(executor_id_, PlanType::Window, schema_, req_id, child_)
+        , window_description(window_description_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -43,5 +46,8 @@ public:
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+
+private:
+    WindowDescription window_description;
 };
 } // namespace DB

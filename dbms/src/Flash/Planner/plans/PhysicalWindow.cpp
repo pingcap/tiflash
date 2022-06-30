@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
+#include <DataStreams/WindowBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -32,19 +33,44 @@ PhysicalPlanPtr PhysicalWindow::build(
     const PhysicalPlanPtr & child)
 {
     assert(child);
+
+    DAGExpressionAnalyzer analyzer(child->getSchema(), context);
+    WindowDescription window_description = analyzer.buildWindowDescription(window);
+
+    /// project action after window to remove useless columns.
+    const auto & schema = window_description.after_window_columns;
+    window_description.after_window->add(ExpressionAction::project(PhysicalPlanHelper::schemaToNames(schema)));
+
+    auto physical_window = std::make_shared<PhysicalWindow>(
+        executor_id,
+        schema,
+        log->identifier(),
+        child,
+        window_description);
+    return physical_window;
 }
 
 void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     child->transform(pipeline, context, max_streams);
+
+    executeExpression(pipeline, window_description.before_window, log, "before window");
+
+    /// If there are several streams, we merge them into one
+    executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
+    assert(pipeline.streams.size() == 1);
+    pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
+
+    executeExpression(pipeline, window_description.after_window, log, "cast after window");
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)
 {
-    
+    FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 }
 
 const Block & PhysicalWindow::getSampleBlock() const
 {
+    return window_description.after_window->getSampleBlock();
 }
 } // namespace DB

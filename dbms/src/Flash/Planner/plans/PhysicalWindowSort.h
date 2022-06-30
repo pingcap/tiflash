@@ -14,27 +14,28 @@
 
 #pragma once
 
+#include <Core/SortDescription.h>
 #include <Flash/Planner/plans/PhysicalUnary.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-class PhysicalPartialSort : public PhysicalUnary
+class PhysicalWindowSort : public PhysicalUnary
 {
 public:
     static PhysicalPlanPtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::Sort & sort,
+        const tipb::Sort & window_sort,
         const PhysicalPlanPtr & child);
 
-    PhysicalPartialSort(
+    PhysicalWindowSort(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanPtr & child_)
-        : PhysicalUnary(executor_id_, PlanType::PartialSort, schema_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::WindowSort, schema_, req_id, child_)
     {}
 
     void finalize(const Names & parent_require) override;

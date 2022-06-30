@@ -33,7 +33,7 @@ struct PlanType
         MockExchangeReceiver = 8,
         Projection = 9,
         Window = 10,
-        PartialSort = 11,
+        WindowSort = 11,
     };
     PlanTypeEnum enum_value;
 

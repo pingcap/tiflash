@@ -43,8 +43,8 @@ String PlanType::toString() const
         return "Projection";
     case Window:
         return "Window";
-    case PartialSort:
-        return "PartialSort";
+    case WindowSort:
+        return "WindowSort";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }
