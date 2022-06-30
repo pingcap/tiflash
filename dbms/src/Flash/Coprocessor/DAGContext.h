@@ -351,6 +351,7 @@ private:
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams
     /// The order of map.key is necessary for the executor summary of executor list which without executor_id.
     /// It uses `${i}_${type}` as executor_id to ensure the order of map.keys is consistent.
+    /// Since the number of executors is <= 6 for the executor list, the order of the executor summary can be guaranteed.
     std::map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
