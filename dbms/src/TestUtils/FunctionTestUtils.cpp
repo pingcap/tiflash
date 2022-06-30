@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Core/ColumnNumbers.h>
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Row.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -25,13 +26,12 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/core.h>
+#include <gtest/gtest.h>
 
 #include <ext/enumerate.h>
 #include <iterator>
 #include <set>
 
-#include "Core/ColumnsWithTypeAndName.h"
-#include "gtest/gtest.h"
 
 namespace DB
 {
