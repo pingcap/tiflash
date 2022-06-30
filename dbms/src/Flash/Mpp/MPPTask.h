@@ -59,6 +59,8 @@ public:
 
     void cancel(const String & reason);
 
+    void handleError(const String & error_msg);
+
     void prepare(const mpp::DispatchTaskRequest & task_request);
 
     void run();
@@ -90,11 +92,21 @@ private:
 
     void unregisterTask();
 
-    void writeErrToAllTunnels(const String & e);
-
     /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
     /// without waiting the tunnel to be connected
     void closeAllTunnels(const String & reason);
+
+    enum class AbortType
+    {
+        /// todo add ONKILL to distinguish between silent cancellation and kill
+        ONCANCELLATION,
+        ONERROR,
+    };
+    void abort(const String & message, AbortType abort_type);
+
+    void abortTunnels(const String & message, AbortType abort_type);
+    void abortReceivers();
+    void abortDataStreams(AbortType abort_type);
 
     void finishWrite();
 
@@ -110,8 +122,6 @@ private:
 
     void initExchangeReceivers();
 
-    void cancelAllReceivers();
-
     tipb::DAGRequest dag_req;
 
     ContextPtr context;
@@ -121,6 +131,7 @@ private:
     MemoryTracker * memory_tracker = nullptr;
 
     std::atomic<TaskStatus> status{INITIALIZING};
+    String err_string;
 
     mpp::TaskMeta meta;
 
@@ -137,8 +148,6 @@ private:
     const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
-
-    Exception err;
 
     friend class MPPTaskManager;
 
