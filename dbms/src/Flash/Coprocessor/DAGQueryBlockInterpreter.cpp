@@ -129,8 +129,7 @@ bool isFinalAgg(const tipb::Expr & expr)
     return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
 
-AnalysisResult analyzeExpressions(
-    Context & context,
+AnalysisResult analyzeExpressions(Context & context,
     DAGExpressionAnalyzer & analyzer,
     const DAGQueryBlock & query_block,
     const std::vector<const tipb::Expr *> & conditions,
@@ -584,10 +583,10 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
 
 void DAGQueryBlockInterpreter::executeAggregation(
     DAGPipeline & pipeline,
-    const ExpressionActionsPtr & expression_actions_ptr,
+    const ExpressionActionsPtr & expr,
     Names & key_names,
     TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
+    AggregateDescriptions & aggregates,
     bool is_final_agg)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
@@ -629,9 +628,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by,
-        !is_final_agg,
-        context.getTemporaryPath(),
+        settings.max_bytes_before_external_group_by, !is_final_agg, context.getTemporaryPath(),
         has_collator ? collators : TiDB::dummy_collators);
 
     /// If there are several sources, then we perform parallel aggregation
