@@ -46,7 +46,6 @@ public:
     template <typename T>
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(T param)
     {
-        /// topN is introduced, so that we can get stable results in concurrency environment.
         return context.scan(db_name, table_name).project(param).build(context);
     };
 
