@@ -221,5 +221,22 @@ MockExchangeReceiver)",
 }
 CATCH
 
+TEST_F(PhysicalPlanTestRunner, WindowFunction)
+try
+{
+    auto request = context.receive("exchange1")
+                       .build(context);
+
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+MockExchangeReceiver)",
+        {toNullableVec<String>({"banana", {}, "banana"}),
+         toNullableVec<String>({"apple", {}, "banana"})});
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

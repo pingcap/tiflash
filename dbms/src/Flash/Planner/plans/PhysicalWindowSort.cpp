@@ -36,8 +36,8 @@ PhysicalPlanPtr PhysicalWindowSort::build(
     assert(window_sort.ispartialsort());
 
     DAGExpressionAnalyzer analyzer(child->getSchema(), context);
-    auto order_columns = analyzer.buildWindowOrderColumns(window_sort);
-    SortDescription order_descr = getSortDescription(order_columns, window_sort.byitems());
+    const auto & order_columns = analyzer.buildWindowOrderColumns(window_sort);
+    const SortDescription & order_descr = getSortDescription(order_columns, window_sort.byitems());
 
     auto physical_window_sort = std::make_shared<PhysicalWindowSort>(
         executor_id,

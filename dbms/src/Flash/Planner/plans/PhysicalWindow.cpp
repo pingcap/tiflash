@@ -33,6 +33,7 @@ PhysicalPlanPtr PhysicalWindow::build(
     const PhysicalPlanPtr & child)
 {
     assert(child);
+    child->disableRestoreConcurrency();
 
     DAGExpressionAnalyzer analyzer(child->getSchema(), context);
     WindowDescription window_description = analyzer.buildWindowDescription(window);
@@ -67,6 +68,8 @@ void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, si
 void PhysicalWindow::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
+
+    FinalizeHelper::prependProjectInputIfNeed(window_description.before_window, child->getSampleBlock().columns());
 }
 
 const Block & PhysicalWindow::getSampleBlock() const

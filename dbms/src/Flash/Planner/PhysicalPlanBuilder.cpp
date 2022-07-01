@@ -22,6 +22,8 @@
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
+#include <Flash/Planner/plans/PhysicalWindow.h>
+#include <Flash/Planner/plans/PhysicalWindowSort.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
@@ -80,6 +82,12 @@ void PhysicalPlanBuilder::build(const String & executor_id, const tipb::Executor
     }
     case tipb::ExecType::TypeProjection:
         pushBack(PhysicalProjection::build(context, executor_id, log, executor->projection(), popBack()));
+        break;
+    case tipb::ExecType::TypeWindow:
+        pushBack(PhysicalWindow::build(context, executor_id, log, executor->window(), popBack()));
+        break;
+    case tipb::ExecType::TypeSort:
+        pushBack(PhysicalWindowSort::build(context, executor_id, log, executor->sort(), popBack()));
         break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
