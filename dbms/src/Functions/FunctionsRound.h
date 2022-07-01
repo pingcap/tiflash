@@ -1150,6 +1150,7 @@ struct TiDBDecimalRound
 
         // rounding.
         auto absolute_value = toSafeUnsigned<UnsignedInput>(input.value);
+        auto carry = 0;
         if (frac < info.input_scale)
         {
             FracType frac_index = info.input_scale - frac;
@@ -1162,7 +1163,21 @@ struct TiDBDecimalRound
             if (remainder >= base / 2)
             {
                 // round up.
+                auto absolute_before = absolute_value;
                 absolute_value += base;
+
+                // check if carry occurs
+                auto absolute_tmp = absolute_value;
+                while (absolute_tmp >= 10 && absolute_before >= 10)
+                {
+                    absolute_tmp /= 10;
+                    absolute_before /= 10;
+                }
+
+                if (absolute_tmp >= 10)
+                {
+                    carry = 1; /// carry occurs
+                }
             }
         }
 
@@ -1186,7 +1201,7 @@ struct TiDBDecimalRound
             scaled_value *= PowForOutput::result[-difference];
 
         // check overflow and construct result.
-        if (scaled_value > DecimalMaxValue::get(info.output_prec))
+        if (scaled_value > DecimalMaxValue::get(info.output_prec + carry)) 
             throw TiFlashException("Data truncated", Errors::Decimal::Overflow);
 
         auto result = static_cast<typename OutputType::NativeType>(scaled_value);
