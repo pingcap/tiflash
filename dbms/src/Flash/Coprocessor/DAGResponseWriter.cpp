@@ -92,7 +92,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
     auto fill_execution_summary = [&](const String & executor_id, const BlockInputStreams & streams) {
         ExecutionSummary current;
         /// part 1: local execution info
-        for (auto & stream_ptr : streams)
+        for (const auto & stream_ptr : streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
             {
