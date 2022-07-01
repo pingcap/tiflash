@@ -231,23 +231,23 @@ private:
 
         handler.onFinishThread(thread_num);
 
+        if (additional_inputs_at_end.empty())
+        {
+            if (0 == --active_threads)
+            {
+                handler.onFinish();
+            }
+        }
+
         {
             std::unique_lock lock(running_first_mutex);
             if (0 == --running_first)
             {
                 /// Only one thread can go here so don't need to hold `unprepared_inputs_mutex`
                 /// or `unprepared_inputs_mutex` lock.
-                if (finish)
-                {
-                    return;
-                }
-                else if (additional_inputs_at_end.empty())
-                {
-                    handler.onFinish();
-                    return;
-                }
-
-                assert(unprepared_inputs.empty() && available_inputs.empty());
+                /// If a error happens, the `unprepared_inputs` and `available_inputs` may not be empty.
+                unprepared_inputs = UnpreparedInputs{};
+                available_inputs = AvailableInputs{};
                 for (size_t i = 0; i < additional_inputs_at_end.size(); ++i)
                     unprepared_inputs.emplace(additional_inputs_at_end[i], i);
 
@@ -255,9 +255,6 @@ private:
             }
             else
             {
-                if (additional_inputs_at_end.empty()) {
-                    return;
-                }
                 wait_first_done.wait(lock, [this] {
                     return running_first == 0;
                 });
