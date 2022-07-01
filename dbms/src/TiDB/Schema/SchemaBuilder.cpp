@@ -1209,13 +1209,13 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr d
                                Errors::DDL::MissingTable);
     }
 
-    applySetTiFlashReplicaLogicalTable(db_info, latest_table_info, storage);
+    applySetTiFlashReplicaOnLogicalTable(db_info, latest_table_info, storage);
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage)
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage)
 {
-    applySetTiFlashReplicaPhysicalTable(db_info, table_info, storage);
+    applySetTiFlashReplicaOnPhysicalTable(db_info, table_info, storage);
 
     if (table_info->isLogicalPartitionTable())
     {
@@ -1230,13 +1230,13 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaLogicalTable(TiDB:
                 throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *new_part_table_info)),
                                        Errors::DDL::MissingTable);
             }
-            applySetTiFlashReplicaPhysicalTable(db_info, new_part_table_info, part_storage);
+            applySetTiFlashReplicaOnPhysicalTable(db_info, new_part_table_info, part_storage);
         }
     }
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaPhysicalTable(
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
     TiDB::DBInfoPtr db_info,
     TiDB::TableInfoPtr latest_table_info,
     ManageableStoragePtr storage)
@@ -1326,7 +1326,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             /// Rename if needed.
             applyRenameLogicalTable(db, table, storage);
             /// Update replica info if needed.
-            applySetTiFlashReplicaLogicalTable(db, table, storage);
+            applySetTiFlashReplicaOnLogicalTable(db, table, storage);
             /// Alter if needed.
             applyAlterLogicalTable(db, table, storage);
             LOG_FMT_DEBUG(log, "Table {} synced during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
