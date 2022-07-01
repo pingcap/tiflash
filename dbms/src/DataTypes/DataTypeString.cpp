@@ -129,7 +129,6 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
 
         data.resize(offset);
 
-#
         if constexpr (BLOCK_SIZE >= 256)
         {
             /* The intel reference manual states that for sizes larger than 128, using REP MOVSB will give identical performance with other variants.
@@ -172,7 +171,7 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
                 src += shift;
                 size -= shift;
 #ifdef __x86_64__
-                ::detail::rep_movsb(dst, src, size);
+                ::detail::repMovsb(dst, src, size);
 #elif defined(__aarch64__)
                 ::detail::cpyf(dst, src, size);
 #else

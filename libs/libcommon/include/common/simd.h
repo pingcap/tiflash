@@ -118,7 +118,7 @@ __attribute__((target("mops"))) static inline void cpyf(void * dst, const void *
 }
 #endif
 #ifdef __x86_64__
-static inline void rep_movsb(void * dst, const void * src, size_t size)
+static inline void repMovsb(void * dst, const void * src, size_t size)
 {
     asm volatile("rep movsb"
                  : "+D"(dst), "+S"(src), "+c"(size)
