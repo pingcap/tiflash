@@ -133,12 +133,12 @@ void MPPTunnelSetBase<Tunnel>::writeError(const String & msg)
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel)
+void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id, const TunnelPtr & tunnel)
 {
-    if (id_to_index_map.find(id) != id_to_index_map.end())
-        throw Exception("the tunnel " + tunnel->id() + " has been registered");
+    if (receiver_task_id_to_index_map.find(receiver_task_id) != receiver_task_id_to_index_map.end())
+        throw Exception(fmt::format("the tunnel {} has been registered", tunnel->id()));
 
-    id_to_index_map[id] = tunnels.size();
+    receiver_task_id_to_index_map[receiver_task_id] = tunnels.size();
     tunnels.push_back(tunnel);
     if (!tunnel->isLocal())
     {
@@ -163,10 +163,10 @@ void MPPTunnelSetBase<Tunnel>::finishWrite()
 }
 
 template <typename Tunnel>
-typename MPPTunnelSetBase<Tunnel>::TunnelPtr MPPTunnelSetBase<Tunnel>::getTunnelById(const MPPTaskId & id)
+typename MPPTunnelSetBase<Tunnel>::TunnelPtr MPPTunnelSetBase<Tunnel>::getTunnelByReceiverTaskId(const MPPTaskId & id)
 {
-    auto it = id_to_index_map.find(id);
-    if (it == id_to_index_map.end())
+    auto it = receiver_task_id_to_index_map.find(id);
+    if (it == receiver_task_id_to_index_map.end())
     {
         return nullptr;
     }

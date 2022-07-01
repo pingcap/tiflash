@@ -77,6 +77,4 @@ public:
         stop_watch.stop();
     }
 };
-
-REGISTER_WORKLOAD(NormalWorkload)
 } // namespace DB::PS::tests

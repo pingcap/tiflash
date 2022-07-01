@@ -111,13 +111,29 @@ protected:
         }
     }
 
-    UInt64 getRightMargin() override
+    UInt64 getUsedBoundary() override
     {
         if (free_map.empty())
         {
-            return end - start;
+            return end;
         }
-        return free_map.rbegin()->first;
+
+        const auto & last_node_it = free_map.rbegin();
+
+        // If the `offset+size` of the last free node is not equal to `end`, it means the range `[last_node.offset, end)` is marked as used,
+        // then we should return `end` as the used boundary.
+        //
+        // eg.
+        //  1. The spacemap manage a space of `[0, 100]`
+        //  2. A span {offset=90, size=10} is marked as used, then the free range in SpaceMap is `[0, 90)`
+        //  3. The return value should be 100
+        if (last_node_it->first + last_node_it->second != end)
+        {
+            return end;
+        }
+
+        // Else we should return the offset of last free node
+        return last_node_it->first;
     }
 
     bool isMarkUnused(UInt64 offset, size_t length) override

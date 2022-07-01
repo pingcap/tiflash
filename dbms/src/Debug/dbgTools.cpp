@@ -310,7 +310,7 @@ void insert( //
     // Parse the fields in the inserted row
     std::vector<Field> fields;
     {
-        for (ASTs::const_iterator it = values_begin; it != values_end; ++it)
+        for (auto it = values_begin; it != values_end; ++it)
         {
             auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
             fields.emplace_back(field);
@@ -330,11 +330,18 @@ void insert( //
     if (table_info.is_common_handle)
     {
         std::vector<Field> keys;
+
+        std::unordered_map<String, size_t> column_name_columns_index_map;
+        for (size_t i = 0; i < table_info.columns.size(); i++)
+        {
+            column_name_columns_index_map.emplace(table_info.columns[i].name, i);
+        }
+
         for (size_t i = 0; i < table_info.getPrimaryIndexInfo().idx_cols.size(); i++)
         {
-            const auto & idx_col = table_info.getPrimaryIndexInfo().idx_cols[i];
-            const auto & column_info = table_info.columns[idx_col.offset];
-            auto start_field = RegionBench::convertField(column_info, fields[idx_col.offset]);
+            const auto & col_idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
+            const auto & column_info = table_info.columns[col_idx];
+            auto start_field = RegionBench::convertField(column_info, fields[col_idx]);
             TiDB::DatumBumpy start_datum = TiDB::DatumBumpy(start_field, column_info.tp);
             keys.emplace_back(start_datum.field());
         }
