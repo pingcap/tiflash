@@ -68,7 +68,6 @@ extern const char pause_after_copr_streams_acquired[];
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 
-<<<<<<< HEAD
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
     const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
@@ -83,67 +82,21 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
       subqueriesForSets(subqueriesForSets_),
       exchange_receiver_map(exchange_receiver_map_),
       log(&Logger::get("DAGQueryBlockInterpreter"))
-=======
-DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
-    Context & context_,
-    const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_,
-    size_t max_streams_,
-    bool keep_session_timezone_info_,
-    std::vector<SubqueriesForSets> & subqueries_for_sets_)
-    : context(context_)
-    , input_streams_vec(input_streams_vec_)
-    , query_block(query_block_)
-    , keep_session_timezone_info(keep_session_timezone_info_)
-    , max_streams(max_streams_)
-    , subqueries_for_sets(subqueries_for_sets_)
-    , log(getMPPTaskLog(dagContext(), "DAGQueryBlockInterpreter"))
-{}
-
-namespace
-{
-struct AnalysisResult
-{
-    ExpressionActionsPtr before_where;
-    ExpressionActionsPtr before_aggregation;
-    ExpressionActionsPtr before_having;
-    ExpressionActionsPtr before_order_and_select;
-    ExpressionActionsPtr final_projection;
-
-    String filter_column_name;
-    String having_column_name;
-    std::vector<NameAndTypePair> order_columns;
-
-    Names aggregation_keys;
-    TiDB::TiDBCollators aggregation_collators;
-    AggregateDescriptions aggregate_descriptions;
-    bool is_final_agg;
-};
-
-// add timezone cast for timestamp type, this is used to support session level timezone
-bool addExtraCastsAfterTs(
-    DAGExpressionAnalyzer & analyzer,
-    const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    ExpressionActionsChain & chain,
-    const tipb::TableScan & table_scan)
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
 {
     if (query_block.selection != nullptr)
     {
         for (auto & condition : query_block.selection->selection().conditions())
             conditions.push_back(&condition);
     }
-<<<<<<< HEAD
     const Settings & settings = context.getSettingsRef();
     if (dag.isBatchCop())
         max_streams = settings.max_threads;
     else
         max_streams = 1;
     if (max_streams > 1)
-=======
-    if (!has_need_cast_column)
-        return false;
-    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
+    {
+        max_streams *= settings.max_streams_to_max_threads_ratio;
+    }
 }
 
 bool isFinalAgg(const tipb::Expr & expr)
@@ -154,45 +107,6 @@ bool isFinalAgg(const tipb::Expr & expr)
         return true;
     return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
-
-AnalysisResult analyzeExpressions(
-    Context & context,
-    DAGExpressionAnalyzer & analyzer,
-    const DAGQueryBlock & query_block,
-    bool keep_session_timezone_info,
-    NamesWithAliases & final_project)
-{
-    AnalysisResult res;
-    ExpressionActionsChain chain;
-    // selection on table scan had been executed in executeTs
-    if (query_block.selection && query_block.source->tp() != tipb::ExecType::TypeTableScan)
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
-    {
-        max_streams *= settings.max_streams_to_max_threads_ratio;
-    }
-<<<<<<< HEAD
-}
-=======
-    // There will be either Agg...
-    if (query_block.aggregation)
-    {
-        /// set default value to true to make it compatible with old version of TiDB since before this
-        /// change, all the aggregation in TiFlash is treated as final aggregation
-        res.is_final_agg = true;
-        const auto & aggregation = query_block.aggregation->aggregation();
-        if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
-            res.is_final_agg = false;
-        for (int i = 1; i < aggregation.agg_func_size(); i++)
-        {
-            if (res.is_final_agg != isFinalAgg(aggregation.agg_func(i)))
-                throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
-        }
-        // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive
-        //  aggregation if the stage is partial
-        bool group_by_collation_sensitive =
-            /// collation sensitive group by is slower than normal group by, use normal group by by default
-            context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
 
 static std::tuple<std::optional<::tipb::DAGRequest>, std::optional<DAGSchema>> //
 buildRemoteTS(const RegionRetryList & region_retry, const DAGQueryBlock & query_block, const tipb::TableScan & ts,
@@ -942,18 +856,12 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
 }
 
-<<<<<<< HEAD
-void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names,
-    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
-=======
-void DAGQueryBlockInterpreter::executeAggregation(
-    DAGPipeline & pipeline,
-    const ExpressionActionsPtr & expression_actions_ptr,
+void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expr,
     Names & key_names,
     TiDB::TiDBCollators & collators,
-    AggregateDescriptions & aggregate_descriptions,
+    AggregateDescriptions & aggregates,
     bool is_final_agg)
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
 
@@ -995,13 +903,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         settings.compile && !has_collator ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-<<<<<<< HEAD
-        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath(),
-=======
-        settings.max_bytes_before_external_group_by,
-        !is_final_agg,
-        context.getTemporaryPath(),
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
+        settings.max_bytes_before_external_group_by, !is_final_agg, context.getTemporaryPath(),
         has_collator ? collators : TiDB::dummy_collators);
 
     /// If there are several sources, then we perform parallel aggregation
@@ -1496,12 +1398,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-<<<<<<< HEAD
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions,
+            res.is_final_agg);
         recordProfileStreams(pipeline, query_block.aggregation_name);
-=======
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
     }
     if (res.has_having)
     {
