@@ -807,6 +807,17 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
     // There will be either Agg...
     if (query_block.aggregation)
     {
+        /// set default value to true to make it compatible with old version of TiDB since before this
+        /// change, all the aggregation in TiFlash is treated as final aggregation
+        res.is_final_agg = true;
+        const auto & aggregation = query_block.aggregation->aggregation();
+        if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
+            res.is_final_agg = false;
+        for (int i = 1; i < aggregation.agg_func_size(); i++)
+        {
+            if (res.is_final_agg != isFinalAgg(aggregation.agg_func(i)))
+                throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
+        }
         /// collation sensitive group by is slower then normal group by, use normal group by by default
         // todo better to let TiDB decide whether group by is collation sensitive or not
         analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregation_collators,
