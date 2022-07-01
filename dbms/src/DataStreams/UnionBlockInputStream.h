@@ -101,7 +101,7 @@ public:
         : output_queue(std::min(inputs.size(), max_threads) * 5) // reduce contention
         , log(Logger::get(NAME, req_id))
         , handler(*this)
-        , processor(inputs, additional_input_at_end, max_threads, handler, log)
+        , processor(inputs, additional_input_at_end ? BlockInputStreams{additional_input_at_end} : BlockInputStreams{}, max_threads, handler, log)
         , exception_callback(exception_callback_)
     {
         // TODO: assert capacity of output_queue is not less than processor.getMaxThreads()

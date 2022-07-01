@@ -83,9 +83,8 @@ template <typename Handler, StreamUnionMode mode = StreamUnionMode::Basic>
 class ParallelInputsProcessor
 {
 public:
-    /** additional_input_at_end - if not nullptr,
-      *  then the blocks from this source will start to be processed only after all other sources are processed.
-      * This is done in the main thread.
+    /** additional_inputs_at_end - if not empty,
+      *  then the blocks from thes sources will start to be processed only after all other sources are processed.
       *
       * Intended for implementation of FULL and RIGHT JOIN
       * - where you must first make JOIN in parallel, while noting which keys are not found,
@@ -93,12 +92,12 @@ public:
       */
     ParallelInputsProcessor(
         const BlockInputStreams & inputs_,
-        const BlockInputStreamPtr & additional_input_at_end_,
+        const BlockInputStreams & additional_inputs_at_end_,
         size_t max_threads_,
         Handler & handler_,
         const LoggerPtr & log_)
         : inputs(inputs_)
-        , additional_input_at_end(additional_input_at_end_)
+        , additional_inputs_at_end(additional_inputs_at_end_)
         , max_threads(std::min(inputs_.size(), max_threads_))
         , handler(handler_)
         , log(log_)
@@ -125,6 +124,10 @@ public:
         if (!thread_manager)
             thread_manager = newThreadManager();
         active_threads = max_threads;
+        {
+            std::lock_guard lock(running_first_mutex);
+            running_first = max_threads;
+        }
         for (size_t i = 0; i < max_threads; ++i)
             thread_manager->schedule(true, handler.getName(), [this, i] { this->thread(i); });
     }
@@ -136,21 +139,12 @@ public:
 
         for (auto & input : inputs)
         {
-            if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(&*input))
-            {
-                try
-                {
-                    child->cancel(kill);
-                }
-                catch (...)
-                {
-                    /** If you can not ask one or more sources to stop.
-                      * (for example, the connection is broken for distributed query processing)
-                      * - then do not care.
-                      */
-                    LOG_FMT_ERROR(log, "Exception while cancelling {}", child->getName());
-                }
-            }
+            cancelStream(input, kill);
+        }
+
+        for (auto & input : additional_inputs_at_end)
+        {
+            cancelStream(input, kill);
         }
     }
 
@@ -188,6 +182,24 @@ private:
         {}
     };
 
+    void cancelStream(const BlockInputStreamPtr & stream, bool kill) {
+        if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*stream))
+        {
+            try
+            {
+                child->cancel(kill);
+            }
+            catch (...)
+            {
+                /** If you can not ask one or more sources to stop.
+                      * (for example, the connection is broken for distributed query processing)
+                      * - then do not care.
+                      */
+                LOG_FMT_ERROR(log, "Exception while cancelling {}", child->getName());
+            }
+        }
+    }
+
     void publishPayload(BlockInputStreamPtr & stream, Block & block, size_t thread_num)
     {
         if constexpr (mode == StreamUnionMode::Basic)
@@ -205,27 +217,6 @@ private:
 
         try
         {
-            while (!finish)
-            {
-                InputData unprepared_input;
-                {
-                    std::lock_guard lock(unprepared_inputs_mutex);
-
-                    if (unprepared_inputs.empty())
-                        break;
-
-                    unprepared_input = unprepared_inputs.front();
-                    unprepared_inputs.pop();
-                }
-
-                unprepared_input.in->readPrefix();
-
-                {
-                    std::lock_guard lock(available_inputs_mutex);
-                    available_inputs.push(unprepared_input);
-                }
-            }
-
             loop(thread_num);
         }
         catch (...)
@@ -240,35 +231,81 @@ private:
 
         handler.onFinishThread(thread_num);
 
-        /// The last thread on the output indicates that there is no more data.
-        if (0 == --active_threads)
         {
-            /// And then it processes an additional source, if there is one.
-            if (additional_input_at_end)
+            std::unique_lock lock(running_first_mutex);
+            if (0 == --running_first)
             {
-                try
+                /// Only one thread can go here so don't need to hold `unprepared_inputs_mutex`
+                /// or `unprepared_inputs_mutex` lock.
+                if (finish)
                 {
-                    additional_input_at_end->readPrefix();
-                    while (Block block = additional_input_at_end->read())
-                        publishPayload(additional_input_at_end, block, thread_num);
+                    return;
                 }
-                catch (...)
+                else if (additional_inputs_at_end.empty())
                 {
-                    exception = std::current_exception();
+                    handler.onFinish();
+                    return;
                 }
 
-                if (exception)
-                {
-                    handler.onException(exception, thread_num);
-                }
+                assert(unprepared_inputs.empty() && available_inputs.empty());
+                for (size_t i = 0; i < additional_inputs_at_end.size(); ++i)
+                    unprepared_inputs.emplace(additional_inputs_at_end[i], i);
+
+                wait_first_done.notify_all();
             }
+            else
+            {
+                if (additional_inputs_at_end.empty()) {
+                    return;
+                }
+                wait_first_done.wait(lock, [this] {
+                    return running_first == 0;
+                });
+            }
+        }
 
+        try
+        {
+            loop(thread_num);
+        }
+        catch (...)
+        {
+            exception = std::current_exception();
+        }
+
+        if (exception)
+        {
+            handler.onException(exception, thread_num);
+        }
+
+        if (0 == --active_threads) {
             handler.onFinish(); /// TODO If in `onFinish` or `onFinishThread` there is an exception, then std::terminate is called.
         }
     }
 
     void loop(size_t thread_num)
     {
+        while (!finish)
+        {
+            InputData unprepared_input;
+            {
+                std::lock_guard lock(unprepared_inputs_mutex);
+
+                if (unprepared_inputs.empty())
+                    break;
+
+                unprepared_input = unprepared_inputs.front();
+                unprepared_inputs.pop();
+            }
+
+            unprepared_input.in->readPrefix();
+
+            {
+                std::lock_guard lock(available_inputs_mutex);
+                available_inputs.push(unprepared_input);
+            }
+        }
+
         while (!finish) /// You may need to stop work earlier than all sources run out.
         {
             InputData input;
@@ -318,8 +355,8 @@ private:
         }
     }
 
-    BlockInputStreams inputs;
-    BlockInputStreamPtr additional_input_at_end;
+    const BlockInputStreams inputs;
+    const BlockInputStreams additional_inputs_at_end;
     unsigned max_threads;
 
     Handler & handler;
@@ -358,6 +395,12 @@ private:
 
     /// For operations with unprepared_inputs.
     std::mutex unprepared_inputs_mutex;
+
+    /// For waiting all `inputs` sources work done.
+    /// After that, the `additional_inputs_at_end` sources can be processed.
+    std::mutex running_first_mutex;
+    std::condition_variable wait_first_done;
+    size_t running_first{0};
 
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};

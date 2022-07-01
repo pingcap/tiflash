@@ -386,10 +386,9 @@ void DAGQueryBlockInterpreter::executeAggregation(
     if (pipeline.streams.size() > 1)
     {
         const Settings & settings = context.getSettingsRef();
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
-            stream_with_non_joined_data,
+            pipeline.streams_with_non_joined_data,
             params,
             context.getFileProvider(),
             true,
