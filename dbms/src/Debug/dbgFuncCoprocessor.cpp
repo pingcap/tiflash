@@ -544,7 +544,7 @@ void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & conte
             return;
         DataTypes arguments_types;
         ColumnsWithTypeAndName argument_columns;
-        for (auto & c : expr->children())
+        for (const auto & c : expr->children())
         {
             Field value = decodeLiteral(c);
             DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
