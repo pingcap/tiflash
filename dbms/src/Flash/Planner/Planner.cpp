@@ -90,7 +90,9 @@ bool Planner::isSupported(const DAGQueryBlock & query_block)
 {
     return query_block.source
         && (query_block.source->tp() == tipb::ExecType::TypeProjection
-            || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver);
+            || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
+            || query_block.source->tp() == tipb::ExecType::TypeWindow
+            || query_block.source->tp() == tipb::ExecType::TypeSort);
 }
 
 DAGContext & Planner::dagContext() const
