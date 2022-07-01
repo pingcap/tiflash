@@ -70,7 +70,7 @@ void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subqu
     subqueries.push_back(std::move(subqueries_for_sets));
 }
 
-std::map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
+std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
 }
