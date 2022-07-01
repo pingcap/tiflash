@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Allocator.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
@@ -39,6 +40,8 @@ namespace FailPoints
 extern const char pause_before_apply_raft_cmd[];
 extern const char pause_before_apply_raft_snapshot[];
 extern const char force_set_safepoint_when_decode_block[];
+extern const char unblock_query_init_after_write[];
+extern const char pause_query_init[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -150,6 +153,7 @@ static void writeRegionDataToStorage(
         default:
             throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
         }
+
         write_part_cost = watch.elapsedMilliseconds();
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
         if (need_decode)
@@ -164,10 +168,20 @@ static void writeRegionDataToStorage(
     /// decoding data. Check the test case for more details.
     FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_cmd);
 
+    /// disable pause_query_init when the write action finish, to make the query action continue.
+    /// the usage of unblock_query_init_after_write and pause_query_init can refer to InterpreterSelectQuery::init
+    SCOPE_EXIT({
+        fiu_do_on(FailPoints::unblock_query_init_after_write, {
+            FailPointHelper::disableFailPoint(FailPoints::pause_query_init);
+        });
+    });
+
     /// Try read then write once.
     {
         if (atomic_read_write(false))
+        {
             return;
+        }
     }
 
     /// If first try failed, sync schema and force read then write.
@@ -176,10 +190,12 @@ static void writeRegionDataToStorage(
         tmt.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomic_read_write(true))
+        {
             // Failure won't be tolerated this time.
             // TODO: Enrich exception message.
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
                             ErrorCodes::LOGICAL_ERROR);
+        }
     }
 }
 

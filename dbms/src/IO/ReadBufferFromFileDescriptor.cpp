@@ -77,7 +77,7 @@ bool ReadBufferFromFileDescriptor::nextImpl()
 
         if (profile_callback)
         {
-            ProfileInfo info;
+            ProfileInfo info; // NOLINT
             info.bytes_requested = internal_buffer.size();
             info.bytes_read = res;
             info.nanoseconds = watch->elapsed();
@@ -120,8 +120,6 @@ off_t ReadBufferFromFileDescriptor::doSeek(off_t offset, int whence)
     }
     else
     {
-        ProfileEvents::increment(ProfileEvents::Seek);
-
         pos = working_buffer.end();
         off_t res = doSeekInFile(new_pos, SEEK_SET);
         if (-1 == res)
@@ -145,7 +143,7 @@ bool ReadBufferFromFileDescriptor::poll(size_t timeout_microseconds)
     FD_SET(fd, &fds);
     timeval timeout = {time_t(timeout_microseconds / 1000000), suseconds_t(timeout_microseconds % 1000000)};
 
-    int res = select(1, &fds, 0, 0, &timeout);
+    int res = select(1, &fds, nullptr, nullptr, &timeout);
 
     if (-1 == res)
         throwFromErrno("Cannot select", ErrorCodes::CANNOT_SELECT);
