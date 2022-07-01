@@ -125,6 +125,7 @@ private:
         bool has_having     = false;
         bool has_order_by   = false;
         bool has_limit_by   = false;
+	bool is_final_agg   = true;
 
         ExpressionActionsPtr before_join;   /// including JOIN
         ExpressionActionsPtr before_where;
