@@ -117,18 +117,12 @@ private:
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
-<<<<<<< HEAD
-    void executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
-        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
-=======
-    void executeAggregation(
-        DAGPipeline & pipeline,
+    void executeAggregation(DAGPipeline & pipeline,
         const ExpressionActionsPtr & expression_actions_ptr,
         Names & key_names,
         TiDB::TiDBCollators & collators,
         AggregateDescriptions & aggregate_descriptions,
         bool is_final_agg);
->>>>>>> 5bd08d6040 (set empty_result_for_aggregation_by_empty_set according to AggregateFuncMode (#3822))
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
     void readFromLocalStorage(            //
