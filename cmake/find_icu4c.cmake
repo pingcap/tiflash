@@ -1,4 +1,4 @@
-option (ENABLE_ICU "Enable ICU" ON)
+option (ENABLE_ICU "Enable ICU" OFF)
 
 if (ENABLE_ICU)
     set (ICU_PATHS "/usr/local/opt/icu4c/lib")

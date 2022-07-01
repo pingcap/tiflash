@@ -207,9 +207,10 @@ public:
      * @param pk        `pk`'s value
      * @param tso_beg   `tso`'s value begin
      * @param tso_end   `tso`'s value end (not included)
+     * @param deleted   if deleted is false, set `tag` to 0; otherwise set `tag` to 1
      * @return
      */
-    static Block prepareBlockWithIncreasingTso(Int64 pk, size_t tso_beg, size_t tso_end)
+    static Block prepareBlockWithIncreasingTso(Int64 pk, size_t tso_beg, size_t tso_end, bool deleted = false)
     {
         Block        block;
         const size_t num_rows = (tso_end - tso_beg);
@@ -225,6 +226,7 @@ public:
                 }
                 col1.column = std::move(m_col);
             }
+            col1.column_id = EXTRA_HANDLE_COLUMN_ID;
             block.insert(col1);
 
             ColumnWithTypeAndName version_col(VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME);
@@ -237,6 +239,7 @@ public:
                 }
                 version_col.column = std::move(m_col);
             }
+            version_col.column_id = VERSION_COLUMN_ID;
             block.insert(version_col);
 
             ColumnWithTypeAndName tag_col(TAG_COLUMN_TYPE, TAG_COLUMN_NAME);
@@ -246,10 +249,11 @@ public:
                 column_data.resize(num_rows);
                 for (size_t i = 0; i < num_rows; ++i)
                 {
-                    column_data[i] = 0;
+                    column_data[i] = deleted ? 1 : 0;
                 }
                 tag_col.column = std::move(m_col);
             }
+            tag_col.column_id = TAG_COLUMN_ID;
             block.insert(tag_col);
         }
         return block;
