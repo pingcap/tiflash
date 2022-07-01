@@ -261,7 +261,7 @@ To run micro benchmark tests, you need to build with -DCMAKE_BUILD_TYPE=RELEASE 
 
 ```shell
 cd $BUILD
-cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON
+cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON
 ninja bench_dbms       
 ```
 
