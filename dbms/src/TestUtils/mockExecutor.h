@@ -68,8 +68,8 @@ public:
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfos & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoList & columns);
 
-    DAGRequestBuilder & exchangeReceiver(const MockColumnInfos & columns);
-    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoList & columns);
+    DAGRequestBuilder & exchangeReceiver(const MockColumnInfos & columns, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoList & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -97,16 +97,16 @@ public:
     DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
 
     // window
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame);
-    DAGRequestBuilder & window(MockAsts window_funcs, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame);
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame);
-    DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort);
-    DAGRequestBuilder & sort(MockOrderByItems order_by_list, bool is_partial_sort);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(MockAsts window_funcs, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & sort(MockOrderByItems order_by_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
-    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfos & columns);
+    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfos & columns, uint64_t fine_grained_shuffle_stream_count);
 
     ExecutorPtr root;
     DAGProperties properties;
@@ -148,7 +148,7 @@ public:
     std::unordered_map<String, ColumnsWithTypeAndName> & executorIdColumnsMap() { return executor_id_columns_map; }
 
     DAGRequestBuilder scan(String db_name, String table_name);
-    DAGRequestBuilder receive(String exchange_name);
+    DAGRequestBuilder receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
 private:
     size_t index;

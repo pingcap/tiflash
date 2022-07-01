@@ -118,8 +118,6 @@ try
     const uint16_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 4096;
-    dag_context_ptr->setFineGrainedShuffleStreamCount(fine_grained_shuffle_stream_count);
-    dag_context_ptr->setFineGrainedShuffleBatchSize(fine_grained_shuffle_batch_size);
 
     // Set these to 1, because when fine grained shuffle is enabled,
     // batchWriteFineGrainedShuffle() only check fine_grained_shuffle_batch_size.

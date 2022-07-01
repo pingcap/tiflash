@@ -469,11 +469,12 @@ TEST_F(InterpreterExecuteTest, FineGrainedShuffle)
 try
 {
     // fine-grained shuffle is enabled.
-    dag_context_ptr->setFineGrainedShuffleStreamCount(8);
+    const uint64_t enable = 8;
+    const uint64_t disable = 0;
     auto request = context
-                       .receive("sender_1")
-                       .sort({{"s1", true}, {"s2", false}}, true)
-                       .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
+                       .receive("sender_1", enable)
+                       .sort({{"s1", true}, {"s2", false}}, true, enable)
+                       .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame(), enable)
                        .build(context);
     {
         String expected = R"(
@@ -506,11 +507,10 @@ Union: <for test>
     ASSERT_BLOCKINPUTSTREAM_EQAUL(topn_expected, topn_request, 10);
 
     // fine-grained shuffle is disabled.
-    dag_context_ptr->setFineGrainedShuffleStreamCount(0);
     request = context
-                  .receive("sender_1")
-                  .sort({{"s1", true}, {"s2", false}}, true)
-                  .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
+                  .receive("sender_1", disable)
+                  .sort({{"s1", true}, {"s2", false}}, true, disable)
+                  .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame(), disable)
                   .build(context);
     {
         String expected = R"(

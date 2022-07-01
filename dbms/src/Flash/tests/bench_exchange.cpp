@@ -296,8 +296,6 @@ SenderHelper::SenderHelper(
     dag_context->is_root_mpp_task = false;
     dag_context->encode_type = tipb::EncodeType::TypeCHBlock;
     dag_context->result_field_types = fields;
-    dag_context->setFineGrainedShuffleStreamCount(fine_grained_shuffle_stream_count_);
-    dag_context->setFineGrainedShuffleBatchSize(fine_grained_shuffle_batch_size_);
 }
 
 BlockInputStreamPtr SenderHelper::buildUnionStream(
