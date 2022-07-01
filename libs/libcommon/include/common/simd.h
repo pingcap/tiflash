@@ -88,7 +88,7 @@ static inline bool sveSupported()
 static inline bool mopsSupported()
 {
     auto hwcaps = getauxval(AT_HWCAP);
-    if (hwcaps & HWCAP_CPUID == 0)
+    if ((hwcaps & HWCAP_CPUID) == 0)
     {
         return false;
     }
@@ -98,7 +98,7 @@ static inline bool mopsSupported()
     return (id_reg >> 16u & 0b1111u) == 0b0001u;
 }
 
-__attribute__((target("mops"))) static inline void cypf(void * dst, const void * src, size_t size)
+__attribute__((target("mops"))) static inline void cpyf(void * dst, const void * src, size_t size)
 {
     asm volatile(
         "cpyfp [%0]!, [%1]!, %2!"
