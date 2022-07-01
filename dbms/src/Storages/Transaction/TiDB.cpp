@@ -799,7 +799,6 @@ TiFlashMode parseTiFlashMode(String mode_str)
     }
     else
     {
-        // 这种抛 exception 合适吗？
         throw DB::Exception(
             std::string(__PRETTY_FUNCTION__)
             + " ParseTiFlashMode Failed. mode " + mode_str + " is unvalid, please set mode as fast/normal");
