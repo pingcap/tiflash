@@ -678,7 +678,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header, UInt32 stream_id)
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header, size_t stream_id)
 {
     if (unlikely(stream_id >= msg_channels.size()))
     {

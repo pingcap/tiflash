@@ -61,7 +61,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     // For fine grained shuffle, sender will partition data into muiltiple streams by hashing.
     // ExchangeReceiverBlockInputStream only need to read its own stream, i.e., streams[stream_id].
     // CoprocessorBlockInputStream doesn't take care of this.
-    UInt32 stream_id;
+    size_t stream_id;
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
@@ -173,7 +173,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id, UInt32 stream_id_)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id, size_t stream_id_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
