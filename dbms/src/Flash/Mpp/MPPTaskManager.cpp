@@ -147,6 +147,17 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     return true;
 }
 
+bool MPPTaskManager::isTaskToBeCancelled(const MPPTaskId & task_id)
+{
+    std::unique_lock lock(mu);
+    auto it = mpp_query_map.find(task_id.start_ts);
+    if (it != mpp_query_map.end() && it->second->to_be_cancelled)
+    {
+        return it->second->task_map.find(task_id) != it->second->task_map.end();
+    }
+    return false;
+}
+
 void MPPTaskManager::unregisterTask(MPPTask * task)
 {
     std::unique_lock lock(mu);

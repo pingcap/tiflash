@@ -31,6 +31,7 @@ using MockOrderByItems = std::initializer_list<MockOrderByItem>;
 using MockPartitionByItem = std::pair<String, bool>;
 using MockPartitionByItems = std::initializer_list<MockPartitionByItem>;
 using MockColumnNames = std::initializer_list<String>;
+using MockColumnNamesVec = std::vector<String>;
 using MockAsts = std::initializer_list<ASTPtr>;
 using MockWindowFrame = mock::MockWindowFrame;
 
@@ -84,6 +85,7 @@ public:
     DAGRequestBuilder & project(const String & col_name);
     DAGRequestBuilder & project(MockAsts expr);
     DAGRequestBuilder & project(MockColumnNames col_names);
+    DAGRequestBuilder & project(MockColumnNamesVec col_names);
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
@@ -181,8 +183,8 @@ MockWindowFrame buildDefaultRowsFrame();
 #define gt(expr1, expr2) makeASTFunction("greater", (expr1), (expr2))
 #define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
-#define NOT(expr) makeASTFunction("not", (expr1), (expr2))
-#define Max(expr) makeASTFunction("max", expr)
+#define NOT(expr) makeASTFunction("not", (expr))
+#define Max(expr) makeASTFunction("max", (expr))
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
 #define Rank() makeASTFunction("Rank")

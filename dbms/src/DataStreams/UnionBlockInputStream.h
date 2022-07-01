@@ -293,8 +293,8 @@ private:
         /// and the exception is lost.
         output_queue.emplace(exception);
         /// can not cancel itself or the exception might be lost
-        /// kill the processor so ExchangeReceiver will be closed
-        processor.cancel(true);
+        /// use cancel instead of kill to avoid too many useless error message
+        processor.cancel(false);
     }
 
     struct Handler
