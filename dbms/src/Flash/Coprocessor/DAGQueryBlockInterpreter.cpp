@@ -396,6 +396,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
             log->identifier());
         pipeline.streams.resize(1);
+        pipeline.streams_with_non_joined_data.clear();
         // should record for agg before restore concurrency. See #3804.
         recordProfileStreams(pipeline, query_block.aggregation_name);
         restorePipelineConcurrency(pipeline);
