@@ -69,6 +69,7 @@ struct AnalysisResult
     bool need_aggregate = false;
     bool has_having = false;
     bool has_order_by = false;
+    bool is_final_agg = true;
 
     ExpressionActionsPtr timezone_cast;
     ExpressionActionsPtr before_where;
