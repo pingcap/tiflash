@@ -170,6 +170,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, latest_version);
 
         Int64 used_version = cur_version;
+        // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
+        // schema diff without any exception.
         std::vector<std::optional<SchemaDiff>> diffs;
         while (used_version < latest_version)
         {
