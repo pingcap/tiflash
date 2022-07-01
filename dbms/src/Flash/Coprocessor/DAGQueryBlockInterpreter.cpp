@@ -354,12 +354,12 @@ void DAGQueryBlockInterpreter::executeWindow(
 
     if (enable_fine_grained_shuffle)
     {
-        // fine_grained_shuffle_stream_count is logical, no need to be equal to real stream count.
+        /// Window function can be multiple threaded when fine grained shuffle is enabled.
         pipeline.transform([&](auto & stream) { stream = std::make_shared<WindowBlockInputStream>(stream, window_description, log->identifier()); });
     }
     else
     {
-        /// If there are several streams, we merge them into one
+        /// If there are several streams, we merge them into one.
         executeUnion(pipeline, max_streams, log, false, "merge into one for window input");
         assert(pipeline.streams.size() == 1);
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
