@@ -51,8 +51,8 @@ protected:
     }
 };
 
-// test string and string
-TEST_F(StringSpace, strAndStrTest)
+// test space
+TEST_F(StringSpace, spaceTest)
 try
 {
     ASSERT_COLUMN_EQ(
@@ -63,7 +63,7 @@ try
 }
 CATCH
 
-// test NULL
+// test space NULL
 TEST_F(StringSpace, nullTest)
 try
 {

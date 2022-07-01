@@ -13,7 +13,7 @@
 # limitations under the License.
 
 mysql> drop table if exists test.t;
-mysql> create table if not exists test.t(a char(20));
+mysql> create table if not exists test.t(a varchar(20));
 
 mysql> insert into test.t values('www.pingcap.com');
 mysql> insert into test.t values('中文测试');
@@ -21,55 +21,7 @@ mysql> insert into test.t values(NULL);
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
-mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select space(40) from test.t;
-+------------------------------------------+
-| space(40)                                |
-+------------------------------------------+
-|                                          |
-|                                          |
-|                                          |
-+------------------------------------------+
-
-
-mysql> select space('') from test.t;
-+-----------+
-| space('') |
-+-----------+
-|           |
-|           |
-|           |
-+-----------+
-
-mysql> select space(NULL) from test.t;
-+-------------+
-| space(NULL) |
-+-------------+
-| NULL        |
-| NULL        |
-| NULL        |
-+-------------+
-
-mysql> explain select space(40) from test.t;
-+---------------------------+---------+--------------+---------------+----------------------------------------------------+
-| id                        | estRows | task         | access object | operator info                                      |
-+---------------------------+---------+--------------+---------------+----------------------------------------------------+
-| TableReader_9             | 3.00    | root         |               | data:ExchangeSender_8                              |
-| └─ExchangeSender_8        | 3.00    | mpp[tiflash] |               | ExchangeType: PassThrough                          |
-|   └─Projection_4          | 3.00    | mpp[tiflash] |               |                                         ->Column#3 |
-|     └─TableFullScan_7     | 3.00    | mpp[tiflash] | table:t       | keep order:false, stats:pseudo                     |
-+---------------------------+---------+--------------+---------------+----------------------------------------------------+
-
-mysql> explain select space(40),length(space(40)),space(NULL),length(space(NULL)),space(''),length(space('')) from test.t;
-+---------------------------+---------+--------------+---------------+-----------------------------------------------------------------------------------------------------------------------------+
-| id                        | estRows | task         | access object | operator info                                                                                                               |
-+---------------------------+---------+--------------+---------------+-----------------------------------------------------------------------------------------------------------------------------+
-| TableReader_9             | 3.00    | root         |               | data:ExchangeSender_8                                                                                                       |
-| └─ExchangeSender_8        | 3.00    | mpp[tiflash] |               | ExchangeType: PassThrough                                                                                                   |
-|   └─Projection_4          | 3.00    | mpp[tiflash] |               |                                         ->Column#3, 40->Column#4, <nil>->Column#5, <nil>->Column#6, ->Column#7, 0->Column#8 |
-|     └─TableFullScan_7     | 3.00    | mpp[tiflash] | table:t       | keep order:false, stats:pseudo                                                                                              |
-+---------------------------+---------+--------------+---------------+-----------------------------------------------------------------------------------------------------------------------------+
-
-mysql> select space(40),length(space(40)),space(NULL),length(space(NULL)),space(''),length(space('')) from test.t;
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select space(40),length(space(40)),space(NULL),length(space(NULL)),space(''),length(space('')) from test.t;
 +------------------------------------------+-------------------+-------------+---------------------+-----------+-------------------+
 | space(40)                                | length(space(40)) | space(NULL) | length(space(NULL)) | space('') | length(space('')) |
 +------------------------------------------+-------------------+-------------+---------------------+-----------+-------------------+
