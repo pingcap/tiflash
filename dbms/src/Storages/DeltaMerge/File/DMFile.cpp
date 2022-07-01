@@ -193,43 +193,43 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-const String DMFile::encryptionBasePath() const
+String DMFile::encryptionBasePath() const
 {
     return getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
 }
 
 
-const EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::DATA_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::INDEX_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
+EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + details::MARK_FILE_SUFFIX);
 }
 
-const EncryptionPath DMFile::encryptionMetaPath() const
+EncryptionPath DMFile::encryptionMetaPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : metaFileName());
 }
 
-const EncryptionPath DMFile::encryptionPackStatPath() const
+EncryptionPath DMFile::encryptionPackStatPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packStatFileName());
 }
 
-const EncryptionPath DMFile::encryptionPackPropertyPath() const
+EncryptionPath DMFile::encryptionPackPropertyPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : packPropertyFileName());
 }
 
-const EncryptionPath DMFile::encryptionConfigurationPath() const
+EncryptionPath DMFile::encryptionConfigurationPath() const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : configurationFileName());
 }
@@ -460,7 +460,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
             configuration->getChecksumAlgorithm(),
             configuration->getChecksumFrameLength());
         buf->seek(meta_pack_info.pack_stat_offset);
-        if (sizeof(PackStat) * packs != buf->readBig((char *)pack_stats.data(), sizeof(PackStat) * packs))
+        if (sizeof(PackStat) * packs != buf->readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -469,7 +469,7 @@ void DMFile::readPackStat(const FileProviderPtr & file_provider, const MetaPackI
     {
         auto buf = openForRead(file_provider, path, encryptionPackStatPath(), meta_pack_info.pack_stat_size);
         buf.seek(meta_pack_info.pack_stat_offset);
-        if (sizeof(PackStat) * packs != buf.readBig((char *)pack_stats.data(), sizeof(PackStat) * packs))
+        if (sizeof(PackStat) * packs != buf.readBig(reinterpret_cast<char *>(pack_stats.data()), sizeof(PackStat) * packs))
         {
             throw Exception("Cannot read all data", ErrorCodes::CANNOT_READ_ALL_DATA);
         }
@@ -565,8 +565,9 @@ void DMFile::readMetadata(const FileProviderPtr & file_provider, const ReadMetaM
         auto recheck = [&](size_t size) {
             if (this->configuration)
             {
-                auto frame_count = size / this->configuration->getChecksumFrameLength()
-                    + (0 != size % this->configuration->getChecksumFrameLength());
+                auto total_size = this->configuration->getChecksumFrameLength() + this->configuration->getChecksumHeaderLength();
+                auto frame_count = size / total_size
+                    + (0 != size % total_size);
                 size -= frame_count * this->configuration->getChecksumHeaderLength();
             }
             return size;

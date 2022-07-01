@@ -33,7 +33,7 @@ add_library (clickhouse-server-lib
 target_link_libraries(clickhouse-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
 target_link_libraries (clickhouse-server-lib PUBLIC clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
-target_include_directories (clickhouse-server-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
+target_include_directories (clickhouse-server-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 
 add_library (clickhouse-local-lib LocalServer.cpp)
 target_link_libraries (clickhouse-local-lib clickhouse-server-lib clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
@@ -44,7 +44,6 @@ target_link_libraries (clickhouse-extract-from-config-lib clickhouse_common_conf
 add_library (clickhouse-client-lib Client.cpp)
 target_link_libraries (clickhouse-client-lib clickhouse_functions clickhouse_aggregate_functions ${LINE_EDITING_LIBS} ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_include_directories (clickhouse-client-lib PRIVATE ${READLINE_INCLUDE_DIR})
-install (FILES clickhouse-client.xml DESTINATION ${CLICKHOUSE_ETC_DIR}/clickhouse-client COMPONENT clickhouse-client RENAME config.xml)
 
 add_library (clickhouse-benchmark-lib ${SPLIT_SHARED} Benchmark.cpp)
 target_link_libraries (clickhouse-benchmark-lib clickhouse-client-lib clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
@@ -62,11 +61,11 @@ target_link_libraries (clickhouse-format-lib dbms clickhouse_common_io ${Boost_P
 
 add_library(tiflash-dttool-lib ${SPLIT_SHARED} DTTool/DTToolBench.cpp DTTool/DTToolMigrate.cpp DTTool/DTToolInspect.cpp)
 target_link_libraries(tiflash-dttool-lib PUBLIC dbms daemon clickhouse_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
-target_include_directories(tiflash-dttool-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
+target_include_directories(tiflash-dttool-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 
 add_library(tiflash-dttool-entry-object STATIC DTTool/DTTool.cpp)
 target_link_libraries(tiflash-dttool-entry-object tiflash-dttool-lib ${TIFLASH_PROXY_LIBRARY})
-target_include_directories(tiflash-dttool-entry-object PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
+target_include_directories(tiflash-dttool-entry-object PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 
 if (USE_EMBEDDED_COMPILER)
     link_directories (${LLVM_LIBRARY_DIRS})
@@ -207,8 +206,3 @@ endif ()
 
 set (GLIBC_MAX_REQUIRED 2.4)
 add_test(NAME GLIBC_required_version COMMAND bash -c "readelf -s ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-server | grep '@GLIBC' | grep -oP 'GLIBC_[\\d\\.]+' | sort | uniq | sort -r | perl -lnE 'exit 1 if $_ gt q{GLIBC_${GLIBC_MAX_REQUIRED}}'")
-
-install (
-    FILES config.xml users.xml
-    DESTINATION  ${CLICKHOUSE_ETC_DIR}/clickhouse-server
-    COMPONENT tiflash)

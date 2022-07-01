@@ -10,6 +10,8 @@ namespace DB
   */
 class SquashingBlockInputStream : public IProfilingBlockInputStream
 {
+    static constexpr auto NAME = "Squashing";
+
 public:
     SquashingBlockInputStream(
         const BlockInputStreamPtr & src,
@@ -17,7 +19,7 @@ public:
         size_t min_block_size_bytes,
         const LogWithPrefixPtr & log_);
 
-    String getName() const override { return "Squashing"; }
+    String getName() const override { return NAME; }
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
 

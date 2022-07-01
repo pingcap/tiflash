@@ -8,11 +8,11 @@
 #include <thread>
 #include <vector>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
+namespace
 {
-class TestMPMCQueue : public ::testing::Test
+class MPMCQueueTest : public ::testing::Test
 {
 protected:
     std::random_device rd;
@@ -489,28 +489,28 @@ protected:
 };
 
 template <>
-struct TestMPMCQueue::ValueHelper<int>
+struct MPMCQueueTest::ValueHelper<int>
 {
     static int make(int v) { return v; }
     static int extract(int v) { return v; }
 };
 
 template <>
-struct TestMPMCQueue::ValueHelper<std::unique_ptr<int>>
+struct MPMCQueueTest::ValueHelper<std::unique_ptr<int>>
 {
     static std::unique_ptr<int> make(int v) { return std::make_unique<int>(v); }
     static int extract(std::unique_ptr<int> & v) { return *v; }
 };
 
 template <>
-struct TestMPMCQueue::ValueHelper<std::shared_ptr<int>>
+struct MPMCQueueTest::ValueHelper<std::shared_ptr<int>>
 {
     static std::shared_ptr<int> make(int v) { return std::make_shared<int>(v); }
     static int extract(std::shared_ptr<int> & v) { return *v; }
 };
 
 #define ADD_TEST_FOR(type_name, type, test_name, ...) \
-    TEST_F(TestMPMCQueue, type_name##_##test_name)    \
+    TEST_F(MPMCQueueTest, type_name##_##test_name)    \
     try                                               \
     {                                                 \
         test##test_name<type>(__VA_ARGS__);           \
@@ -533,7 +533,7 @@ ADD_TEST(CancelEmpty, 4, 4);
 ADD_TEST(CancelConcurrentPop, 4);
 ADD_TEST(CancelConcurrentPush, 4);
 
-TEST_F(TestMPMCQueue, ExceptionSafe)
+TEST_F(MPMCQueueTest, ExceptionSafe)
 try
 {
     MPMCQueue<ThrowInjectable> queue(10);
@@ -590,5 +590,41 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+struct Counter
+{
+    static int count;
+    Counter()
+    {
+        ++count;
+    }
+
+    ~Counter()
+    {
+        --count;
+    }
+};
+int Counter::count = 0;
+
+TEST_F(MPMCQueueTest, objectsDestructed)
+try
+{
+    {
+        MPMCQueue<Counter> queue(100);
+        queue.emplace();
+        ASSERT_EQ(Counter::count, 1);
+
+        {
+            Counter cnt;
+            queue.pop(cnt);
+        }
+        ASSERT_EQ(Counter::count, 0);
+
+        queue.emplace();
+        ASSERT_EQ(Counter::count, 1);
+    }
+    ASSERT_EQ(Counter::count, 0);
+}
+CATCH
+
+} // namespace
+} // namespace DB::tests

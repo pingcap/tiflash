@@ -95,7 +95,7 @@ public:
         ret = EVP_EncryptUpdate(ctx, ciphertext, &output_size, plaintext, static_cast<int>(MAX_SIZE));
         DBMS_ASSERT(ret == 1);
         int final_output_size = 0;
-        ret = EVP_EncryptFinal(ctx, ciphertext + output_size, &final_output_size);
+        ret = EVP_EncryptFinal_ex(ctx, ciphertext + output_size, &final_output_size);
         DBMS_ASSERT(ret == 1);
         DBMS_ASSERT(output_size + final_output_size == MAX_SIZE);
         FreeCipherContext(ctx);

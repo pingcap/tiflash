@@ -4,6 +4,7 @@
 
 #include <Poco/Logger.h>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <sstream>
 

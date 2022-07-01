@@ -1,5 +1,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
 
 namespace DB
 {
@@ -161,7 +162,7 @@ void DAGContext::appendWarning(const String & msg, int32_t code)
     appendWarning(warning);
 }
 
-bool DAGContext::shouldClipToZero()
+bool DAGContext::shouldClipToZero() const
 {
     return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT;
 }
@@ -178,9 +179,9 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
     {
         if (p.first == table_scan_executor_id)
         {
-            for (auto & streamPtr : p.second.input_streams)
+            for (auto & stream_ptr : p.second.input_streams)
             {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
                 {
                     time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
                     num_produced_bytes += p_stream->getProfileInfo().bytes;
@@ -197,6 +198,14 @@ std::pair<bool, double> DAGContext::getTableScanThroughput()
 void DAGContext::attachBlockIO(const BlockIO & io_)
 {
     io = io_;
+}
+
+void DAGContext::cancelAllExchangeReceiver()
+{
+    for (auto & it : mpp_exchange_receiver_map)
+    {
+        it.second->cancel();
+    }
 }
 
 } // namespace DB

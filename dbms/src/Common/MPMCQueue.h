@@ -53,6 +53,13 @@ public:
     {
     }
 
+    ~MPMCQueue()
+    {
+        std::unique_lock lock(mu);
+        for (; read_pos < write_pos; ++read_pos)
+            destruct(getObj(read_pos));
+    }
+
     /// Block util:
     /// 1. Pop succeeds with a valid T: return true.
     /// 2. The queue is cancelled or finished: return false.
@@ -198,7 +205,11 @@ private:
 
     bool popObj(T & res, const TimePoint * deadline = nullptr)
     {
+#ifdef __APPLE__
+        WaitingNode node;
+#else
         thread_local WaitingNode node;
+#endif
         {
             /// read_pos < write_pos means the queue isn't empty
             auto pred = [&] {
@@ -234,7 +245,11 @@ private:
     template <typename F>
     bool assignObj(const TimePoint * deadline, F && assigner)
     {
+#ifdef __APPLE__
+        WaitingNode node;
+#else
         thread_local WaitingNode node;
+#endif
         auto pred = [&] {
             return write_pos - read_pos < capacity || !isNormal();
         };

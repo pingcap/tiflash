@@ -89,6 +89,8 @@ public:
 
     void cancel();
 
+    void close();
+
     const DAGSchema & getOutputSchema() const { return schema; }
 
     ExchangeReceiverResult nextResult(

@@ -7,8 +7,12 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <grpcpp/server_context.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #include <kvproto/mpp.pb.h>
 #include <kvproto/tikvpb.grpc.pb.h>
+#pragma GCC diagnostic pop
 
 #include <boost/noncopyable.hpp>
 #include <chrono>

@@ -38,11 +38,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 template <typename RPCContext>
 ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 {
-    {
-        std::unique_lock<std::mutex> lk(mu);
-        state = ExchangeReceiverState::CLOSED;
-        cv.notify_all();
-    }
+    close();
     if (thread_manager)
         thread_manager->wait();
 }
@@ -51,7 +47,17 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
     std::unique_lock<std::mutex> lk(mu);
-    state = ExchangeReceiverState::CANCELED;
+    if (!(state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED))
+        state = ExchangeReceiverState::CANCELED;
+    cv.notify_all();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::close()
+{
+    std::unique_lock<std::mutex> lk(mu);
+    if (!(state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED))
+        state = ExchangeReceiverState::CLOSED;
     cv.notify_all();
 }
 

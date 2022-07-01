@@ -13,11 +13,12 @@ class ExchangeSender : public IProfilingBlockInputStream
 public:
     ExchangeSender(const BlockInputStreamPtr & input, std::unique_ptr<DAGResponseWriter> writer, const std::shared_ptr<LogWithPrefix> & log_ = nullptr)
         : writer(std::move(writer))
-        , log(getLogWithPrefix(log_, getName()))
+        , log(getLogWithPrefix(log_, name))
     {
         children.push_back(input);
     }
-    String getName() const override { return "ExchangeSender"; }
+    static constexpr auto name = "ExchangeSender";
+    String getName() const override { return name; }
     Block getHeader() const override { return children.back()->getHeader(); }
     void readSuffix() override
     {

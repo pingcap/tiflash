@@ -223,14 +223,14 @@ std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(ColumnIDs handle_
     {
         table_info.is_common_handle = true;
         TiDB::IndexInfo index_info;
-        for (size_t i = 0; i < handle_ids.size(); i++)
+        for (auto handle_id : handle_ids)
         {
             TiDB::IndexColumnInfo index_column_info;
-            for (size_t pos = 0; pos < table_info.columns.size(); pos++)
+            for (auto & column : table_info.columns)
             {
-                if (table_info.columns[pos].id == handle_ids[i])
+                if (column.id == handle_id)
                 {
-                    index_column_info.offset = pos;
+                    index_column_info.name = column.name;
                     break;
                 }
             }
@@ -271,11 +271,11 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
     if (handle_id != EXTRA_HANDLE_COLUMN_ID)
     {
         auto iter = std::find_if(store_columns.begin(), store_columns.end(), [&](const ColumnDefine & cd) { return cd.id == handle_id; });
-        return std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, *iter);
+        return std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, *iter, /* decoding_schema_version_ */ 1);
     }
     else
     {
-        return std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, store_columns[0]);
+        return std::make_shared<DecodingStorageSchemaSnapshot>(std::make_shared<ColumnDefines>(store_columns), table_info, store_columns[0], /* decoding_schema_version_ */ 1);
     }
 }
 

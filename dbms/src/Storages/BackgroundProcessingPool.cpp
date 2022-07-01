@@ -15,6 +15,15 @@
 #ifdef __linux__
 #include <sys/syscall.h>
 #include <unistd.h>
+inline static pid_t getTid()
+{
+    return syscall(SYS_gettid);
+}
+#else
+inline static pid_t getTid()
+{
+    return -1;
+}
 #endif
 
 namespace CurrentMetrics
@@ -23,6 +32,56 @@ extern const Metric BackgroundPoolTask;
 extern const Metric MemoryTrackingInBackgroundProcessingPool;
 } // namespace CurrentMetrics
 
+namespace absl
+{
+BlockingCounter::BlockingCounter(int initial_count)
+    : count(initial_count)
+    , num_waiting(0)
+    , done{initial_count == 0}
+{
+    if (initial_count < 0)
+    {
+        throw std::logic_error("BlockingCounter initial_count negative");
+    }
+}
+
+bool BlockingCounter::DecrementCount()
+{
+    int c = count.fetch_sub(1, std::memory_order_acq_rel) - 1;
+    if (c < 0)
+    {
+        throw std::logic_error("BlockingCounter::DecrementCount() called too many times");
+    }
+    if (count == 0)
+    {
+        {
+            std::lock_guard l(lock);
+            done = true;
+        }
+        cv.notify_one();
+        return true;
+    }
+    return false;
+}
+
+void BlockingCounter::Wait()
+{
+    std::unique_lock l(lock);
+    // only one thread may call Wait(). To support more than one thread,
+    // implement a counter num_to_exit, like in the Barrier class.
+    if (num_waiting != 0)
+    {
+        throw std::logic_error("multiple threads called Wait()");
+    }
+    num_waiting++;
+    cv.wait(l, [&] { return done; });
+
+    // At this point, we know that all threads executing DecrementCount
+    // will not touch this object again.
+    // Therefore, the thread calling this method is free to delete the object
+    // after we return from this method.
+}
+} // namespace absl
 namespace DB
 {
 constexpr double BackgroundProcessingPool::sleep_seconds;
@@ -62,6 +121,7 @@ void BackgroundProcessingPool::TaskInfo::wake()
 
 BackgroundProcessingPool::BackgroundProcessingPool(int size_)
     : size(size_)
+    , thread_ids_counter(size_)
 {
     LOG_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with " << size << " threads");
 
@@ -126,9 +186,7 @@ void BackgroundProcessingPool::threadFunction()
         const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
         is_background_thread = true;
-#ifdef __linux__
-        addThreadId(syscall(SYS_gettid));
-#endif
+        addThreadId(getTid());
     }
 
     MemoryTracker memory_tracker;
@@ -258,14 +316,23 @@ void BackgroundProcessingPool::threadFunction()
 
 std::vector<pid_t> BackgroundProcessingPool::getThreadIds()
 {
+    thread_ids_counter.Wait();
     std::lock_guard lock(thread_ids_mtx);
+    if (thread_ids.size() != size)
+    {
+        LOG_FMT_ERROR(&Poco::Logger::get("BackgroundProcessingPool"), "thread_ids.size is {}, but {} is required", thread_ids.size(), size);
+        throw Exception("Background threads' number not match");
+    }
     return thread_ids;
 }
 
 void BackgroundProcessingPool::addThreadId(pid_t tid)
 {
-    std::lock_guard lock(thread_ids_mtx);
-    thread_ids.push_back(tid);
+    {
+        std::lock_guard lock(thread_ids_mtx);
+        thread_ids.push_back(tid);
+    }
+    thread_ids_counter.DecrementCount();
 }
 
 } // namespace DB

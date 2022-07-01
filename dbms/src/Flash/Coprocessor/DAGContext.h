@@ -41,6 +41,8 @@ UInt64 inline getMaxErrorCount(const tipb::DAGRequest &)
     return 1024;
 }
 
+class ExchangeReceiver;
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -105,7 +107,7 @@ public:
     void appendWarning(const String & msg, int32_t code = 0);
     bool allowZeroInDate() const;
     bool allowInvalidDate() const;
-    bool shouldClipToZero();
+    bool shouldClipToZero() const;
     /// This method is thread-safe.
     void appendWarning(const tipb::Error & warning)
     {
@@ -148,6 +150,13 @@ public:
     {
         return io;
     }
+
+    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMapRef()
+    {
+        return mpp_exchange_receiver_map;
+    }
+
+    void cancelAllExchangeReceiver();
 
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
@@ -202,6 +211,8 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
+    // mpp_exchange_receiver_map holds exchange_receivers
+    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_map;
 };
 
 } // namespace DB
