@@ -106,7 +106,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
-        LOG_FMT_INFO(log, "start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
+        LOG_FMT_INFO(log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
@@ -165,7 +165,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return -1;
         }
 
-        LOG_FMT_DEBUG(log, "try load schema diffs.");
+        LOG_FMT_DEBUG(log, "Try load schema diffs.");
 
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, latest_version);
 
@@ -176,7 +176,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             used_version++;
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
-        LOG_FMT_DEBUG(log, "end load schema diffs with total {} entries.", diffs.size());
+        LOG_FMT_DEBUG(log, "End load schema diffs with total {} entries.", diffs.size());
 
         try
         {
