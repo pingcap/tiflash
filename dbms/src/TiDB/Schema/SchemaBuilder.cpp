@@ -1201,39 +1201,42 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr d
         throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
     }
 
-    if (latest_table_info->isLogicalPartitionTable())
-    {
-        for (const auto & part_def : latest_table_info->partition.definitions)
-        {
-            auto new_table_info = latest_table_info->producePartitionTableInfo(part_def.id, name_mapper);
-            applySetTiFlashReplica(db_info, new_table_info);
-        }
-    }
-
-    applySetTiFlashReplica(db_info, latest_table_info);
-}
-
-template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info)
-{
     auto & tmt_context = context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(table_info->id);
+    auto storage = tmt_context.getStorages().get(latest_table_info->id);
     if (unlikely(storage == nullptr))
     {
-        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *table_info)),
+        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *latest_table_info)),
                                Errors::DDL::MissingTable);
     }
 
-    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
-    if (unlikely(!managed_storage))
-        throw Exception(fmt::format("{} is not a ManageableStorage", name_mapper.debugCanonicalName(*db_info, *table_info)));
-
-    applySetTiFlashReplica(db_info, table_info, managed_storage);
+    applySetTiFlashReplicaLogicalTable(db_info, latest_table_info, storage);
 }
 
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage)
+{
+    applySetTiFlashReplicaPhysicalTable(db_info, table_info, storage);
+
+    if (table_info->isLogicalPartitionTable())
+    {
+        auto & tmt_context = context.getTMTContext();
+
+        for (const auto & part_def : table_info->partition.definitions)
+        {
+            auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
+            auto part_storage = tmt_context.getStorages().get(new_part_table_info->id);
+            if (unlikely(part_storage == nullptr))
+            {
+                throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *new_part_table_info)),
+                                       Errors::DDL::MissingTable);
+            }
+            applySetTiFlashReplicaPhysicalTable(db_info, new_part_table_info, part_storage);
+        }
+    }
+}
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaPhysicalTable(
     TiDB::DBInfoPtr db_info,
     TiDB::TableInfoPtr latest_table_info,
     ManageableStoragePtr storage)
@@ -1323,7 +1326,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             /// Rename if needed.
             applyRenameLogicalTable(db, table, storage);
             /// Update replica info if needed.
-            applySetTiFlashReplica(db, table, storage);
+            applySetTiFlashReplicaLogicalTable(db, table, storage);
             /// Alter if needed.
             applyAlterLogicalTable(db, table, storage);
             LOG_FMT_DEBUG(log, "Table {} synced during sync all schemas", name_mapper.debugCanonicalName(*db, *table));

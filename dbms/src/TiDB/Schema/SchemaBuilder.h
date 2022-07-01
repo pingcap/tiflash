@@ -87,8 +87,8 @@ private:
     void applyExchangeTablePartition(const SchemaDiff & diff);
 
     void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TableID table_id);
-    void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info);
-    void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applySetTiFlashReplicaLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applySetTiFlashReplicaPhysicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
 };
 
 } // namespace DB
