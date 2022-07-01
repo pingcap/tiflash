@@ -32,6 +32,8 @@
 #include <iterator>
 #include <set>
 
+#include "Common/FmtUtils.h"
+
 
 namespace DB
 {
@@ -186,36 +188,39 @@ std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
 
     if (expected_row_set != actual_row_set)
     {
+        FmtBuffer buf;
+
         auto expect_it = expected_row_set.begin();
         auto actual_it = actual_row_set.begin();
-        auto ret = testing::AssertionFailure() << "Columns row set mismatch\n";
-        auto fmt_row = [](auto const & r) {
-            String ret;
-            for (auto const & v : r)
-            {
-                ret += v.toString() + " ";
-            }
-            return ret;
-        };
 
-        ret << "expected_row_set:\n";
+        buf.append("Columns row set mismatch\n").append("expected_row_set:\n");
         for (; expect_it != expected_row_set.end(); ++expect_it, ++actual_it)
         {
-            ret << fmt_row(*expect_it) << "\n";
+            buf.joinStr(
+                   expect_it->begin(),
+                   expect_it->end(),
+                   [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
+                   " ")
+                .append("\n");
             if (*expect_it != *actual_it)
                 break;
         }
 
         ++actual_it;
 
-        ret << "...\nactual_row_set:\n";
+        buf.append("...\nactual_row_set:\n");
         for (auto it = actual_row_set.begin(); it != actual_it; ++it)
         {
-            ret << fmt_row(*it) << "\n";
+            buf.joinStr(
+                   it->begin(),
+                   it->end(),
+                   [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
+                   " ")
+                .append("\n");
         }
-        ret << "...\n";
+        buf.append("...\n");
 
-        return ret;
+        return testing::AssertionFailure() << buf.toString();
     }
 
     return testing::AssertionSuccess();
