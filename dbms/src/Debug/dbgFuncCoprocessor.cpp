@@ -45,9 +45,6 @@ extern const int LOGICAL_ERROR;
 extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
 
-using TiDB::DatumFlat;
-using TiDB::TableInfo;
-
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 static const String ENCODE_TYPE_NAME = "encode_type";
@@ -287,11 +284,11 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             {
                 /// contains a table scan
                 auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
-                if (regions.size() < (size_t)properties.mpp_partition_num)
+                if (regions.size() < static_cast<size_t>(properties.mpp_partition_num))
                     throw Exception("Not supported: table region num less than mpp partition num");
                 for (size_t i = 0; i < regions.size(); i++)
                 {
-                    if (i % properties.mpp_partition_num != (size_t)task.partition_id)
+                    if (i % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
                         continue;
                     auto * region = req->add_regions();
                     region->set_region_id(regions[i].first);
@@ -383,7 +380,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
 
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
 {
-    if (args.size() < 1 || args.size() > 3)
+    if (args.empty() || args.size() > 3)
         throw Exception("Args not matched, should be: query[, region-id, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -391,7 +388,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    String prop_string = "";
+    String prop_string;
     if (args.size() == 3)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     DAGProperties properties = getDAGProperties(prop_string);
@@ -427,7 +424,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    String prop_string = "";
+    String prop_string;
     if (args.size() == 4)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     DAGProperties properties = getDAGProperties(prop_string);
@@ -535,7 +532,7 @@ void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & conte
     if (expr->tp() == tipb::ScalarFunc)
     {
         bool all_const = true;
-        for (auto c : expr->children())
+        for (const auto & c : expr->children())
         {
             if (!isLiteralExpr(c))
             {
@@ -831,7 +828,7 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
         else
         {
             bool found = false;
-            for (auto & field : input)
+            for (const auto & field : input)
             {
                 auto field_name = splitQualifiedName(field.first);
                 if (field_name.second == column_name.second)
@@ -936,7 +933,7 @@ struct Executor
     {
         children[0]->toMPPSubPlan(executor_index, properties, exchange_map);
     }
-    virtual ~Executor() {}
+    virtual ~Executor() = default;
 };
 
 struct ExchangeSender : Executor
@@ -1053,7 +1050,7 @@ struct TableScan : public Executor
             ci->set_decimal(info.second.decimal);
             if (!info.second.elems.empty())
             {
-                for (auto & pair : info.second.elems)
+                for (const auto & pair : info.second.elems)
                 {
                     ci->add_elems(pair.first);
                 }
@@ -1407,14 +1404,14 @@ struct Join : Executor
 
         std::unordered_set<String> left_used_columns;
         std::unordered_set<String> right_used_columns;
-        for (auto & s : used_columns)
+        for (const auto & s : used_columns)
         {
             if (left_columns.find(s) != left_columns.end())
                 left_used_columns.emplace(s);
             else
                 right_used_columns.emplace(s);
         }
-        for (auto child : join_params.using_expression_list->children)
+        for (const auto & child : join_params.using_expression_list->children)
         {
             if (auto * identifier = typeid_cast<ASTIdentifier *>(child.get()))
             {
@@ -1461,7 +1458,7 @@ struct Join : Executor
         }
     }
 
-    void fillJoinKeyAndFieldType(
+    static void fillJoinKeyAndFieldType(
         ASTPtr key,
         const DAGSchema & schema,
         tipb::Expr * tipb_key,
@@ -1471,7 +1468,7 @@ struct Join : Executor
         auto * identifier = typeid_cast<ASTIdentifier *>(key.get());
         for (size_t index = 0; index < schema.size(); index++)
         {
-            auto & field = schema[index];
+            const auto & field = schema[index];
             if (splitQualifiedName(field.first).second == identifier->getColumnName())
             {
                 auto tipb_type = TiDB::columnInfoToFieldType(field.second);
@@ -1820,9 +1817,9 @@ ExecutorPtr compileTopN(ExecutorPtr input, size_t & executor_index, ASTPtr order
         compileExpr(input->output_schema, elem->children[0]);
     }
     auto limit = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*limit_expr).value);
-    auto topN = std::make_shared<mock::TopN>(executor_index, input->output_schema, std::move(order_columns), limit);
-    topN->children.push_back(input);
-    return topN;
+    auto top_n = std::make_shared<mock::TopN>(executor_index, input->output_schema, std::move(order_columns), limit);
+    top_n->children.push_back(input);
+    return top_n;
 }
 
 ExecutorPtr compileLimit(ExecutorPtr input, size_t & executor_index, ASTPtr limit_expr)
@@ -1958,7 +1955,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params)
 {
     DAGSchema output_schema;
-    auto & join_params = (static_cast<const ASTTableJoin &>(*params));
+    const auto & join_params = (static_cast<const ASTTableJoin &>(*params));
     for (auto & field : left->output_schema)
     {
         if (join_params.kind == ASTTableJoin::Kind::Right && field.second.hasNotNullFlag())
@@ -2022,7 +2019,7 @@ struct QueryFragment
             dag_request.add_output_offsets(i);
         auto * root_tipb_executor = dag_request.mutable_root_executor();
         root_executor->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info, context);
-        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, mpp_info.sender_target_task_ids.size() == 0 ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
+        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, mpp_info.sender_target_task_ids.empty() ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
     }
 
     QueryTasks toQueryTasks(const DAGProperties & properties, const Context & context)
@@ -2058,7 +2055,7 @@ TableID findTableIdForQueryFragment(ExecutorPtr root_executor, bool must_have_ta
     while (!current_executor->children.empty())
     {
         ExecutorPtr non_exchange_child;
-        for (auto c : current_executor->children)
+        for (const auto & c : current_executor->children)
         {
             if (dynamic_cast<mock::ExchangeReceiver *>(c.get()))
                 continue;
@@ -2187,7 +2184,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
     const DAGProperties & properties,
     ASTSelectQuery & ast_query)
 {
-    auto joined_table = getJoin(ast_query);
+    const auto * joined_table = getJoin(ast_query);
     /// uniq_raw is used to test `ApproxCountDistinct`, when testing `ApproxCountDistinct` in mock coprocessor
     /// the return value of `ApproxCountDistinct` is just the raw result, we need to convert it to a readable
     /// value when decoding the result(using `UniqRawResReformatBlockOutputStream`)
