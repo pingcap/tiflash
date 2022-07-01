@@ -25,6 +25,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_during_mpp_close_tunnel[];
+extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 
 template <typename Writer>
@@ -322,6 +323,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
         auto res = cv_for_connected_or_finished.wait_for(lk, timeout, connected_or_finished);
         LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
 
+        fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, res = false;);
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
