@@ -51,22 +51,29 @@ protected:
 TEST_F(StringReverse, strAndStrTest)
 try
 {
+    std::vector<std::optional<String>> candidate_strings = {"one week’s time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
+    std::vector<std::optional<String>> reversed_strings = {"tset emit s’keew eno", "fed试测cba", "cbaトステcba", "џўѝќћњљјїіѕєѓђёѐ", "^！џ@ў#ѝ￥ќ）ћ（њ&љ……ј%ї@$і#ѕ@є!ѓ/ђ*ё-ѐ+", "σωψχφυτσρποξνμλκιθηζεδγβα", "✕σ★ω♘ψχ♖φυ♥τσ℉ρπ✚οξ✓νμ♫λκ€ιθ✂ηζ☎εδ➨γβ▼α▲", "շմնբվցղզխլկյհգֆդսապօիւըտռեոքծժճչրջձփթ"};
     ASSERT_COLUMN_EQ(
-        toVec({"olleh", "dlrow,olleh", "", "pacgnip.www", "。。。试.测.文中"}),
+        toVec(candidate_strings),
         executeFunction(
             func_name,
-            toVec({"hello", "hello,world", "", "www.pingcap", "中文.测.试。。。"}), ));
+            toVec(reversed_strings)));
+    ASSERT_COLUMN_EQ(
+        toVec(candidate_strings),
+        executeFunction(
+            "reverseUTF8",
+            toVec(reversed_strings)));
 }
 CATCH
 
 // test NULL
-TEST_F(StringLength, nullTest)
+TEST_F(StringReverse, nullTest)
 {
     ASSERT_COLUMN_EQ(
         toVec({"", {}}),
         executeFunction(
             func_name,
-            toVec({"", {}}), ));
+            toVec({"", {}})));
 }
 
 } // namespace tests
