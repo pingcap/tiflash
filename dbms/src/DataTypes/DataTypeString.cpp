@@ -129,12 +129,12 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
 
         data.resize(offset);
 
-#ifdef __x86_64__
-        // The intel reference manual states that for sizes larger than 128, using REP MOVSB will give identical performance with other variants.
-        // Beginning from 2048 bytes, REP MOVSB gives an even better performance.
+#
         if constexpr (BLOCK_SIZE >= 256)
         {
-            /*
+            /* The intel reference manual states that for sizes larger than 128, using REP MOVSB will give identical performance with other variants.
+             * Beginning from 2048 bytes, REP MOVSB gives an even better performance.
+             *
              * According to intel's reference manual:
              *
              * On older microarchitecture (ivy bridge), a REP MOVSB implementation of memcpy can achieve throughput at
@@ -145,7 +145,14 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
              * For copy length that are smaller than a few hundred bytes, REP MOVSB approach is still slower than those
              * SIMD approaches.
              */
-            if (size >= 1024 && common::cpu_feature_flags.erms && istr.position() + size <= istr.buffer().end())
+#ifdef __x86_64__
+            static const bool memcpy_instruction_ready = common::cpu_feature_flags.erms;
+#elif defined(__aarch64__)
+            static const bool memcpy_instruction_ready = ::detail::mopsSupported();
+#else
+            static const bool memcpy_instruction_ready = false;
+#endif
+            if (size >= 1024 && memcpy_instruction_ready && istr.position() + size <= istr.buffer().end())
             {
                 const auto * src = reinterpret_cast<const char *>(istr.position());
                 auto * dst = reinterpret_cast<char *>(&data[offset - size - 1]);
@@ -164,15 +171,18 @@ static ALWAYS_INLINE inline void deserializeBinaryBlockImpl(ColumnString::Chars_
                 dst += shift;
                 src += shift;
                 size -= shift;
-                asm volatile("rep movsb"
-                             : "+D"(dst), "+S"(src), "+c"(size)
-                             :
-                             : "memory");
+#ifdef __x86_64__
+                ::detail::rep_movsb(dst, src, size);
+#elif defined(__aarch64__)
+                ::detail::cpyf(dst, src, size);
+#else
+                std::memcpy(dst, src, size);
+#endif
                 data[offset - 1] = 0;
                 continue;
             }
         }
-#endif
+
         if (size)
         {
             /// An optimistic branch in which more efficient copying is possible.

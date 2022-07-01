@@ -58,6 +58,10 @@ extern bool ENABLE_SVE;
 #define HWCAP_SVE (1 << 22)
 #endif
 
+#ifndef HWCAP_CPUID
+#define HWCAP_CPUID (1 << 11)
+#endif
+
 #ifndef AT_HWCAP2
 #define AT_HWCAP2 26
 #endif
@@ -79,6 +83,47 @@ static inline bool sveSupported()
 {
     auto hwcaps = getauxval(AT_HWCAP);
     return (hwcaps & HWCAP_SVE) != 0;
+}
+
+static inline bool mopsSupported()
+{
+    auto hwcaps = getauxval(AT_HWCAP);
+    if (hwcaps & HWCAP_CPUID == 0)
+    {
+        return false;
+    }
+    uint64_t id_reg;
+    asm("mrs %0, ID_AA64ISAR2_EL1"
+        : "=r"(id_reg));
+    return (id_reg >> 16u & 0b1111u) == 0b0001u;
+}
+
+__attribute__((target("mops"))) static inline void cypf(void * dst, const void * src, size_t size)
+{
+    asm volatile(
+        "cpyfp [%0]!, [%1]!, %2!"
+        : "+r"(dst), "+r"(src), "+r"(size)
+        :
+        : "memory");
+    asm volatile(
+        "cpyfm [%0]!, [%1]!, %2!"
+        : "+r"(dst), "+r"(src), "+r"(size)
+        :
+        : "memory");
+    asm volatile(
+        "cpyfe [%0]!, [%1]!, %2!"
+        : "+r"(dst), "+r"(src), "+r"(size)
+        :
+        : "memory");
+}
+#endif
+#ifdef __x86_64__
+static inline void rep_movsb(void * dst, const void * src, size_t size)
+{
+    asm volatile("rep movsb"
+                 : "+D"(dst), "+S"(src), "+c"(size)
+                 :
+                 : "memory");
 }
 #endif
 } // namespace detail
