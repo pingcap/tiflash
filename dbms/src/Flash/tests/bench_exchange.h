@@ -247,7 +247,6 @@ struct ReceiverHelper
     explicit ReceiverHelper(int concurrency_, int source_num_, uint32_t fine_grained_shuffle_stream_count_);
     MockExchangeReceiverPtr buildReceiver();
     std::vector<BlockInputStreamPtr> buildExchangeReceiverStream();
-    ;
     BlockInputStreamPtr buildUnionStream();
     void finish();
 };

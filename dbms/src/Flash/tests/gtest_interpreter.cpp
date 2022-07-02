@@ -481,10 +481,10 @@ try
 Union: <for test>
  Expression x 10: <final projection>
   Expression: <cast after window>
-   Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+   Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     Expression: <final projection>
-     MergeSorting, limit = 0
-      PartialSorting: limit = 0
+     MergeSorting: <enable fine grained shuffle>, limit = 0
+      PartialSorting: <enable fine grained shuffle>: limit = 0
        Expression: <final projection>
         MockExchangeReceiver
         )";

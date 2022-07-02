@@ -225,14 +225,12 @@ std::vector<BlockInputStreamPtr> ReceiverHelper::buildExchangeReceiverStream()
     auto receiver = buildReceiver();
     std::vector<BlockInputStreamPtr> streams(concurrency);
     // NOTE: check if need fine_grained_shuffle_stream_count
-    uint32_t stream_id = 0;
     for (int i = 0; i < concurrency; ++i)
     {
-        if (::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
-        {
-            stream_id = i;
-        }
-        streams[i] = std::make_shared<MockExchangeReceiverInputStream>(receiver, "mock_req_id", "mock_executor_id" + std::to_string(i), stream_id);
+        streams[i] = std::make_shared<MockExchangeReceiverInputStream>(receiver,
+                                                                       "mock_req_id",
+                                                                       "mock_executor_id" + std::to_string(i),
+                                                                       /*stream_id=*/enableFineGrainedShuffle(fine_grained_shuffle_stream_count) ? i : 0);
     }
     return streams;
 }

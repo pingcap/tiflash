@@ -57,6 +57,10 @@ namespace FailPoints
 {
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
+namespace
+{
+const String EnableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
+}
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     Context & context_,
@@ -355,7 +359,10 @@ void DAGQueryBlockInterpreter::executeWindow(
     if (enable_fine_grained_shuffle)
     {
         /// Window function can be multiple threaded when fine grained shuffle is enabled.
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<WindowBlockInputStream>(stream, window_description, log->identifier()); });
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<WindowBlockInputStream>(stream, window_description, log->identifier());
+            stream->setExtraInfo(EnableFineGrainedShuffleExtraInfo);
+        });
     }
     else
     {
@@ -455,6 +462,9 @@ void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesA
 void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit, bool enable_fine_grained_shuffle)
 {
     const Settings & settings = context.getSettingsRef();
+    String extra_info;
+    if (enable_fine_grained_shuffle)
+        extra_info = EnableFineGrainedShuffleExtraInfo;
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
@@ -466,6 +476,7 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
         sorting_stream->setLimits(limits);
 
         stream = sorting_stream;
+        stream->setExtraInfo(extra_info);
     });
 
     if (enable_fine_grained_shuffle)
@@ -479,6 +490,7 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
                 settings.max_bytes_before_external_sort,
                 context.getTemporaryPath(),
                 log->identifier());
+            stream->setExtraInfo(EnableFineGrainedShuffleExtraInfo);
         });
     }
     else
@@ -511,15 +523,19 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
-    size_t stream_id = 0;
+    const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(exchange_receiver->getFineGrainedShuffleStreamCount());
+    String extra_info = "squashing after exchange receiver";
+    if (enable_fine_grained_shuffle)
+        extra_info += ", " + EnableFineGrainedShuffleExtraInfo;
     for (size_t i = 0; i < max_streams; ++i)
     {
-        if (enableFineGrainedShuffle(exchange_receiver->getFineGrainedShuffleStreamCount()))
-            stream_id = i;
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, log->identifier(), query_block.source_name, stream_id);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
+                                                                                   log->identifier(),
+                                                                                   query_block.source_name,
+                                                                                   /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
-        stream->setExtraInfo("squashing after exchange receiver");
+        stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
     NamesAndTypes source_columns;
@@ -771,6 +787,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
     TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
     int stream_id = 0;
+    const uint64_t stream_count = query_block.exchange_sender->fine_grained_shuffle_stream_count();
+    const uint64_t batch_size = query_block.exchange_sender->fine_grained_shuffle_batch_size();
 
     pipeline.transform([&](auto & stream) {
         // construct writer
@@ -783,9 +801,11 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             context.getSettingsRef().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
             dagContext(),
-            query_block.exchange_sender->fine_grained_shuffle_stream_count(),
-            query_block.exchange_sender->fine_grained_shuffle_batch_size());
+            stream_count,
+            batch_size);
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+        if (enableFineGrainedShuffle(stream_count))
+            stream->setExtraInfo(EnableFineGrainedShuffleExtraInfo);
     });
 }
 
