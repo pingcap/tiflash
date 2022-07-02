@@ -17,6 +17,7 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnTuple.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
@@ -48,6 +49,11 @@ extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char random_aggregate_create_state_failpoint[];
+extern const char random_aggregate_merge_failpoint[];
+} // namespace FailPoints
 
 AggregatedDataVariants::~AggregatedDataVariants()
 {
@@ -317,6 +323,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
               * In order that then everything is properly destroyed, we "roll back" some of the created states.
               * The code is not very convenient.
               */
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_create_state_failpoint);
             aggregate_functions[j]->create(aggregate_data + offsets_of_aggregate_states[j]);
         }
         catch (...)
@@ -1503,6 +1510,8 @@ protected:
 
         if (current_bucket_num >= NUM_BUCKETS)
             return {};
+
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_merge_failpoint);
 
         AggregatedDataVariantsPtr & first = data[0];
 

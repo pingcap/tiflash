@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
@@ -22,6 +23,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_task_manager_find_task_failure_failpoint[];
+} // namespace FailPoints
+
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
     , log(&Poco::Logger::get("TaskManager"))
@@ -50,6 +56,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
         it = query_it->second->task_map.find(id);
         return it != query_it->second->task_map.end();
     });
+    fiu_do_on(FailPoints::random_task_manager_find_task_failure_failpoint, ret = false;);
     if (cancelled)
     {
         errMsg = fmt::format("Task [{},{}] has been cancelled.", meta.start_ts(), meta.task_id());
@@ -138,6 +145,17 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     task->manager = this;
     cv.notify_all();
     return true;
+}
+
+bool MPPTaskManager::isTaskToBeCancelled(const MPPTaskId & task_id)
+{
+    std::unique_lock lock(mu);
+    auto it = mpp_query_map.find(task_id.start_ts);
+    if (it != mpp_query_map.end() && it->second->to_be_cancelled)
+    {
+        return it->second->task_map.find(task_id) != it->second->task_map.end();
+    }
+    return false;
 }
 
 void MPPTaskManager::unregisterTask(MPPTask * task)
