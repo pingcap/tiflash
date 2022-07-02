@@ -162,7 +162,7 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
-mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
+mysql_client="mysql -u root -P $tidb_port -h $tidb_server --raw -e"
 
 if [ "$fullstack" = true ]; then
     mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"

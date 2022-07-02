@@ -40,12 +40,18 @@ def exec_func(cmd):
     err = p.close()
     return output, err
 
+# translate string to unescaped version in shell environment
+# we only need to consider '$', '`' and '\'
+# ref: https://www.gnu.org/software/bash/manual/html_node/Double-Quotes.html
+def to_unescaped_str(cmd):
+    return cmd.replace('\\', '\\\\').replace('$', '\\$').replace('`', '\\`')
+
 class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
     def exe(self, cmd):
-        return exec_func(self.dbc + ' "' + cmd + '" 2>&1')
+        return exec_func(self.dbc + ' "' + to_unescaped_str(cmd) + '" 2>&1')
 
 
 class ShellFuncExecutor:
