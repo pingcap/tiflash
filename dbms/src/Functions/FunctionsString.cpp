@@ -4288,6 +4288,7 @@ private:
         }
 
         block.getByPosition(result).column = std::move(col_res);
+        return true;
     }
     static void vectorConst(
         const ColumnString::Chars_t & data,
@@ -4331,7 +4332,6 @@ private:
         }
     }
 
-private:
     static size_t doRepeat(
         const ColumnString::Chars_t & data,
         const ColumnString::Offset & start_offset,
