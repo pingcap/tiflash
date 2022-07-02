@@ -39,6 +39,7 @@ class StringRepeatTest : public DB::tests::FunctionTest
 {
 public:
     static constexpr auto funcName = "repeat";
+
 protected:
     static ColumnWithTypeAndName toVecString(const std::vector<std::optional<String>> & v)
     {
