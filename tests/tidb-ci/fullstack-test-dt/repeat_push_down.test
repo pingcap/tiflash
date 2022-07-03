@@ -19,7 +19,7 @@ mysql> insert into test.f values('abc',1,1);
 mysql> insert into test.f values('pingcap',2,1);
 mysql> alter table test.f set tiflash replica 1;
 
-mysql> use test;set @@tidb_isolation_read_engines='tiflash,tidb'; set @@tidb_allow_mpp=1; select repeat(a,b) from test.f;
+mysql> use test; set @@tidb_allow_mpp=1;set @@tidb_enforce_mpp=1;  select repeat(a,b) from test.f;
 +----------------+
 | repeat(a,b)    |
 +----------------+
