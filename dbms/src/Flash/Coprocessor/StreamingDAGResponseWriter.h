@@ -46,7 +46,7 @@ public:
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
-        uint64_t fine_grained_shuffle_stream_count_,
+        UInt64 fine_grained_shuffle_stream_count_,
         UInt64 fine_grained_shuffle_batch_size);
     void write(const Block & block) override;
     void finishWrite() override;
@@ -80,7 +80,7 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
-    uint64_t fine_grained_shuffle_stream_count;
+    UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
 };
 
