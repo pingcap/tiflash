@@ -39,8 +39,8 @@ inline void serializeToPacket(mpp::MPPDataPacket & packet, const tipb::SelectRes
         throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
 }
 
-template <class StreamWriterPtr>
-StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
+StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::StreamingDAGResponseWriter(
     StreamWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
@@ -77,12 +77,12 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     }
 }
 
-template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::finishWrite()
 {
     if (should_send_exec_summary_at_last)
     {
-        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+        if constexpr (enable_fine_grained_shuffle)
         {
             assert(exchange_type == tipb::ExchangeType::Hash);
             batchWriteFineGrainedShuffle<true>();
@@ -94,7 +94,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
     }
     else
     {
-        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+        if constexpr (enable_fine_grained_shuffle)
         {
             assert(exchange_type == tipb::ExchangeType::Hash);
             batchWriteFineGrainedShuffle<false>();
@@ -106,8 +106,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
     }
 }
 
-template <class StreamWriterPtr>
-void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::write(const Block & block)
 {
     if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
@@ -118,7 +118,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+    if constexpr (enable_fine_grained_shuffle)
     {
         assert(exchange_type == tipb::ExchangeType::Hash);
         if (static_cast<UInt64>(rows_in_blocks) >= fine_grained_shuffle_batch_size)
@@ -131,9 +131,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     }
 }
 
-template <class StreamWriterPtr>
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::encodeThenWriteBlocks(
     const std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
@@ -228,9 +228,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
 }
 
 
-template <class StreamWriterPtr>
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::batchWrite()
 {
     tipb::SelectResponse response;
     if constexpr (send_exec_summary_at_last)
@@ -247,9 +247,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
     rows_in_blocks = 0;
 }
 
-template <class StreamWriterPtr>
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr>::handleExecSummary(
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::handleExecSummary(
     const std::vector<Block> & input_blocks,
     std::vector<mpp::MPPDataPacket> & packet,
     tipb::SelectResponse & response) const
@@ -271,10 +271,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::handleExecSummary(
     }
 }
 
-template <class StreamWriterPtr>
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr>::writePackets(const std::vector<size_t> & responses_row_count,
-                                                               std::vector<mpp::MPPDataPacket> & packets) const
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::writePackets(const std::vector<size_t> & responses_row_count,
+                                                                                            std::vector<mpp::MPPDataPacket> & packets) const
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
@@ -369,9 +369,9 @@ void computeHash(const Block & input_block,
 }
 
 /// hash exchanging data among only TiFlash nodes.
-template <class StreamWriterPtr>
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::partitionAndEncodeThenWriteBlocks(
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
@@ -406,9 +406,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     writePackets<send_exec_summary_at_last>(responses_row_count, packet);
 }
 
-template <class StreamWriterPtr>
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::batchWriteFineGrainedShuffle()
 {
     assert(exchange_type == tipb::ExchangeType::Hash);
     assert(fine_grained_shuffle_stream_count > 0);
@@ -472,7 +472,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
     rows_in_blocks = 0;
 }
 
-template class StreamingDAGResponseWriter<StreamWriterPtr>;
-template class StreamingDAGResponseWriter<MPPTunnelSetPtr>;
+template class StreamingDAGResponseWriter<StreamWriterPtr, /*enable_fine_grained_shuffle=*/true>;
+template class StreamingDAGResponseWriter<MPPTunnelSetPtr, /*enable_fine_grained_shuffle=*/true>;
+template class StreamingDAGResponseWriter<StreamWriterPtr, /*enable_fine_grained_shuffle=*/false>;
+template class StreamingDAGResponseWriter<MPPTunnelSetPtr, /*enable_fine_grained_shuffle=*/false>;
 
 } // namespace DB

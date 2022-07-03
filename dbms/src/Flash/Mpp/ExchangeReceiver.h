@@ -113,7 +113,7 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count);
+        bool enable_fine_grained_shuffle);
 
     ~ExchangeReceiverBase();
 
@@ -129,7 +129,7 @@ public:
         size_t stream_id);
 
     size_t getSourceNum() const { return source_num; }
-    uint64_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
+    uint64_t getEnableFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle; }
 
     int computeNewThreadCount() const { return thread_count; }
 
@@ -151,7 +151,10 @@ private:
     using Request = typename RPCContext::Request;
 
     void setUpConnection();
+    // Template argument enable_fine_grained_shuffle will be setup properly in setUpConnection().
+    template <bool enable_fine_grained_shuffle>
     void readLoop(const Request & req);
+    template <bool enable_fine_grained_shuffle>
     void reactor(const std::vector<Request> & async_requests);
 
     bool setEndState(ExchangeReceiverState new_state);
@@ -192,7 +195,7 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    uint64_t fine_grained_shuffle_stream_count;
+    bool enable_fine_grained_shuffle;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

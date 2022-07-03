@@ -146,7 +146,7 @@ try
     auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>, /*enable_fine_grained_shuffle=*/true>>(
         mock_writer,
         part_col_ids,
         part_col_collators,

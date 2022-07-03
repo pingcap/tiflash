@@ -304,19 +304,38 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(
     for (int i = 0; i < concurrency; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<MockBlockInputStream>(blocks, stop_flag);
-        std::unique_ptr<DAGResponseWriter> response_writer(
-            new StreamingDAGResponseWriter<MockTunnelSetPtr>(
-                tunnel_set,
-                {0, 1, 2},
-                TiDB::TiDBCollators(3),
-                tipb::Hash,
-                -1,
-                -1,
-                true,
-                *dag_context,
-                fine_grained_shuffle_stream_count,
-                fine_grained_shuffle_batch_size));
-        send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer(
+                new StreamingDAGResponseWriter<MockTunnelSetPtr, true>(
+                    tunnel_set,
+                    {0, 1, 2},
+                    TiDB::TiDBCollators(3),
+                    tipb::Hash,
+                    -1,
+                    -1,
+                    true,
+                    *dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        }
+        else
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer(
+                new StreamingDAGResponseWriter<MockTunnelSetPtr, false>(
+                    tunnel_set,
+                    {0, 1, 2},
+                    TiDB::TiDBCollators(3),
+                    tipb::Hash,
+                    -1,
+                    -1,
+                    true,
+                    *dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        }
     }
 
     return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");
@@ -328,19 +347,38 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std:
     for (int i = 0; i < concurrency; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<MockFixedRowsBlockInputStream>(total_rows / concurrency, blocks);
-        std::unique_ptr<DAGResponseWriter> response_writer(
-            new StreamingDAGResponseWriter<MockTunnelSetPtr>(
-                tunnel_set,
-                {0, 1, 2},
-                TiDB::TiDBCollators(3),
-                tipb::Hash,
-                -1,
-                -1,
-                true,
-                *dag_context,
-                fine_grained_shuffle_stream_count,
-                fine_grained_shuffle_batch_size));
-        send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer(
+                new StreamingDAGResponseWriter<MockTunnelSetPtr, true>(
+                    tunnel_set,
+                    {0, 1, 2},
+                    TiDB::TiDBCollators(3),
+                    tipb::Hash,
+                    -1,
+                    -1,
+                    true,
+                    *dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        }
+        else
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer(
+                new StreamingDAGResponseWriter<MockTunnelSetPtr, false>(
+                    tunnel_set,
+                    {0, 1, 2},
+                    TiDB::TiDBCollators(3),
+                    tipb::Hash,
+                    -1,
+                    -1,
+                    true,
+                    *dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        }
     }
 
     return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");

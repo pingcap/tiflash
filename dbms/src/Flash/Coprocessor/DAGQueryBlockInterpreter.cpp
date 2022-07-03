@@ -523,7 +523,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
-    const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(exchange_receiver->getFineGrainedShuffleStreamCount());
+    const bool enable_fine_grained_shuffle = exchange_receiver->getEnableFineGrainedShuffleStreamCount();
     String extra_info = "squashing after exchange receiver";
     if (enable_fine_grained_shuffle)
         extra_info += ", " + EnableFineGrainedShuffleExtraInfo;
@@ -792,20 +792,37 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
 
     pipeline.transform([&](auto & stream) {
         // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
-            context.getDAGContext()->tunnel_set,
-            partition_col_ids,
-            partition_col_collators,
-            exchange_sender.tp(),
-            context.getSettingsRef().dag_records_per_chunk,
-            context.getSettingsRef().batch_send_min_limit,
-            stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-            dagContext(),
-            stream_count,
-            batch_size);
-        stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         if (enableFineGrainedShuffle(stream_count))
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, true>>(
+                context.getDAGContext()->tunnel_set,
+                partition_col_ids,
+                partition_col_collators,
+                exchange_sender.tp(),
+                context.getSettingsRef().dag_records_per_chunk,
+                context.getSettingsRef().batch_send_min_limit,
+                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+                dagContext(),
+                stream_count,
+                batch_size);
+            stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
             stream->setExtraInfo(EnableFineGrainedShuffleExtraInfo);
+        }
+        else
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, false>>(
+                context.getDAGContext()->tunnel_set,
+                partition_col_ids,
+                partition_col_collators,
+                exchange_sender.tp(),
+                context.getSettingsRef().dag_records_per_chunk,
+                context.getSettingsRef().batch_send_min_limit,
+                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+                dagContext(),
+                stream_count,
+                batch_size);
+            stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+        }
     });
 }
 

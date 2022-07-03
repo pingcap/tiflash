@@ -54,11 +54,11 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
 //      Push all chunks to msg_channels[0].
 // Return true if all push succeed, otherwise return false.
 // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
+template <bool enable_fine_grained_shuffle>
 bool pushPacket(size_t source_index,
                 const String & req_info,
                 MPPDataPacketPtr & packet,
                 const std::vector<MsgChannelPtr> & msg_channels,
-                bool enable_fine_grained_shuffle,
                 LoggerPtr & log)
 {
     bool push_succeed = true;
@@ -70,7 +70,7 @@ bool pushPacket(size_t source_index,
     if (!packet->data().empty())
         resp_ptr = packet->mutable_data();
 
-    if (enable_fine_grained_shuffle)
+    if constexpr (enable_fine_grained_shuffle)
     {
         std::vector<std::vector<const String *>> chunks(msg_channels.size());
         if (!packet->chunks().empty())
@@ -156,29 +156,27 @@ using TimePoint = Clock::time_point;
 constexpr Int32 max_retry_times = 10;
 constexpr Int32 batch_packet_count = 16;
 
-template <typename RPCContext>
+template <typename RPCContext, bool enable_fine_grained_shuffle>
 class AsyncRequestHandler : public UnaryCallback<bool>
 {
 public:
     using Status = typename RPCContext::Status;
     using Request = typename RPCContext::Request;
     using AsyncReader = typename RPCContext::AsyncReader;
-    using Self = AsyncRequestHandler<RPCContext>;
+    using Self = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
 
     AsyncRequestHandler(
         MPMCQueue<Self *> * queue,
         std::vector<MsgChannelPtr> msg_channels_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
-        const String & req_id,
-        bool enable_fine_grained_shuffle_)
+        const String & req_id)
         : rpc_context(context)
         , request(&req)
         , notify_queue(queue)
         , msg_channels(msg_channels_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
         , log(Logger::get("ExchangeReceiver", req_id, req_info))
-        , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -354,7 +352,7 @@ private:
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
-            if (!pushPacket(request->source_index, req_info, packet, msg_channels, enable_fine_grained_shuffle, log))
+            if (!pushPacket<enable_fine_grained_shuffle>(request->source_index, req_info, packet, msg_channels, log))
                 return false;
             // Update packets[i].
             packet = std::make_shared<MPPDataPacket>();
@@ -386,7 +384,6 @@ private:
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
     LoggerPtr log;
-    bool enable_fine_grained_shuffle;
     std::mutex mu;
 };
 } // namespace
@@ -398,7 +395,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     size_t max_streams_,
     const String & req_id,
     const String & executor_id,
-    uint64_t fine_grained_shuffle_stream_count_)
+    bool enable_fine_grained_shuffle_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
@@ -408,11 +405,12 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , state(ExchangeReceiverState::NORMAL)
     , exc_log(Logger::get("ExchangeReceiver", req_id, executor_id))
     , collected(false)
-    , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
+    , enable_fine_grained_shuffle(enable_fine_grained_shuffle_)
 {
     try
     {
-        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count_))
+        // TODO: just bool is enough
+        if (enable_fine_grained_shuffle_)
         {
             for (size_t i = 0; i < max_streams_; ++i)
             {
@@ -481,7 +479,12 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
             async_requests.push_back(std::move(req));
         else
         {
-            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] { readLoop(req); });
+            thread_manager->schedule(true, "Receiver", [this, req = std::move(req)] {
+                if (enable_fine_grained_shuffle)
+                    readLoop<true>(req);
+                else
+                    readLoop<false>(req);
+            });
             ++thread_count;
         }
     }
@@ -489,15 +492,21 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
     // TODO: reduce this thread in the future.
     if (!async_requests.empty())
     {
-        thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] { reactor(async_requests); });
+        thread_manager->schedule(true, "RecvReactor", [this, async_requests = std::move(async_requests)] {
+            if (enable_fine_grained_shuffle)
+                reactor<true>(async_requests);
+            else
+                reactor<false>(async_requests);
+        });
         ++thread_count;
     }
 }
 
 template <typename RPCContext>
+template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & async_requests)
 {
-    using AsyncHandler = AsyncRequestHandler<RPCContext>;
+    using AsyncHandler = AsyncRequestHandler<RPCContext, enable_fine_grained_shuffle>;
 
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Increment();
     SCOPE_EXIT({
@@ -513,7 +522,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, msg_channels, rpc_context, req, exc_log->identifier(), ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count)));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, msg_channels, rpc_context, req, exc_log->identifier()));
 
     while (alive_async_connections > 0)
     {
@@ -558,6 +567,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
 }
 
 template <typename RPCContext>
+template <bool enable_fine_grained_shuffle>
 void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
 {
     GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Increment();
@@ -590,7 +600,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (packet->has_error())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
 
-                if (!pushPacket(req.source_index, req_info, packet, msg_channels, ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count), log))
+                if (!pushPacket<enable_fine_grained_shuffle>(req.source_index, req_info, packet, msg_channels, log))
                 {
                     meet_error = true;
                     auto local_state = getState();
