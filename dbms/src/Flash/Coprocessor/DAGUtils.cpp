@@ -623,7 +623,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::FormatWithLocale, "cast"},
     //{tipb::ScalarFuncSig::FromBase64, "cast"},
     //{tipb::ScalarFuncSig::HexIntArg, "cast"},
-    //{tipb::ScalarFuncSig::HexStrArg, "cast"},
+    {tipb::ScalarFuncSig::HexStrArg, "hexStr"},
     //{tipb::ScalarFuncSig::InsertUTF8, "cast"},
     //{tipb::ScalarFuncSig::Insert, "cast"},
     //{tipb::ScalarFuncSig::InstrUTF8, "cast"},
