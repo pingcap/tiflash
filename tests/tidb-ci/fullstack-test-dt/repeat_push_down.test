@@ -19,6 +19,7 @@ mysql> insert into test.f values('abc',1,1);
 mysql> insert into test.f values('pingcap',2,1);
 mysql> insert into test.f values('li',-1,1);
 mysql> insert into test.f values(null,4,1);
+mysql> insert into test.f values('ww',null,1);
 mysql> alter table test.f set tiflash replica 1;
 
 mysql> use test; set @@tidb_allow_mpp=1;set @@tidb_enforce_mpp=1;  select repeat(a,b) from test.f;
@@ -28,6 +29,7 @@ mysql> use test; set @@tidb_allow_mpp=1;set @@tidb_enforce_mpp=1;  select repeat
 | abc            |
 | pingcappingcap |
 |                |
+| NULL           |
 | NULL           |
 +----------------+
 
