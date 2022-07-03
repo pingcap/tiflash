@@ -22,19 +22,35 @@
 
 namespace DB {
 namespace tests {
-class HexStrTest : public DB::tests::FunctionTest {
+class HexIntTest : public DB::tests::FunctionTest {
 };
 
-TEST_F(HexStrTest, hexstr_all_unit_Test)
+TEST_F(HexIntTest, hexint_all_unit_Test)
 try {
-    const String &func_name = "hexStr";
+    const String &func_name = "hexInt";
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"7777772E70696E676361702E636F6D", "61626364", "E6B58BE8AF95E6B58BE8AF95E6B58BE8AF95E6B58BE8AF9561626364E6B58BE8AF95", std::nullopt}),
+        createColumn<Nullable<UInt64>>({std::nullopt, 12345, 0xFFFFFFFFFFFFFFFF}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"www.pingcap.com", "abcd", "测试测试测试测试abcd测试", std::nullopt})
-        )
+            createColumn<Nullable<String>>({std::nullopt, "3039", "FFFFFFFFFFFFFFFF"})
+                )
+    );
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({12345, -12345}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"3039", "FFFFFFFFFFFFCFC7"})
+                )
+    );
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int8>>({255, 1}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<String>>({"FF", "1"})
+                )
     );
 }
 CATCH

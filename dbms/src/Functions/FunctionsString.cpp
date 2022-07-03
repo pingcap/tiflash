@@ -4999,6 +4999,89 @@ private:
     }
 };
 
+class FunctionHexInt : public IFunction {
+public:
+    static constexpr auto name = "hexInt";
+    FunctionHexInt() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexInt>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isNumber())
+            throw Exception(
+                    fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeHexInt<UInt8>(block, arguments, result)
+            || executeHexInt<UInt16>(block, arguments, result)
+            || executeHexInt<UInt32>(block, arguments, result)
+            || executeHexInt<UInt64>(block, arguments, result)
+            || executeHexInt<Int8>(block, arguments, result)
+            || executeHexInt<Int16>(block, arguments, result)
+            || executeHexInt<Int32>(block, arguments, result)
+            || executeHexInt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+private:
+    template <typename IntType>
+    bool executeHexInt(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        const auto col = checkAndGetColumn<ColumnVector<IntType>>(column.get());
+        if (col == nullptr)
+        {
+            return false;
+        }
+        size_t size = col->size();
+
+        auto col_res = ColumnString::create();
+
+        ColumnString::Chars_t & res_chars = col_res->getChars();
+        // Convert a UInt64 to hex, will cost 17 bytes at most
+        res_chars.reserve(size * 17);
+        ColumnString::Offsets & res_offsets = col_res->getOffsets();
+        res_offsets.resize(size);
+
+        size_t prev_res_offset = 0;
+        for(size_t i=0;i<size;++i)
+        {
+            UInt64 number = col->getUInt(i);
+
+            int print_size = sprintf(reinterpret_cast<char*>(&res_chars[prev_res_offset]), "%lX", number);
+            res_chars[prev_res_offset + print_size] = 0;
+            // Add the size of printed string and a tailing zero
+            prev_res_offset += print_size + 1;
+            res_offsets[i] = prev_res_offset;
+        }
+        res_chars.resize(prev_res_offset);
+
+        block.getByPosition(result).column = std::move(col_res);
+
+        return true;
+    }
+};
+
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
@@ -5084,5 +5167,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();
     factory.registerFunction<FunctionHexStr>();
+    factory.registerFunction<FunctionHexInt>();
 }
 } // namespace DB
