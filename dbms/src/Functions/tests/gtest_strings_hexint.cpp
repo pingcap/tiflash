@@ -20,39 +20,37 @@
 #include <vector>
 
 
-namespace DB {
-namespace tests {
-class HexIntTest : public DB::tests::FunctionTest {
+namespace DB
+{
+namespace tests
+{
+class HexIntTest : public DB::tests::FunctionTest
+{
 };
 
 TEST_F(HexIntTest, hexint_all_unit_Test)
-try {
-    const String &func_name = "hexInt";
+try
+{
+    const String & func_name = "hexInt";
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt64>>({std::nullopt, 12345, 0xFFFFFFFFFFFFFFFF}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({std::nullopt, "3039", "FFFFFFFFFFFFFFFF"})
-                )
-    );
+            createColumn<Nullable<String>>({std::nullopt, "3039", "FFFFFFFFFFFFFFFF"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int64>>({12345, -12345}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"3039", "FFFFFFFFFFFFCFC7"})
-                )
-    );
+            createColumn<Nullable<String>>({"3039", "FFFFFFFFFFFFCFC7"})));
 
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Int8>>({255, 1}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"FF", "1"})
-                )
-    );
+            createColumn<Nullable<String>>({"FF", "1"})));
 }
 CATCH
-}
-}
+} // namespace tests
+} // namespace DB

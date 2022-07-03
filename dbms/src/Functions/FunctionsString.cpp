@@ -4910,7 +4910,8 @@ private:
     }
 };
 
-class FunctionHexStr : public IFunction {
+class FunctionHexStr : public IFunction
+{
 public:
     static constexpr auto name = "hexStr";
     FunctionHexStr() = default;
@@ -4928,23 +4929,27 @@ public:
     {
         if (!arguments[0]->isString())
             throw Exception(
-                    fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return std::make_shared<DataTypeString>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr & column = block.getByPosition(arguments[0]).column;
-        if (const auto * col = checkAndGetColumn<ColumnString>(column.get())) {
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
             auto col_res = ColumnString::create();
             vector(col->getChars(), col->getOffsets(), col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
-        } else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get())) {
+        }
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get()))
+        {
             auto col_res = ColumnFixedString::create(col->getN() * 2);
             vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
-        } else
+        }
+        else
             throw Exception(
                 fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
                 ErrorCodes::ILLEGAL_COLUMN);
@@ -4964,9 +4969,9 @@ private:
         res_offsets.resize(size);
 
         ColumnString::Offset prev_offset = 0;
-        for(size_t i = 0; i < size;++i)
+        for (size_t i = 0; i < size; ++i)
         {
-            for (size_t j = prev_offset; j < offsets[i] - 1;++j)
+            for (size_t j = prev_offset; j < offsets[i] - 1; ++j)
             {
                 ColumnString::Offset pos = j * 2 - i;
                 UInt8 byte = data[j];
@@ -4976,8 +4981,8 @@ private:
             // the last element written by the previous loop is:
             // `(offsets[i] - 2) * 2 - i + 1 = offsets[2] * 2 - i - 3`
             // then the zero should be written to `offsets[2] * 2 - i - 2`
-            res_data[offsets[i]*2 - i - 2] = 0;
-            res_offsets[i] = offsets[i]*2 - i - 1;
+            res_data[offsets[i] * 2 - i - 2] = 0;
+            res_offsets[i] = offsets[i] * 2 - i - 1;
 
             prev_offset = offsets[i];
         }
@@ -4989,7 +4994,7 @@ private:
         res_data.resize(data.size() * 2);
 
         for (size_t i = 0; i < size; ++i)
-            for (size_t j = i * length; j < (i+1) * length; ++j)
+            for (size_t j = i * length; j < (i + 1) * length; ++j)
             {
                 ColumnString::Offset pos = j * 2;
                 UInt8 byte = data[j];
@@ -4999,7 +5004,8 @@ private:
     }
 };
 
-class FunctionHexInt : public IFunction {
+class FunctionHexInt : public IFunction
+{
 public:
     static constexpr auto name = "hexInt";
     FunctionHexInt() = default;
@@ -5017,8 +5023,8 @@ public:
     {
         if (!arguments[0]->isNumber())
             throw Exception(
-                    fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return std::make_shared<DataTypeString>();
     }
 
@@ -5040,6 +5046,7 @@ public:
             throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
+
 private:
     template <typename IntType>
     bool executeHexInt(
@@ -5064,11 +5071,11 @@ private:
         res_offsets.resize(size);
 
         size_t prev_res_offset = 0;
-        for(size_t i=0;i<size;++i)
+        for (size_t i = 0; i < size; ++i)
         {
             UInt64 number = col->getUInt(i);
 
-            int print_size = sprintf(reinterpret_cast<char*>(&res_chars[prev_res_offset]), "%lX", number);
+            int print_size = sprintf(reinterpret_cast<char *>(&res_chars[prev_res_offset]), "%lX", number);
             res_chars[prev_res_offset + print_size] = 0;
             // Add the size of printed string and a tailing zero
             prev_res_offset += print_size + 1;
