@@ -4377,7 +4377,7 @@ private:
         if (repeat_times < 1)
         {
             res_data.resize(res_data.size() + 1);
-            res_data[res_offset] = '\0';
+            res_data[res_offset] = 0;
             return 1;
         }
         size_t size_to_copy = end_offset - start_offset - 1;
