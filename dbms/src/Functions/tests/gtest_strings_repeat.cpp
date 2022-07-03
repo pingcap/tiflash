@@ -96,7 +96,6 @@ CATCH
 TEST_F(StringRepeatTest, RepeatTimesIsIllegal)
 try
 {
-
     /// repeat_times < 1, should return ""
     ASSERT_COLUMN_EQ(
         toVecString({"a", "", ""}),

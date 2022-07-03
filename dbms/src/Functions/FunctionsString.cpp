@@ -4289,10 +4289,10 @@ private:
             }
             const auto * col_string_from_const = checkAndGetColumn<ColumnString>(col_const->getDataColumnPtr().get());
             constVector(col_string_from_const->getChars(),
-                         col_string_from_const->getOffsets(),
-                         col_vector_repeat_count->getData(),
-                         col_res->getChars(),
-                         col_res->getOffsets());
+                        col_string_from_const->getOffsets(),
+                        col_vector_repeat_count->getData(),
+                        col_res->getChars(),
+                        col_res->getOffsets());
         }
         else
         {
@@ -4364,7 +4364,6 @@ private:
             Int64 repeat_count = accurate::lessOp(INT64_MAX, repeat_times[i]) ? INT64_MAX : repeat_times[i];
             res_offset += doRepeat(data, start_offset, end_offset, repeat_count, res_data, res_offset);
             res_offsets[i] = res_offset;
-
         }
     }
     static size_t doRepeat(
