@@ -68,7 +68,7 @@ try
         executeFunction(
             funcName,
             toVecString({"a", "b", "c", "d"}),
-            toConstInt(1)));
+            toConstInt(3)));
     /// vec vec
     ASSERT_COLUMN_EQ(
         toVecString({"a", "bb", "ccc", "dddd"}),
@@ -78,7 +78,7 @@ try
             toVecInt({1, 2, 3, 4})));
     /// const const
     ASSERT_COLUMN_EQ(
-        toVecString({"aaaaa"}),
+        createConstColumn<String>(1, "aaaaa"),
         executeFunction(
             funcName,
             toConstString("a"),
@@ -92,6 +92,21 @@ try
             toVecInt({1, 2, 3, 4})));
 }
 CATCH
+
+TEST_F(StringRepeatTest, RepeatTimesIsIllegal)
+try
+{
+
+    /// repeat_times < 1, should return ""
+    ASSERT_COLUMN_EQ(
+        toVecString({"a", "", ""}),
+        executeFunction(
+            funcName,
+            toVecString({"a", "b", "c"}),
+            toVecInt({1, 0, -1})));
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DB

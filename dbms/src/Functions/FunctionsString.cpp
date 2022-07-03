@@ -4209,7 +4209,7 @@ public:
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if (!arguments[1]->isNumber())
+        if (!arguments[1]->isInteger())
             throw Exception(
                 fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -4250,8 +4250,13 @@ private:
         if (const auto * col_string = checkAndGetColumn<ColumnString>(column_string.get()))
         {
             // vector const
-            if (const ColumnConst * col_const_repeat_times = checkAndGetColumnConst<ColumnVector<IntType>>(column_repeat_times.get()))
+            if (column_repeat_times->isColumnConst())
             {
+                const ColumnConst * col_const_repeat_times = checkAndGetColumnConst<ColumnVector<IntType>>(column_repeat_times.get());
+                if (col_const_repeat_times == nullptr)
+                {
+                    return false;
+                }
                 auto repeat_times = col_const_repeat_times->getValue<IntType>();
                 vectorConst(col_string->getChars(),
                             col_string->getOffsets(),
@@ -4263,6 +4268,10 @@ private:
             else
             {
                 const auto * col_vector_repeat_count = checkAndGetColumn<ColumnVector<IntType>>(column_repeat_times.get());
+                if (col_vector_repeat_count == nullptr)
+                {
+                    return false;
+                }
                 vectorVector(col_string->getChars(),
                              col_string->getOffsets(),
                              col_vector_repeat_count->getData(),
@@ -4273,9 +4282,13 @@ private:
         else if (const ColumnConst * col_const = checkAndGetColumnConst<ColumnString>(column_string.get()))
         {
             // const vector
-            const ColumnString * col_string_from_const = checkAndGetColumn<ColumnString>(col_const->getDataColumnPtr().get());
             const auto * col_vector_repeat_count = checkAndGetColumn<ColumnVector<IntType>>(column_repeat_times.get());
-            vectorVector(col_string_from_const->getChars(),
+            if (col_vector_repeat_count == nullptr)
+            {
+                return false;
+            }
+            const auto * col_string_from_const = checkAndGetColumn<ColumnString>(col_const->getDataColumnPtr().get());
+            constVector(col_string_from_const->getChars(),
                          col_string_from_const->getOffsets(),
                          col_vector_repeat_count->getData(),
                          col_res->getChars(),
@@ -4332,6 +4345,28 @@ private:
         }
     }
 
+    template <typename IntType>
+    static void constVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const PaddedPODArray<IntType> & repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = repeat_times.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset start_offset = 0;
+        ColumnString::Offset end_offset = offsets[0];
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            Int64 repeat_count = accurate::lessOp(INT64_MAX, repeat_times[i]) ? INT64_MAX : repeat_times[i];
+            res_offset += doRepeat(data, start_offset, end_offset, repeat_count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+
+        }
+    }
     static size_t doRepeat(
         const ColumnString::Chars_t & data,
         const ColumnString::Offset & start_offset,
@@ -4340,14 +4375,22 @@ private:
         ColumnString::Chars_t & res_data,
         const ColumnString::Offset & res_offset)
     {
-        size_t size_to_copy = end_offset - start_offset;
-        res_data.resize(res_data.size() + repeat_times * size_to_copy);
+        if (repeat_times < 1)
+        {
+            res_data.resize(res_data.size() + 1);
+            res_data[res_offset] = '\0';
+            return 1;
+        }
+        size_t size_to_copy = end_offset - start_offset - 1;
+        size_t size = repeat_times * size_to_copy;
+        res_data.resize(res_data.size() + size + 1);
 
         for (Int64 i = 0; i < repeat_times; ++i)
         {
             memcpy(&res_data[res_offset + size_to_copy * i], &data[start_offset], size_to_copy);
         }
-        return res_offset + size_to_copy * repeat_times;
+        res_data[res_offset + size] = '\0';
+        return size + 1;
     }
 };
 
