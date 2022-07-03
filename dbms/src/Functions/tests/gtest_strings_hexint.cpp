@@ -34,22 +34,22 @@ try
     const String & func_name = "hexInt";
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<UInt64>>({std::nullopt, 12345, 0xFFFFFFFFFFFFFFFF}),
+        createColumn<Nullable<String>>({std::nullopt, "3039", "FFFFFFFFFFFFFFFF"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({std::nullopt, "3039", "FFFFFFFFFFFFFFFF"})));
+            createColumn<Nullable<UInt64>>({std::nullopt, 12345, 0xFFFFFFFFFFFFFFFF})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Int64>>({12345, -12345}),
+        createColumn<Nullable<String>>({"3039", "FFFFFFFFFFFFCFC7"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"3039", "FFFFFFFFFFFFCFC7"})));
+            createColumn<Nullable<Int64>>({12345, -12345})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Int8>>({255, 1}),
+        createColumn<Nullable<String>>({"FF", "1"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<String>>({"FF", "1"})));
+            createColumn<Nullable<UInt8>>({255, 1})));
 }
 CATCH
 } // namespace tests
