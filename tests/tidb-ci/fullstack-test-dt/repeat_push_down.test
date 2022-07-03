@@ -22,14 +22,14 @@ mysql> insert into test.f values(null,4,1);
 mysql> insert into test.f values('ww',null,1);
 mysql> alter table test.f set tiflash replica 1;
 
-mysql> use test; set @@tidb_allow_mpp=1;set @@tidb_enforce_mpp=1;  select repeat(a,b) from test.f;
-+----------------+
-| repeat(a,b)    |
-+----------------+
-| abc            |
-| pingcappingcap |
-|                |
-| NULL           |
-| NULL           |
-+----------------+
+mysql> use test; set @@tidb_allow_mpp=1;set @@tidb_enforce_mpp=1;  select a,b,repeat(a,b) from test.f;
++---------+------+----------------+
+| a       | b    | repeat(a,b)    |
++---------+------+----------------+
+| abc     |    1 | abc            |
+| pingcap |    2 | pingcappingcap |
+| li      |   -1 |                |
+| NULL    |    4 | NULL           |
+| ww      | NULL | NULL           |
++---------+------+----------------+
 
