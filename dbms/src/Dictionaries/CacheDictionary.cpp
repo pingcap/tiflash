@@ -12,57 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <functional>
-#include <sstream>
-#include <memory>
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnVector.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnVector.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/BitHelpers.h>
-#include <Common/randomSeed.h>
-#include <Common/HashTable/Hash.h>
-#include <Common/Stopwatch.h>
-#include <Common/ProfilingScopedRWLock.h>
-#include <Common/ProfileEvents.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/HashTable/Hash.h>
+#include <Common/ProfileEvents.h>
+#include <Common/ProfilingScopedRWLock.h>
+#include <Common/Stopwatch.h>
+#include <Common/randomSeed.h>
 #include <Common/typeid_cast.h>
 #include <Dictionaries/CacheDictionary.h>
 #include <Dictionaries/DictionaryBlockInputStream.h>
-#include <ext/size.h>
-#include <ext/range.h>
+
 #include <ext/map.h>
-
-
-namespace ProfileEvents
-{
-    extern const Event DictCacheKeysRequested;
-    extern const Event DictCacheKeysRequestedMiss;
-    extern const Event DictCacheKeysRequestedFound;
-    extern const Event DictCacheKeysExpired;
-    extern const Event DictCacheKeysNotFound;
-    extern const Event DictCacheKeysHit;
-    extern const Event DictCacheRequestTimeNs;
-    extern const Event DictCacheRequests;
-    extern const Event DictCacheLockWriteNs;
-    extern const Event DictCacheLockReadNs;
-}
-
-namespace CurrentMetrics
-{
-    extern const Metric DictCacheRequests;
-}
-
+#include <ext/range.h>
+#include <ext/size.h>
+#include <functional>
+#include <memory>
+#include <sstream>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
-    extern const int TYPE_MISMATCH;
-    extern const int BAD_ARGUMENTS;
-    extern const int UNSUPPORTED_METHOD;
-    extern const int LOGICAL_ERROR;
-}
+extern const int TYPE_MISMATCH;
+extern const int BAD_ARGUMENTS;
+extern const int UNSUPPORTED_METHOD;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
 inline size_t CacheDictionary::getCellIdx(const Key id) const
@@ -73,15 +52,15 @@ inline size_t CacheDictionary::getCellIdx(const Key id) const
 }
 
 
-CacheDictionary::CacheDictionary(const std::string & name, const DictionaryStructure & dict_struct,
-    DictionarySourcePtr source_ptr, const DictionaryLifetime dict_lifetime,
-    const size_t size)
-    : name{name}, dict_struct(dict_struct),
-        source_ptr{std::move(source_ptr)}, dict_lifetime(dict_lifetime),
-        size{roundUpToPowerOfTwoOrZero(std::max(size, size_t(max_collision_length)))},
-        size_overlap_mask{this->size - 1},
-        cells{this->size},
-        rnd_engine(randomSeed())
+CacheDictionary::CacheDictionary(const std::string & name, const DictionaryStructure & dict_struct, DictionarySourcePtr source_ptr, const DictionaryLifetime dict_lifetime, const size_t size)
+    : name{name}
+    , dict_struct(dict_struct)
+    , source_ptr{std::move(source_ptr)}
+    , dict_lifetime(dict_lifetime)
+    , size{roundUpToPowerOfTwoOrZero(std::max(size, size_t(max_collision_length)))}
+    , size_overlap_mask{this->size - 1}
+    , cells{this->size}
+    , rnd_engine(randomSeed())
 {
     if (!this->source_ptr->supportsSelectiveLoad())
         throw Exception{
@@ -100,13 +79,19 @@ void CacheDictionary::toParent(const PaddedPODArray<Key> & ids, PaddedPODArray<K
 {
     const auto null_value = std::get<UInt64>(hierarchical_attribute->null_values);
 
-    getItemsNumber<UInt64>(*hierarchical_attribute, ids, out, [&] (const size_t) { return null_value; });
+    getItemsNumber<UInt64>(*hierarchical_attribute, ids, out, [&](const size_t) { return null_value; });
 }
 
 
 /// Allow to use single value in same way as array.
-static inline CacheDictionary::Key getAt(const PaddedPODArray<CacheDictionary::Key> & arr, const size_t idx) { return arr[idx]; }
-static inline CacheDictionary::Key getAt(const CacheDictionary::Key & value, const size_t) { return value; }
+static inline CacheDictionary::Key getAt(const PaddedPODArray<CacheDictionary::Key> & arr, const size_t idx)
+{
+    return arr[idx];
+}
+static inline CacheDictionary::Key getAt(const CacheDictionary::Key & value, const size_t)
+{
+    return value;
+}
 
 
 template <typename AncestorType>
@@ -118,7 +103,7 @@ void CacheDictionary::isInImpl(
     /// Transform all children to parents until ancestor id or null_value will be reached.
 
     size_t size = out.size();
-    memset(out.data(), 0xFF, size);        /// 0xFF means "not calculated"
+    memset(out.data(), 0xFF, size); /// 0xFF means "not calculated"
 
     const auto null_value = std::get<UInt64>(hierarchical_attribute->null_values);
 
@@ -224,19 +209,19 @@ void CacheDictionary::isInConstantVector(
 }
 
 
-#define DECLARE(TYPE)\
-void CacheDictionary::get##TYPE(const std::string & attribute_name, const PaddedPODArray<Key> & ids, PaddedPODArray<TYPE> & out) const\
-{\
-    auto & attribute = getAttribute(attribute_name);\
-    if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::TYPE))\
-        throw Exception{\
-            name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type),\
-            ErrorCodes::TYPE_MISMATCH};\
-    \
-    const auto null_value = std::get<TYPE>(attribute.null_values);\
-    \
-    getItemsNumber<TYPE>(attribute, ids, out, [&] (const size_t) { return null_value; });\
-}
+#define DECLARE(TYPE)                                                                                                                      \
+    void CacheDictionary::get##TYPE(const std::string & attribute_name, const PaddedPODArray<Key> & ids, PaddedPODArray<TYPE> & out) const \
+    {                                                                                                                                      \
+        auto & attribute = getAttribute(attribute_name);                                                                                   \
+        if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::TYPE))                                                  \
+            throw Exception{                                                                                                               \
+                name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type),                           \
+                ErrorCodes::TYPE_MISMATCH};                                                                                                \
+                                                                                                                                           \
+        const auto null_value = std::get<TYPE>(attribute.null_values);                                                                     \
+                                                                                                                                           \
+        getItemsNumber<TYPE>(attribute, ids, out, [&](const size_t) { return null_value; });                                               \
+    }
 DECLARE(UInt8)
 DECLARE(UInt16)
 DECLARE(UInt32)
@@ -260,22 +245,24 @@ void CacheDictionary::getString(const std::string & attribute_name, const Padded
 
     const auto null_value = StringRef{std::get<String>(attribute.null_values)};
 
-    getItemsString(attribute, ids, out, [&] (const size_t) { return null_value; });
+    getItemsString(attribute, ids, out, [&](const size_t) { return null_value; });
 }
 
-#define DECLARE(TYPE)\
-void CacheDictionary::get##TYPE(\
-    const std::string & attribute_name, const PaddedPODArray<Key> & ids, const PaddedPODArray<TYPE> & def,\
-    PaddedPODArray<TYPE> & out) const\
-{\
-    auto & attribute = getAttribute(attribute_name);\
-    if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::TYPE))\
-        throw Exception{\
-            name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type),\
-            ErrorCodes::TYPE_MISMATCH};\
-    \
-    getItemsNumber<TYPE>(attribute, ids, out, [&] (const size_t row) { return def[row]; });\
-}
+#define DECLARE(TYPE)                                                                                            \
+    void CacheDictionary::get##TYPE(                                                                             \
+        const std::string & attribute_name,                                                                      \
+        const PaddedPODArray<Key> & ids,                                                                         \
+        const PaddedPODArray<TYPE> & def,                                                                        \
+        PaddedPODArray<TYPE> & out) const                                                                        \
+    {                                                                                                            \
+        auto & attribute = getAttribute(attribute_name);                                                         \
+        if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::TYPE))                        \
+            throw Exception{                                                                                     \
+                name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type), \
+                ErrorCodes::TYPE_MISMATCH};                                                                      \
+                                                                                                                 \
+        getItemsNumber<TYPE>(attribute, ids, out, [&](const size_t row) { return def[row]; });                   \
+    }
 DECLARE(UInt8)
 DECLARE(UInt16)
 DECLARE(UInt32)
@@ -290,7 +277,9 @@ DECLARE(Float64)
 #undef DECLARE
 
 void CacheDictionary::getString(
-    const std::string & attribute_name, const PaddedPODArray<Key> & ids, const ColumnString * const def,
+    const std::string & attribute_name,
+    const PaddedPODArray<Key> & ids,
+    const ColumnString * const def,
     ColumnString * const out) const
 {
     auto & attribute = getAttribute(attribute_name);
@@ -299,21 +288,24 @@ void CacheDictionary::getString(
             name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type),
             ErrorCodes::TYPE_MISMATCH};
 
-    getItemsString(attribute, ids, out, [&] (const size_t row) { return def->getDataAt(row); });
+    getItemsString(attribute, ids, out, [&](const size_t row) { return def->getDataAt(row); });
 }
 
-#define DECLARE(TYPE)\
-void CacheDictionary::get##TYPE(\
-    const std::string & attribute_name, const PaddedPODArray<Key> & ids, const TYPE def, PaddedPODArray<TYPE> & out) const\
-{\
-    auto & attribute = getAttribute(attribute_name);\
-    if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::TYPE))\
-        throw Exception{\
-            name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type),\
-            ErrorCodes::TYPE_MISMATCH};\
-    \
-    getItemsNumber<TYPE>(attribute, ids, out, [&] (const size_t) { return def; });\
-}
+#define DECLARE(TYPE)                                                                                            \
+    void CacheDictionary::get##TYPE(                                                                             \
+        const std::string & attribute_name,                                                                      \
+        const PaddedPODArray<Key> & ids,                                                                         \
+        const TYPE def,                                                                                          \
+        PaddedPODArray<TYPE> & out) const                                                                        \
+    {                                                                                                            \
+        auto & attribute = getAttribute(attribute_name);                                                         \
+        if (!isAttributeTypeConvertibleTo(attribute.type, AttributeUnderlyingType::TYPE))                        \
+            throw Exception{                                                                                     \
+                name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type), \
+                ErrorCodes::TYPE_MISMATCH};                                                                      \
+                                                                                                                 \
+        getItemsNumber<TYPE>(attribute, ids, out, [&](const size_t) { return def; });                            \
+    }
 DECLARE(UInt8)
 DECLARE(UInt16)
 DECLARE(UInt32)
@@ -328,7 +320,9 @@ DECLARE(Float64)
 #undef DECLARE
 
 void CacheDictionary::getString(
-    const std::string & attribute_name, const PaddedPODArray<Key> & ids, const String & def,
+    const std::string & attribute_name,
+    const PaddedPODArray<Key> & ids,
+    const String & def,
     ColumnString * const out) const
 {
     auto & attribute = getAttribute(attribute_name);
@@ -337,7 +331,7 @@ void CacheDictionary::getString(
             name + ": type mismatch: attribute " + attribute_name + " has type " + toString(attribute.type),
             ErrorCodes::TYPE_MISMATCH};
 
-    getItemsString(attribute, ids, out, [&] (const size_t) { return StringRef{def}; });
+    getItemsString(attribute, ids, out, [&](const size_t) { return StringRef{def}; });
 }
 
 
@@ -390,8 +384,6 @@ void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8>
 
     const auto rows = ext::size(ids);
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, decide which ones require update
         for (const auto row : ext::range(0, rows))
@@ -416,10 +408,6 @@ void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8>
         }
     }
 
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
-
     query_count.fetch_add(rows, std::memory_order_relaxed);
     hit_count.fetch_add(rows - outdated_ids.size(), std::memory_order_release);
 
@@ -427,21 +415,19 @@ void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8>
         return;
 
     std::vector<Key> required_ids(outdated_ids.size());
-    std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids),
-        [] (auto & pair) { return pair.first; });
+    std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) { return pair.first; });
 
     /// request new values
-    update(required_ids,
-    [&] (const auto id, const auto)
-    {
-        for (const auto row : outdated_ids[id])
-            out[row] = true;
-    },
-    [&] (const auto id, const auto)
-    {
-        for (const auto row : outdated_ids[id])
-            out[row] = false;
-    });
+    update(
+        required_ids,
+        [&](const auto id, const auto) {
+            for (const auto row : outdated_ids[id])
+                out[row] = true;
+        },
+        [&](const auto id, const auto) {
+            for (const auto row : outdated_ids[id])
+                out[row] = false;
+        });
 }
 
 
@@ -476,68 +462,68 @@ CacheDictionary::Attribute CacheDictionary::createAttributeWithType(const Attrib
 
     switch (type)
     {
-        case AttributeUnderlyingType::UInt8:
-            std::get<UInt8>(attr.null_values) = null_value.get<UInt64>();
-            std::get<ContainerPtrType<UInt8>>(attr.arrays) = std::make_unique<ContainerType<UInt8>>(size);
-            bytes_allocated += size * sizeof(UInt8);
-            break;
-        case AttributeUnderlyingType::UInt16:
-            std::get<UInt16>(attr.null_values) = null_value.get<UInt64>();
-            std::get<ContainerPtrType<UInt16>>(attr.arrays) = std::make_unique<ContainerType<UInt16>>(size);
-            bytes_allocated += size * sizeof(UInt16);
-            break;
-        case AttributeUnderlyingType::UInt32:
-            std::get<UInt32>(attr.null_values) = null_value.get<UInt64>();
-            std::get<ContainerPtrType<UInt32>>(attr.arrays) = std::make_unique<ContainerType<UInt32>>(size);
-            bytes_allocated += size * sizeof(UInt32);
-            break;
-        case AttributeUnderlyingType::UInt64:
-            std::get<UInt64>(attr.null_values) = null_value.get<UInt64>();
-            std::get<ContainerPtrType<UInt64>>(attr.arrays) = std::make_unique<ContainerType<UInt64>>(size);
-            bytes_allocated += size * sizeof(UInt64);
-            break;
-        case AttributeUnderlyingType::UInt128:
-            std::get<UInt128>(attr.null_values) = null_value.get<UInt128>();
-            std::get<ContainerPtrType<UInt128>>(attr.arrays) = std::make_unique<ContainerType<UInt128>>(size);
-            bytes_allocated += size * sizeof(UInt128);
-            break;
-        case AttributeUnderlyingType::Int8:
-            std::get<Int8>(attr.null_values) = null_value.get<Int64>();
-            std::get<ContainerPtrType<Int8>>(attr.arrays) = std::make_unique<ContainerType<Int8>>(size);
-            bytes_allocated += size * sizeof(Int8);
-            break;
-        case AttributeUnderlyingType::Int16:
-            std::get<Int16>(attr.null_values) = null_value.get<Int64>();
-            std::get<ContainerPtrType<Int16>>(attr.arrays) = std::make_unique<ContainerType<Int16>>(size);
-            bytes_allocated += size * sizeof(Int16);
-            break;
-        case AttributeUnderlyingType::Int32:
-            std::get<Int32>(attr.null_values) = null_value.get<Int64>();
-            std::get<ContainerPtrType<Int32>>(attr.arrays) = std::make_unique<ContainerType<Int32>>(size);
-            bytes_allocated += size * sizeof(Int32);
-            break;
-        case AttributeUnderlyingType::Int64:
-            std::get<Int64>(attr.null_values) = null_value.get<Int64>();
-            std::get<ContainerPtrType<Int64>>(attr.arrays) = std::make_unique<ContainerType<Int64>>(size);
-            bytes_allocated += size * sizeof(Int64);
-            break;
-        case AttributeUnderlyingType::Float32:
-            std::get<Float32>(attr.null_values) = null_value.get<Float64>();
-            std::get<ContainerPtrType<Float32>>(attr.arrays) = std::make_unique<ContainerType<Float32>>(size);
-            bytes_allocated += size * sizeof(Float32);
-            break;
-        case AttributeUnderlyingType::Float64:
-            std::get<Float64>(attr.null_values) = null_value.get<Float64>();
-            std::get<ContainerPtrType<Float64>>(attr.arrays) = std::make_unique<ContainerType<Float64>>(size);
-            bytes_allocated += size * sizeof(Float64);
-            break;
-        case AttributeUnderlyingType::String:
-            std::get<String>(attr.null_values) = null_value.get<String>();
-            std::get<ContainerPtrType<StringRef>>(attr.arrays) = std::make_unique<ContainerType<StringRef>>(size);
-            bytes_allocated += size * sizeof(StringRef);
-            if (!string_arena)
-                string_arena = std::make_unique<ArenaWithFreeLists>();
-            break;
+    case AttributeUnderlyingType::UInt8:
+        std::get<UInt8>(attr.null_values) = null_value.get<UInt64>();
+        std::get<ContainerPtrType<UInt8>>(attr.arrays) = std::make_unique<ContainerType<UInt8>>(size);
+        bytes_allocated += size * sizeof(UInt8);
+        break;
+    case AttributeUnderlyingType::UInt16:
+        std::get<UInt16>(attr.null_values) = null_value.get<UInt64>();
+        std::get<ContainerPtrType<UInt16>>(attr.arrays) = std::make_unique<ContainerType<UInt16>>(size);
+        bytes_allocated += size * sizeof(UInt16);
+        break;
+    case AttributeUnderlyingType::UInt32:
+        std::get<UInt32>(attr.null_values) = null_value.get<UInt64>();
+        std::get<ContainerPtrType<UInt32>>(attr.arrays) = std::make_unique<ContainerType<UInt32>>(size);
+        bytes_allocated += size * sizeof(UInt32);
+        break;
+    case AttributeUnderlyingType::UInt64:
+        std::get<UInt64>(attr.null_values) = null_value.get<UInt64>();
+        std::get<ContainerPtrType<UInt64>>(attr.arrays) = std::make_unique<ContainerType<UInt64>>(size);
+        bytes_allocated += size * sizeof(UInt64);
+        break;
+    case AttributeUnderlyingType::UInt128:
+        std::get<UInt128>(attr.null_values) = null_value.get<UInt128>();
+        std::get<ContainerPtrType<UInt128>>(attr.arrays) = std::make_unique<ContainerType<UInt128>>(size);
+        bytes_allocated += size * sizeof(UInt128);
+        break;
+    case AttributeUnderlyingType::Int8:
+        std::get<Int8>(attr.null_values) = null_value.get<Int64>();
+        std::get<ContainerPtrType<Int8>>(attr.arrays) = std::make_unique<ContainerType<Int8>>(size);
+        bytes_allocated += size * sizeof(Int8);
+        break;
+    case AttributeUnderlyingType::Int16:
+        std::get<Int16>(attr.null_values) = null_value.get<Int64>();
+        std::get<ContainerPtrType<Int16>>(attr.arrays) = std::make_unique<ContainerType<Int16>>(size);
+        bytes_allocated += size * sizeof(Int16);
+        break;
+    case AttributeUnderlyingType::Int32:
+        std::get<Int32>(attr.null_values) = null_value.get<Int64>();
+        std::get<ContainerPtrType<Int32>>(attr.arrays) = std::make_unique<ContainerType<Int32>>(size);
+        bytes_allocated += size * sizeof(Int32);
+        break;
+    case AttributeUnderlyingType::Int64:
+        std::get<Int64>(attr.null_values) = null_value.get<Int64>();
+        std::get<ContainerPtrType<Int64>>(attr.arrays) = std::make_unique<ContainerType<Int64>>(size);
+        bytes_allocated += size * sizeof(Int64);
+        break;
+    case AttributeUnderlyingType::Float32:
+        std::get<Float32>(attr.null_values) = null_value.get<Float64>();
+        std::get<ContainerPtrType<Float32>>(attr.arrays) = std::make_unique<ContainerType<Float32>>(size);
+        bytes_allocated += size * sizeof(Float32);
+        break;
+    case AttributeUnderlyingType::Float64:
+        std::get<Float64>(attr.null_values) = null_value.get<Float64>();
+        std::get<ContainerPtrType<Float64>>(attr.arrays) = std::make_unique<ContainerType<Float64>>(size);
+        bytes_allocated += size * sizeof(Float64);
+        break;
+    case AttributeUnderlyingType::String:
+        std::get<String>(attr.null_values) = null_value.get<String>();
+        std::get<ContainerPtrType<StringRef>>(attr.arrays) = std::make_unique<ContainerType<StringRef>>(size);
+        bytes_allocated += size * sizeof(StringRef);
+        if (!string_arena)
+            string_arena = std::make_unique<ArenaWithFreeLists>();
+        break;
     }
 
     return attr;
@@ -551,8 +537,8 @@ void CacheDictionary::getItemsNumber(
     PaddedPODArray<OutputType> & out,
     DefaultGetter && get_default) const
 {
-    if (false) {}
-#define DISPATCH(TYPE) \
+    if (false) {} // NOLINT
+#define DISPATCH(TYPE)                                        \
     else if (attribute.type == AttributeUnderlyingType::TYPE) \
         getItemsNumberImpl<TYPE, OutputType>(attribute, ids, out, std::forward<DefaultGetter>(get_default));
     DISPATCH(UInt8)
@@ -567,8 +553,7 @@ void CacheDictionary::getItemsNumber(
     DISPATCH(Float32)
     DISPATCH(Float64)
 #undef DISPATCH
-    else
-        throw Exception("Unexpected type of attribute: " + toString(attribute.type), ErrorCodes::LOGICAL_ERROR);
+    else throw Exception("Unexpected type of attribute: " + toString(attribute.type), ErrorCodes::LOGICAL_ERROR);
 }
 
 template <typename AttributeType, typename OutputType, typename DefaultGetter>
@@ -586,8 +571,6 @@ void CacheDictionary::getItemsNumberImpl(
     size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
 
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, decide which ones require update
         for (const auto row : ext::range(0, rows))
@@ -618,10 +601,6 @@ void CacheDictionary::getItemsNumberImpl(
         }
     }
 
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
-
     query_count.fetch_add(rows, std::memory_order_relaxed);
     hit_count.fetch_add(rows - outdated_ids.size(), std::memory_order_release);
 
@@ -629,23 +608,21 @@ void CacheDictionary::getItemsNumberImpl(
         return;
 
     std::vector<Key> required_ids(outdated_ids.size());
-    std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids),
-        [] (auto & pair) { return pair.first; });
+    std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) { return pair.first; });
 
     /// request new values
-    update(required_ids,
-    [&] (const auto id, const auto cell_idx)
-    {
-        const auto attribute_value = attribute_array[cell_idx];
+    update(
+        required_ids,
+        [&](const auto id, const auto cell_idx) {
+            const auto attribute_value = attribute_array[cell_idx];
 
-        for (const auto row : outdated_ids[id])
-            out[row] = static_cast<OutputType>(attribute_value);
-    },
-    [&] (const auto id, const auto)
-    {
-        for (const auto row : outdated_ids[id])
-            out[row] = get_default(row);
-    });
+            for (const auto row : outdated_ids[id])
+                out[row] = static_cast<OutputType>(attribute_value); // NOLINT
+        },
+        [&](const auto id, const auto) {
+            for (const auto row : outdated_ids[id])
+                out[row] = get_default(row);
+        });
 }
 
 template <typename DefaultGetter>
@@ -666,8 +643,6 @@ void CacheDictionary::getItemsString(
 
     /// perform optimistic version, fallback to pessimistic if failed
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, discard on fail
         for (const auto row : ext::range(0, rows))
@@ -710,8 +685,6 @@ void CacheDictionary::getItemsString(
     size_t total_length = 0;
     size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
     {
-        const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
         const auto now = std::chrono::system_clock::now();
         for (const auto row : ext::range(0, ids.size()))
         {
@@ -741,10 +714,6 @@ void CacheDictionary::getItemsString(
         }
     }
 
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysExpired, cache_expired);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysNotFound, cache_not_found);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysHit, cache_hit);
-
     query_count.fetch_add(rows, std::memory_order_relaxed);
     hit_count.fetch_add(rows - outdated_ids.size(), std::memory_order_release);
 
@@ -752,22 +721,20 @@ void CacheDictionary::getItemsString(
     if (!outdated_ids.empty())
     {
         std::vector<Key> required_ids(outdated_ids.size());
-        std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids),
-            [] (auto & pair) { return pair.first; });
+        std::transform(std::begin(outdated_ids), std::end(outdated_ids), std::begin(required_ids), [](auto & pair) { return pair.first; });
 
-        update(required_ids,
-        [&] (const auto id, const auto cell_idx)
-        {
-            const auto attribute_value = attribute_array[cell_idx];
+        update(
+            required_ids,
+            [&](const auto id, const auto cell_idx) {
+                const auto attribute_value = attribute_array[cell_idx];
 
-            map[id] = String{attribute_value};
-            total_length += (attribute_value.size + 1) * outdated_ids[id].size();
-        },
-        [&] (const auto id, const auto)
-        {
-            for (const auto row : outdated_ids[id])
-                total_length += get_default(row).size + 1;
-        });
+                map[id] = String{attribute_value};
+                total_length += (attribute_value.size + 1) * outdated_ids[id].size();
+            },
+            [&](const auto id, const auto) {
+                for (const auto row : outdated_ids[id])
+                    total_length += get_default(row).size + 1;
+            });
     }
 
     out->getChars().reserve(total_length);
@@ -790,18 +757,13 @@ void CacheDictionary::update(
 {
     std::unordered_map<Key, UInt8> remaining_ids{requested_ids.size()};
     for (const auto id : requested_ids)
-        remaining_ids.insert({ id, 0 });
+        remaining_ids.insert({id, 0});
 
-    std::uniform_int_distribution<UInt64> distribution
-    {
+    std::uniform_int_distribution<UInt64> distribution{
         dict_lifetime.min_sec,
-        dict_lifetime.max_sec
-    };
-
-    const ProfilingScopedWriteRWLock write_lock{rw_lock, ProfileEvents::DictCacheLockWriteNs};
+        dict_lifetime.max_sec};
 
     {
-        CurrentMetrics::Increment metric_increment{CurrentMetrics::DictCacheRequests};
         Stopwatch watch;
         auto stream = source_ptr->loadIds(requested_ids);
         stream->readPrefix();
@@ -810,7 +772,7 @@ void CacheDictionary::update(
 
         while (const auto block = stream->read())
         {
-            const auto id_column = typeid_cast<const ColumnUInt64 *>(block.safeGetByPosition(0).column.get());
+            const auto * id_column = typeid_cast<const ColumnUInt64 *>(block.safeGetByPosition(0).column.get());
             if (!id_column)
                 throw Exception{
                     name + ": id column has type different from UInt64.",
@@ -819,8 +781,7 @@ void CacheDictionary::update(
             const auto & ids = id_column->getData();
 
             /// cache column pointers
-            const auto column_ptrs = ext::map<std::vector>(ext::range(0, attributes.size()), [&block] (size_t i)
-            {
+            const auto column_ptrs = ext::map<std::vector>(ext::range(0, attributes.size()), [&block](size_t i) {
                 return block.safeGetByPosition(i + 1).column.get();
             });
 
@@ -859,9 +820,6 @@ void CacheDictionary::update(
         }
 
         stream->readSuffix();
-
-        ProfileEvents::increment(ProfileEvents::DictCacheKeysRequested, requested_ids.size());
-        ProfileEvents::increment(ProfileEvents::DictCacheRequestTimeNs, watch.elapsed());
     }
 
     size_t not_found_num = 0, found_num = 0;
@@ -903,10 +861,6 @@ void CacheDictionary::update(
         /// inform caller that the cell has not been found
         on_id_not_found(id, cell_idx);
     }
-
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysRequestedMiss, not_found_num);
-    ProfileEvents::increment(ProfileEvents::DictCacheKeysRequestedFound, found_num);
-    ProfileEvents::increment(ProfileEvents::DictCacheRequests);
 }
 
 
@@ -914,32 +868,54 @@ void CacheDictionary::setDefaultAttributeValue(Attribute & attribute, const Key 
 {
     switch (attribute.type)
     {
-        case AttributeUnderlyingType::UInt8: std::get<ContainerPtrType<UInt8>>(attribute.arrays)[idx] = std::get<UInt8>(attribute.null_values); break;
-        case AttributeUnderlyingType::UInt16: std::get<ContainerPtrType<UInt16>>(attribute.arrays)[idx] = std::get<UInt16>(attribute.null_values); break;
-        case AttributeUnderlyingType::UInt32: std::get<ContainerPtrType<UInt32>>(attribute.arrays)[idx] = std::get<UInt32>(attribute.null_values); break;
-        case AttributeUnderlyingType::UInt64: std::get<ContainerPtrType<UInt64>>(attribute.arrays)[idx] = std::get<UInt64>(attribute.null_values); break;
-        case AttributeUnderlyingType::UInt128: std::get<ContainerPtrType<UInt128>>(attribute.arrays)[idx] = std::get<UInt128>(attribute.null_values); break;
-        case AttributeUnderlyingType::Int8: std::get<ContainerPtrType<Int8>>(attribute.arrays)[idx] = std::get<Int8>(attribute.null_values); break;
-        case AttributeUnderlyingType::Int16: std::get<ContainerPtrType<Int16>>(attribute.arrays)[idx] = std::get<Int16>(attribute.null_values); break;
-        case AttributeUnderlyingType::Int32: std::get<ContainerPtrType<Int32>>(attribute.arrays)[idx] = std::get<Int32>(attribute.null_values); break;
-        case AttributeUnderlyingType::Int64: std::get<ContainerPtrType<Int64>>(attribute.arrays)[idx] = std::get<Int64>(attribute.null_values); break;
-        case AttributeUnderlyingType::Float32: std::get<ContainerPtrType<Float32>>(attribute.arrays)[idx] = std::get<Float32>(attribute.null_values); break;
-        case AttributeUnderlyingType::Float64: std::get<ContainerPtrType<Float64>>(attribute.arrays)[idx] = std::get<Float64>(attribute.null_values); break;
-        case AttributeUnderlyingType::String:
+    case AttributeUnderlyingType::UInt8:
+        std::get<ContainerPtrType<UInt8>>(attribute.arrays)[idx] = std::get<UInt8>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::UInt16:
+        std::get<ContainerPtrType<UInt16>>(attribute.arrays)[idx] = std::get<UInt16>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::UInt32:
+        std::get<ContainerPtrType<UInt32>>(attribute.arrays)[idx] = std::get<UInt32>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::UInt64:
+        std::get<ContainerPtrType<UInt64>>(attribute.arrays)[idx] = std::get<UInt64>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::UInt128:
+        std::get<ContainerPtrType<UInt128>>(attribute.arrays)[idx] = std::get<UInt128>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::Int8:
+        std::get<ContainerPtrType<Int8>>(attribute.arrays)[idx] = std::get<Int8>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::Int16:
+        std::get<ContainerPtrType<Int16>>(attribute.arrays)[idx] = std::get<Int16>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::Int32:
+        std::get<ContainerPtrType<Int32>>(attribute.arrays)[idx] = std::get<Int32>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::Int64:
+        std::get<ContainerPtrType<Int64>>(attribute.arrays)[idx] = std::get<Int64>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::Float32:
+        std::get<ContainerPtrType<Float32>>(attribute.arrays)[idx] = std::get<Float32>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::Float64:
+        std::get<ContainerPtrType<Float64>>(attribute.arrays)[idx] = std::get<Float64>(attribute.null_values);
+        break;
+    case AttributeUnderlyingType::String:
+    {
+        const auto & null_value_ref = std::get<String>(attribute.null_values);
+        auto & string_ref = std::get<ContainerPtrType<StringRef>>(attribute.arrays)[idx];
+
+        if (string_ref.data != null_value_ref.data())
         {
-            const auto & null_value_ref = std::get<String>(attribute.null_values);
-            auto & string_ref = std::get<ContainerPtrType<StringRef>>(attribute.arrays)[idx];
+            if (string_ref.data)
+                string_arena->free(const_cast<char *>(string_ref.data), string_ref.size);
 
-            if (string_ref.data != null_value_ref.data())
-            {
-                if (string_ref.data)
-                    string_arena->free(const_cast<char *>(string_ref.data), string_ref.size);
-
-                string_ref = StringRef{null_value_ref};
-            }
-
-            break;
+            string_ref = StringRef{null_value_ref};
         }
+
+        break;
+    }
     }
 }
 
@@ -947,39 +923,61 @@ void CacheDictionary::setAttributeValue(Attribute & attribute, const Key idx, co
 {
     switch (attribute.type)
     {
-        case AttributeUnderlyingType::UInt8: std::get<ContainerPtrType<UInt8>>(attribute.arrays)[idx] = value.get<UInt64>(); break;
-        case AttributeUnderlyingType::UInt16: std::get<ContainerPtrType<UInt16>>(attribute.arrays)[idx] = value.get<UInt64>(); break;
-        case AttributeUnderlyingType::UInt32: std::get<ContainerPtrType<UInt32>>(attribute.arrays)[idx] = value.get<UInt64>(); break;
-        case AttributeUnderlyingType::UInt64: std::get<ContainerPtrType<UInt64>>(attribute.arrays)[idx] = value.get<UInt64>(); break;
-        case AttributeUnderlyingType::UInt128: std::get<ContainerPtrType<UInt128>>(attribute.arrays)[idx] = value.get<UInt128>(); break;
-        case AttributeUnderlyingType::Int8: std::get<ContainerPtrType<Int8>>(attribute.arrays)[idx] = value.get<Int64>(); break;
-        case AttributeUnderlyingType::Int16: std::get<ContainerPtrType<Int16>>(attribute.arrays)[idx] = value.get<Int64>(); break;
-        case AttributeUnderlyingType::Int32: std::get<ContainerPtrType<Int32>>(attribute.arrays)[idx] = value.get<Int64>(); break;
-        case AttributeUnderlyingType::Int64: std::get<ContainerPtrType<Int64>>(attribute.arrays)[idx] = value.get<Int64>(); break;
-        case AttributeUnderlyingType::Float32: std::get<ContainerPtrType<Float32>>(attribute.arrays)[idx] = value.get<Float64>(); break;
-        case AttributeUnderlyingType::Float64: std::get<ContainerPtrType<Float64>>(attribute.arrays)[idx] = value.get<Float64>(); break;
-        case AttributeUnderlyingType::String:
+    case AttributeUnderlyingType::UInt8:
+        std::get<ContainerPtrType<UInt8>>(attribute.arrays)[idx] = value.get<UInt64>();
+        break;
+    case AttributeUnderlyingType::UInt16:
+        std::get<ContainerPtrType<UInt16>>(attribute.arrays)[idx] = value.get<UInt64>();
+        break;
+    case AttributeUnderlyingType::UInt32:
+        std::get<ContainerPtrType<UInt32>>(attribute.arrays)[idx] = value.get<UInt64>();
+        break;
+    case AttributeUnderlyingType::UInt64:
+        std::get<ContainerPtrType<UInt64>>(attribute.arrays)[idx] = value.get<UInt64>();
+        break;
+    case AttributeUnderlyingType::UInt128:
+        std::get<ContainerPtrType<UInt128>>(attribute.arrays)[idx] = value.get<UInt128>();
+        break;
+    case AttributeUnderlyingType::Int8:
+        std::get<ContainerPtrType<Int8>>(attribute.arrays)[idx] = value.get<Int64>();
+        break;
+    case AttributeUnderlyingType::Int16:
+        std::get<ContainerPtrType<Int16>>(attribute.arrays)[idx] = value.get<Int64>();
+        break;
+    case AttributeUnderlyingType::Int32:
+        std::get<ContainerPtrType<Int32>>(attribute.arrays)[idx] = value.get<Int64>();
+        break;
+    case AttributeUnderlyingType::Int64:
+        std::get<ContainerPtrType<Int64>>(attribute.arrays)[idx] = value.get<Int64>();
+        break;
+    case AttributeUnderlyingType::Float32:
+        std::get<ContainerPtrType<Float32>>(attribute.arrays)[idx] = value.get<Float64>();
+        break;
+    case AttributeUnderlyingType::Float64:
+        std::get<ContainerPtrType<Float64>>(attribute.arrays)[idx] = value.get<Float64>();
+        break;
+    case AttributeUnderlyingType::String:
+    {
+        const auto & string = value.get<String>();
+        auto & string_ref = std::get<ContainerPtrType<StringRef>>(attribute.arrays)[idx];
+        const auto & null_value_ref = std::get<String>(attribute.null_values);
+
+        /// free memory unless it points to a null_value
+        if (string_ref.data && string_ref.data != null_value_ref.data())
+            string_arena->free(const_cast<char *>(string_ref.data), string_ref.size);
+
+        const auto size = string.size();
+        if (size != 0)
         {
-            const auto & string = value.get<String>();
-            auto & string_ref = std::get<ContainerPtrType<StringRef>>(attribute.arrays)[idx];
-            const auto & null_value_ref = std::get<String>(attribute.null_values);
-
-            /// free memory unless it points to a null_value
-            if (string_ref.data && string_ref.data != null_value_ref.data())
-                string_arena->free(const_cast<char *>(string_ref.data), string_ref.size);
-
-            const auto size = string.size();
-            if (size != 0)
-            {
-                auto string_ptr = string_arena->alloc(size + 1);
-                std::copy(string.data(), string.data() + size + 1, string_ptr);
-                string_ref = StringRef{string_ptr, size};
-            }
-            else
-                string_ref = {};
-
-            break;
+            auto * string_ptr = string_arena->alloc(size + 1);
+            std::copy(string.data(), string.data() + size + 1, string_ptr);
+            string_ref = StringRef{string_ptr, size};
         }
+        else
+            string_ref = {};
+
+        break;
+    }
     }
 }
 
@@ -989,22 +987,18 @@ CacheDictionary::Attribute & CacheDictionary::getAttribute(const std::string & a
     if (it == std::end(attribute_index_by_name))
         throw Exception{
             name + ": no such attribute '" + attribute_name + "'",
-            ErrorCodes::BAD_ARGUMENTS
-        };
+            ErrorCodes::BAD_ARGUMENTS};
 
     return attributes[it->second];
 }
 
 bool CacheDictionary::isEmptyCell(const UInt64 idx) const
 {
-    return (idx != zero_cell_idx && cells[idx].id == 0) || (cells[idx].data
-        == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t()));
+    return (idx != zero_cell_idx && cells[idx].id == 0) || (cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t()));
 }
 
 PaddedPODArray<CacheDictionary::Key> CacheDictionary::getCachedIds() const
 {
-    const ProfilingScopedReadRWLock read_lock{rw_lock, ProfileEvents::DictCacheLockReadNs};
-
     PaddedPODArray<Key> array;
     for (size_t idx = 0; idx < cells.size(); ++idx)
     {
@@ -1024,4 +1018,4 @@ BlockInputStreamPtr CacheDictionary::getBlockInputStream(const Names & column_na
 }
 
 
-}
+} // namespace DB

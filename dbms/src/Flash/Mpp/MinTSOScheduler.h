@@ -15,12 +15,19 @@
 #pragma once
 
 #include <Flash/Mpp/MPPTask.h>
-#include <Flash/Mpp/MPPTaskManager.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
+class MinTSOScheduler;
+using MPPTaskSchedulerPtr = std::unique_ptr<MinTSOScheduler>;
+
+class MPPTaskManager;
+using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
+
+struct MPPQueryTaskSet;
+using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
+
 /// scheduling tasks in the set according to the tso order under the soft limit of threads, but allow the min_tso query to preempt threads under the hard limit of threads.
 /// The min_tso query avoids the deadlock resulted from threads competition among nodes.
 /// schedule tasks under the lock protection of the task manager.

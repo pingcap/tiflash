@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/InterpreterTestUtils.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB
 {
 namespace tests
 {
-class InterpreterExecuteTest : public DB::tests::InterpreterTest
+class InterpreterExecuteTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
     {
-        InterpreterTest::initializeContext();
+        ExecutorTest::initializeContext();
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
@@ -47,7 +47,7 @@ try
                        .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Expression: <final projection>
    MergeSorting, limit = 10
@@ -72,7 +72,7 @@ Union: <for mpp>
 
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Limit, limit = 10
    Union: <for partial limit>
@@ -100,7 +100,7 @@ try
                        .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -122,7 +122,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -147,7 +147,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -181,7 +181,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  SharedQuery x 10: <restore concurrency>
   Limit, limit = 10
    Union: <for partial limit>
@@ -244,7 +244,7 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockTableScan
- Union: <for mpp>
+ Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
     HashJoinProbe: <join probe, join_executor_id = Join_6>
@@ -260,7 +260,7 @@ CreatingSets
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    Expression: <before projection>
@@ -283,7 +283,7 @@ Union: <for mpp>
                   .build(context);
     {
         String expected = R"(
-Union: <for mpp>
+Union: <for test>
  MockExchangeSender x 10
   Expression: <final projection>
    Expression: <projection>
@@ -331,7 +331,7 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockExchangeReceiver
- Union: <for mpp>
+ Union: <for test>
   Expression x 10: <final projection>
    Expression: <remove useless column after join>
     HashJoinProbe: <join probe, join_executor_id = Join_6>
@@ -373,13 +373,93 @@ CreatingSets
       HashJoinProbe: <join probe, join_executor_id = Join_4>
        Expression: <final projection>
         MockExchangeReceiver
- Union: <for mpp>
+ Union: <for test>
   MockExchangeSender x 10
    Expression: <final projection>
     Expression: <remove useless column after join>
      HashJoinProbe: <join probe, join_executor_id = Join_6>
       Expression: <final projection>
        MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
+TEST_F(InterpreterExecuteTest, Window)
+try
+{
+    auto request = context
+                       .scan("test_db", "test_table")
+                       .sort({{"s1", true}, {"s2", false}}, true)
+                       .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
+                       .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  SharedQuery: <restore concurrency>
+   Expression: <cast after window>
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+     Expression: <final projection>
+      MergeSorting, limit = 0
+       Union: <for partial order>
+        PartialSorting x 10: limit = 0
+         Expression: <final projection>
+          MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    request = context.scan("test_db", "test_table")
+                  .sort({{"s1", true}, {"s2", false}}, true)
+                  .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame())
+                  .project({"s1", "s2", "RowNumber()"})
+                  .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <projection>
+   Expression: <before projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
+      Expression: <cast after window>
+       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+        Expression: <final projection>
+         MergeSorting, limit = 0
+          Union: <for partial order>
+           PartialSorting x 10: limit = 0
+            Expression: <final projection>
+             MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+                  .sort({{"s1", true}, {"s2", false}}, true)
+                  .project({"s1", "s2", "s3"})
+                  .window(RowNumber(), {"s1", true}, {"s1", false}, buildDefaultRowsFrame())
+                  .project({"s1", "s2", "s3", "RowNumber()"})
+                  .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <projection>
+   Expression: <before projection>
+    Expression: <final projection>
+     SharedQuery: <restore concurrency>
+      Expression: <cast after window>
+       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+        Union: <merge into one for window input>
+         Expression x 10: <final projection>
+          Expression: <projection>
+           Expression: <before projection>
+            SharedQuery: <restore concurrency>
+             Expression: <final projection>
+              MergeSorting, limit = 0
+               Union: <for partial order>
+                PartialSorting x 10: limit = 0
+                 Expression: <final projection>
+                  MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }

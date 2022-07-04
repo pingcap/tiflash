@@ -17,6 +17,7 @@
 #include <AggregateFunctions/AggregateFunctionState.h>
 #include <Columns/ColumnTuple.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
@@ -37,19 +38,6 @@
 #include <iomanip>
 #include <thread>
 
-
-namespace ProfileEvents
-{
-extern const Event ExternalAggregationWritePart;
-extern const Event ExternalAggregationCompressedBytes;
-extern const Event ExternalAggregationUncompressedBytes;
-} // namespace ProfileEvents
-
-namespace CurrentMetrics
-{
-extern const Metric QueryThread;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -61,6 +49,11 @@ extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char random_aggregate_create_state_failpoint[];
+extern const char random_aggregate_merge_failpoint[];
+} // namespace FailPoints
 
 AggregatedDataVariants::~AggregatedDataVariants()
 {
@@ -330,6 +323,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
               * In order that then everything is properly destroyed, we "roll back" some of the created states.
               * The code is not very convenient.
               */
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_create_state_failpoint);
             aggregate_functions[j]->create(aggregate_data + offsets_of_aggregate_states[j]);
         }
         catch (...)
@@ -658,7 +652,6 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     NativeBlockOutputStream block_out(compressed_buf, ClickHouseRevision::get(), getHeader(false));
 
     LOG_FMT_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
-    ProfileEvents::increment(ProfileEvents::ExternalAggregationWritePart);
 
     /// Flush only two-level data and possibly overflow data.
 
@@ -693,9 +686,6 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
         temporary_files.sum_size_uncompressed += uncompressed_bytes;
         temporary_files.sum_size_compressed += compressed_bytes;
     }
-
-    ProfileEvents::increment(ProfileEvents::ExternalAggregationCompressedBytes, compressed_bytes);
-    ProfileEvents::increment(ProfileEvents::ExternalAggregationUncompressedBytes, uncompressed_bytes);
 
     LOG_FMT_TRACE(
         log,
@@ -1016,7 +1006,7 @@ Block Aggregator::prepareBlockAndFill(
             aggregate_columns[i] = header.getByName(aggregate_column_name).type->createColumn();
 
             /// The ColumnAggregateFunction column captures the shared ownership of the arena with the aggregate function states.
-            ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
+            auto & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
 
             for (auto & pool : data_variants.aggregates_pools)
                 column_aggregate_func.addArena(pool);
@@ -1502,7 +1492,7 @@ public:
 
     Block getHeader() const override { return aggregator.getHeader(final); }
 
-    ~MergingAndConvertingBlockInputStream()
+    ~MergingAndConvertingBlockInputStream() override
     {
         LOG_FMT_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Waiting for threads to finish");
 
@@ -1520,6 +1510,8 @@ protected:
 
         if (current_bucket_num >= NUM_BUCKETS)
             return {};
+
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_aggregate_merge_failpoint);
 
         AggregatedDataVariantsPtr & first = data[0];
 
@@ -1636,8 +1628,6 @@ private:
 
     void thread(Int32 bucket_num)
     {
-        CurrentMetrics::Increment metric_increment{CurrentMetrics::QueryThread};
-
         try
         {
             /// TODO: add no_more_keys support maybe

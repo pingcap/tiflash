@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Poco/Logger.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -19,6 +20,8 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
+#include <fmt/ranges.h>
 #include <gtest/gtest.h>
 
 namespace DB
@@ -80,6 +83,16 @@ public:
         page_writer_mix = storage_pool_mix->logWriter();
         page_reader_mix = storage_pool_mix->logReader();
         return run_mode;
+    }
+
+    PageReader newMixedPageReader(PageStorage::SnapshotPtr & snapshot)
+    {
+        return storage_pool_mix->newLogReader(nullptr, snapshot);
+    }
+
+    PageReader newMixedPageReader()
+    {
+        return storage_pool_mix->newLogReader(nullptr, true, "PageStorageMixedTest");
     }
 
     void reloadV2StoragePool()
@@ -879,6 +892,129 @@ try
 }
 CATCH
 
+
+TEST_F(PageStorageMixedTest, RefV2External2)
+try
+{
+    auto logger = DB::Logger::get("PageStorageMixedTest");
+    {
+        WriteBatch batch;
+        batch.putExternal(100, 0);
+        batch.putRefPage(101, 100);
+        batch.delPage(100);
+        batch.putExternal(102, 0);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+    {
+        WriteBatch batch;
+        batch.putExternal(100, 0);
+        batch.putRefPage(101, 100);
+        batch.delPage(100);
+        batch.putExternal(102, 0);
+        page_writer_mix->writeIntoV3(std::move(batch), nullptr);
+    }
+    {
+        auto snap = storage_pool_mix->log_storage_v2->getSnapshot("zzz"); // must hold
+        // after transform to v3, delete these from v2
+        WriteBatch batch;
+        batch.delPage(100);
+        batch.delPage(101);
+        batch.delPage(102);
+        page_writer_mix->writeIntoV2(std::move(batch), nullptr);
+    }
+
+    {
+        LOG_FMT_INFO(logger, "first check alive id in v2");
+        auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_dt_ids_in_v2.size(), 0);
+
+        storage_pool_mix->log_storage_v3->gc(false, nullptr, nullptr);
+        auto alive_dt_ids_in_v3 = storage_pool_mix->log_storage_v3->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        ASSERT_EQ(alive_dt_ids_in_v3.size(), 2);
+        auto iter = alive_dt_ids_in_v3.begin();
+        EXPECT_EQ(*iter, 100);
+        iter++;
+        EXPECT_EQ(*iter, 102);
+    }
+
+    {
+        LOG_FMT_INFO(logger, "remove 100, create 105");
+        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        // write delete again
+        WriteBatch batch;
+        batch.delPage(100);
+        batch.putExternal(105, 0);
+        page_writer_mix->write(std::move(batch), nullptr);
+        LOG_FMT_INFO(logger, "done");
+    }
+    {
+        LOG_FMT_INFO(logger, "remove 101, create 106");
+        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        // write delete again
+        WriteBatch batch;
+        batch.delPage(101);
+        batch.putExternal(106, 0);
+        page_writer_mix->write(std::move(batch), nullptr);
+        LOG_FMT_INFO(logger, "done");
+    }
+    {
+        LOG_FMT_INFO(logger, "remove 102, create 107");
+        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        // write delete again
+        WriteBatch batch;
+        batch.delPage(102);
+        batch.putExternal(107, 0);
+        page_writer_mix->write(std::move(batch), nullptr);
+        LOG_FMT_INFO(logger, "done");
+    }
+
+    {
+        LOG_FMT_INFO(logger, "second check alive id in v2");
+        auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_dt_ids_in_v2.size(), 0) << fmt::format("{}", alive_dt_ids_in_v2);
+
+        storage_pool_mix->log_storage_v3->gc(false, nullptr, nullptr);
+        auto alive_dt_ids_in_v3 = storage_pool_mix->log_storage_v3->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        ASSERT_EQ(alive_dt_ids_in_v3.size(), 3) << fmt::format("{}", alive_dt_ids_in_v3);
+        auto iter = alive_dt_ids_in_v3.begin();
+        EXPECT_EQ(*iter, 105);
+        iter++;
+        EXPECT_EQ(*iter, 106);
+        iter++;
+        EXPECT_EQ(*iter, 107);
+    }
+    {
+        LOG_FMT_INFO(logger, "third check alive id in v2");
+        auto alive_dt_ids_in_v2 = storage_pool_mix->log_storage_v2->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_dt_ids_in_v2.size(), 0) << fmt::format("{}", alive_dt_ids_in_v2);
+
+        storage_pool_mix->log_storage_v3->gc(false, nullptr, nullptr);
+        auto alive_dt_ids_in_v3 = storage_pool_mix->log_storage_v3->getAliveExternalPageIds(TEST_NAMESPACE_ID);
+        ASSERT_EQ(alive_dt_ids_in_v3.size(), 3) << fmt::format("{}", alive_dt_ids_in_v3);
+        auto iter = alive_dt_ids_in_v3.begin();
+        EXPECT_EQ(*iter, 105);
+        iter++;
+        EXPECT_EQ(*iter, 106);
+        iter++;
+        EXPECT_EQ(*iter, 107);
+    }
+
+    {
+        // cleanup v3
+        WriteBatch batch;
+        batch.delPage(100);
+        batch.delPage(101);
+        batch.delPage(102);
+        batch.delPage(105);
+        batch.delPage(106);
+        batch.delPage(107);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+}
+CATCH
+
 TEST_F(PageStorageMixedTest, ReadWithSnapshotAfterMergeDelta)
 try
 {
@@ -909,7 +1045,7 @@ try
     // Thread A create snapshot for read
     auto snapshot_mix_before_merge_delta = page_reader_mix->getSnapshot("ReadWithSnapshotAfterMergeDelta");
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_before_merge_delta);
+        auto page_reader_mix_with_snap = newMixedPageReader(snapshot_mix_before_merge_delta);
         const auto & page1 = page_reader_mix_with_snap.read(1);
         const auto & page2 = page_reader_mix_with_snap.read(2);
         const auto & page3 = page_reader_mix_with_snap.read(3);
@@ -918,7 +1054,7 @@ try
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
     }
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, true, "ReadWithSnapshotAfterMergeDelta");
+        auto page_reader_mix_with_snap = newMixedPageReader();
         const auto & page1 = page_reader_mix_with_snap.read(1);
         const auto & page2 = page_reader_mix_with_snap.read(2);
         const auto & page3 = page_reader_mix_with_snap.read(3);
@@ -937,7 +1073,7 @@ try
     }
     // Thread A continue to read 1, 3
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_before_merge_delta);
+        auto page_reader_mix_with_snap = newMixedPageReader(snapshot_mix_before_merge_delta);
         // read 1, 3 with snapshot, should be success
         const auto & page1 = page_reader_mix_with_snap.read(1);
         const auto & page3 = page_reader_mix_with_snap.read(3);
@@ -945,11 +1081,296 @@ try
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
         ASSERT_THROW(page_reader_mix_with_snap.read(4), DB::Exception);
     }
+
     {
         // Revert v3
         WriteBatch batch;
         batch.delPage(3);
         batch.delPage(4);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+}
+CATCH
+
+TEST_F(PageStorageMixedTest, refWithSnapshot2)
+try
+{
+    UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    // Change to mix mode here
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+
+    auto snapshot_mix = page_reader_mix->getSnapshot("");
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        batch.delPage(2);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+
+    {
+        auto page_maps = newMixedPageReader(snapshot_mix).read({1, 2});
+        ASSERT_EQ(page_maps.size(), 2);
+
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[2], 2);
+    }
+}
+CATCH
+
+TEST_F(PageStorageMixedTest, refWithSnapshot3)
+try
+{
+    UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        // to keep mix mode
+        batch.putExternal(10, 1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        batch.delPage(2);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    // Change to mix mode here
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+
+    auto snapshot_mix = page_reader_mix->getSnapshot("");
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        batch.delPage(2);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+
+    {
+        auto page_maps = newMixedPageReader(snapshot_mix).read({1, 2});
+        ASSERT_EQ(page_maps.size(), 2);
+
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[1], 1);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[2], 2);
+    }
+}
+CATCH
+
+TEST_F(PageStorageMixedTest, refWithSnapshot4)
+try
+{
+    UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    // Change to mix mode here
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+
+    {
+        WriteBatch batch;
+        batch.delPage(2);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+
+    {
+        auto page1 = page_reader_mix->read(1);
+
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
+    }
+}
+CATCH
+
+TEST_F(PageStorageMixedTest, refWithSnapshot5)
+try
+{
+    UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    // Change to mix mode here
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+
+    {
+        auto page1 = page_reader_mix->read(2);
+
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
+    }
+}
+CATCH
+
+TEST_F(PageStorageMixedTest, refWithSnapshot6)
+try
+{
+    UInt64 tag = 0;
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    // Change to mix mode here
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+
+    {
+        auto page1 = page_reader_mix->read(2);
+
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
+    }
+}
+CATCH
+
+TEST_F(PageStorageMixedTest, ReadWithSnapshot2)
+try
+{
+    UInt64 tag = 0;
+    const size_t buf_sz = 1;
+    char c_buff1[buf_sz];
+    c_buff1[0] = 1;
+
+    char c_buff2[buf_sz];
+    c_buff2[0] = 2;
+
+    {
+        WriteBatch batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff1, buf_sz);
+        batch.putPage(1, tag, buff, buf_sz);
+        page_writer_v2->write(std::move(batch), nullptr);
+    }
+
+    // Change to mix mode here
+    ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
+
+    auto snapshot_mix = page_reader_mix->getSnapshot("");
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff2, buf_sz);
+        batch.putPage(1, tag, buff, buf_sz);
+        page_writer_mix->write(std::move(batch), nullptr);
+    }
+
+    {
+        auto page1 = newMixedPageReader(snapshot_mix).read(1);
+        ASSERT_PAGE_EQ(c_buff1, buf_sz, page1, 1);
+    }
+
+    {
+        auto page1 = page_reader_mix->read(1);
+        ASSERT_PAGE_EQ(c_buff2, buf_sz, page1, 1);
+    }
+
+    {
+        // Revert v3
+        WriteBatch batch;
+        batch.delPage(1);
         page_writer_mix->write(std::move(batch), nullptr);
     }
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {

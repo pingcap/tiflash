@@ -26,8 +26,11 @@
 
 #include <common/logger_useful.h>
 
+#include <optional>
+
 namespace DB
 {
+// The enum results are completely the same as the DDL Action listed in the "parser/model/ddl.go" of TiDB codebase, which must be keeping in sync.
 enum class SchemaActionType : Int8
 {
     None = 0,
@@ -137,7 +140,9 @@ struct SchemaGetter
 
     Int64 getVersion();
 
-    SchemaDiff getSchemaDiff(Int64 ver);
+    bool checkSchemaDiffExists(Int64 ver);
+
+    std::optional<SchemaDiff> getSchemaDiff(Int64 ver);
 
     static String getSchemaDiffKey(Int64 ver);
 

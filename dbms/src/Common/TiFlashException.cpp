@@ -18,6 +18,32 @@
 
 namespace DB
 {
+struct TiFlashErrorRegistry::Errors : std::map<std::pair<std::string, std::string>, TiFlashError>
+{
+};
+
+TiFlashErrorRegistry::Errors & TiFlashErrorRegistry::errors()
+{
+    return *inner_data;
+}
+
+TiFlashErrorRegistry::Errors & TiFlashErrorRegistry::errors() const
+{
+    return *inner_data;
+}
+
+TiFlashErrorRegistry::TiFlashErrorRegistry()
+    : inner_data(new Errors{})
+{
+    initialize();
+}
+
+TiFlashErrorRegistry::~TiFlashErrorRegistry()
+{
+    delete inner_data;
+    inner_data = nullptr;
+}
+
 void TiFlashErrorRegistry::initialize()
 {
     // Used to check uniqueness of classes
@@ -46,9 +72,9 @@ void TiFlashErrorRegistry::initialize()
 void TiFlashErrorRegistry::registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template)
 {
     TiFlashError error{error_class, error_code, description, workaround, message_template};
-    if (all_errors.find({error_class, error_code}) == all_errors.end())
+    if (errors().find({error_class, error_code}) == errors().end())
     {
-        all_errors.emplace(std::make_pair(error_class, error_code), std::move(error));
+        errors().emplace(std::make_pair(error_class, error_code), std::move(error));
     }
     else
     {
@@ -76,5 +102,52 @@ std::string TiFlashException::standardText() const
     }
     return text;
 }
+
+std::optional<TiFlashError> TiFlashErrorRegistry::get(const std::string & error_class, const std::string & error_code) const
+{
+    auto error = errors().find({error_class, error_code});
+    if (error != errors().end())
+    {
+        return error->second;
+    }
+    else
+    {
+        return {};
+    }
+}
+std::optional<TiFlashError> TiFlashErrorRegistry::get(const std::string & error_class, int error_code) const
+{
+    return get(error_class, std::to_string(error_code));
+}
+
+std::vector<TiFlashError> TiFlashErrorRegistry::allErrors() const
+{
+    std::vector<TiFlashError> res;
+    res.reserve(errors().size());
+    for (const auto & error : errors())
+    {
+        res.push_back(error.second);
+    }
+    return res;
+}
+
+TiFlashError TiFlashErrorRegistry::simpleGet(const std::string & error_class, const std::string & error_code)
+{
+    auto & m_instance = instance();
+    auto error = m_instance.get(error_class, error_code);
+    if (error.has_value())
+    {
+        return error.value();
+    }
+    else
+    {
+        throw Exception("Unregistered TiFlashError: FLASH:" + error_class + ":" + error_code);
+    }
+}
+TiFlashError TiFlashErrorRegistry::simpleGet(const std::string & error_class, int error_code)
+{
+    return simpleGet(error_class, std::to_string(error_code));
+}
+
 
 } // namespace DB

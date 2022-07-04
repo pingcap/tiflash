@@ -487,6 +487,7 @@ bool IDAsPathUpgrader::needUpgrade()
         if (db_info.engine != "TiFlash")
         {
             has_old_db_engine = true;
+            LOG_FMT_INFO(log, "Find old style of database engine, doing upgrade [path={}] [engine={}]", database_metadata_file, db_info.engine);
         }
     }
 

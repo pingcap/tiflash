@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
@@ -459,6 +458,8 @@ public:
     using SessionKey = std::pair<String, String>;
 
     void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
+
+    size_t getMaxStreams() const;
 
 private:
     /** Check if the current client has access to the specified database.

@@ -128,12 +128,13 @@ public:
 
     String toDebugString() const
     {
-        return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",
+        return fmt::format("PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, ref: {}, field_offsets_size: {}}}",
                            file_id,
                            offset,
                            size,
                            checksum,
                            tag,
+                           ref,
                            field_offsets.size());
     }
 

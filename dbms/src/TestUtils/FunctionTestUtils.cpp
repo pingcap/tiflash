@@ -108,14 +108,15 @@ void blockEqual(
     const Block & actual)
 {
     size_t columns = actual.columns();
+    size_t expected_columns = expected.columns();
 
-    ASSERT_TRUE(expected.columns() == columns);
+    ASSERT_EQ(expected_columns, columns);
 
     for (size_t i = 0; i < columns; ++i)
     {
         const auto & expected_col = expected.getByPosition(i);
         const auto & actual_col = actual.getByPosition(i);
-        ASSERT_TRUE(actual_col.type->getName() == expected_col.type->getName());
+        ASSERT_EQ(actual_col.type->getName(), expected_col.type->getName());
         ASSERT_COLUMN_EQ(expected_col.column, actual_col.column);
     }
 }
@@ -242,5 +243,37 @@ ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
     return {std::move(col), data_type, name};
 }
 
+ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp)
+{
+    std::vector<typename TypeTraits<MyDateTime>::FieldType> vec;
+    vec.reserve(v.size());
+    for (const auto & value_str : v)
+    {
+        Field value = parseMyDateTime(value_str, fsp);
+        vec.push_back(value.template safeGet<UInt64>());
+    }
+    DataTypePtr data_type = std::make_shared<DataTypeMyDateTime>(fsp);
+    return {makeColumn<MyDateTime>(data_type, vec), data_type, name, 0};
+}
+
+ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp)
+{
+    std::vector<std::optional<typename TypeTraits<MyDateTime>::FieldType>> vec;
+    vec.reserve(v.size());
+    for (const auto & value_str : v)
+    {
+        if (!value_str.empty())
+        {
+            Field value = parseMyDateTime(value_str, fsp);
+            vec.push_back(value.template safeGet<UInt64>());
+        }
+        else
+        {
+            vec.push_back({});
+        }
+    }
+    DataTypePtr data_type = makeNullable(std::make_shared<DataTypeMyDateTime>(fsp));
+    return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
+}
 } // namespace tests
 } // namespace DB

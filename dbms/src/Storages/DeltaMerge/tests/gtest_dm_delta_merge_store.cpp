@@ -27,6 +27,8 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -35,9 +37,6 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
-
-#include "MultiSegmentTestUtil.h"
-#include "dm_basic_include.h"
 
 namespace DB
 {
@@ -3565,7 +3564,6 @@ class DeltaMergeStoreMergeDeltaBySegmentTest
 public:
     DeltaMergeStoreMergeDeltaBySegmentTest()
     {
-        log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
         std::tie(ps_ver, pk_type) = GetParam();
     }
 
@@ -3608,8 +3606,6 @@ protected:
 
     UInt64 ps_ver;
     DMTestEnv::PkType pk_type;
-
-    [[maybe_unused]] Poco::Logger * log;
 };
 
 INSTANTIATE_TEST_CASE_P(

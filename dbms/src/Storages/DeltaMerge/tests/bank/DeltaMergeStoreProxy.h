@@ -18,9 +18,9 @@
 #include <DataTypes/DataTypeString.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/bank/IDGenerator.h>
 #include <Storages/DeltaMerge/tests/bank/SimpleDB.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <cstddef>
