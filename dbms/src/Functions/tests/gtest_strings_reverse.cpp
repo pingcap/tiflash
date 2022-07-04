@@ -46,18 +46,31 @@ protected:
         return createColumn<Nullable<String>>(v);
     }
 };
-
 // test reverse
 TEST_F(StringReverse, stringReverseTest)
 try
 {
-    std::vector<std::optional<String>> candidate_strings = {"one week’s time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
-    std::vector<std::optional<String>> reversed_strings = {"tset emit s’keew eno", "fed试测cba", "cbaトステcba", "џўѝќћњљјїіѕєѓђёѐ", "^！џ@ў#ѝ￥ќ）ћ（њ&љ……ј%ї@$і#ѕ@є!ѓ/ђ*ё-ѐ+", "σωψχφυτσρποξνμλκιθηζεδγβα", "✕σ★ω♘ψχ♖φυ♥τσ℉ρπ✚οξ✓νμ♫λκ€ιθ✂ηζ☎εδ➨γβ▼α▲", "շմնբվցղզխլկյհգֆդսապօիւըտռեոքծժճչրջձփթ"};
+    std::vector<std::optional<String>> candidate_strings = {"one week's time test", "abcdef", "abcabc", "moc.pacgnip"};
+    std::vector<std::optional<String>> reversed_strings = {"tset emit s'keew eno", "fedcba", "cbacba", "pingcap.com"};
     ASSERT_COLUMN_EQ(
         toVec(reversed_strings),
         executeFunction(
             func_name,
             toVec(candidate_strings)));
+}
+CATCH
+
+// test reverseUTF8
+TEST_F(StringReverse, stringReverseUTF8Test)
+try
+{
+    std::vector<std::optional<String>> candidate_strings = {"one week's time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
+    std::vector<std::optional<String>> reversed_strings = {"tset emit s'keew eno", "fed试测cba", "cbaトステcba", "џўѝќћњљјїіѕєѓђёѐ", "^！џ@ў#ѝ￥ќ）ћ（њ&љ……ј%ї@$і#ѕ@є!ѓ/ђ*ё-ѐ+", "σωψχφυτσρποξνμλκιθηζεδγβα", "✕σ★ω♘ψχ♖φυ♥τσ℉ρπ✚οξ✓νμ♫λκ€ιθ✂ηζ☎εδ➨γβ▼α▲", "շմնբվցղզխլկյհգֆդսապօիւըտռեոքծժճչրջձփթ"};
+    // ASSERT_COLUMN_EQ(
+    //     toVec(reversed_strings),
+    //     executeFunction(
+    //         func_name,
+    //         toVec(candidate_strings)));
     ASSERT_COLUMN_EQ(
         toVec(reversed_strings),
         executeFunction(
@@ -66,6 +79,7 @@ try
 }
 CATCH
 
+
 // test NULL
 TEST_F(StringReverse, nullTest)
 {
@@ -73,6 +87,11 @@ TEST_F(StringReverse, nullTest)
         toVec({"", {}}),
         executeFunction(
             func_name,
+            toVec({"", {}})));
+    ASSERT_COLUMN_EQ(
+        toVec({"", {}}),
+        executeFunction(
+            "reverseUTF8",
             toVec({"", {}})));
 }
 
