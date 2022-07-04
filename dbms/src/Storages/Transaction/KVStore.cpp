@@ -326,13 +326,15 @@ void KVStore::persistRegion(const Region & region, const RegionTaskLock & region
     LOG_FMT_DEBUG(log, "Persist {} done", region.toString(false));
 }
 
-bool KVStore::canFlushRegionData(UInt64 region_id, UInt8 flush_if_possible, TMTContext & tmt) {
+bool KVStore::canFlushRegionData(UInt64 region_id, UInt8 flush_if_possible, TMTContext & tmt)
+{
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
     return canFlushRegionDataImpl(curr_region_ptr, flush_if_possible, tmt, region_task_lock);
 }
 
-bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, TMTContext & tmt, const RegionTaskLock & region_task_lock) {
+bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, TMTContext & tmt, const RegionTaskLock & region_task_lock)
+{
     auto & curr_region = *curr_region_ptr;
     if (curr_region_ptr == nullptr)
     {
@@ -359,7 +361,8 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
         auto compact_log_period = std::rand() % region_compact_log_period.load(std::memory_order_relaxed); // NOLINT
         can_flush = !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());
     }
-    if (can_flush && flush_if_possible) {
+    if (can_flush && flush_if_possible)
+    {
         LOG_FMT_DEBUG(log, "{} flush region due to can_flush_data", curr_region.toString(false));
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
         persistRegion(curr_region, region_task_lock, "compact raft log");

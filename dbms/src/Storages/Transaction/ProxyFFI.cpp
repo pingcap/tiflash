@@ -128,7 +128,8 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     }
 }
 
-uint8_t CanFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_if_possible) {
+uint8_t CanFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_if_possible)
+{
     try
     {
         auto & kvstore = server->tmt->getKVStore();
