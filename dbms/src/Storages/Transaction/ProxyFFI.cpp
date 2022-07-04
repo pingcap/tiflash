@@ -128,6 +128,19 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     }
 }
 
+uint8_t CanFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_if_possible) {
+    try
+    {
+        auto & kvstore = server->tmt->getKVStore();
+        return kvstore->canFlushRegionData(region_id, flush_if_possible, *server->tmt);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
 static_assert(sizeof(RaftStoreProxyFFIHelper) == sizeof(TiFlashRaftProxyHelper));
 static_assert(alignof(RaftStoreProxyFFIHelper) == alignof(TiFlashRaftProxyHelper));
 

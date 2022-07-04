@@ -108,6 +108,8 @@ public:
         TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
+    bool canFlushRegionData(UInt64 region_id, UInt8 flush_if_possible, TMTContext & tmt);
+
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
 
     std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
@@ -218,6 +220,7 @@ private:
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
+    bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, TMTContext & tmt, const RegionTaskLock & region_task_lock);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
     void releaseReadIndexWorkers();
