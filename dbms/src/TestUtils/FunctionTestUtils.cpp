@@ -14,7 +14,6 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Core/ColumnNumbers.h>
-#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Row.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <Flash/Coprocessor/DAGCodec.h>
