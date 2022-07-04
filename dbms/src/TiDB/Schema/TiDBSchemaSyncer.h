@@ -201,8 +201,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     {
                         LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
                         continue;
-                    } // else (diff_index == diffs.size() - 1)
-
+                    }
+                    
+                    // if diff_index == diffs.size() - 1, return used_version - 1;
                     return used_version - 1;
                 }
 
