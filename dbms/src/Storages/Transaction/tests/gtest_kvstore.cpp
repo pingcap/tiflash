@@ -1181,10 +1181,10 @@ void RegionKVStoreTest::testKVStore()
     }
     {
         // There shall be data to flush.
-        ASSERT_EQ(kvs.canFlushRegionData(19, false, ctx.getTMTContext()), true);
-        ASSERT_EQ(kvs.canFlushRegionData(19, true, ctx.getTMTContext()), true);
+        ASSERT_EQ(kvs.canFlushRegionData(19, false, false, ctx.getTMTContext()), true);
+        ASSERT_EQ(kvs.canFlushRegionData(19, true, false, ctx.getTMTContext()), true);
         // There shall be no data to flush.
-        ASSERT_EQ(kvs.canFlushRegionData(19, false, ctx.getTMTContext()), false);
+        ASSERT_EQ(kvs.canFlushRegionData(19, false, false, ctx.getTMTContext()), false);
     }
 }
 

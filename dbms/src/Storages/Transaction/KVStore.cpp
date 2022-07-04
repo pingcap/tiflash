@@ -129,7 +129,7 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
         callback(region.first, region.second);
 }
 
-void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log)
+bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log, bool try_until_succeed)
 {
     auto table_id = region.getMappedTableID();
     auto storage = tmt.getStorages().get(table_id);
@@ -139,7 +139,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
                         "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
                         region.toString(),
                         table_id);
-        return;
+        return true;
     }
 
     try
@@ -151,7 +151,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
             region.getRange()->getMappedTableID(),
             storage->isCommonHandle(),
             storage->getRowKeyColumnSize());
-        storage->flushCache(tmt.getContext(), rowkey_range);
+        return storage->flushCache(tmt.getContext(), rowkey_range, try_until_succeed);
     }
     catch (DB::Exception & e)
     {
@@ -159,6 +159,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
         if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
             throw;
     }
+    return true;
 }
 
 void KVStore::tryPersist(RegionID region_id)
@@ -326,14 +327,14 @@ void KVStore::persistRegion(const Region & region, const RegionTaskLock & region
     LOG_FMT_DEBUG(log, "Persist {} done", region.toString(false));
 }
 
-bool KVStore::canFlushRegionData(UInt64 region_id, UInt8 flush_if_possible, TMTContext & tmt)
+bool KVStore::canFlushRegionData(UInt64 region_id, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
-    return canFlushRegionDataImpl(curr_region_ptr, flush_if_possible, tmt, region_task_lock);
+    return canFlushRegionDataImpl(curr_region_ptr, flush_if_possible, try_until_succeed, tmt, region_task_lock);
 }
 
-bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, TMTContext & tmt, const RegionTaskLock & region_task_lock)
+bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock)
 {
     if (curr_region_ptr == nullptr)
     {
@@ -362,10 +363,17 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     if (can_flush && flush_if_possible)
     {
         LOG_FMT_DEBUG(log, "{} flush region due to can_flush_data", curr_region.toString(false));
-        tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, "compact raft log");
-        curr_region.markCompactLog();
-        curr_region.cleanApproxMemCacheInfo();
+        if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
+        {
+            persistRegion(curr_region, region_task_lock, "compact raft log");
+            curr_region.markCompactLog();
+            curr_region.cleanApproxMemCacheInfo();
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
     return can_flush;
 }
@@ -409,7 +417,10 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
     if (check_sync_log())
     {
+<<<<<<< HEAD
         return EngineStoreApplyRes::Persist;
+=======
+>>>>>>> upstream/master
     }
     return EngineStoreApplyRes::None;
 }
