@@ -789,7 +789,7 @@ String TiFlashModeToString(TiFlashMode tiflash_mode)
 
 TiFlashMode parseTiFlashMode(String mode_str)
 {
-    if (mode_str == "")
+    if (mode_str.empty())
     {
         return TiFlashMode::Normal;
     }
