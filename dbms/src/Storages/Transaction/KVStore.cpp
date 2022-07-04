@@ -128,7 +128,7 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
         callback(region.first, region.second);
 }
 
-void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log)
+bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log, bool try_until_succeed)
 {
     auto table_id = region.getMappedTableID();
     auto storage = tmt.getStorages().get(table_id);
@@ -138,7 +138,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
                         "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
                         region.toString(),
                         table_id);
-        return;
+        return true;
     }
 
     try
@@ -150,7 +150,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
             region.getRange()->getMappedTableID(),
             storage->isCommonHandle(),
             storage->getRowKeyColumnSize());
-        storage->flushCache(tmt.getContext(), rowkey_range);
+        return storage->flushCache(tmt.getContext(), rowkey_range, try_until_succeed);
     }
     catch (DB::Exception & e)
     {
@@ -158,6 +158,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
         if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
             throw;
     }
+    return true;
 }
 
 void KVStore::tryPersist(RegionID region_id)
@@ -365,12 +366,12 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
             if (rows >= REGION_COMPACT_LOG_MIN_ROWS.load(std::memory_order_relaxed)
                 || size_bytes >= REGION_COMPACT_LOG_MIN_BYTES.load(std::memory_order_relaxed))
             {
-                // if rows or bytes more than threshold, flush cache and perist mem data.
+                // if rows or bytes more than threshold, try to flush cache and persist mem data.
                 return true;
             }
             else
             {
-                // if thhere is little data in mem, wait until time interval reached threshold.
+                // if there is little data in mem, wait until time interval reached threshold.
                 // use random period so that lots of regions will not be persisted at same time.
                 auto compact_log_period = std::rand() % REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed); // NOLINT
                 return !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());
@@ -380,11 +381,17 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
     if (check_sync_log())
     {
-        tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, "compact raft log");
-        curr_region.markCompactLog();
-        curr_region.cleanApproxMemCacheInfo();
-        return EngineStoreApplyRes::Persist;
+        if (tryFlushRegionCacheInStorage(tmt, curr_region, log, /* try_until_succeed */ false))
+        {
+            persistRegion(curr_region, region_task_lock, "compact raft log");
+            curr_region.markCompactLog();
+            curr_region.cleanApproxMemCacheInfo();
+            return EngineStoreApplyRes::Persist;
+        }
+        else
+        {
+            return EngineStoreApplyRes::None;
+        }
     }
     return EngineStoreApplyRes::None;
 }

@@ -775,12 +775,12 @@ void StorageDeltaMerge::checkStatus(const Context & context)
 
 void StorageDeltaMerge::flushCache(const Context & context)
 {
-    flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
+    flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size), /* try_until_succeed */ true);
 }
 
-void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush)
+bool StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush, bool try_until_succeed)
 {
-    getAndMaybeInitStore()->flushCache(context, range_to_flush);
+    return getAndMaybeInitStore()->flushCache(context, range_to_flush, try_until_succeed);
 }
 
 void StorageDeltaMerge::mergeDelta(const Context & context)
