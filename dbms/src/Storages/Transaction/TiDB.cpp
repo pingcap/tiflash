@@ -778,7 +778,7 @@ String TiFlashModeToString(TiFlashMode tiflash_mode)
     switch (tiflash_mode)
     {
     case TiFlashMode::Normal:
-        return "normal";
+        return "";
     case TiFlashMode::Fast:
         return "fast";
     default:
@@ -789,7 +789,7 @@ String TiFlashModeToString(TiFlashMode tiflash_mode)
 
 TiFlashMode parseTiFlashMode(String mode_str)
 {
-    if (mode_str == "normal")
+    if (mode_str == "")
     {
         return TiFlashMode::Normal;
     }
