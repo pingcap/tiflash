@@ -368,13 +368,14 @@ void computeHash(const Block & input_block,
     }
 }
 
-/// hash exchanging data among only TiFlash nodes.
+/// Hash exchanging data among only TiFlash nodes. Only be called when enable_fine_grained_shuffle is false.
 template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::partitionAndEncodeThenWriteBlocks(
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
+    static_assert(!enable_fine_grained_shuffle);
     std::vector<mpp::MPPDataPacket> packet(partition_num);
     std::vector<size_t> responses_row_count(partition_num);
     handleExecSummary<send_exec_summary_at_last>(input_blocks, packet, response);
@@ -406,10 +407,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::p
     writePackets<send_exec_summary_at_last>(responses_row_count, packet);
 }
 
+/// Hash exchanging data among only TiFlash nodes. Only be called when enable_fine_grained_shuffle is true.
 template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::batchWriteFineGrainedShuffle()
 {
+    static_assert(enable_fine_grained_shuffle);
     assert(exchange_type == tipb::ExchangeType::Hash);
     assert(fine_grained_shuffle_stream_count > 0);
     assert(fine_grained_shuffle_batch_size > 0);
@@ -430,6 +433,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
         initInputBlocks(blocks);
         initDestColumns(blocks[0], final_dest_tbl_columns);
 
+        // Hash partition input_blocks into bucket_num.
         for (const auto & block : blocks)
         {
             std::vector<String> partition_key_containers(collators.size());
@@ -446,6 +450,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
             }
         }
 
+        // For i-th stream_count buckets, send to i-th tiflash node.
         for (size_t bucket_idx = 0; bucket_idx < bucket_num; bucket_idx += fine_grained_shuffle_stream_count)
         {
             size_t part_id = bucket_idx / fine_grained_shuffle_stream_count; // NOLINT(clang-analyzer-core.DivideZero)

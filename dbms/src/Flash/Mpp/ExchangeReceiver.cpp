@@ -409,7 +409,6 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
 {
     try
     {
-        // TODO: just bool is enough
         if (enable_fine_grained_shuffle_)
         {
             for (size_t i = 0; i < max_streams_; ++i)

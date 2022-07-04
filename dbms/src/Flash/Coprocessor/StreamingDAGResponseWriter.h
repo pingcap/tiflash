@@ -56,7 +56,6 @@ private:
     void batchWrite();
     template <bool send_exec_summary_at_last>
     void batchWriteFineGrainedShuffle();
-    bool canUseFineGrainedShuffle() const;
 
     template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;

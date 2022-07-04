@@ -37,7 +37,7 @@ struct ReceivedMessage
 {
     size_t source_index;
     String req_info;
-    // shared_ptr<const MPPDataPacket> is copied, so error_ptr, resp_ptr and chunks are valid.
+    // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
     const std::shared_ptr<const MPPDataPacket> packet;
     const mpp::Error * error_ptr;
     const String * resp_ptr;
