@@ -237,6 +237,7 @@ private:
             {
                 handler.onFinish();
             }
+            return;
         }
 
         {
@@ -245,7 +246,7 @@ private:
             {
                 /// Only one thread can go here so don't need to hold `unprepared_inputs_mutex`
                 /// or `unprepared_inputs_mutex` lock.
-                /// If a error happens, the `unprepared_inputs` and `available_inputs` may not be empty.
+                /// If an error has occurred, the `unprepared_inputs` and `available_inputs` may not be empty.
                 unprepared_inputs = UnpreparedInputs{};
                 available_inputs = AvailableInputs{};
                 for (size_t i = 0; i < additional_inputs_at_end.size(); ++i)
