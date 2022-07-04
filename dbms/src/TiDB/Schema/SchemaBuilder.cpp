@@ -1247,7 +1247,6 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(TiDB::DBInfoPtr db_info, TableID table_id)
 {
-    LOG_FMT_INFO(log, "INTO applySetTiFlashMode function with table_id", table_id);
     auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
 
     if (unlikely(latest_table_info == nullptr))
@@ -1267,7 +1266,10 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(TiDB::DBInfoPtr db_i
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashModeOnLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage)
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashModeOnLogicalTable(
+    const TiDB::DBInfoPtr & db_info,
+    const TiDB::TableInfoPtr & table_info,
+    ManageableStoragePtr storage)
 {
     applySetTiFlashModeOnPhysicalTable(db_info, table_info, storage);
 
@@ -1291,8 +1293,8 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashModeOnLogicalTable(TiDB::
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applySetTiFlashModeOnPhysicalTable(
-    TiDB::DBInfoPtr db_info,
-    TiDB::TableInfoPtr latest_table_info,
+    const TiDB::DBInfoPtr & db_info,
+    const TiDB::TableInfoPtr & latest_table_info,
     ManageableStoragePtr storage)
 {
     if (storage->getTableInfo().tiflash_mode == latest_table_info->tiflash_mode)

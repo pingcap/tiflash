@@ -89,9 +89,9 @@ private:
     void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TableID table_id);
     void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
 
-    void applySetTiFlashMode(TiDB::DBInfoPtr db_info, TableID table_id);
-    void applySetTiFlashModeOnLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
-    void applySetTiFlashModeOnPhysicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applySetTiFlashMode(const TiDB::DBInfoPtr & db_info, TableID table_id);
+    void applySetTiFlashModeOnLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, ManageableStoragePtr storage);
+    void applySetTiFlashModeOnPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, ManageableStoragePtr storage);
 };
 
 } // namespace DB
