@@ -162,6 +162,8 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
+# --raw is for disabling escaping, otherwise Newline, tab, NUL, and backslash will be written as \n, \t, \0, and \\.
+# ref: https://dev.mysql.com/doc/refman/8.0/en/mysql-command-options.html#option_mysql_raw
 mysql_client="mysql -u root -P $tidb_port -h $tidb_server --raw -e"
 
 if [ "$fullstack" = true ]; then
