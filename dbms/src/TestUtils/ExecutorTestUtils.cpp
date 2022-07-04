@@ -21,11 +21,6 @@
 
 #include <functional>
 
-#include "Columns/IColumn.h"
-#include "Core/ColumnsWithTypeAndName.h"
-#include "TestUtils/FunctionTestUtils.h"
-#include "gtest/gtest.h"
-
 namespace DB::tests
 {
 DAGContext & ExecutorTest::getDAGContext()
@@ -122,7 +117,7 @@ DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 }
 } // namespace
 
-ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
     dag_context.setColumnsForTest(source_columns_map);
@@ -132,12 +127,12 @@ ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::
     return readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     return executeStreams(request, context.executorIdColumnsMap(), concurrency);
 }
 
-ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, SourceType type, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, SourceType type, size_t concurrency)
 {
     std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
     source_columns_map[getSourceName(type)] = source_columns;

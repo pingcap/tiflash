@@ -25,14 +25,8 @@
 #include <TestUtils/ColumnsToTiPBExpr.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <fmt/core.h>
-#include <gtest/gtest.h>
-
 #include <ext/enumerate.h>
-#include <iterator>
 #include <set>
-
-#include "Common/FmtUtils.h"
 
 
 namespace DB
@@ -133,7 +127,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return ::testing::AssertionSuccess();
 }
 
-/// @pre size of each column should be the same
+/// size of each column should be the same
 std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
 {
     if (cols.empty())
