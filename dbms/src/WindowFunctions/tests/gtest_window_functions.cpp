@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/FunctionTestUtils.h>
 
 namespace DB::tests
 {

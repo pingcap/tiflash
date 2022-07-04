@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Core/ColumnsWithTypeAndName.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB
