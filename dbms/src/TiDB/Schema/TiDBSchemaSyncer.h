@@ -182,7 +182,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         try
         {
-            for (size_t diff_index = 0; diff_index < diffs.size(); diff_index++)
+            for (size_t diff_index = 0; diff_index < diffs.size(); ++diff_index)
             {
                 const auto & schema_diff = diffs[diff_index];
 
