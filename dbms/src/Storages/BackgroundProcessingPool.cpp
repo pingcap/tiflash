@@ -42,7 +42,6 @@ inline static pid_t getTid()
 
 namespace CurrentMetrics
 {
-extern const Metric BackgroundPoolTask;
 extern const Metric MemoryTrackingInBackgroundProcessingPool;
 } // namespace CurrentMetrics
 
@@ -87,9 +86,6 @@ BackgroundProcessingPool::BackgroundProcessingPool(int size_)
     : size(size_)
     , thread_ids_counter(size_)
 {
-    if (size <= 0)
-        throw Exception("BackgroundProcessingPool size must be greater than 0", ErrorCodes::LOGICAL_ERROR);
-
     LOG_FMT_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool with {} threads", size);
 
     threads.resize(size);
@@ -218,8 +214,6 @@ void BackgroundProcessingPool::threadFunction()
                 continue;
 
             {
-                CurrentMetrics::Increment metric_increment{CurrentMetrics::BackgroundPoolTask};
-
                 bool done_work = false;
                 if (!task->multi)
                 {

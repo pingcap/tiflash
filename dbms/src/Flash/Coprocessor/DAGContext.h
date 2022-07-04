@@ -37,8 +37,13 @@ namespace DB
 class Context;
 class MPPTunnelSet;
 class ExchangeReceiver;
-using ExchangeReceiverMap = std::unordered_map<String, std::shared_ptr<ExchangeReceiver>>;
-using ExchangeReceiverMapPtr = std::shared_ptr<std::unordered_map<String, std::shared_ptr<ExchangeReceiver>>>;
+using ExchangeReceiverPtr = std::shared_ptr<ExchangeReceiver>;
+/// key: executor_id of ExchangeReceiver nodes in dag.
+using ExchangeReceiverMap = std::unordered_map<String, ExchangeReceiverPtr>;
+class MPPReceiverSet;
+using MPPReceiverSetPtr = std::shared_ptr<MPPReceiverSet>;
+class CoprocessorReader;
+using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
@@ -304,11 +309,12 @@ public:
 
     bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
 
-    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & getMPPExchangeReceiverMap() const;
-    void setMPPExchangeReceiverMap(ExchangeReceiverMapPtr & exchange_receiver_map)
+    ExchangeReceiverPtr getMPPExchangeReceiver(const String & executor_id) const;
+    void setMPPReceiverSet(const MPPReceiverSetPtr & receiver_set)
     {
-        mpp_exchange_receiver_map = exchange_receiver_map;
+        mpp_receiver_set = receiver_set;
     }
+    void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
@@ -343,6 +349,10 @@ public:
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
 
+    /// Hold the order of list based executors.
+    /// It is used to ensure that the order of Execution summary of list based executors is the same as the order of list based executors.
+    std::vector<String> list_based_executors_order;
+
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
@@ -350,7 +360,7 @@ private:
 private:
     /// Hold io for correcting the destruction order.
     BlockIO io;
-    /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams
+    /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
@@ -369,8 +379,8 @@ private:
     ConcurrentBoundedQueue<tipb::Error> warnings;
     /// warning_count is the actual warning count during the entire execution
     std::atomic<UInt64> warning_count;
-    /// key: executor_id of ExchangeReceiver nodes in dag.
-    ExchangeReceiverMapPtr mpp_exchange_receiver_map;
+
+    MPPReceiverSetPtr mpp_receiver_set;
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
