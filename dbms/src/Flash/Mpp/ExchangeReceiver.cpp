@@ -358,7 +358,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
     setEndState(ExchangeReceiverState::CANCELED);
-    msg_channel.finish();
+    msg_channel.cancel();
 }
 
 template <typename RPCContext>
