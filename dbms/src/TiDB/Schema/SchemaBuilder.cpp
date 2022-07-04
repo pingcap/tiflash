@@ -320,7 +320,7 @@ inline SchemaChanges detectSchemaChanges(
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_info, TableInfoPtr table_info, ManageableStoragePtr storage)
+void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(const DBInfoPtr & db_info, const TableInfoPtr & table_info, const ManageableStoragePtr & storage)
 {
     LOG_FMT_INFO(log, "Altering table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
 
@@ -394,7 +394,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyAlterTable(DBInfoPtr db_info, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyAlterTable(const DBInfoPtr & db_info, TableID table_id)
 {
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
@@ -413,7 +413,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterTable(DBInfoPtr db_info, Table
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyAlterLogicalTable(DBInfoPtr db_info, TableInfoPtr table_info, ManageableStoragePtr storage)
+void SchemaBuilder<Getter, NameMapper>::applyAlterLogicalTable(const DBInfoPtr & db_info, const TableInfoPtr & table_info, const ManageableStoragePtr & storage)
 {
     // Alter logical table first.
     applyAlterPhysicalTable(db_info, table_info, storage);
@@ -569,7 +569,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_info, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id)
 {
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
@@ -593,7 +593,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_info, TableInfoPtr table_info, ManageableStoragePtr storage)
+void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TableInfoPtr & table_info, const ManageableStoragePtr & storage)
 {
     const auto & orig_table_info = storage->getTableInfo();
     if (!orig_table_info.isLogicalPartitionTable())
@@ -659,7 +659,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DBInfoPtr new_db_info, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyRenameTable(const DBInfoPtr & new_db_info, TableID table_id)
 {
     auto new_table_info = getter.getTableInfo(new_db_info->id, table_id);
     if (new_table_info == nullptr)
@@ -679,9 +679,9 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DBInfoPtr new_db_info, 
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
-    DBInfoPtr new_db_info,
-    TableInfoPtr new_table_info,
-    ManageableStoragePtr storage)
+    const DBInfoPtr & new_db_info,
+    const TableInfoPtr & new_table_info,
+    const ManageableStoragePtr & storage)
 {
     applyRenamePhysicalTable(new_db_info, *new_table_info, storage);
 
@@ -703,9 +703,9 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
-    DBInfoPtr new_db_info,
-    TableInfo & new_table_info,
-    ManageableStoragePtr storage)
+    const DBInfoPtr & new_db_info,
+    const TableInfo & new_table_info,
+    const ManageableStoragePtr & storage)
 {
     const auto old_mapped_db_name = storage->getDatabaseName();
     const auto new_mapped_db_name = name_mapper.mapDatabaseName(*new_db_info);
@@ -908,7 +908,7 @@ String createDatabaseStmt(Context & context, const DBInfo & db_info, const Schem
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_info)
+void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(const TiDB::DBInfoPtr & db_info)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_db).Increment();
     LOG_FMT_INFO(log, "Creating database {}", name_mapper.debugDatabaseName(*db_info));
@@ -1047,7 +1047,7 @@ String createTableStmt(
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_info, TableInfoPtr table_info)
+void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(const DBInfoPtr & db_info, const TableInfoPtr & table_info)
 {
     GET_METRIC(tiflash_schema_internal_ddl_count, type_create_table).Increment();
     LOG_FMT_INFO(log, "Creating table {}", name_mapper.debugCanonicalName(*db_info, *table_info));
@@ -1109,7 +1109,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyCreateTable(TiDB::DBInfoPtr db_info, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyCreateTable(const TiDB::DBInfoPtr & db_info, TableID table_id)
 {
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
@@ -1123,7 +1123,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateTable(TiDB::DBInfoPtr db_info
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyCreateLogicalTable(TiDB::DBInfoPtr db_info, TableInfoPtr table_info)
+void SchemaBuilder<Getter, NameMapper>::applyCreateLogicalTable(const TiDB::DBInfoPtr & db_info, const TableInfoPtr & table_info)
 {
     if (table_info->isLogicalPartitionTable())
     {
@@ -1169,7 +1169,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applyDropTable(DBInfoPtr db_info, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applyDropTable(const DBInfoPtr & db_info, TableID table_id)
 {
     auto & tmt_context = context.getTMTContext();
     auto * storage = tmt_context.getStorages().get(table_id).get();
@@ -1193,7 +1193,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DBInfoPtr db_info, TableI
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TableID table_id)
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(const TiDB::DBInfoPtr & db_info, TableID table_id)
 {
     auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
     if (unlikely(latest_table_info == nullptr))
@@ -1213,7 +1213,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr d
 }
 
 template <typename Getter, typename NameMapper>
-void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage)
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage)
 {
     applySetTiFlashReplicaOnPhysicalTable(db_info, table_info, storage);
 
@@ -1237,9 +1237,9 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnLogicalTable(TiD
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
-    TiDB::DBInfoPtr db_info,
-    TiDB::TableInfoPtr latest_table_info,
-    ManageableStoragePtr storage)
+    const TiDB::DBInfoPtr & db_info,
+    const TiDB::TableInfoPtr & latest_table_info,
+    const ManageableStoragePtr & storage)
 {
     if (storage->getTableInfo().replica_info.count == latest_table_info->replica_info.count)
         return;
