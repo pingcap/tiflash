@@ -253,7 +253,7 @@ ninja tiflash
 tiup playground nightly --tiflash.binpath $BUILD/dbms/src/Server/tiflash
 ```
 3. Check $WORKSPACE/tests/_env.sh to make the port and build dir right.
-4. Run your integration tests using commands like "./run-test.sh fullstack-test2/ddl" under $WORKSPACE dir
+4. Run your integration tests using commands like "./run-test.sh fullstack-test2/ddl" under $WORKSPACE/tests dir
 
 ## Run MicroBenchmark Tests
 
@@ -261,7 +261,7 @@ To run micro benchmark tests, you need to build with -DCMAKE_BUILD_TYPE=RELEASE 
 
 ```shell
 cd $BUILD
-cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON
+cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON
 ninja bench_dbms       
 ```
 
