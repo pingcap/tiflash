@@ -335,13 +335,11 @@ bool KVStore::canFlushRegionData(UInt64 region_id, UInt8 flush_if_possible, TMTC
 
 bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, TMTContext & tmt, const RegionTaskLock & region_task_lock)
 {
-    auto & curr_region = *curr_region_ptr;
     if (curr_region_ptr == nullptr)
     {
-        // If we can't find region, we don't block proxy from exec_compact_log,
-        // However, TiFlash will do a dummy persist.
-        return true;
+        throw Exception(fmt::format("region not found when trying flush", ErrorCodes::LOGICAL_ERROR);
     }
+    auto & curr_region = *curr_region_ptr;
 
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
