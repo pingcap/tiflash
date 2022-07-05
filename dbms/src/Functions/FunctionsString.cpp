@@ -4576,9 +4576,6 @@ public:
         const auto & number_base_type = block.getByPosition(arguments[0]).type;
         const auto & precision_base_type = block.getByPosition(arguments[1]).type;
 
-        auto precision_base_col = block.getByPosition(arguments[1]).column;
-        auto precision_base_col_size = precision_base_col->size();
-
         auto col_res = ColumnString::create();
         auto val_num = block.getByPosition(arguments[0]).column->size();
 
@@ -4588,14 +4585,11 @@ public:
             using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
             const auto * number_raw = block.getByPosition(arguments[0]).column.get();
 
-            auto prec = getDecimalPrecision(number_type, 0);
-            auto scale = getDecimalScale(number_type, 0);
+            auto input_prec = getDecimalPrecision(number_type, 0);
+            auto input_scale = getDecimalScale(number_type, 0);
 
-            /// output_scale is the second parameter of the 'format' function
-            auto output_scale = precision_base_col_size > 0 ? (*precision_base_col)[0].get<Int64>() : scale;
-            output_scale = output_scale < 0 ? 0 : output_scale; /// Ensure output_scale >= 0
-            TiDBDecimalRoundInfo info{prec, scale, prec, output_scale};
-
+            TiDBDecimalRoundInfo info{input_prec, input_scale};
+    
             return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
                 using PrecisionFieldType = typename PrecisionType::FieldType;
@@ -4612,6 +4606,7 @@ public:
                         for (size_t i = 0; i != val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
+                            info.setOutputPrecAndScale(input_prec, max_num_decimals);
                             format(const_number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
                         }
                     }
@@ -4623,6 +4618,7 @@ public:
                     if (const auto * col1_const = checkAndGetColumnConst<PrecisionColVec>(precision_raw))
                     {
                         size_t max_num_decimals = getMaxNumDecimals(col1_const->template getValue<PrecisionFieldType>());
+                        info.setOutputPrecAndScale(input_prec, max_num_decimals);
                         for (const auto & number : col0_column->getData())
                             format(number, max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
                     }
@@ -4633,7 +4629,7 @@ public:
                         for (size_t i = 0; i != val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
-                            info.setOutputScale(max_num_decimals);
+                            info.setOutputPrecAndScale(input_prec, max_num_decimals);
                             format(number_array[i], max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
                         }
                     }
