@@ -500,56 +500,56 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                const ColumnDefines & columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-                                               bool do_range_filter,
+                                               const RowKeyRanges & data_ranges,
+                                               const RSOperatorPtr & filter,
                                                size_t expected_block_size)
 {
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
-    if (!do_range_filter)
-    {
-        (*new_columns_to_read) = columns_to_read;
-    }
-    else
-    {
-        new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
 
-        for (const auto & c : columns_to_read)
-        {
-            if (c.id != EXTRA_HANDLE_COLUMN_ID)
-                new_columns_to_read->push_back(c);
-        }
+    new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+
+    for (const auto & c : columns_to_read)
+    {
+        if (c.id != EXTRA_HANDLE_COLUMN_ID)
+            new_columns_to_read->push_back(c);
     }
 
-
-    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, //
-                                                                               segment_snap->delta,
-                                                                               new_columns_to_read,
-                                                                               this->rowkey_range);
-
-    RowKeyRanges rowkey_ranges{rowkey_range};
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *new_columns_to_read,
-        rowkey_ranges,
-        EMPTY_FILTER,
+        data_ranges,
+        filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
         false);
 
-    if (do_range_filter)
-    {
-        delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, rowkey_ranges, 0);
-        delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
+    //BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 
-        stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, rowkey_ranges, 0);
-        stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
-    }
+    //delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
+    //delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
+
+    DeltaValueInputStream delta_stream(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
+    auto memtable_stream = delta_stream.getMemTableInputStream();
+    auto persisted_files_stream = delta_stream.getPersistedFilesInputStream();
+
+    memtable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(memtable_stream, data_ranges, 0);
+    memtable_stream = std::make_shared<DMColumnFilterBlockInputStream>(memtable_stream, columns_to_read);
+
+    persisted_files_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(persisted_files_stream, data_ranges, 0); // related to minor compaction sorted
+    persisted_files_stream = std::make_shared<DMColumnFilterBlockInputStream>(persisted_files_stream, columns_to_read);
+
+    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
+    stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
+
 
     BlockInputStreams streams;
 
     if (dm_context.read_delta_only)
     {
-        streams.push_back(delta_stream);
+        //streams.push_back(delta_stream);
+        streams.push_back(memtable_stream);
+        streams.push_back(persisted_files_stream);
     }
     else if (dm_context.read_stable_only)
     {
@@ -557,7 +557,9 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     }
     else
     {
-        streams.push_back(delta_stream);
+        //streams.push_back(delta_stream);
+        streams.push_back(memtable_stream);
+        streams.push_back(persisted_files_stream);
         streams.push_back(stable_stream);
     }
     return std::make_shared<ConcatBlockInputStream>(streams, /*req_id=*/"");
@@ -568,7 +570,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
     if (!segment_snap)
         return {};
-    return getInputStreamRaw(dm_context, columns_to_read, segment_snap, true);
+    return getInputStreamRaw(dm_context, columns_to_read, segment_snap, {rowkey_range}, EMPTY_FILTER);
 }
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
