@@ -44,7 +44,7 @@ namespace DB
 {
 namespace tests
 {
-class TestMPPTunnelBase;
+class TestMPPTunnel;
 } // namespace tests
 
 class EstablishCallData;
@@ -52,23 +52,23 @@ class EstablishCallData;
 enum class TunnelSenderMode
 {
     SYNC_GRPC, // Using sync grpc writer
-    LOCAL,     // Expose internal memory access, no grpc writer needed
+    LOCAL, // Expose internal memory access, no grpc writer needed
     ASYNC_GRPC // Using async grpc writer
 };
 
-///
+/// TunnelSender is responsible for consuming data from Tunnel's internal send_queue and do the actual sending work
+/// After TunnelSend finished its work, either normally or abnormally, set ConsumerState to inform Tunnel
 class TunnelSender : private boost::noncopyable
 {
 public:
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
     virtual ~TunnelSender() = default;
-    TunnelSender(TunnelSenderMode mode_, DataPacketMPMCQueuePtr send_queue_, PacketWriter * writer_, std::shared_ptr<std::condition_variable> cv_for_status_changed_ptr_, const LoggerPtr log_)
-            : mode(mode_)
-            , send_queue(send_queue_)
-            , writer(writer_)
-            , cv_for_status_changed_ptr(cv_for_status_changed_ptr_)
-            , log(log_)
+    TunnelSender(TunnelSenderMode mode_, DataPacketMPMCQueuePtr send_queue_, PacketWriter * writer_, const LoggerPtr log_)
+        : mode(mode_)
+        , send_queue(send_queue_)
+        , writer(writer_)
+        , log(log_)
     {
     }
     DataPacketMPMCQueuePtr getSendQueue()
@@ -85,13 +85,14 @@ public:
         return consumer_state.msgHasSet();
     }
     const LoggerPtr & getLogger() const { return log; }
+
 protected:
-    /// Consumer can be sendLoop or local receiver.
+    /// TunnelSender use consumer state to inform tunnel that whether sender has finished its work
     class ConsumerState
     {
     public:
         ConsumerState()
-                : future(promise.get_future())
+            : future(promise.get_future())
         {
         }
 
@@ -110,6 +111,7 @@ protected:
         {
             return msg_has_set.load();
         }
+
     private:
         std::promise<String> promise;
         std::shared_future<String> future;
@@ -119,11 +121,11 @@ protected:
     DataPacketMPMCQueuePtr send_queue;
     ConsumerState consumer_state;
     PacketWriter * writer;
-    std::shared_ptr<std::condition_variable> cv_for_status_changed_ptr;
     std::mutex state_mu;
     const LoggerPtr log;
 };
 
+/// SyncTunnelSender maintains a new thread itself to consume and send data
 class SyncTunnelSender : public TunnelSender
 {
 public:
@@ -131,12 +133,14 @@ public:
     using Base::Base;
     virtual ~SyncTunnelSender();
     void startSendThread();
+
 private:
-    friend class tests::TestMPPTunnelBase;
+    friend class tests::TestMPPTunnel;
     void sendJob();
     std::shared_ptr<ThreadManager> thread_manager;
 };
 
+/// AsyncTunnelSender is mainly triggered by the Async PacketWriter which handles GRPC request/response in async mode, send one element one time
 class AsyncTunnelSender : public TunnelSender
 {
 public:
@@ -147,6 +151,8 @@ public:
     bool isSendQueueNextPopNonBlocking() { return send_queue->isNextPopNonBlocking(); }
 };
 
+/// LocalTunnelSender just provide readForLocal method to return one element one time
+/// LocalTunnelSender is owned by the associated ExchangeReceiver
 class LocalTunnelSender : public TunnelSender
 {
 public:
@@ -161,30 +167,30 @@ using AsyncTunnelSenderPtr = std::shared_ptr<AsyncTunnelSender>;
 using LocalTunnelSenderPtr = std::shared_ptr<LocalTunnelSender>;
 
 /**
- * MPPTunnelBase represents the sender of an exchange connection.
+ * MPPTunnel represents the sender of an exchange connection.
  *
- * The lifecycle of a MPPTunnel can be indicated by `connected`, `finished` and tunnel_sender's consumerFinish:
- * | Stage                          | `connected` | `finished` | `tunnel_sender consumerFinish` |
- * |--------------------------------|-------------|------------|--------------------------------|
- * | After constructed              | false       | false      |     tunnel_sender is nullptr   |
- * | After `close` before `connect` | false       | true       |     tunnel_sender is nullptr   |
- * | After `connect`                | true        | false      |     consumerFinish is false    |
- * | After `consumerFinish`         | true        | unchanged       |
+ * The lifecycle of a MPPTunnel can be indicated by TunnelStatus:
+ * | Previous Status        | Event           | New Status             |
+ * |------------------------|-----------------|------------------------|
+ * | NaN                    | Construction    | Unconnected            |
+ * | Unconnected            | Close           | Finished               |
+ * | Unconnected            | Connection      | Connected              |
+ * | Connected              | WriteDone       | WaitingForSenderFinish |
+ * | Connected              | Close           | WaitingForSenderFinish |
+ * | Connected              | Encounter error | WaitingForSenderFinish |
+ * | WaitingForSenderFinish | Sender Finished | Finished               |
  *
- * To be short: before `connect`, only `close` can finish a MPPTunnel; after `connect`, only `consumerFinish` can.
+ * To be short: before connect, only close can finish a MPPTunnel; after connect, only Sender Finish can.
  *
- * Each MPPTunnel has a consumer to consume data. There're two kinds of consumers: local and remote.
- * - Remote consumer is owned by MPPTunnel itself. MPPTunnel will create a thread and run `sendLoop`.
- * - Local consumer is owned by the associated ExchangeReceiver (in the same process).
+ * Each MPPTunnel has a Sender to consume data. There're three kinds of senders: sync_remote, local and async_remote.
  * 
- * The protocol between MPPTunnel and consumer:
+ * The protocol between MPPTunnel and Sender:
  * - All data will be pushed into the `send_queue`, including errors.
- * - MPPTunnel may close `send_queue` to notify consumer normally finish.
- * - Consumer may close `send_queue` to notify MPPTunnel that an error occurs.
- * - After `connect` only the consumer can set `finished` to `true`.
- * - Consumer's state is saved in `consumer_state` and be available after consumer finished.
+ * - MPPTunnel may close `send_queue` to notify Sender normally finish.
+ * - Sender may close `send_queue` to notify MPPTunnel that an error occurs.
+ * - After `status` turned to Connected only when Sender finish its work, MPPTunnel can set its 'status' to Finished.
  *
- * NOTE: to avoid deadlock, `waitForConsumerFinish` should be called outside of the protection of `mu`.
+ * NOTE: to avoid deadlock, `waitForSenderFinish` should be called outside of the protection of `mu`.
  */
 class MPPTunnel : private boost::noncopyable
 {
@@ -238,21 +244,28 @@ public:
     SyncTunnelSenderPtr getSyncTunnelSender() { return sync_tunnel_sender; }
     AsyncTunnelSenderPtr getAsyncTunnelSender() { return async_tunnel_sender; }
     LocalTunnelSenderPtr getLocalTunnelSender() { return local_tunnel_sender; }
-private:
-    friend class tests::TestMPPTunnelBase;
 
+private:
+    friend class tests::TestMPPTunnel;
+    enum class TunnelStatus
+    {
+        Unconnected, // Not connect to any writer, not able to accept new data
+        Connected, // Connected to some writer, accepting data
+        WaitingForSenderFinish, // Accepting all data already, wait for sender to finish
+        Finished // Final state, no more work to do
+    };
+
+    StringRef statusToString();
     void finishSendQueue();
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
-    void waitForConsumerFinish(bool allow_throw);
+    void waitForSenderFinish(bool allow_throw);
 
     std::mutex mu;
-    std::shared_ptr<std::condition_variable> cv_for_status_changed_ptr;
+    std::condition_variable cv_for_status_changed;
 
-    bool connected; // if the exchange in has connected this tunnel.
-
-    bool finished; // if the tunnel has finished its connection.
+    TunnelStatus status;
 
     TunnelSenderMode mode; // Tunnel transfer data mode
 

@@ -98,8 +98,8 @@ struct MockTerminateLocalReader
     std::shared_ptr<ThreadManager> thread_manager;
 
     explicit MockTerminateLocalReader(const LocalTunnelSenderPtr & local_sender_)
-            : local_sender(local_sender_)
-            , thread_manager(newThreadManager())
+        : local_sender(local_sender_)
+        , thread_manager(newThreadManager())
     {
         thread_manager->schedule(true, "LocalReader", [this] {
             this->read();
@@ -191,7 +191,7 @@ public:
     bool ready = false;
 };
 
-class TestMPPTunnelBase : public testing::Test
+class TestMPPTunnel : public testing::Test
 {
 protected:
     virtual void SetUp() override { timeout = std::chrono::seconds(10); }
@@ -229,24 +229,19 @@ public:
         sync_tunnel_sender->thread_manager->wait();
     }
 
-    void setTunnelFinished(MPPTunnelPtr tunnel, bool finished)
+    void setTunnelFinished(MPPTunnelPtr tunnel)
     {
-        tunnel->finished = finished;
-    }
-
-    void setTunnelConnected(MPPTunnelPtr tunnel, bool connected)
-    {
-        tunnel->connected = connected;
+        tunnel->status = MPPTunnel::TunnelStatus::Finished;
     }
 
     bool getTunnelConnectedFlag(MPPTunnelPtr tunnel)
     {
-        return tunnel->connected;
+        return tunnel->status != MPPTunnel::TunnelStatus::Unconnected && tunnel->status != MPPTunnel::TunnelStatus::Finished;
     }
 
     bool getTunnelFinishedFlag(MPPTunnelPtr tunnel)
     {
-        return tunnel->finished;
+        return tunnel->status == MPPTunnel::TunnelStatus::Finished;
     }
 
     bool getTunnelSenderConsumerFinishedFlag(TunnelSenderPtr sender)
@@ -255,20 +250,20 @@ public:
     }
 };
 
-TEST_F(TestMPPTunnelBase, ConnectWhenFinished)
+TEST_F(TestMPPTunnel, ConnectWhenFinished)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
-    setTunnelFinished(mpp_tunnel_ptr, true);
+    setTunnelFinished(mpp_tunnel_ptr);
     mpp_tunnel_ptr->connect(nullptr);
     GTEST_FAIL();
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "MPPTunnel has finished");
+    GTEST_ASSERT_EQ(e.message(), "MPPTunnel has connected or finished: Finished");
 }
 
-TEST_F(TestMPPTunnelBase, ConnectWhenConnected)
+TEST_F(TestMPPTunnel, ConnectWhenConnected)
 {
     try
     {
@@ -281,11 +276,11 @@ TEST_F(TestMPPTunnelBase, ConnectWhenConnected)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "MPPTunnel has connected");
+        GTEST_ASSERT_EQ(e.message(), "MPPTunnel has connected or finished: Connected");
     }
 }
 
-TEST_F(TestMPPTunnelBase, CloseBeforeConnect)
+TEST_F(TestMPPTunnel, CloseBeforeConnect)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
@@ -295,7 +290,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, CloseAfterClose)
+TEST_F(TestMPPTunnel, CloseAfterClose)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
@@ -306,7 +301,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, ConnectWriteCancel)
+TEST_F(TestMPPTunnel, ConnectWriteCancel)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
@@ -323,7 +318,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, ConnectWriteWithCloseFlag)
+TEST_F(TestMPPTunnel, ConnectWriteWithCloseFlag)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
@@ -340,7 +335,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, ConnectWriteWriteDone)
+TEST_F(TestMPPTunnel, ConnectWriteWriteDone)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
@@ -357,7 +352,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, ConsumerFinish)
+TEST_F(TestMPPTunnel, ConsumerFinish)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
@@ -376,7 +371,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, WriteError)
+TEST_F(TestMPPTunnel, WriteError)
 {
     try
     {
@@ -396,7 +391,7 @@ TEST_F(TestMPPTunnelBase, WriteError)
     }
 }
 
-TEST_F(TestMPPTunnelBase, WriteAfterFinished)
+TEST_F(TestMPPTunnel, WriteAfterFinished)
 {
     try
     {
@@ -418,20 +413,20 @@ TEST_F(TestMPPTunnelBase, WriteAfterFinished)
 }
 
 /// Test Local MPPTunnel
-TEST_F(TestMPPTunnelBase, LocalConnectWhenFinished)
+TEST_F(TestMPPTunnel, LocalConnectWhenFinished)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    setTunnelFinished(mpp_tunnel_ptr, true);
+    setTunnelFinished(mpp_tunnel_ptr);
     mpp_tunnel_ptr->connect(nullptr);
     GTEST_FAIL();
 }
 catch (Exception & e)
 {
-    GTEST_ASSERT_EQ(e.message(), "MPPTunnel has finished");
+    GTEST_ASSERT_EQ(e.message(), "MPPTunnel has connected or finished: Finished");
 }
 
-TEST_F(TestMPPTunnelBase, LocalConnectWhenConnected)
+TEST_F(TestMPPTunnel, LocalConnectWhenConnected)
 {
     try
     {
@@ -443,11 +438,11 @@ TEST_F(TestMPPTunnelBase, LocalConnectWhenConnected)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "MPPTunnel has connected");
+        GTEST_ASSERT_EQ(e.message(), "MPPTunnel has connected or finished: Connected");
     }
 }
 
-TEST_F(TestMPPTunnelBase, LocalCloseBeforeConnect)
+TEST_F(TestMPPTunnel, LocalCloseBeforeConnect)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
@@ -457,7 +452,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, LocalCloseAfterClose)
+TEST_F(TestMPPTunnel, LocalCloseAfterClose)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
@@ -468,7 +463,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, LocalConnectWriteCancel)
+TEST_F(TestMPPTunnel, LocalConnectWriteCancel)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
@@ -486,7 +481,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, LocalConnectWriteWriteDone)
+TEST_F(TestMPPTunnel, LocalConnectWriteWriteDone)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
@@ -505,7 +500,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, LocalConsumerFinish)
+TEST_F(TestMPPTunnel, LocalConsumerFinish)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
@@ -523,7 +518,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, LocalReadTerminate)
+TEST_F(TestMPPTunnel, LocalReadTerminate)
 {
     try
     {
@@ -543,7 +538,7 @@ TEST_F(TestMPPTunnelBase, LocalReadTerminate)
     }
 }
 
-TEST_F(TestMPPTunnelBase, LocalWriteAfterFinished)
+TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
 {
     try
     {
@@ -564,7 +559,7 @@ TEST_F(TestMPPTunnelBase, LocalWriteAfterFinished)
 }
 
 /// Test Async MPPTunnel
-TEST_F(TestMPPTunnelBase, AsyncConnectWriteCancel)
+TEST_F(TestMPPTunnel, AsyncConnectWriteCancel)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
@@ -586,7 +581,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, AsyncConnectWriteWriteDone)
+TEST_F(TestMPPTunnel, AsyncConnectWriteWriteDone)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
@@ -604,7 +599,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, AsyncConsumerFinish)
+TEST_F(TestMPPTunnel, AsyncConsumerFinish)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
@@ -621,7 +616,7 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTunnelBase, AsyncWriteError)
+TEST_F(TestMPPTunnel, AsyncWriteError)
 {
     try
     {
