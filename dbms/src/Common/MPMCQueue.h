@@ -76,7 +76,8 @@ public:
 
     /// Block util:
     /// 1. Pop succeeds with a valid T: return true.
-    /// 2. The queue is cancelled or finished: return false.
+    /// 2. The queue is cancelled: return false.
+    /// 3. The queue is finished: return true if the queue is not empty.
     bool pop(T & obj)
     {
         return popObj(obj);
