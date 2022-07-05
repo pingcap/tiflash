@@ -670,11 +670,7 @@ try
     size_t num_rows_seg2 = 0;
     {
         {
-<<<<<<< HEAD
-            auto in = segment->getInputStream(dmContext(), *tableColumns());
-=======
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()});
->>>>>>> 94afb714ed (flush cache before segment merge (#4955))
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), {segment->getRange()});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -683,11 +679,7 @@ try
             in->readSuffix();
         }
         {
-<<<<<<< HEAD
-            auto in = segment->getInputStream(dmContext(), *tableColumns());
-=======
-            auto in = new_segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()});
->>>>>>> 94afb714ed (flush cache before segment merge (#4955))
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRange()});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -700,7 +692,7 @@ try
 
     // delete rows in the right segment
     {
-        new_segment->write(dmContext(), /*delete_range*/ new_segment->getRowKeyRange());
+        new_segment->write(dmContext(), /*delete_range*/ new_segment->getRange());
         new_segment->flushCache(dmContext());
     }
 
