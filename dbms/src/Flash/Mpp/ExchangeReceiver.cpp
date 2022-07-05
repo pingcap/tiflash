@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
@@ -22,6 +23,12 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_receiver_sync_msg_push_failure_failpoint[];
+extern const char random_receiver_async_msg_push_failure_failpoint[];
+} // namespace FailPoints
+
 namespace
 {
 String getReceiverStateStr(const ExchangeReceiverState & s)
@@ -257,7 +264,9 @@ private:
             recv_msg->packet = std::move(packet);
             recv_msg->source_index = request->source_index;
             recv_msg->req_info = req_info;
-            if (!msg_channel->push(std::move(recv_msg)))
+            bool push_success = msg_channel->push(std::move(recv_msg));
+            fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_success = false;);
+            if (!push_success)
                 return false;
             // can't reuse packet since it is sent to readers.
             packet = std::make_shared<MPPDataPacket>();
@@ -349,7 +358,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
     setEndState(ExchangeReceiverState::CANCELED);
-    msg_channel.finish();
+    msg_channel.cancel();
 }
 
 template <typename RPCContext>
@@ -483,7 +492,9 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (recv_msg->packet->has_error())
                     throw Exception("Exchange receiver meet error : " + recv_msg->packet->error().msg());
 
-                if (!msg_channel.push(std::move(recv_msg)))
+                bool push_success = msg_channel.push(std::move(recv_msg));
+                fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_success = false;);
+                if (!push_success)
                 {
                     meet_error = true;
                     auto local_state = getState();
