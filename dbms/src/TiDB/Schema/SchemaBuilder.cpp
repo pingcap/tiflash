@@ -45,6 +45,8 @@
 #include <boost/algorithm/string/join.hpp>
 #include <tuple>
 
+#include "Storages/Transaction/TiDB.h"
+
 namespace DB
 {
 using namespace TiDB;
@@ -1304,11 +1306,11 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashModeOnPhysicalTable(
     table_info.tiflash_mode = latest_table_info->tiflash_mode;
     AlterCommands commands;
 
-    LOG_FMT_INFO(log, "Updating tiflash mode for {}", name_mapper.debugCanonicalName(*db_info, table_info));
+    LOG_FMT_INFO(log, "Updating tiflash mode for {} to {}", name_mapper.debugCanonicalName(*db_info, table_info), TiFlashModeToString(table_info.tiflash_mode));
 
     auto alter_lock = storage->lockForAlter(getThreadName());
     storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
-    LOG_FMT_INFO(log, "Updated tiflash mode for {}", name_mapper.debugCanonicalName(*db_info, table_info));
+    LOG_FMT_INFO(log, "Updated tiflash mode for {} to {}", name_mapper.debugCanonicalName(*db_info, table_info), TiFlashModeToString(table_info.tiflash_mode));
 }
 
 
