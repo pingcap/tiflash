@@ -182,12 +182,13 @@ private:
         {}
     };
 
-    void cancelStream(const BlockInputStreamPtr & stream, bool kill) {
-        if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*stream))
+    void cancelStream(const BlockInputStreamPtr & stream, bool kill)
+    {
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(&*stream))
         {
             try
             {
-                child->cancel(kill);
+                p_stream->cancel(kill);
             }
             catch (...)
             {
@@ -195,7 +196,7 @@ private:
                       * (for example, the connection is broken for distributed query processing)
                       * - then do not care.
                       */
-                LOG_FMT_ERROR(log, "Exception while cancelling {}", child->getName());
+                LOG_FMT_ERROR(log, "Exception while cancelling {}", p_stream->getName());
             }
         }
     }
@@ -213,21 +214,8 @@ private:
 
     void thread(size_t thread_num)
     {
-        std::exception_ptr exception;
-
-        try
-        {
-            loop(thread_num);
-        }
-        catch (...)
-        {
-            exception = std::current_exception();
-        }
-
-        if (exception)
-        {
-            handler.onException(exception, thread_num);
-        }
+        /// Handle `inputs`.
+        work(thread_num);
 
         handler.onFinishThread(thread_num);
 
@@ -262,6 +250,19 @@ private:
             }
         }
 
+        /// Handle `additional_inputs_at_end`.
+        work(thread_num);
+
+        if (0 == --active_threads)
+        {
+            handler.onFinish(); /// TODO If in `onFinish` or `onFinishThread` there is an exception, then std::terminate is called.
+        }
+    }
+
+    void work(size_t thread_num)
+    {
+        std::exception_ptr exception;
+
         try
         {
             loop(thread_num);
@@ -274,10 +275,6 @@ private:
         if (exception)
         {
             handler.onException(exception, thread_num);
-        }
-
-        if (0 == --active_threads) {
-            handler.onFinish(); /// TODO If in `onFinish` or `onFinishThread` there is an exception, then std::terminate is called.
         }
     }
 
