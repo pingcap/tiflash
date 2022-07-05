@@ -1400,7 +1400,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         auto size = settings.grpc_completion_queue_pool_size;
         if (size == 0)
-            size = server_info.cpu_info.logical_cores;
+            size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
     }
 
