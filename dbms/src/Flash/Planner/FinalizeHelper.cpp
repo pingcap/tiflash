@@ -45,7 +45,7 @@ String schemaToString(const NamesAndTypes & schema)
     return bf.toString();
 }
 
-String blockToString(const Block & block)
+String blockMetaToString(const Block & block)
 {
     FmtBuffer bf;
     bf.append("{");
@@ -102,7 +102,7 @@ void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTy
     {
         if (unlikely(!sample_block.has(schema_column.name)))
             throw TiFlashException(
-                fmt::format("sample block {} don't contain schema column: {}", blockToString(sample_block), schema_column.name),
+                fmt::format("sample block {} don't contain schema column: {}", blockMetaToString(sample_block), schema_column.name),
                 Errors::Planner::Internal);
 
         const auto & type_in_sample_block = sample_block.getByName(schema_column.name).type->getName();
