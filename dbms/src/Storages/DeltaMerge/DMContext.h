@@ -55,6 +55,7 @@ struct DMContext : private boost::noncopyable
     const bool enable_logical_split;
     const bool read_delta_only;
     const bool read_stable_only;
+    const bool enable_relevant_place;
     const bool enable_skippable_place;
 
     DMContext(const Context &          db_context_,
@@ -83,6 +84,7 @@ struct DMContext : private boost::noncopyable
           enable_logical_split(settings.dt_enable_logical_split),
           read_delta_only(settings.dt_read_delta_only),
           read_stable_only(settings.dt_read_stable_only),
+          enable_relevant_place(settings.dt_enable_relevant_place),
           enable_skippable_place(settings.dt_enable_skippable_place)
     {
     }
