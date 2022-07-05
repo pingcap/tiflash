@@ -29,6 +29,7 @@ COMMENT_PREFIX = '#'
 UNFINISHED_1_PREFIX = '\t'
 UNFINISHED_2_PREFIX = '   '
 WORD_PH = '{#WORD}'
+LINE_PH = '{#LINE}'
 CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 
 verbose = False
@@ -144,18 +145,22 @@ def match_ph_word(line):
 
 # TODO: Support more place holders, eg: {#NUMBER}
 def compare_line(line, template):
-    while True:
-        i = template.find(WORD_PH)
-        if i < 0:
-            return line == template
-        else:
-            if line[:i] != template[:i]:
-                return False
-            j = match_ph_word(line[i:])
-            if j == 0:
-                return False
-            template = template[i + len(WORD_PH):]
-            line = line[i + j:]
+    l = template.find(LINE_PH)
+    if l >= 0:
+        return True
+    else:
+        while True:
+            i = template.find(WORD_PH)
+            if i < 0:
+                return line == template
+            else:
+                if line[:i] != template[:i]:
+                    return False
+                j = match_ph_word(line[i:])
+                if j == 0:
+                    return False
+                template = template[i + len(WORD_PH):]
+                line = line[i + j:]
 
 
 class MySQLCompare:
@@ -200,10 +205,13 @@ class MySQLCompare:
             b = MySQLCompare.parse_excepted_outputs(matches)
             return a == b
         else:
-            if len(outputs) != len(matches):
+            if len(outputs) > len(matches):
                 return False
             for i in range(0, len(outputs)):
                 if not compare_line(outputs[i], matches[i]):
+                    return False
+            for i in range(len(outputs), len(matches)):
+                if not compare_line("", matches[i]):
                     return False
             return True
 
@@ -218,10 +226,13 @@ def matched(outputs, matches, fuzz):
         b = parse_table_parts(matches, fuzz)
         return a == b
     else:
-        if len(outputs) != len(matches):
+        if len(outputs) > len(matches):
             return False
         for i in range(0, len(outputs)):
             if not compare_line(outputs[i], matches[i]):
+                return False
+        for i in range(len(outputs), len(matches)):
+            if not compare_line("", matches[i]):
                 return False
         return True
 
