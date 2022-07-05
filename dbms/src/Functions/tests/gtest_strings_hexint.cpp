@@ -34,22 +34,52 @@ try
     const String & func_name = "hexInt";
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({std::nullopt, "3039", "FFFFFFFFFFFFFFFF"}),
+        createColumn<Nullable<String>>({"1348B21", std::nullopt, "0", "FFFFFFFFFECB74DF", "8000000000000000", "7FFFFFFFFFFFFFFF"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<UInt64>>({std::nullopt, 12345, 0xFFFFFFFFFFFFFFFF})));
+            createColumn<Nullable<Int64>>({20220705, std::nullopt, 0, -20220705, std::numeric_limits<Int64>::min(), std::numeric_limits<Int64>::max()})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"3039", "FFFFFFFFFFFFCFC7"}),
+        createColumn<Nullable<String>>({"1348B21", std::nullopt, "0", "0", "FFFFFFFFFFFFFFFF"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<Int64>>({12345, -12345})));
+            createColumn<Nullable<UInt64>>({20220705, std::nullopt, 0, std::numeric_limits<UInt64>::min(), std::numeric_limits<UInt64>::max()})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Nullable<String>>({"FF", "1"}),
+        createColumn<Nullable<String>>({"13414DA", std::nullopt, "0", "FFFFFFFFFECBEB26", "FFFFFFFF80000000", "7FFFFFFF"}),
         executeFunction(
             func_name,
-            createColumn<Nullable<UInt8>>({255, 1})));
+            createColumn<Nullable<Int32>>({20190426, std::nullopt, 0, -20190426, std::numeric_limits<Int32>::min(), std::numeric_limits<Int32>::max()})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"13414DA", std::nullopt, "0", "0", "FFFFFFFF"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt32>>({20190426, std::nullopt, 0, std::numeric_limits<UInt32>::min(), std::numeric_limits<UInt32>::max()})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"3039", std::nullopt, "0", "FFFFFFFFFFFFCFC7", "FFFFFFFFFFFF8000", "7FFF"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int16>>({12345, std::nullopt, 0, -12345, std::numeric_limits<Int16>::min(), std::numeric_limits<Int16>::max()})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"3039", std::nullopt, "0", "0", "FFFF"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt16>>({12345, std::nullopt, 0, std::numeric_limits<UInt16>::min(), std::numeric_limits<UInt16>::max()})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"78", std::nullopt, "0", "FFFFFFFFFFFFFF88", "FFFFFFFFFFFFFF80", "7F"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<Int8>>({120, std::nullopt, 0, -120, std::numeric_limits<Int8>::min(), std::numeric_limits<Int8>::max()})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<String>>({"8F", std::nullopt, "0", "0", "FF"}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt8>>({143, std::nullopt, 0, std::numeric_limits<UInt8>::min(), std::numeric_limits<UInt8>::max()})));
 }
 CATCH
 } // namespace tests
