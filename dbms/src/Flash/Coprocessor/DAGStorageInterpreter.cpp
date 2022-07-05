@@ -39,6 +39,7 @@
 #include <TiDB/Schema/SchemaSyncer.h>
 
 #include "Flash/Coprocessor/BatchCoprocessorReader.h"
+#include "common/logger_useful.h"
 #include "pingcap/coprocessor/Client.h"
 #include "pingcap/kv/Backoff.h"
 #include "pingcap/kv/RegionCache.h"
@@ -484,7 +485,13 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
             throw Exception("Schema mismatch between different partitions for partition table");
     }
 #endif
-    if (!is_read_node)
+    bool do_batch_cop = false;
+    if (is_read_node)
+    {
+        do_batch_cop = settings.enable_rn_batch_cop;
+    }
+
+    if (!do_batch_cop)
     {
         // build cop request streams
         bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
@@ -527,27 +534,27 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
     {
         // build batch cop request streams
         pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-        std::vector<pingcap::coprocessor::CopTask> all_tasks;
+        auto req = std::make_shared<pingcap::coprocessor::Request>();
+        remote_requests[0].dag_request.SerializeToString(&req->data); // TODO: Is is ok for partition table?
+        req->tp = pingcap::coprocessor::ReqType::DAG;
+        req->start_ts = context.getSettingsRef().read_tso;
+        req->schema_version = context.getSettingsRef().schema_version;
+        // FIXME: req->table_regions for partition table?
+
+        std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
         for (const auto & remote_request : remote_requests)
         {
-            auto req = std::make_shared<pingcap::coprocessor::Request>();
-            remote_request.dag_request.SerializeToString(&req->data);
-            req->tp = pingcap::coprocessor::ReqType::DAG;
-            req->start_ts = context.getSettingsRef().read_tso;
-            req->schema_version = context.getSettingsRef().schema_version;
-            // FIXME: req->table_regions for partition table?
-
-            pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-            pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-            auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/batch_coprocessor"));
-            all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
+            ranges_for_each_physical_table.emplace_back(remote_request.key_ranges);
         }
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, all_tasks, &Poco::Logger::get("pingcap/coprocessor"));
+        pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
+        const size_t expect_concurrent_num = context.getSettingsRef().max_threads / 2;
+        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, ranges_for_each_physical_table, store_type, expect_concurrent_num, &Poco::Logger::get("pingcap/coprocessor"));
+        LOG_FMT_INFO(log, "build {} batch cop tasks", all_batch_tasks.size());
         for (const auto & batch_task : all_batch_tasks)
         {
-            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, /*concurrency*/ 1);
+            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, /*concurrency*/ 1);
             BlockInputStreamPtr input = std::make_shared<BatchCoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID());
             pipeline.streams.emplace_back(std::move(input));
         }

@@ -15,21 +15,22 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
+#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
+#include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
+#include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Coprocessor/RemoteRequest.h>
+#include <common/logger_useful.h>
 
 #include <memory>
 #include <thread>
-
-#include "Flash/Coprocessor/ArrowChunkCodec.h"
-#include "Flash/Coprocessor/CHBlockChunkCodec.h"
-#include "Flash/Coprocessor/DAGUtils.h"
-#include "Flash/Coprocessor/DefaultChunkCodec.h"
-#include "common/logger_useful.h"
-#include "tipb/expression.pb.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -40,6 +41,7 @@
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Rpc.h>
 #include <tipb/executor.pb.h>
+#include <tipb/expression.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
@@ -81,29 +83,45 @@ public:
         const DAGSchema & schema_,
         pingcap::kv::Cluster * cluster_,
         pingcap::coprocessor::BatchCopTask task_,
+        const pingcap::coprocessor::RequestPtr & req,
         int concurrency_)
         : schema(schema_)
         , task(std::move(task_))
         , cluster(cluster_)
         , thread_manager(newThreadManager())
         , msg_channel(16)
+        , total_wait_channel_elapse_ms(0)
+        , total_wait_net_elapse_ms(0)
+        , total_net_recv_bytes(0)
         , collected(false)
         , concurrency(concurrency_)
         , log(Logger::get(name /*req_id, etc*/))
     {
-        auto req = std::make_shared<::coprocessor::BatchRequest>();
-        req->set_tp(task.req->tp);
-        req->set_data(task.req->data);
-        req->set_start_ts(task.req->start_ts);
-        req->set_schema_ver(task.req->schema_version);
+        auto batch_req = std::make_shared<::coprocessor::BatchRequest>();
+        batch_req->set_tp(req->tp);
+        batch_req->set_data(req->data);
+        batch_req->set_start_ts(req->start_ts);
+        batch_req->set_schema_ver(req->schema_version);
+
         // TODO: set `regions`, `table_regions`
+        for (const auto & ri : task.region_infos)
+        {
+            auto * reg = batch_req->add_regions();
+            reg->set_region_id(ri.region_id.id);
+            reg->mutable_region_epoch()->set_version(ri.region_id.ver);
+            reg->mutable_region_epoch()->set_conf_ver(ri.region_id.conf_ver);
+            for (const auto & key_range : ri.ranges)
+            {
+                key_range.setKeyRange(reg->add_ranges());
+            }
+        }
 
         try
         {
             //
             for (size_t index = 0; index < getSourceNum(); ++index)
             {
-                thread_manager->schedule(true, "BatchCoprocessor", [this, req = std::move(req)] { readLoop(req); });
+                thread_manager->schedule(true, "BatchCoprocessor", [this, batch_req = std::move(batch_req)] { readLoop(batch_req); });
             }
         }
         catch (...)
@@ -120,6 +138,11 @@ public:
         }
     }
 
+    ~BatchCoprocessorReader()
+    {
+        LOG_FMT_INFO(log, "done, wait_channel_ms={} wait_net_ms={} net_recv_bytes={}", total_wait_channel_elapse_ms, total_wait_net_elapse_ms, total_net_recv_bytes);
+    }
+
     const DAGSchema & getOutputSchema() const { return schema; }
 
     size_t getSourceNum() const { return 1; }
@@ -127,12 +150,15 @@ public:
     BatchCoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header)
     {
         std::shared_ptr<coprocessor::BatchResponse> recv_msg;
+        watch.restart();
         if (!msg_channel.pop(recv_msg))
         {
             // TODO: check error
             // msg_channel is finished
             return BatchCoprocessorReaderResult::newEOF(name);
         }
+        auto elapsed_ms = watch.elapsedMilliseconds();
+        total_wait_channel_elapse_ms += elapsed_ms;
 
         assert(recv_msg != nullptr);
         BatchCoprocessorReaderResult result;
@@ -194,6 +220,8 @@ private:
         LoggerPtr log = Logger::get(name /*req_info*/);
         auto status = grpc::Status::OK;
 
+        size_t total_wait_net_elapse_ms = 0;
+        size_t total_net_recv_bytes = 0;
         try
         {
             do
@@ -202,11 +230,15 @@ private:
                 call = std::make_shared<pingcap::kv::RpcCall<coprocessor::BatchRequest>>(req);
                 stream_reader = cluster->rpc_client->sendStreamRequest(task.store_addr, &client_context, *call);
 
+                Stopwatch read_watch;
                 while (true)
                 {
                     LOG_FMT_TRACE(log, "begin next");
-                    std::shared_ptr<coprocessor::BatchResponse> rsp;
+                    read_watch.restart();
+                    auto rsp = std::make_shared<coprocessor::BatchResponse>();
                     bool success = stream_reader->Read(rsp.get());
+                    total_net_recv_bytes += rsp->ByteSizeLong();
+                    total_wait_net_elapse_ms += read_watch.elapsedMilliseconds();
                     if (!success)
                     {
                         // no more incoming message
@@ -227,7 +259,7 @@ private:
                 status = stream_reader->Finish();
                 if (status.ok())
                 {
-                    LOG_FMT_DEBUG(log, "finish read: {}", req->DebugString());
+                    LOG_FMT_DEBUG(log, "finish read"); // TODO: add identifier
                     break;
                 }
                 // else sleep for a while and retry?
@@ -256,7 +288,20 @@ private:
             meet_error = true;
             local_err_msg = "fatal error";
         }
+        connectionDone(meet_error, local_err_msg, log, total_wait_net_elapse_ms, total_net_recv_bytes);
+    }
+
+    void connectionDone(
+        bool /*meet_error*/,
+        const String & /*local_err_msg*/,
+        const LoggerPtr & /*log*/,
+        size_t net_elapsed_ms,
+        size_t net_recv_bytes)
+    {
         // TODO: check and release resources
+        msg_channel.finish();
+        total_wait_net_elapse_ms = net_elapsed_ms;
+        total_net_recv_bytes = net_recv_bytes;
     }
 
     static DecodeDetail decodeChunks(
@@ -312,6 +357,12 @@ private:
 
     std::shared_ptr<ThreadManager> thread_manager;
     MPMCQueue<std::shared_ptr<coprocessor::BatchResponse>> msg_channel;
+
+    Stopwatch watch;
+
+    size_t total_wait_channel_elapse_ms;
+    size_t total_wait_net_elapse_ms;
+    size_t total_net_recv_bytes;
 
     bool collected;
     int concurrency;

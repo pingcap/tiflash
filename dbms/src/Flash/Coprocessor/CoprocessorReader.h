@@ -85,10 +85,21 @@ public:
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , resp_iter(std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"))
+        , total_wait_channel_elapse_ms(0)
         , collected(false)
         , concurrency(concurrency_)
     {
         resp_iter.open();
+    }
+
+    ~CoprocessorReader()
+    {
+        LOG_FMT_INFO(
+            Logger::get(name),
+            "done, wait_channel_ms={} wait_net_ms={} net_recv_bytes={}",
+            total_wait_channel_elapse_ms,
+            resp_iter.total_wait_net_elapse_ms,
+            resp_iter.total_net_recv_bytes);
     }
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -142,7 +153,9 @@ public:
     // stream_id is only meaningful for ExchagneReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/)
     {
+        Stopwatch read_watch;
         auto && [result, has_next] = resp_iter.next();
+        total_wait_channel_elapse_ms += read_watch.elapsedMilliseconds();
         if (!result.error.empty())
             return {nullptr, true, result.error.message(), false};
         if (!has_next)
@@ -190,6 +203,8 @@ public:
     }
 
     void close() {}
+
+    size_t total_wait_channel_elapse_ms;
 
     bool collected = false;
     int concurrency;
