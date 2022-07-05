@@ -120,6 +120,8 @@ elseif(APPLE)
             COMPONENT tiflash-release
             DESTINATION "."
             PRE_INCLUDE_REGEXES ".*proxy.*")
+    target_link_libraries (tiflash c++ c++abi)
+
 endif ()
 
 target_link_libraries (tiflash clickhouse_common_io)

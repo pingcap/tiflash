@@ -300,7 +300,7 @@ if (ENABLE_TESTS)
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
-    target_link_libraries(gtests_dbms test_util_gtest_main clickhouse_functions tiflash-dttool-lib)
+    target_link_libraries(gtests_dbms test_util_gtest_main clickhouse_functions tiflash-dttool-lib clickhouse_common_io clickhouse-server-lib)
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
