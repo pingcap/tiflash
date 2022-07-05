@@ -23,9 +23,7 @@
 
 #pragma GCC diagnostic pop
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 class StringReverse : public DB::tests::FunctionTest
 {
@@ -38,6 +36,11 @@ protected:
     static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
     {
         return createColumn<Nullable<String>>(v);
+    }
+
+    static ColumnWithTypeAndName toConst(const String & s)
+    {
+        return createConstColumn<String>(1, s);
     }
 };
 // test reverse
@@ -70,7 +73,7 @@ try
 CATCH
 
 
-// test NULL
+// test null and const
 TEST_F(StringReverse, nullTest)
 {
     ASSERT_COLUMN_EQ(
@@ -78,12 +81,24 @@ TEST_F(StringReverse, nullTest)
         executeFunction(
             "reverse",
             toNullableVec({"", " ", {}, "pingcap"})));
+
     ASSERT_COLUMN_EQ(
         toNullableVec({"", " ", {}, "pacgnip"}),
         executeFunction(
             "reverseUTF8",
             toNullableVec({"", " ", {}, "pingcap"})));
+
+    ASSERT_COLUMN_EQ(
+        toConst("pacgnip"),
+        executeFunction(
+            "reverse",
+            toConst("pingcap")));
+
+    ASSERT_COLUMN_EQ(
+        toConst("pacgnip"),
+        executeFunction(
+            "reverseUTF8",
+            toConst("pingcap")));
 }
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests
