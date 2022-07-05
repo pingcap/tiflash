@@ -11,9 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
 
 namespace DB
 {
@@ -69,7 +69,7 @@ BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefine
         std::make_shared<DebugBlockInputStream>(blocks, is_common_handle),
         columns);
 }
-}
+} // namespace
 
 TEST(ColumnFilterTest, NormalCase)
 {
@@ -112,6 +112,6 @@ TEST(ColumnFilterTest, NormalCase)
         in->readSuffix();
     }
 }
-}
-}
-}
+} // namespace tests
+} // namespace DM
+} // namespace DB
