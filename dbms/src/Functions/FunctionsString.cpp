@@ -4342,6 +4342,9 @@ public:
         const auto & number_base_type = block.getByPosition(arguments[0]).type;
         const auto & precision_base_type = block.getByPosition(arguments[1]).type;
 
+        auto precision_base_col = block.getByPosition(arguments[1]).column;
+        auto precision_base_col_size = precision_base_col->size();
+
         auto col_res = ColumnString::create();
         auto val_num = block.getByPosition(arguments[0]).column->size();
 
@@ -4350,7 +4353,14 @@ public:
             using NumberFieldType = typename NumberType::FieldType;
             using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
             const auto * number_raw = block.getByPosition(arguments[0]).column.get();
-            TiDBDecimalRoundInfo info{number_type, number_type};
+
+            auto prec = getDecimalPrecision(number_type, 0);
+            auto scale = getDecimalScale(number_type, 0);
+
+            /// output_scale is the second parameter of the 'format' function
+            auto output_scale = precision_base_col_size > 0 ? (*precision_base_col)[0].get<Int64>() : scale;
+            output_scale = output_scale < 0 ? 0 : output_scale; /// Ensure output_scale >= 0
+            TiDBDecimalRoundInfo info{prec, scale, prec, output_scale};
 
             return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
@@ -4389,6 +4399,7 @@ public:
                         for (size_t i = 0; i != val_num; ++i)
                         {
                             size_t max_num_decimals = getMaxNumDecimals(precision_array[i]);
+                            info.setOutputScale(max_num_decimals);
                             format(number_array[i], max_num_decimals, info, col_res->getChars(), col_res->getOffsets());
                         }
                     }
@@ -4477,7 +4488,7 @@ private:
     static std::string number2Str(T number, const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
         if constexpr (IsDecimal<T>)
-            return number.toString(info.output_scale);
+            return number.toString(std::min(info.input_scale, info.output_scale));
         else
         {
             static_assert(std::is_floating_point_v<T> || std::is_integral_v<T>);
