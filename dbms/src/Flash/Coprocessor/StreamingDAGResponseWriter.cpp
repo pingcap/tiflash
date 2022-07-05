@@ -437,7 +437,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
         {
             size_t part_id = bucket_idx / fine_grained_shuffle_stream_count; // NOLINT(clang-analyzer-core.DivideZero)
             size_t row_count_per_part = 0;
-            for (uint32_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
+            for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
             {
                 Block dest_block = blocks[0].cloneEmpty();
                 // For now we put all rows into one Block, may cause this Block too large.

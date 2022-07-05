@@ -90,7 +90,7 @@ bool pushPacket(size_t source_index,
 
             for (int i = 0; i < packet->stream_ids_size(); ++i)
             {
-                UInt32 stream_id = packet->stream_ids(i) % msg_channels.size();
+                UInt64 stream_id = packet->stream_ids(i) % msg_channels.size();
                 chunks[stream_id].push_back(packet->mutable_chunks(i));
             }
         }
