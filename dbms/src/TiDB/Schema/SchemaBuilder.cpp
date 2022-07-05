@@ -36,6 +36,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <TiDB/Schema/SchemaBuilder-internal.h>
 #include <TiDB/Schema/SchemaBuilder.h>
@@ -44,8 +45,6 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include <tuple>
-
-#include "Storages/Transaction/TiDB.h"
 
 namespace DB
 {
