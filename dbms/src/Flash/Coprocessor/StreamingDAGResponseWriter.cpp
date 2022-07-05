@@ -290,24 +290,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::w
     }
 }
 
-void initBlocks(Block & input_block,
-                std::vector<MutableColumns> & dest_tbl_cols,
-                uint32_t bucket_num)
-{
-    for (size_t i = 0; i < input_block.columns(); ++i)
-    {
-        if (ColumnPtr converted = input_block.getByPosition(i).column->convertToFullColumnIfConst())
-        {
-            input_block.getByPosition(i).column = converted;
-        }
-    }
-
-    for (uint32_t i = 0; i < bucket_num; ++i)
-    {
-        dest_tbl_cols[i] = input_block.cloneEmptyColumns();
-    }
-}
-
 inline void initInputBlocks(std::vector<Block> & input_blocks)
 {
     for (auto & input_block : input_blocks)

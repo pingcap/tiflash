@@ -139,7 +139,7 @@ public:
         return detail;
     }
 
-    // stream_id is only meaningful for ExchagneReceive.
+    // stream_id is only meaningful for ExchagneReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/)
     {
         auto && [result, has_next] = resp_iter.next();

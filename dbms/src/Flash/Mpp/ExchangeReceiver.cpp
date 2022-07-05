@@ -54,7 +54,7 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
 //      Push all chunks to msg_channels[0].
 // Return true if all push succeed, otherwise return false.
 // NOTE: shared_ptr<MPPDataPacket> will be hold by all ExchangeReceiverBlockInputStream to make chunk pointer valid.
-template <bool enable_fine_grained_shuffle>
+template <bool enable_fine_grained_shuffle, bool is_sync>
 bool pushPacket(size_t source_index,
                 const String & req_info,
                 MPPDataPacketPtr & packet,
@@ -108,7 +108,10 @@ bool pushPacket(size_t source_index,
                 resp_ptr,
                 std::move(chunks[i]));
             push_succeed = msg_channels[i]->push(std::move(recv_msg));
-            fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
+            if constexpr (is_sync)
+                fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
+            else
+                fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
 
             // Only the first ExchangeReceiverInputStream need to handle resp.
             resp_ptr = nullptr;
@@ -133,7 +136,10 @@ bool pushPacket(size_t source_index,
                 std::move(chunks));
 
             push_succeed = msg_channels[0]->push(std::move(recv_msg));
-            fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
+            if constexpr (is_sync)
+                fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
+            else
+                fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
         }
     }
     LOG_FMT_DEBUG(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
@@ -167,7 +173,7 @@ public:
 
     AsyncRequestHandler(
         MPMCQueue<Self *> * queue,
-        std::vector<MsgChannelPtr> msg_channels_,
+        std::vector<MsgChannelPtr> * msg_channels_,
         const std::shared_ptr<RPCContext> & context,
         const Request & req,
         const String & req_id)
@@ -352,9 +358,9 @@ private:
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
-            if (!pushPacket<enable_fine_grained_shuffle>(request->source_index, req_info, packet, msg_channels, log))
+            if (!pushPacket<enable_fine_grained_shuffle, false>(request->source_index, req_info, packet, *msg_channels, log))
                 return false;
-            // Update packets[i].
+            // can't reuse packet since it is sent to readers.
             packet = std::make_shared<MPPDataPacket>();
         }
         return true;
@@ -369,7 +375,7 @@ private:
     std::shared_ptr<RPCContext> rpc_context;
     const Request * request; // won't be null
     MPMCQueue<Self *> * notify_queue; // won't be null
-    std::vector<MsgChannelPtr> msg_channels;
+    std::vector<MsgChannelPtr> * msg_channels; // won't be null
 
     String req_info;
     bool meet_error = false;
@@ -521,7 +527,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
     std::vector<std::unique_ptr<AsyncHandler>> handlers;
     handlers.reserve(alive_async_connections);
     for (const auto & req : async_requests)
-        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, msg_channels, rpc_context, req, exc_log->identifier()));
+        handlers.emplace_back(std::make_unique<AsyncHandler>(&ready_requests, &msg_channels, rpc_context, req, exc_log->identifier()));
 
     while (alive_async_connections > 0)
     {
@@ -599,7 +605,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (packet->has_error())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
 
-                if (!pushPacket<enable_fine_grained_shuffle>(req.source_index, req_info, packet, msg_channels, log))
+                if (!pushPacket<enable_fine_grained_shuffle, true>(req.source_index, req_info, packet, msg_channels, log))
                 {
                     meet_error = true;
                     auto local_state = getState();
@@ -691,8 +697,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
 {
     if (unlikely(stream_id >= msg_channels.size()))
     {
-        LoggerPtr log = Logger::get("ExchangeReceiver", exc_log->identifier());
-        LOG_FMT_ERROR(log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
+        LOG_FMT_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
         return {nullptr, 0, "", true, "stream_id out of range", false};
     }
     std::shared_ptr<ReceivedMessage> recv_msg;
