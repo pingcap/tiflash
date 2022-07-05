@@ -417,10 +417,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
     if (check_sync_log())
     {
-<<<<<<< HEAD
         return EngineStoreApplyRes::Persist;
-=======
->>>>>>> upstream/master
     }
     return EngineStoreApplyRes::None;
 }
