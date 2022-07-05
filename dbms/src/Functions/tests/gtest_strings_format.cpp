@@ -39,8 +39,7 @@ public:
                 func_name,
                 createColumn<NullableDecimal>(
                     std::make_tuple(precision, 4),
-                    {
-                     FieldType(static_cast<Native>(0), 4),
+                    {FieldType(static_cast<Native>(0), 4),
                      FieldType(static_cast<Native>(-120), 4),
                      FieldType(static_cast<Native>(120), 4),
                      FieldType(static_cast<Native>(123321000), 4),
@@ -53,10 +52,8 @@ public:
                      FieldType(static_cast<Native>(0), 0),
                      FieldType(static_cast<Native>(999999999), 4),
                      FieldType(static_cast<Native>(999999999), 4),
-                     FieldType(static_cast<Native>(999999999), 4)
-                     }),
-                createColumn<Nullable<Int64>>({4, 4, 4, 4, 0, -1, 31, 5, 1, 2, {}, 10, 3, -5})
-                ));
+                     FieldType(static_cast<Native>(999999999), 4)}),
+                createColumn<Nullable<Int64>>({4, 4, 4, 4, 0, -1, 31, 5, 1, 2, {}, 10, 3, -5})));
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"12,332.100", "-12,332.300", "-1,000.000", "-333.333"}),
             executeFunction(
