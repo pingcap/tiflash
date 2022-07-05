@@ -51,7 +51,7 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::GroupConcat, "groupArray"},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
-    //{tipb::ExprType::Agg_BitOr, ""},
+    {tipb::ExprType::Agg_BitOr, "groupBitOr"},
     //{tipb::ExprType::Agg_BitXor, ""},
     //{tipb::ExprType::Std, ""},
     //{tipb::ExprType::Stddev, ""},
