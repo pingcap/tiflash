@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
 #include <Interpreters/Context.h>
@@ -25,10 +21,6 @@
 #include <string>
 #include <vector>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-#include <Poco/Types.h>
-
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -37,11 +29,13 @@ namespace tests
 {
 class StringReverse : public DB::tests::FunctionTest
 {
-public:
-    static constexpr auto func_name = "reverse";
-
 protected:
-    ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
+    static ColumnWithTypeAndName toVec(const std::vector<String> & v)
+    {
+        return createColumn<String>(v);
+    }
+
+    static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
     {
         return createColumn<Nullable<String>>(v);
     }
@@ -50,12 +44,12 @@ protected:
 TEST_F(StringReverse, stringReverseTest)
 try
 {
-    std::vector<std::optional<String>> candidate_strings = {"one week's time test", "abcdef", "abcabc", "moc.pacgnip"};
-    std::vector<std::optional<String>> reversed_strings = {"tset emit s'keew eno", "fedcba", "cbacba", "pingcap.com"};
+    std::vector<String> candidate_strings = {"one week's time test", "abcdef", "abcabc", "moc.pacgnip"};
+    std::vector<String> reversed_strings = {"tset emit s'keew eno", "fedcba", "cbacba", "pingcap.com"};
     ASSERT_COLUMN_EQ(
         toVec(reversed_strings),
         executeFunction(
-            func_name,
+            "reverse",
             toVec(candidate_strings)));
 }
 CATCH
@@ -64,13 +58,9 @@ CATCH
 TEST_F(StringReverse, stringReverseUTF8Test)
 try
 {
-    std::vector<std::optional<String>> candidate_strings = {"one week's time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
-    std::vector<std::optional<String>> reversed_strings = {"tset emit s'keew eno", "fed试测cba", "cbaトステcba", "џўѝќћњљјїіѕєѓђёѐ", "^！џ@ў#ѝ￥ќ）ћ（њ&љ……ј%ї@$і#ѕ@є!ѓ/ђ*ё-ѐ+", "σωψχφυτσρποξνμλκιθηζεδγβα", "✕σ★ω♘ψχ♖φυ♥τσ℉ρπ✚οξ✓νμ♫λκ€ιθ✂ηζ☎εδ➨γβ▼α▲", "շմնբվցղզխլկյհգֆդսապօիւըտռեոքծժճչրջձփթ"};
-    // ASSERT_COLUMN_EQ(
-    //     toVec(reversed_strings),
-    //     executeFunction(
-    //         func_name,
-    //         toVec(candidate_strings)));
+    std::vector<String> candidate_strings = {"one week's time test", "abc测试def", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ", "+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^", "αβγδεζηθικλμνξοπρστυφχψωσ", "▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕", "թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ"};
+    std::vector<String> reversed_strings = {"tset emit s'keew eno", "fed试测cba", "cbaトステcba", "џўѝќћњљјїіѕєѓђёѐ", "^！џ@ў#ѝ￥ќ）ћ（њ&љ……ј%ї@$і#ѕ@є!ѓ/ђ*ё-ѐ+", "σωψχφυτσρποξνμλκιθηζεδγβα", "✕σ★ω♘ψχ♖φυ♥τσ℉ρπ✚οξ✓νμ♫λκ€ιθ✂ηζ☎εδ➨γβ▼α▲", "շմնբվցղզխլկյհգֆդսապօիւըտռեոքծժճչրջձփթ"};
+
     ASSERT_COLUMN_EQ(
         toVec(reversed_strings),
         executeFunction(
@@ -84,15 +74,15 @@ CATCH
 TEST_F(StringReverse, nullTest)
 {
     ASSERT_COLUMN_EQ(
-        toVec({"", {}}),
+        toNullableVec({"", " ", {}, "pacgnip"}),
         executeFunction(
-            func_name,
-            toVec({"", {}})));
+            "reverse",
+            toNullableVec({"", " ", {}, "pingcap"})));
     ASSERT_COLUMN_EQ(
-        toVec({"", {}}),
+        toNullableVec({"", " ", {}, "pacgnip"}),
         executeFunction(
             "reverseUTF8",
-            toVec({"", {}})));
+            toNullableVec({"", " ", {}, "pingcap"})));
 }
 
 } // namespace tests
