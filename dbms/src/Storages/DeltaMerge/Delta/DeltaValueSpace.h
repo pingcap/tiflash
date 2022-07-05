@@ -245,7 +245,7 @@ public:
     DeltaSnapshotPtr createSnapshot(const DMContext & context, bool for_update, CurrentMetrics::Metric type);
 
 private:
-    void updateDeltaTree(DeltaIndex::Updates delta_index_update);
+    void updateDeltaTree(const DeltaIndex::Updates & delta_index_update);
 };
 
 class DeltaValueSnapshot

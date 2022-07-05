@@ -263,7 +263,7 @@ bool DeltaValueSpace::compact(DMContext & context)
 }
 
 // updateDeltaTree should be used under lock.
-void DeltaValueSpace::updateDeltaTree(DeltaIndex::Updates delta_index_updates)
+void DeltaValueSpace::updateDeltaTree(const DeltaIndex::Updates & delta_index_updates)
 {
     if (!delta_index_updates.empty())
     {
