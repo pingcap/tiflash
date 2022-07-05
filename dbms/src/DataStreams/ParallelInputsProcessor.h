@@ -16,6 +16,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/Logger.h>
+#include <Common/MPMCQueue.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
@@ -98,10 +99,12 @@ public:
         const LoggerPtr & log_)
         : inputs(inputs_)
         , additional_inputs_at_end(additional_inputs_at_end_)
-        , max_threads(std::min(inputs_.size(), max_threads_))
+        , max_threads(std::min(std::max(inputs_.size(), additional_inputs_at_end_.size()), max_threads_))
         , handler(handler_)
+        , available_inputs_ptr(std::make_unique<AvailableInputs>(inputs_.size()))
         , log(log_)
     {
+        active_streams = inputs_.size();
         for (size_t i = 0; i < inputs_.size(); ++i)
             unprepared_inputs.emplace(inputs_[i], i);
     }
@@ -236,7 +239,9 @@ private:
                 /// or `unprepared_inputs_mutex` lock.
                 /// If an error has occurred, the `unprepared_inputs` and `available_inputs` may not be empty.
                 unprepared_inputs = UnpreparedInputs{};
-                available_inputs = AvailableInputs{};
+                available_inputs_ptr = std::make_unique<AvailableInputs>(additional_inputs_at_end.size());
+
+                active_streams = additional_inputs_at_end.size();
                 for (size_t i = 0; i < additional_inputs_at_end.size(); ++i)
                     unprepared_inputs.emplace(additional_inputs_at_end[i], i);
 
@@ -295,57 +300,37 @@ private:
 
             unprepared_input.in->readPrefix();
 
-            {
-                std::lock_guard lock(available_inputs_mutex);
-                available_inputs.push(unprepared_input);
-            }
+            available_inputs_ptr->push(unprepared_input);
         }
 
         while (!finish) /// You may need to stop work earlier than all sources run out.
         {
             InputData input;
 
-            /// Select the next source.
+            if (!available_inputs_ptr->pop(input))
             {
-                std::lock_guard lock(available_inputs_mutex);
-
-                /// If there are no free sources, then this thread is no longer needed. (But other threads can work with their sources.)
-                if (available_inputs.empty())
-                    break;
-
-                input = available_inputs.front();
-
-                /// We remove the source from the queue of available sources.
-                available_inputs.pop();
+                // All input streams are exhausted.
+                break;
             }
 
             /// The main work.
             Block block = input.in->read();
 
+            if (finish)
+                break;
+
+            if (block)
             {
-                if (finish)
-                    break;
-
-                /// If this source is not run out yet, then put the resulting block in the ready queue.
+                available_inputs_ptr->push(input);
+                publishPayload(input.in, block, thread_num);
+            }
+            else
+            {
+                if (0 == --active_streams)
                 {
-                    std::lock_guard lock(available_inputs_mutex);
-
-                    if (block)
-                    {
-                        available_inputs.push(input);
-                    }
-                    else
-                    {
-                        if (available_inputs.empty())
-                            break;
-                    }
-                }
-
-                if (finish)
+                    available_inputs_ptr->finish();
                     break;
-
-                if (block)
-                    publishPayload(input.in, block, thread_num);
+                }
             }
         }
     }
@@ -375,8 +360,9 @@ private:
       *
       * Therefore, a queue is used. This can be improved in the future.
       */
-    using AvailableInputs = std::queue<InputData>;
-    AvailableInputs available_inputs;
+    using AvailableInputs = MPMCQueue<InputData>;
+    using AvailableInputsPtr = std::unique_ptr<AvailableInputs>;
+    AvailableInputsPtr available_inputs_ptr;
 
     /** For parallel preparing (readPrefix) child streams.
       * First, streams are located here.
@@ -384,9 +370,6 @@ private:
       */
     using UnpreparedInputs = std::queue<InputData>;
     UnpreparedInputs unprepared_inputs;
-
-    /// For operations with available_inputs.
-    std::mutex available_inputs_mutex;
 
     /// For operations with unprepared_inputs.
     std::mutex unprepared_inputs_mutex;
@@ -397,6 +380,8 @@ private:
     std::condition_variable wait_first_done;
     size_t running_first{0};
 
+    /// How many active input streams.
+    std::atomic<size_t> active_streams{0};
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};
     /// Finish the threads work (before the sources run out).
