@@ -411,7 +411,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         }
         else
         {
-            return canFlushRegionDataImpl(curr_region_ptr, true, tmt, region_task_lock);
+            return canFlushRegionDataImpl(curr_region_ptr, true, /* try_until_succeed */ false, tmt, region_task_lock);
         }
     };
 
