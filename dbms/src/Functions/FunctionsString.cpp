@@ -4589,7 +4589,7 @@ public:
             auto input_scale = getDecimalScale(number_type, 0);
 
             TiDBDecimalRoundInfo info{input_prec, input_scale};
-    
+
             return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
                 using PrecisionFieldType = typename PrecisionType::FieldType;
