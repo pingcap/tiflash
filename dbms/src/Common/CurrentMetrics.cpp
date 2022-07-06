@@ -22,15 +22,6 @@
     M(OpenFileForReadWrite)                     \
     M(MemoryTracking)                           \
     M(MemoryTrackingInBackgroundProcessingPool) \
-    M(MemoryTrackingForMerges)                  \
-    M(LeaderElection)                           \
-    M(EphemeralNode)                            \
-    M(DelayedInserts)                           \
-    M(ContextLockWait)                          \
-    M(StorageBufferRows)                        \
-    M(StorageBufferBytes)                       \
-    M(DictCacheRequests)                        \
-    M(Revision)                                 \
     M(LogicalCPUCores)                          \
     M(MemoryCapacity)                           \
     M(PSMVCCNumSnapshots)                       \
