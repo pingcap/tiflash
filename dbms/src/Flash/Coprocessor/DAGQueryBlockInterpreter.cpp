@@ -386,7 +386,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
     {
         const Settings & settings = context.getSettingsRef();
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
+        BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
             pipeline.streams_with_non_joined_data,
             params,
@@ -397,6 +397,8 @@ void DAGQueryBlockInterpreter::executeAggregation(
             log->identifier());
         pipeline.streams.resize(1);
         pipeline.streams_with_non_joined_data.clear();
+        pipeline.firstStream() = std::move(stream);
+
         // should record for agg before restore concurrency. See #3804.
         recordProfileStreams(pipeline, query_block.aggregation_name);
         restorePipelineConcurrency(pipeline);

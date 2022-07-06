@@ -85,7 +85,7 @@ class ParallelInputsProcessor
 {
 public:
     /** additional_inputs_at_end - if not empty,
-      *  then the blocks from thes sources will start to be processed only after all other sources are processed.
+      *  then the blocks from the sources will start to be processed only after all other sources are processed.
       *
       * Intended for implementation of FULL and RIGHT JOIN
       * - where you must first make JOIN in parallel, while noting which keys are not found,
@@ -136,15 +136,8 @@ public:
         working_inputs.available_inputs.cancel();
         working_additional_inputs.available_inputs.cancel();
 
-        for (auto & input : inputs)
-        {
-            cancelStream(input, kill);
-        }
-
-        for (auto & input : additional_inputs_at_end)
-        {
-            cancelStream(input, kill);
-        }
+        cancelStreams(inputs, kill);
+        cancelStreams(additional_inputs_at_end, kill);
     }
 
     /// Wait until all threads are finished, before the destructor.
@@ -174,7 +167,9 @@ private:
         BlockInputStreamPtr in;
         size_t i; /// The source number (for debugging).
 
-        InputData() {}
+        InputData()
+            : i(0)
+        {}
         InputData(const BlockInputStreamPtr & in_, size_t i_)
             : in(in_)
             , i(i_)
@@ -224,21 +219,24 @@ private:
         std::mutex unprepared_inputs_mutex;
     };
 
-    void cancelStream(const BlockInputStreamPtr & stream, bool kill)
+    void cancelStreams(const BlockInputStreams & streams, bool kill)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(&*stream))
+        for (const auto & input : streams)
         {
-            try
+            if (auto * p_child = dynamic_cast<IProfilingBlockInputStream *>(&*input))
             {
-                p_stream->cancel(kill);
-            }
-            catch (...)
-            {
-                /** If you can not ask one or more sources to stop.
+                try
+                {
+                    p_child->cancel(kill);
+                }
+                catch (...)
+                {
+                    /** If you can not ask one or more sources to stop.
                       * (for example, the connection is broken for distributed query processing)
                       * - then do not care.
                       */
-                LOG_FMT_ERROR(log, "Exception while cancelling {}", p_stream->getName());
+                    LOG_FMT_ERROR(log, "Exception while cancelling {}", p_child->getName());
+                }
             }
         }
     }
@@ -346,6 +344,8 @@ private:
                 }
             }
         }
+
+        // Should read_suffix be called here?
     }
 
     const BlockInputStreams inputs;

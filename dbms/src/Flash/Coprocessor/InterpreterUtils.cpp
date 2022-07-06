@@ -48,12 +48,15 @@ void executeUnion(
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
         return;
+    BlockInputStreamPtr stream;
     if (ignore_block)
-        pipeline.firstStream() = std::make_shared<UnionWithoutBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+        stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
     else
-        pipeline.firstStream() = std::make_shared<UnionWithBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+        stream = std::make_shared<UnionWithBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
     pipeline.firstStream()->setExtraInfo(extra_info);
     pipeline.streams.resize(1);
+    pipeline.streams_with_non_joined_data.clear();
+    pipeline.firstStream() = std::move(stream);
 }
 
 ExpressionActionsPtr generateProjectExpressionActions(
