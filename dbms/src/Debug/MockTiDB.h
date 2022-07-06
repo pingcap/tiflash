@@ -127,7 +127,9 @@ public:
 
     std::pair<bool, DatabaseID> getDBIDByName(const String & database_name);
 
-    SchemaDiff getSchemaDiff(Int64 version);
+    bool checkSchemaDiffExists(Int64 version);
+
+    std::optional<SchemaDiff> getSchemaDiff(Int64 version);
 
     std::unordered_map<String, DatabaseID> getDatabases() { return databases; }
 
