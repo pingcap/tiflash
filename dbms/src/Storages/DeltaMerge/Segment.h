@@ -98,7 +98,8 @@ public:
 
     bool writeToDisk(DMContext & dm_context, const PackPtr & pack);
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
-    bool write(DMContext & dm_context, const Block & block); // For test only
+
+    bool write(DMContext & dm_context, const Block & block, bool flush_cache = true); // For test only
     bool write(DMContext & dm_context, const HandleRange & delete_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool is_update = false) const;
