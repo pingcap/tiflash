@@ -162,9 +162,7 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
-# --raw asks mysql client not to escape output, otherwise Newline, tab, NUL, and backslash will be outputted as \n, \t, \0, and \\.
-# ref: https://dev.mysql.com/doc/refman/8.0/en/mysql-command-options.html#option_mysql_raw
-mysql_client="mysql -u root -P $tidb_port -h $tidb_server --raw -e"
+mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
 
 if [ "$fullstack" = true ]; then
     mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
