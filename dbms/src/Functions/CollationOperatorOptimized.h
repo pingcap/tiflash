@@ -47,11 +47,15 @@ __attribute__((flatten, always_inline, pure)) inline int RawStrCompare(const std
     return signum(v1.compare(v2));
 }
 
+constexpr char SPACE = ' ';
+
 // Remove tail space
 __attribute__((flatten, always_inline, pure)) inline std::string_view RightTrim(const std::string_view & v)
 {
-    size_t end = v.find_last_not_of(' ');
-    return end == std::string_view::npos ? "" : v.substr(0, end + 1);
+    if (likely(v.empty() || v.back() != SPACE))
+        return v;
+    size_t end = v.find_last_not_of(SPACE);
+    return end == std::string_view::npos ? std::string_view{} : std::string_view(v.data(), end + 1);
 }
 
 __attribute__((flatten, always_inline, pure)) inline int RtrimeStrCompare(const std::string_view & va, const std::string_view & vb)
@@ -77,26 +81,6 @@ struct IsEqualRelated<DB::NotEqualsOp<A...>>
 {
     static constexpr const bool value = true;
 };
-
-// Return true if any str has tail space
-__attribute__((always_inline, pure)) inline bool HasTailSpace(
-    const ColumnString::Chars_t & a_data,
-    const ColumnString::Offsets & a_offsets,
-    size_t size)
-{
-    bool has_tail_space = false;
-
-    // #pragma clang loop vectorize(enable)
-    for (size_t i = 0; i < size; ++i)
-    {
-        const auto * ptr = reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]);
-        auto size = StringUtil::sizeAt(a_offsets, i) - 1;
-        auto pos = size > 0 ? size - 1 : 0; // if size is 0, use the last pos which aways contains a '\0'
-        has_tail_space |= ptr[pos] == ' ';
-    }
-    return has_tail_space;
-}
-
 
 // Loop columns and invoke callback for each pair.
 template <typename F>
@@ -158,34 +142,16 @@ ALWAYS_INLINE inline bool StringVectorStringVector(
     {
         size_t size = a_offsets.size();
 
-        if (unlikely(HasTailSpace(a_data, a_offsets, size) || HasTailSpace(b_data, b_offsets, size)))
-        {
-            // if any col has any str with tail space, trim it ans compare
-            LoopTwoColumns(a_data, a_offsets, b_data, b_offsets, size, [&c](const std::string_view & va, const std::string_view & vb, size_t i) {
-                if constexpr (IsEqualRelated<Op>::value)
-                {
-                    c[i] = Op::apply(RawStrEqualCompare(RightTrim(va), RightTrim(vb)), 0);
-                }
-                else
-                {
-                    c[i] = Op::apply(RtrimeStrCompare(va, vb), 0);
-                }
-            });
-        }
-        else
-        {
-            // in most case, string will not contain tail space
-            LoopTwoColumns(a_data, a_offsets, b_data, b_offsets, size, [&c](const std::string_view & va, const std::string_view & vb, size_t i) {
-                if constexpr (IsEqualRelated<Op>::value)
-                {
-                    c[i] = Op::apply(RawStrEqualCompare(va, vb), 0);
-                }
-                else
-                {
-                    c[i] = Op::apply(RawStrCompare(va, vb), 0);
-                }
-            });
-        }
+        LoopTwoColumns(a_data, a_offsets, b_data, b_offsets, size, [&c](const std::string_view & va, const std::string_view & vb, size_t i) {
+            if constexpr (IsEqualRelated<Op>::value)
+            {
+                c[i] = Op::apply(RawStrEqualCompare(RightTrim(va), RightTrim(vb)), 0);
+            }
+            else
+            {
+                c[i] = Op::apply(RtrimeStrCompare(va, vb), 0);
+            }
+        });
 
         use_optimized_path = true;
 
@@ -221,32 +187,17 @@ ALWAYS_INLINE inline bool StringVectorConstant(
 
         std::string_view tar_str_view = RightTrim(b); // right trim const-str first
 
-        if (likely(!HasTailSpace(a_data, a_offsets, size)))
-        {
-            LoopOneColumn(a_data, a_offsets, size, [&c, &tar_str_view](const std::string_view & view, size_t i) {
-                if constexpr (IsEqualRelated<Op>::value)
-                {
-                    c[i] = Op::apply(RawStrEqualCompare(view, tar_str_view), 0);
-                }
-                else
-                {
-                    c[i] = Op::apply(RawStrCompare(view, tar_str_view), 0);
-                }
-            });
-        }
-        else
-        {
-            LoopOneColumn(a_data, a_offsets, size, [&c, &tar_str_view](const std::string_view & view, size_t i) {
-                if constexpr (IsEqualRelated<Op>::value)
-                {
-                    c[i] = Op::apply(RawStrEqualCompare(RightTrim(view), tar_str_view), 0);
-                }
-                else
-                {
-                    c[i] = Op::apply(RawStrCompare(RightTrim(view), tar_str_view), 0);
-                }
-            });
-        }
+        LoopOneColumn(a_data, a_offsets, size, [&c, &tar_str_view](const std::string_view & view, size_t i) {
+            if constexpr (IsEqualRelated<Op>::value)
+            {
+                c[i] = Op::apply(RawStrEqualCompare(RightTrim(view), tar_str_view), 0);
+            }
+            else
+            {
+                c[i] = Op::apply(RawStrCompare(RightTrim(view), tar_str_view), 0);
+            }
+        });
+
         use_optimized_path = true;
         break;
     }
