@@ -4927,7 +4927,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!arguments[0]->isString())
+        if (!arguments[0]->isStringOrFixedString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -4979,8 +4979,8 @@ private:
                 res_data[pos + 1] = hexTable[byte & 0x0f];
             }
             // the last element written by the previous loop is:
-            // `(offsets[i] - 2) * 2 - i + 1 = offsets[2] * 2 - i - 3`
-            // then the zero should be written to `offsets[2] * 2 - i - 2`
+            // `(offsets[i] - 2) * 2 - i + 1 = offsets[i] * 2 - i - 3`
+            // then the zero should be written to `offsets[i] * 2 - i - 2`
             res_data[offsets[i] * 2 - i - 2] = 0;
             res_offsets[i] = offsets[i] * 2 - i - 1;
 
