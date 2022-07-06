@@ -179,7 +179,6 @@ namespace
 
 namespace CurrentMetrics
 {
-extern const Metric Revision;
 extern const Metric LogicalCPUCores;
 extern const Metric MemoryCapacity;
 } // namespace CurrentMetrics
