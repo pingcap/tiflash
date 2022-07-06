@@ -183,7 +183,7 @@ private:
 };
 
 template <typename T, bool padding = false>
-class BinCollator : public ITiDBCollator
+class BinCollator final : public ITiDBCollator
 {
 public:
     explicit BinCollator(int32_t id)
@@ -249,7 +249,7 @@ using WeightType = uint16_t;
 extern const std::array<WeightType, 256 * 256> weight_lut;
 } // namespace GeneralCI
 
-class GeneralCICollator : public ITiDBCollator
+class GeneralCICollator final : public ITiDBCollator
 {
 public:
     explicit GeneralCICollator(int32_t id)
@@ -365,7 +365,7 @@ const std::array<long_weight, 23> weight_lut_long = {
 
 } // namespace UnicodeCI
 
-class UnicodeCICollator : public ITiDBCollator
+class UnicodeCICollator final : public ITiDBCollator
 {
 public:
     explicit UnicodeCICollator(int32_t id)
@@ -593,6 +593,8 @@ private:
     friend class Pattern<UnicodeCICollator>;
 };
 
+using UTF8MB4_BIN_TYPE = BinCollator<Rune, true>;
+
 TiDBCollatorPtr ITiDBCollator::getCollator(int32_t id)
 {
     switch (id)
@@ -607,10 +609,10 @@ TiDBCollatorPtr ITiDBCollator::getCollator(int32_t id)
         static const auto latin1_collator = BinCollator<char, true>(LATIN1_BIN);
         return &latin1_collator;
     case ITiDBCollator::UTF8MB4_BIN:
-        static const auto utf8mb4_collator = BinCollator<Rune, true>(UTF8MB4_BIN);
+        static const auto utf8mb4_collator = UTF8MB4_BIN_TYPE(UTF8MB4_BIN);
         return &utf8mb4_collator;
     case ITiDBCollator::UTF8_BIN:
-        static const auto utf8_collator = BinCollator<Rune, true>(UTF8_BIN);
+        static const auto utf8_collator = UTF8MB4_BIN_TYPE(UTF8_BIN);
         return &utf8_collator;
     case ITiDBCollator::UTF8_GENERAL_CI:
         static const auto utf8_general_ci_collator = GeneralCICollator(UTF8_GENERAL_CI);
