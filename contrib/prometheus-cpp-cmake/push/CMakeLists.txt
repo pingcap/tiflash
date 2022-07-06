@@ -3,6 +3,8 @@ if(NOT CURL_FOUND)
 endif()
 
 add_library(push
+  ${PROMETHEUS_SRC_DIR}/push/src/curl_wrapper.cc
+  ${PROMETHEUS_SRC_DIR}/push/src/curl_wrapper.h
   ${PROMETHEUS_SRC_DIR}/push/src/gateway.cc
 )
 
