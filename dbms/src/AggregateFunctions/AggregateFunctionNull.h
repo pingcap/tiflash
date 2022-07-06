@@ -429,11 +429,18 @@ public:
         if constexpr (input_is_nullable)
         {
             const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
+            const String & nexted_func_name = this->nested_function->getName();
             if (!column->isNullAt(row_num))
             {
                 this->setFlag(place);
                 const IColumn * nested_column = &column->getNestedColumn();
                 this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+            }
+            else if (nexted_func_name == "groupBitOr" || nexted_func_name == "groupBitAnd" || nexted_func_name == "groupBitXor")
+            {
+                // If nested_function is bitwise aggregation function,
+                // the result is always not null.
+                this->setFlag(place);
             }
         }
         else
@@ -458,6 +465,7 @@ public:
             const ColumnNullable * column = assert_cast<const ColumnNullable *>(columns[0]);
             const IColumn * nested_column = &column->getNestedColumn();
             const UInt8 * null_map = column->getNullMapData().data();
+            const String & nexted_func_name = this->nested_function->getName();
 
             this->nested_function->addBatchSinglePlaceNotNull(
                 batch_size,
@@ -466,6 +474,13 @@ public:
                 null_map,
                 arena,
                 if_argument_pos);
+
+            if (nexted_func_name == "groupBitOr" || nexted_func_name == "groupBitAnd" || nexted_func_name == "groupBitXor")
+            {
+                // If nested_function is bitwise aggregation function,
+                // the result is always not null.
+                this->setFlag(place);
+            }
 
             if constexpr (result_is_nullable)
                 if (!mem_utils::memoryIsByte(null_map, batch_size, std::byte{1}))
