@@ -101,13 +101,10 @@ public:
         , additional_inputs_at_end(additional_inputs_at_end_)
         , max_threads(std::min(std::max(inputs_.size(), additional_inputs_at_end_.size()), max_threads_))
         , handler(handler_)
-        , available_inputs_ptr(std::make_unique<AvailableInputs>(inputs_.size()))
+        , working_inputs(inputs_)
+        , working_additional_inputs(additional_inputs_at_end_)
         , log(log_)
-    {
-        active_streams = inputs_.size();
-        for (size_t i = 0; i < inputs_.size(); ++i)
-            unprepared_inputs.emplace(inputs_[i], i);
-    }
+    {}
 
     ~ParallelInputsProcessor()
     {
@@ -127,10 +124,6 @@ public:
         if (!thread_manager)
             thread_manager = newThreadManager();
         active_threads = max_threads;
-        {
-            std::lock_guard lock(running_first_mutex);
-            running_first = max_threads;
-        }
         for (size_t i = 0; i < max_threads; ++i)
             thread_manager->schedule(true, handler.getName(), [this, i] { this->thread(i); });
     }
@@ -139,6 +132,9 @@ public:
     void cancel(bool kill)
     {
         finish = true;
+
+        working_inputs.available_inputs.cancel();
+        working_additional_inputs.available_inputs.cancel();
 
         for (auto & input : inputs)
         {
@@ -185,6 +181,49 @@ private:
         {}
     };
 
+    struct WorkingInputs
+    {
+        explicit WorkingInputs(const BlockInputStreams & inputs_)
+            : available_inputs(inputs_.size())
+            , active_inputs(inputs_.size())
+        {
+            for (size_t i = 0; i < inputs_.size(); ++i)
+                unprepared_inputs.emplace(inputs_[i], i);
+        }
+        /** A set of available sources that are not currently processed by any thread.
+          * Each thread takes one source from this set, takes a block out of the source (at this moment the source does the calculations)
+          *  and (if the source is not run out), puts it back into the set of available sources.
+          *
+          * The question arises what is better to use:
+          * - the queue (just processed source will be processed the next time later than the rest)
+          * - stack (just processed source will be processed as soon as possible).
+          *
+          * The stack is better than the queue when you need to do work on reading one source more consequentially,
+          *  and theoretically, this allows you to achieve more consequent/consistent reads from the disk.
+          *
+          * But when using the stack, there is a problem with distributed query processing:
+          *  data is read only from a part of the servers, and on the other servers
+          * a timeout occurs during send, and the request processing ends with an exception.
+          *
+          * Therefore, a queue is used. This can be improved in the future.
+          */
+        using AvailableInputs = MPMCQueue<InputData>;
+        AvailableInputs available_inputs;
+
+        /// How many active input streams.
+        std::atomic<size_t> active_inputs;
+
+        /** For parallel preparing (readPrefix) child streams.
+          * First, streams are located here.
+          * After a stream was prepared, it is moved to "available_inputs" for reading.
+          */
+        using UnpreparedInputs = std::queue<InputData>;
+        UnpreparedInputs unprepared_inputs;
+
+        /// For operations with unprepared_inputs.
+        std::mutex unprepared_inputs_mutex;
+    };
+
     void cancelStream(const BlockInputStreamPtr & stream, bool kill)
     {
         if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(&*stream))
@@ -217,46 +256,11 @@ private:
 
     void thread(size_t thread_num)
     {
-        /// Handle `inputs`.
-        work(thread_num);
+        work(thread_num, working_inputs);
 
         handler.onFinishThread(thread_num);
 
-        if (additional_inputs_at_end.empty())
-        {
-            if (0 == --active_threads)
-            {
-                handler.onFinish();
-            }
-            return;
-        }
-
-        {
-            std::unique_lock lock(running_first_mutex);
-            if (0 == --running_first)
-            {
-                /// Only one thread can go here so don't need to hold `unprepared_inputs_mutex`
-                /// or `unprepared_inputs_mutex` lock.
-                /// If an error has occurred, the `unprepared_inputs` and `available_inputs` may not be empty.
-                unprepared_inputs = UnpreparedInputs{};
-                available_inputs_ptr = std::make_unique<AvailableInputs>(additional_inputs_at_end.size());
-
-                active_streams = additional_inputs_at_end.size();
-                for (size_t i = 0; i < additional_inputs_at_end.size(); ++i)
-                    unprepared_inputs.emplace(additional_inputs_at_end[i], i);
-
-                wait_first_done.notify_all();
-            }
-            else
-            {
-                wait_first_done.wait(lock, [this] {
-                    return running_first == 0;
-                });
-            }
-        }
-
-        /// Handle `additional_inputs_at_end`.
-        work(thread_num);
+        work(thread_num, working_additional_inputs);
 
         if (0 == --active_threads)
         {
@@ -264,13 +268,13 @@ private:
         }
     }
 
-    void work(size_t thread_num)
+    void work(size_t thread_num, WorkingInputs & work)
     {
         std::exception_ptr exception;
 
         try
         {
-            loop(thread_num);
+            loop(thread_num, work);
         }
         catch (...)
         {
@@ -283,33 +287,42 @@ private:
         }
     }
 
-    void loop(size_t thread_num)
+    /// This function may be called in different threads.
+    /// If finish is not true and no exception occurs, we can ensure that the work is
+    /// all done when the function returns in any thread.
+    void loop(size_t thread_num, WorkingInputs & work)
     {
+        if (work.active_inputs == 0)
+        {
+            return;
+        }
+
         while (!finish)
         {
             InputData unprepared_input;
             {
-                std::lock_guard lock(unprepared_inputs_mutex);
+                std::lock_guard lock(work.unprepared_inputs_mutex);
 
-                if (unprepared_inputs.empty())
+                if (work.unprepared_inputs.empty())
                     break;
 
-                unprepared_input = unprepared_inputs.front();
-                unprepared_inputs.pop();
+                unprepared_input = work.unprepared_inputs.front();
+                work.unprepared_inputs.pop();
             }
 
             unprepared_input.in->readPrefix();
 
-            available_inputs_ptr->push(unprepared_input);
+            work.available_inputs.push(unprepared_input);
         }
 
         while (!finish) /// You may need to stop work earlier than all sources run out.
         {
             InputData input;
 
-            if (!available_inputs_ptr->pop(input))
+            if (!work.available_inputs.pop(input))
             {
-                // All input streams are exhausted.
+                /// All input streams are exhausted.
+                /// Or an exception occurred and the queue was cancelled.
                 break;
             }
 
@@ -321,14 +334,14 @@ private:
 
             if (block)
             {
-                available_inputs_ptr->push(input);
+                work.available_inputs.push(input);
                 publishPayload(input.in, block, thread_num);
             }
             else
             {
-                if (0 == --active_streams)
+                if (0 == --work.active_inputs)
                 {
-                    available_inputs_ptr->finish();
+                    work.available_inputs.finish();
                     break;
                 }
             }
@@ -343,45 +356,9 @@ private:
 
     std::shared_ptr<ThreadManager> thread_manager;
 
-    /** A set of available sources that are not currently processed by any thread.
-      * Each thread takes one source from this set, takes a block out of the source (at this moment the source does the calculations)
-      *  and (if the source is not run out), puts it back into the set of available sources.
-      *
-      * The question arises what is better to use:
-      * - the queue (just processed source will be processed the next time later than the rest)
-      * - stack (just processed source will be processed as soon as possible).
-      *
-      * The stack is better than the queue when you need to do work on reading one source more consequentially,
-      *  and theoretically, this allows you to achieve more consequent/consistent reads from the disk.
-      *
-      * But when using the stack, there is a problem with distributed query processing:
-      *  data is read only from a part of the servers, and on the other servers
-      * a timeout occurs during send, and the request processing ends with an exception.
-      *
-      * Therefore, a queue is used. This can be improved in the future.
-      */
-    using AvailableInputs = MPMCQueue<InputData>;
-    using AvailableInputsPtr = std::unique_ptr<AvailableInputs>;
-    AvailableInputsPtr available_inputs_ptr;
+    WorkingInputs working_inputs;
+    WorkingInputs working_additional_inputs;
 
-    /** For parallel preparing (readPrefix) child streams.
-      * First, streams are located here.
-      * After a stream was prepared, it is moved to "available_inputs" for reading.
-      */
-    using UnpreparedInputs = std::queue<InputData>;
-    UnpreparedInputs unprepared_inputs;
-
-    /// For operations with unprepared_inputs.
-    std::mutex unprepared_inputs_mutex;
-
-    /// For waiting all `inputs` sources work done.
-    /// After that, the `additional_inputs_at_end` sources can be processed.
-    std::mutex running_first_mutex;
-    std::condition_variable wait_first_done;
-    size_t running_first{0};
-
-    /// How many active input streams.
-    std::atomic<size_t> active_streams{0};
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};
     /// Finish the threads work (before the sources run out).
