@@ -23,6 +23,6 @@
 namespace DB
 {
 mpp::MPPDataPacket getPacketWithError(String reason);
-String trimStackTrace(String message);
+void trimStackTrace(String & message);
 
 } // namespace DB

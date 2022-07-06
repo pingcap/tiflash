@@ -28,7 +28,7 @@ mpp::MPPDataPacket getPacketWithError(String reason)
     return data;
 }
 
-String trimStackTrace(String message)
+void trimStackTrace(String & message)
 {
     auto stack_trace_pos = message.find("Stack trace");
     if (stack_trace_pos != String::npos)
@@ -36,7 +36,6 @@ String trimStackTrace(String message)
         message.resize(stack_trace_pos);
         Poco::trimRightInPlace(message);
     }
-    return message;
 }
 
 } // namespace DB

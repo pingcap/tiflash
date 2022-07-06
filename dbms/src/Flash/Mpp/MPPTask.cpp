@@ -406,7 +406,7 @@ void MPPTask::runImpl()
         {
             LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
             /// trim the stack trace to avoid too many useless information in log
-            err_msg = trimStackTrace(err_msg);
+            trimStackTrace(err_msg);
             try
             {
                 handleError(err_msg);
