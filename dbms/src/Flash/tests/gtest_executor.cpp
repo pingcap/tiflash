@@ -48,7 +48,7 @@ public:
                              {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                              {toVec<String>("s", {"banana", "banana"}),
                               toVec<String>("join_c", {"apple", "banana"})});
-      
+
         context.addMockTable({"test_db", "r_table_2"},
                              {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                              {toVec<String>("s", {"banana", "banana", "banana"}),

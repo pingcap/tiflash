@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Common/TiFlashMetrics.h>
+#include <Debug/astToExecutor.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/FlashService.h>
 #include <Server/IServer.h>
 #include <Server/ServerInfo.h>
 #include <daemon/BaseDaemon.h>
-#include <Debug/astToExecutor.h>
-#include <Flash/FlashService.h>
-#include "Flash/Coprocessor/DAGContext.h"
 
 namespace DB
 {
@@ -45,7 +45,10 @@ class MockExecutionServer : public BaseDaemon
     , public IServer
 {
 public:
-    explicit MockExecutionServer(std::unique_ptr<Context> &global_context_, std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map_):global_context(global_context_), executor_id_columns_map(executor_id_columns_map_) {}
+    explicit MockExecutionServer(std::unique_ptr<Context> & global_context_, std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map_)
+        : global_context(global_context_)
+        , executor_id_columns_map(executor_id_columns_map_)
+    {}
     Poco::Util::LayeredConfiguration & config() const override
     {
         return BaseDaemon::config();
@@ -68,7 +71,8 @@ public:
         return BaseDaemon::isCancelled();
     }
 
-    std::unordered_map<String, ColumnsWithTypeAndName> getColumns() override {
+    std::unordered_map<String, ColumnsWithTypeAndName> getColumns() override
+    { // ywq todo do not copy
         return executor_id_columns_map;
     }
 
@@ -116,7 +120,7 @@ private:
             , is_shutdown(std::make_shared<std::atomic<bool>>(false))
         {
             grpc::ServerBuilder builder;
-            builder.AddListeningPort(Debug::LOCAL_HOST, grpc::InsecureServerCredentials());
+            builder.AddListeningPort(Debug::LOCAL_HOST, grpc::InsecureServerCredentials()); // TODO: Port as a parameter.
 
             /// Init and register flash service.
             flash_service = std::make_unique<FlashService>(server);
@@ -131,7 +135,6 @@ private:
             LOG_FMT_INFO(log, "Flash service registered");
 
             /// Kick off grpc server.
-            // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
             builder.SetMaxReceiveMessageSize(-1);
             builder.SetMaxSendMessageSize(-1);
             flash_grpc_server = builder.BuildAndStart();

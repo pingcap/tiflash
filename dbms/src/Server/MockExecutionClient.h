@@ -21,10 +21,6 @@
 #include <coprocessor.pb.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 
-#include <string>
-#include "grpcpp/impl/codegen/client_context.h"
-#include "grpcpp/impl/codegen/status.h"
-
 using grpc::Status;
 using grpc_impl::Channel;
 namespace DB
@@ -36,32 +32,14 @@ public:
         : stub(tikvpb::Tikv::NewStub(channel))
     {}
 
-
-    std::string runCoprocessor(coprocessor::Request request,
-        coprocessor::Response response)
+    std::string runCoprocessor(coprocessor::Request & request,
+                               coprocessor::Response & response)
     {
-        
         grpc::ClientContext context;
         request.set_tp(103);
-        Status status = stub->Coprocessor(&context, request, &response);
-        if (status.ok())
-        {
-            return response.DebugString();
-        }
-        else
-        {
-            std::cout << status.error_code() << ": " << status.error_message()
-                      << std::endl;
-            return "RPC failed";
-        }
-    }
+        request.set_start_ts(1);
 
-    std::string runDispatchMPPTask()
-    {
-        const ::mpp::DispatchTaskRequest request;
-            ::mpp::DispatchTaskResponse response;
-        grpc::ClientContext context;
-        Status status = stub->DispatchMPPTask(&context, request, &response);
+        Status status = stub->Coprocessor(&context, request, &response);
         if (status.ok())
         {
             return response.DebugString();
