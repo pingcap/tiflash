@@ -73,7 +73,7 @@ public:
 
     void flushCache(const Context & context) override;
 
-    void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush) override;
+    bool flushCache(const Context & context, const DM::RowKeyRange & range_to_flush, bool try_until_succeed) override;
 
     /// Merge delta into the stable layer for all segments.
     ///
