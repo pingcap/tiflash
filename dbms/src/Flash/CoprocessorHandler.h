@@ -51,6 +51,7 @@ public:
 
     virtual ~CoprocessorHandler() = default;
 
+    virtual grpc::Status execute(std::unordered_map<String, ColumnsWithTypeAndName> columns);
     virtual grpc::Status execute();
 
     static std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> GenCopKeyRange(

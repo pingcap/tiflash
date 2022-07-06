@@ -20,6 +20,7 @@
 #include <daemon/BaseDaemon.h>
 #include <Debug/astToExecutor.h>
 #include <Flash/FlashService.h>
+#include "Flash/Coprocessor/DAGContext.h"
 
 namespace DB
 {
@@ -29,6 +30,7 @@ extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
 
 Poco::Logger * grpc_log = nullptr;
+class DAGContext;
 
 static std::string getCanonicalPath(std::string path)
 {
@@ -43,7 +45,7 @@ class MockExecutionServer : public BaseDaemon
     , public IServer
 {
 public:
-    MockExecutionServer(std::unique_ptr<Context> &global_context_):global_context(global_context_) {}
+    explicit MockExecutionServer(std::unique_ptr<Context> &global_context_, std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map_):global_context(global_context_), executor_id_columns_map(executor_id_columns_map_) {}
     Poco::Util::LayeredConfiguration & config() const override
     {
         return BaseDaemon::config();
@@ -64,6 +66,10 @@ public:
     bool isCancelled() const override
     {
         return BaseDaemon::isCancelled();
+    }
+
+    std::unordered_map<String, ColumnsWithTypeAndName> getColumns() override {
+        return executor_id_columns_map;
     }
 
 protected:
@@ -96,6 +102,7 @@ protected:
 
 private:
     std::unique_ptr<Context> & global_context;
+    std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map;
 
     TiFlashSecurityConfig security_config;
 

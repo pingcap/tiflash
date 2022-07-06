@@ -304,6 +304,7 @@ public:
     }
 
     bool isTest() const { return is_test; }
+    void setTest() { is_test = true; }
     void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
     ColumnsWithTypeAndName columnsForTest(String executor_id);
 
@@ -381,7 +382,7 @@ private:
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
 
-    bool is_test = false; /// switch for test, do not use it in production.
+    bool is_test = true; /// switch for test, do not use it in production.
     std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
 };
 

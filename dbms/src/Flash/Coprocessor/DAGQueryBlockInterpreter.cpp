@@ -50,6 +50,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
+#include "Core/ColumnsWithTypeAndName.h"
 
 namespace DB
 {
@@ -164,6 +165,9 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     {
         auto names_and_types = genNamesAndTypes(table_scan);
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
+        for (auto kv : columns_with_type_and_name) {
+            std::cout << kv.name << std::endl;
+        }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         for (size_t i = 0; i < max_streams; ++i)
         {
@@ -173,7 +177,11 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     }
     else
     {
+        std::cout << "ywq test reach here..." << std::endl;
         auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getTableScanExecutorID());
+        for (auto kv : names_and_types) {
+            std::cout << kv.name << std::endl;
+        }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }

@@ -21,6 +21,8 @@
 #include <iostream>
 
 #include "Debug/astToExecutor.h"
+#include "Interpreters/Context.h"
+#include "TestUtils/TiFlashTestEnv.h"
 #include "gtest/gtest.h"
 
 namespace DB
@@ -29,6 +31,8 @@ namespace tests
 {
 class ServerRunner : public DB::tests::ExecutorTest
 {
+    public:
+    std::shared_ptr<tipb::DAGRequest> dag_request;
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
@@ -36,13 +40,26 @@ class ServerRunner : public DB::tests::ExecutorTest
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+        dag_request = context
+                                                            .scan("test_db", "test_table")
+                                                            .filter(eq(col("s1"), col("s2")))
+                                                            .build(context);
     }
 };
+
 
 TEST_F(ServerRunner, runServer)
 try
 {
-    DB::MockExecutionServer app(TiFlashTestEnv::global_context);
+    std::cout << "ywq test columns map" << std::endl;
+    for (auto kv : context.executorIdColumnsMap()) {
+        std::cout << kv.first << std::endl;
+    }
+    // dag_context_ptr->setColumnsForTest(context.executorIdColumnsMap()); // ywq todo make it clear..
+    // TiFlashTestEnv::global_context->setDAGContext(dag_context_ptr.get());
+    DB::MockExecutionServer app(TiFlashTestEnv::global_context, context.executorIdColumnsMap());
+
     std::vector<std::string> args;
     args.push_back("--deamon");
     try
@@ -61,37 +78,35 @@ try
 CATCH
 
 
+TEST_F(ServerRunner, runDispatchMPPTask)
+try
+{
+    std::cout << "ywq test reach client run dispatchmpptask..." << std::endl;
+
+    MockExecutionClient client(
+        grpc::CreateChannel(Debug::LOCAL_HOST, grpc::InsecureChannelCredentials()));
+    std::string reply = client.runDispatchMPPTask();
+    std::cout << "runDispatchMPPTask received: " << reply << std::endl;
+}
+CATCH
+
 TEST_F(ServerRunner, runCoprocessor)
 try
 {
     std::cout << "ywq test reach client run coprocessor..." << std::endl;
-
-    MockExecutionClient client(
-        grpc::CreateChannel(Debug::LOCAL_HOST, grpc::InsecureChannelCredentials()));
-    std::string reply = client.runCoprocessor();
-    std::cout << "coprocessor received: " << reply << std::endl;
-}
-CATCH
-
-TEST_F(ServerRunner, runDispatchMPPTask)
-try
-{
-    std::cout << "ywq test reach client run dispatchMPPTask..." << std::endl;
-    auto dag_request = context
-                           .scan("test_db", "test_table")
-                           .filter(eq(col("s1"), col("s2")))
-                           .build(context);
     coprocessor::Request request;
     request.set_tp(103);
     request.set_start_ts(1);
-    
-
+    String dag_string;
+    dag_request->SerializeToString(&dag_string);
+    request.set_data(dag_string);
+    std::cout << "dag string: " << dag_string << std::endl;
     coprocessor::Response response;
-    
+
     MockExecutionClient client(
         grpc::CreateChannel(Debug::LOCAL_HOST, grpc::InsecureChannelCredentials()));
     std::string reply = client.runCoprocessor(request, response);
-    std::cout << "dispatchMPPTask received: " << reply << std::endl;
+    std::cout << "coprocessor received: " << reply << std::endl;
 }
 CATCH
 

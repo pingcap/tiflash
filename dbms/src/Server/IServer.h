@@ -14,11 +14,12 @@
 
 #pragma once
 
+#include <Common/TiFlashSecurity.h>
+#include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 
-#include <Common/TiFlashSecurity.h>
-#include <Interpreters/Context.h>
+#include "Core/ColumnsWithTypeAndName.h"
 
 
 namespace DB
@@ -38,10 +39,12 @@ public:
 
     virtual const TiFlashSecurityConfig & securityConfig() const = 0;
 
+    virtual std::unordered_map<String, ColumnsWithTypeAndName> getColumns() {return {};};
+
     /// Returns true if shutdown signaled.
     virtual bool isCancelled() const = 0;
 
     virtual ~IServer() {}
 };
 
-}
+} // namespace DB

@@ -109,7 +109,7 @@ grpc::Status FlashService::Coprocessor(
         }
         CoprocessorContext cop_context(*context, request->context(), *grpc_context);
         CoprocessorHandler cop_handler(cop_context, request, response);
-        return cop_handler.execute();
+        return cop_handler.execute(server.getColumns());
     });
 
     LOG_FMT_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
