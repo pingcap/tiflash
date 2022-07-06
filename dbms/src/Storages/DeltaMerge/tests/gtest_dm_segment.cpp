@@ -629,12 +629,12 @@ try
     {
         // write to segment and flush
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write_per_batch, false);
-        segment->write(dmContext(), std::move(block), true);
+        segment->write(dmContext(), block, true);
     }
     {
         // write to segment and don't flush
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write_per_batch, 2 * num_rows_write_per_batch, false);
-        segment->write(dmContext(), std::move(block), false);
+        segment->write(dmContext(), block, false);
     }
 
     {
@@ -679,7 +679,7 @@ try
             in->readSuffix();
         }
         {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRange()});
+            auto in = new_segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRange()});
             in->readPrefix();
             while (Block block = in->read())
             {
