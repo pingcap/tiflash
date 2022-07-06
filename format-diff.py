@@ -49,15 +49,15 @@ def main():
     default_suffix = args.suffix.strip().split(' ') if args.suffix else []
     ignore_suffix = args.ignore_suffix.strip().split(
         ' ') if args.ignore_suffix else []
-    tiflash_repo_path = args.repo_path
-    if not os.path.isabs(tiflash_repo_path):
+    tics_repo_path = args.repo_path
+    if not os.path.isabs(tics_repo_path):
         raise Exception("path of repo should be absolute")
-    assert tiflash_repo_path[-1] != '/'
+    assert tics_repo_path[-1] != '/'
 
-    os.chdir(tiflash_repo_path)
+    os.chdir(tics_repo_path)
     files_to_check = run_cmd('git diff HEAD --name-only') if args.diff_from == 'HEAD' else run_cmd(
         'git diff {} --name-only'.format(args.diff_from))
-    files_to_check = [os.path.join(tiflash_repo_path, s.strip())
+    files_to_check = [os.path.join(tics_repo_path, s.strip())
                       for s in files_to_check]
     files_to_format = []
     for f in files_to_check:
@@ -74,8 +74,8 @@ def main():
         files_to_format.append(file_path)
 
     if args.dump_diff_files_to:
-        da = [e[len(tiflash_repo_path):] for e in files_to_format]
-        json.dump({'files': da, 'repo': tiflash_repo_path},
+        da = [e[len(tics_repo_path):] for e in files_to_format]
+        json.dump({'files': da, 'repo': tics_repo_path},
                   open(args.dump_diff_files_to, 'w'))
         print('dump {} modified files info to {}'.format(
             len(da), args.dump_diff_files_to))
@@ -84,7 +84,7 @@ def main():
         print('Files to format:\n  {}'.format('\n  '.join(files_to_format)))
         for file in files_to_format:
             cmd = 'clang-format -i {}'.format(file)
-            if subprocess.Popen(cmd, shell=True, cwd=tiflash_repo_path).wait():
+            if subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait():
                 exit(-1)
 
         if args.check_formatted:
