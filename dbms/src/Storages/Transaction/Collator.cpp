@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Functions/CollationOperatorOptimized.h>
 #include <Poco/String.h>
 #include <Storages/Transaction/Collator.h>
 
@@ -29,17 +30,10 @@ TiDBCollators dummy_collators;
 std::vector<std::string> dummy_sort_key_contaners;
 std::string dummy_sort_key_contaner;
 
-std::string_view rtrim(const char * s, size_t length)
+ALWAYS_INLINE std::string_view rtrim(const char * s, size_t length)
 {
     auto v = std::string_view(s, length);
-    size_t end = v.find_last_not_of(' ');
-    return end == std::string_view::npos ? "" : v.substr(0, end + 1);
-}
-
-template <typename T>
-int signum(T val)
-{
-    return (0 < val) - (val < 0);
+    return DB::RightTrim(v);
 }
 
 using Rune = int32_t;
@@ -192,9 +186,9 @@ public:
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
         if constexpr (padding)
-            return signum(rtrim(s1, length1).compare(rtrim(s2, length2)));
+            return DB::RtrimeStrCompare({s1, length1}, {s2, length2});
         else
-            return signum(std::string_view(s1, length1).compare(std::string_view(s2, length2)));
+            return DB::RawStrCompare({s1, length1}, {s2, length2});
     }
 
     StringRef sortKey(const char * s, size_t length, std::string &) const override
@@ -270,7 +264,7 @@ public:
             auto sk2 = weight(c2);
             auto cmp = sk1 - sk2;
             if (cmp != 0)
-                return signum(cmp);
+                return DB::signum(cmp);
         }
 
         return (offset1 < v1.length()) - (offset2 < v2.length());
@@ -420,7 +414,7 @@ public:
                 }
                 else
                 {
-                    return signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
+                    return DB::signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
                 }
             }
         }
