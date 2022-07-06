@@ -21,7 +21,9 @@
 #include <common/logger_useful.h>
 
 #include <iomanip>
-
+std::atomic<long long> tracked_mem{0}, tracked_peak{0};
+std::atomic<long long> tracked_alloc{0}, tracked_reloc{0}, tracked_free{0};
+std::atomic<long long> tracked_rec_alloc{0}, tracked_rec_reloc{0}, tracked_rec_free{0};
 MemoryTracker::~MemoryTracker()
 {
     if (peak)
@@ -68,7 +70,6 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
       * So, we allow over-allocations.
       */
     Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
-
     if (!next.load(std::memory_order_relaxed))
         CurrentMetrics::add(metric, size);
 
@@ -123,7 +124,6 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 void MemoryTracker::free(Int64 size)
 {
     Int64 new_amount = amount.fetch_sub(size, std::memory_order_relaxed) - size;
-
     /** Sometimes, query could free some data, that was allocated outside of query context.
       * Example: cache eviction.
       * To avoid negative memory usage, we "saturate" amount.
@@ -233,17 +233,52 @@ Int64 getLocalDeltaMemory()
 
 void alloc(Int64 size)
 {
-    checkSubmitAndUpdateLocalDelta(local_delta + size);
+    
+    tracked_mem += size;
+    long long cur_mem = tracked_mem;
+    if (cur_mem > tracked_peak) {
+        tracked_peak = cur_mem;
+    }
+    if (current_memory_tracker)
+    {
+        tracked_rec_alloc++;
+        checkSubmitAndUpdateLocalDelta(local_delta + size);
+    }
+    else
+    {
+        tracked_alloc++;
+       
+    }
 }
 
 void realloc(Int64 old_size, Int64 new_size)
 {
-    checkSubmitAndUpdateLocalDelta(local_delta + (new_size - old_size));
+    tracked_mem += (new_size - old_size);
+    if (current_memory_tracker)
+    {
+        tracked_rec_reloc++;
+        checkSubmitAndUpdateLocalDelta(local_delta + (new_size - old_size));
+    }
+    else
+    {
+        tracked_reloc++;
+        
+    }
 }
 
 void free(Int64 size)
 {
-    checkSubmitAndUpdateLocalDelta(local_delta - size);
+    tracked_mem -= size;
+    if (current_memory_tracker)
+    {
+        tracked_rec_free++;
+        checkSubmitAndUpdateLocalDelta(local_delta - size);
+    }
+    else
+    {
+        tracked_free++;
+        
+    }
 }
 
 } // namespace CurrentMemoryTracker

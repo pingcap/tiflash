@@ -19,7 +19,9 @@
 
 #include <atomic>
 
-
+extern std::atomic<long long> tracked_mem, tracked_peak;
+extern std::atomic<long long> tracked_alloc,tracked_reloc, tracked_free;
+extern std::atomic<long long> tracked_rec_alloc, tracked_rec_reloc, tracked_rec_free;
 namespace CurrentMetrics
 {
 extern const Metric MemoryTracking;

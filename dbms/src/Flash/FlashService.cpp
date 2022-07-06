@@ -33,9 +33,9 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
-#if USE_JEMALLOC
+// #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
-#endif
+// #endif
 
 #include <ext/scope_guard.h>
 
@@ -76,19 +76,106 @@ FlashService::FlashService(IServer & server_)
     t.detach();
 }
 
+void jestats() 
+{
+    size_t sz;
+    // Update the statistics cached by mallctl.
+    uint64_t epoch = 1;
+    sz = sizeof(epoch);
+    mallctl("epoch", &epoch, &sz, &epoch, sz);
+
+    // Get basic allocation statistics.  Take care to check for
+    // errors, since --enable-stats must have been specified at
+    // build time for these statistics to be available.
+    size_t allocated, active, metadata, resident, mapped, retained;
+    sz = sizeof(size_t);
+    if (mallctl("stats.allocated", &allocated, &sz, NULL, 0) == 0
+        && mallctl("stats.active", &active, &sz, NULL, 0) == 0
+        && mallctl("stats.metadata", &metadata, &sz, NULL, 0) == 0
+        && mallctl("stats.resident", &resident, &sz, NULL, 0) == 0
+        && mallctl("stats.mapped", &mapped, &sz, NULL, 0) == 0 
+        && mallctl("stats.retained", &retained, &sz, NULL, 0) == 0) {
+            fprintf(stderr,
+                "Current allocated/active/metadata/resident/mapped/retained: %zu/%zu/%zu/%zu/%zu/%zu\n",
+                allocated, active, metadata, resident, mapped, retained);
+    }
+}
+
+void process_mem_usage(double& vm_usage, double& resident_set)
+{
+   using std::ios_base;
+   using std::ifstream;
+   using std::string;
+
+   vm_usage     = 0.0;
+   resident_set = 0.0;
+
+   // 'file' stat seems to give the most reliable results
+   //
+   ifstream stat_stream("/proc/self/stat",ios_base::in);
+
+   // dummy vars for leading entries in stat that we don't care about
+   //
+   string pid, comm, state, ppid, pgrp, session, tty_nr;
+   string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+   string utime, stime, cutime, cstime, priority, nice;
+   string O, itrealvalue, starttime;
+
+   // the two fields we want
+   //
+   unsigned long vsize;
+   long rss;
+
+   stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
+               >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
+               >> utime >> stime >> cutime >> cstime >> priority >> nice
+               >> O >> itrealvalue >> starttime >> vsize >> rss; // don't care about the rest
+
+   stat_stream.close();
+
+   long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
+   vm_usage     = vsize / 1024.0;
+   resident_set = rss * page_size_kb;
+}
+
 void FlashService::memCheckJob()
 {
+    double vm_usage;
+    double resident_set;
     while (!end_syn)
     {
         DB::ProcessList & proc_list = server.context().getGlobalContext().getProcessList();
-        size_t tracked_used = static_cast<size_t>(proc_list.getMemAlloacted());
-        size_t limit = static_cast<size_t>(proc_list.getMemAlloacted());
+        long long tracked_used = static_cast<long long>(proc_list.getMemAlloacted());
+        long long limit = static_cast<long long>(proc_list.getMemLimit());
+        long long cur_tracked_proto = tracked_proto.load();
         size_t value{0};
-#if USE_JEMALLOC
+// #if USE_JEMALLOC
         size_t size = sizeof(value);
         mallctl("stats.resident", &value, &size, nullptr, 0);
-#endif
-        LOG_FMT_INFO(log, "mem_check: tracked: {}, limit: {}, real: {}, diff: {}", tracked_used, limit, value, (tracked_used < value ? value - tracked_used : tracked_used - value));
+// #endif
+        long long cur_tracked_peak = tracked_peak;
+        tracked_peak = tracked_mem.load();
+        process_mem_usage(vm_usage, resident_set);
+        resident_set*=1024;
+        LOG_FMT_INFO(log, "mem_check: tracked: {}, limit: {}, proto: {}, glb_mem_track: {},glb_peak:{}, proc_mem:{}, alloc_cnt:{}, reloc_cnt:{}, free_cnt:{}, alloc_rec_cnt:{}, reloc_rec_cnt:{}, free_rec_cnt:{}", 
+        tracked_used, limit, cur_tracked_proto, tracked_mem.load(), cur_tracked_peak, resident_set,
+        tracked_alloc.load(), tracked_reloc.load(), tracked_free.load(),
+        tracked_rec_alloc.load(), tracked_rec_reloc.load(), tracked_rec_free.load());
+
+        LOG_FMT_INFO(log, "mem_checkV2: tracked: {} GB, proto: {} GB, glb_mem_track: {} GB, glb_peak:{} GB, proc_mem:{} GB, alloc: {} GB, delloc: {} GB", 
+        static_cast<long long>(tracked_used/1024/1024)/1000.0, 
+        static_cast<long long>(cur_tracked_proto/1024/1024)/1000.0,
+        static_cast<long long>(tracked_mem.load()/1024/1024)/1000.0,
+        static_cast<long long>(cur_tracked_peak/1024/1024)/1000.0,
+        static_cast<long long>(resident_set/1024/1024)/1000.0,
+        static_cast<long long>(alloc_mem/1024/1024)/1000.0,
+        static_cast<long long>(dealloc_mem/1024/1024)/1000.0
+         );
+        jestats();
+        mallctl("prof.dump", NULL, NULL, NULL, 0);
+        // std::cerr<<"*******************"<<std::endl;
+        // malloc_stats_print(NULL, NULL, NULL);
+        // std::cerr<<"*******************"<<std::endl;
         usleep(1000000);
     }
     end_fin = true;

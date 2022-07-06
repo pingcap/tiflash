@@ -18,6 +18,8 @@
 
 #include <atomic>
 
+extern std::atomic<long long> alloc_mem, dealloc_mem;
+
 namespace DB
 {
 extern std::atomic_size_t allocator_mmap_counter;

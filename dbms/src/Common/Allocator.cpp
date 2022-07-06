@@ -32,7 +32,7 @@
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
-
+std::atomic<long long> alloc_mem{0}, dealloc_mem{0};
 
 namespace DB
 {
@@ -65,6 +65,7 @@ static constexpr size_t MALLOC_MIN_ALIGNMENT = 8;
 template <bool clear_memory_>
 void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
 {
+    alloc_mem += size;
     CurrentMemoryTracker::alloc(size);
 
     void * buf;
@@ -116,6 +117,7 @@ void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
 template <bool clear_memory_>
 void Allocator<clear_memory_>::free(void * buf, size_t size)
 {
+    dealloc_mem += size;
     if (size >= MMAP_THRESHOLD)
     {
         if (0 != munmap(buf, size))
@@ -134,6 +136,11 @@ void Allocator<clear_memory_>::free(void * buf, size_t size)
 template <bool clear_memory_>
 void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new_size, size_t alignment)
 {
+    if (old_size != new_size) 
+    {
+        alloc_mem += new_size;
+        dealloc_mem += old_size;
+    }
     if (old_size == new_size)
     {
         /// nothing to do.

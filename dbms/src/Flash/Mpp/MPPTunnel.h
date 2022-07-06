@@ -210,6 +210,7 @@ private:
     ConnectionProfileInfo connection_profile_info;
 
     const LoggerPtr log;
+    MemoryTracker * mem_tracker;
 };
 
 class MPPTunnel : public MPPTunnelBase<PacketWriter>

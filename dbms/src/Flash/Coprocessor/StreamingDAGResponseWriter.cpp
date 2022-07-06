@@ -97,6 +97,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     }
 }
 
+const bool fix_huge_block = true;
+
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
@@ -122,6 +124,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             }
             for (const auto & block : input_blocks)
             {
+                std::cerr<<"rows#2: "<<block.rows()<<std::endl;
                 chunk_codec_stream->encode(block, 0, block.rows());
                 packet.add_chunks(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
@@ -160,20 +163,44 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             }
             return;
         }
-
+        bool writed = false;
         Int64 current_records_num = 0;
+        Int64 resp_records_num = 0;
         for (const auto & block : input_blocks)
         {
             size_t rows = block.rows();
+            std::cerr<<"rows: "<<rows<<" records_per_chunk: "<<records_per_chunk<<std::endl;
             for (size_t row_index = 0; row_index < rows;)
             {
+                bool chunk_end = false;
                 if (current_records_num >= records_per_chunk)
                 {
                     auto * dag_chunk = response.add_chunks();
                     dag_chunk->set_rows_data(chunk_codec_stream->getString());
                     chunk_codec_stream->clear();
+                    resp_records_num+=current_records_num;
                     current_records_num = 0;
+                    chunk_end = true;
+                    // if (fix_huge_block) {
+                    //     writer->write(response);
+                    //     writed = true;
+                    //     response.clear_chunks();
+                    // }
                 }
+                if (chunk_end && resp_records_num >= records_per_chunk*2)
+                {
+                   
+                    // resp_records_num+=current_records_num;
+                    // current_records_num = 0;
+                    if (fix_huge_block) {
+                        std::cerr<<"send rows: "<<resp_records_num<<std::endl;
+                        resp_records_num = 0;
+                        writer->write(response);
+                        writed = true;
+                        response.clear_chunks();
+                    }
+                }
+
                 const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
                 chunk_codec_stream->encode(block, row_index, upper);
                 current_records_num += (upper - row_index);
@@ -187,7 +214,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             dag_chunk->set_rows_data(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        writer->write(response);
+        if (!fix_huge_block || !(writed && response.chunks_size() == 0))
+            writer->write(response);
     }
 }
 
@@ -198,6 +226,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     std::vector<Block> & input_blocks,
     tipb::SelectResponse & response) const
 {
+    /// TODO: solve huge block problem
     std::vector<mpp::MPPDataPacket> packet(partition_num);
 
     std::vector<size_t> responses_row_count(partition_num);

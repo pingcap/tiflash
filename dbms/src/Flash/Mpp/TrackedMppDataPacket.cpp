@@ -12,17 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/Transaction/PDTiKVClient.h>
+#include "TrackedMppDataPacket.h"
 
-namespace DB
-{
-
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-}
-
-std::atomic<Timestamp> PDClientHelper::cached_gc_safe_point = 0;
-std::chrono::time_point<std::chrono::system_clock> PDClientHelper::safe_point_last_update_time;
-
-} // namespace DB
+std::atomic<long long> tracked_proto{0};

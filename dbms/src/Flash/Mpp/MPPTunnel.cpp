@@ -46,6 +46,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , thread_manager(newThreadManager())
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
+    , mem_tracker(current_memory_tracker)
 {
     RUNTIME_ASSERT(!(is_local && is_async), log, "is_local: {}, is_async: {}.", is_local, is_async);
     GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
@@ -69,6 +70,7 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , send_queue(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , thread_manager(newThreadManager())
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
+    , mem_tracker(current_memory_tracker)
 {
     RUNTIME_ASSERT(!(is_local && is_async), log, "is_local: {}, is_async: {}.", is_local, is_async);
 }
@@ -189,6 +191,9 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
     String err_msg;
     try
     {
+
+//        if (!current_memory_tracker)
+        MemoryTrackerSetter setter(!current_memory_tracker, mem_tracker);
         /// TODO(fzh) reuse it later
         MPPDataPacketPtr res;
         while (send_queue.pop(res))
