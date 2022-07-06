@@ -1186,7 +1186,7 @@ void RegionKVStoreTest::testKVStore()
             TiKVValue write_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 2333);
             RegionBench::setupPutRequest(request.add_requests(), ColumnFamilyName::Write, write_key, write_value);
         }
-        auto tar = kvs.getRegion(tar_region_id);
+        auto tar = kvs.getRegion(19);
         ASSERT_EQ(
             tar->handleWriteRaftCmd({}, 110, 1, ctx.getTMTContext()),
             EngineStoreApplyRes::None);
