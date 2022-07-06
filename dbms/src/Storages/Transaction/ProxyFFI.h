@@ -125,7 +125,8 @@ EngineStoreApplyRes HandleAdminRaftCmd(
 EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server,
                                        WriteCmdsView cmds,
                                        RaftCmdHeader header);
-uint8_t CanFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t);
+uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id);
+uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t until_succeed);
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
 EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header);
@@ -159,7 +160,8 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
-        .fn_can_flush_data = CanFlushData,
+        .fn_need_flush_data = NeedFlushData,
+        .fn_try_flush_data = TryFlushData,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,

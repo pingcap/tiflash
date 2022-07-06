@@ -128,12 +128,26 @@ EngineStoreApplyRes HandleAdminRaftCmd(
     }
 }
 
-uint8_t CanFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t flush_if_possible)
+uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id)
 {
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        return kvstore->canFlushRegionData(region_id, flush_if_possible, false, *server->tmt);
+        return kvstore->canFlushRegionData(region_id, false, false, *server->tmt);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t until_succeed)
+{
+    try
+    {
+        auto & kvstore = server->tmt->getKVStore();
+        return kvstore->canFlushRegionData(region_id, true, until_succeed, *server->tmt);
     }
     catch (...)
     {
