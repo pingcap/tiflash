@@ -15,12 +15,6 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <cstdint>
-#include <optional>
-
-#include "common/types.h"
-
-
 namespace DB
 {
 namespace tests
