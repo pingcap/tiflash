@@ -880,7 +880,7 @@ BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
         }
     }
     { // if meet timeout, which means part of regions can not get response from leader, try to poll rest tasks
-        TEST_LOG_FMT("rest {}, poll rest tasks onece", tasks.size());
+        TEST_LOG_FMT("rest {}, poll rest tasks once", tasks.size());
 
         while (!tasks.empty())
         {

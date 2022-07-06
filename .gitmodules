@@ -82,3 +82,6 @@
 [submodule "contrib/cpu_features"]
 	path = contrib/cpu_features
 	url = https://github.com/google/cpu_features
+[submodule "contrib/arm-optimized-routines"]
+	path = contrib/arm-optimized-routines
+	url = https://github.com/ARM-software/optimized-routines
