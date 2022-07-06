@@ -39,32 +39,6 @@ void restoreConcurrency(
     }
 }
 
-BlockInputStreamPtr combinedNonJoinedDataStream(
-    DAGPipeline & pipeline,
-    size_t max_threads,
-    const LoggerPtr & log,
-    bool ignore_block)
-{
-    BlockInputStreamPtr ret = nullptr;
-    if (pipeline.streams_with_non_joined_data.size() == 1)
-        ret = pipeline.streams_with_non_joined_data.at(0);
-    else if (pipeline.streams_with_non_joined_data.size() > 1)
-    {
-        if (ignore_block)
-        {
-            ret = std::make_shared<UnionWithoutBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log->identifier());
-            ret->setExtraInfo("combine non joined(ignore block)");
-        }
-        else
-        {
-            ret = std::make_shared<UnionWithBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log->identifier());
-            ret->setExtraInfo("combine non joined");
-        }
-    }
-    pipeline.streams_with_non_joined_data.clear();
-    return ret;
-}
-
 void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
@@ -74,20 +48,12 @@ void executeUnion(
 {
     if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
         return;
-    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log, ignore_block);
-    if (!pipeline.streams.empty())
-    {
-        if (ignore_block)
-            pipeline.firstStream() = std::make_shared<UnionWithoutBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
-        else
-            pipeline.firstStream() = std::make_shared<UnionWithBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
-        pipeline.firstStream()->setExtraInfo(extra_info);
-        pipeline.streams.resize(1);
-    }
-    else if (non_joined_data_stream != nullptr)
-    {
-        pipeline.streams.push_back(non_joined_data_stream);
-    }
+    if (ignore_block)
+        pipeline.firstStream() = std::make_shared<UnionWithoutBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+    else
+        pipeline.firstStream() = std::make_shared<UnionWithBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+    pipeline.firstStream()->setExtraInfo(extra_info);
+    pipeline.streams.resize(1);
 }
 
 ExpressionActionsPtr generateProjectExpressionActions(

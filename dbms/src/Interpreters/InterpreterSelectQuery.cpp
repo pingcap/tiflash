@@ -989,15 +989,9 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
-        BlockInputStreams additional_inputs;
-        if (pipeline.stream_with_non_joined_data)
-        {
-            additional_inputs.push_back(pipeline.stream_with_non_joined_data);
-        }
-
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
-            additional_inputs,
+            BlockInputStreams{pipeline.stream_with_non_joined_data},
             params,
             file_provider,
             final,
@@ -1255,7 +1249,7 @@ void InterpreterSelectQuery::executeUnion(Pipeline & pipeline)
     {
         pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(
             pipeline.streams,
-            pipeline.stream_with_non_joined_data,
+            BlockInputStreams{pipeline.stream_with_non_joined_data},
             max_streams,
             /*req_id=*/"");
         pipeline.stream_with_non_joined_data = nullptr;

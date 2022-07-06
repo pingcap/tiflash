@@ -383,7 +383,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         is_final_agg);
 
     /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.streams.size() > 1)
+    if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
     {
         const Settings & settings = context.getSettingsRef();
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
@@ -403,14 +403,14 @@ void DAGQueryBlockInterpreter::executeAggregation(
     }
     else
     {
-        BlockInputStreamPtr stream_with_non_joined_data = combinedNonJoinedDataStream(pipeline, max_streams, log);
         BlockInputStreams inputs;
         if (!pipeline.streams.empty())
             inputs.push_back(pipeline.firstStream());
         else
             pipeline.streams.resize(1);
-        if (stream_with_non_joined_data)
-            inputs.push_back(stream_with_non_joined_data);
+        if (!pipeline.streams_with_non_joined_data.empty())
+            inputs.push_back(pipeline.streams_with_non_joined_data.at(0));
+
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
             params,

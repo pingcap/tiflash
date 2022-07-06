@@ -94,20 +94,19 @@ private:
 public:
     UnionBlockInputStream(
         BlockInputStreams inputs,
-        BlockInputStreamPtr additional_input_at_end,
+        BlockInputStreams additional_inputs_at_end,
         size_t max_threads,
         const String & req_id,
         ExceptionCallback exception_callback_ = ExceptionCallback())
         : output_queue(std::min(inputs.size(), max_threads) * 5) // reduce contention
         , log(Logger::get(NAME, req_id))
         , handler(*this)
-        , processor(inputs, additional_input_at_end ? BlockInputStreams{additional_input_at_end} : BlockInputStreams{}, max_threads, handler, log)
+        , processor(inputs, additional_inputs_at_end, max_threads, handler, log)
         , exception_callback(exception_callback_)
     {
         // TODO: assert capacity of output_queue is not less than processor.getMaxThreads()
         children = inputs;
-        if (additional_input_at_end)
-            children.push_back(additional_input_at_end);
+        children.insert(children.end(), additional_inputs_at_end.begin(), additional_inputs_at_end.end());
 
         size_t num_children = children.size();
         if (num_children > 1)
