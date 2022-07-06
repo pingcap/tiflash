@@ -1194,8 +1194,6 @@ void RegionKVStoreTest::testKVStore()
         ASSERT_EQ(kvs.canFlushRegionData(19, false, true, ctx.getTMTContext()), true);
         // Force flush until succeed only for testing.
         ASSERT_EQ(kvs.canFlushRegionData(19, true, true, ctx.getTMTContext()), true);
-        // There shall be no data to flush.
-        ASSERT_EQ(kvs.canFlushRegionData(19, false, true, ctx.getTMTContext()), false);
     }
 }
 
