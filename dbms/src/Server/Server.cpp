@@ -152,6 +152,7 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
 namespace
 {
 [[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
@@ -191,6 +192,7 @@ extern const int NO_ELEMENTS_IN_CONFIG;
 extern const int SUPPORT_IS_DISABLED;
 extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int INVALID_CONFIG_PARAMETER;
+extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
 
 namespace Debug
@@ -628,6 +630,10 @@ public:
             }
         }
         flash_grpc_server = builder.BuildAndStart();
+        if (!flash_grpc_server)
+        {
+            throw Exception("Exception happens when start grpc server, the flash.service_addr may be invalid, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
+        }
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
         if (enable_async_server)
@@ -968,7 +974,10 @@ public:
             LOG_DEBUG(log, debug_msg);
     }
 
-    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const { return servers; }
+    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const
+    {
+        return servers;
+    }
 
 private:
     Server & server;
@@ -1004,7 +1013,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
-
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
