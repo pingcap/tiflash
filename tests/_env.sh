@@ -36,5 +36,5 @@ export verbose="false"
 # export verbose="true"
 
 # Setup running env vars
-source ../../_vars.sh
-setup_dylib_path
+#source ../../_vars.sh
+#setup_dylib_path
