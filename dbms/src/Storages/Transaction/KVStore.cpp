@@ -327,7 +327,7 @@ void KVStore::persistRegion(const Region & region, const RegionTaskLock & region
     LOG_FMT_DEBUG(log, "Persist {} done", region.toString(false));
 }
 
-bool KVStore::needFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt)
+bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);

@@ -133,7 +133,7 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id)
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        return kvstore->canFlushRegionData(region_id, false, false, *server->tmt);
+        return kvstore->needFlushRegionData(region_id, *server->tmt);
     }
     catch (...)
     {
@@ -147,7 +147,7 @@ uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        return kvstore->canFlushRegionData(region_id, true, until_succeed, *server->tmt);
+        return kvstore->tryFlushRegionData(region_id, until_succeed, *server->tmt);
     }
     catch (...)
     {
