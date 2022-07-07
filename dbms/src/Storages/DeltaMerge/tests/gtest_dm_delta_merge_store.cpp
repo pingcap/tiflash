@@ -202,7 +202,7 @@ public:
 
         store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 
-        auto & pk_column = block.getByPosition(0).column;
+        const auto & pk_column = block.getByPosition(0).column;
         auto min_pk = pk_column->getInt(0);
         auto max_pk = pk_column->getInt(block.rows() - 1);
         HandleRange range(min_pk, max_pk + 1);
@@ -423,6 +423,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -565,6 +566,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -650,6 +652,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -721,6 +724,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -758,6 +762,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -843,6 +848,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -928,6 +934,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -959,6 +966,7 @@ try
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -1014,6 +1022,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -1053,6 +1062,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         // block_num represents index of current segment
@@ -1112,6 +1122,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1135,6 +1146,7 @@ try
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1158,6 +1170,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1181,6 +1194,7 @@ try
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1242,6 +1256,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1279,6 +1294,7 @@ try
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1317,6 +1333,7 @@ try
                                             /* max_version= */ tso3 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1342,6 +1359,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1367,6 +1385,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1428,6 +1447,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1465,6 +1485,7 @@ try
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1503,6 +1524,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1559,6 +1581,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1596,6 +1619,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1682,6 +1706,7 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* is_raw_read= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
@@ -1790,6 +1815,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1897,6 +1923,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1985,6 +2012,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2088,6 +2116,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2164,6 +2193,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2240,6 +2270,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2316,6 +2347,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2392,6 +2424,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2466,6 +2499,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -2539,6 +2573,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2629,6 +2664,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2763,6 +2799,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* is_raw_read= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2824,6 +2861,7 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* is_raw_read= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr & in = ins[0];
@@ -2923,6 +2961,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2976,6 +3015,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* is_raw_read= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -3005,14 +3045,14 @@ try
     store = reload(table_column_defines, true, 2);
     {
         // check handle column of store
-        auto & h = store->getHandle();
+        const auto & h = store->getHandle();
         ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
         ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
         ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_STRING_TYPE));
     }
     {
         // check column structure of store
-        auto & cols = store->getTableColumns();
+        const auto & cols = store->getTableColumns();
         // version & tag column added
         ASSERT_EQ(cols.size(), 3UL);
     }
@@ -3092,6 +3132,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -3221,6 +3262,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3295,6 +3337,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3326,6 +3369,7 @@ try
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3384,6 +3428,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3434,6 +3479,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3507,6 +3553,7 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* is_raw_read= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
@@ -3600,11 +3647,11 @@ public:
     }
 
 protected:
-    std::unique_ptr<MultiSegmentTestUtil> helper;
+    std::unique_ptr<MultiSegmentTestUtil> helper{};
     DeltaMergeStorePtr store;
     DMContextPtr dm_context;
 
-    UInt64 ps_ver;
+    UInt64 ps_ver{};
     DMTestEnv::PkType pk_type;
 };
 

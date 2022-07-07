@@ -33,10 +33,11 @@ static constexpr size_t UNROLL_BATCH = 64;
 class DMColumnFilterBlockInputStream : public IBlockInputStream
 {
 public:
-    DMColumnFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
+    DMColumnFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_, const bool filter_delete_mark = true)
         : columns_to_read(columns_to_read_)
         , header(toEmptyBlock(columns_to_read))
         , log(&Poco::Logger::get("DMColumnFilterBlockInputStream"))
+        , filter_delete_mark(filter_delete_mark)
     {
         children.emplace_back(input);
         delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
@@ -59,66 +60,81 @@ public:
 
     Block read() override
     {
-        while (true)
+        if (filter_delete_mark)
+        {
+            while (true)
+            {
+                Block block = children.back()->read();
+                if (!block)
+                    return {};
+                if (!block.rows())
+                    continue;
+
+                delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
+
+                size_t rows = block.rows();
+                delete_filter.resize(rows);
+
+                const size_t batch_rows = (rows - 1) / UNROLL_BATCH * UNROLL_BATCH;
+
+                // The following is trying to unroll the filtering operations,
+                // so that optimizer could use vectorized optimization.
+                // The original logic can be seen in #checkWithNextIndex().
+                {
+                    UInt8 * filter_pos = delete_filter.data();
+                    auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
+                    for (size_t i = 0; i < batch_rows; ++i)
+                    {
+                        (*filter_pos) = (*delete_pos) == 0;
+                        ++filter_pos;
+                        ++delete_pos;
+                    }
+                }
+
+                for (size_t i = batch_rows; i < rows; ++i)
+                {
+                    delete_filter[i] = !(*delete_col_data)[i];
+                }
+
+                const size_t passed_count = countBytesInFilter(delete_filter);
+
+                ++total_blocks;
+                total_rows += rows;
+                passed_rows += passed_count;
+
+                // This block is empty after filter, continue to process next block
+                if (passed_count == 0)
+                {
+                    ++complete_not_passed;
+                    continue;
+                }
+
+
+                if (passed_count == rows)
+                {
+                    ++complete_passed;
+                    return getNewBlockByHeader(header, block);
+                }
+
+                Block res;
+                for (auto & cd : columns_to_read)
+                {
+                    auto & column = block.getByName(cd.name);
+                    column.column = column.column->filter(delete_filter, passed_count);
+                    res.insert(std::move(column));
+                }
+                return res;
+            }
+        }
+        else
         {
             Block block = children.back()->read();
             if (!block)
                 return {};
-            if (!block.rows())
-                continue;
-
-            delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
-
-            size_t rows = block.rows();
-            delete_filter.resize(rows);
-
-            const size_t batch_rows = (rows - 1) / UNROLL_BATCH * UNROLL_BATCH;
-
-            // The following is trying to unroll the filtering operations,
-            // so that optimizer could use vectorized optimization.
-            // The original logic can be seen in #checkWithNextIndex().
-            {
-                UInt8 * filter_pos = delete_filter.data();
-                auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
-                for (size_t i = 0; i < batch_rows; ++i)
-                {
-                    (*filter_pos) = (*delete_pos) == 0;
-                    ++filter_pos;
-                    ++delete_pos;
-                }
-            }
-
-            for (size_t i = batch_rows; i < rows; ++i)
-            {
-                delete_filter[i] = !(*delete_col_data)[i];
-            }
-
-            const size_t passed_count = countBytesInFilter(delete_filter);
-
-            ++total_blocks;
-            total_rows += rows;
-            passed_rows += passed_count;
-
-            // This block is empty after filter, continue to process next block
-            if (passed_count == 0)
-            {
-                ++complete_not_passed;
-                continue;
-            }
-
-
-            if (passed_count == rows)
-            {
-                ++complete_passed;
-                return getNewBlockByHeader(header, block);
-            }
-
             Block res;
             for (auto & cd : columns_to_read)
             {
-                auto & column = block.getByName(cd.name);
-                column.column = column.column->filter(delete_filter, passed_count);
-                res.insert(std::move(column));
+                res.insert(block.getByName(cd.name));
             }
             return res;
         }
@@ -141,6 +157,8 @@ private:
     size_t complete_not_passed = 0;
 
     Poco::Logger * log;
+
+    bool filter_delete_mark;
 };
 
 class DMHandleConvertBlockInputStream : public IBlockInputStream

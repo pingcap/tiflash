@@ -59,7 +59,7 @@ private:
     bool is_common_handle;
 };
 
-BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
+BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle, bool filter_delete_mark = true)
 {
     ColumnDefine handle_define(
         TiDBPkColumnID,
@@ -67,11 +67,12 @@ BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefine
         is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE);
     return std::make_shared<DMColumnFilterBlockInputStream>(
         std::make_shared<DebugBlockInputStream>(blocks, is_common_handle),
-        columns);
+        columns,
+        filter_delete_mark);
 }
 } // namespace
 
-TEST(ColumnFilterTest, NormalCase)
+TEST(ColumnFilterTest, NormalCaseFilterDeleteMark)
 {
     BlocksList blocks;
 
@@ -106,6 +107,60 @@ TEST(ColumnFilterTest, NormalCase)
         col = block.getByName(str_col_name);
         val = col.column->getDataAt(0);
         ASSERT_EQ(val, "TiFlash");
+
+        block = in->read();
+        ASSERT_EQ(block.rows(), 0);
+        in->readSuffix();
+    }
+}
+
+TEST(ColumnFilterTest, WithoutFilterDeleteMark)
+{
+    BlocksList blocks;
+
+    {
+        Int64 pk_value = 4;
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 10, 0, str_col_name, "hello", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 20, 0, str_col_name, "world", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 30, 1, str_col_name, "", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "TiFlash", false, 1));
+        blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 1, str_col_name, "Storage", false, 1));
+    }
+
+    ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
+
+    {
+        auto in = genInputStream(blocks, columns, false);
+        in->readPrefix();
+        Block block = in->read();
+        ASSERT_EQ(block.rows(), 1);
+        auto col = block.getByName(str_col_name);
+        auto val = col.column->getDataAt(0);
+        ASSERT_EQ(val, "hello");
+
+        block = in->read();
+        ASSERT_EQ(block.rows(), 1);
+        col = block.getByName(str_col_name);
+        val = col.column->getDataAt(0);
+        ASSERT_EQ(val, "world");
+
+        block = in->read();
+        ASSERT_EQ(block.rows(), 1);
+        col = block.getByName(str_col_name);
+        val = col.column->getDataAt(0);
+        ASSERT_EQ(val, "");
+
+        block = in->read();
+        ASSERT_EQ(block.rows(), 1);
+        col = block.getByName(str_col_name);
+        val = col.column->getDataAt(0);
+        ASSERT_EQ(val, "TiFlash");
+
+        block = in->read();
+        ASSERT_EQ(block.rows(), 1);
+        col = block.getByName(str_col_name);
+        val = col.column->getDataAt(0);
+        ASSERT_EQ(val, "Storage");
 
         block = in->read();
         ASSERT_EQ(block.rows(), 0);
