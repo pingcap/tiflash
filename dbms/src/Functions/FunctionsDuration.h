@@ -69,4 +69,23 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 };
 
+template <typename Impl>
+class FunctionMyDurationToSec : public IFunction
+{
+public:
+    static constexpr auto name = Impl::name;
+
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionMyDurationToSec>(); };
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
+};
+
 } // namespace DB
