@@ -327,12 +327,20 @@ void KVStore::persistRegion(const Region & region, const RegionTaskLock & region
     LOG_FMT_DEBUG(log, "Persist {} done", region.toString(false));
 }
 
-bool KVStore::canFlushRegionData(UInt64 region_id, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt)
+bool KVStore::needFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
-    return canFlushRegionDataImpl(curr_region_ptr, flush_if_possible, try_until_succeed, tmt, region_task_lock);
+    return canFlushRegionDataImpl(curr_region_ptr, false, try_until_succeed, tmt, region_task_lock);
 }
+
+bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt)
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+    const RegionPtr curr_region_ptr = getRegion(region_id);
+    return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock);
+}
+
 
 bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock)
 {

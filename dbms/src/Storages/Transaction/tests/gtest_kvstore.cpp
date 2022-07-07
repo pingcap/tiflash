@@ -1180,20 +1180,10 @@ void RegionKVStoreTest::testKVStore()
         }
     }
     {
-        raft_cmdpb::RaftCmdRequest request;
-        {
-            auto write_key = RecordKVFormat::genKey(1, 2333, 1);
-            TiKVValue write_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 2333);
-            RegionBench::setupPutRequest(request.add_requests(), ColumnFamilyName::Write, write_key, write_value);
-        }
-        auto tar = kvs.getRegion(19);
-        ASSERT_EQ(
-            tar->handleWriteRaftCmd({}, 110, 1, ctx.getTMTContext()),
-            EngineStoreApplyRes::None);
         // There shall be data to flush.
-        ASSERT_EQ(kvs.canFlushRegionData(19, false, true, ctx.getTMTContext()), true);
+        ASSERT_EQ(kvs.needFlushRegionData(19, true, ctx.getTMTContext()), true);
         // Force flush until succeed only for testing.
-        ASSERT_EQ(kvs.canFlushRegionData(19, true, true, ctx.getTMTContext()), true);
+        ASSERT_EQ(kvs.tryFlushRegionData(19, true, true, ctx.getTMTContext()), true);
     }
 }
 
