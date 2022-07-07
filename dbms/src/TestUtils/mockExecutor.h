@@ -89,7 +89,7 @@ public:
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
-    // Currentlt only support inner join, left join and right join.
+    // Currently only support inner join, left join and right join.
     // TODO support more types of join.
     DAGRequestBuilder & join(const DAGRequestBuilder & right, MockAsts exprs);
     DAGRequestBuilder & join(const DAGRequestBuilder & right, MockAsts exprs, ASTTableJoin::Kind kind);

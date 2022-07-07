@@ -295,40 +295,31 @@ private:
             return;
         }
 
+        InputData input;
+
         while (!finish)
         {
-            InputData unprepared_input;
             {
                 std::lock_guard lock(work.unprepared_inputs_mutex);
 
                 if (work.unprepared_inputs.empty())
                     break;
 
-                unprepared_input = work.unprepared_inputs.front();
+                input = work.unprepared_inputs.front();
                 work.unprepared_inputs.pop();
             }
 
-            unprepared_input.in->readPrefix();
+            input.in->readPrefix();
 
-            work.available_inputs.push(unprepared_input);
+            work.available_inputs.push(input);
         }
 
-        while (!finish) /// You may need to stop work earlier than all sources run out.
+        /// The condition is false when all input streams are exhausted or
+        /// an exception occurred then the queue was cancelled.
+        while (work.available_inputs.pop(input))
         {
-            InputData input;
-
-            if (!work.available_inputs.pop(input))
-            {
-                /// All input streams are exhausted.
-                /// Or an exception occurred and the queue was cancelled.
-                break;
-            }
-
             /// The main work.
             Block block = input.in->read();
-
-            if (finish)
-                break;
 
             if (block)
             {
@@ -345,7 +336,7 @@ private:
             }
         }
 
-        // Should read_suffix be called here?
+        // Should readSuffix be called here?
     }
 
     const BlockInputStreams inputs;

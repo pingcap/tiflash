@@ -53,7 +53,7 @@ void executeUnion(
         stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
     else
         stream = std::make_shared<UnionWithBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
-    pipeline.firstStream()->setExtraInfo(extra_info);
+    stream->setExtraInfo(extra_info);
     pipeline.streams.resize(1);
     pipeline.streams_with_non_joined_data.clear();
     pipeline.firstStream() = std::move(stream);
