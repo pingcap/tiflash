@@ -341,7 +341,6 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTCo
     return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock);
 }
 
-
 bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock)
 {
     if (curr_region_ptr == nullptr)
