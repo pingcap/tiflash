@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
+#include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Row.h>
 #include <DataTypes/DataTypeNothing.h>
@@ -24,7 +25,6 @@
 #include <TestUtils/ColumnsToTiPBExpr.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <Common/FmtUtils.h>
 
 #include <ext/enumerate.h>
 #include <set>
@@ -121,7 +121,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     {
         const auto & expected_col = expected.getByPosition(i);
         const auto & actual_col = actual.getByPosition(i);
-        std::cout << "PRINT: " << getColumnsContent({expected_col, actual_col}) << std::endl;
+
         auto cmp_res = columnEqual(expected_col, actual_col);
         if (!cmp_res)
             return cmp_res;
@@ -415,9 +415,13 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
             col_content.push_back(std::make_pair(j, (*cols[i].column)[j].toString()));
 
         /// Add content
-        fmt_buf.joinStr(col_content.begin(), col_content.end(), [](const auto & content, FmtBuffer & fmt_buf) {
-            fmt_buf.append(fmt::format("{}: {}", content.first, content.second));
-        }, ",");
+        fmt_buf.joinStr(
+            col_content.begin(),
+            col_content.end(),
+            [](const auto & content, FmtBuffer & fmt_buf) {
+                fmt_buf.append(fmt::format("{}: {}", content.first, content.second));
+            },
+            ",");
 
         fmt_buf.append(")\n");
         col_content.clear();
