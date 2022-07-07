@@ -356,8 +356,8 @@ struct StringComparisonWithCollatorImpl
     }
 
     static void constantConstant(
-        std::string_view a,
-        std::string_view b,
+        const std::string_view & a,
+        const std::string_view & b,
         const TiDB::TiDBCollatorPtr & collator,
         ResultType & c)
     {
