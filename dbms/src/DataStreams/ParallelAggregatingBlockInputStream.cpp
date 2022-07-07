@@ -198,8 +198,8 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
 
     /// can not cancel parent inputStream or the exception might be lost
     if (!parent.executed)
-        /// kill the processor so ExchangeReceiver will be closed
-        parent.processor.cancel(true);
+        /// use cancel instead of kill to avoid too many useless error message
+        parent.processor.cancel(false);
 }
 
 
