@@ -166,7 +166,7 @@ ALWAYS_INLINE inline bool StringVectorStringVector(
 // Handle str-column compare const-str.
 // - Optimize UTF8_BIN and UTF8MB4_BIN
 //   - Right trim const-str first
-//   - Check if column don NOT contains tail space
+//   - Check if column does NOT contain tail space
 //   - If Op is `EqualsOp` or `NotEqualsOp`, optimize comparison by faster way
 template <typename Op, typename Result>
 ALWAYS_INLINE inline bool StringVectorConstant(
