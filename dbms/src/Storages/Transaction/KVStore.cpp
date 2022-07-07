@@ -331,7 +331,7 @@ bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
-    return canFlushRegionDataImpl(curr_region_ptr, false, try_until_succeed, tmt, region_task_lock);
+    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock);
 }
 
 bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt)
