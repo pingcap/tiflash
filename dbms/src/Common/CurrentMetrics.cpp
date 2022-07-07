@@ -22,6 +22,8 @@
     M(OpenFileForReadWrite)                     \
     M(MemoryTracking)                           \
     M(MemoryTrackingInBackgroundProcessingPool) \
+    M(LogicalCPUCores)                          \
+    M(MemoryCapacity)                           \
     M(PSMVCCNumSnapshots)                       \
     M(PSMVCCSnapshotsList)                      \
     M(RWLockWaitingReaders)                     \
