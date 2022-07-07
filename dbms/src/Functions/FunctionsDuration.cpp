@@ -97,6 +97,57 @@ void FunctionDurationSplit<Impl>::executeImpl(Block & block, const ColumnNumbers
             ErrorCodes::ILLEGAL_COLUMN);
 };
 
+template <typename Impl>
+DataTypePtr FunctionMyDurationToSec<Impl>::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
+{
+    if (!arguments[0].type->isMyTime())
+    {
+        throw Exception(
+            fmt::format("Illegal type {} of the first argument of function {}", arguments[0].type->getName(), getName()),
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    return std::make_shared<DataTypeInt64>();
+}
+
+template <typename Impl>
+void FunctionMyDurationToSec<Impl>::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
+{
+    const auto * from_type = checkAndGetDataType<DataTypeMyDuration>(block.getByPosition(arguments[0]).type.get());
+    if (from_type == nullptr)
+    {
+        throw Exception(
+            fmt::format(
+                "Illegal column {} of the first argument of function {}",
+                block.getByPosition(arguments[0]).column->getName(),
+                name),
+            ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+    using FromFieldType = typename DataTypeMyDuration::FieldType;
+    const auto * col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+    if (col_from != nullptr)
+    {
+        const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+        const size_t size = vec_from.size();
+        auto col_to = ColumnVector<Int64>::create(size);
+        typename ColumnVector<Int64>::Container & vec_to = col_to->getData();
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            MyDuration val(vec_from[i], from_type->getFsp());
+            vec_to[i] = Impl::apply(val);
+        }
+        block.getByPosition(result).column = std::move(col_to);
+    }
+    else
+        throw Exception(
+            fmt::format(
+                "Illegal column {} of the first argument of function {}",
+                block.getByPosition(arguments[0]).column->getName(),
+                name),
+            ErrorCodes::ILLEGAL_COLUMN);
+}
+
 struct DurationSplitHourImpl
 {
     static constexpr auto name = "hour";
@@ -133,10 +184,26 @@ struct DurationSplitMicroSecondImpl
     }
 };
 
+struct TiDBTimeToSecTransformerImpl
+{
+    static constexpr auto name = "tidbTimeToSec";
+    static Int64 apply(const MyDuration & val)
+    {
+        Int64 sign = 1;
+        if (val.isNeg())
+        {
+            sign = -1;
+        }
+        return sign * (val.hours() * 3600 + val.minutes() * 60 + val.seconds());
+    }
+};
+
 using FunctionDurationHour = FunctionDurationSplit<DurationSplitHourImpl>;
 using FunctionDurationMinute = FunctionDurationSplit<DurationSplitMinuteImpl>;
 using FunctionDurationSecond = FunctionDurationSplit<DurationSplitSecondImpl>;
 using FunctionDurationMicroSecond = FunctionDurationSplit<DurationSplitMicroSecondImpl>;
+
+using FunctionToTiDBTimeToSec = FunctionMyDurationToSec<TiDBTimeToSecTransformerImpl>;
 
 void registerFunctionsDuration(FunctionFactory & factory)
 {
@@ -146,5 +213,7 @@ void registerFunctionsDuration(FunctionFactory & factory)
     factory.registerFunction<FunctionDurationMinute>();
     factory.registerFunction<FunctionDurationSecond>();
     factory.registerFunction<FunctionDurationMicroSecond>();
+
+    factory.registerFunction<FunctionToTiDBTimeToSec>();
 }
 } // namespace DB
