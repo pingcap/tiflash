@@ -720,6 +720,25 @@ private:
         }
     }
 
+    static inline std::string_view genConstStrRef(const ColumnConst * c0_const)
+    {
+        std::string_view c0_const_str_ref{};
+        if (c0_const)
+        {
+            if (const auto * c0_const_string = checkAndGetColumn<ColumnString>(&c0_const->getDataColumn()); c0_const_string)
+            {
+                c0_const_str_ref = std::string_view(c0_const_string->getDataAt(0));
+            }
+            else if (const auto * c0_const_fixed_string = checkAndGetColumn<ColumnFixedString>(&c0_const->getDataColumn()); c0_const_fixed_string)
+            {
+                c0_const_str_ref = std::string_view(c0_const_fixed_string->getDataAt(0));
+            }
+            else
+                throw Exception("Logical error: ColumnConst contains not String nor FixedString column", ErrorCodes::ILLEGAL_COLUMN);
+        }
+        return c0_const_str_ref;
+    }
+
     template <typename ResultColumnType>
     bool executeStringWithCollator(
         Block & block,
@@ -734,36 +753,8 @@ private:
         using ResultType = typename ResultColumnType::value_type;
         using StringImpl = StringComparisonWithCollatorImpl<Op<int, int>, ResultType>;
 
-        std::string_view c0_const_str_ref{};
-        std::string_view c1_const_str_ref{};
-
-        if (c0_const)
-        {
-            if (const auto * c0_const_string = checkAndGetColumn<ColumnString>(&c0_const->getDataColumn()); c0_const_string)
-            {
-                c0_const_str_ref = std::string_view(c0_const_string->getDataAt(0));
-            }
-            else if (const auto * c0_const_fixed_string = checkAndGetColumn<ColumnFixedString>(&c0_const->getDataColumn()); c0_const_fixed_string)
-            {
-                c0_const_str_ref = std::string_view(c0_const_fixed_string->getDataAt(0));
-            }
-            else
-                throw Exception("Logical error: ColumnConst contains not String nor FixedString column", ErrorCodes::ILLEGAL_COLUMN);
-        }
-
-        if (c1_const)
-        {
-            if (const auto * c1_const_string = checkAndGetColumn<ColumnString>(&c1_const->getDataColumn()); c1_const_string)
-            {
-                c1_const_str_ref = std::string_view(c1_const_string->getDataAt(0));
-            }
-            else if (const auto * c1_const_fixed_string = checkAndGetColumn<ColumnFixedString>(&c1_const->getDataColumn()); c1_const_fixed_string)
-            {
-                c1_const_str_ref = std::string_view(c1_const_fixed_string->getDataAt(0));
-            }
-            else
-                throw Exception("Logical error: ColumnConst contains not String nor FixedString column", ErrorCodes::ILLEGAL_COLUMN);
-        }
+        std::string_view c0_const_str_ref = genConstStrRef(c0_const);
+        std::string_view c1_const_str_ref = genConstStrRef(c1_const);
 
         if (c0_const && c1_const)
         {
