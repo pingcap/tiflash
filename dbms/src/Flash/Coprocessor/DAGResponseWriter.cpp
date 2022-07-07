@@ -89,12 +89,10 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
         }
     }
 
-    /// add execution_summary for local executor
-    for (auto & p : dag_context.getProfileStreamsMap())
-    {
+    auto fill_execution_summary = [&](const String & executor_id, const BlockInputStreams & streams) {
         ExecutionSummary current;
         /// part 1: local execution info
-        for (auto & stream_ptr : p.second)
+        for (const auto & stream_ptr : streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
             {
@@ -105,16 +103,16 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
             current.concurrency++;
         }
         /// part 2: remote execution info
-        if (merged_remote_execution_summaries.find(p.first) != merged_remote_execution_summaries.end())
+        if (merged_remote_execution_summaries.find(executor_id) != merged_remote_execution_summaries.end())
         {
-            for (auto & remote : merged_remote_execution_summaries[p.first])
+            for (auto & remote : merged_remote_execution_summaries[executor_id])
                 current.merge(remote, false);
         }
         /// part 3: for join need to add the build time
         /// In TiFlash, a hash join's build side is finished before probe side starts,
         /// so the join probe side's running time does not include hash table's build time,
         /// when construct ExecSummaries, we need add the build cost to probe executor
-        auto all_join_id_it = dag_context.getExecutorIdToJoinIdMap().find(p.first);
+        auto all_join_id_it = dag_context.getExecutorIdToJoinIdMap().find(executor_id);
         if (all_join_id_it != dag_context.getExecutorIdToJoinIdMap().end())
         {
             for (const auto & join_executor_id : all_join_id_it->second)
@@ -138,8 +136,27 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response, boo
         }
 
         current.time_processed_ns += dag_context.compile_time_ns;
-        fillTiExecutionSummary(response.add_execution_summaries(), current, p.first, delta_mode);
+        fillTiExecutionSummary(response.add_execution_summaries(), current, executor_id, delta_mode);
+    };
+
+    /// add execution_summary for local executor
+    if (dag_context.return_executor_id)
+    {
+        for (auto & p : dag_context.getProfileStreamsMap())
+            fill_execution_summary(p.first, p.second);
     }
+    else
+    {
+        const auto & profile_streams_map = dag_context.getProfileStreamsMap();
+        assert(profile_streams_map.size() == dag_context.list_based_executors_order.size());
+        for (const auto & executor_id : dag_context.list_based_executors_order)
+        {
+            auto it = profile_streams_map.find(executor_id);
+            assert(it != profile_streams_map.end());
+            fill_execution_summary(executor_id, it->second);
+        }
+    }
+
     for (auto & p : merged_remote_execution_summaries)
     {
         if (local_executors.find(p.first) == local_executors.end())
