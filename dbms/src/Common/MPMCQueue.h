@@ -258,7 +258,7 @@ private:
     }
 
     template <bool need_wait>
-    bool popObj(T & res, const TimePoint * deadline = nullptr)
+    bool popObj(T & res, [[maybe_unused]] const TimePoint * deadline = nullptr)
     {
 #ifdef __APPLE__
         WaitingNode node;
@@ -266,15 +266,14 @@ private:
         thread_local WaitingNode node;
 #endif
         {
-            /// read_pos < write_pos means the queue isn't empty
-            auto pred = [&] {
-                return read_pos < write_pos || !isNormal();
-            };
-
             std::unique_lock lock(mu);
 
             if constexpr (need_wait)
             {
+                /// read_pos < write_pos means the queue isn't empty
+                auto pred = [&] {
+                    return read_pos < write_pos || !isNormal();
+                };
                 wait(lock, reader_head, node, pred, deadline);
             }
 
@@ -301,21 +300,20 @@ private:
     }
 
     template <bool need_wait, typename F>
-    bool assignObj(const TimePoint * deadline, F && assigner)
+    bool assignObj([[maybe_unused]] const TimePoint * deadline, F && assigner)
     {
 #ifdef __APPLE__
         WaitingNode node;
 #else
         thread_local WaitingNode node;
 #endif
-        auto pred = [&] {
-            return write_pos - read_pos < capacity || !isNormal();
-        };
-
         std::unique_lock lock(mu);
 
         if constexpr (need_wait)
         {
+            auto pred = [&] {
+                return write_pos - read_pos < capacity || !isNormal();
+            };
             wait(lock, writer_head, node, pred, deadline);
         }
 
