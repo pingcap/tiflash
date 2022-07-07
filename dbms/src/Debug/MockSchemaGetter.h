@@ -17,16 +17,25 @@
 #include <Debug/MockTiDB.h>
 #include <TiDB/Schema/SchemaGetter.h>
 
+#include <optional>
+
 namespace DB
 {
-
 struct MockSchemaGetter
 {
     TiDB::DBInfoPtr getDatabase(DatabaseID db_id) { return MockTiDB::instance().getDBInfoByID(db_id); }
 
     Int64 getVersion() { return MockTiDB::instance().getVersion(); }
 
-    SchemaDiff getSchemaDiff(Int64 version) { return MockTiDB::instance().getSchemaDiff(version); }
+    std::optional<SchemaDiff> getSchemaDiff(Int64 version)
+    {
+        return MockTiDB::instance().getSchemaDiff(version);
+    }
+
+    bool checkSchemaDiffExists(Int64 version)
+    {
+        return MockTiDB::instance().checkSchemaDiffExists(version);
+    }
 
     TiDB::TableInfoPtr getTableInfo(DatabaseID, TableID table_id) { return MockTiDB::instance().getTableInfoByID(table_id); }
 
