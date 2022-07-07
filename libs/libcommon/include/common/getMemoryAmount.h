@@ -19,5 +19,6 @@
 /**
 * Returns the size of physical memory (RAM) in bytes.
 * Returns 0 on unsupported platform
+* Note: do not support environment under resource isolation mechanism like Docker, CGroup.
 */
 uint64_t getMemoryAmount();
