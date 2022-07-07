@@ -87,6 +87,8 @@ bool pushPacket(size_t source_index,
                               source_index);
                 return false;
             }
+            // packet.stream_ids[i] is corresponding to packet.chunks[i],
+            // indicating which stream_id this chunk belongs to.
             assert(packet->chunks_size() == packet->stream_ids_size());
 
             for (int i = 0; i < packet->stream_ids_size(); ++i)

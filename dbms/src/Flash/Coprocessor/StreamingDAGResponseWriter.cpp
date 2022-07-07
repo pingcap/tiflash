@@ -256,10 +256,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::h
     {
         /// Sending the response to only one node, default the first one.
         serializeToPacket(packet[0], response);
-    }
-    if (input_blocks.empty())
-    {
-        if constexpr (send_exec_summary_at_last)
+
+        // No need to send data when blocks are not empty,
+        // because exec_summary will be sent together with blocks.
+        if (input_blocks.empty())
         {
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
@@ -394,8 +394,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
 {
     static_assert(enable_fine_grained_shuffle);
     assert(exchange_type == tipb::ExchangeType::Hash);
-    assert(fine_grained_shuffle_stream_count > 0 && fine_grained_shuffle_stream_count <= 1024);
-    assert(fine_grained_shuffle_batch_size > 0);
+    assert(fine_grained_shuffle_stream_count <= 1024);
 
     tipb::SelectResponse response;
     if constexpr (send_exec_summary_at_last)

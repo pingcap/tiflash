@@ -790,10 +790,10 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     const uint64_t stream_count = query_block.exchange_sender->fine_grained_shuffle_stream_count();
     const uint64_t batch_size = query_block.exchange_sender->fine_grained_shuffle_batch_size();
 
-    pipeline.transform([&](auto & stream) {
-        // construct writer
-        if (enableFineGrainedShuffle(stream_count))
-        {
+    if (enableFineGrainedShuffle(stream_count))
+    {
+        pipeline.transform([&](auto & stream) {
+            // construct writer
             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, true>>(
                 context.getDAGContext()->tunnel_set,
                 partition_col_ids,
@@ -807,9 +807,13 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
                 batch_size);
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
             stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
-        }
-        else
-        {
+        });
+        RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, Exception, "exchange_sender has to be hash partition when fine grained shuffle is enabled");
+        RUNTIME_CHECK(stream_count <= 1024, Exception, "fine_grained_shuffle_stream_count should not be greater than 1024");
+    }
+    else
+    {
+        pipeline.transform([&](auto & stream) {
             std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, false>>(
                 context.getDAGContext()->tunnel_set,
                 partition_col_ids,
@@ -822,8 +826,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
                 stream_count,
                 batch_size);
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
-        }
-    });
+        });
+    }
 }
 
 void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline)
