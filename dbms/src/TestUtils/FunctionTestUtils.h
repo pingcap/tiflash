@@ -514,10 +514,10 @@ ColumnWithTypeAndName createConstColumn(
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
 
-void printColumns(const ColumnsWithTypeAndName & cols);
+String printColumns(const ColumnsWithTypeAndName & cols);
 
 /// We can designate the range of columns printed with begin and end. range: [begin, end]
-void printColumns(const ColumnsWithTypeAndName & cols, size_t begin, size_t end);
+String printColumns(const ColumnsWithTypeAndName & cols, size_t begin, size_t end);
 
 // This wrapper function only serves to construct columns input for function-like macros,
 // since preprocessor recognizes `{col1, col2, col3}` as three arguments instead of one.
