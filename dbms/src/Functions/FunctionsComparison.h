@@ -757,7 +757,7 @@ private:
             {
                 c1_const_str_ref = std::string_view(c1_const_string->getDataAt(0));
             }
-            else if (const auto * c1_const_fixed_string = checkAndGetColumn<ColumnFixedString>(&c0_const->getDataColumn()); c1_const_fixed_string)
+            else if (const auto * c1_const_fixed_string = checkAndGetColumn<ColumnFixedString>(&c1_const->getDataColumn()); c1_const_fixed_string)
             {
                 c1_const_str_ref = std::string_view(c1_const_fixed_string->getDataAt(0));
             }
