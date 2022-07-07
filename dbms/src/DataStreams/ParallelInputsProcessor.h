@@ -255,10 +255,9 @@ private:
     void thread(size_t thread_num)
     {
         work(thread_num, working_inputs);
+        work(thread_num, working_additional_inputs);
 
         handler.onFinishThread(thread_num);
-
-        work(thread_num, working_additional_inputs);
 
         if (0 == --active_threads)
         {
@@ -314,8 +313,8 @@ private:
             work.available_inputs.push(input);
         }
 
-        /// The condition is false when all input streams are exhausted or
-        /// an exception occurred then the queue was cancelled.
+        // The condition is false when all input streams are exhausted or
+        // an exception occurred then the queue was cancelled.
         while (work.available_inputs.pop(input))
         {
             /// The main work.
@@ -335,8 +334,6 @@ private:
                 }
             }
         }
-
-        // Should readSuffix be called here?
     }
 
     const BlockInputStreams inputs;
