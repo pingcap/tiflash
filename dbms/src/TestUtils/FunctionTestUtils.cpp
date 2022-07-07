@@ -375,14 +375,14 @@ ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<Strin
     return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
 }
 
-String printColumns(const ColumnsWithTypeAndName & cols)
+String getColumnsContent(const ColumnsWithTypeAndName & cols)
 {
     if (cols.size() <= 0)
         return "";
-    return printColumns(cols, 0, cols[0].column->size() - 1);
+    return getColumnsContent(cols, 0, cols[0].column->size() - 1);
 }
 
-String printColumns(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
+String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
 {
     const size_t col_num = cols.size();
     if (col_num <= 0)
