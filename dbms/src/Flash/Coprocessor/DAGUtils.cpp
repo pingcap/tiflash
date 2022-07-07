@@ -561,7 +561,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Quarter, "toQuarter"},
 
     //{tipb::ScalarFuncSig::SecToTime, "cast"},
-    //{tipb::ScalarFuncSig::TimeToSec, "cast"},
+    {tipb::ScalarFuncSig::TimeToSec, "tidbTimeToSec"},
     //{tipb::ScalarFuncSig::TimestampAdd, "cast"},
     {tipb::ScalarFuncSig::ToDays, "tidbToDays"},
     {tipb::ScalarFuncSig::ToSeconds, "tidbToSeconds"},
