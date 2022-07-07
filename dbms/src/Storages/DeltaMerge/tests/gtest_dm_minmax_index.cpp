@@ -1051,6 +1051,12 @@ try
         for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
         {
             {
+                // not null
+                auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
+                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
+                ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
+            }
+            {
                 // has null
                 if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
                 {
@@ -1059,30 +1065,24 @@ try
                 auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), true);
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
-            }
-            {
-                // not null
-                auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
-                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
-                ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
             }
         }
         // datatypes which not support minmax index
         for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
         {
             {
+                // not null
+                auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
+                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
+                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
+            }
+            {
                 // has null
                 if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
                 {
                     continue;
                 }
                 auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), true);
-                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
-                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
-            }
-            {
-                // not null
-                auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
             }
@@ -1101,6 +1101,12 @@ try
         for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
         {
             {
+                // not null
+                auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
+                ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true))));
+                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false))));
+            }
+            {
                 // has null
                 if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
                 {
@@ -1108,12 +1114,6 @@ try
                 }
                 auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), true);
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true))));
-                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false))));
-            }
-            {
-                // not null
-                auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
-                ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true))));
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false))));
             }
         }
@@ -1133,18 +1133,6 @@ try
             for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
             {
                 {
-                    // has null
-                    if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
-                    {
-                        continue;
-                    }
-                    auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), true);
-                    auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
-                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
-                }
-                {
                     // not null
                     auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
                     auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
@@ -1154,10 +1142,30 @@ try
                     auto right_rs_operator_not_match = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
                     ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator_not_match})));
                 }
+                {
+                    // has null
+                    if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
+                    {
+                        continue;
+                    }
+                    auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), true);
+                    auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
+                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
+                }
             }
             // datatypes which not support minmax index
             for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
             {
+                {
+                    // not null
+                    auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
+                    auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
+                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
+                }
                 {
                     // has null
                     if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
@@ -1168,14 +1176,6 @@ try
                     auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
                     auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
 
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
-                }
-                {
-                    // not null
-                    auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
-                    auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
-                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
                 }
@@ -1197,18 +1197,6 @@ try
             for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
             {
                 {
-                    // has null
-                    if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
-                    {
-                        continue;
-                    }
-                    auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), true);
-                    auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
-                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
-                }
-                {
                     // not null
                     auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
                     auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
@@ -1218,10 +1206,29 @@ try
                     auto right_rs_operator_not_match = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator_not_match})));
                 }
+                {
+                    // has null
+                    if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
+                    {
+                        continue;
+                    }
+                    auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), true);
+                    auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
+                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
+                }
             }
             // datatypes which not support minmax index
             for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
             {
+                {
+                    // not null
+                    auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
+                    auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), false);
+                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
+                }
                 {
                     // has null
                     if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
@@ -1232,13 +1239,6 @@ try
                     auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), false);
                     auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
 
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
-                }
-                {
-                    // not null
-                    auto type_value_pair = generateTypeValue(MinMaxTestDatatype(datatype), false);
-                    auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), false);
-                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
                 }
             }
