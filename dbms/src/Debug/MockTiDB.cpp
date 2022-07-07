@@ -668,9 +668,14 @@ std::pair<bool, DatabaseID> MockTiDB::getDBIDByName(const String & database_name
     return std::make_pair(false, -1);
 }
 
-SchemaDiff MockTiDB::getSchemaDiff(Int64 version_)
+std::optional<SchemaDiff> MockTiDB::getSchemaDiff(Int64 version_)
 {
     return version_diff[version_];
+}
+
+bool MockTiDB::checkSchemaDiffExists(Int64 version)
+{
+    return version_diff.find(version) != version_diff.end();
 }
 
 } // namespace DB
