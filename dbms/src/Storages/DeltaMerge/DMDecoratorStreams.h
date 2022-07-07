@@ -40,7 +40,10 @@ public:
         , filter_delete_mark(filter_delete_mark)
     {
         children.emplace_back(input);
-        delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
+        if (filter_delete_mark)
+        {
+            delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
+        }
     }
 
     ~DMColumnFilterBlockInputStream()
