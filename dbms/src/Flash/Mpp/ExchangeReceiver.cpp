@@ -92,7 +92,7 @@ bool pushPacket(size_t source_index,
             for (int i = 0; i < packet->stream_ids_size(); ++i)
             {
                 UInt64 stream_id = packet->stream_ids(i) % msg_channels.size();
-                chunks[stream_id].push_back(packet->mutable_chunks(i));
+                chunks[stream_id].push_back(&packet->chunks(i));
             }
         }
         // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
@@ -123,7 +123,7 @@ bool pushPacket(size_t source_index,
         std::vector<const String *> chunks(packet->chunks_size());
         for (int i = 0; i < packet->chunks_size(); ++i)
         {
-            chunks[i] = packet->mutable_chunks(i);
+            chunks[i] = &packet->chunks(i);
         }
 
         if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
