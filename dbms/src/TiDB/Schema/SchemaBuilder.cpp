@@ -36,6 +36,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <TiDB/Schema/SchemaBuilder-internal.h>
 #include <TiDB/Schema/SchemaBuilder.h>
@@ -540,6 +541,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::SetTiFlashReplica:
     {
         applySetTiFlashReplica(db_info, diff.table_id);
+        break;
+    }
+    case SchemaActionType::SetTiFlashMode:
+    {
+        applySetTiFlashMode(db_info, diff.table_id);
         break;
     }
     default:
@@ -1258,6 +1264,75 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
     LOG_FMT_INFO(log, "Updated replica info for {}", name_mapper.debugCanonicalName(*db_info, table_info));
 }
 
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashMode(const TiDB::DBInfoPtr & db_info, TableID table_id)
+{
+    auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
+
+    if (unlikely(latest_table_info == nullptr))
+    {
+        throw TiFlashException(fmt::format("miss table in TiKV : {}", table_id), Errors::DDL::StaleSchema);
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    auto storage = tmt_context.getStorages().get(latest_table_info->id);
+    if (unlikely(storage == nullptr))
+    {
+        throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *latest_table_info)),
+                               Errors::DDL::MissingTable);
+    }
+
+    applySetTiFlashModeOnLogicalTable(db_info, latest_table_info, storage);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashModeOnLogicalTable(
+    const TiDB::DBInfoPtr & db_info,
+    const TiDB::TableInfoPtr & table_info,
+    const ManageableStoragePtr & storage)
+{
+    applySetTiFlashModeOnPhysicalTable(db_info, table_info, storage);
+
+    if (table_info->isLogicalPartitionTable())
+    {
+        auto & tmt_context = context.getTMTContext();
+        for (const auto & part_def : table_info->partition.definitions)
+        {
+            auto new_part_table_info = table_info->producePartitionTableInfo(part_def.id, name_mapper);
+            auto part_storage = tmt_context.getStorages().get(table_info->id);
+            if (unlikely(part_storage == nullptr))
+            {
+                throw TiFlashException(fmt::format("miss table in TiFlash : {}", name_mapper.debugCanonicalName(*db_info, *new_part_table_info)),
+                                       Errors::DDL::MissingTable);
+            }
+            applySetTiFlashModeOnPhysicalTable(db_info, new_part_table_info, part_storage);
+        }
+    }
+}
+
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashModeOnPhysicalTable(
+    const TiDB::DBInfoPtr & db_info,
+    const TiDB::TableInfoPtr & latest_table_info,
+    const ManageableStoragePtr & storage)
+{
+    if (storage->getTableInfo().tiflash_mode == latest_table_info->tiflash_mode)
+        return;
+
+    TiDB::TableInfo table_info = storage->getTableInfo();
+    table_info.tiflash_mode = latest_table_info->tiflash_mode;
+    AlterCommands commands;
+
+    LOG_FMT_INFO(log, "Updating tiflash mode for {} to {}", name_mapper.debugCanonicalName(*db_info, table_info), TiFlashModeToString(table_info.tiflash_mode));
+
+    auto alter_lock = storage->lockForAlter(getThreadName());
+    storage->alterFromTiDB(alter_lock, commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
+    LOG_FMT_INFO(log, "Updated tiflash mode for {} to {}", name_mapper.debugCanonicalName(*db_info, table_info), TiFlashModeToString(table_info.tiflash_mode));
+}
+
+
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
 {
@@ -1327,6 +1402,8 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             applyRenameLogicalTable(db, table, storage);
             /// Update replica info if needed.
             applySetTiFlashReplicaOnLogicalTable(db, table, storage);
+            /// Update tiflash mode if needed.
+            applySetTiFlashModeOnLogicalTable(db, table, storage);
             /// Alter if needed.
             applyAlterLogicalTable(db, table, storage);
             LOG_FMT_DEBUG(log, "Table {} synced during sync all schemas", name_mapper.debugCanonicalName(*db, *table));
