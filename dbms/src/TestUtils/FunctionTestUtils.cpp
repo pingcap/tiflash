@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Core/ColumnNumbers.h>
+#include <Core/Row.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -23,7 +24,10 @@
 #include <TestUtils/ColumnsToTiPBExpr.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <fmt/core.h>
+
+#include <ext/enumerate.h>
+#include <set>
+
 
 namespace DB
 {
@@ -103,22 +107,117 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     return columnEqual(expected.column, actual.column);
 }
 
-void blockEqual(
+::testing::AssertionResult blockEqual(
     const Block & expected,
     const Block & actual)
 {
     size_t columns = actual.columns();
     size_t expected_columns = expected.columns();
 
-    ASSERT_EQ(expected_columns, columns);
+    ASSERT_EQUAL(expected_columns, columns, "Block size mismatch");
 
     for (size_t i = 0; i < columns; ++i)
     {
         const auto & expected_col = expected.getByPosition(i);
         const auto & actual_col = actual.getByPosition(i);
-        ASSERT_EQ(actual_col.type->getName(), expected_col.type->getName());
-        ASSERT_COLUMN_EQ(expected_col.column, actual_col.column);
+        auto cmp_res = columnEqual(expected_col, actual_col);
+        if (!cmp_res)
+            return cmp_res;
     }
+    return ::testing::AssertionSuccess();
+}
+
+/// size of each column should be the same
+std::multiset<Row> columnsToRowSet(const ColumnsWithTypeAndName & cols)
+{
+    if (cols.empty())
+        return {};
+    if (cols[0].column->empty())
+        return {};
+
+    size_t cols_size = cols.size();
+    std::vector<Row> rows{cols[0].column->size()};
+
+    for (auto & r : rows)
+    {
+        r.resize(cols_size, true);
+    }
+
+    for (auto const & [col_id, col] : ext::enumerate(cols))
+    {
+        for (size_t i = 0, size = col.column->size(); i < size; ++i)
+        {
+            new (rows[i].place(col_id)) Field((*col.column)[i]);
+        }
+    }
+    return {std::make_move_iterator(rows.begin()), std::make_move_iterator(rows.end())};
+}
+
+::testing::AssertionResult columnsEqual(
+    const ColumnsWithTypeAndName & expected,
+    const ColumnsWithTypeAndName & actual,
+    bool _restrict)
+{
+    if (_restrict)
+        return blockEqual(Block(expected), Block(actual));
+
+    auto expect_cols_size = expected.size();
+    auto actual_cols_size = actual.size();
+
+    ASSERT_EQUAL(expect_cols_size, actual_cols_size, "Columns size mismatch");
+
+    for (size_t i = 0; i < expect_cols_size; ++i)
+    {
+        auto const & expect_col = expected[i];
+        auto const & actual_col = actual[i];
+        ASSERT_EQUAL(expect_col.column->getName(), actual_col.column->getName(), fmt::format("Column {} name mismatch", i));
+        ASSERT_EQUAL(expect_col.column->size(), actual_col.column->size(), fmt::format("Column {} size mismatch", i));
+        auto type_eq = dataTypeEqual(expected[i].type, actual[i].type);
+        if (!type_eq)
+            return type_eq;
+    }
+
+    auto const expected_row_set = columnsToRowSet(expected);
+    auto const actual_row_set = columnsToRowSet(actual);
+
+    if (expected_row_set != actual_row_set)
+    {
+        FmtBuffer buf;
+
+        auto expect_it = expected_row_set.begin();
+        auto actual_it = actual_row_set.begin();
+
+        buf.append("Columns row set mismatch\n").append("expected_row_set:\n");
+        for (; expect_it != expected_row_set.end(); ++expect_it, ++actual_it)
+        {
+            buf.joinStr(
+                   expect_it->begin(),
+                   expect_it->end(),
+                   [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
+                   " ")
+                .append("\n");
+            if (*expect_it != *actual_it)
+                break;
+        }
+
+        ++actual_it;
+
+        buf.append("...\nactual_row_set:\n");
+        for (auto it = actual_row_set.begin(); it != actual_it; ++it)
+        {
+            buf.joinStr(
+                   it->begin(),
+                   it->end(),
+                   [](const auto & v, FmtBuffer & fb) { fb.append(v.toString()); },
+                   " ")
+                .append("\n");
+        }
+        buf.append("...\n");
+
+        return testing::AssertionFailure() << buf.toString();
+    }
+
+    return testing::AssertionSuccess();
 }
 
 std::pair<ExpressionActionsPtr, String> buildFunction(
@@ -322,6 +421,11 @@ void printColumns(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
     }
 
     std::cout << output << std::endl;
+}
+
+ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols)
+{
+    return cols;
 }
 
 } // namespace tests
