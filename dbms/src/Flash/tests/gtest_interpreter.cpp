@@ -96,7 +96,7 @@ try
     auto request = context.scan("test_db", "test_table_1")
                        .project({"s1", "s2", "s3"})
                        .project({"s1", "s2"})
-                       .project("s1")
+                       .project({"s1"})
                        .build(context);
     {
         String expected = R"(
@@ -215,7 +215,7 @@ Union: <for test>
     request = context.receive("sender_1")
                   .project({"s1", "s2", "s3"})
                   .project({"s1", "s2"})
-                  .project("s1")
+                  .project({"s1"})
                   .build(context);
     {
         String expected = R"(
@@ -237,7 +237,7 @@ Union: <for test>
     request = context.receive("sender_1")
                   .project({"s1", "s2", "s3"})
                   .project({"s1", "s2"})
-                  .project("s1")
+                  .project({"s1"})
                   .exchangeSender(tipb::Broadcast)
                   .build(context);
     {
