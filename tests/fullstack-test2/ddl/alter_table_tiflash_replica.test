@@ -24,9 +24,24 @@ func> wait_table test t
 │ 1                                  │
 └────────────────────────────────────┘
 
+>> DBGInvoke get_tiflash_mode("test", "t")
+┌─get_tiflash_replica_count(test, t)─┐
+│                                    │
+└────────────────────────────────────┘
+
+mysql> alter table test.t set tiflash mode fast
+
+>> DBGInvoke __refresh_schemas()
+
+>> DBGInvoke get_tiflash_mode("test", "t")
+┌─get_tiflash_replica_count(test, t)─┐
+│ fast                               │
+└────────────────────────────────────┘
+
 # test replica for partition tables
 mysql> drop table if exists test.t
 mysql> create table test.t (x int) partition by range (x) (partition p0 values less than (5), partition p1 values less than (10));
+mysql> alter table test.t set tiflash mode fast
 mysql> alter table test.t set tiflash replica 1
 
 func> wait_table test t
@@ -36,10 +51,20 @@ func> wait_table test t
 │ 1                                  │
 └────────────────────────────────────┘
 
+>> DBGInvoke get_tiflash_mode("test", "t")
+┌─get_tiflash_replica_count(test, t)─┐
+│ fast                               │
+└────────────────────────────────────┘
+
 >> DBGInvoke get_partition_tables_tiflash_replica_count("test", "t")
 ┌─get_partition_tables_tiflash_replica_count(test, t)─┐
 │ 1/1/                                                │
 └─────────────────────────────────────────────────────┘
+
+>> DBGInvoke get_tiflash_mode("test", "t")
+┌─get_tiflash_replica_count(test, t)─┐
+│ fast/fast                          │
+└────────────────────────────────────┘
 
 # test replica for add partition tables after set replica
 mysql> alter table test.t add partition (partition p2 values less than (2010));
@@ -50,6 +75,11 @@ mysql> alter table test.t add partition (partition p2 values less than (2010));
 ┌─get_partition_tables_tiflash_replica_count(test, t)─┐
 │ 1/1/1/                                              │
 └─────────────────────────────────────────────────────┘
+
+>> DBGInvoke get_tiflash_mode("test", "t")
+┌─get_tiflash_replica_count(test, t)─┐
+│ fast/fast/fast                     │
+└────────────────────────────────────┘
 
 
 
