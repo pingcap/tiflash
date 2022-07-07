@@ -523,11 +523,17 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
-    const bool enable_fine_grained_shuffle = exchange_receiver->getEnableFineGrainedShuffleStreamCount();
+
+    const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(exchange_receiver->getFineGrainedShuffleStreamCount());
     String extra_info = "squashing after exchange receiver";
+    size_t stream_count = max_streams;
     if (enable_fine_grained_shuffle)
+    {
         extra_info += ", " + enableFineGrainedShuffleExtraInfo;
-    for (size_t i = 0; i < max_streams; ++i)
+        stream_count = std::min(max_streams, exchange_receiver->getFineGrainedShuffleStreamCount());
+    }
+
+    for (size_t i = 0; i < stream_count; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
                                                                                    log->identifier(),

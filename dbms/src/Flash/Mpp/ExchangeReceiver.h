@@ -97,7 +97,7 @@ enum class ExchangeReceiverState
     CLOSED,
 };
 
-using MsgChannelPtr = std::shared_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>>>;
+using MsgChannelPtr = std::unique_ptr<MPMCQueue<std::shared_ptr<ReceivedMessage>>>;
 
 template <typename RPCContext>
 class ExchangeReceiverBase
@@ -113,7 +113,7 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        bool enable_fine_grained_shuffle);
+        uint64_t fine_grained_shuffle_stream_count);
 
     ~ExchangeReceiverBase();
 
@@ -129,7 +129,7 @@ public:
         size_t stream_id);
 
     size_t getSourceNum() const { return source_num; }
-    uint64_t getEnableFineGrainedShuffleStreamCount() const { return enable_fine_grained_shuffle; }
+    uint64_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
 
     int computeNewThreadCount() const { return thread_count; }
 
@@ -196,7 +196,7 @@ private:
 
     bool collected = false;
     int thread_count = 0;
-    bool enable_fine_grained_shuffle;
+    uint64_t fine_grained_shuffle_stream_count;
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>
