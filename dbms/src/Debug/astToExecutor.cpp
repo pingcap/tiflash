@@ -1540,7 +1540,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
             }
 
             TiDB::ColumnInfo ci;
-            if (func->name == "count")
+            if (func->name == "count" || func->name == "sum")
             {
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
