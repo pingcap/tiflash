@@ -122,7 +122,7 @@ __attribute__((flatten, always_inline)) inline void LoopOneColumn(
 
 // Handle str-column compare str-column.
 // - Optimize UTF8_BIN and UTF8MB4_BIN
-//   - Check if columns don NOT contains tail space
+//   - Check if columns do NOT contain tail space
 //   - If Op is `EqualsOp` or `NotEqualsOp`, optimize comparison by faster way
 template <typename Op, typename Result>
 ALWAYS_INLINE inline bool StringVectorStringVector(
