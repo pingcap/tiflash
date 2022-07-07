@@ -378,8 +378,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::p
             responses_row_count[part_id] += dest_block.rows();
             chunk_codec_stream->encode(dest_block, 0, dest_block.rows());
             packet[part_id].add_chunks(chunk_codec_stream->getString());
-            // Fine grained shuffle is disabled, so all packet will be handled by receiver's first stream.
-            packet[part_id].add_stream_ids(0);
             chunk_codec_stream->clear();
         }
     }
