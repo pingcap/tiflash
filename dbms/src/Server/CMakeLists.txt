@@ -22,6 +22,7 @@ option(ENABLE_CLICKHOUSE_SERVER "Enable server" ${ENABLE_CLICKHOUSE_ALL})
 option(ENABLE_CLICKHOUSE_CLIENT "Enable client" ${ENABLE_CLICKHOUSE_ALL})
 option(ENABLE_TIFLASH_DTTOOL "Enable dttool: tools to manage dmfile" ${ENABLE_CLICKHOUSE_ALL})
 option(ENABLE_TIFLASH_DTWORKLOAD "Enable dtworkload: tools to test and stress DeltaTree" ${ENABLE_CLICKHOUSE_ALL})
+option(ENABLE_TIFLASH_PAGEWORKLOAD "Enable pageworkload: tools to test and stress PageStorage" ${ENABLE_CLICKHOUSE_ALL})
 option(ENABLE_TIFLASH_PAGECTL "Enable pagectl: tools to debug page storage" ${ENABLE_CLICKHOUSE_ALL})
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
@@ -33,6 +34,7 @@ add_library (clickhouse-server-lib
     NotFoundHandler.cpp
     PingRequestHandler.cpp
     RootRequestHandler.cpp
+    ServerInfo.cpp
     Server.cpp
     StatusFile.cpp
     TCPHandler.cpp
@@ -136,6 +138,9 @@ endif ()
 if (ENABLE_TIFLASH_DTWORKLOAD)
     target_link_libraries(tiflash dt-workload-lib)
 endif ()
+if (ENABLE_TIFLASH_PAGEWORKLOAD)
+    target_link_libraries(tiflash page-workload-lib)
+endif()
 if (ENABLE_TIFLASH_PAGECTL)
     target_link_libraries(tiflash page-ctl-lib)
 endif ()

@@ -20,9 +20,6 @@
 #include <Parsers/ASTFunction.h>
 #include <tipb/executor.pb.h>
 
-#include <initializer_list>
-#include <unordered_map>
-
 namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;
@@ -31,8 +28,12 @@ using MockColumnInfoList = std::initializer_list<MockColumnInfo>;
 using MockTableName = std::pair<String, String>;
 using MockOrderByItem = std::pair<String, bool>;
 using MockOrderByItems = std::initializer_list<MockOrderByItem>;
+using MockPartitionByItem = std::pair<String, bool>;
+using MockPartitionByItems = std::initializer_list<MockPartitionByItem>;
 using MockColumnNames = std::initializer_list<String>;
+using MockColumnNamesVec = std::vector<String>;
 using MockAsts = std::initializer_list<ASTPtr>;
+using MockWindowFrame = mock::MockWindowFrame;
 
 class MockDAGRequestContext;
 
@@ -84,6 +85,7 @@ public:
     DAGRequestBuilder & project(const String & col_name);
     DAGRequestBuilder & project(MockAsts expr);
     DAGRequestBuilder & project(MockColumnNames col_names);
+    DAGRequestBuilder & project(MockColumnNamesVec col_names);
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
@@ -95,6 +97,13 @@ public:
     // aggregation
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
     DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
+
+    // window
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame);
+    DAGRequestBuilder & window(MockAsts window_funcs, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame);
+    DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort);
+    DAGRequestBuilder & sort(MockOrderByItems order_by_list, bool is_partial_sort);
 
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
@@ -164,6 +173,8 @@ ASTPtr buildLiteral(const Field & field);
 ASTPtr buildFunction(MockAsts exprs, const String & name);
 ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 
+MockWindowFrame buildDefaultRowsFrame();
+
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
@@ -172,7 +183,11 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 #define gt(expr1, expr2) makeASTFunction("greater", (expr1), (expr2))
 #define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
-#define NOT(expr) makeASTFunction("not", (expr1), (expr2))
-#define Max(expr) makeASTFunction("max", expr)
+#define NOT(expr) makeASTFunction("not", (expr))
+#define Max(expr) makeASTFunction("max", (expr))
+/// Window functions
+#define RowNumber() makeASTFunction("RowNumber")
+#define Rank() makeASTFunction("Rank")
+#define DenseRank() makeASTFunction("DenseRank")
 
 } // namespace DB::tests

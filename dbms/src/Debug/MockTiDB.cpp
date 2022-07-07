@@ -221,7 +221,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
             {
                 String & name = string_tokens[index];
                 index_info.idx_cols[index].name = name;
-                index_info.idx_cols[index].offset = pk_column_pos_map[name];
                 index_info.idx_cols[index].length = -1;
             }
         }
@@ -302,7 +301,7 @@ int MockTiDB::newTables(
         tables_by_id.emplace(table->table_info.id, table);
         tables_by_name.emplace(qualified_name, table);
 
-        AffectedOption opt;
+        AffectedOption opt{};
         opt.schema_id = table->database_id;
         opt.table_id = table->id();
         opt.old_schema_id = table->database_id;
@@ -571,7 +570,7 @@ void MockTiDB::renameTables(const std::vector<std::tuple<std::string, std::strin
         tables_by_name.erase(qualified_name);
         tables_by_name.emplace(new_qualified_name, new_table);
 
-        AffectedOption opt;
+        AffectedOption opt{};
         opt.schema_id = table->database_id;
         opt.table_id = new_table->id();
         opt.old_schema_id = table->database_id;
@@ -669,9 +668,14 @@ std::pair<bool, DatabaseID> MockTiDB::getDBIDByName(const String & database_name
     return std::make_pair(false, -1);
 }
 
-SchemaDiff MockTiDB::getSchemaDiff(Int64 version_)
+std::optional<SchemaDiff> MockTiDB::getSchemaDiff(Int64 version_)
 {
     return version_diff[version_];
+}
+
+bool MockTiDB::checkSchemaDiffExists(Int64 version)
+{
+    return version_diff.find(version) != version_diff.end();
 }
 
 } // namespace DB

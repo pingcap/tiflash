@@ -281,7 +281,7 @@ void readFile(T & file,
     }
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::TiFlashException(fmt::format("No enough data in file {}, read bytes: {} , expected bytes: {}", file->getFileName(), bytes_read, expected_bytes),
+        throw DB::TiFlashException(fmt::format("No enough data in file {}, read bytes: {}, expected bytes: {}, offset: {}", file->getFileName(), bytes_read, expected_bytes, offset),
                                    Errors::PageStorage::FileSizeNotMatch);
 }
 

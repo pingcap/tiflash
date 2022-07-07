@@ -29,7 +29,6 @@
 #include <unordered_map>
 namespace DB
 {
-
 const Int8 VAR_SIZE = 0;
 
 extern const String uniq_raw_res_name;
@@ -333,7 +332,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::DecimalIsFalseWithNull, "isFalseWithNull"},
 
     //{tipb::ScalarFuncSig::LeftShift, "cast"},
-    //{tipb::ScalarFuncSig::RightShift, "cast"},
+    {tipb::ScalarFuncSig::RightShift, "bitShiftRight"},
 
     //{tipb::ScalarFuncSig::BitCount, "cast"},
     //{tipb::ScalarFuncSig::GetParamString, "cast"},
@@ -562,7 +561,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Quarter, "toQuarter"},
 
     //{tipb::ScalarFuncSig::SecToTime, "cast"},
-    //{tipb::ScalarFuncSig::TimeToSec, "cast"},
+    {tipb::ScalarFuncSig::TimeToSec, "tidbTimeToSec"},
     //{tipb::ScalarFuncSig::TimestampAdd, "cast"},
     {tipb::ScalarFuncSig::ToDays, "tidbToDays"},
     {tipb::ScalarFuncSig::ToSeconds, "tidbToSeconds"},
@@ -769,6 +768,10 @@ const String & getFunctionName(const tipb::Expr & expr)
     if (isAggFunctionExpr(expr))
     {
         return getAggFunctionName(expr);
+    }
+    else if (isWindowFunctionExpr(expr))
+    {
+        return getWindowFunctionName(expr);
     }
     else
     {
@@ -1429,6 +1432,7 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
         return tipb::EncodeType::TypeDefault;
     return encode_type;
 }
+
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
 {
     static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
