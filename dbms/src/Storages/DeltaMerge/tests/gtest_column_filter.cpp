@@ -130,7 +130,7 @@ TEST(ColumnFilterTest, WithoutFilterDeleteMark)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = genInputStream(blocks, columns, false);
+        auto in = genInputStream(blocks, columns, false, false);
         in->readPrefix();
         Block block = in->read();
         ASSERT_EQ(block.rows(), 1);
@@ -149,6 +149,7 @@ TEST(ColumnFilterTest, WithoutFilterDeleteMark)
         col = block.getByName(str_col_name);
         val = col.column->getDataAt(0);
         ASSERT_EQ(val, "");
+
 
         block = in->read();
         ASSERT_EQ(block.rows(), 1);
