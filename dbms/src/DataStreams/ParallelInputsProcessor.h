@@ -131,8 +131,6 @@ public:
     /// Ask all sources to stop earlier than they run out.
     void cancel(bool kill)
     {
-        finish = true;
-
         working_inputs.available_inputs.cancel();
         working_additional_inputs.available_inputs.cancel();
 
@@ -181,6 +179,7 @@ private:
         explicit WorkingInputs(const BlockInputStreams & inputs_)
             : available_inputs(inputs_.size())
             , active_inputs(inputs_.size())
+            , unprepared_inputs(inputs_.size())
         {
             for (size_t i = 0; i < inputs_.size(); ++i)
                 unprepared_inputs.emplace(inputs_[i], i);
@@ -212,11 +211,8 @@ private:
           * First, streams are located here.
           * After a stream was prepared, it is moved to "available_inputs" for reading.
           */
-        using UnpreparedInputs = std::queue<InputData>;
+        using UnpreparedInputs = MPMCQueue<InputData>;
         UnpreparedInputs unprepared_inputs;
-
-        /// For operations with unprepared_inputs.
-        std::mutex unprepared_inputs_mutex;
     };
 
     void cancelStreams(const BlockInputStreams & streams, bool kill)
@@ -261,7 +257,7 @@ private:
 
         if (0 == --active_threads)
         {
-            handler.onFinish(); /// TODO If in `onFinish` or `onFinishThread` there is an exception, then std::terminate is called.
+            handler.onFinish();
         }
     }
 
@@ -285,8 +281,8 @@ private:
     }
 
     /// This function may be called in different threads.
-    /// If finish is not true and no exception occurs, we can ensure that the work is
-    /// all done when the function returns in any thread.
+    /// If no exception occurs, we can ensure that the work is all done when the function
+    /// returns in any thread.
     void loop(size_t thread_num, WorkingInputs & work)
     {
         if (work.active_inputs == 0)
@@ -296,18 +292,8 @@ private:
 
         InputData input;
 
-        while (!finish)
+        while (work.unprepared_inputs.tryPop(input))
         {
-            {
-                std::lock_guard lock(work.unprepared_inputs_mutex);
-
-                if (work.unprepared_inputs.empty())
-                    break;
-
-                input = work.unprepared_inputs.front();
-                work.unprepared_inputs.pop();
-            }
-
             input.in->readPrefix();
 
             work.available_inputs.push(input);
@@ -349,8 +335,6 @@ private:
 
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};
-    /// Finish the threads work (before the sources run out).
-    std::atomic<bool> finish{false};
     /// Wait for the completion of all threads.
     std::atomic<bool> joined_threads{false};
 
