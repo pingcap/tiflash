@@ -58,7 +58,7 @@ __attribute__((flatten, always_inline, pure)) inline std::string_view RightTrim(
     return end == std::string_view::npos ? std::string_view{} : std::string_view(v.data(), end + 1);
 }
 
-__attribute__((flatten, always_inline, pure)) inline int RtrimeStrCompare(const std::string_view & va, const std::string_view & vb)
+__attribute__((flatten, always_inline, pure)) inline int RtrimStrCompare(const std::string_view & va, const std::string_view & vb)
 {
     return RawStrCompare(RightTrim(va), RightTrim(vb));
 }
@@ -149,7 +149,7 @@ ALWAYS_INLINE inline bool StringVectorStringVector(
             }
             else
             {
-                c[i] = Op::apply(RtrimeStrCompare(va, vb), 0);
+                c[i] = Op::apply(RtrimStrCompare(va, vb), 0);
             }
         });
 

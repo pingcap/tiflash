@@ -183,10 +183,11 @@ public:
     explicit BinCollator(int32_t id)
         : ITiDBCollator(id)
     {}
+
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
         if constexpr (padding)
-            return DB::RtrimeStrCompare({s1, length1}, {s2, length2});
+            return DB::RtrimStrCompare({s1, length1}, {s2, length2});
         else
             return DB::RawStrCompare({s1, length1}, {s2, length2});
     }
@@ -195,8 +196,7 @@ public:
     {
         if constexpr (padding)
         {
-            auto v = rtrim(s, length);
-            return StringRef(v.data(), v.length());
+            return StringRef(rtrim(s, length));
         }
         else
         {
