@@ -126,6 +126,8 @@ CLIService<Func, Args>::TiFlashProxyConfig::TiFlashProxyConfig(Poco::Util::Layer
         args.push_back(v.first.data());
         args.push_back(v.second.data());
     }
+    // Start the decryption service without starting the raftstore service
+    args.push_back("--only-decryption");
     is_proxy_runnable = true;
 }
 template <typename Func, typename Args>

@@ -354,6 +354,10 @@ public:
     std::vector<tipb::FieldType> output_field_types;
     std::vector<Int32> output_offsets;
 
+    /// Hold the order of list based executors.
+    /// It is used to ensure that the order of Execution summary of list based executors is the same as the order of list based executors.
+    std::vector<String> list_based_executors_order;
+
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
@@ -361,7 +365,7 @@ private:
 private:
     /// Hold io for correcting the destruction order.
     BlockIO io;
-    /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams
+    /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
