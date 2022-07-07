@@ -52,7 +52,7 @@ class IProfilingBlockInputStream : public IBlockInputStream
 public:
     IProfilingBlockInputStream();
 
-    Block read() override final;
+    Block read() override;
 
     Block read(FilterPtr & res_filter, bool return_filter) override final;
 
@@ -203,6 +203,19 @@ protected:
     /// Minimums and maximums. The first row of the block - minimums, the second - the maximums.
     Block extremes;
 
+    /// The approximate total number of rows to read. For progress bar.
+    size_t total_rows_approx = 0;
+
+    /// The limit on the number of rows/bytes has been exceeded, and you need to stop execution on the next `read` call, as if the thread has run out.
+    bool limit_exceeded_need_break = false;
+
+    bool enabled_extremes = false;
+
+    /// Limitations and quotas.
+
+    LocalLimits limits;
+
+    QuotaForIntervals * quota = nullptr; /// If nullptr - the quota is not used.
 
     void addChild(BlockInputStreamPtr & child)
     {
@@ -210,21 +223,19 @@ protected:
         children.push_back(child);
     }
 
+    /** Check limits and quotas.
+      * But only those that can be checked within each separate stream.
+      */
+    bool checkTimeLimit();
+
+    void updateExtremes(Block & block);
+
+    void checkQuota(Block & block);
+
+
 private:
-    bool enabled_extremes = false;
-
-    /// The limit on the number of rows/bytes has been exceeded, and you need to stop execution on the next `read` call, as if the thread has run out.
-    bool limit_exceeded_need_break = false;
-
-    /// Limitations and quotas.
-
-    LocalLimits limits;
-
-    QuotaForIntervals * quota = nullptr; /// If nullptr - the quota is not used.
     double prev_elapsed = 0;
 
-    /// The approximate total number of rows to read. For progress bar.
-    size_t total_rows_approx = 0;
 
     /// The successors must implement this function.
     virtual Block readImpl() = 0;
@@ -236,14 +247,6 @@ private:
 
     /// Here you need to do a finalization, which can lead to an exception.
     virtual void readSuffixImpl() {}
-
-    void updateExtremes(Block & block);
-
-    /** Check limits and quotas.
-      * But only those that can be checked within each separate stream.
-      */
-    bool checkTimeLimit();
-    void checkQuota(Block & block);
 
 
     template <typename F>

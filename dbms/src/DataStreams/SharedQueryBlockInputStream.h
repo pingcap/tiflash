@@ -30,6 +30,10 @@ namespace FailPoints
 extern const char random_sharedquery_failpoint[];
 } // namespace FailPoints
 
+namespace ErrorCodes
+{
+extern const int TOO_MANY_ROWS_OR_BYTES;
+} // namespace ErrorCodes
 /** This block input stream is used by SharedQuery.
   * It enable multiple threads read from one stream.
  */
@@ -46,7 +50,7 @@ public:
         children.push_back(in);
     }
 
-    ~SharedQueryBlockInputStream()
+    ~SharedQueryBlockInputStream() override
     {
         try
         {
@@ -86,6 +90,82 @@ public:
         waitThread();
     }
 
+    Block read() override
+    {
+        if (total_rows_approx)
+        {
+            progressImpl(Progress(0, 0, total_rows_approx));
+            total_rows_approx = 0;
+        }
+
+        mutex.lock();
+        if (!info.started)
+        {
+            info.total_stopwatch.start();
+            info.started = true;
+        }
+
+        Block res;
+
+        if (isCancelledOrThrowIfKilled())
+        {
+            mutex.unlock();
+            return res;
+        }
+
+        auto start_time = info.total_stopwatch.elapsed();
+        mutex.unlock();
+
+        if (!checkTimeLimit())
+            limit_exceeded_need_break = true;
+
+        if (!limit_exceeded_need_break)
+        {
+            res = readImpl();
+        }
+
+        if (res)
+        {
+            mutex.lock();
+            info.update(res);
+
+            if (enabled_extremes)
+                updateExtremes(res);
+
+            if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
+                limit_exceeded_need_break = true;
+
+            if (quota != nullptr)
+                checkQuota(res);
+            mutex.unlock();
+        }
+        else
+        {
+            /** If the thread is over, then we will ask all children to abort the execution.
+          * This makes sense when running a query with LIMIT
+          * - there is a situation when all the necessary data has already been read,
+          *   but children sources are still working,
+          *   herewith they can work in separate threads or even remotely.
+          */
+            cancel(false);
+        }
+
+        progress(Progress(res.rows(), res.bytes()));
+
+#ifndef NDEBUG
+        if (res)
+        {
+            Block header = getHeader();
+            if (header)
+                assertBlocksHaveEqualStructure(res, header, getName());
+        }
+#endif
+        mutex.lock();
+        info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+        mutex.unlock();
+        return res;
+    }
+
     /** Different from the default implementation by trying to cancel the queue
       */
     void cancel(bool kill) override
@@ -106,7 +186,7 @@ public:
         ptr->cancel(kill);
     }
 
-    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    void collectNewThreadCountOfThisLevel(int & cnt) override
     {
         ++cnt;
     }
