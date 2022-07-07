@@ -68,7 +68,7 @@ try
         else
             expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + limit_num))};
 
-        executeStreams(request, expect_cols);
+        ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);
     }
 }
 CATCH
