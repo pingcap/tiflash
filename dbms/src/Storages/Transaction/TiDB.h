@@ -338,6 +338,7 @@ enum class TiFlashMode
     Normal,
     Fast,
 };
+
 struct TableInfo
 {
     TableInfo() = default;
@@ -419,5 +420,8 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+
+String TiFlashModeToString(TiFlashMode tiflash_mode);
+TiFlashMode parseTiFlashMode(String mode_str);
 
 } // namespace TiDB
