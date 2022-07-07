@@ -158,8 +158,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
                 packet.add_chunks(chunk_codec_stream->getString());
-                // Fine grained shuffle is disabled, all packet need to be handled by receiver's first stream.
-                packet.add_stream_ids(0);
                 chunk_codec_stream->clear();
             }
             writer->write(packet);
@@ -396,7 +394,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
 {
     static_assert(enable_fine_grained_shuffle);
     assert(exchange_type == tipb::ExchangeType::Hash);
-    assert(fine_grained_shuffle_stream_count > 0);
+    assert(fine_grained_shuffle_stream_count > 0 && fine_grained_shuffle_stream_count <= 1024);
     assert(fine_grained_shuffle_batch_size > 0);
 
     tipb::SelectResponse response;
@@ -406,7 +404,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
     std::vector<mpp::MPPDataPacket> packet(partition_num);
     std::vector<size_t> responses_row_count(partition_num, 0);
 
-    // fine_grained_shuffle_stream_count is in [0, 1024], so will not overflow.
+    // fine_grained_shuffle_stream_count is in [0, 1024], and partition_num is uint16_t, so will not overflow.
     uint32_t bucket_num = partition_num * fine_grained_shuffle_stream_count;
     handleExecSummary<send_exec_summary_at_last>(blocks, packet, response);
     if (!blocks.empty())

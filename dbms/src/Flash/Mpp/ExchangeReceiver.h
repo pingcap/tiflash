@@ -171,6 +171,7 @@ private:
         const LoggerPtr & log);
 
     void finishAllMsgChannels();
+    void cancelAllMsgChannels();
 
     std::shared_ptr<RPCContext> rpc_context;
 

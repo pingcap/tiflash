@@ -59,7 +59,7 @@ extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
 namespace
 {
-const String EnableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
+const String enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
 }
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
@@ -361,7 +361,7 @@ void DAGQueryBlockInterpreter::executeWindow(
         /// Window function can be multiple threaded when fine grained shuffle is enabled.
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<WindowBlockInputStream>(stream, window_description, log->identifier());
-            stream->setExtraInfo(EnableFineGrainedShuffleExtraInfo);
+            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
         });
     }
     else
@@ -464,7 +464,7 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
     const Settings & settings = context.getSettingsRef();
     String extra_info;
     if (enable_fine_grained_shuffle)
-        extra_info = EnableFineGrainedShuffleExtraInfo;
+        extra_info = enableFineGrainedShuffleExtraInfo;
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
@@ -490,7 +490,7 @@ void DAGQueryBlockInterpreter::orderStreams(DAGPipeline & pipeline, SortDescript
                 settings.max_bytes_before_external_sort,
                 context.getTemporaryPath(),
                 log->identifier());
-            stream->setExtraInfo(EnableFineGrainedShuffleExtraInfo);
+            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
         });
     }
     else
@@ -526,7 +526,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
     const bool enable_fine_grained_shuffle = exchange_receiver->getEnableFineGrainedShuffleStreamCount();
     String extra_info = "squashing after exchange receiver";
     if (enable_fine_grained_shuffle)
-        extra_info += ", " + EnableFineGrainedShuffleExtraInfo;
+        extra_info += ", " + enableFineGrainedShuffleExtraInfo;
     for (size_t i = 0; i < max_streams; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
@@ -806,7 +806,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
                 stream_count,
                 batch_size);
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
-            stream->setExtraInfo(EnableFineGrainedShuffleExtraInfo);
+            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
         }
         else
         {

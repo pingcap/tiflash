@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
@@ -65,10 +66,10 @@ bool pushPacket(size_t source_index,
 
     const mpp::Error * error_ptr = nullptr;
     if (packet->has_error())
-        error_ptr = packet->mutable_error();
+        error_ptr = &packet->error();
     const String * resp_ptr = nullptr;
     if (!packet->data().empty())
-        resp_ptr = packet->mutable_data();
+        resp_ptr = &packet->data();
 
     if constexpr (enable_fine_grained_shuffle)
     {
@@ -462,7 +463,7 @@ template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::cancel()
 {
     setEndState(ExchangeReceiverState::CANCELED);
-    finishAllMsgChannels();
+    cancelAllMsgChannels();
 }
 
 template <typename RPCContext>
@@ -745,6 +746,9 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 if (!select_resp->chunks().empty())
                 {
                     assert(recv_msg->chunks.empty());
+                    // Fine grained shuffle should only be enabled when sending data to TiFlash node.
+                    // So all data should be encoded into MPPDataPacket.chunks.
+                    RUNTIME_CHECK(!enable_fine_grained_shuffle, Exception, "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
                     result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
                 }
             }
@@ -823,6 +827,13 @@ void ExchangeReceiverBase<RPCContext>::finishAllMsgChannels()
 {
     for (auto & msg_channel : msg_channels)
         msg_channel->finish();
+}
+
+template <typename RPCContext>
+void ExchangeReceiverBase<RPCContext>::cancelAllMsgChannels()
+{
+    for (auto & msg_channel : msg_channels)
+        msg_channel->cancel();
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.
