@@ -33,6 +33,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/CollationOperatorOptimized.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsLogical.h>
 #include <Functions/IFunction.h>
@@ -301,6 +302,12 @@ struct StringComparisonWithCollatorImpl
         const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<ResultType> & c)
     {
+        bool optimized_path = StringVectorStringVector<Op>(a_data, a_offsets, b_data, b_offsets, collator, c);
+        if (optimized_path)
+        {
+            return;
+        }
+
         size_t size = a_offsets.size();
 
         for (size_t i = 0; i < size; ++i)
@@ -317,10 +324,17 @@ struct StringComparisonWithCollatorImpl
     static void NO_INLINE stringVectorConstant(
         const ColumnString::Chars_t & a_data,
         const ColumnString::Offsets & a_offsets,
-        const std::string & b,
+        const std::string_view & b,
         const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<ResultType> & c)
     {
+        bool optimized_path = StringVectorConstant<Op>(a_data, a_offsets, b, collator, c);
+
+        if (optimized_path)
+        {
+            return;
+        }
+
         size_t size = a_offsets.size();
         ColumnString::Offset b_size = b.size();
         const char * b_data = reinterpret_cast<const char *>(b.data());
@@ -332,7 +346,7 @@ struct StringComparisonWithCollatorImpl
     }
 
     static void constantStringVector(
-        const std::string & a,
+        const std::string_view & a,
         const ColumnString::Chars_t & b_data,
         const ColumnString::Offsets & b_offsets,
         const TiDB::TiDBCollatorPtr & collator,
@@ -342,8 +356,8 @@ struct StringComparisonWithCollatorImpl
     }
 
     static void constantConstant(
-        const std::string & a,
-        const std::string & b,
+        const std::string_view & a,
+        const std::string_view & b,
         const TiDB::TiDBCollatorPtr & collator,
         ResultType & c)
     {
@@ -706,6 +720,25 @@ private:
         }
     }
 
+    static inline std::string_view genConstStrRef(const ColumnConst * c0_const)
+    {
+        std::string_view c0_const_str_ref{};
+        if (c0_const)
+        {
+            if (const auto * c0_const_string = checkAndGetColumn<ColumnString>(&c0_const->getDataColumn()); c0_const_string)
+            {
+                c0_const_str_ref = std::string_view(c0_const_string->getDataAt(0));
+            }
+            else if (const auto * c0_const_fixed_string = checkAndGetColumn<ColumnFixedString>(&c0_const->getDataColumn()); c0_const_fixed_string)
+            {
+                c0_const_str_ref = std::string_view(c0_const_fixed_string->getDataAt(0));
+            }
+            else
+                throw Exception("Logical error: ColumnConst contains not String nor FixedString column", ErrorCodes::ILLEGAL_COLUMN);
+        }
+        return c0_const_str_ref;
+    }
+
     template <typename ResultColumnType>
     bool executeStringWithCollator(
         Block & block,
@@ -720,10 +753,13 @@ private:
         using ResultType = typename ResultColumnType::value_type;
         using StringImpl = StringComparisonWithCollatorImpl<Op<int, int>, ResultType>;
 
+        std::string_view c0_const_str_ref = genConstStrRef(c0_const);
+        std::string_view c1_const_str_ref = genConstStrRef(c1_const);
+
         if (c0_const && c1_const)
         {
             ResultType res = 0;
-            StringImpl::constantConstant(c0_const->getValue<String>(), c1_const->getValue<String>(), collator, res);
+            StringImpl::constantConstant(c0_const_str_ref, c1_const_str_ref, collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(c0_const->size(), toField(res));
             return true;
         }
@@ -745,12 +781,12 @@ private:
                 StringImpl::stringVectorConstant(
                     c0_string->getChars(),
                     c0_string->getOffsets(),
-                    c1_const->getValue<String>(),
+                    c1_const_str_ref,
                     collator,
                     c_res->getData());
             else if (c0_const && c1_string)
                 StringImpl::constantStringVector(
-                    c0_const->getValue<String>(),
+                    c0_const_str_ref,
                     c1_string->getChars(),
                     c1_string->getOffsets(),
                     collator,
@@ -770,8 +806,8 @@ private:
     template <typename ReturnColumnType = ColumnUInt8>
     bool executeString(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
-        const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1);
         const ColumnConst * c0_const = checkAndGetColumnConstStringOrFixedString(c0);
         const ColumnConst * c1_const = checkAndGetColumnConstStringOrFixedString(c1);
 
