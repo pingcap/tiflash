@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/mockExecutor.h>
-#include "Parsers/ASTTablesInSelectQuery.h"
-#include "TestUtils/FunctionTestUtils.h"
+#include <tuple>
 
 namespace DB
 {
@@ -78,7 +76,17 @@ public:
             {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
                 {toVec<Int32>("a", {3, 2, 0}),
                         toVec<Int32>("b", {4, 2, 0})});
-        
+
+        context.addMockTable("subquery", "t1",
+            {{"c", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}},
+                {toVec<Int32>("c", {1, 2, 3}),
+                    toVec<Int32>("d", {1, 2, 4})});
+
+        context.addMockTable("subquery", "t2",
+            {{"c", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}},
+                {toVec<Int32>("c", {1, 4}),
+                    toVec<Int32>("d", {2, 6})});
+
         context.addExchangeReceiver("exchange_r_table",
                                     {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s", {"banana", "banana"}),
@@ -366,6 +374,130 @@ try
                                   toNullableVec<Int32>({2, 2, 0}),
                                   toNullableVec<Int32>({2, 2, 0}),
                                   toNullableVec<Int32>({2, 2, 0})});
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, JoinCast)
+try
+{
+    auto cast_request = [&] ()
+    {
+        return context.scan("cast", "t1")
+        .join(context.scan("cast", "t2"), {col("a")}, ASTTableJoin::Kind::Inner)
+        .build(context);
+    };
+
+    /// int(1) == float(1.0)
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeLong}},
+                    {toVec<Int32>("a", {1})});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeFloat}},
+                    {toVec<Float32>("a", {1.0})});
+    
+    executeWithConcurrency(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float32>({1.0})});
+
+    /// int(1) == double(1.0)
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeLong}},
+                    {toVec<Int32>("a", {1})});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeDouble}},
+                    {toVec<Float64>("a", {1.0})});
+    
+    executeWithConcurrency(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float64>({1.0})});
+
+    /// float(1) == double(1.0)
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeFloat}},
+                    {toVec<Float32>("a", {1})});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeDouble}},
+                    {toVec<Float64>("a", {1})});
+    
+    executeWithConcurrency(cast_request(), {toNullableVec<Float32>({1}), toNullableVec<Float64>({1})});
+
+    /// varchar('x') == char('x')
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeString}},
+                    {toVec<String>("a", {"x"})});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeVarchar}},
+                    {toVec<String>("a", {"x"})});
+
+    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+
+    /// tinyblob('x') == varchar('x')
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeTinyBlob}},
+                    {toVec<String>("a", {"x"})});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeVarchar}},
+                    {toVec<String>("a", {"x"})});
+
+    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+
+    /// mediumBlob('x') == varchar('x')
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeMediumBlob}},
+                    {toVec<String>("a", {"x"})});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeVarchar}},
+                    {toVec<String>("a", {"x"})});
+
+    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+
+    /// blob('x') == varchar('x')
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeBlob}},
+                    {toVec<String>("a", {"x"})});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeVarchar}},
+                    {toVec<String>("a", {"x"})});
+
+    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+
+    /// longBlob('x') == varchar('x')
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeLongBlob}},
+                    {toVec<String>("a", {"x"})});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeVarchar}},
+                    {toVec<String>("a", {"x"})});
+
+    executeWithConcurrency(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+
+    /// decimal with different scale
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeNewDecimal}},
+                    {createColumn<Decimal256>(std::make_tuple(9, 4), {"0.12"}, "a")});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeNewDecimal}},
+                    {createColumn<Decimal256>(std::make_tuple(9, 3), {"0.12"}, "a")});
+
+    executeWithConcurrency(cast_request(), {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}),
+        createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
+    
+    /// datetime(1970-01-01 00:00:01) == timestamp(1970-01-01 00:00:01)
+    context.addMockTable("cast", "t1",
+                    {{"a", TiDB::TP::TypeDatetime}},
+                    {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
+
+    context.addMockTable("cast", "t2",
+                    {{"a", TiDB::TP::TypeTimestamp}},
+                    {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
+
+    executeWithConcurrency(cast_request(), {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0),
+        createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
 }
 CATCH
 
