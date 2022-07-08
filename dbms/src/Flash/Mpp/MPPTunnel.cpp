@@ -197,16 +197,16 @@ void MPPTunnel::connect(PacketWriter * writer)
         {
         case TunnelSenderMode::LOCAL:
             RUNTIME_ASSERT(writer == nullptr, log);
-            local_tunnel_sender = std::make_shared<LocalTunnelSender>(mode, send_queue, nullptr, log);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender>(mode, send_queue, nullptr, log, tunnel_id);
             tunnel_sender = local_tunnel_sender;
             break;
         case TunnelSenderMode::SYNC_GRPC:
-            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(mode, send_queue, writer, log);
+            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(mode, send_queue, writer, log, tunnel_id);
             sync_tunnel_sender->startSendThread();
             tunnel_sender = sync_tunnel_sender;
             break;
         case TunnelSenderMode::ASYNC_GRPC:
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(mode, send_queue, writer, log);
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(mode, send_queue, writer, log, tunnel_id);
             tunnel_sender = async_tunnel_sender;
             RUNTIME_ASSERT(writer != nullptr, log, "Async writer shouldn't be null");
             RUNTIME_ASSERT(tunnel_sender != nullptr, log, "Tunnel sender shouldn't be null");

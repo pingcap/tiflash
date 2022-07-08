@@ -64,11 +64,12 @@ public:
     using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
     using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
     virtual ~TunnelSender() = default;
-    TunnelSender(TunnelSenderMode mode_, DataPacketMPMCQueuePtr send_queue_, PacketWriter * writer_, const LoggerPtr log_)
+    TunnelSender(TunnelSenderMode mode_, DataPacketMPMCQueuePtr send_queue_, PacketWriter * writer_, const LoggerPtr log_, const String & tunnel_id_)
         : mode(mode_)
         , send_queue(send_queue_)
         , writer(writer_)
         , log(log_)
+        , tunnel_id(tunnel_id_)
     {
     }
     DataPacketMPMCQueuePtr getSendQueue()
@@ -85,6 +86,10 @@ public:
         return consumer_state.msgHasSet();
     }
     const LoggerPtr & getLogger() const { return log; }
+    String getTunnelId()
+    {
+        return tunnel_id;
+    }
 
 protected:
     /// TunnelSender use consumer state to inform tunnel that whether sender has finished its work
@@ -123,6 +128,7 @@ protected:
     PacketWriter * writer;
     std::mutex state_mu;
     const LoggerPtr log;
+    String tunnel_id;
 };
 
 /// SyncTunnelSender maintains a new thread itself to consume and send data
