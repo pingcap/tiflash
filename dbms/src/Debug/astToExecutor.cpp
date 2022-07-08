@@ -170,6 +170,7 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"cast_decimal_datetime", tipb::ScalarFuncSig::CastDecimalAsTime},
     {"cast_time_datetime", tipb::ScalarFuncSig::CastTimeAsTime},
     {"cast_string_datetime", tipb::ScalarFuncSig::CastStringAsTime},
+    {"concat", tipb::ScalarFuncSig::Concat},
     {"round_int", tipb::ScalarFuncSig::RoundInt},
     {"round_uint", tipb::ScalarFuncSig::RoundInt},
     {"round_dec", tipb::ScalarFuncSig::RoundDec},
@@ -458,6 +459,14 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
         expr->set_sig(it_sig->second);
         auto * ft = expr->mutable_field_type();
         ft->set_tp(TiDB::TypeDouble);
+        ft->set_collate(collator_id);
+        break;
+    }
+    case tipb::ScalarFuncSig::Concat:
+    {
+        expr->set_sig(it_sig->second);
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(TiDB::TypeString);
         ft->set_collate(collator_id);
         break;
     }
