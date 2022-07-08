@@ -143,7 +143,7 @@ void EstablishCallData::finishTunnelAndResponder()
     state = FINISH;
     if (async_tunnel_sender)
     {
-        async_tunnel_sender->consumerFinish("grpc writes failed."); //trigger mpp tunnel finish work
+        async_tunnel_sender->consumerFinish(fmt::format("{}: finishTunnelAndResponder called.", async_tunnel_sender->tunnelId()), true); //trigger mpp tunnel finish work
     }
     grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
     responder.Finish(status, this);

@@ -331,7 +331,10 @@ void SyncTunnelSender::sendJob()
         err_msg = getCurrentExceptionMessage(true);
     }
     if (!err_msg.empty())
+    {
+        err_msg = fmt::format("{} meet error: {}", tunnel_id, err_msg);
         LOG_ERROR(log, err_msg);
+    }
     consumerFinish(err_msg);
     GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
 }
@@ -371,6 +374,7 @@ void AsyncTunnelSender::sendOne()
     }
     if (!err_msg.empty())
     {
+        err_msg = fmt::format("{} meet error: {}", tunnel_id, err_msg);
         LOG_ERROR(log, err_msg);
     }
     if (!err_msg.empty() || queue_empty_flag)
