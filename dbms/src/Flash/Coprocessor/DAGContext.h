@@ -297,6 +297,8 @@ public:
         return sql_mode & f;
     }
 
+    void updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit);
+
     bool isTest() const { return is_test; }
     void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
     ColumnsWithTypeAndName columnsForTest(String executor_id);

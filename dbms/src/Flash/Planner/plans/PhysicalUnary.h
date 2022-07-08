@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
@@ -24,43 +24,38 @@ namespace DB
 /**
  * A physical plan node with single child.
  */
-class PhysicalUnary : public PhysicalPlan
+class PhysicalUnary : public PhysicalPlanNode
 {
 public:
     PhysicalUnary(
         const String & executor_id_,
         const PlanType & type_,
         const NamesAndTypes & schema_,
-        const String & req_id)
-        : PhysicalPlan(executor_id_, type_, schema_, req_id)
-    {}
-
-    PhysicalPlanPtr children(size_t i) const override
+        const String & req_id,
+        const PhysicalPlanNodePtr & child_)
+        : PhysicalPlanNode(executor_id_, type_, schema_, req_id)
+        , child(child_)
     {
-        RUNTIME_ASSERT(i == 0, log, "child_index({}) should not >= childrenSize({})", i, childrenSize());
-        assert(child);
+        RUNTIME_ASSERT(child, log, "children(0) shouldn't be nullptr");
+    }
+
+    PhysicalPlanNodePtr children(size_t i) const override
+    {
+        RUNTIME_ASSERT(i == 0, log, "child_index({}) shouldn't >= childrenSize({})", i, childrenSize());
         return child;
     }
 
-    void setChild(size_t i, const PhysicalPlanPtr & new_child) override
+    void setChild(size_t i, const PhysicalPlanNodePtr & new_child) override
     {
         RUNTIME_ASSERT(i == 0, log, "child_index({}) should not >= childrenSize({})", i, childrenSize());
-        assert(new_child);
-        assert(new_child.get() != this);
-        child = new_child;
-    }
-
-    void appendChild(const PhysicalPlanPtr & new_child) override
-    {
-        RUNTIME_ASSERT(!child, log, "the actual children size had be the max size({}), don't append child again", childrenSize());
-        assert(new_child);
-        assert(new_child.get() != this);
+        RUNTIME_ASSERT(new_child, log, "new_child for child_index({}) shouldn't be nullptr", i);
+        RUNTIME_ASSERT(new_child.get() != this, log, "new_child for child_index({}) shouldn't be itself", i);
         child = new_child;
     }
 
     size_t childrenSize() const override { return 1; };
 
 protected:
-    PhysicalPlanPtr child;
+    PhysicalPlanNodePtr child;
 };
 } // namespace DB

@@ -166,6 +166,7 @@ ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
 
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
+#define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))

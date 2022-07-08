@@ -23,6 +23,24 @@ String PlanType::toString() const
     {
     case Source:
         return "Source";
+    case Limit:
+        return "Limit";
+    case TopN:
+        return "TopN";
+    case Filter:
+        return "Filter";
+    case Aggregation:
+        return "Aggregation";
+    case ExchangeSender:
+        return "ExchangeSender";
+    case MockExchangeSender:
+        return "MockExchangeSender";
+    case ExchangeReceiver:
+        return "ExchangeReceiver";
+    case MockExchangeReceiver:
+        return "MockExchangeReceiver";
+    case Projection:
+        return "Projection";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }

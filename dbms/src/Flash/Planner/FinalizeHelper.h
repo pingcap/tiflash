@@ -15,17 +15,20 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Core/Names.h>
 #include <Core/NamesAndTypes.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
+#include <common/types.h>
 
-namespace DB::PhysicalPlanHelper
+namespace DB::FinalizeHelper
 {
-Names schemaToNames(const NamesAndTypes & schema);
+void prependProjectInputIfNeed(ExpressionActionsPtr & actions, size_t columns_from_previous);
 
-ExpressionActionsPtr newActions(const Block & input_block, const Context & context);
+void checkSchemaContainsParentRequire(const NamesAndTypes & schema, const Names & parent_require);
 
-ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Context & context);
+void checkParentRequireContainsSchema(const Names & parent_require, const NamesAndTypes & schema);
 
-Block constructBlockFromSchema(const NamesAndTypes & schema);
-} // namespace DB::PhysicalPlanHelper
+void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTypes & schema);
+
+void checkSchemaContainsSampleBlock(const NamesAndTypes & schema, const Block & sample_block);
+} // namespace DB::FinalizeHelper

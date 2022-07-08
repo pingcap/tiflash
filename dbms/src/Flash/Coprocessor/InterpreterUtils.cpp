@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
@@ -101,5 +104,56 @@ ExpressionActionsPtr generateProjectExpressionActions(
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
     project->add(ExpressionAction::project(project_cols));
     return project;
+}
+
+void executeExpression(
+    DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expr_actions,
+    const LoggerPtr & log,
+    const String & extra_info)
+{
+    if (expr_actions && !expr_actions->getActions().empty())
+    {
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, expr_actions, log->identifier());
+            stream->setExtraInfo(extra_info);
+        });
+    }
+}
+
+void orderStreams(
+    DAGPipeline & pipeline,
+    size_t max_streams,
+    SortDescription order_descr,
+    Int64 limit,
+    const Context & context,
+    const LoggerPtr & log)
+{
+    const Settings & settings = context.getSettingsRef();
+
+    pipeline.transform([&](auto & stream) {
+        auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
+
+        /// Limits on sorting
+        IProfilingBlockInputStream::LocalLimits limits;
+        limits.mode = IProfilingBlockInputStream::LIMITS_TOTAL;
+        limits.size_limits = SizeLimits(settings.max_rows_to_sort, settings.max_bytes_to_sort, settings.sort_overflow_mode);
+        sorting_stream->setLimits(limits);
+
+        stream = sorting_stream;
+    });
+
+    /// If there are several streams, we merge them into one
+    executeUnion(pipeline, max_streams, log, false, "for partial order");
+
+    /// Merge the sorted blocks.
+    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
+        pipeline.firstStream(),
+        order_descr,
+        settings.max_block_size,
+        limit,
+        settings.max_bytes_before_external_sort,
+        context.getTemporaryPath(),
+        log->identifier());
 }
 } // namespace DB

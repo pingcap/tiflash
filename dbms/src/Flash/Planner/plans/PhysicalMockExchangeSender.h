@@ -14,40 +14,33 @@
 
 #pragma once
 
-#include <Core/Block.h>
-#include <Flash/Planner/plans/PhysicalLeaf.h>
+#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <tipb/executor.pb.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
-class PhysicalSource : public PhysicalLeaf
+class PhysicalMockExchangeSender : public PhysicalUnary
 {
 public:
     static PhysicalPlanNodePtr build(
-        const BlockInputStreams & source_streams,
-        const LoggerPtr & log);
+        const String & executor_id,
+        const LoggerPtr & log,
+        const PhysicalPlanNodePtr & child);
 
-    PhysicalSource(
+    PhysicalMockExchangeSender(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const Block & sample_block_,
-        const BlockInputStreams & source_streams_)
-        : PhysicalLeaf(executor_id_, PlanType::Source, schema_, req_id)
-        , sample_block(sample_block_)
-        , source_streams(source_streams_)
-    {
-        is_record_profile_streams = false;
-    }
+        const PhysicalPlanNodePtr & child_)
+        : PhysicalUnary(executor_id_, PlanType::MockExchangeSender, schema_, req_id, child_)
+    {}
 
-    void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+    void finalize(const Names & parent_require) override;
 
-    void finalize(const Names &) override {}
-
-    const Block & getSampleBlock() const override { return sample_block; }
+    const Block & getSampleBlock() const override;
 
 private:
-    Block sample_block;
-
-    BlockInputStreams source_streams;
+    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 };
 } // namespace DB

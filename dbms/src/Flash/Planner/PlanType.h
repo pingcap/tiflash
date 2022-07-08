@@ -23,6 +23,15 @@ struct PlanType
     enum PlanTypeEnum
     {
         Source = 0,
+        Limit = 1,
+        TopN = 2,
+        Filter = 3,
+        Aggregation = 4,
+        ExchangeSender = 5,
+        MockExchangeSender = 6,
+        ExchangeReceiver = 7,
+        MockExchangeReceiver = 8,
+        Projection = 9,
     };
     PlanTypeEnum enum_value;
 

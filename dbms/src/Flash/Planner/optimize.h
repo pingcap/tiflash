@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 
 namespace DB
 {
 class Context;
-PhysicalPlanPtr optimize(const Context & context, PhysicalPlanPtr plan);
+PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan);
 } // namespace DB

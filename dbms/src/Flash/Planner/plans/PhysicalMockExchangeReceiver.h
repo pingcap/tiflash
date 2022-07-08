@@ -14,40 +14,37 @@
 
 #pragma once
 
-#include <Core/Block.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Planner/plans/PhysicalLeaf.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
-class PhysicalSource : public PhysicalLeaf
+class PhysicalMockExchangeReceiver : public PhysicalLeaf
 {
 public:
     static PhysicalPlanNodePtr build(
-        const BlockInputStreams & source_streams,
-        const LoggerPtr & log);
+        Context & context,
+        const String & executor_id,
+        const LoggerPtr & log,
+        const tipb::ExchangeReceiver & exchange_receiver);
 
-    PhysicalSource(
+    PhysicalMockExchangeReceiver(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
         const Block & sample_block_,
-        const BlockInputStreams & source_streams_)
-        : PhysicalLeaf(executor_id_, PlanType::Source, schema_, req_id)
-        , sample_block(sample_block_)
-        , source_streams(source_streams_)
-    {
-        is_record_profile_streams = false;
-    }
+        const BlockInputStreams & mock_streams_);
 
-    void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+    void finalize(const Names & parent_require) override;
 
-    void finalize(const Names &) override {}
-
-    const Block & getSampleBlock() const override { return sample_block; }
+    const Block & getSampleBlock() const override;
 
 private:
+    void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+
     Block sample_block;
 
-    BlockInputStreams source_streams;
+    BlockInputStreams mock_streams;
 };
 } // namespace DB

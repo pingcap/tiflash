@@ -67,9 +67,7 @@ private:
     void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
     void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column, const String & extra_info = "");
-    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, const String & extra_info = "");
     void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
-    void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
     void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeWindow(

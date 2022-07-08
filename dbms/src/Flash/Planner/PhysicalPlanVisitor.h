@@ -12,13 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/PhysicalPlanBuilder.h>
-#include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 
-namespace DB
+namespace DB::PhysicalPlanVisitor
 {
-void PhysicalPlanBuilder::buildSource(const Block & sample_block)
+/// visit physical plan node tree and apply function.
+/// f: (const PhysicalPlanNodePtr &) -> bool, return true to continue visit.
+template <typename FF>
+void visit(const PhysicalPlanNodePtr & plan, FF && f)
 {
-    cur_plans.push_back(PhysicalSource::build(sample_block, log->identifier()));
+    if (f(plan))
+    {
+        for (size_t i = 0; i < plan->childrenSize(); ++i)
+        {
+            visit(plan->children(i), std::forward<FF>(f));
+        }
+    }
 }
-} // namespace DB
+
+String visitToString(const PhysicalPlanNodePtr & plan);
+} // namespace DB::PhysicalPlanVisitor

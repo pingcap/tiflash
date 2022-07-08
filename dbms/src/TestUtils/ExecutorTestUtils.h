@@ -86,6 +86,8 @@ public:
         return createColumn<T>(v, name);
     }
 
+    static void readAndAssertBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns);
+
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;

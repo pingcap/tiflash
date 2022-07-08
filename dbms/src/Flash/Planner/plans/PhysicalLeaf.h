@@ -15,14 +15,14 @@
 #pragma once
 
 #include <Common/TiFlashException.h>
-#include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 
 namespace DB
 {
 /**
  * A physical plan node with no children.
  */
-class PhysicalLeaf : public PhysicalPlan
+class PhysicalLeaf : public PhysicalPlanNode
 {
 public:
     PhysicalLeaf(
@@ -30,20 +30,15 @@ public:
         const PlanType & type_,
         const NamesAndTypes & schema_,
         const String & req_id)
-        : PhysicalPlan(executor_id_, type_, schema_, req_id)
+        : PhysicalPlanNode(executor_id_, type_, schema_, req_id)
     {}
 
-    PhysicalPlanPtr children(size_t) const override
+    PhysicalPlanNodePtr children(size_t) const override
     {
         throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
     }
 
-    void setChild(size_t, const PhysicalPlanPtr &) override
-    {
-        throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
-    }
-
-    void appendChild(const PhysicalPlanPtr &) override
+    void setChild(size_t, const PhysicalPlanNodePtr &) override
     {
         throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
     }
