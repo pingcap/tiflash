@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import argparse
+import os
 import signal
 import sys
 import time
@@ -117,28 +118,51 @@ class Runner:
 """
         parser = argparse.ArgumentParser(
             description="Auto FDO tools", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-            usage=usage)
+            usage=usage,
+            add_help=False)
+        self.parser = parser
+
         parser.add_argument(
             '--perf', help='run perf with workload', action='store_true')
         parser.add_argument(
             '--convert-llvm', help='convert linux perf data to llvm profile data', action='store_true')
+        parser.add_argument(
+            '--output', help='output file of perf data')
+        parser.add_argument(
+            '-h', '--help',
+            action='store_true',
+            help=('show this help message and exit'))
 
-        parser.add_argument(
-            '--workload', help='absolute path of workload script', required=False)
-        parser.add_argument(
-            '--pid', help='pid of TiFlash process', required=False)
-        parser.add_argument(
-            '--output', help='output file of perf data', required=False)
-        parser.add_argument(
-            '--convert-tool', help='tool to conver linux perf data to llvm profile data',)
-        parser.add_argument(
-            '--input-perf-file', help='input linux perf data file path')
-        parser.add_argument(
-            '--binary', help='binary to run workload')
-        parser.add_argument(
-            '--output-llvm-prof', help='output llvm profile data path', default='tiflash.llvm.code.prof')
-        self.args = parser.parse_args()
+        self.args, rem_args = parser.parse_known_args()
+
+        if self.args.perf:
+            parser.add_argument(
+                '--workload', help='absolute path of workload script', required=True)
+            parser.add_argument(
+                '--pid', help='pid of TiFlash process', required=True)
+            self._show_help()
+
+        if self.args.convert_llvm:
+            parser.add_argument(
+                '--convert-tool', help='tool to conver linux perf data to llvm profile data', required=True)
+            parser.add_argument(
+                '--input-perf-file', help='input linux perf data file path', required=False if self.args.perf else True)
+            parser.add_argument(
+                '--binary', help='binary to run workload', required=True)
+            parser.add_argument(
+                '--output-llvm-prof', help='output llvm profile data path', default='tiflash.llvm.code.prof')
+            self._show_help()
+
+        self._show_help()
+
+        parser.parse_args(rem_args, namespace=self.args)
+
         self.linux_perf_data = None
+
+    def _show_help(self):
+        if self.args.help:
+            self.parser.print_help()
+            self.parser.exit()
 
     def run(self):
         if self.args.perf:
@@ -147,15 +171,14 @@ class Runner:
             self.convert_llvm_perf()
 
     def convert_llvm_perf(self):
-        assert self.args.convert_tool
-        if self.linux_perf_data is None:
-            assert self.args.input_perf_file
-        else:
+        if self.args.input_perf_file is None:
+            assert self.linux_perf_data
             self.args.input_perf_file = self.linux_perf_data
+        assert os.path.isfile(self.args.input_perf_file)
 
         self.args.output_llvm_prof = 'tiflash.llvm.code.prof'
+        self.args.binary = os.path.realpath(self.args.binary)
 
-        assert self.args.binary
         logger.info('start to convert linux perf data `{}` to llvm profile data `{}`'.format(
             self.args.input_perf_file, self.args.output_llvm_prof))
         stdout, stderr, e = run_cmd([self.args.convert_tool, '--profile', '{}'.format(self.args.input_perf_file),
@@ -166,9 +189,6 @@ class Runner:
         assert e == 0
 
     def run_perf(self):
-        assert self.args.pid
-        assert self.args.workload
-
         pid = self.args.pid
         output = 'tiflash.perf.data' if self.args.output is None else self.args.output
         logger.info('using output file `{}`'.format(output))
