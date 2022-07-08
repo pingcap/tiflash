@@ -166,7 +166,7 @@ public:
     void appendCastAfterWindow(
         const ExpressionActionsPtr & actions,
         const tipb::Window & window,
-        const size_t window_columns_start_index);
+        size_t window_columns_start_index);
 
     NamesAndTypes buildOrderColumns(
         const ExpressionActionsPtr & actions,
@@ -293,6 +293,12 @@ private:
     String convertToUInt8(
         const ExpressionActionsPtr & actions,
         const String & column_name);
+
+    String buildFilterColumn(
+        const ExpressionActionsPtr & actions,
+        const std::vector<const tipb::Expr *> & conditions);
+
+    NamesWithAliases genNonRootFinalProjectAliases(const String & column_prefix) const;
 
     NamesWithAliases genRootFinalProjectAliases(
         const String & column_prefix,

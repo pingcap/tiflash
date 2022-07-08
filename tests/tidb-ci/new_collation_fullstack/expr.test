@@ -35,6 +35,13 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 |    2 | abc   |
 +------+-------+
 
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ id, value1 from test.t where value1 = 'abc       ';
++------+-------+
+| id   | value1|
++------+-------+
+|    1 | abc   |
+|    2 | abc   |
++------+-------+
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ id, value from test.t where value like 'aB%';
 +------+-------+
@@ -59,6 +66,13 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 +------+-------+
 |    1 | abc   |
 |    2 | Abc   |
+|    3 | def   |
++------+-------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ id, value1 from test.t where value1 = 'def       ';
++------+-------+
+| id   | value1|
++------+-------+
 |    3 | def   |
 +------+-------+
 

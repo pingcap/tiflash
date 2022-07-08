@@ -42,7 +42,6 @@ inline static pid_t getTid()
 
 namespace CurrentMetrics
 {
-extern const Metric BackgroundPoolTask;
 extern const Metric MemoryTrackingInBackgroundProcessingPool;
 } // namespace CurrentMetrics
 
@@ -215,8 +214,6 @@ void BackgroundProcessingPool::threadFunction()
                 continue;
 
             {
-                CurrentMetrics::Increment metric_increment{CurrentMetrics::BackgroundPoolTask};
-
                 bool done_work = false;
                 if (!task->multi)
                 {

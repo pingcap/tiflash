@@ -436,14 +436,14 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
 
 void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 {
-    auto it = dagContext().getMPPExchangeReceiverMap().find(query_block.source_name);
-    if (unlikely(it == dagContext().getMPPExchangeReceiverMap().end()))
+    auto exchange_receiver = dagContext().getMPPExchangeReceiver(query_block.source_name);
+    if (unlikely(exchange_receiver == nullptr))
         throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[query_block.source_name];
     for (size_t i = 0; i < max_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(it->second, log->identifier(), query_block.source_name);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, log->identifier(), query_block.source_name);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         stream->setExtraInfo("squashing after exchange receiver");

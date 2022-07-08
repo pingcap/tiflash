@@ -46,7 +46,7 @@ public:
 
     std::pair<UInt64, UInt64> getSizes() const override;
 
-    UInt64 getRightMargin() override;
+    UInt64 getUsedBoundary() override;
 
 protected:
     RBTreeSpaceMap(UInt64 start, UInt64 end)

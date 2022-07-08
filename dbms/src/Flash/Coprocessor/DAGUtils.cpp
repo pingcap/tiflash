@@ -29,7 +29,6 @@
 #include <unordered_map>
 namespace DB
 {
-
 const Int8 VAR_SIZE = 0;
 
 extern const String uniq_raw_res_name;
@@ -333,7 +332,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::DecimalIsFalseWithNull, "isFalseWithNull"},
 
     //{tipb::ScalarFuncSig::LeftShift, "cast"},
-    //{tipb::ScalarFuncSig::RightShift, "cast"},
+    {tipb::ScalarFuncSig::RightShift, "bitShiftRight"},
 
     //{tipb::ScalarFuncSig::BitCount, "cast"},
     //{tipb::ScalarFuncSig::GetParamString, "cast"},
@@ -562,7 +561,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Quarter, "toQuarter"},
 
     //{tipb::ScalarFuncSig::SecToTime, "cast"},
-    //{tipb::ScalarFuncSig::TimeToSec, "cast"},
+    {tipb::ScalarFuncSig::TimeToSec, "tidbTimeToSec"},
     //{tipb::ScalarFuncSig::TimestampAdd, "cast"},
     {tipb::ScalarFuncSig::ToDays, "tidbToDays"},
     {tipb::ScalarFuncSig::ToSeconds, "tidbToSeconds"},
@@ -649,8 +648,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Quote, "cast"},
     //{tipb::ScalarFuncSig::Repeat, "cast"},
     {tipb::ScalarFuncSig::Replace, "replaceAll"},
-    //{tipb::ScalarFuncSig::ReverseUTF8, "cast"},
-    //{tipb::ScalarFuncSig::Reverse, "cast"},
+    {tipb::ScalarFuncSig::ReverseUTF8, "reverseUTF8"},
+    {tipb::ScalarFuncSig::Reverse, "reverse"},
     {tipb::ScalarFuncSig::RightUTF8, "rightUTF8"},
     //{tipb::ScalarFuncSig::Right, "cast"},
     {tipb::ScalarFuncSig::RpadUTF8, "rpadUTF8"},
@@ -769,6 +768,10 @@ const String & getFunctionName(const tipb::Expr & expr)
     if (isAggFunctionExpr(expr))
     {
         return getAggFunctionName(expr);
+    }
+    else if (isWindowFunctionExpr(expr))
+    {
+        return getWindowFunctionName(expr);
     }
     else
     {
@@ -1429,6 +1432,14 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
         return tipb::EncodeType::TypeDefault;
     return encode_type;
 }
+tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
+{
+    static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
+    if (func_name_sig_map.find(name) == func_name_sig_map.end())
+        throw Exception(fmt::format("Unsupported function {}", name));
+    return func_name_sig_map[name];
+}
+
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
 {
     static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();

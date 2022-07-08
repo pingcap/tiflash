@@ -179,7 +179,6 @@ struct ColumnInfo
 
     ColumnID id = -1;
     String name;
-    Int32 offset = -1;
     Poco::Dynamic::Var origin_default_value;
     Poco::Dynamic::Var default_value;
     Poco::Dynamic::Var default_bit_value;
@@ -212,6 +211,12 @@ struct ColumnInfo
     static Int64 getTimeValue(const String &);
     static Int64 getYearValue(const String &);
     static UInt64 getBitValue(const String &);
+
+private:
+    /// please be very careful when you have to use offset,
+    /// because we never update offset when DDL action changes.
+    /// Thus, our offset will not exactly correspond the order of columns.
+    Int32 offset = -1;
 };
 
 enum PartitionType
@@ -298,8 +303,13 @@ struct IndexColumnInfo
     void deserialize(Poco::JSON::Object::Ptr json);
 
     String name;
-    Int32 offset;
     Int32 length;
+
+private:
+    /// please be very careful when you have to use offset,
+    /// because we never update offset when DDL action changes.
+    /// Thus, our offset will not exactly correspond the order of columns.
+    Int32 offset;
 };
 struct IndexInfo
 {
@@ -321,6 +331,12 @@ struct IndexInfo
     bool is_primary;
     bool is_invisible;
     bool is_global;
+};
+
+enum class TiFlashMode
+{
+    Normal,
+    Fast,
 };
 
 struct TableInfo
@@ -372,6 +388,8 @@ struct TableInfo
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
+    TiFlashMode tiflash_mode = TiFlashMode::Normal;
+
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
     ColumnID getColumnID(const String & name) const;
@@ -385,7 +403,12 @@ struct TableInfo
 
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
 
-    /// should not be called if is_common_handle = false
+    /// should not be called if is_common_handle = false.
+    /// when use IndexInfo, please avoid to use the offset info
+    /// the offset value may be wrong in some cases,
+    /// due to we will not update IndexInfo except RENAME DDL action,
+    /// but DDL like add column / drop column may change the offset of columns
+    /// Thus, please be very careful when you must have to use offset information !!!!!
     const IndexInfo & getPrimaryIndexInfo() const { return index_infos[0]; }
 
     IndexInfo & getPrimaryIndexInfo() { return index_infos[0]; }
@@ -397,5 +420,8 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+
+String TiFlashModeToString(TiFlashMode tiflash_mode);
+TiFlashMode parseTiFlashMode(String mode_str);
 
 } // namespace TiDB
