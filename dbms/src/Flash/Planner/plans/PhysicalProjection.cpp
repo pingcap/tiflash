@@ -25,12 +25,12 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalProjection::build(
+PhysicalPlanNodePtr PhysicalProjection::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Projection & projection,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 
@@ -63,11 +63,11 @@ PhysicalPlanPtr PhysicalProjection::build(
     return physical_projection;
 }
 
-PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
+PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     const Context & context,
     const LoggerPtr & log,
     const String & column_prefix,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 
@@ -97,14 +97,14 @@ PhysicalPlanPtr PhysicalProjection::buildNonRootFinal(
     return physical_projection;
 }
 
-PhysicalPlanPtr PhysicalProjection::buildRootFinal(
+PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     const Context & context,
     const LoggerPtr & log,
     const std::vector<tipb::FieldType> & require_schema,
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
     bool keep_session_timezone_info,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 

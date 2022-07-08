@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Planner/PhysicalPlanBuilder.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
@@ -50,17 +50,17 @@ public:
         dag_context.setColumnsForTest(context.executorIdColumnsMap());
         context.context.setDAGContext(&dag_context);
 
-        PhysicalPlanBuilder builder{context.context, log->identifier()};
+        PhysicalPlan physical_plan{context.context, log->identifier()};
         assert(request);
-        builder.build(request.get());
-        auto physical_plan = builder.outputAndOptimize();
+        physical_plan.build(request.get());
+        physical_plan.outputAndOptimize();
 
-        ASSERT_EQ(Poco::trim(expected_physical_plan), Poco::trim(PhysicalPlanVisitor::visitToString(physical_plan)));
+        ASSERT_EQ(Poco::trim(expected_physical_plan), Poco::trim(physical_plan.toString()));
 
         BlockInputStreamPtr final_stream;
         {
             DAGPipeline pipeline;
-            physical_plan->transform(pipeline, context.context, max_streams);
+            physical_plan.transform(pipeline, context.context, max_streams);
             // TODO support non-joined streams.
             assert(pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty());
             final_stream = pipeline.firstStream();

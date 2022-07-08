@@ -23,16 +23,16 @@ namespace DB
 class PhysicalMockExchangeSender : public PhysicalUnary
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const String & executor_id,
         const LoggerPtr & log,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     PhysicalMockExchangeSender(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_)
+        const PhysicalPlanNodePtr & child_)
         : PhysicalUnary(executor_id_, PlanType::MockExchangeSender, schema_, req_id, child_)
     {}
 

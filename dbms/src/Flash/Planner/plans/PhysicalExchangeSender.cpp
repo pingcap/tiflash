@@ -24,11 +24,11 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalExchangeSender::build(
+PhysicalPlanNodePtr PhysicalExchangeSender::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::ExchangeSender & exchange_sender,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 

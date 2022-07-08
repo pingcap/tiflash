@@ -23,38 +23,38 @@ namespace DB
 class PhysicalProjection : public PhysicalUnary
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Projection & projection,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     // Generate a project action to keep the schema of Block and tidb-schema the same,
     // and guarantee that left/right block of join don't have duplicated column names.
-    static PhysicalPlanPtr buildNonRootFinal(
+    static PhysicalPlanNodePtr buildNonRootFinal(
         const Context & context,
         const LoggerPtr & log,
         const String & column_prefix,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     // Generate a project action for root executor,
     // to keep the schema of Block and tidb-schema the same.
     // Because the output of the root executor is sent to other TiFlash or TiDB.
-    static PhysicalPlanPtr buildRootFinal(
+    static PhysicalPlanNodePtr buildRootFinal(
         const Context & context,
         const LoggerPtr & log,
         const std::vector<tipb::FieldType> & require_schema,
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,
         bool keep_session_timezone_info,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     PhysicalProjection(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_,
+        const PhysicalPlanNodePtr & child_,
         const String & extra_info_,
         const ExpressionActionsPtr & project_actions_)
         : PhysicalUnary(executor_id_, PlanType::Projection, schema_, req_id, child_)

@@ -23,7 +23,7 @@ class ExchangeReceiver;
 class PhysicalExchangeReceiver : public PhysicalLeaf
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log);

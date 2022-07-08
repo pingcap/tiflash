@@ -14,67 +14,53 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Core/Block.h>
-#include <Core/Names.h>
-#include <Core/NamesAndTypes.h>
-#include <Flash/Planner/PlanType.h>
-
-#include <memory>
+#include <DataStreams/IBlockInputStream.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
+#include <common/logger_useful.h>
+#include <tipb/executor.pb.h>
+#include <tipb/select.pb.h>
 
 namespace DB
 {
-struct DAGPipeline;
-class Context;
-class DAGContext;
-
-class PhysicalPlan;
-using PhysicalPlanPtr = std::shared_ptr<PhysicalPlan>;
-
 class PhysicalPlan
 {
 public:
-    PhysicalPlan(
-        const String & executor_id_,
-        const PlanType & type_,
-        const NamesAndTypes & schema_,
-        const String & req_id);
+    explicit PhysicalPlan(Context & context_, const String & req_id)
+        : context(context_)
+        , log(Logger::get("PhysicalPlan", req_id))
+    {}
 
-    virtual ~PhysicalPlan() = default;
+    void build(const tipb::DAGRequest * dag_request);
 
-    virtual PhysicalPlanPtr children(size_t /*i*/) const = 0;
+    void build(const String & executor_id, const tipb::Executor * executor);
 
-    virtual void setChild(size_t /*i*/, const PhysicalPlanPtr & /*new_child*/) = 0;
+    void buildSource(const BlockInputStreams & source_streams);
 
-    const PlanType & tp() const { return type; }
+    void buildFinalProjection(const String & column_prefix, bool is_root);
 
-    const String & execId() const { return executor_id; }
+    // after outputAndOptimize, the physical plan node tree is done.
+    void outputAndOptimize();
 
-    const NamesAndTypes & getSchema() const { return schema; }
+    String toString() const;
 
-    virtual size_t childrenSize() const = 0;
+    void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
-    virtual void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
+private:
+    PhysicalPlanNodePtr popBack();
 
-    virtual void finalize(const Names & parent_require) = 0;
-    void finalize();
+    void pushBack(const PhysicalPlanNodePtr & plan);
 
-    /// Obtain a sample block that contains the names and types of result columns.
-    virtual const Block & getSampleBlock() const = 0;
+    DAGContext & dagContext() const;
 
-    void disableRecordProfileStreams() { is_record_profile_streams = false; }
+private:
+    std::vector<PhysicalPlanNodePtr> cur_plan_nodes{};
 
-    String toString();
+    // hold the root node of physical plan node tree after `outputAndOptimize`.
+    PhysicalPlanNodePtr root_node;
 
-protected:
-    virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
-
-    void recordProfileStreams(DAGPipeline & pipeline, const Context & context);
-
-    String executor_id;
-    PlanType type;
-    NamesAndTypes schema;
-    bool is_record_profile_streams = true;
+    Context & context;
 
     LoggerPtr log;
 };

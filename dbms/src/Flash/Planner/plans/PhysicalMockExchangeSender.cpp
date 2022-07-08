@@ -20,10 +20,10 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalMockExchangeSender::build(
+PhysicalPlanNodePtr PhysicalMockExchangeSender::build(
     const String & executor_id,
     const LoggerPtr & log,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 

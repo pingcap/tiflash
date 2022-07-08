@@ -22,7 +22,7 @@ namespace DB
 class PhysicalSource : public PhysicalLeaf
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const BlockInputStreams & source_streams,
         const LoggerPtr & log);
 

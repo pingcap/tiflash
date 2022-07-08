@@ -23,17 +23,17 @@ namespace DB
 class PhysicalExchangeSender : public PhysicalUnary
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::ExchangeSender & exchange_sender,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     PhysicalExchangeSender(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_,
+        const PhysicalPlanNodePtr & child_,
         const std::vector<Int64> & partition_col_ids_,
         const TiDB::TiDBCollators & collators_,
         const tipb::ExchangeType & exchange_type_)

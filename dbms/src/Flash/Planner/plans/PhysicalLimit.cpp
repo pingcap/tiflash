@@ -22,11 +22,11 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalLimit::build(
+PhysicalPlanNodePtr PhysicalLimit::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Limit & limit,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
     auto physical_limit = std::make_shared<PhysicalLimit>(

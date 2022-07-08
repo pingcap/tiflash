@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 
 namespace DB::PhysicalPlanVisitor
 {
-/// visit physical plan tree and apply function.
-/// f: (const PhysicalPlanPtr &) -> bool, return true to continue visit.
+/// visit physical plan node tree and apply function.
+/// f: (const PhysicalPlanNodePtr &) -> bool, return true to continue visit.
 template <typename FF>
-void visit(const PhysicalPlanPtr & plan, FF && f)
+void visit(const PhysicalPlanNodePtr & plan, FF && f)
 {
     if (f(plan))
     {
@@ -30,5 +30,5 @@ void visit(const PhysicalPlanPtr & plan, FF && f)
     }
 }
 
-String visitToString(const PhysicalPlanPtr & plan);
+String visitToString(const PhysicalPlanNodePtr & plan);
 } // namespace DB::PhysicalPlanVisitor

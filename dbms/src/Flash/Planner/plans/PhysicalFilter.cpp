@@ -23,12 +23,12 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalFilter::build(
+PhysicalPlanNodePtr PhysicalFilter::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Selection & selection,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 

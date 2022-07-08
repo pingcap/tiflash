@@ -38,7 +38,7 @@ PhysicalExchangeReceiver::PhysicalExchangeReceiver(
     , mpp_exchange_receiver(mpp_exchange_receiver_)
 {}
 
-PhysicalPlanPtr PhysicalExchangeReceiver::build(
+PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log)

@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
@@ -24,7 +24,7 @@ namespace DB
 /**
  * A physical plan node with single child.
  */
-class PhysicalUnary : public PhysicalPlan
+class PhysicalUnary : public PhysicalPlanNode
 {
 public:
     PhysicalUnary(
@@ -32,20 +32,20 @@ public:
         const PlanType & type_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_)
-        : PhysicalPlan(executor_id_, type_, schema_, req_id)
+        const PhysicalPlanNodePtr & child_)
+        : PhysicalPlanNode(executor_id_, type_, schema_, req_id)
         , child(child_)
     {
         RUNTIME_ASSERT(child, log, "children(0) shouldn't be nullptr");
     }
 
-    PhysicalPlanPtr children(size_t i) const override
+    PhysicalPlanNodePtr children(size_t i) const override
     {
         RUNTIME_ASSERT(i == 0, log, "child_index({}) shouldn't >= childrenSize({})", i, childrenSize());
         return child;
     }
 
-    void setChild(size_t i, const PhysicalPlanPtr & new_child) override
+    void setChild(size_t i, const PhysicalPlanNodePtr & new_child) override
     {
         RUNTIME_ASSERT(i == 0, log, "child_index({}) should not >= childrenSize({})", i, childrenSize());
         RUNTIME_ASSERT(new_child, log, "new_child for child_index({}) shouldn't be nullptr", i);
@@ -56,6 +56,6 @@ public:
     size_t childrenSize() const override { return 1; };
 
 protected:
-    PhysicalPlanPtr child;
+    PhysicalPlanNodePtr child;
 };
 } // namespace DB

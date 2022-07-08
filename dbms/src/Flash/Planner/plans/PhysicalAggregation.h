@@ -24,18 +24,18 @@ namespace DB
 class PhysicalAggregation : public PhysicalUnary
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Aggregation & aggregation,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     PhysicalAggregation(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_,
+        const PhysicalPlanNodePtr & child_,
         const ExpressionActionsPtr & before_agg_actions_,
         const Names & aggregation_keys_,
         const TiDB::TiDBCollators & aggregation_collators_,

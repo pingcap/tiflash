@@ -24,18 +24,18 @@ namespace DB
 class PhysicalTopN : public PhysicalUnary
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::TopN & top_n,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     PhysicalTopN(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_,
+        const PhysicalPlanNodePtr & child_,
         const SortDescription & order_descr_,
         const ExpressionActionsPtr & before_sort_actions_,
         size_t limit_)

@@ -18,7 +18,7 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalSource::build(
+PhysicalPlanNodePtr PhysicalSource::build(
     const BlockInputStreams & source_streams,
     const LoggerPtr & log)
 {

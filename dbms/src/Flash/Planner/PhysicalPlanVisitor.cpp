@@ -24,9 +24,9 @@ void addPrefix(FmtBuffer & buffer, size_t level)
     buffer.append(String(level, ' '));
 }
 
-void doVisitToString(FmtBuffer & buffer, const PhysicalPlanPtr & physical_plan, size_t level)
+void doVisitToString(FmtBuffer & buffer, const PhysicalPlanNodePtr & physical_plan, size_t level)
 {
-    visit(physical_plan, [&buffer, &level](const PhysicalPlanPtr & plan) {
+    visit(physical_plan, [&buffer, &level](const PhysicalPlanNodePtr & plan) {
         assert(plan);
         addPrefix(buffer, level);
         buffer.fmtAppend("{}\n", plan->toString());
@@ -45,7 +45,7 @@ void doVisitToString(FmtBuffer & buffer, const PhysicalPlanPtr & physical_plan, 
 }
 } // namespace
 
-String visitToString(const PhysicalPlanPtr & plan)
+String visitToString(const PhysicalPlanNodePtr & plan)
 {
     FmtBuffer buffer;
     doVisitToString(buffer, plan, 0);

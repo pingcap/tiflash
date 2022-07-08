@@ -33,7 +33,7 @@ PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(
     , mock_streams(mock_streams_)
 {}
 
-PhysicalPlanPtr PhysicalMockExchangeReceiver::build(
+PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     Context & context,
     const String & executor_id,
     const LoggerPtr & log,

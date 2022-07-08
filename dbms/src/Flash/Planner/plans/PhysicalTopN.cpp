@@ -24,12 +24,12 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalTopN::build(
+PhysicalPlanNodePtr PhysicalTopN::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::TopN & top_n,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 

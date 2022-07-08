@@ -30,12 +30,12 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalAggregation::build(
+PhysicalPlanNodePtr PhysicalAggregation::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Aggregation & aggregation,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 

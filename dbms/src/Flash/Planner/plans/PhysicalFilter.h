@@ -23,18 +23,18 @@ namespace DB
 class PhysicalFilter : public PhysicalUnary
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Selection & selection,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     PhysicalFilter(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_,
+        const PhysicalPlanNodePtr & child_,
         const String & filter_column_,
         const ExpressionActionsPtr & before_filter_actions_)
         : PhysicalUnary(executor_id_, PlanType::Filter, schema_, req_id, child_)

@@ -23,7 +23,7 @@ namespace DB
 class PhysicalMockExchangeReceiver : public PhysicalLeaf
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         Context & context,
         const String & executor_id,
         const LoggerPtr & log,
