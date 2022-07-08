@@ -75,7 +75,7 @@ public:
                     FieldType(static_cast<Native>(-9999999), 4)),
                 createColumn<Nullable<Int32>>({4, 0, -1, 31, 5, 1, 2})));
         ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<String>>(1, "-1,000.000"),
+            createConstColumn<String>(1, "-1,000.000"),
             executeFunction(
                 func_name,
                 createConstColumn<NullableDecimal>(
@@ -118,7 +118,7 @@ public:
                     FieldType(static_cast<Native>(-9999999), 4)),
                 createColumn<Nullable<UInt32>>({4, 0, 31, 5, 1, 2})));
         ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<String>>(1, "-1,000.000"),
+            createConstColumn<String>(1, "-1,000.000"),
             executeFunction(
                 func_name,
                 createConstColumn<NullableDecimal>(
