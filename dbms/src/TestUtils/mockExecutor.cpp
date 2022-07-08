@@ -23,8 +23,6 @@
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
 
-#include <unordered_map>
-
 namespace DB::tests
 {
 ASTPtr buildColumn(const String & column_name)
@@ -353,57 +351,6 @@ void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockC
 }
 
 void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns)
-{
-    addExchangeRelationSchema(name, columnInfos);
-    addExchangeReceiverColumnData(name, columns);
-}
-
-void MockDAGRequestContext::addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
-{
-    mock_table_columns[db + "." + table] = columns;
-}
-
-void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns)
-{
-    mock_table_columns[name.first + "." + name.second] = columns;
-}
-
-void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
-{
-    mock_exchange_columns[name] = columns;
-}
-
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns)
-{
-    addMockTable(db, table, columnInfos);
-    addMockTableColumnData(db, table, columns);
-}
-
-void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns)
-{
-    addMockTable(db, table, columnInfos);
-    addMockTableColumnData(db, table, columns);
-}
-
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoList & columnInfos, ColumnsWithTypeAndName columns)
-{
-    addMockTable(name, columnInfos);
-    addMockTableColumnData(name, columns);
-}
-
-void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfos & columnInfos, ColumnsWithTypeAndName columns)
-{
-    addMockTable(name, columnInfos);
-    addMockTableColumnData(name, columns);
-}
-
-void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnInfos columnInfos, ColumnsWithTypeAndName columns)
-{
-    addExchangeRelationSchema(name, columnInfos);
-    addExchangeReceiverColumnData(name, columns);
-}
-
-void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnInfoList columnInfos, ColumnsWithTypeAndName columns)
 {
     addExchangeRelationSchema(name, columnInfos);
     addExchangeReceiverColumnData(name, columns);
