@@ -141,11 +141,11 @@ public:
     /// Wait until all threads are finished, before the destructor.
     void wait()
     {
-        if (joined_threads)
-            return;
         if (thread_manager)
+        {
             thread_manager->wait();
-        joined_threads = true;
+            thread_manager.reset();
+        }
     }
 
     size_t getNumActiveThreads() const
@@ -335,8 +335,6 @@ private:
 
     /// How many sources ran out.
     std::atomic<size_t> active_threads{0};
-    /// Wait for the completion of all threads.
-    std::atomic<bool> joined_threads{false};
 
     const LoggerPtr log;
 };
