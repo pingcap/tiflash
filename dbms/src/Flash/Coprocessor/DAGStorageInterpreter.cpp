@@ -38,6 +38,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 
+#include "Common/Exception.h"
 #include "Flash/Coprocessor/BatchCoprocessorReader.h"
 #include "common/logger_useful.h"
 #include "pingcap/coprocessor/Client.h"
@@ -547,16 +548,29 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
             ranges_for_each_physical_table.emplace_back(remote_request.key_ranges);
         }
 
+        if (ranges_for_each_physical_table.size() != 1)
+        {
+            throw Exception(fmt::format("Do not support for partition table scan now! [ranges_for_each_physical_table={}]", ranges_for_each_physical_table.size()), ErrorCodes::NOT_IMPLEMENTED);
+        }
+
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-        const size_t expect_concurrent_num = context.getSettingsRef().max_threads / 2;
-        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, ranges_for_each_physical_table, store_type, expect_concurrent_num, &Poco::Logger::get("pingcap/coprocessor"));
-        LOG_FMT_INFO(log, "build {} batch cop tasks", all_batch_tasks.size());
-        for (const auto & batch_task : all_batch_tasks)
+        const auto & settings = context.getSettingsRef();
+        const size_t batch_cop_split = settings.batch_cop_split;
+        const size_t expect_concurrent_num = settings.max_threads;
+        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, ranges_for_each_physical_table, store_type, batch_cop_split, &Poco::Logger::get("pingcap/coprocessor"));
+        LOG_FMT_INFO(log, "build {} batch cop tasks with [split={}]", all_batch_tasks.size(), batch_cop_split);
+        for (size_t task_idx = 0; task_idx < all_batch_tasks.size(); ++task_idx)
         {
+            const auto & batch_task = all_batch_tasks[task_idx];
             auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, /*concurrency*/ 1);
-            BlockInputStreamPtr input = std::make_shared<BatchCoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID());
-            pipeline.streams.emplace_back(std::move(input));
+            size_t idx = 0;
+            for (; idx < expect_concurrent_num / all_batch_tasks.size(); ++idx)
+            {
+                BlockInputStreamPtr input = std::make_shared<BatchCoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID());
+                pipeline.streams.emplace_back(std::move(input));
+            }
+            LOG_FMT_INFO(log, "build {} batch cop stream for [task_idx={}]", idx, task_idx);
         }
     }
 }
