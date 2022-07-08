@@ -244,7 +244,7 @@ private:
     /** Check limits and quotas.
       * But only those that can be checked within each separate stream.
       */
-    bool checkTimeLimit();
+    bool checkTimeLimit() const;
     void checkQuota(Block & block);
 
 
