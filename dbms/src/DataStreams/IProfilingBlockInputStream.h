@@ -212,14 +212,6 @@ protected:
     }
 
 private:
-    void lock() {
-      if(shared) mutex.lock();
-    }
-
-    void unlock() {
-      if (shared) mutex.unlock();
-    }
-
     bool enabled_extremes = false;
 
     /// The limit on the number of rows/bytes has been exceeded, and you need to stop execution on the next `read` call, as if the thread has run out.
