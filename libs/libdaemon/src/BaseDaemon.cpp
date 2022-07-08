@@ -807,9 +807,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         error_log_file->setProperty(Poco::FileChannel::PROP_PURGECOUNT, config.getRawString("logger.count", "10"));
         error_log_file->setProperty(Poco::FileChannel::PROP_FLUSH, config.getRawString("logger.flush", "true"));
         error_log_file->setProperty(Poco::FileChannel::PROP_ROTATEONOPEN, config.getRawString("logger.rotateOnOpen", "false"));
-        if (!error_log_file_async)
-            error_log_file_async = new Poco::AsyncChannel(error_log_file);
-        errorlog->setChannel(error_log_file_async);
+        errorlog->setChannel(error_log_file);
         level->setChannel(errorlog);
         split->addChannel(level);
         errorlog->open();

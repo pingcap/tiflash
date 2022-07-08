@@ -210,7 +210,6 @@ protected:
     Poco::AutoPtr<Poco::FileChannel> tracing_log_file;
     Poco::AutoPtr<Poco::SyslogChannel> syslog_channel;
     Poco::AutoPtr<Poco::AsyncChannel> log_file_async;
-    Poco::AutoPtr<Poco::AsyncChannel> error_log_file_async;
     Poco::AutoPtr<Poco::AsyncChannel> tracing_log_file_async;
 
     std::map<std::string, std::unique_ptr<GraphiteWriter>> graphite_writers;
