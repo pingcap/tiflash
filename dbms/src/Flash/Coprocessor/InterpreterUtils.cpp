@@ -46,17 +46,34 @@ void executeUnion(
     bool ignore_block,
     const String & extra_info)
 {
-    if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
-        return;
-    BlockInputStreamPtr stream;
-    if (ignore_block)
-        stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
-    else
-        stream = std::make_shared<UnionWithBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
-    stream->setExtraInfo(extra_info);
-    pipeline.streams.resize(1);
-    pipeline.streams_with_non_joined_data.clear();
-    pipeline.firstStream() = std::move(stream);
+    switch (pipeline.streams.size() + pipeline.streams_with_non_joined_data.size())
+    {
+    case 0:
+        break;
+    case 1:
+    {
+        if (pipeline.streams.size() == 1)
+            break;
+        // streams_with_non_joined_data's size is 1.
+        pipeline.streams.push_back(pipeline.streams_with_non_joined_data.at(0));
+        pipeline.streams_with_non_joined_data.clear();
+        break;
+    }
+    default:
+    {
+        BlockInputStreamPtr stream;
+        if (ignore_block)
+            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+        else
+            stream = std::make_shared<UnionWithBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+        stream->setExtraInfo(extra_info);
+
+        pipeline.streams.resize(1);
+        pipeline.streams_with_non_joined_data.clear();
+        pipeline.firstStream() = std::move(stream);
+        break;
+    }
+    }
 }
 
 ExpressionActionsPtr generateProjectExpressionActions(
