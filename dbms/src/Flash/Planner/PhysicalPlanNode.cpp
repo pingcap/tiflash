@@ -16,8 +16,8 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/Context.h>
 
 namespace DB
