@@ -33,7 +33,7 @@ void restoreConcurrency(
     if (concurrency > 1 && pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
     {
         BlockInputStreamPtr shared_query_block_input_stream
-            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log->identifier());
+            = std::make_shared<SharedQueryBlockInputStream>(concurrency * 5, pipeline.firstStream(), log->identifier(), true);
         shared_query_block_input_stream->setExtraInfo("restore concurrency");
         pipeline.streams.assign(concurrency, shared_query_block_input_stream);
     }
