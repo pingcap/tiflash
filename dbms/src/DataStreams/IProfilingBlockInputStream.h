@@ -205,7 +205,6 @@ protected:
     /// Minimums and maximums. The first row of the block - minimums, the second - the maximums.
     Block extremes;
 
-
     void addChild(BlockInputStreamPtr & child)
     {
         std::unique_lock lock(children_mutex);
@@ -213,6 +212,14 @@ protected:
     }
 
 private:
+    void lock() {
+      if(shared) mutex.lock();
+    }
+
+    void unlock() {
+      if (shared) mutex.unlock();
+    }
+
     bool enabled_extremes = false;
 
     /// The limit on the number of rows/bytes has been exceeded, and you need to stop execution on the next `read` call, as if the thread has run out.

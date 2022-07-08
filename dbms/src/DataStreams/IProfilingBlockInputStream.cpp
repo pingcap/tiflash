@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/UniqueLockGuard.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
@@ -51,27 +52,22 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
         total_rows_approx = 0;
     }
 
-    if (shared)
-        mutex.lock();
-    if (!info.started)
-    {
-        info.total_stopwatch.start();
-        info.started = true;
-    }
-
+    UInt64 start_time;
     Block res;
-
-    if (isCancelledOrThrowIfKilled())
     {
-        if (shared)
-            mutex.unlock();
-        return res;
+        UniqueLockGuard lock(shared, mutex);
+        if (!info.started)
+        {
+            info.total_stopwatch.start();
+            info.started = true;
+        }
+
+        if (isCancelledOrThrowIfKilled())
+        {
+            return res;
+        }
+        start_time = info.total_stopwatch.elapsed();
     }
-
-    auto start_time = info.total_stopwatch.elapsed();
-
-    if (shared)
-        mutex.unlock();
 
     if (!checkTimeLimit())
         limit_exceeded_need_break = true;
@@ -86,20 +82,19 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
     if (res)
     {
-        if (shared)
-            mutex.lock();
-        info.update(res);
+        {
+            UniqueLockGuard lock(shared, mutex);
+            info.update(res);
 
-        if (enabled_extremes)
-            updateExtremes(res);
+            if (enabled_extremes)
+                updateExtremes(res);
 
-        if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
-            limit_exceeded_need_break = true;
+            if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
+                limit_exceeded_need_break = true;
 
-        if (quota != nullptr)
-            checkQuota(res);
-        if (shared)
-            mutex.unlock();
+            if (quota != nullptr)
+                checkQuota(res);
+        }
     }
     else
     {
@@ -123,11 +118,10 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     }
 #endif
 
-    if (shared)
-        mutex.lock();
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
-    if (shared)
-        mutex.unlock();
+    {
+        UniqueLockGuard lock(shared, mutex);
+        info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    }
     return res;
 }
 
