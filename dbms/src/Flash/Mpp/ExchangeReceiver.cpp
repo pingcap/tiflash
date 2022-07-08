@@ -542,7 +542,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
         for (Int32 i = 0; i < check_waiting_requests_freq; ++i)
         {
             AsyncHandler * handler = nullptr;
-            if (unlikely(!ready_requests.tryPop(handler, timeout)))
+            if (unlikely(!ready_requests.popTimeout(handler, timeout)))
                 break;
 
             handler->handle();

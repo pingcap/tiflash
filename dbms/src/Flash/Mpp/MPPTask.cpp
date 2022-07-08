@@ -380,7 +380,7 @@ void MPPTask::runImpl()
     }
     catch (...)
     {
-        err_msg = getCurrentExceptionMessage(true);
+        err_msg = getCurrentExceptionMessage(true, true);
     }
 
     if (err_msg.empty())
@@ -406,6 +406,8 @@ void MPPTask::runImpl()
         if (status == RUNNING)
         {
             LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
+            /// trim the stack trace to avoid too many useless information in log
+            trimStackTrace(err_msg);
             try
             {
                 handleError(err_msg);

@@ -31,7 +31,7 @@ public:
 
     static void setupPB(uint64_t fine_grained_shuffle_stream_count, tipb::Window & window, tipb::Sort & sort)
     {
-        MockColumnInfos columns{
+        MockColumnInfoVec columns{
             {"c1", TiDB::TP::TypeLongLong},
             {"c2", TiDB::TP::TypeString},
             {"c3", TiDB::TP::TypeLongLong},
