@@ -140,7 +140,6 @@ class Runner:
                 '--workload', help='absolute path of workload script', required=True)
             parser.add_argument(
                 '--pid', help='pid of TiFlash process', required=True)
-            self._show_help()
 
         if self.args.convert_llvm:
             parser.add_argument(
@@ -151,7 +150,6 @@ class Runner:
                 '--binary', help='binary to run workload', required=True)
             parser.add_argument(
                 '--output-llvm-prof', help='output llvm profile data path', default='tiflash.llvm.code.prof')
-            self._show_help()
 
         self._show_help()
 
@@ -178,6 +176,7 @@ class Runner:
 
         self.args.output_llvm_prof = 'tiflash.llvm.code.prof'
         self.args.binary = os.path.realpath(self.args.binary)
+        assert os.path.isfile(self.args.binary)
 
         logger.info('start to convert linux perf data `{}` to llvm profile data `{}`'.format(
             self.args.input_perf_file, self.args.output_llvm_prof))
