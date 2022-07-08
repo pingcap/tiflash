@@ -35,20 +35,21 @@ public:
         const PhysicalPlanPtr & child_)
         : PhysicalPlan(executor_id_, type_, schema_, req_id)
         , child(child_)
-    {}
+    {
+        RUNTIME_ASSERT(child, log, "children(0) shouldn't be nullptr");
+    }
 
     PhysicalPlanPtr children(size_t i) const override
     {
-        RUNTIME_ASSERT(i == 0, log, "child_index({}) should not >= childrenSize({})", i, childrenSize());
-        assert(child);
+        RUNTIME_ASSERT(i == 0, log, "child_index({}) shouldn't >= childrenSize({})", i, childrenSize());
         return child;
     }
 
     void setChild(size_t i, const PhysicalPlanPtr & new_child) override
     {
         RUNTIME_ASSERT(i == 0, log, "child_index({}) should not >= childrenSize({})", i, childrenSize());
-        assert(new_child);
-        assert(new_child.get() != this);
+        RUNTIME_ASSERT(new_child, log, "new_child for child_index({}) shouldn't be nullptr", i);
+        RUNTIME_ASSERT(new_child.get() != this, log, "new_child for child_index({}) shouldn't be itself", i);
         child = new_child;
     }
 
