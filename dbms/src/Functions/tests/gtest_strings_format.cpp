@@ -65,8 +65,6 @@ public:
                      FieldType(static_cast<Native>(-9999999), 4),
                      FieldType(static_cast<Native>(-3333330), 4)}),
                 createConstColumn<Nullable<Int16>>(4, 3)));
-        /// known issue https://github.com/pingcap/tiflash/issues/4891
-        /*
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"-999.9999", "-1,000", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
             executeFunction(
@@ -77,7 +75,7 @@ public:
                     FieldType(static_cast<Native>(-9999999), 4)),
                 createColumn<Nullable<Int32>>({4, 0, -1, 31, 5, 1, 2})));
         ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<String>>(1, "-1,000.000"),
+            createConstColumn<String>(1, "-1,000.000"),
             executeFunction(
                 func_name,
                 createConstColumn<NullableDecimal>(
@@ -85,7 +83,6 @@ public:
                     1,
                     FieldType(static_cast<Native>(-9999999), 4)),
                 createConstColumn<Nullable<Int8>>(1, 3)));
-                */
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"12,332.1000", "12,332", "12,332.300000000000000000000000000000", "-12,332.30000", "-1,000.0", "-333.33", {}}),
             executeFunction(
@@ -111,8 +108,6 @@ public:
                      FieldType(static_cast<Native>(-9999999), 4),
                      FieldType(static_cast<Native>(-3333330), 4)}),
                 createConstColumn<Nullable<UInt16>>(4, 3)));
-        /// known issue https://github.com/pingcap/tiflash/issues/4891
-        /*
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"-999.9999", "-1,000", "-999.999900000000000000000000000000", "-999.99990", "-1,000.0", "-1,000.00"}),
             executeFunction(
@@ -123,7 +118,7 @@ public:
                     FieldType(static_cast<Native>(-9999999), 4)),
                 createColumn<Nullable<UInt32>>({4, 0, 31, 5, 1, 2})));
         ASSERT_COLUMN_EQ(
-            createConstColumn<Nullable<String>>(1, "-1,000.000"),
+            createConstColumn<String>(1, "-1,000.000"),
             executeFunction(
                 func_name,
                 createConstColumn<NullableDecimal>(
@@ -131,7 +126,6 @@ public:
                     1,
                     FieldType(static_cast<Native>(-9999999), 4)),
                 createConstColumn<Nullable<UInt8>>(1, 3)));
-         */
     }
 
     template <typename Integer>
