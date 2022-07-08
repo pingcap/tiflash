@@ -271,71 +271,40 @@ DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByIte
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();
     window_func_list->children.push_back(window_func);
-<<<<<<< HEAD
-    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList({partition_by}), buildOrderByItemList({order_by}), frame, fine_grained_shuffle_stream_count);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemVec({partition_by}), buildOrderByItemVec({order_by}), frame, fine_grained_shuffle_stream_count);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
-=======
-    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemVec({partition_by}), buildOrderByItemVec({order_by}), frame);
-    return *this;
-}
-
-DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame)
->>>>>>> e58a007b48308369caa5fd458469c86fbd069602
+DAGRequestBuilder & DAGRequestBuilder::window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();
     window_func_list->children.push_back(window_func);
-<<<<<<< HEAD
-    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(partition_by_list), buildOrderByItemList(order_by_list), frame, fine_grained_shuffle_stream_count);
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemVec(partition_by_vec), buildOrderByItemVec(order_by_vec), frame, fine_grained_shuffle_stream_count);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::window(MockAsts window_funcs, MockOrderByItems order_by_list, MockPartitionByItems partition_by_list, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
-=======
-    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemVec(partition_by_vec), buildOrderByItemVec(order_by_vec), frame);
-    return *this;
-}
-
-DAGRequestBuilder & DAGRequestBuilder::window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame)
->>>>>>> e58a007b48308369caa5fd458469c86fbd069602
+DAGRequestBuilder & DAGRequestBuilder::window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
     auto window_func_list = std::make_shared<ASTExpressionList>();
     for (const auto & func : window_funcs)
         window_func_list->children.push_back(func);
-<<<<<<< HEAD
-    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemList(partition_by_list), buildOrderByItemList(order_by_list), frame, fine_grained_shuffle_stream_count);
-=======
-    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemVec(partition_by_vec), buildOrderByItemVec(order_by_vec), frame);
->>>>>>> e58a007b48308369caa5fd458469c86fbd069602
+    root = compileWindow(root, getExecutorIndex(), window_func_list, buildOrderByItemVec(partition_by_vec), buildOrderByItemVec(order_by_vec), frame, fine_grained_shuffle_stream_count);
     return *this;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-<<<<<<< HEAD
-    root = compileSort(root, getExecutorIndex(), buildOrderByItemList({order_by}), is_partial_sort, fine_grained_shuffle_stream_count);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemVec({order_by}), is_partial_sort, fine_grained_shuffle_stream_count);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItems order_by_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = compileSort(root, getExecutorIndex(), buildOrderByItemList(order_by_list), is_partial_sort, fine_grained_shuffle_stream_count);
-=======
-    root = compileSort(root, getExecutorIndex(), buildOrderByItemVec({order_by}), is_partial_sort);
-    return *this;
-}
-
-DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, bool is_partial_sort)
-{
-    assert(root);
-    root = compileSort(root, getExecutorIndex(), buildOrderByItemVec(order_by_vec), is_partial_sort);
->>>>>>> e58a007b48308369caa5fd458469c86fbd069602
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemVec(order_by_vec), is_partial_sort, fine_grained_shuffle_stream_count);
     return *this;
 }
 

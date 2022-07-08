@@ -156,29 +156,6 @@ void printException(const Exception & e)
                   << e.getStackTrace().toString() << std::endl;
 }
 
-void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & queue, StopFlag & stop_flag)
-{
-    std::mt19937 mt(rd());
-    std::uniform_int_distribution<int> dist(0, packets.size() - 1);
-
-    while (!stop_flag.load())
-    {
-        int i = dist(mt);
-        queue->tryPush(packets[i], std::chrono::milliseconds(10));
-    }
-    queue->finish();
-}
-
-void receivePacket(const PacketQueuePtr & queue)
-{
-    while (true)
-    {
-        PacketPtr packet;
-        if (!queue->pop(packet))
-            break;
-    }
-}
-
 ReceiverHelper::ReceiverHelper(int concurrency_, int source_num_, uint32_t fine_grained_shuffle_stream_count_)
     : concurrency(concurrency_)
     , source_num(source_num_)
