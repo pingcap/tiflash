@@ -40,10 +40,6 @@ if (USE_ICU)
     target_include_directories (clickhouse_functions PRIVATE ${ICU_INCLUDE_DIR})
 endif ()
 
-if (USE_VECTORCLASS)
-    target_include_directories (clickhouse_functions BEFORE PUBLIC ${VECTORCLASS_INCLUDE_DIR})
-endif ()
-
 if (ENABLE_TESTS)
     add_subdirectory (tests EXCLUDE_FROM_ALL)
 endif ()

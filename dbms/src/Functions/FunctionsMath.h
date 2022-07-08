@@ -27,27 +27,13 @@
 #include <common/preciseExp10.h>
 #include <fmt/core.h>
 
-/** More efficient implementations of mathematical functions are possible when using a separate library.
-  * Disabled due to licence compatibility limitations.
-  * To enable: download http://www.agner.org/optimize/vectorclass.zip and unpack to contrib/vectorclass
-  * Then rebuild with -DENABLE_VECTORCLASS=1
-  */
-
-#if USE_VECTORCLASS
-#if __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wshift-negative-value"
+#if defined(__linux__) && defined(__aarch64__)
+#include <Functions/FunctionsMathARM64.h>
 #endif
 
-#include <vectorf128.h>
-#include <vectormath_exp.h>
-#include <vectormath_trig.h>
-
-#if __clang__
-#pragma clang diagnostic pop
+#if defined(__linux__) && defined(__x86_64__)
+#include <Functions/FunctionsMathAMD64.h>
 #endif
-#endif
-
 
 namespace DB
 {
@@ -55,6 +41,10 @@ namespace ErrorCodes
 {
 extern const int ILLEGAL_COLUMN;
 }
+
+struct UnaryFunctionVectorizedTag
+{
+};
 
 template <typename Impl>
 class FunctionMathNullaryConstFloat64 : public IFunction
@@ -153,8 +143,15 @@ private:
             }
             else
             {
-                for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
-                    Impl::execute(&src_data[i], &dst_data[i]);
+                if constexpr (std::is_base_of_v<UnaryFunctionVectorizedTag, Impl>)
+                {
+                    Impl::transform(&dst_data[0], &src_data[0], rows_size);
+                }
+                else
+                {
+                    for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
+                        Impl::execute(&src_data[i], &dst_data[i]);
+                }
 
                 if (rows_remaining != 0)
                 {
@@ -219,30 +216,6 @@ struct UnaryFunctionPlain
         dst[0] = static_cast<Float64>(Function(static_cast<Float64>(src[0])));
     }
 };
-
-#if USE_VECTORCLASS
-
-template <typename Name, Vec2d(Function)(const Vec2d &)>
-struct UnaryFunctionVectorized
-{
-    static constexpr auto name = Name::name;
-    static constexpr auto rows_per_iteration = 2;
-
-    template <typename T>
-    static void execute(const T * src, Float64 * dst)
-    {
-        const auto result = Function(Vec2d(src[0], src[1]));
-        result.store(dst);
-    }
-};
-
-#else
-
-#define UnaryFunctionVectorized UnaryFunctionPlain
-#define UnaryFunctionNullableVectorized UnaryFunctionNullablePlain
-
-#endif
-
 
 template <typename Impl, bool Nullable = false>
 class FunctionMathBinaryFloat64 : public IFunction
@@ -561,29 +534,6 @@ struct BinaryFunctionPlain
     }
 };
 
-#if USE_VECTORCLASS
-
-template <typename Name, Vec2d(Function)(const Vec2d &, const Vec2d &)>
-struct BinaryFunctionVectorized
-{
-    static constexpr auto name = Name::name;
-    static constexpr auto rows_per_iteration = 2;
-
-    template <typename T1, typename T2>
-    static void execute(const T1 * src_left, const T2 * src_right, Float64 * dst)
-    {
-        const auto result = Function(Vec2d(src_left[0], src_left[1]), Vec2d(src_right[0], src_right[1]));
-        result.store(dst);
-    }
-};
-
-#else
-
-#define BinaryFunctionVectorized BinaryFunctionPlain
-
-#endif
-
-
 struct EImpl
 {
     static constexpr auto name = "e";
@@ -716,38 +666,102 @@ struct PowName
     static constexpr auto name = "pow";
 };
 
+#pragma push_macro("UNARY_FUNCTION_IMPL")
+#pragma push_macro("UNARY_FUNCTION_IMPL_NORMAL")
+#define UNARY_FUNCTION_IMPL(X, FUNC)                                             \
+    struct X##FunctionImpl : public UnaryFunctionVectorizedTag                   \
+    {                                                                            \
+        static constexpr auto name = X##Name::name;                              \
+        static constexpr auto rows_per_iteration = 1;                            \
+        template <typename T>                                                    \
+        static void transform(Float64 * dst, const T * src, size_t size)         \
+        {                                                                        \
+            ::DB::UnaryMath::FUNC##Transform<T>(dst, src, size);                 \
+        }                                                                        \
+        template <typename T>                                                    \
+        static void execute(const T * src, Float64 * dst)                        \
+        {                                                                        \
+            dst[0] = static_cast<Float64>(::FUNC(static_cast<Float64>(src[0]))); \
+        }                                                                        \
+    }
+
+#define UNARY_FUNCTION_IMPL_NORMAL(X, FUNC) \
+    using X##FunctionImpl = UnaryFunctionPlain<ExpName, FUNC>
+
+#if defined(__linux__) && defined(__aarch64__)
+UNARY_FUNCTION_IMPL(Log, log);
+UNARY_FUNCTION_IMPL_NORMAL(Log2, log2);
+UNARY_FUNCTION_IMPL_NORMAL(Log10, log10);
+UNARY_FUNCTION_IMPL_NORMAL(Cbrt, cbrt);
+UNARY_FUNCTION_IMPL(Sin, sin);
+UNARY_FUNCTION_IMPL(Cos, cos);
+UNARY_FUNCTION_IMPL_NORMAL(Tan, tan);
+UNARY_FUNCTION_IMPL_NORMAL(Asin, asin);
+UNARY_FUNCTION_IMPL_NORMAL(Acos, acos);
+UNARY_FUNCTION_IMPL_NORMAL(Atan, atan);
+UNARY_FUNCTION_IMPL_NORMAL(Erf, erf);
+UNARY_FUNCTION_IMPL_NORMAL(Erfc, erfc);
+UNARY_FUNCTION_IMPL(Exp, exp);
+UNARY_FUNCTION_IMPL_NORMAL(Exp2, exp2);
+#elif defined(__linux__) && defined(__x86_64__)
+UNARY_FUNCTION_IMPL(Log, log);
+UNARY_FUNCTION_IMPL(Log2, log2);
+UNARY_FUNCTION_IMPL(Log10, log10);
+UNARY_FUNCTION_IMPL(Cbrt, cbrt);
+UNARY_FUNCTION_IMPL(Sin, sin);
+UNARY_FUNCTION_IMPL(Cos, cos);
+UNARY_FUNCTION_IMPL(Tan, tan);
+UNARY_FUNCTION_IMPL(Asin, asin);
+UNARY_FUNCTION_IMPL(Acos, acos);
+UNARY_FUNCTION_IMPL(Atan, atan);
+UNARY_FUNCTION_IMPL(Erf, erf);
+UNARY_FUNCTION_IMPL(Erfc, erfc);
+UNARY_FUNCTION_IMPL_NORMAL(Exp, exp);
+UNARY_FUNCTION_IMPL_NORMAL(Exp2, exp2);
+#else
+UNARY_FUNCTION_IMPL_NORMAL(Log, log);
+UNARY_FUNCTION_IMPL_NORMAL(Log2, log2);
+UNARY_FUNCTION_IMPL_NORMAL(Log10, log10);
+UNARY_FUNCTION_IMPL_NORMAL(Cbrt, cbrt);
+UNARY_FUNCTION_IMPL_NORMAL(Sin, sin);
+UNARY_FUNCTION_IMPL_NORMAL(Cos, cos);
+UNARY_FUNCTION_IMPL_NORMAL(Tan, tan);
+UNARY_FUNCTION_IMPL_NORMAL(Asin, asin);
+UNARY_FUNCTION_IMPL_NORMAL(Acos, acos);
+UNARY_FUNCTION_IMPL_NORMAL(Atan, atan);
+UNARY_FUNCTION_IMPL_NORMAL(Erf, erf);
+UNARY_FUNCTION_IMPL_NORMAL(Erfc, erfc);
+UNARY_FUNCTION_IMPL_NORMAL(Exp, exp);
+UNARY_FUNCTION_IMPL_NORMAL(Exp2, exp2);
+#endif
+
+#pragma pop_macro("UNARY_FUNCTION_IMPL")
+#pragma pop_macro("UNARY_FUNCTION_IMPL_NORMAL")
+
 using FunctionRadians = FunctionMathUnaryFloat64<UnaryFunctionPlain<RadiansName, DB::degToRad>>;
 using FunctionDegrees = FunctionMathUnaryFloat64<UnaryFunctionPlain<DegreesName, DB::radToDeg>>;
 using FunctionSign = FunctionMathUnaryFloat64<UnaryFunctionPlain<SignName, DB::sign>>;
 using FunctionE = FunctionMathNullaryConstFloat64<EImpl>;
 using FunctionPi = FunctionMathNullaryConstFloat64<PiImpl>;
-using FunctionExp = FunctionMathUnaryFloat64<UnaryFunctionVectorized<ExpName, exp>>;
-using FunctionLog = FunctionMathUnaryFloat64<UnaryFunctionVectorized<LogName, log>>;
+using FunctionExp = FunctionMathUnaryFloat64<ExpFunctionImpl>;
+using FunctionLog = FunctionMathUnaryFloat64<LogFunctionImpl>;
 using FunctionLog2Args = FunctionMathBinaryFloat64Nullable<BinaryFunctionNullablePlain<Log2ArgsName, DB::log2args>>;
-using FunctionExp2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp2Name, exp2>>;
-using FunctionLog2 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Log2Name, log2>>;
-using FunctionExp10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp10Name, preciseExp10>>;
-using FunctionLog10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Log10Name, log10>>;
-using FunctionSqrt = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVectorized<SqrtName, DB::sqrtNullable>>;
-
-using FunctionCbrt = FunctionMathUnaryFloat64<UnaryFunctionVectorized<CbrtName,
-#if USE_VECTORCLASS
-                                                                      Power_rational<1, 3>::pow
-#else
-                                                                      cbrt
-#endif
-                                                                      >>;
-
-using FunctionSin = FunctionMathUnaryFloat64<UnaryFunctionVectorized<SinName, sin>>;
-using FunctionCos = FunctionMathUnaryFloat64<UnaryFunctionVectorized<CosName, cos>>;
-using FunctionTan = FunctionMathUnaryFloat64<UnaryFunctionVectorized<TanName, tan>>;
-using FunctionAsin = FunctionMathUnaryFloat64<UnaryFunctionVectorized<AsinName, asin>>;
-using FunctionAcos = FunctionMathUnaryFloat64<UnaryFunctionVectorized<AcosName, acos>>;
-using FunctionAtan = FunctionMathUnaryFloat64<UnaryFunctionVectorized<AtanName, atan>>;
-using FunctionErf = FunctionMathUnaryFloat64<UnaryFunctionPlain<ErfName, std::erf>>;
-using FunctionErfc = FunctionMathUnaryFloat64<UnaryFunctionPlain<ErfcName, std::erfc>>;
+using FunctionExp2 = FunctionMathUnaryFloat64<Exp2FunctionImpl>;
+using FunctionLog2 = FunctionMathUnaryFloat64<Log2FunctionImpl>;
+using FunctionExp10 = FunctionMathUnaryFloat64<UnaryFunctionPlain<Exp10Name, preciseExp10>>;
+using FunctionLog10 = FunctionMathUnaryFloat64<Log10FunctionImpl>;
+using FunctionSqrt = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullablePlain<SqrtName, DB::sqrtNullable>>;
+using FunctionCbrt = FunctionMathUnaryFloat64<CbrtFunctionImpl>;
+using FunctionSin = FunctionMathUnaryFloat64<SinFunctionImpl>;
+using FunctionCos = FunctionMathUnaryFloat64<CosFunctionImpl>;
+using FunctionTan = FunctionMathUnaryFloat64<TanFunctionImpl>;
+using FunctionAsin = FunctionMathUnaryFloat64<AsinFunctionImpl>;
+using FunctionAcos = FunctionMathUnaryFloat64<AcosFunctionImpl>;
+using FunctionAtan = FunctionMathUnaryFloat64<AtanFunctionImpl>;
+using FunctionErf = FunctionMathUnaryFloat64<ErfFunctionImpl>;
+using FunctionErfc = FunctionMathUnaryFloat64<ErfcFunctionImpl>;
 using FunctionLGamma = FunctionMathUnaryFloat64<UnaryFunctionPlain<LGammaName, std::lgamma>>;
 using FunctionTGamma = FunctionMathUnaryFloat64<UnaryFunctionPlain<TGammaName, std::tgamma>>;
-using FunctionPow = FunctionMathBinaryFloat64<BinaryFunctionVectorized<PowName, pow>>;
+using FunctionPow = FunctionMathBinaryFloat64<BinaryFunctionPlain<PowName, pow>>;
 
 } // namespace DB

@@ -59,8 +59,6 @@ const char * auto_config_build[]{
     "@USE_ICU@",
     "USE_RE2_ST",
     "@USE_RE2_ST@",
-    "USE_VECTORCLASS",
-    "@USE_VECTORCLASS@",
     "USE_Poco_NetSSL",
     "@Poco_NetSSL_FOUND@",
 
