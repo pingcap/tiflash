@@ -21,6 +21,7 @@
 #include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
+#include <Flash/Planner/plans/PhysicalJoin.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
@@ -81,6 +82,19 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeProjection:
         pushBack(PhysicalProjection::build(context, executor_id, log, executor->projection(), popBack()));
         break;
+    case tipb::ExecType::TypeJoin:
+    {
+        if (dagContext().isTest())
+            buildFinalProjection(fmt::format("{}_l_", executor_id), false);
+        auto left = popBack();
+
+        if (dagContext().isTest())
+            buildFinalProjection(fmt::format("{}_r_", executor_id), false);
+        auto right = popBack();
+
+        pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), left, right));
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }
@@ -135,14 +149,19 @@ void PhysicalPlan::outputAndOptimize()
 {
     RUNTIME_ASSERT(!root_node, log, "root_node shoud be nullptr before `outputAndOptimize`");
     RUNTIME_ASSERT(cur_plan_nodes.size() == 1, log, "There can only be one plan node output, but here are {}", cur_plan_nodes.size());
-    root_node = popBack();
 
+    root_node = popBack();
     LOG_FMT_DEBUG(
         log,
         "build unoptimized physical plan: \n{}",
         toString());
 
     root_node = optimize(context, root_node);
+    LOG_FMT_DEBUG(
+        log,
+        "build optimized physical plan: \n{}",
+        toString());
+
     RUNTIME_ASSERT(root_node, log, "root_node shoudn't be nullptr after `outputAndOptimize`");
 }
 

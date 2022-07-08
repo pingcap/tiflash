@@ -89,7 +89,8 @@ bool Planner::isSupported(const DAGQueryBlock & query_block)
 {
     return query_block.source
         && (query_block.source->tp() == tipb::ExecType::TypeProjection
-            || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver);
+            || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
+            || query_block.source->tp() == tipb::ExecType::TypeJoin);
 }
 
 DAGContext & Planner::dagContext() const
@@ -115,11 +116,6 @@ void Planner::executeImpl(DAGPipeline & pipeline)
     analyzePhysicalPlan(context, physical_plan, query_block);
 
     physical_plan.outputAndOptimize();
-
-    LOG_FMT_DEBUG(
-        log,
-        "build physical plan: \n{}",
-        physical_plan.toString());
 
     physical_plan.transform(pipeline, context, max_streams);
 }
