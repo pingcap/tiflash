@@ -382,7 +382,7 @@ TEST_F(TestMPPTunnelBase, WriteError)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, grpc writes failed.");
+        GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, 0000_0001 meet error: grpc writes failed.");
     }
 }
 
@@ -631,7 +631,7 @@ TEST_F(TestMPPTunnelBase, AsyncWriteError)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, grpc writes failed.");
+        GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, 0000_0001 meet error: grpc writes failed.");
     }
 }
 
