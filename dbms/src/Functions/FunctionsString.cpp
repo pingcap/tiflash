@@ -4260,7 +4260,7 @@ private:
                 auto repeat_times = col_const_repeat_times->getValue<IntType>();
                 vectorConst(col_string->getChars(),
                             col_string->getOffsets(),
-                            accurate::lessOp(INT64_MAX, repeat_times) ? INT64_MAX : repeat_times,
+                            accurate::lessOp(INT32_MAX, repeat_times) ? INT32_MAX : repeat_times,
                             col_res->getChars(),
                             col_res->getOffsets());
             }
@@ -4297,7 +4297,7 @@ private:
         else
         {
             // Impossible to reach here
-            return false;
+            throw Exception("Impossible to reach here. Please check logic", ErrorCodes::LOGICAL_ERROR);
         }
 
         block.getByPosition(result).column = std::move(col_res);
@@ -4306,7 +4306,7 @@ private:
     static void vectorConst(
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        const Int64 repeat_times,
+        const Int32 repeat_times,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -4338,7 +4338,7 @@ private:
         ColumnString::Offset res_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            Int64 repeat_count = accurate::lessOp(INT64_MAX, repeat_times[i]) ? INT64_MAX : repeat_times[i];
+            Int32 repeat_count = accurate::lessOp(INT32_MAX, repeat_times[i]) ? INT32_MAX : repeat_times[i];
             res_offset += doRepeat(data, prev_offset, offsets[i], repeat_count, res_data, res_offset);
             res_offsets[i] = res_offset;
             prev_offset = offsets[i];
@@ -4361,7 +4361,7 @@ private:
         ColumnString::Offset res_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            Int64 repeat_count = accurate::lessOp(INT64_MAX, repeat_times[i]) ? INT64_MAX : repeat_times[i];
+            Int32 repeat_count = accurate::lessOp(INT32_MAX, repeat_times[i]) ? INT32_MAX : repeat_times[i];
             res_offset += doRepeat(data, start_offset, end_offset, repeat_count, res_data, res_offset);
             res_offsets[i] = res_offset;
         }
@@ -4370,7 +4370,7 @@ private:
         const ColumnString::Chars_t & data,
         const ColumnString::Offset & start_offset,
         const ColumnString::Offset & end_offset,
-        Int64 repeat_times,
+        Int32 repeat_times,
         ColumnString::Chars_t & res_data,
         const ColumnString::Offset & res_offset)
     {
@@ -4384,7 +4384,7 @@ private:
         size_t size = repeat_times * size_to_copy;
         res_data.resize(res_data.size() + size + 1);
 
-        for (Int64 i = 0; i < repeat_times; ++i)
+        for (Int32 i = 0; i < repeat_times; ++i)
         {
             memcpy(&res_data[res_offset + size_to_copy * i], &data[start_offset], size_to_copy);
         }
