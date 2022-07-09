@@ -4713,7 +4713,7 @@ private:
     static std::string number2Str(T number, const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
         if constexpr (IsDecimal<T>)
-            return number.toString(std::min(info.input_scale, info.output_scale));
+            return number.toString(info.output_scale);
         else
         {
             static_assert(std::is_floating_point_v<T> || std::is_integral_v<T>);
