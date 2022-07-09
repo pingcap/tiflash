@@ -4943,16 +4943,16 @@ public:
     }
 
     template <typename T>
-    static void executeOneUIntOrInt(T xx, char *& out, bool skip_leading_zero = true, bool auto_close = true)
+    static void executeOneUIntOrInt(T data, char *& out)
     {
-        auto x = static_cast<Int64>(xx); // NOLINT
+        auto x = static_cast<Int64>(data); // NOLINT
         bool was_nonzero = false;
         bool was_first_nonzero_byte = true;
         for (int offset = (sizeof(Int64) - 1) * 8; offset >= 0; offset -= 8)
         {
             UInt8 byte = x >> offset;
             /// Skip leading zeros
-            if (byte == 0 && !was_nonzero && offset && skip_leading_zero) //-V560
+            if (byte == 0 && !was_nonzero && offset)
                 continue;
             was_nonzero = true;
             if (was_first_nonzero_byte)
@@ -4966,11 +4966,8 @@ public:
                 out += word_size;
             }
         }
-        if (auto_close)
-        {
-            *out = '\0';
-            ++out;
-        }
+        *out = '\0';
+        ++out;
     }
 
     template <typename T>
@@ -5013,7 +5010,14 @@ public:
     {
         const IColumn * column = block.getByPosition(arguments[0]).column.get();
         ColumnPtr res_column;
-        if (tryExecuteUIntOrInt<UInt8>(column, res_column) || tryExecuteUIntOrInt<UInt16>(column, res_column) || tryExecuteUIntOrInt<UInt32>(column, res_column) || tryExecuteUIntOrInt<UInt64>(column, res_column) || tryExecuteUIntOrInt<Int8>(column, res_column) || tryExecuteUIntOrInt<Int16>(column, res_column) || tryExecuteUIntOrInt<Int32>(column, res_column) || tryExecuteUIntOrInt<Int64>(column, res_column))
+        if (tryExecuteUIntOrInt<UInt8>(column, res_column) ||
+	    tryExecuteUIntOrInt<UInt16>(column, res_column) ||
+	    tryExecuteUIntOrInt<UInt32>(column, res_column) ||
+	    tryExecuteUIntOrInt<UInt64>(column, res_column) ||
+	    tryExecuteUIntOrInt<Int8>(column, res_column) ||
+	    tryExecuteUIntOrInt<Int16>(column, res_column) ||
+	    tryExecuteUIntOrInt<Int32>(column, res_column) ||
+	    tryExecuteUIntOrInt<Int64>(column, res_column))
         {
             block.getByPosition(result).column = std::move(res_column);
             return;
