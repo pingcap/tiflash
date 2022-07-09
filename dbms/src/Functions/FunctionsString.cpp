@@ -4366,6 +4366,7 @@ private:
             res_offsets[i] = res_offset;
         }
     }
+    /// Todo: should handle maxAllowedPacket. Detail in https://github.com/pingcap/tiflash/issues/3669
     static size_t doRepeat(
         const ColumnString::Chars_t & data,
         const ColumnString::Offset & start_offset,
