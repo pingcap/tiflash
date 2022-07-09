@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Functions/UnaryMath/Switch.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <mutex>
 #include <random>
 
 namespace DB
@@ -24,6 +26,26 @@ namespace tests
 
 static constexpr size_t ROW_NUMBER = 200000;
 static constexpr double ERROR_LIMIT = std::numeric_limits<double>::epsilon();
+
+static inline std::mutex vectorization_mutex;
+
+struct VectorizationGardian
+{
+    std::unique_lock<std::mutex> holder;
+    VectorizationGardian()
+        : holder(vectorization_mutex)
+    {
+#ifdef TIFLASH_HAS_UNARY_MATH_VECTORIZATION_SUPPORT
+        UnaryMath::enableVectorization();
+#endif
+    }
+    ~VectorizationGardian()
+    {
+#ifdef TIFLASH_HAS_UNARY_MATH_VECTORIZATION_SUPPORT
+        UnaryMath::disableVectorization();
+#endif
+    }
+};
 
 class TestFunctionMath : public DB::tests::FunctionTest
 {
@@ -61,10 +83,11 @@ public:
     }
 };
 
-#define MATH_TEST_INSTANCE(NAME, FUNC, SCALE, DATA_SET)                                \
+#define MATH_TEST_INSTANCE(NAME, FUNC, SCALE, DATA_SET, GUARDIAN)                      \
     TEST_F(TestFunctionMath, NAME)                                                     \
     try                                                                                \
     {                                                                                  \
+        GUARDIAN;                                                                      \
         auto result = executeFunction(#FUNC, DATA_SET);                                \
         for (size_t i = 0; i < ROW_NUMBER; ++i)                                        \
         {                                                                              \
@@ -83,16 +106,27 @@ public:
     }                                                                                  \
     CATCH
 
-MATH_TEST_INSTANCE(Sin, sin, 10, column);
-MATH_TEST_INSTANCE(Cos, cos, 10, column);
-MATH_TEST_INSTANCE(Tan, tan, 10, tangent);
-MATH_TEST_INSTANCE(Asin, asin, 10, column);
-MATH_TEST_INSTANCE(Acos, acos, 10, column);
-MATH_TEST_INSTANCE(Atan, atan, 10, column);
-MATH_TEST_INSTANCE(Log, log, 10, column);
-MATH_TEST_INSTANCE(Log2, log2, 10, column);
-MATH_TEST_INSTANCE(Log10, log10, 10, column);
-MATH_TEST_INSTANCE(Exp, exp, 10, column);
+MATH_TEST_INSTANCE(VectorizedSin, sin, 10, column, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedCos, cos, 10, column, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedTan, tan, 10, tangent, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedAsin, asin, 10, column, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedAcos, acos, 10, column, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedAtan, atan, 10, column, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedLog, log, 10, column, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedLog2, log2, 10, column, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedLog10, log10, 10, column, VectorizationGardian gardian{});
+MATH_TEST_INSTANCE(VectorizedExp, exp, 10, column, VectorizationGardian gardian{});
+
+MATH_TEST_INSTANCE(ScalarSin, sin, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarCos, cos, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarTan, tan, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarAsin, asin, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarAcos, acos, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarAtan, atan, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarLog, log, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarLog2, log2, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarLog10, log10, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
+MATH_TEST_INSTANCE(ScalarExp, exp, 1, column, std::unique_lock<std::mutex> gardian{vectorization_mutex});
 
 } // namespace tests
 } // namespace DB

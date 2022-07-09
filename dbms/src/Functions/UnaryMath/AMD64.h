@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
 #include <dlfcn.h>
 #include <immintrin.h>
 
@@ -60,10 +61,7 @@ enum class LibMVecFunc
 struct LibMVec
 {
     void * handle;
-    LibMVec()
-    {
-        handle = ::dlopen("libmvec.so.1", RTLD_LAZY | RTLD_LOCAL);
-    }
+    LibMVec() { handle = ::dlopen("libmvec.so.1", RTLD_LAZY | RTLD_LOCAL); }
     ~LibMVec()
     {
         if (handle)
@@ -103,20 +101,26 @@ struct MVec
     }
 };
 
-static inline __attribute__((target("avx512f"))) __m512d load512(const double * data)
+static inline __attribute__((target("avx512f"))) __m512d load512(
+    const double * data)
 {
     return _mm512_load_pd(data);
 }
 
-static inline __attribute__((target("avx512f"))) void store512(double * data, __m512d vec)
+static inline __attribute__((target("avx512f"))) void store512(double * data,
+                                                               __m512d vec)
 {
     _mm512_store_pd(data, vec);
 }
 
 static inline const LibMVec LIBMVEC_LIBRARY{};
-static inline const MVec<__m128d, _mm_load_pd, _mm_store_pd> LIBMDEV_SSE2_FUNCTIONS{"_ZGVbN2v_", LIBMVEC_LIBRARY.handle};
-static inline const MVec<__m256d, _mm256_load_pd, _mm256_store_pd> LIBMDEV_AVX2_FUNCTIONS{"_ZGVdN4v_", LIBMVEC_LIBRARY.handle};
-static inline const MVec<__m512d, load512, store512> LIBMDEV_AVX512_FUNCTIONS{"_ZGVeN8v_", LIBMVEC_LIBRARY.handle};
+static inline const MVec<__m128d, _mm_load_pd, _mm_store_pd>
+    LIBMDEV_SSE2_FUNCTIONS{"_ZGVbN2v_", LIBMVEC_LIBRARY.handle};
+static inline const MVec<__m256d, _mm256_load_pd, _mm256_store_pd>
+    LIBMDEV_AVX2_FUNCTIONS{"_ZGVdN4v_", LIBMVEC_LIBRARY.handle};
+static inline const MVec<__m512d, load512, store512> LIBMDEV_AVX512_FUNCTIONS{
+    "_ZGVeN8v_",
+    LIBMVEC_LIBRARY.handle};
 
 static constexpr size_t BATCH_SIZE = 64;
 struct InputArray
@@ -126,17 +130,20 @@ struct InputArray
 using InputArrayRef = const InputArray &;
 
 #pragma push_macro("TRANSFORM")
-#define TRANSFORM(X, ATTR, VARIANT)                                                                                            \
-    __attribute__((target(#ATTR))) static inline void X##TransformBatch##VARIANT(double * __restrict dst, InputArrayRef input) \
-    {                                                                                                                          \
-        using ImplType = decltype(LIBMDEV_##VARIANT##_FUNCTIONS);                                                              \
-        auto function = LIBMDEV_##VARIANT##_FUNCTIONS.funcs[static_cast<size_t>(LibMVecFunc::X)];                              \
-        for (size_t i = 0; i < BATCH_SIZE; i += ImplType::vector_size)                                                         \
-        {                                                                                                                      \
-            ImplType::VectorType data = ImplType::load(&input.data[i]);                                                        \
-            ImplType::VectorType result = function(data);                                                                      \
-            ImplType::store(&dst[i], result);                                                                                  \
-        }                                                                                                                      \
+#define TRANSFORM(X, ATTR, VARIANT)                                      \
+    __attribute__((target(#ATTR))) static inline void                    \
+        X##TransformBatch##VARIANT(double * __restrict dst,              \
+                                   InputArrayRef input)                  \
+    {                                                                    \
+        using ImplType = decltype(LIBMDEV_##VARIANT##_FUNCTIONS);        \
+        auto function = LIBMDEV_##VARIANT##_FUNCTIONS                    \
+                            .funcs[static_cast<size_t>(LibMVecFunc::X)]; \
+        for (size_t i = 0; i < BATCH_SIZE; i += ImplType::vector_size)   \
+        {                                                                \
+            ImplType::VectorType data = ImplType::load(&input.data[i]);  \
+            ImplType::VectorType result = function(data);                \
+            ImplType::store(&dst[i], result);                            \
+        }                                                                \
     }
 
 #pragma push_macro("TRANSFORM_AVX512")
@@ -157,62 +164,81 @@ UNARY_FUNCTION_LIST(TRANSFORM_SSE2)
 
 #pragma push_macro("SELECT")
 #define SELECT(X)                                                                                                     \
-    static inline void X##TransformBatchDefault(double * __restrict dst, InputArrayRef input)                         \
+    static inline void X##TransformBatchScalar(double * __restrict dst,                                               \
+                                               InputArrayRef input)                                                   \
     {                                                                                                                 \
         for (size_t i = 0; i < BATCH_SIZE; ++i)                                                                       \
         {                                                                                                             \
             dst[i] = ::X(input.data[i]);                                                                              \
         }                                                                                                             \
     }                                                                                                                 \
-    static inline decltype(X##TransformBatchDefault) & X##TransformBatchSelect()                                      \
+    static inline decltype(X##TransformBatchScalar) * X##TransformBatchSelect()                                       \
     {                                                                                                                 \
         if (__builtin_cpu_supports("avx512f") && LIBMDEV_AVX512_FUNCTIONS.funcs[static_cast<size_t>(LibMVecFunc::X)]) \
         {                                                                                                             \
-            return X##TransformBatch##AVX512;                                                                         \
+            return &X##TransformBatch##AVX512;                                                                        \
         }                                                                                                             \
         if (__builtin_cpu_supports("avx2") && LIBMDEV_AVX2_FUNCTIONS.funcs[static_cast<size_t>(LibMVecFunc::X)])      \
         {                                                                                                             \
-            return X##TransformBatch##AVX2;                                                                           \
+            return &X##TransformBatch##AVX2;                                                                          \
         }                                                                                                             \
         if (__builtin_cpu_supports("sse2") && LIBMDEV_SSE2_FUNCTIONS.funcs[static_cast<size_t>(LibMVecFunc::X)])      \
         {                                                                                                             \
-            return X##TransformBatch##SSE2;                                                                           \
+            return &X##TransformBatch##SSE2;                                                                          \
         }                                                                                                             \
-        return X##TransformBatchDefault;                                                                              \
+        return &X##TransformBatchScalar;                                                                              \
     }                                                                                                                 \
-    static inline decltype(X##TransformBatchDefault) & X##TransformBatch = X##TransformBatchSelect();
+    static inline decltype(X##TransformBatchScalar) * X##TransformBatch = &X##TransformBatchScalar;
 UNARY_FUNCTION_LIST(SELECT)
 #pragma pop_macro("SELECT")
 
 #pragma push_macro("TRANSFORM")
-#define TRANSFORM(X)                                                                                \
-    template <typename T>                                                                           \
-    static inline void X##Transform(double * __restrict dst, const T * __restrict src, size_t size) \
-    {                                                                                               \
-        InputArray input_data;                                                                      \
-        auto address = reinterpret_cast<uintptr_t>(dst);                                            \
-        auto remainder = address % BATCH_SIZE;                                                      \
-        auto offset = (BATCH_SIZE - (remainder == 0 ? BATCH_SIZE : remainder)) / sizeof(double);    \
-        size_t i = 0;                                                                               \
-        for (; i < offset; ++i)                                                                     \
-        {                                                                                           \
-            dst[i] = ::X(static_cast<double>(src[i]));                                              \
-        }                                                                                           \
-        for (; i + BATCH_SIZE <= size; i += BATCH_SIZE)                                             \
-        {                                                                                           \
-            for (size_t j = 0; j < BATCH_SIZE; ++j)                                                 \
-            {                                                                                       \
-                input_data.data[j] = static_cast<double>(src[i + j]);                               \
-            }                                                                                       \
-            X##TransformBatch(&dst[i], input_data);                                                 \
-        }                                                                                           \
-        for (; i < size; ++i)                                                                       \
-        {                                                                                           \
-            dst[i] = ::X(static_cast<double>(src[i]));                                              \
-        }                                                                                           \
+#define TRANSFORM(X)                                                                             \
+    template <typename T>                                                                        \
+    static inline void X##Transform(double * __restrict dst,                                     \
+                                    const T * __restrict src,                                    \
+                                    size_t size)                                                 \
+    {                                                                                            \
+        InputArray input_data;                                                                   \
+        auto address = reinterpret_cast<uintptr_t>(dst);                                         \
+        auto remainder = address % BATCH_SIZE;                                                   \
+        auto offset = (BATCH_SIZE - (remainder == 0 ? BATCH_SIZE : remainder)) / sizeof(double); \
+        size_t i = 0;                                                                            \
+        for (; i < offset; ++i)                                                                  \
+        {                                                                                        \
+            dst[i] = ::X(static_cast<double>(src[i]));                                           \
+        }                                                                                        \
+        for (; i + BATCH_SIZE <= size; i += BATCH_SIZE)                                          \
+        {                                                                                        \
+            for (size_t j = 0; j < BATCH_SIZE; ++j)                                              \
+            {                                                                                    \
+                input_data.data[j] = static_cast<double>(src[i + j]);                            \
+            }                                                                                    \
+            X##TransformBatch(&dst[i], input_data);                                              \
+        }                                                                                        \
+        for (; i < size; ++i)                                                                    \
+        {                                                                                        \
+            dst[i] = ::X(static_cast<double>(src[i]));                                           \
+        }                                                                                        \
     }
 UNARY_FUNCTION_LIST(TRANSFORM)
 #pragma pop_macro("TRANSFORM")
+
+#pragma push_macro("ENABLE")
+#define ENABLE(X) X##TransformBatch = X##TransformBatchSelect();
+static inline void enableVectorizationImpl()
+{
+    UNARY_FUNCTION_LIST(ENABLE);
+}
+#pragma pop_macro("ENABLE")
+
+#pragma push_macro("DISABLE")
+#define DISABLE(X) X##TransformBatch = &X##TransformBatchScalar;
+static inline void disableVectorizationImpl()
+{
+    UNARY_FUNCTION_LIST(DISABLE);
+}
+#pragma pop_macro("DISABLE")
 
 #pragma pop_macro("UNARY_FUNCTION_LIST")
 } // namespace DB::UnaryMath

@@ -14,7 +14,7 @@
 
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsMath.h>
-
+#include <Functions/UnaryMath/Switch.h>
 namespace DB
 {
 const double EImpl::value = 2.7182818284590452353602874713526624977572470;
@@ -49,5 +49,19 @@ void registerFunctionsMath(FunctionFactory & factory)
     factory.registerFunction<FunctionAtan>();
     factory.registerFunction<FunctionPow>();
 }
+
+#ifdef TIFLASH_HAS_UNARY_MATH_VECTORIZATION_SUPPORT
+namespace UnaryMath
+{
+void disableVectorization()
+{
+    disableVectorizationImpl();
+}
+void enableVectorization()
+{
+    enableVectorizationImpl();
+}
+} // namespace UnaryMath
+#endif
 
 } // namespace DB

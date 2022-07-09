@@ -28,11 +28,11 @@
 #include <fmt/core.h>
 
 #if defined(__linux__) && defined(__aarch64__)
-#include <Functions/FunctionsMathARM64.h>
+#include <Functions/UnaryMath/ARM64.h>
 #endif
 
 #if defined(__linux__) && defined(__x86_64__)
-#include <Functions/FunctionsMathAMD64.h>
+#include <Functions/UnaryMath/AMD64.h>
 #endif
 
 namespace DB
