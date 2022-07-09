@@ -5010,14 +5010,7 @@ public:
     {
         const IColumn * column = block.getByPosition(arguments[0]).column.get();
         ColumnPtr res_column;
-        if (tryExecuteUIntOrInt<UInt8>(column, res_column) ||
-	    tryExecuteUIntOrInt<UInt16>(column, res_column) ||
-	    tryExecuteUIntOrInt<UInt32>(column, res_column) ||
-	    tryExecuteUIntOrInt<UInt64>(column, res_column) ||
-	    tryExecuteUIntOrInt<Int8>(column, res_column) ||
-	    tryExecuteUIntOrInt<Int16>(column, res_column) ||
-	    tryExecuteUIntOrInt<Int32>(column, res_column) ||
-	    tryExecuteUIntOrInt<Int64>(column, res_column))
+        if (tryExecuteUIntOrInt<UInt8>(column, res_column) || tryExecuteUIntOrInt<UInt16>(column, res_column) || tryExecuteUIntOrInt<UInt32>(column, res_column) || tryExecuteUIntOrInt<UInt64>(column, res_column) || tryExecuteUIntOrInt<Int8>(column, res_column) || tryExecuteUIntOrInt<Int16>(column, res_column) || tryExecuteUIntOrInt<Int32>(column, res_column) || tryExecuteUIntOrInt<Int64>(column, res_column))
         {
             block.getByPosition(result).column = std::move(res_column);
             return;
