@@ -1126,18 +1126,6 @@ struct TiDBDecimalRoundInfo
         , output_prec(getDecimalPrecision(output_type, 0))
         , output_scale(getDecimalScale(output_type, 0))
     {}
-
-    TiDBDecimalRoundInfo(const FracType & input_prec_, const FracType & input_scale_)
-        : input_prec(input_prec_)
-        , input_scale(input_scale_)
-        , input_int_prec(input_prec_ - input_scale_)
-    {}
-
-    void setOutputPrecAndScale(const FracType & output_prec_, const FracType & output_scale_)
-    {
-        output_prec = output_prec_;
-        output_scale = output_scale_;
-    }
 };
 
 template <typename InputType, typename OutputType>
@@ -1193,6 +1181,9 @@ struct TiDBDecimalRound
         }
 
         auto scaled_value = static_cast<UnsignedOutput>(absolute_value);
+
+        if (difference < 0)
+            scaled_value *= PowForOutput::result[-difference];
 
         // check overflow and construct result.
         if (scaled_value > DecimalMaxValue::get(info.output_prec))
