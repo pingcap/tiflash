@@ -66,7 +66,10 @@ struct LibMVec
     }
     ~LibMVec()
     {
-        ::dlclose(handle);
+        if (handle)
+        {
+            ::dlclose(handle);
+        }
     }
 };
 
