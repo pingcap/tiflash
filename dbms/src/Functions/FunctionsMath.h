@@ -686,7 +686,7 @@ struct PowName
     }
 
 #define UNARY_FUNCTION_IMPL_NORMAL(X, FUNC) \
-    using X##FunctionImpl = UnaryFunctionPlain<ExpName, FUNC>
+    using X##FunctionImpl = UnaryFunctionPlain<X##Name, FUNC>
 
 #if defined(__linux__) && defined(__aarch64__)
 UNARY_FUNCTION_IMPL(Log, log);
