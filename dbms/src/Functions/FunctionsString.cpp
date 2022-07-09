@@ -4356,8 +4356,8 @@ private:
         size_t size = repeat_times.size();
         res_offsets.resize(size);
 
-        ColumnString::Offset start_offset = 0;
-        ColumnString::Offset end_offset = offsets[0];
+        const ColumnString::Offset start_offset = 0;
+        const ColumnString::Offset end_offset = offsets[0];
         ColumnString::Offset res_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
