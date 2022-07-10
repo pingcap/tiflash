@@ -215,7 +215,7 @@ std::vector<BlockInputStreamPtr> ReceiverHelper::buildExchangeReceiverStream()
 BlockInputStreamPtr ReceiverHelper::buildUnionStream()
 {
     auto streams = buildExchangeReceiverStream();
-    return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
+    return std::make_shared<UnionBlockInputStream<>>(streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
 }
 
 void ReceiverHelper::finish()
@@ -315,7 +315,7 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(
         }
     }
 
-    return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");
+    return std::make_shared<UnionBlockInputStream<>>(send_streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
 }
 
 BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std::vector<Block> & blocks)
@@ -358,7 +358,7 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std:
         }
     }
 
-    return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");
+    return std::make_shared<UnionBlockInputStream<>>(send_streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
 }
 
 void SenderHelper::finish()

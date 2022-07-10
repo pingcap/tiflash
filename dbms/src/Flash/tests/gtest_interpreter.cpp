@@ -31,8 +31,8 @@ public:
         context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "l_table"}, {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addExchangeRelationSchema("sender_1", {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_l", {{"l_a", TiDB::TP::TypeString}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addExchangeRelationSchema("sender_r", {{"r_a", TiDB::TP::TypeString}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeRelationSchema("sender_l", {{"l_a", TiDB::TP::TypeLong}, {"l_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addExchangeRelationSchema("sender_r", {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
     }
 };
 
@@ -212,47 +212,6 @@ Union: <for test>
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
-    // Join Source.
-    DAGRequestBuilder table1 = context.scan("test_db", "r_table");
-    DAGRequestBuilder table2 = context.scan("test_db", "l_table");
-    DAGRequestBuilder table3 = context.scan("test_db", "r_table");
-    DAGRequestBuilder table4 = context.scan("test_db", "l_table");
-
-    request = table1.join(
-                        table2.join(
-                            table3.join(table4,
-                                        {col("join_c")},
-                                        ASTTableJoin::Kind::Left),
-                            {col("join_c")},
-                            ASTTableJoin::Kind::Left),
-                        {col("join_c")},
-                        ASTTableJoin::Kind::Left)
-                  .build(context);
-    {
-        String expected = R"(
-CreatingSets
- Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockTableScan
- Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
-       Expression: <final projection>
-        MockTableScan
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
-     Expression: <final projection>
-      MockTableScan)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
-    }
-
     request = context.receive("sender_1")
                   .project({"s1", "s2", "s3"})
                   .project({"s1", "s2"})
@@ -296,90 +255,6 @@ Union: <for test>
           Expression: <before projection>
            Expression: <final projection>
             MockExchangeReceiver)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
-    }
-
-    // only join + ExchangeReceiver
-    DAGRequestBuilder receiver1 = context.receive("sender_l");
-    DAGRequestBuilder receiver2 = context.receive("sender_r");
-    DAGRequestBuilder receiver3 = context.receive("sender_l");
-    DAGRequestBuilder receiver4 = context.receive("sender_r");
-
-    request = receiver1.join(
-                           receiver2.join(
-                               receiver3.join(receiver4,
-                                              {col("join_c")},
-                                              ASTTableJoin::Kind::Left),
-                               {col("join_c")},
-                               ASTTableJoin::Kind::Left),
-                           {col("join_c")},
-                           ASTTableJoin::Kind::Left)
-                  .build(context);
-    {
-        String expected = R"(
-CreatingSets
- Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
-       Expression: <final projection>
-        MockExchangeReceiver
- Union: <for test>
-  Expression x 10: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
-     Expression: <final projection>
-      MockExchangeReceiver)";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
-    }
-
-    // join + receiver + sender
-    // TODO: Find a way to write the request easier.
-    DAGRequestBuilder receiver5 = context.receive("sender_l");
-    DAGRequestBuilder receiver6 = context.receive("sender_r");
-    DAGRequestBuilder receiver7 = context.receive("sender_l");
-    DAGRequestBuilder receiver8 = context.receive("sender_r");
-    request = receiver5.join(
-                           receiver6.join(
-                               receiver7.join(receiver8,
-                                              {col("join_c")},
-                                              ASTTableJoin::Kind::Left),
-                               {col("join_c")},
-                               ASTTableJoin::Kind::Left),
-                           {col("join_c")},
-                           ASTTableJoin::Kind::Left)
-                  .exchangeSender(tipb::PassThrough)
-                  .build(context);
-    {
-        String expected = R"(
-CreatingSets
- Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     MockExchangeReceiver
- Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
-   Expression: <append join key and join filters for build side>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_4>
-       Expression: <final projection>
-        MockExchangeReceiver
- Union: <for test>
-  MockExchangeSender x 10
-   Expression: <final projection>
-    Expression: <remove useless column after join>
-     HashJoinProbe: <join probe, join_executor_id = Join_6>
-      Expression: <final projection>
-       MockExchangeReceiver)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 }
@@ -534,6 +409,251 @@ Union: <for test>
                        .topN("s2", false, 10)
                        .build(context);
     ASSERT_BLOCKINPUTSTREAM_EQAUL(topn_expected, topn_request, 10);
+}
+CATCH
+
+TEST_F(InterpreterExecuteTest, Join)
+try
+{
+    // TODO: Find a way to write the request easier.
+    {
+        // Join Source.
+        DAGRequestBuilder table1 = context.scan("test_db", "r_table");
+        DAGRequestBuilder table2 = context.scan("test_db", "l_table");
+        DAGRequestBuilder table3 = context.scan("test_db", "r_table");
+        DAGRequestBuilder table4 = context.scan("test_db", "l_table");
+
+        auto request = table1.join(
+                                 table2.join(
+                                     table3.join(table4,
+                                                 {col("join_c")},
+                                                 ASTTableJoin::Kind::Left),
+                                     {col("join_c")},
+                                     ASTTableJoin::Kind::Left),
+                                 {col("join_c")},
+                                 ASTTableJoin::Kind::Left)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockTableScan
+ Union x 2: <for join>
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
+      HashJoinProbe: <join probe, join_executor_id = Join_4>
+       Expression: <final projection>
+        MockTableScan
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_6>
+     Expression: <final projection>
+      MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    {
+        // only join + ExchangeReceiver
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r");
+        DAGRequestBuilder receiver3 = context.receive("sender_l");
+        DAGRequestBuilder receiver4 = context.receive("sender_r");
+
+        auto request = receiver1.join(
+                                    receiver2.join(
+                                        receiver3.join(receiver4,
+                                                       {col("join_c")},
+                                                       ASTTableJoin::Kind::Left),
+                                        {col("join_c")},
+                                        ASTTableJoin::Kind::Left),
+                                    {col("join_c")},
+                                    ASTTableJoin::Kind::Left)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union x 2: <for join>
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
+      HashJoinProbe: <join probe, join_executor_id = Join_4>
+       Expression: <final projection>
+        MockExchangeReceiver
+ Union: <for test>
+  Expression x 10: <final projection>
+   Expression: <remove useless column after join>
+    HashJoinProbe: <join probe, join_executor_id = Join_6>
+     Expression: <final projection>
+      MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    {
+        // join + receiver + sender
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r");
+        DAGRequestBuilder receiver3 = context.receive("sender_l");
+        DAGRequestBuilder receiver4 = context.receive("sender_r");
+
+        auto request = receiver1.join(
+                                    receiver2.join(
+                                        receiver3.join(receiver4,
+                                                       {col("join_c")},
+                                                       ASTTableJoin::Kind::Left),
+                                        {col("join_c")},
+                                        ASTTableJoin::Kind::Left),
+                                    {col("join_c")},
+                                    ASTTableJoin::Kind::Left)
+                           .exchangeSender(tipb::PassThrough)
+                           .build(context);
+
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union x 2: <for join>
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     Expression: <remove useless column after join>
+      HashJoinProbe: <join probe, join_executor_id = Join_4>
+       Expression: <final projection>
+        MockExchangeReceiver
+ Union: <for test>
+  MockExchangeSender x 10
+   Expression: <final projection>
+    Expression: <remove useless column after join>
+     HashJoinProbe: <join probe, join_executor_id = Join_6>
+      Expression: <final projection>
+       MockExchangeReceiver)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
+TEST_F(InterpreterExecuteTest, JoinThenAgg)
+try
+{
+    {
+        // Left Join.
+        DAGRequestBuilder table1 = context.scan("test_db", "r_table");
+        DAGRequestBuilder table2 = context.scan("test_db", "l_table");
+
+        auto request = table1.join(
+                                 table2,
+                                 {col("join_c")},
+                                 ASTTableJoin::Kind::Left)
+                           .aggregation({Max(col("r_a"))}, {col("join_c")})
+                           .build(context);
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockTableScan
+ Union: <for test>
+  Expression x 10: <final projection>
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     Expression x 10: <before aggregation>
+      Expression: <remove useless column after join>
+       HashJoinProbe: <join probe, join_executor_id = Join_2>
+        Expression: <final projection>
+         MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    {
+        // Right Join
+        DAGRequestBuilder table1 = context.scan("test_db", "r_table");
+        DAGRequestBuilder table2 = context.scan("test_db", "l_table");
+
+        auto request = table1.join(
+                                 table2,
+                                 {col("join_c")},
+                                 ASTTableJoin::Kind::Right)
+                           .aggregation({Max(col("r_a"))}, {col("join_c")})
+                           .build(context);
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockTableScan
+ Union: <for test>
+  Expression x 10: <final projection>
+   SharedQuery: <restore concurrency>
+    ParallelAggregating, max_threads: 10, final: true
+     Expression x 10: <before aggregation>
+      Expression: <remove useless column after join>
+       HashJoinProbe: <join probe, join_executor_id = Join_2>
+        Expression: <append join key and join filters for probe side>
+         Expression: <final projection>
+          MockTableScan
+     Expression x 10: <before aggregation>
+      Expression: <remove useless column after join>
+       NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    {
+        // Right join + receiver + sender
+        DAGRequestBuilder receiver1 = context.receive("sender_l");
+        DAGRequestBuilder receiver2 = context.receive("sender_r");
+
+        auto request = receiver1.join(
+                                    receiver2,
+                                    {col("join_c")},
+                                    ASTTableJoin::Kind::Right)
+                           .aggregation({Sum(col("r_a"))}, {col("join_c")})
+                           .exchangeSender(tipb::PassThrough)
+                           .limit(10)
+                           .build(context);
+        String expected = R"(
+CreatingSets
+ Union: <for join>
+  HashJoinBuildBlockInputStream x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
+   Expression: <append join key and join filters for build side>
+    Expression: <final projection>
+     MockExchangeReceiver
+ Union: <for test>
+  MockExchangeSender x 20
+   SharedQuery: <restore concurrency>
+    Limit, limit = 10
+     Union: <for partial limit>
+      Limit x 20, limit = 10
+       Expression: <final projection>
+        Expression: <before order and select>
+         SharedQuery: <restore concurrency>
+          ParallelAggregating, max_threads: 20, final: true
+           Expression x 20: <before aggregation>
+            Expression: <remove useless column after join>
+             HashJoinProbe: <join probe, join_executor_id = Join_2>
+              Expression: <append join key and join filters for probe side>
+               Expression: <final projection>
+                MockExchangeReceiver
+           Expression x 20: <before aggregation>
+            Expression: <remove useless column after join>
+             NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
+    }
 }
 CATCH
 

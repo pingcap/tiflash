@@ -83,7 +83,7 @@ public:
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, "mock_executor_id_squashing");
         });
-        receiver_stream = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, nullptr, concurrency, /*req_id=*/"");
+        receiver_stream = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
     }
 };
 
