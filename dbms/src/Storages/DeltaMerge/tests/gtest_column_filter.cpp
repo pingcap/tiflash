@@ -59,20 +59,32 @@ private:
     bool is_common_handle;
 };
 
-BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle, bool filter_delete_mark = true)
+BlockInputStreamPtr genColumnFilterInputStream(const BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
 {
     ColumnDefine handle_define(
         TiDBPkColumnID,
         DMTestEnv::pk_name,
         is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE);
+
     return std::make_shared<DMColumnFilterBlockInputStream>(
         std::make_shared<DebugBlockInputStream>(blocks, is_common_handle),
-        columns,
-        filter_delete_mark);
+        columns);
+}
+
+BlockInputStreamPtr genDeleteFilterInputStream(const BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
+{
+    ColumnDefine handle_define(
+        TiDBPkColumnID,
+        DMTestEnv::pk_name,
+        is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE);
+
+    return std::make_shared<DMDeleteFilterBlockInputStream>(
+        std::make_shared<DebugBlockInputStream>(blocks, is_common_handle),
+        columns);
 }
 } // namespace
 
-TEST(ColumnFilterTest, NormalCaseFilterDeleteMark)
+TEST(DeleteFilterTest, NormalCase)
 {
     BlocksList blocks;
 
@@ -88,7 +100,7 @@ TEST(ColumnFilterTest, NormalCaseFilterDeleteMark)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = genInputStream(blocks, columns, false);
+        auto in = genDeleteFilterInputStream(blocks, columns, false);
         in->readPrefix();
         Block block = in->read();
         ASSERT_EQ(block.rows(), 1);
@@ -114,7 +126,7 @@ TEST(ColumnFilterTest, NormalCaseFilterDeleteMark)
     }
 }
 
-TEST(ColumnFilterTest, WithoutFilterDeleteMark)
+TEST(ColumnFilterTest, NormalCase)
 {
     BlocksList blocks;
 
@@ -130,7 +142,7 @@ TEST(ColumnFilterTest, WithoutFilterDeleteMark)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = genInputStream(blocks, columns, false, false);
+        auto in = genColumnFilterInputStream(blocks, columns, false);
         in->readPrefix();
         Block block = in->read();
         ASSERT_EQ(block.rows(), 1);

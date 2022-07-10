@@ -535,14 +535,22 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     auto persisted_files_stream = delta_stream.getPersistedFilesInputStream();
 
     memtable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(memtable_stream, data_ranges, 0);
-    memtable_stream = std::make_shared<DMColumnFilterBlockInputStream>(memtable_stream, columns_to_read, filter_delete_mark);
-
     persisted_files_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(persisted_files_stream, data_ranges, 0); // related to minor compaction sorted
-    persisted_files_stream = std::make_shared<DMColumnFilterBlockInputStream>(persisted_files_stream, columns_to_read, filter_delete_mark);
-
     stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
-    stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read, filter_delete_mark);
 
+
+    if (filter_delete_mark)
+    {
+        memtable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(memtable_stream, columns_to_read);
+        persisted_files_stream = std::make_shared<DMDeleteFilterBlockInputStream>(persisted_files_stream, columns_to_read);
+        stable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(stable_stream, columns_to_read);
+    }
+    else
+    {
+        memtable_stream = std::make_shared<DMColumnFilterBlockInputStream>(memtable_stream, columns_to_read);
+        persisted_files_stream = std::make_shared<DMColumnFilterBlockInputStream>(persisted_files_stream, columns_to_read);
+        stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
+    }
 
     BlockInputStreams streams;
 
