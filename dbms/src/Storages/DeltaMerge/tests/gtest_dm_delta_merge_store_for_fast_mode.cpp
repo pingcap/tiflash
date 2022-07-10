@@ -41,18 +41,20 @@
 /// This test file is mainly test on the correctness of read in fast mode.
 /// Because the basic functions are tested in gtest_dm_delta_merge_storage.cpp, we will not cover it here.
 
-namespace DB {
-namespace FailPoints {
+namespace DB
+{
+namespace FailPoints
+{
 } // namespace FailPoints
 
 namespace DM
 {
 extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
-                                const ColumnDefinesPtr & schema_snap,
-                                const BlockInputStreamPtr & input_stream,
-                                UInt64 file_id,
-                                const String & parent_path,
-                                DMFileBlockOutputStream::Flags flags);
+                                    const ColumnDefinesPtr & schema_snap,
+                                    const BlockInputStreamPtr & input_stream,
+                                    UInt64 file_id,
+                                    const String & parent_path,
+                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
 class DeltaMergeStoreTest : public DB::base::TiFlashStorageTestBasic
@@ -279,7 +281,6 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
         in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
-    
 }
 
 TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
@@ -330,23 +331,23 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
         }
     }
     {
-        // read all columns from store with row key range in fast mode 
+        // read all columns from store with row key range in fast mode
         WriteBufferFromOwnString start_key_ss;
         DB::EncodeInt64(0, start_key_ss);
 
         WriteBufferFromOwnString end_key_ss;
         DB::EncodeInt64(64, end_key_ss);
-        
+
 
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(*db_context,
                                              db_context->getSettingsRef(),
                                              columns,
                                              {RowKeyRange(
-                                                RowKeyValue(false, std::make_shared<String>(start_key_ss.releaseStr()), 0),
-                                                RowKeyValue(false, std::make_shared<String>(end_key_ss.releaseStr()), 64),
-                                                false, 
-                                                store->getRowKeyColumnSize())},
+                                                 RowKeyValue(false, std::make_shared<String>(start_key_ss.releaseStr()), 0),
+                                                 RowKeyValue(false, std::make_shared<String>(end_key_ss.releaseStr()), 64),
+                                                 false,
+                                                 store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -430,7 +431,7 @@ try
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
             store->ingestFiles(dm_context, range, file_ids, false); // in disk
             store->write(*db_context, db_context->getSettingsRef(), block2);
-   
+
             break;
         }
         }
@@ -497,9 +498,12 @@ try
             int begin_value = num_write_rows; // memory first, then persist, finally stable
             while (Block block = in->read())
             {
-                if (block_index == 1) {
+                if (block_index == 1)
+                {
                     begin_value = 0;
-                } else if (block_index == 2) {
+                }
+                else if (block_index == 2)
+                {
                     begin_value = num_write_rows * 2;
                 }
                 for (auto && iter : block)
@@ -519,7 +523,7 @@ try
             break;
         }
         }
-        
+
 
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
@@ -571,7 +575,7 @@ try
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
             store->ingestFiles(dm_context, range, file_ids, false);
             store->write(*db_context, db_context->getSettingsRef(), block2);
-   
+
             break;
         }
         }
@@ -640,9 +644,12 @@ try
             int begin_value = 0;
             while (Block block = in->read())
             {
-                if (block_index == 1) {
+                if (block_index == 1)
+                {
                     begin_value = num_write_rows * 2;
-                } else if (block_index == 2) {
+                }
+                else if (block_index == 2)
+                {
                     begin_value = num_write_rows;
                 }
                 for (auto && iter : block)
@@ -662,7 +669,7 @@ try
             break;
         }
         }
-        
+
 
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
@@ -714,7 +721,7 @@ try
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
             store->ingestFiles(dm_context, range, file_ids, false);
             store->write(*db_context, db_context->getSettingsRef(), block2);
-   
+
             break;
         }
         }
@@ -785,9 +792,12 @@ try
             int begin_value = 0;
             while (Block block = in->read())
             {
-                if (block_index == 1) {
+                if (block_index == 1)
+                {
                     begin_value = num_write_rows * 2;
-                } else if (block_index == 2) {
+                }
+                else if (block_index == 2)
+                {
                     begin_value = num_write_rows;
                 }
                 for (auto && iter : block)
@@ -807,7 +817,7 @@ try
             break;
         }
         }
-        
+
 
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
@@ -859,7 +869,7 @@ try
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
             store->ingestFiles(dm_context, range, file_ids, false);
             store->write(*db_context, db_context->getSettingsRef(), block2);
-   
+
             break;
         }
         }
@@ -868,7 +878,7 @@ try
     }
 
     store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    
+
     store->mergeDeltaAll(*db_context);
 
     {
@@ -901,7 +911,6 @@ try
             }
         }
 
-        
 
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
@@ -912,7 +921,7 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, TestFastModeWithMultipleBlockWithOverlap)
 try
 {
-    const size_t num_write_rows = 32;   
+    const size_t num_write_rows = 32;
 
     // Test write multi blocks with overlap and do compact
     {
@@ -994,14 +1003,19 @@ try
                         auto c = iter.column;
                         for (Int64 i = 0; i < Int64(c->size()); ++i)
                         {
-                            if (i < Int64(num_write_rows / 2)) {
+                            if (i < Int64(num_write_rows / 2))
+                            {
                                 ASSERT_EQ(c->getInt(i), i);
-                            } else if (i < Int64(2.5 * num_write_rows)) {
+                            }
+                            else if (i < Int64(2.5 * num_write_rows))
+                            {
                                 ASSERT_EQ(c->getInt(i), (i - num_write_rows / 2) / 2 + num_write_rows / 2);
-                            } else {
+                            }
+                            else
+                            {
                                 ASSERT_EQ(c->getInt(i), (i - num_write_rows * 2) + num_write_rows);
                             }
-                        }   
+                        }
                     }
                 }
                 num_rows_read += block.rows();
@@ -1014,9 +1028,12 @@ try
             auto begin_value = 0;
             while (Block block = in->read())
             {
-                if (block_index == 1) {
+                if (block_index == 1)
+                {
                     begin_value = num_write_rows;
-                } else if (block_index == 2) {
+                }
+                else if (block_index == 2)
+                {
                     begin_value = num_write_rows / 2;
                 }
                 for (auto && iter : block)
@@ -1027,7 +1044,7 @@ try
                         for (Int64 i = 0; i < Int64(c->size()); ++i)
                         {
                             ASSERT_EQ(c->getInt(i), i + begin_value);
-                        }   
+                        }
                     }
                 }
                 num_rows_read += block.rows();
@@ -1041,9 +1058,12 @@ try
             auto begin_value = num_write_rows;
             while (Block block = in->read())
             {
-                if (block_index == 1) {
+                if (block_index == 1)
+                {
                     begin_value = 0;
-                } else if (block_index == 2) {
+                }
+                else if (block_index == 2)
+                {
                     begin_value = num_write_rows / 2;
                 }
                 for (auto && iter : block)
@@ -1054,7 +1074,7 @@ try
                         for (Int64 i = 0; i < Int64(c->size()); ++i)
                         {
                             ASSERT_EQ(c->getInt(i), i + begin_value);
-                        }   
+                        }
                     }
                 }
                 num_rows_read += block.rows();
@@ -1063,7 +1083,7 @@ try
             break;
         }
         }
-        
+
 
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
@@ -1203,9 +1223,9 @@ try
     store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
     store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    
+
     store->mergeDeltaAll(*db_context);
-    
+
     // Read after merge delta
     {
         const auto & columns = store->getTableColumns();
@@ -1335,14 +1355,19 @@ try
                         auto c = iter.column;
                         for (Int64 i = 0; i < Int64(c->size()); ++i)
                         {
-                            if (i < Int64(num_write_rows / 2)) {
+                            if (i < Int64(num_write_rows / 2))
+                            {
                                 ASSERT_EQ(c->getInt(i), i);
-                            } else if (i < Int64(2.5 * num_write_rows)) {
+                            }
+                            else if (i < Int64(2.5 * num_write_rows))
+                            {
                                 ASSERT_EQ(c->getInt(i), (i - num_write_rows / 2) / 2 + num_write_rows / 2);
-                            } else {
+                            }
+                            else
+                            {
                                 ASSERT_EQ(c->getInt(i), (i - num_write_rows * 2) + num_write_rows);
                             }
-                        }   
+                        }
                     }
                 }
                 num_rows_read += block.rows();
@@ -1355,9 +1380,12 @@ try
             auto begin_value = 0;
             while (Block block = in->read())
             {
-                if (block_index == 1) {
+                if (block_index == 1)
+                {
                     begin_value = num_write_rows;
-                } else if (block_index == 2) {
+                }
+                else if (block_index == 2)
+                {
                     begin_value = num_write_rows / 2;
                 }
                 for (auto && iter : block)
@@ -1368,7 +1396,7 @@ try
                         for (Int64 i = 0; i < Int64(c->size()); ++i)
                         {
                             ASSERT_EQ(c->getInt(i), i + begin_value);
-                        }   
+                        }
                     }
                 }
                 num_rows_read += block.rows();
@@ -1382,9 +1410,12 @@ try
             auto begin_value = num_write_rows;
             while (Block block = in->read())
             {
-                if (block_index == 1) {
+                if (block_index == 1)
+                {
                     begin_value = 0;
-                } else if (block_index == 2) {
+                }
+                else if (block_index == 2)
+                {
                     begin_value = num_write_rows / 2;
                 }
                 for (auto && iter : block)
@@ -1395,7 +1426,7 @@ try
                         for (Int64 i = 0; i < Int64(c->size()); ++i)
                         {
                             ASSERT_EQ(c->getInt(i), i + begin_value);
-                        }   
+                        }
                     }
                 }
                 num_rows_read += block.rows();
@@ -1443,6 +1474,6 @@ try
 }
 CATCH
 
-}
-}
-}
+} // namespace tests
+} // namespace DM
+} // namespace DB
