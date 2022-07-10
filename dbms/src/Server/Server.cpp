@@ -782,9 +782,12 @@ public:
 
         /// Check unary math vectorization
 #ifdef TIFLASH_HAS_UNARY_MATH_VECTORIZATION_SUPPORT
-        if (config.getBool("unary_math_vectorization", false)) {
+        if (config.getBool("unary_math_vectorization", false))
+        {
             DB::UnaryMath::enableVectorization();
-        } else {
+        }
+        else
+        {
             DB::UnaryMath::disableVectorization();
         }
 #endif
