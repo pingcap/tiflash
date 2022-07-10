@@ -77,15 +77,15 @@ public:
                 {toVec<Int32>("a", {3, 2, 0}),
                         toVec<Int32>("b", {4, 2, 0})});
 
-        context.addMockTable("subquery", "t1",
-            {{"c", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}},
-                {toVec<Int32>("c", {1, 2, 3}),
-                    toVec<Int32>("d", {1, 2, 4})});
+        context.addMockTable("join_agg", "t1",
+            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+                {toVec<Int32>("a", {1, 1, 3}),
+                    toVec<Int32>("b", {1, 1, 4})});
 
-        context.addMockTable("subquery", "t2",
-            {{"c", TiDB::TP::TypeLong}, {"d", TiDB::TP::TypeLong}},
-                {toVec<Int32>("c", {1, 4}),
-                    toVec<Int32>("d", {2, 6})});
+        context.addMockTable("join_agg", "t2",
+            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+                {toVec<Int32>("a", {1, 4}),
+                    toVec<Int32>("b", {2, 6})});
 
         context.addExchangeReceiver("exchange_r_table",
                                     {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
@@ -498,6 +498,47 @@ try
 
     executeWithConcurrency(cast_request(), {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0),
         createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, JoinAgg)
+try
+{
+    auto request = context.scan("join_agg", "t1")
+        .join(context.scan("join_agg", "t2"), {col("a")}, ASTTableJoin::Kind::Inner)
+        .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
+        .build(context);
+
+    {
+        executeWithConcurrency(request, {toNullableVec<Int32>({1}),
+                                                    toNullableVec<Int32>({1}),
+                                                    toVec<UInt64>({2}),
+                                                    toNullableVec<Int32>({1})});
+    }
+
+    request = context.scan("join_agg", "t1")
+        .join(context.scan("join_agg", "t2"), {col("a")}, ASTTableJoin::Kind::Left)
+        .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
+        .build(context);
+
+    {
+        executeWithConcurrency(request, {toNullableVec<Int32>({1, 3}),
+                                                    toNullableVec<Int32>({1, 3}),
+                                                    toVec<UInt64>({2, 1}),
+                                                    toNullableVec<Int32>({1, 4})});
+    }
+
+    request = context.scan("join_agg", "t1")
+        .join(context.scan("join_agg", "t2"), {col("a")}, ASTTableJoin::Kind::Right)
+        .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
+        .build(context);
+
+    {
+        executeWithConcurrency(request, {toNullableVec<Int32>({1, {}}),
+                                                    toNullableVec<Int32>({1, {}}),
+                                                    toVec<UInt64>({2, 0}),
+                                                    toNullableVec<Int32>({1, {}})});
+    }
 }
 CATCH
 
