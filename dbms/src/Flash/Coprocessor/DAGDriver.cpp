@@ -127,7 +127,8 @@ try
             writer->Write(response);
         }
 
-        auto streaming_writer = std::make_shared<StreamWriter>(writer);
+        const auto & settings = context.getSettingsRef();
+        auto streaming_writer = std::make_shared<StreamWriter>(writer, settings.max_threads);
         TiDB::TiDBCollators collators;
 
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr, false>>(
@@ -135,8 +136,8 @@ try
             std::vector<Int64>(),
             collators,
             tipb::ExchangeType::PassThrough,
-            context.getSettingsRef().dag_records_per_chunk,
-            context.getSettingsRef().batch_send_min_limit,
+            settings.dag_records_per_chunk,
+            settings.batch_send_min_limit,
             true,
             dag_context,
             /*fine_grained_shuffle_stream_count=*/0,
