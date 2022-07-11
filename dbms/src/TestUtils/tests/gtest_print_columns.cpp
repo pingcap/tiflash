@@ -37,10 +37,10 @@ public:
 
     ColumnsWithTypeAndName test_cols;
     size_t col_len;
-    const String result1{"col1: (0: Int64_36,1: Int64_34,2: Int64_32,3: Int64_27,4: NULL,5: NULL)\ncol2: (0: 'female',1: 'male',2: 'male',3: 'female',4: 'male',5: 'female')\n"};
-    const String result2{"col1: (0: Int64_36,1: Int64_34,2: Int64_32,3: Int64_27,4: NULL,5: NULL)\ncol2: (0: 'female',1: 'male',2: 'male',3: 'female',4: 'male',5: 'female')\n"};
+    const String result1{"col1: (0: Int64_36, 1: Int64_34, 2: Int64_32, 3: Int64_27, 4: NULL, 5: NULL)\ncol2: (0: 'female', 1: 'male', 2: 'male', 3: 'female', 4: 'male', 5: 'female')\n"};
+    const String result2{"col1: (0: Int64_36, 1: Int64_34, 2: Int64_32, 3: Int64_27, 4: NULL, 5: NULL)\ncol2: (0: 'female', 1: 'male', 2: 'male', 3: 'female', 4: 'male', 5: 'female')\n"};
     const String result3{"col1: (0: Int64_36)\ncol2: (0: 'female')\n"};
-    const String result4{"col1: (1: Int64_34,2: Int64_32,3: Int64_27,4: NULL)\ncol2: (1: 'male',2: 'male',3: 'female',4: 'male')\n"};
+    const String result4{"col1: (1: Int64_34, 2: Int64_32, 3: Int64_27, 4: NULL)\ncol2: (1: 'male', 2: 'male', 3: 'female', 4: 'male')\n"};
 };
 
 TEST_F(PrintColumnsTest, SimpleTest)
