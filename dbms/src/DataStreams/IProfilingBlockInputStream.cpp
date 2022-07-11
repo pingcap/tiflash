@@ -128,27 +128,42 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
 void IProfilingBlockInputStream::readPrefix()
 {
-    auto start_time = info.total_stopwatch.elapsed();
+    UInt64 start_time;
+    {
+        UniqueLockGuard lock(shared, mutex);
+        start_time = info.total_stopwatch.elapsed();
+    }
     readPrefixImpl();
 
     forEachChild([&](IBlockInputStream & child) {
         child.readPrefix();
         return false;
     });
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    {
+        UniqueLockGuard lock(shared, mutex);
+        info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    }
 }
 
 
 void IProfilingBlockInputStream::readSuffix()
 {
-    auto start_time = info.total_stopwatch.elapsed();
+    UInt64 start_time;
+    {
+        UniqueLockGuard lock(shared, mutex);
+        start_time = info.total_stopwatch.elapsed();
+    }
+
     forEachChild([&](IBlockInputStream & child) {
         child.readSuffix();
         return false;
     });
 
     readSuffixImpl();
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    {
+        UniqueLockGuard lock(shared, mutex);
+        info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    }
 }
 
 
@@ -233,6 +248,7 @@ static bool handleOverflowMode(OverflowMode mode, const String & message, int co
 
 bool IProfilingBlockInputStream::checkTimeLimit() const
 {
+    UniqueLockGuard lock(shared, mutex);
     if (limits.max_execution_time != 0
         && info.total_stopwatch.elapsed() > static_cast<UInt64>(limits.max_execution_time.totalMicroseconds()) * 1000)
         return handleOverflowMode(limits.timeout_overflow_mode,
@@ -255,7 +271,11 @@ void IProfilingBlockInputStream::checkQuota(Block & block)
     case LIMITS_CURRENT:
     {
         time_t current_time = time(nullptr);
-        double total_elapsed = info.total_stopwatch.elapsedSeconds();
+        double total_elapsed;
+        {
+            UniqueLockGuard lock(shared, mutex);
+            total_elapsed = info.total_stopwatch.elapsedSeconds();
+        }
 
         quota->checkAndAddResultRowsBytes(current_time, block.rows(), block.bytes());
         quota->checkAndAddExecutionTime(current_time, Poco::Timespan((total_elapsed - prev_elapsed) * 1000000.0));
@@ -329,8 +349,11 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
 
         if (limits.min_execution_speed || (total_rows && limits.timeout_before_checking_execution_speed != 0))
         {
-            double total_elapsed = info.total_stopwatch.elapsedSeconds();
-
+            double total_elapsed;
+            {
+                UniqueLockGuard lock(shared, mutex);
+                total_elapsed = info.total_stopwatch.elapsedSeconds();
+            }
             if (total_elapsed > limits.timeout_before_checking_execution_speed.totalMicroseconds() / 1000000.0)
             {
                 if (limits.min_execution_speed && progress.rows / total_elapsed < limits.min_execution_speed)
