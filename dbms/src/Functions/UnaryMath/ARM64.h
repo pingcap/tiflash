@@ -76,6 +76,7 @@ UNARY_FUNCTION_LIST(TRANSFORM)
     static inline void X##Transform(double * __restrict dst, const T * src, size_t size) \
     {                                                                                    \
         auto * dst_f64 = reinterpret_cast<float64_t *>(dst);                             \
+        auto * batch = X##TransformBatch;                                                \
         size_t i = 0;                                                                    \
         for (; i + BATCH_SIZE <= size; i += BATCH_SIZE)                                  \
         {                                                                                \
@@ -84,7 +85,7 @@ UNARY_FUNCTION_LIST(TRANSFORM)
             {                                                                            \
                 buffer.data[j] = static_cast<double>(src[i + j]);                        \
             }                                                                            \
-            X##TransformBatch(&dst_f64[i], buffer);                                      \
+            batch(&dst_f64[i], buffer);                                                  \
         }                                                                                \
         for (; i < size; i++)                                                            \
         {                                                                                \

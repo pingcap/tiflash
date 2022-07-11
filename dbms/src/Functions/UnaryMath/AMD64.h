@@ -203,6 +203,7 @@ UNARY_FUNCTION_LIST(SELECT)
         auto address = reinterpret_cast<uintptr_t>(dst);                                         \
         auto remainder = address % BATCH_SIZE;                                                   \
         auto offset = (BATCH_SIZE - (remainder == 0 ? BATCH_SIZE : remainder)) / sizeof(double); \
+        auto * batch = X##TransformBatch;                                                        \
         size_t i = 0;                                                                            \
         for (; i < offset; ++i)                                                                  \
         {                                                                                        \
@@ -214,7 +215,7 @@ UNARY_FUNCTION_LIST(SELECT)
             {                                                                                    \
                 input_data.data[j] = static_cast<double>(src[i + j]);                            \
             }                                                                                    \
-            X##TransformBatch(&dst[i], input_data);                                              \
+            batch(&dst[i], input_data);                                                          \
         }                                                                                        \
         for (; i < size; ++i)                                                                    \
         {                                                                                        \
