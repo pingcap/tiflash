@@ -95,7 +95,7 @@ private:
           * It has a special meaning, since reading from it should be done after reading from the main streams.
           * It is appended to the main streams in UnionBlockInputStream or ParallelAggregatingBlockInputStream.
           */
-        BlockInputStreamPtr stream_with_non_joined_data;
+        BlockInputStreams streams_with_non_joined_data;
 
         BlockInputStreamPtr & firstStream() { return streams.at(0); }
 
@@ -105,13 +105,13 @@ private:
             for (auto & stream : streams)
                 transform(stream);
 
-            if (stream_with_non_joined_data)
-                transform(stream_with_non_joined_data);
+            for (auto & stream : streams_with_non_joined_data)
+                transform(stream);
         }
 
         bool hasMoreThanOneStream() const
         {
-            return streams.size() + (stream_with_non_joined_data ? 1 : 0) > 1;
+            return streams.size() + streams_with_non_joined_data.size() > 1;
         }
     };
 

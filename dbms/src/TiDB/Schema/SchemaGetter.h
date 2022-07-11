@@ -94,11 +94,14 @@ enum class SchemaActionType : Int8
     AlterTableStatsOptions = 58,
     AlterNoCacheTable = 59,
     CreateTables = 60,
+    ActionMultiSchemaChange = 61,
+    SetTiFlashMode = 62,
+
 
     // If we supporte new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
-    MaxRecognizedType = 61,
+    MaxRecognizedType = 63,
 };
 
 struct AffectedOption

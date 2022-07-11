@@ -21,8 +21,12 @@ namespace DB
 /// Detail of the packet that decoding in TiRemoteInputStream.RemoteReader.decodeChunks()
 struct DecodeDetail
 {
+    // For fine grained shuffle, each ExchangeReceiver/thread will decode its own blocks.
+    // So this is the row number of partial blocks of the original packet.
+    // This will be the row number of all blocks of the original packet if it's not fine grained shuffle.
     Int64 rows = 0;
-    // byte size of origin packet.
+
+    // Total byte size of the origin packet, even for fine grained shuffle.
     Int64 packet_bytes = 0;
 };
 } // namespace DB
