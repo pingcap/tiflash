@@ -27,7 +27,7 @@ public:
         // build tipb::Window and tipb::Sort.
         // select row_number() over w1 from t1 window w1 as (partition by c1, c2, c3 order by c1, c2, c3);
         ExchangeBench::SetUp(state);
-        MockColumnInfos columns{
+        MockColumnInfoVec columns{
             {"c1", TiDB::TP::TypeLongLong},
             {"c2", TiDB::TP::TypeString},
             {"c3", TiDB::TP::TypeLongLong},
@@ -71,7 +71,7 @@ public:
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, "mock_executor_id_squashing");
         });
-        receiver_stream = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, nullptr, concurrency, /*req_id=*/"");
+        receiver_stream = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
     }
 
     tipb::Window window;
