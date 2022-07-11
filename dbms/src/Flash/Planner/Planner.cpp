@@ -24,14 +24,12 @@ namespace DB
 {
 namespace
 {
-void analyzePhysicalPlan(Context & context, PhysicalPlan & physical_plan, const DAGQueryBlock & query_block)
+void analyzePhysicalPlan(PhysicalPlan & physical_plan, const DAGQueryBlock & query_block)
 {
     assert(query_block.source);
     physical_plan.build(query_block.source_name, query_block.source);
 
-    // selection on table scan had been executed in table scan.
-    // In test mode, filter is not pushed down to table scan.
-    if (query_block.selection && (!query_block.isTableScanSource() || context.getDAGContext()->isTest()))
+    if (query_block.selection)
     {
         physical_plan.build(query_block.selection_name, query_block.selection);
     }
@@ -112,7 +110,7 @@ void Planner::executeImpl(DAGPipeline & pipeline)
         physical_plan.buildSource(input_streams);
     }
 
-    analyzePhysicalPlan(context, physical_plan, query_block);
+    analyzePhysicalPlan(physical_plan, query_block);
 
     physical_plan.outputAndOptimize();
 

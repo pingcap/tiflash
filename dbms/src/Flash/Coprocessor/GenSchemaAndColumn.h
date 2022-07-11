@@ -22,7 +22,7 @@
 
 namespace DB
 {
-NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan);
+NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, StringRef column_prefix);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
 } // namespace DB

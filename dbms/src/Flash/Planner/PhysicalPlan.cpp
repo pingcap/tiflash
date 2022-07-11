@@ -24,8 +24,10 @@
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
+#include <Flash/Planner/plans/PhysicalMockTableScan.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
@@ -56,8 +58,21 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         pushBack(PhysicalTopN::build(context, executor_id, log, executor->topn(), popBack()));
         break;
     case tipb::ExecType::TypeSelection:
+    {
+        auto child = popBack();
+        if (child->tp() == PlanType::TableScan)
+        {
+            auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(child);
+            if (!physical_table_scan->hasPushDownFilter())
+            {
+                physical_table_scan->pushDownFilter(executor_id, executor->selection());
+                pushBack(physical_table_scan);
+                break;
+            }
+        }
         pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), popBack()));
         break;
+    }
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
         pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), popBack()));
@@ -81,6 +96,17 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeProjection:
         pushBack(PhysicalProjection::build(context, executor_id, log, executor->projection(), popBack()));
         break;
+    case tipb::ExecType::TypeTableScan:
+    case tipb::ExecType::TypePartitionTableScan:
+    {
+        TiDBTableScan table_scan(executor, executor_id, dagContext());
+        if (unlikely(dagContext().isTest()))
+            pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
+        else
+            pushBack(PhysicalTableScan::build(executor_id, log, table_scan));
+        dagContext().table_scan_executor_id = executor_id;
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }

@@ -17,7 +17,7 @@
 
 namespace DB
 {
-NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan)
+NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
 {
     NamesAndTypes names_and_types;
     names_and_types.reserve(table_scan.getColumnSize());
@@ -38,7 +38,7 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan)
             names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, MutableSupport::extra_table_id_column_type);
             break;
         default:
-            names_and_types.emplace_back(fmt::format("mock_table_scan_{}", i), getDataTypeByColumnInfoForComputingLayer(column_info));
+            names_and_types.emplace_back(fmt::format("{}_{}", column_prefix, i), getDataTypeByColumnInfoForComputingLayer(column_info));
         }
     }
     return names_and_types;
