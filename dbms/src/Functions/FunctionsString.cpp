@@ -4725,7 +4725,7 @@ private:
     static void format(
         T number,
         size_t max_num_decimals,
-        TiDBDecimalRoundInfo info,
+        TiDBDecimalRoundInfo & info,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
