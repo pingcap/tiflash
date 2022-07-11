@@ -23,7 +23,7 @@ image_tiflash_llvm_base_aarch64:
 build_tiflash_release_amd64:
 	docker run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /build/tics/release-centos7-llvm/scripts/build-release.sh
 
-# Just add build_tiflash_debug_amd64 target to support FailPoint tests on x86, and outputs are the same as release version
+# Add build_tiflash_debug_amd64 target to enable FailPoints on x86. Since outputs are the same as release version, no new package targets added. 
 build_tiflash_debug_amd64:
 	docker run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:amd64 /build/tics/release-centos7-llvm/scripts/build-debug.sh
 
