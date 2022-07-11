@@ -58,6 +58,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     uint64_t total_rows;
 
+    // For fine grained shuffle, sender will partition data into muiltiple streams by hashing.
+    // ExchangeReceiverBlockInputStream only need to read its own stream, i.e., streams[stream_id].
+    // CoprocessorBlockInputStream doesn't take care of this.
+    size_t stream_id;
+
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
         for (const auto & execution_summary : resp.execution_summaries())
@@ -120,7 +125,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     bool fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult(block_queue, sample_block);
+        auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
         if (result.meet_error)
         {
             LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
@@ -168,13 +173,14 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id, size_t stream_id_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
         , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
         , log(Logger::get(name, req_id, executor_id))
         , total_rows(0)
+        , stream_id(stream_id_)
     {
         // generate sample block
         ColumnsWithTypeAndName columns;

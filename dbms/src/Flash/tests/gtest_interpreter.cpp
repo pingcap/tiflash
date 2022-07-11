@@ -340,6 +340,78 @@ Union: <for test>
 }
 CATCH
 
+TEST_F(InterpreterExecuteTest, FineGrainedShuffle)
+try
+{
+    // fine-grained shuffle is enabled.
+    const uint64_t enable = 8;
+    const uint64_t disable = 0;
+    auto request = context
+                       .receive("sender_1", enable)
+                       .sort({{"s1", true}, {"s2", false}}, true, enable)
+                       .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame(), enable)
+                       .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  Expression: <cast after window>
+   Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+    Expression: <final projection>
+     MergeSorting: <enable fine grained shuffle>, limit = 0
+      PartialSorting: <enable fine grained shuffle>: limit = 0
+       Expression: <final projection>
+        MockExchangeReceiver
+        )";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    auto topn_request = context
+                            .receive("sender_1")
+                            .topN("s2", false, 10)
+                            .build(context);
+    String topn_expected = R"(
+Union: <for test>
+ SharedQuery x 10: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 10: limit = 10
+      MockExchangeReceiver
+    )";
+    ASSERT_BLOCKINPUTSTREAM_EQAUL(topn_expected, topn_request, 10);
+
+    // fine-grained shuffle is disabled.
+    request = context
+                  .receive("sender_1", disable)
+                  .sort({{"s1", true}, {"s2", false}}, true, disable)
+                  .window(RowNumber(), {"s1", true}, {"s2", false}, buildDefaultRowsFrame(), disable)
+                  .build(context);
+    {
+        String expected = R"(
+Union: <for test>
+ Expression x 10: <final projection>
+  SharedQuery: <restore concurrency>
+   Expression: <cast after window>
+    Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+     Expression: <final projection>
+      MergeSorting, limit = 0
+       Union: <for partial order>
+        PartialSorting x 10: limit = 0
+         Expression: <final projection>
+          MockExchangeReceiver
+        )";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    topn_request = context
+                       .receive("sender_1")
+                       .topN("s2", false, 10)
+                       .build(context);
+    ASSERT_BLOCKINPUTSTREAM_EQAUL(topn_expected, topn_request, 10);
+}
+CATCH
+
 TEST_F(InterpreterExecuteTest, Join)
 try
 {
