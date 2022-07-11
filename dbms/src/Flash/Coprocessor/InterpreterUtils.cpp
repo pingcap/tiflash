@@ -17,6 +17,7 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
 
@@ -112,10 +113,14 @@ void orderStreams(
     size_t max_streams,
     SortDescription order_descr,
     Int64 limit,
+    bool enable_fine_grained_shuffle,
     const Context & context,
     const LoggerPtr & log)
 {
     const Settings & settings = context.getSettingsRef();
+    String extra_info;
+    if (enable_fine_grained_shuffle)
+        extra_info = enableFineGrainedShuffleExtraInfo;
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
@@ -127,19 +132,37 @@ void orderStreams(
         sorting_stream->setLimits(limits);
 
         stream = sorting_stream;
+        stream->setExtraInfo(extra_info);
     });
 
-    /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log, false, "for partial order");
+    if (enable_fine_grained_shuffle)
+    {
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<MergeSortingBlockInputStream>(
+                stream,
+                order_descr,
+                settings.max_block_size,
+                limit,
+                settings.max_bytes_before_external_sort,
+                context.getTemporaryPath(),
+                log->identifier());
+            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
+        });
+    }
+    else
+    {
+        /// If there are several streams, we merge them into one
+        executeUnion(pipeline, max_streams, log, false, "for partial order");
 
-    /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
-        pipeline.firstStream(),
-        order_descr,
-        settings.max_block_size,
-        limit,
-        settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
-        log->identifier());
+        /// Merge the sorted blocks.
+        pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
+            pipeline.firstStream(),
+            order_descr,
+            settings.max_block_size,
+            limit,
+            settings.max_bytes_before_external_sort,
+            context.getTemporaryPath(),
+            log->identifier());
+    }
 }
 } // namespace DB

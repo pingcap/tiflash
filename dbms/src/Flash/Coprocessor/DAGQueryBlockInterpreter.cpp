@@ -56,10 +56,6 @@ namespace FailPoints
 {
 extern const char minimum_block_size_for_cross_join[];
 } // namespace FailPoints
-namespace
-{
-const String enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
-}
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     Context & context_,
@@ -438,7 +434,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
     }
 }
 
-void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc)
+void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle)
 {
     orderStreams(pipeline, max_streams, sort_desc, 0, enable_fine_grained_shuffle, context, log);
 }
@@ -446,7 +442,7 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
-    orderStreams(pipeline, max_streams, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit, enable_fine_grained_shuffle, context, log);
+    orderStreams(pipeline, max_streams, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit, false, context, log);
 }
 
 void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, const String & key)
