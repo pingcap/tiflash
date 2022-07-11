@@ -1432,13 +1432,6 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
         return tipb::EncodeType::TypeDefault;
     return encode_type;
 }
-tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
-{
-    static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
-    if (func_name_sig_map.find(name) == func_name_sig_map.end())
-        throw Exception(fmt::format("Unsupported function {}", name));
-    return func_name_sig_map[name];
-}
 
 tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
 {

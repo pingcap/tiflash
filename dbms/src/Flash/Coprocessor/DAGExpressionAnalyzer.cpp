@@ -1125,7 +1125,7 @@ std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequiredForRootFinalProjec
 }
 
 NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
-    const ExpressionActionsPtr & actions,
+    ExpressionActionsChain & chain,
     const std::vector<tipb::FieldType> & schema,
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,

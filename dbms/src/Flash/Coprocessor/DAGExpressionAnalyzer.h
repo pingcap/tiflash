@@ -199,6 +199,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+
     String buildTupleFunctionForGroupConcat(
         const tipb::Expr & expr,
         SortDescription & sort_desc,

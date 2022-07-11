@@ -103,6 +103,7 @@ Block mergeBlocks(Blocks blocks)
         actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
     return Block(actual_columns);
 }
+} // namespace
 
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 {
@@ -115,7 +116,11 @@ DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
     stream->readSuffix();
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
-} // namespace
+
+void ExecutorTest::enablePlanner(bool is_enable)
+{
+    context.context.setSetting("enable_planner", is_enable ? "true" : "false");
+}
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
 {

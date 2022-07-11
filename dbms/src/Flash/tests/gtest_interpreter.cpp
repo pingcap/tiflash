@@ -19,14 +19,14 @@ namespace DB
 {
 namespace tests
 {
-class QBInterpreterExecuteTest : public DB::tests::ExecutorTest
+class InterpreterExecuteTest : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
 
-        context.context.setSetting("enable_planner", "false");
+        enablePlanner(false);
 
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
@@ -38,7 +38,7 @@ public:
     }
 };
 
-TEST_F(QBInterpreterExecuteTest, SingleQueryBlock)
+TEST_F(InterpreterExecuteTest, SingleQueryBlock)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -92,7 +92,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(QBInterpreterExecuteTest, MultipleQueryBlockWithSource)
+TEST_F(InterpreterExecuteTest, MultipleQueryBlockWithSource)
 try
 {
     auto request = context.scan("test_db", "test_table_1")

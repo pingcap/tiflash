@@ -44,9 +44,6 @@
 #if ENABLE_TIFLASH_PAGECTL
 #include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
 #endif
-#if ENABLE_TIFLASH_PAGECTL
-#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
-#endif
 #include <Common/StringUtils/StringUtils.h>
 #include <Server/DTTool/DTTool.h>
 
