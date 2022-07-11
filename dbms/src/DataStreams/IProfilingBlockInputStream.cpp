@@ -17,6 +17,8 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
 
+#include <mutex>
+
 
 namespace DB
 {
@@ -67,10 +69,10 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
             return res;
         }
         start_time = info.total_stopwatch.elapsed();
-    }
 
-    if (!checkTimeLimit())
-        limit_exceeded_need_break = true;
+        if (!checkTimeLimit())
+            limit_exceeded_need_break = true;
+    }
 
     if (!limit_exceeded_need_break)
     {
@@ -248,7 +250,6 @@ static bool handleOverflowMode(OverflowMode mode, const String & message, int co
 
 bool IProfilingBlockInputStream::checkTimeLimit() const
 {
-    UniqueLockGuard lock(shared, mutex);
     if (limits.max_execution_time != 0
         && info.total_stopwatch.elapsed() > static_cast<UInt64>(limits.max_execution_time.totalMicroseconds()) * 1000)
         return handleOverflowMode(limits.timeout_overflow_mode,
