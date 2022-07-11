@@ -421,7 +421,7 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
             [](const auto & content, FmtBuffer & fmt_buf) {
                 fmt_buf.append(fmt::format("{}: {}", content.first, content.second));
             },
-            ",");
+            ", ");
 
         fmt_buf.append(")\n");
         col_content.clear();
