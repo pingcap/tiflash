@@ -33,7 +33,7 @@ namespace DB
 /// Serializes the stream of blocks and sends them to TiDB or TiFlash with different serialization paths.
 /// When sending data to TiDB, blocks with extra info are written into tipb::SelectResponse, then the whole tipb::SelectResponse is further serialized into mpp::MPPDataPacket.data.
 /// Differently when sending data to TiFlash, blocks with only tuples are directly serialized into mpp::MPPDataPacket.chunks, but for the last block, its extra info (like execution summaries) is written into tipb::SelectResponse, then further serialized into mpp::MPPDataPacket.data.
-template <class StreamWriterPtr>
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
 public:
@@ -45,7 +45,9 @@ public:
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
-        DAGContext & dag_context_);
+        DAGContext & dag_context_,
+        UInt64 fine_grained_shuffle_stream_count_,
+        UInt64 fine_grained_shuffle_batch_size);
     void write(const Block & block) override;
     void finishWrite() override;
 
@@ -53,9 +55,19 @@ private:
     template <bool send_exec_summary_at_last>
     void batchWrite();
     template <bool send_exec_summary_at_last>
+    void batchWriteFineGrainedShuffle();
+
+    template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     template <bool send_exec_summary_at_last>
     void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+
+    template <bool send_exec_summary_at_last>
+    void handleExecSummary(const std::vector<Block> & input_blocks,
+                           std::vector<mpp::MPPDataPacket> & packet,
+                           tipb::SelectResponse & response) const;
+    template <bool send_exec_summary_at_last>
+    void writePackets(const std::vector<size_t> & responses_row_count, std::vector<mpp::MPPDataPacket> & packets) const;
 
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
@@ -67,6 +79,8 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
+    UInt64 fine_grained_shuffle_stream_count;
+    UInt64 fine_grained_shuffle_batch_size;
 };
 
 } // namespace DB

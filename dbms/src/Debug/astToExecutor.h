@@ -139,8 +139,11 @@ struct ExchangeSender : Executor
 struct ExchangeReceiver : Executor
 {
     TaskMetas task_metas;
-    ExchangeReceiver(size_t & index, const DAGSchema & output)
+    uint64_t fine_grained_shuffle_stream_count;
+
+    ExchangeReceiver(size_t & index, const DAGSchema & output, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : Executor(index, "exchange_receiver_" + std::to_string(index), output)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
@@ -292,13 +295,15 @@ struct Window : Executor
     std::vector<ASTPtr> partition_by_exprs;
     std::vector<ASTPtr> order_by_exprs;
     MockWindowFrame frame;
+    uint64_t fine_grained_shuffle_stream_count;
 
-    Window(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> func_descs_, std::vector<ASTPtr> partition_by_exprs_, std::vector<ASTPtr> order_by_exprs_, MockWindowFrame frame_)
+    Window(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> func_descs_, std::vector<ASTPtr> partition_by_exprs_, std::vector<ASTPtr> order_by_exprs_, MockWindowFrame frame_, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : Executor(index_, "window_" + std::to_string(index_), output_schema_)
         , func_descs(std::move(func_descs_))
         , partition_by_exprs(std::move(partition_by_exprs_))
         , order_by_exprs(order_by_exprs_)
         , frame(frame_)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {
     }
     // Currently only use Window Executor in Unit Test which don't call columnPrume.
@@ -311,11 +316,13 @@ struct Sort : Executor
 {
     std::vector<ASTPtr> by_exprs;
     bool is_partial_sort;
+    uint64_t fine_grained_shuffle_stream_count;
 
-    Sort(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> by_exprs_, bool is_partial_sort_)
+    Sort(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> by_exprs_, bool is_partial_sort_, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : Executor(index_, "sort_" + std::to_string(index_), output_schema_)
         , by_exprs(by_exprs_)
         , is_partial_sort(is_partial_sort_)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {
     }
     // Currently only use Sort Executor in Unit Test which don't call columnPrume.
@@ -343,11 +350,11 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
 
-ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
+ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count = 0);
 
-ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame);
+ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
 
-ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort);
+ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
 } // namespace DB

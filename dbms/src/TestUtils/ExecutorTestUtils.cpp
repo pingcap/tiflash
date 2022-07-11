@@ -104,49 +104,39 @@ Block mergeBlocks(Blocks blocks)
     return Block(actual_columns);
 }
 
-void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns)
+DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 {
     Blocks actual_blocks;
-    Block except_block(expect_columns);
     stream->readPrefix();
     while (auto block = stream->read())
     {
         actual_blocks.push_back(block);
     }
     stream->readSuffix();
-    Block actual_block = mergeBlocks(actual_blocks);
-    ASSERT_BLOCK_EQ(except_block, actual_block);
+    return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 } // namespace
 
-void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
     dag_context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
-    readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
+    return readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in);
 }
 
-void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
-    executeStreams(request, context.executorIdColumnsMap(), expect_columns, concurrency);
+    return executeStreams(request, context.executorIdColumnsMap(), concurrency);
 }
 
-void ExecutorTest::executeStreamsWithMultiConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t max_concurrency, size_t step)
-{
-    for (size_t i = 1; i < max_concurrency; i += step)
-    {
-        executeStreams(request, expect_columns, i);
-    }
-}
-
-void ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, SourceType type, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, SourceType type, size_t concurrency)
 {
     std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
     source_columns_map[getSourceName(type)] = source_columns;
-    executeStreams(request, source_columns_map, expect_columns, concurrency);
+    return executeStreams(request, source_columns_map, concurrency);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
