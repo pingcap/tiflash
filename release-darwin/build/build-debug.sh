@@ -17,4 +17,4 @@ set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
-${SCRIPTPATH}/build-tiflash-release.sh ""
+${SCRIPTPATH}/build-tiflash-release.sh "DEBUG"
