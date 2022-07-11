@@ -58,6 +58,16 @@ enum class LibMVecFunc
     sentinel
 };
 
+/**
+ * Libmvec is vector math library added in Glibc 2.22.
+ * 
+ * Vector math library was added to support SIMD constructs of OpenMP4.0 (#2.8 in http://www.openmp.org/mp-documents/OpenMP4.0.0.pdf) 
+ * by adding vector implementations of vector math functions.
+ * 
+ * Vector math functions are vector variants of corresponding scalar math operations implemented using SIMD ISA extensions 
+ * (e.g. SSE or AVX for x86_64). They take packed vector arguments, perform the operation on each element of the packed vector argument, 
+ * and return a packed vector result. Using vector math functions is faster than repeatedly calling the scalar math routines.
+ */
 struct LibMVec
 {
     void * handle;
@@ -113,6 +123,8 @@ static inline __attribute__((target("avx512f"))) void store512(double * data,
     _mm512_store_pd(data, vec);
 }
 
+// The prefix rule is stablized as described in VectorABI:
+// https://sourceware.org/glibc/wiki/libmvec?action=AttachFile&do=view&target=VectorABI.txt
 static inline const LibMVec LIBMVEC_LIBRARY{};
 static inline const MVec<__m128d, _mm_load_pd, _mm_store_pd>
     LIBMDEV_SSE2_FUNCTIONS{"_ZGVbN2v_", LIBMVEC_LIBRARY.handle};

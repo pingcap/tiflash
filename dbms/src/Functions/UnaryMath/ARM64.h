@@ -29,6 +29,7 @@ namespace DB::UnaryMath
     M(log)
 
 #pragma push_macro("__vpcs")
+// The following functions are provided by arm-optimized-routines.
 #define __vpcs __attribute__((__aarch64_vector_pcs__))
 extern "C" {
 __vpcs float64x2_t __vn_sin(float64x2_t);
