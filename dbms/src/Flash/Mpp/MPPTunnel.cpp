@@ -112,7 +112,6 @@ void MPPTunnel::close(const String & reason)
             cv_for_status_changed.notify_all();
             return;
         case TunnelStatus::Connected:
-        case TunnelStatus::WaitingForSenderFinish:
         {
             if (!reason.empty())
             {
@@ -131,6 +130,7 @@ void MPPTunnel::close(const String & reason)
             finishSendQueue();
             break;
         }
+        case TunnelStatus::WaitingForSenderFinish:
         case TunnelStatus::Finished:
             return;
         default:
@@ -201,15 +201,15 @@ void MPPTunnel::connect(PacketWriter * writer)
             tunnel_sender = local_tunnel_sender;
             break;
         case TunnelSenderMode::SYNC_GRPC:
+            RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
             sync_tunnel_sender = std::make_shared<SyncTunnelSender>(mode, send_queue, writer, log, tunnel_id);
             sync_tunnel_sender->startSendThread();
             tunnel_sender = sync_tunnel_sender;
             break;
         case TunnelSenderMode::ASYNC_GRPC:
+            RUNTIME_ASSERT(writer != nullptr, log, "Async writer shouldn't be null");
             async_tunnel_sender = std::make_shared<AsyncTunnelSender>(mode, send_queue, writer, log, tunnel_id);
             tunnel_sender = async_tunnel_sender;
-            RUNTIME_ASSERT(writer != nullptr, log, "Async writer shouldn't be null");
-            RUNTIME_ASSERT(tunnel_sender != nullptr, log, "Tunnel sender shouldn't be null");
             writer->attachAsyncTunnelSender(async_tunnel_sender);
             break;
         default:
@@ -334,6 +334,7 @@ void SyncTunnelSender::sendJob()
     {
         err_msg = fmt::format("{} meet error: {}", tunnel_id, err_msg);
         LOG_ERROR(log, err_msg);
+        trimStackTrace(err_msg);
     }
     consumerFinish(err_msg);
     GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
@@ -376,6 +377,7 @@ void AsyncTunnelSender::sendOne()
     {
         err_msg = fmt::format("{} meet error: {}", tunnel_id, err_msg);
         LOG_ERROR(log, err_msg);
+        trimStackTrace(err_msg);
     }
     if (!err_msg.empty() || queue_empty_flag)
     {

@@ -192,8 +192,8 @@ using LocalTunnelSenderPtr = std::shared_ptr<LocalTunnelSender>;
  * 
  * The protocol between MPPTunnel and Sender:
  * - All data will be pushed into the `send_queue`, including errors.
- * - MPPTunnel may close `send_queue` to notify Sender normally finish.
- * - Sender may close `send_queue` to notify MPPTunnel that an error occurs.
+ * - MPPTunnel may finish `send_queue` to notify Sender normally finish.
+ * - Sender may finish `send_queue` to notify MPPTunnel that an error occurs.
  * - After `status` turned to Connected only when Sender finish its work, MPPTunnel can set its 'status' to Finished.
  *
  * NOTE: to avoid deadlock, `waitForSenderFinish` should be called outside of the protection of `mu`.

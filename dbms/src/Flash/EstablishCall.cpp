@@ -117,7 +117,7 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
     state = FINISH;
     if (stopwatch)
     {
-        LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection cost {} ms.", stopwatch->elapsedMilliseconds());
+        LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
     }
     responderFinish(status);
 }
