@@ -46,6 +46,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
     try
     {
         Stopwatch stopwatch;
+        std::cout << "ywq test reach 49" << std::endl;
         task = MPPTask::newTask(task_request.meta(), context);
 
         task->prepare(task_request);

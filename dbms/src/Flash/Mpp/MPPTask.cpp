@@ -123,7 +123,12 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] { self->runImpl(); });
+    // newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] { self->runImpl(); });
+    newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] {
+        std::cout << "ywq test before sleep" << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::cout << "ywq test after sleep" << std::endl;
+    });
 }
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
@@ -224,7 +229,9 @@ void MPPTask::unregisterTask()
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
+    std::cout << "ywq test reach prepare..." << std::endl;
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
+
     TMTContext & tmt_context = context->getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions/mpp::DispatchTaskRequest::table_regions.
     /// The ones defined in tipb::TableScan will never be used and can be removed later.
@@ -308,13 +315,14 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    mpp_task_statistics.initializeExecutorDAG(dag_context.get());
-    mpp_task_statistics.logTracingJson();
+    // mpp_task_statistics.initializeExecutorDAG(dag_context.get());
+    // mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
+    std::cout << "ywq test preprocess" << std::endl;
     initExchangeReceivers();
     DAGQuerySource dag(*context);
     executeQuery(dag, *context, false, QueryProcessingStage::Complete);
