@@ -83,8 +83,8 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     for (size_t i = 0; i < schema.size(); ++i)
     {
         RUNTIME_ASSERT(
-            schema[i].type->equals(*storage_schema[i].type), 
-            log, 
+            schema[i].type->equals(*storage_schema[i].type),
+            log,
             "Expected col type {} does not match actual col type {}",
             schema[i].type->getName(),
             storage_schema[i].type->getName());

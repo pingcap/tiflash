@@ -70,7 +70,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
                 break;
             }
         }
-        pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), popBack()));
+        pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
         break;
     }
     case tipb::ExecType::TypeAggregation:
