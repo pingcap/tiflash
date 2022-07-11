@@ -121,6 +121,8 @@ inline bool enableFineGrainedShuffle(uint64_t stream_count)
     return stream_count > 0;
 }
 
+extern const String enableFineGrainedShuffleExtraInfo;
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -307,6 +309,8 @@ public:
     {
         return sql_mode & f;
     }
+
+    void updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit);
 
     bool isTest() const { return is_test; }
     void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
