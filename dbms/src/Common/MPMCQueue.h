@@ -74,6 +74,13 @@ public:
             destruct(getObj(read_pos));
     }
 
+    // Cannot to use copy/move constructor,
+    // because MPMCQueue maybe used by different threads.
+    // Copy and move it is dangerous.
+    MPMCQueue(const MPMCQueue<T> &) = delete;
+    MPMCQueue(MPMCQueue<T> &&) = delete;
+    MPMCQueue<T> & operator=(const MPMCQueue<T> &) = delete;
+
     /// Block until:
     /// 1. Pop succeeds with a valid T: return true.
     /// 2. The queue is cancelled or finished: return false.
