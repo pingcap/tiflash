@@ -509,10 +509,14 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
 
 
     new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+    if (filter_delete_mark)
+    {
+        new_columns_to_read->push_back(getTagColumnDefine());
+    }
 
     for (const auto & c : columns_to_read)
     {
-        if (c.id != EXTRA_HANDLE_COLUMN_ID)
+        if (c.id != EXTRA_HANDLE_COLUMN_ID && (!(filter_delete_mark && c.id == TAG_COLUMN_ID)))
             new_columns_to_read->push_back(c);
     }
 
