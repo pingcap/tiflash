@@ -39,9 +39,9 @@ inline void mockExecuteProject(std::shared_ptr<DAGQueryBlockInterpreter> & mock_
     mock_interpreter->executeProject(pipeline, final_project);
 }
 
-inline void mockExecuteWindowOrder(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, const tipb::Sort & sort)
+inline void mockExecuteWindowOrder(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, const tipb::Sort & sort, uint64_t fine_grained_shuffle_stream_count)
 {
-    mock_interpreter->handleWindowOrder(pipeline, sort);
+    mock_interpreter->handleWindowOrder(pipeline, sort, ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count));
     mock_interpreter->input_streams_vec[0] = pipeline.streams;
     NamesWithAliases final_project;
     for (const auto & column : (*mock_interpreter->analyzer).source_columns)
@@ -51,16 +51,9 @@ inline void mockExecuteWindowOrder(std::shared_ptr<DAGQueryBlockInterpreter> & m
     mockExecuteProject(mock_interpreter, pipeline, final_project);
 }
 
-inline void mockExecuteWindowOrder(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, const String & sort_json)
+inline void mockExecuteWindow(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, const tipb::Window & window, uint64_t fine_grained_shuffle_stream_count)
 {
-    tipb::Sort sort;
-    ::google::protobuf::util::JsonStringToMessage(sort_json, &sort);
-    mockExecuteWindowOrder(mock_interpreter, pipeline, sort);
-}
-
-inline void mockExecuteWindow(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, const tipb::Window & window)
-{
-    mock_interpreter->handleWindow(pipeline, window);
+    mock_interpreter->handleWindow(pipeline, window, ::DB::enableFineGrainedShuffle(fine_grained_shuffle_stream_count));
     mock_interpreter->input_streams_vec[0] = pipeline.streams;
     NamesWithAliases final_project;
     for (const auto & column : (*mock_interpreter->analyzer).source_columns)
@@ -68,13 +61,6 @@ inline void mockExecuteWindow(std::shared_ptr<DAGQueryBlockInterpreter> & mock_i
         final_project.push_back({column.name, ""});
     }
     mockExecuteProject(mock_interpreter, pipeline, final_project);
-}
-
-inline void mockExecuteWindow(std::shared_ptr<DAGQueryBlockInterpreter> & mock_interpreter, DAGPipeline & pipeline, std::string window_json_str)
-{
-    tipb::Window window;
-    google::protobuf::util::JsonStringToMessage(window_json_str, &window);
-    mockExecuteWindow(mock_interpreter, pipeline, window);
 }
 
 } // namespace tests

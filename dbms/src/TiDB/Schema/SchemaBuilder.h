@@ -55,39 +55,44 @@ private:
 
     bool applyCreateSchema(DatabaseID schema_id);
 
-    void applyCreateSchema(TiDB::DBInfoPtr db_info);
+    void applyCreateSchema(const TiDB::DBInfoPtr & db_info);
 
-    void applyCreateTable(TiDB::DBInfoPtr db_info, TableID table_id);
+    void applyCreateTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
-    void applyCreateLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info);
+    void applyCreateLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
-    void applyCreatePhysicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info);
+    void applyCreatePhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info);
 
-    void applyDropTable(TiDB::DBInfoPtr db_info, TableID table_id);
+    void applyDropTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
     /// Parameter schema_name should be mapped.
     void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
-    void applyPartitionDiff(TiDB::DBInfoPtr db_info, TableID table_id);
+    void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
-    void applyPartitionDiff(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applyPartitionDiff(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
 
-    void applyAlterTable(TiDB::DBInfoPtr db_info, TableID table_id);
+    void applyAlterTable(const TiDB::DBInfoPtr & db_info, TableID table_id);
 
-    void applyAlterLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applyAlterLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
 
-    void applyAlterPhysicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applyAlterPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
 
-    void applyRenameTable(TiDB::DBInfoPtr new_db_info, TiDB::TableID table_id);
+    void applyRenameTable(const TiDB::DBInfoPtr & new_db_info, TiDB::TableID table_id);
 
-    void applyRenameLogicalTable(TiDB::DBInfoPtr new_db_info, TiDB::TableInfoPtr new_table_info, ManageableStoragePtr storage);
+    void applyRenameLogicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfoPtr & new_table_info, const ManageableStoragePtr & storage);
 
-    void applyRenamePhysicalTable(TiDB::DBInfoPtr new_db_info, TiDB::TableInfo & new_table_info, ManageableStoragePtr storage);
+    void applyRenamePhysicalTable(const TiDB::DBInfoPtr & new_db_info, const TiDB::TableInfo & new_table_info, const ManageableStoragePtr & storage);
 
     void applyExchangeTablePartition(const SchemaDiff & diff);
 
-    void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TableID table_id);
-    void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applySetTiFlashReplica(const TiDB::DBInfoPtr & db_info, TableID table_id);
+    void applySetTiFlashReplicaOnLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
+    void applySetTiFlashReplicaOnPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
+
+    void applySetTiFlashMode(const TiDB::DBInfoPtr & db_info, TableID table_id);
+    void applySetTiFlashModeOnLogicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
+    void applySetTiFlashModeOnPhysicalTable(const TiDB::DBInfoPtr & db_info, const TiDB::TableInfoPtr & table_info, const ManageableStoragePtr & storage);
 };
 
 } // namespace DB

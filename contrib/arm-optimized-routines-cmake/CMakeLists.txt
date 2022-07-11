@@ -26,6 +26,7 @@
 #   the qualities can be ensured while using it also enables us to keep sync with latest
 #   acceleration techniques.
 
+set(CMAKE_C_FLAGS "")
 ENABLE_LANGUAGE(C)
 ENABLE_LANGUAGE(ASM)
 set(TIFLASH_AOR_DIR ../arm-optimized-routines)
@@ -38,3 +39,7 @@ target_include_directories(tiflash-aarch64-string PRIVATE ${TIFLASH_AOR_DIR}/str
 file(GLOB TIFLASH_AARCH64_MATH_FILES ${TIFLASH_AOR_DIR}/math/*.c)
 add_library(tiflash-aarch64-math STATIC ${TIFLASH_AARCH64_MATH_FILES})
 target_include_directories(tiflash-aarch64-math PRIVATE ${TIFLASH_AOR_DIR}/math/include)
+
+# it is reasonable to keep these libraries optimized
+target_compile_options(tiflash-aarch64-string PRIVATE -O3 -g3 -fno-omit-frame-pointer -ffunction-sections -fdata-sections)
+target_compile_options(tiflash-aarch64-math PRIVATE -O3 -g3 -fno-omit-frame-pointer -ffunction-sections -fdata-sections)
