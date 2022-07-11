@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/Collator.h>
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Common/typeid_cast.h>
@@ -93,6 +94,12 @@ extern const int SCHEMA_VERSION_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
+
+namespace FailPoints
+{
+extern const char pause_query_init[];
+} // namespace FailPoints
+
 InterpreterSelectQuery::InterpreterSelectQuery(
     const ASTPtr & query_ptr_,
     const Context & context_,
@@ -131,7 +138,14 @@ InterpreterSelectQuery::~InterpreterSelectQuery() = default;
 
 void InterpreterSelectQuery::init(const Names & required_result_column_names)
 {
-    ProfileEvents::increment(ProfileEvents::SelectQuery);
+    /// the failpoint pause_query_init should use with the failpoint unblock_query_init_after_write,
+    /// to fulfill that the select query action will be blocked before init state to wait the write action finished.
+    /// In using, we need enable unblock_query_init_after_write in our test code,
+    /// and before each write statement take effect, we need enable pause_query_init.
+    /// When the write action finished, the pause_query_init will be disabled automatically,
+    /// and then the select query could be continued.
+    /// you can refer multi_alter_with_write.test for an example.
+    FAIL_POINT_PAUSE(FailPoints::pause_query_init);
 
     if (!context.hasQueryContext())
         context.setQueryContext(context);
@@ -498,13 +512,13 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             {
                 const auto & join = static_cast<const ASTTableJoin &>(*query.join()->table_join);
                 if (join.kind == ASTTableJoin::Kind::Full || join.kind == ASTTableJoin::Kind::Right)
-                    pipeline.stream_with_non_joined_data = expressions.before_join->createStreamWithNonJoinedDataIfFullOrRightJoin(
+                    pipeline.streams_with_non_joined_data.push_back(expressions.before_join->createStreamWithNonJoinedDataIfFullOrRightJoin(
                         pipeline.firstStream()->getHeader(),
                         0,
                         1,
-                        settings.max_block_size);
+                        settings.max_block_size));
 
-                for (auto & stream : pipeline.streams) /// Applies to all sources except stream_with_non_joined_data.
+                for (auto & stream : pipeline.streams) /// Applies to all sources except streams_with_non_joined_data.
                     stream = std::make_shared<ExpressionBlockInputStream>(stream, expressions.before_join, /*req_id=*/"");
             }
 
@@ -589,7 +603,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
             if (need_second_distinct_pass
                 || query.limit_length
                 || query.limit_by_expression_list
-                || pipeline.stream_with_non_joined_data)
+                || !pipeline.streams_with_non_joined_data.empty())
             {
                 need_merge_streams = true;
             }
@@ -973,11 +987,11 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
     Aggregator::Params params(header, keys, aggregates, overflow_row, settings.max_rows_to_group_by, settings.group_by_overflow_mode, allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0), allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0), settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath());
 
     /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.streams.size() > 1)
+    if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
     {
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
+        auto stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,
-            pipeline.stream_with_non_joined_data,
+            pipeline.streams_with_non_joined_data,
             params,
             file_provider,
             final,
@@ -987,19 +1001,21 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
                 : static_cast<size_t>(settings.max_threads),
             /*req_id=*/"");
 
-        pipeline.stream_with_non_joined_data = nullptr;
         pipeline.streams.resize(1);
+        pipeline.streams_with_non_joined_data.clear();
+        pipeline.firstStream() = std::move(stream);
     }
     else
     {
         BlockInputStreams inputs;
         if (!pipeline.streams.empty())
             inputs.push_back(pipeline.firstStream());
-        else
-            pipeline.streams.resize(1);
 
-        if (pipeline.stream_with_non_joined_data)
-            inputs.push_back(pipeline.stream_with_non_joined_data);
+        if (!pipeline.streams_with_non_joined_data.empty())
+            inputs.push_back(pipeline.streams_with_non_joined_data.at(0));
+
+        pipeline.streams.resize(1);
+        pipeline.streams_with_non_joined_data.clear();
 
         pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
             std::make_shared<ConcatBlockInputStream>(inputs, /*req_id=*/""),
@@ -1007,8 +1023,6 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
             file_provider,
             final,
             /*req_id=*/"");
-
-        pipeline.stream_with_non_joined_data = nullptr;
     }
 }
 
@@ -1230,21 +1244,33 @@ void InterpreterSelectQuery::executeDistinct(Pipeline & pipeline, bool before_or
 
 void InterpreterSelectQuery::executeUnion(Pipeline & pipeline)
 {
-    /// If there are still several streams, then we combine them into one
-    if (pipeline.hasMoreThanOneStream())
+    switch (pipeline.streams.size() + pipeline.streams_with_non_joined_data.size())
     {
-        pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(
+    case 0:
+        break;
+    case 1:
+    {
+        if (pipeline.streams.size() == 1)
+            break;
+        // streams_with_non_joined_data's size is 1.
+        pipeline.streams.push_back(pipeline.streams_with_non_joined_data.at(0));
+        pipeline.streams_with_non_joined_data.clear();
+        break;
+    }
+    default:
+    {
+        BlockInputStreamPtr stream = std::make_shared<UnionBlockInputStream<>>(
             pipeline.streams,
-            pipeline.stream_with_non_joined_data,
+            pipeline.streams_with_non_joined_data,
             max_streams,
             /*req_id=*/"");
-        pipeline.stream_with_non_joined_data = nullptr;
+        ;
+
         pipeline.streams.resize(1);
+        pipeline.streams_with_non_joined_data.clear();
+        pipeline.firstStream() = std::move(stream);
+        break;
     }
-    else if (pipeline.stream_with_non_joined_data)
-    {
-        pipeline.streams.push_back(pipeline.stream_with_non_joined_data);
-        pipeline.stream_with_non_joined_data = nullptr;
     }
 }
 

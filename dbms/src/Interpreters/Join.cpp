@@ -17,6 +17,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Common/ColumnsHashing.h>
+#include <Common/FailPoint.h>
 #include <Common/typeid_cast.h>
 #include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -26,9 +27,17 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/NullableUtils.h>
+#include <common/logger_useful.h>
+
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_join_build_failpoint[];
+extern const char random_join_prob_failpoint[];
+} // namespace FailPoints
+
 namespace ErrorCodes
 {
 extern const int UNKNOWN_SET_DATA_VARIANT;
@@ -621,6 +630,7 @@ void NO_INLINE insertFromBlockImplTypeCaseWithLock(
     }
     for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
     {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_build_failpoint);
         size_t segment_index = (insert_index + stream_index) % segment_index_info.size();
         if (segment_index == segment_size)
         {
@@ -1513,7 +1523,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     default:
         throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
-
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & sample_col = sample_block_with_columns_to_add.getByPosition(i);

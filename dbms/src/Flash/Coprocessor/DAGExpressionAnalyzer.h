@@ -166,7 +166,7 @@ public:
     void appendCastAfterWindow(
         const ExpressionActionsPtr & actions,
         const tipb::Window & window,
-        const size_t window_columns_start_index);
+        size_t window_columns_start_index);
 
     NamesAndTypes buildOrderColumns(
         const ExpressionActionsPtr & actions,

@@ -18,9 +18,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include "region_helper.h"
 
 namespace DB
 {
@@ -37,13 +36,6 @@ extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_le
 
 namespace tests
 {
-RegionPtr makeRegion(UInt64 id, const std::string start_key, const std::string end_key, const TiFlashRaftProxyHelper * proxy_helper = nullptr)
-{
-    return std::make_shared<Region>(
-        RegionMeta(createPeer(2, true), createRegionInfo(id, std::move(start_key), std::move(end_key)), initialApplyState()),
-        proxy_helper);
-}
-
 class RegionKVStoreTest : public ::testing::Test
 {
 public:
@@ -1186,6 +1178,12 @@ void RegionKVStoreTest::testKVStore()
         {
             ASSERT_EQ(e.message(), "unsupported admin command type InvalidAdmin");
         }
+    }
+    {
+        // There shall be data to flush.
+        ASSERT_EQ(kvs.needFlushRegionData(19, ctx.getTMTContext()), true);
+        // Force flush until succeed only for testing.
+        ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext()), true);
     }
 }
 

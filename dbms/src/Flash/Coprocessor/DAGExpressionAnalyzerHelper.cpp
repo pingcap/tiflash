@@ -450,6 +450,7 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"bitOr", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
      {"bitXor", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
      {"bitNot", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+     {"bitShiftRight", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
      {"leftUTF8", DAGExpressionAnalyzerHelper::buildLeftUTF8Function},
      {"date_add", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateAdd>},
      {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},
