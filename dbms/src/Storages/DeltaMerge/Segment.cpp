@@ -525,11 +525,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         expected_block_size,
         false);
 
-    //BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
-
-    //delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
-    //delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
-
     DeltaValueInputStream delta_stream(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
     auto memtable_stream = delta_stream.getMemTableInputStream();
     auto persisted_files_stream = delta_stream.getPersistedFilesInputStream();
@@ -556,7 +551,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
 
     if (dm_context.read_delta_only)
     {
-        //streams.push_back(delta_stream);
         streams.push_back(memtable_stream);
         streams.push_back(persisted_files_stream);
     }
@@ -566,7 +560,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     }
     else
     {
-        //streams.push_back(delta_stream);
         streams.push_back(memtable_stream);
         streams.push_back(persisted_files_stream);
         streams.push_back(stable_stream);
