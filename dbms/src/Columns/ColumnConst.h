@@ -233,7 +233,8 @@ public:
     template <typename T>
     T getValue() const
     {
-        return getField().safeGet<typename NearestFieldType<T>::Type>();
+        auto && tmp = getField();
+        return std::move(tmp.safeGet<typename NearestFieldType<T>::Type>());
     }
 };
 

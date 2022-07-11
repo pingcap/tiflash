@@ -277,6 +277,7 @@ struct ResultOfAbs<Decimal<T>>
 };
 
 /** For bitwise operations, an integer is obtained with number of bits is equal to the maximum of the arguments.
+  * todo: note that MySQL handles only unsigned 64-bit integer argument and result values. We should refine the code.
     */
 template <typename A, typename B>
 struct ResultOfBit

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Mpp/Utils.h>
+#include <Poco/String.h>
 
 #include <memory>
 
@@ -25,6 +26,16 @@ mpp::MPPDataPacket getPacketWithError(String reason)
     err->set_msg(std::move(reason));
     data.set_allocated_error(err.release());
     return data;
+}
+
+void trimStackTrace(String & message)
+{
+    auto stack_trace_pos = message.find("Stack trace");
+    if (stack_trace_pos != String::npos)
+    {
+        message.resize(stack_trace_pos);
+        Poco::trimRightInPlace(message);
+    }
 }
 
 } // namespace DB
