@@ -21,6 +21,11 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <common/logger_useful.h>
+
+#include <condition_variable>
+
+#include "Common/MPMCQueue.h"
+#include "Common/ThreadManager.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <common/ThreadPool.h>
@@ -48,8 +53,11 @@ public:
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
         UInt64 fine_grained_shuffle_batch_size);
+        bool encode_pipe_ = false);
     void write(const Block & block) override;
     void finishWrite() override;
+
+    ~StreamingDAGResponseWriter<StreamWriterPtr>();
 
 private:
     template <bool send_exec_summary_at_last>
@@ -81,6 +89,21 @@ private:
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
+
+    bool encode_pipe;
+    void encodeJob();
+
+    struct EncodeElem
+    {
+        std::vector<Block> blocks;
+        tipb::SelectResponse rsp;
+        bool send_exec_summary_at_last = false;
+    };
+    mutable MPMCQueue<std::shared_ptr<EncodeElem>> encode_queue;
+    std::shared_ptr<ThreadManager> thread_manager;
+    std::mutex mu;
+    bool finished;
+    std::condition_variable cv_for_finished;
 };
 
 } // namespace DB

@@ -71,7 +71,7 @@ struct BatchCoprocessorReaderResult
     }
 };
 
-/// this is an adapter for , so it can be used in TiRemoteBlockInputStream
+/// this is an adapter to be used in TiRemoteBlockInputStream
 class BatchCoprocessorReader
 {
 public:
@@ -84,17 +84,17 @@ public:
         pingcap::kv::Cluster * cluster_,
         pingcap::coprocessor::BatchCopTask task_,
         const pingcap::coprocessor::RequestPtr & req,
-        int concurrency_)
+        Int64 buffer_size)
         : schema(schema_)
         , task(std::move(task_))
         , cluster(cluster_)
         , thread_manager(newThreadManager())
-        , msg_channel(16)
-        , total_wait_channel_elapse_ms(0)
+        , msg_channel(std::max(1, buffer_size)) // min is 1
+        , total_wait_pull_channel_elapse_ms(0)
+        , total_wait_push_channel_elapse_ms(0)
         , total_wait_net_elapse_ms(0)
         , total_net_recv_bytes(0)
         , collected(false)
-        , concurrency(concurrency_)
         , log(Logger::get(name /*req_id, etc*/))
     {
         auto batch_req = std::make_shared<::coprocessor::BatchRequest>();
@@ -140,7 +140,14 @@ public:
 
     ~BatchCoprocessorReader()
     {
-        LOG_FMT_INFO(log, "done, wait_channel_ms={} wait_net_ms={} net_recv_bytes={}", total_wait_channel_elapse_ms, total_wait_net_elapse_ms, total_net_recv_bytes);
+        // TODO: Remove this verbose logging?
+        LOG_FMT_DEBUG(
+            log,
+            "done, wait_pull_channel_ms={} wait_push_channel_ms={} wait_net_ms={} net_recv_bytes={}",
+            total_wait_pull_channel_elapse_ms,
+            total_wait_push_channel_elapse_ms,
+            total_wait_net_elapse_ms,
+            total_net_recv_bytes);
     }
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -158,7 +165,7 @@ public:
             return BatchCoprocessorReaderResult::newEOF(name);
         }
         auto elapsed_ms = watch.elapsedMilliseconds();
-        total_wait_channel_elapse_ms += elapsed_ms;
+        total_wait_pull_channel_elapse_ms += elapsed_ms;
 
         assert(recv_msg != nullptr);
         BatchCoprocessorReaderResult result;
@@ -211,7 +218,7 @@ public:
     }
 
 private:
-    int computeNewThreadCount() const { return concurrency; }
+    int computeNewThreadCount() const { return 1; }
 
     void readLoop(const std::shared_ptr<::coprocessor::BatchRequest> req)
     {
@@ -245,11 +252,13 @@ private:
                         break;
                     }
 
+                    read_watch.restart();
                     if (!msg_channel.push(std::move(rsp)))
                     {
                         meet_error = true;
                         break;
                     }
+                    total_wait_push_channel_elapse_ms += read_watch.elapsedMilliseconds();
                     // else continue to read next response
                 }
                 if (meet_error)
@@ -360,12 +369,12 @@ private:
 
     Stopwatch watch;
 
-    size_t total_wait_channel_elapse_ms;
+    size_t total_wait_pull_channel_elapse_ms;
+    size_t total_wait_push_channel_elapse_ms;
     size_t total_wait_net_elapse_ms;
     size_t total_net_recv_bytes;
 
     bool collected;
-    int concurrency;
 
     LoggerPtr log;
 };

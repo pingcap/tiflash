@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
@@ -22,6 +23,7 @@
 #include <DataStreams/MultiplexInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/BatchCoprocessorReader.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -37,17 +39,17 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <common/logger_useful.h>
 
-#include "Common/Exception.h"
-#include "Flash/Coprocessor/BatchCoprocessorReader.h"
-#include "common/logger_useful.h"
-#include "pingcap/coprocessor/Client.h"
-#include "pingcap/kv/Backoff.h"
-#include "pingcap/kv/RegionCache.h"
+#include <limits>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
+#include <kvproto/mpp.pb.h>
+#include <pingcap/coprocessor/Client.h>
+#include <pingcap/kv/Backoff.h>
+#include <pingcap/kv/RegionCache.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
@@ -486,13 +488,16 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
             throw Exception("Schema mismatch between different partitions for partition table");
     }
 #endif
-    bool do_batch_cop = false;
+    constexpr static const Int64 PROTOCOL_COP = 0;
+    constexpr static const Int64 PROTOCOL_BATCH_COP = 1;
+    constexpr static const Int64 PROTOCOL_MPP = 2;
+    Int64 read_node_protocol = 0;
     if (is_read_node)
     {
-        do_batch_cop = settings.enable_rn_batch_cop;
+        read_node_protocol = settings.rn_protocal;
     }
 
-    if (!do_batch_cop)
+    if (read_node_protocol == PROTOCOL_COP)
     {
         // build cop request streams
         bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
@@ -531,7 +536,7 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
             task_start = task_end;
         }
     }
-    else
+    else if (read_node_protocol == PROTOCOL_BATCH_COP)
     {
         // build batch cop request streams
         pingcap::kv::Cluster * cluster = tmt.getKVCluster();
@@ -556,22 +561,50 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
         const auto & settings = context.getSettingsRef();
-        const size_t batch_cop_split = settings.batch_cop_split;
+        const size_t batch_cop_split = settings.rn_batch_cop_split; // TODO: Remove batch_cop_split
         const size_t expect_concurrent_num = settings.max_threads;
+        const size_t recv_buffer_size = settings.rn_recv_buffer;
         auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, ranges_for_each_physical_table, store_type, batch_cop_split, &Poco::Logger::get("pingcap/coprocessor"));
         LOG_FMT_INFO(log, "build {} batch cop tasks with [split={}]", all_batch_tasks.size(), batch_cop_split);
         for (size_t task_idx = 0; task_idx < all_batch_tasks.size(); ++task_idx)
         {
             const auto & batch_task = all_batch_tasks[task_idx];
-            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, /*concurrency*/ 1);
+            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, recv_buffer_size);
             size_t idx = 0;
             for (; idx < expect_concurrent_num / all_batch_tasks.size(); ++idx)
             {
                 BlockInputStreamPtr input = std::make_shared<BatchCoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID());
                 pipeline.streams.emplace_back(std::move(input));
             }
-            LOG_FMT_INFO(log, "build {} batch cop stream for [task_idx={}]", idx, task_idx);
+            LOG_FMT_INFO(log, "build {} batch cop input stream for [task_idx={}] within 1 grpc connection", idx, task_idx);
         }
+    }
+    else if (read_node_protocol == PROTOCOL_MPP)
+    {
+        auto req = std::make_shared<pingcap::coprocessor::Request>();
+        remote_requests[0].dag_request.SerializeToString(&req->data); // TODO: Is is ok for partition table?
+        req->tp = pingcap::coprocessor::ReqType::DAG;
+        req->start_ts = context.getSettingsRef().read_tso;
+        req->schema_version = context.getSettingsRef().schema_version;
+
+        // Dispatch mpp task and establish mpp connections
+        mpp::DispatchTaskRequest dispatch_mpp_task;
+        {
+            auto * meta = dispatch_mpp_task.mutable_meta();
+            meta->set_start_ts(req->start_ts);
+            auto task_id = std::numeric_limits<Int64>::max();
+            task_id -= context.getDAGContext()->getMPPTaskId().task_id;
+            meta->set_task_id(task_id);
+            dispatch_mpp_task.set_encoded_plan(req->data);
+            dispatch_mpp_task.set_timeout(60);
+            dispatch_mpp_task.set_schema_ver(req->schema_version);
+        }
+
+        throw Exception("not implement mpp protocol!", ErrorCodes::NOT_IMPLEMENTED);
+    }
+    else
+    {
+        throw Exception("unknown protocol!", ErrorCodes::LOGICAL_ERROR);
     }
 }
 

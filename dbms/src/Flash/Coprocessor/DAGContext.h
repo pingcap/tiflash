@@ -32,6 +32,8 @@
 #include <Interpreters/SubqueryForSet.h>
 #include <Storages/Transaction/TiDB.h>
 
+#include "StreamWriter.h"
+
 namespace DB
 {
 class Context;
@@ -342,6 +344,7 @@ public:
     bool is_batch_cop = false;
     // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
+    std::shared_ptr<StreamWriter> batch_cop_writer;
     TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
@@ -393,7 +396,7 @@ private:
     std::vector<SubqueriesForSets> subqueries;
 
     bool is_test = false; /// switch for test, do not use it in production.
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
+    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <executor_id, columns>, for multiple sources
 };
 
 } // namespace DB
