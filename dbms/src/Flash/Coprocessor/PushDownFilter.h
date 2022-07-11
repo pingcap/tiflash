@@ -27,7 +27,7 @@ struct PushDownFilter
 
     static PushDownFilter toPushDownFilter(const String & executor_id, const tipb::Selection & selection);
 
-    PushDownFilter() = default;
+    PushDownFilter();
 
     PushDownFilter(
         const String & executor_id_,

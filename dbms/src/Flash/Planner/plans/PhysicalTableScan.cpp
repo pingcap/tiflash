@@ -76,18 +76,21 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     RUNTIME_ASSERT(
         storage_schema.size() == schema.size(),
         log,
-        "Expected col num {} != actual col num {}",
-        storage_schema.size(),
-        schema.size());
+        "Expected col num does not match actual col num {}",
+        schema.size(),
+        storage_schema.size());
     NamesWithAliases schema_project_cols;
     for (size_t i = 0; i < schema.size(); ++i)
     {
         RUNTIME_ASSERT(
             schema[i].type->equals(*storage_schema[i].type),
             log,
-            "Expected col type {} does not match actual col type {}",
+            "The type of schema col <{}, {}> does not match the type pf actual col <{}, {}>",
+            schema[i].name,
             schema[i].type->getName(),
+            storage_schema[i].name,
             storage_schema[i].type->getName());
+        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
         schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
     }
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);

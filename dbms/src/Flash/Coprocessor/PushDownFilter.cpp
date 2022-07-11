@@ -32,6 +32,13 @@ PushDownFilter::PushDownFilter(
     }
 }
 
+PushDownFilter::PushDownFilter()
+    : executor_id("")
+    , conditions({})
+{
+    assert(!hasValue());
+}
+
 tipb::Executor * PushDownFilter::constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const
 {
     if (hasValue())
