@@ -19,6 +19,7 @@
 #include <TestUtils/mockExecutor.h>
 
 #include <thread>
+#include "mpp.pb.h"
 
 namespace DB
 {
@@ -48,7 +49,6 @@ TEST_F(ServerRunner, runCoprocessor)
 try
 {
     DB::MockExecutionServer app(TiFlashTestEnv::global_context, context.executorIdColumnsMap());
-
     std::vector<std::string> args;
     args.push_back("--no");
     auto run_server = [&] {
@@ -60,15 +60,18 @@ try
     std::this_thread::sleep_for(std::chrono::seconds(15));
 
     // Ywq todo: wrap it up.
-    coprocessor::Request request;
-    String dag_string;
-    dag_request->SerializeToString(&dag_string);
-    request.set_data(dag_string);
+    // coprocessor::Request request;
+    // String dag_string;
+    // dag_request->SerializeToString(&dag_string);
+    // request.set_data(dag_string);
 
-    coprocessor::Response response;
+    // coprocessor::Response response;
     MockExecutionClient client(
         grpc::CreateChannel(Debug::LOCAL_HOST, grpc::InsecureChannelCredentials()));
-    std::string reply = client.runCoprocessor(request, response);
+    // std::string reply = client.runCoprocessor(request, response);
+    mpp::DispatchTaskRequest request;
+    mpp::DispatchTaskResponse response;
+    auto reply = client.runDispatchMPP(request, response);
     response.PrintDebugString();
 }
 CATCH
