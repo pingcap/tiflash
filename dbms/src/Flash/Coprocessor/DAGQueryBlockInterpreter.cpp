@@ -105,6 +105,7 @@ struct AnalysisResult
     Names aggregation_keys;
     TiDB::TiDBCollators aggregation_collators;
     AggregateDescriptions aggregate_descriptions;
+    bool is_final_agg;
 };
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -117,6 +118,15 @@ bool addTimeZoneCastAfterTS(DAGExpressionAnalyzer & analyzer, const BoolVec & is
         return false;
 
     return analyzer.appendTimeZoneCastsAfterTS(chain, is_ts_column);
+}
+
+bool isFinalAgg(const tipb::Expr & expr)
+{
+    if (!expr.has_aggfuncmode())
+        /// set default value to true to make it compatible with old version of TiDB since before this
+        /// change, all the aggregation in TiFlash is treated as final aggregation
+        return true;
+    return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
 
 AnalysisResult analyzeExpressions(Context & context,
@@ -148,12 +158,22 @@ AnalysisResult analyzeExpressions(Context & context,
     // There will be either Agg...
     if (query_block.aggregation)
     {
+        /// set default value to true to make it compatible with old version of TiDB since before this
+        /// change, all the aggregation in TiFlash is treated as final aggregation
+        res.is_final_agg = true;
+        const auto & aggregation = query_block.aggregation->aggregation();
+        if (aggregation.agg_func_size() > 0 && !isFinalAgg(aggregation.agg_func(0)))
+            res.is_final_agg = false;
+        for (int i = 1; i < aggregation.agg_func_size(); i++)
+        {
+            if (res.is_final_agg != isFinalAgg(aggregation.agg_func(i)))
+                throw TiFlashException("Different aggregation mode detected", Errors::Coprocessor::BadRequest);
+        }
+        // todo now we can tell if the aggregation is final stage or partial stage, maybe we can do collation insensitive
+        //  aggregation if the stage is partial
         bool group_by_collation_sensitive =
-            /// collation sensitive group by is slower then normal group by, use normal group by by default
-            context.getSettingsRef().group_by_collation_sensitive ||
-            /// in mpp task, here is no way to tell whether this aggregation is first stage aggregation or
-            /// final stage aggregation, to make sure the result is right, always do collation sensitive aggregation
-            context.getDAGContext()->isMPPTask();
+            /// collation sensitive group by is slower than normal group by, use normal group by by default
+            context.getSettingsRef().group_by_collation_sensitive || context.getDAGContext()->isMPPTask();
 
         analyzer.appendAggregation(chain,
             query_block.aggregation->aggregation(),
@@ -561,8 +581,13 @@ void DAGQueryBlockInterpreter::executeWhere(DAGPipeline & pipeline, const Expres
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
 }
 
-void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names,
-    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
+void DAGQueryBlockInterpreter::executeAggregation(
+    DAGPipeline & pipeline,
+    const ExpressionActionsPtr & expr,
+    Names & key_names,
+    TiDB::TiDBCollators & collators,
+    AggregateDescriptions & aggregates,
+    bool is_final_agg)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
 
@@ -603,7 +628,7 @@ void DAGQueryBlockInterpreter::executeAggregation(DAGPipeline & pipeline, const 
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath(),
+        settings.max_bytes_before_external_group_by, !is_final_agg, context.getTemporaryPath(),
         has_collator ? collators : TiDB::dummy_collators);
 
     /// If there are several sources, then we perform parallel aggregation
@@ -1006,7 +1031,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, res.is_final_agg);
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.has_having)

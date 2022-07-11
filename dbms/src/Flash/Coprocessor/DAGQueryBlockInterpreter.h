@@ -33,8 +33,8 @@ class DAGQueryBlockInterpreter
 {
 public:
     DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst,
-        const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
+        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst, const DAGQuerySource & dag_,
+        std::vector<SubqueriesForSets> & subqueriesForSets_,
         const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
 
     ~DAGQueryBlockInterpreter() = default;
@@ -57,8 +57,12 @@ private:
     void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(DAGPipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
     void executeLimit(DAGPipeline & pipeline);
-    void executeAggregation(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
-        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
+    void executeAggregation(DAGPipeline & pipeline,
+        const ExpressionActionsPtr & expression_actions_ptr,
+        Names & key_names,
+        TiDB::TiDBCollators & collators,
+        AggregateDescriptions & aggregate_descriptions,
+        bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
 
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
