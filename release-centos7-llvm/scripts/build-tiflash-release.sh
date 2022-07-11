@@ -47,7 +47,11 @@ ENABLE_PCH=${ENABLE_PCH:-ON}
 INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
 rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
 
-BUILD_DIR="${SRCPATH}/release-centos7-llvm/build-release"
+if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
+  BUILD_DIR="$SRCPATH/release-centos7-llvm/build-release"
+else
+  BUILD_DIR="$SRCPATH/release-centos7-llvm/build-debug"
+fi
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
 cmake -S "${SRCPATH}" \
