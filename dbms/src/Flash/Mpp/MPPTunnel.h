@@ -100,8 +100,6 @@ protected:
             : future(promise.get_future())
         {
         }
-
-        // before finished, must be called without protection of mu
         String getMsg()
         {
             future.wait();
