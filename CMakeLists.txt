@@ -239,10 +239,8 @@ else ()
     set (CMAKE_CXX_STANDARD_REQUIRED ON)
 endif ()
 
-if (NOT ARCH_ARM)
-    set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3")
-    set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3")
-endif ()
+set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3")
+set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3")
 
 option (DEBUG_WITHOUT_DEBUG_INFO "Set to ON to build dev target without debug info (remove flag `-g` in order to accelerate compiling speed and reduce target binary size)" OFF)
 if (DEBUG_WITHOUT_DEBUG_INFO)
@@ -431,9 +429,6 @@ if (ENABLE_FAILPOINTS)
 else (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are disabled")
 endif (ENABLE_FAILPOINTS)
-
-# Enable PageStorage V3 test.
-option (ENABLE_V3_PAGESTORAGE "Enables V3 PageStorage" ON)
 
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)

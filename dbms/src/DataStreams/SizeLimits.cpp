@@ -12,22 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/SizeLimits.h>
-#include <Common/formatReadable.h>
 #include <Common/Exception.h>
-#include <string>
+#include <Common/FailPoint.h>
+#include <Common/formatReadable.h>
+#include <DataStreams/SizeLimits.h>
 
+#include <string>
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_limit_check_failpoint[];
+} // namespace FailPoints
 
 bool SizeLimits::check(UInt64 rows, UInt64 bytes, const char * what, int exception_code) const
 {
-    if (max_rows && rows > max_rows)
+    bool rows_exceed_limit = max_rows && rows > max_rows;
+    fiu_do_on(FailPoints::random_limit_check_failpoint, rows_exceed_limit = true;);
+    if (rows_exceed_limit)
     {
         if (overflow_mode == OverflowMode::THROW)
             throw Exception("Limit for " + std::string(what) + " exceeded, max rows: " + formatReadableQuantity(max_rows)
-                + ", current rows: " + formatReadableQuantity(rows), exception_code);
+                                + ", current rows: " + formatReadableQuantity(rows),
+                            exception_code);
         else
             return false;
     }
@@ -36,7 +44,8 @@ bool SizeLimits::check(UInt64 rows, UInt64 bytes, const char * what, int excepti
     {
         if (overflow_mode == OverflowMode::THROW)
             throw Exception("Limit for " + std::string(what) + " exceeded, max bytes: " + formatReadableSizeWithBinarySuffix(max_bytes)
-                + ", current bytes: " + formatReadableSizeWithBinarySuffix(bytes), exception_code);
+                                + ", current bytes: " + formatReadableSizeWithBinarySuffix(bytes),
+                            exception_code);
         else
             return false;
     }
@@ -44,4 +53,4 @@ bool SizeLimits::check(UInt64 rows, UInt64 bytes, const char * what, int excepti
     return true;
 }
 
-}
+} // namespace DB

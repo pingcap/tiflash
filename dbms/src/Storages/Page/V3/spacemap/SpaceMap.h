@@ -95,9 +95,11 @@ public:
     virtual std::tuple<UInt64, UInt64, bool> searchInsertOffset(size_t size) = 0;
 
     /**
-     * Get the offset of the last free block. `[margin_offset, +∞)` is not used at all.
+     * Get the used boundary of this SpaceMap. 
+     * The return value (`used_boundary`) means that `[used_bounary + 1, +∞)` is safe to be truncated.
+     * If the `used_boundary` is equal to the `end` of this SpaceMap, it means that there is no space to be truncated.
      */
-    virtual UInt64 getRightMargin() = 0;
+    virtual UInt64 getUsedBoundary() = 0;
 
     /**
      * Get the accurate max capacity of the space map.

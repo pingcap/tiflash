@@ -514,6 +514,17 @@ ColumnWithTypeAndName createConstColumn(
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
 
+String getColumnsContent(const ColumnsWithTypeAndName & cols);
+
+/// We can designate the range of columns printed with begin and end. range: [begin, end]
+String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end);
+
+// This wrapper function only serves to construct columns input for function-like macros,
+// since preprocessor recognizes `{col1, col2, col3}` as three arguments instead of one.
+// E.g. preprocessor does not allow us to write `ASSERT_COLUMNS_EQ_R({col1, col2, col3}, actual_cols)`,
+//  but with this func we can write `ASSERT_COLUMNS_EQ_R(createColumns{col1, col2, col3}, actual_cols)` instead.
+ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
+
 ::testing::AssertionResult dataTypeEqual(
     const DataTypePtr & expected,
     const DataTypePtr & actual);
@@ -527,9 +538,14 @@ ColumnWithTypeAndName createConstColumn(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual);
 
-void blockEqual(
+::testing::AssertionResult blockEqual(
     const Block & expected,
     const Block & actual);
+
+::testing::AssertionResult columnsEqual(
+    const ColumnsWithTypeAndName & expected,
+    const ColumnsWithTypeAndName & actual,
+    bool _restrict);
 
 ColumnWithTypeAndName executeFunction(
     Context & context,
@@ -654,6 +670,33 @@ ColumnWithTypeAndName createNullableColumn(
     return createNullableColumn<T>(data_type_args, vec, null_map, name, 0);
 }
 
+template <typename T>
+ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v, name);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v, name);
+}
+
+ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp);
+
+ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp);
 class FunctionTest : public ::testing::Test
 {
 protected:
@@ -729,5 +772,10 @@ protected:
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
 #define ASSERT_BLOCK_EQ(expected, actual) DB::tests::blockEqual((expected), (actual))
+
+/// restrictly checking columns equality, both data set and each row's offset should be the same
+#define ASSERT_COLUMNS_EQ_R(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), true))
+/// unrestrictly checking columns equality, only checking data set equality
+#define ASSERT_COLUMNS_EQ_UR(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), false))
 } // namespace tests
 } // namespace DB

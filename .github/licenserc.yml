@@ -25,6 +25,7 @@ header:
     - '**/LICENSE.TXT'
     - '**/cipher-file-256'
     - '**/asan.suppression'
+    - '**/tsan.suppression'
     - '**/LICENSE.TXT'
     - '**/LICENSE'
     - '**/README'

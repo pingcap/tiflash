@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/TargetSpecific.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/Tuple.h>
@@ -810,6 +811,20 @@ private:
     template <typename T>
     InternPtr afterNodeUpdated(T * node);
 
+#ifdef __x86_64__
+    template <typename T>
+    InternPtr afterNodeUpdatedGeneric(T * node);
+
+    template <typename T>
+    InternPtr afterNodeUpdatedAVX512(T * node);
+
+    template <typename T>
+    InternPtr afterNodeUpdatedAVX(T * node);
+
+    template <typename T>
+    InternPtr afterNodeUpdatedSSE4(T * node);
+#endif
+
     inline void afterLeafUpdated(LeafPtr leaf)
     {
         if (leaf->count == 0 && isRootOnly())
@@ -1348,158 +1363,86 @@ typename DT_CLASS::InterAndSid DT_CLASS::submitMinSid(T * node, UInt64 subtree_m
     }
 }
 
+#ifndef __x86_64__
+#define TIFLASH_DT_IMPL_NAME afterNodeUpdated
+#include "DeltaTree.ipp"
+#undef TIFLASH_DT_IMPL_NAME
+#else
+
+// generic implementation
+#define TIFLASH_DT_IMPL_NAME afterNodeUpdatedGeneric
+#include "DeltaTree.ipp"
+#undef TIFLASH_DT_IMPL_NAME
+
+// avx512 implementation
+TIFLASH_BEGIN_AVX512_SPECIFIC_CODE
+#define TIFLASH_DT_IMPL_NAME afterNodeUpdatedAVX512
+#include "DeltaTree.ipp"
+#undef TIFLASH_DT_IMPL_NAME
+TIFLASH_END_TARGET_SPECIFIC_CODE
+
+// avx implementation
+TIFLASH_BEGIN_AVX_SPECIFIC_CODE
+#define TIFLASH_DT_IMPL_NAME afterNodeUpdatedAVX
+#include "DeltaTree.ipp"
+#undef TIFLASH_DT_IMPL_NAME
+TIFLASH_END_TARGET_SPECIFIC_CODE
+
+// sse4 implementation
+TIFLASH_BEGIN_SSE4_SPECIFIC_CODE
+#define TIFLASH_DT_IMPL_NAME afterNodeUpdatedSSE4
+#include "DeltaTree.ipp"
+#undef TIFLASH_DT_IMPL_NAME
+TIFLASH_END_TARGET_SPECIFIC_CODE
+
+namespace Impl
+{
+enum class DeltaTreeVariant
+{
+    Generic,
+    SSE4,
+    AVX,
+    AVX512
+};
+
+static inline DeltaTreeVariant resolveDeltaTreeVariant()
+{
+    if (DB::TargetSpecific::AVX512Checker::runtimeSupport())
+    {
+        return DeltaTreeVariant::AVX512;
+    }
+    if (DB::TargetSpecific::AVXChecker::runtimeSupport())
+    {
+        return DeltaTreeVariant::AVX;
+    }
+    if (DB::TargetSpecific::SSE4Checker::runtimeSupport())
+    {
+        return DeltaTreeVariant::SSE4;
+    }
+    return DeltaTreeVariant::Generic;
+}
+
+static inline DeltaTreeVariant DELTA_TREE_VARIANT = resolveDeltaTreeVariant();
+} // namespace Impl
+
 DT_TEMPLATE
 template <class T>
 typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 {
-    if (!node)
-        return {};
-
-    constexpr bool is_leaf = std::is_same<Leaf, T>::value;
-
-    if (root == asNode(node) && !isLeaf(root) && node->count == 1)
+    switch (Impl::DELTA_TREE_VARIANT)
     {
-        /// Decrease tree height.
-        root = as(Intern, root)->children[0];
-
-        --(node->count);
-        freeNode<T>(node);
-
-        if (isLeaf(root))
-            as(Leaf, root)->parent = nullptr;
-        else
-            as(Intern, root)->parent = nullptr;
-        --height;
-
-        LOG_FMT_TRACE(log, "height {} -> {}", (height + 1), height);
-
-        return {};
+    case Impl::DeltaTreeVariant::Generic:
+        return afterNodeUpdatedGeneric(node);
+    case Impl::DeltaTreeVariant::SSE4:
+        return afterNodeUpdatedSSE4(node);
+    case Impl::DeltaTreeVariant::AVX:
+        return afterNodeUpdatedAVX(node);
+    case Impl::DeltaTreeVariant::AVX512:
+        return afterNodeUpdatedAVX512(node);
     }
-
-    auto parent = node->parent;
-    bool parent_updated = false;
-
-    if (T::overflow(node->count)) // split
-    {
-        if (!parent)
-        {
-            /// Increase tree height.
-            parent = createNode<Intern>();
-            root = asNode(parent);
-
-            parent->deltas[0] = checkDelta(node->getDelta());
-            parent->children[0] = asNode(node);
-            ++(parent->count);
-            parent->refreshChildParent();
-
-            ++height;
-
-            LOG_FMT_TRACE(log, "height {} -> {}", (height - 1), height);
-        }
-
-        auto pos = parent->searchChild(asNode(node));
-
-        T * next_n = createNode<T>();
-
-        UInt64 sep_sid = node->split(next_n);
-
-        // handle parent update
-        parent->shiftEntries(pos + 1, 1);
-        // for current node
-        parent->deltas[pos] = checkDelta(node->getDelta());
-        // for next node
-        parent->sids[pos] = sep_sid;
-        parent->deltas[pos + 1] = checkDelta(next_n->getDelta());
-        parent->children[pos + 1] = asNode(next_n);
-
-        ++(parent->count);
-
-        if constexpr (is_leaf)
-        {
-            if (as(Leaf, node) == right_leaf)
-                right_leaf = as(Leaf, next_n);
-        }
-
-        parent_updated = true;
-    }
-    else if (T::underflow(node->count) && root != asNode(node)) // adopt or merge
-    {
-        auto pos = parent->searchChild(asNode(node));
-
-        // currently we always adopt from the right one if possible
-        bool is_sibling_left;
-        size_t sibling_pos;
-        T * sibling;
-
-        if (unlikely(parent->count <= 1))
-            throw Exception("Unexpected parent entry count: " + DB::toString(parent->count));
-
-        if (pos == parent->count - 1)
-        {
-            is_sibling_left = true;
-            sibling_pos = pos - 1;
-            sibling = as(T, parent->children[sibling_pos]);
-        }
-        else
-        {
-            is_sibling_left = false;
-            sibling_pos = pos + 1;
-            sibling = as(T, parent->children[sibling_pos]);
-        }
-
-        if (unlikely(sibling->parent != node->parent))
-            throw Exception("parent not the same");
-
-        auto after_adopt = (node->count + sibling->count) / 2;
-        if (T::underflow(after_adopt))
-        {
-            // Do merge.
-            // adoption won't work because the sibling doesn't have enough entries.
-
-            node->merge(sibling, is_sibling_left, pos);
-            freeNode<T>(sibling);
-
-            pos = std::min(pos, sibling_pos);
-            parent->deltas[pos] = checkDelta(node->getDelta());
-            parent->children[pos] = asNode(node);
-            parent->shiftEntries(pos + 2, -1);
-
-            if constexpr (is_leaf)
-            {
-                if (is_sibling_left && (as(Leaf, sibling) == left_leaf))
-                    left_leaf = as(Leaf, node);
-                else if (!is_sibling_left && as(Leaf, sibling) == right_leaf)
-                    right_leaf = as(Leaf, node);
-            }
-            --(parent->count);
-        }
-        else
-        {
-            // Do adoption.
-
-            auto adopt_count = after_adopt - node->count;
-            auto new_sep_sid = node->adopt(sibling, is_sibling_left, adopt_count, pos);
-
-            parent->sids[std::min(pos, sibling_pos)] = new_sep_sid;
-            parent->deltas[pos] = checkDelta(node->getDelta());
-            parent->deltas[sibling_pos] = checkDelta(sibling->getDelta());
-        }
-
-        parent_updated = true;
-    }
-    else if (parent)
-    {
-        auto pos = parent->searchChild(asNode(node));
-        auto delta = node->getDelta();
-        parent_updated = parent->deltas[pos] != delta;
-        parent->deltas[pos] = checkDelta(delta);
-    }
-
-    if (parent_updated)
-        return parent;
-    else
-        return {};
 }
+#endif
+
 
 #undef as
 #undef asNode

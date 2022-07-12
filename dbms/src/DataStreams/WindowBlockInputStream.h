@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/WindowDescription.h>
@@ -169,6 +170,7 @@ public:
 
 protected:
     Block readImpl() override;
+    void appendInfo(FmtBuffer & buffer) const override;
 
     LoggerPtr log;
 

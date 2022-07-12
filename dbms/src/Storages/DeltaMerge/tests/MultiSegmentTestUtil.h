@@ -88,6 +88,7 @@ public:
             // Check there is only one segment
             ASSERT_EQ(store->segments.size(), 1);
             const auto & [_key, seg] = *store->segments.begin();
+            (void)_key;
             ASSERT_EQ(seg->getDelta()->getRows(), n_avg_rows_per_segment * 4);
             ASSERT_EQ(seg->getStable()->getRows(), 0);
 
@@ -108,6 +109,7 @@ public:
             auto segment_idx = 0;
             for (auto & [_key, seg] : store->segments)
             {
+                (void)_key;
                 LOG_FMT_INFO(log, "Segment #{}: Range = {}", segment_idx, seg->getRowKeyRange().toDebugString());
                 ASSERT_EQ(seg->getDelta()->getRows(), 0);
                 ASSERT_GT(seg->getStable()->getRows(), 0); // We don't check the exact rows of each segment.
@@ -147,6 +149,7 @@ public:
         auto segment_idx = 0;
         for (auto & [_key, seg] : store->segments)
         {
+            (void)_key;
             ASSERT_EQ(seg->getDelta()->getRows(), expected_delta_rows[segment_idx]) << "Assert failed for segment #" << segment_idx;
             ASSERT_EQ(seg->getStable()->getRows(), expected_stable_rows[segment_idx]) << "Assert failed for segment #" << segment_idx;
             segment_idx++;

@@ -223,14 +223,14 @@ public:
     bool cleanOutdatedEntries(
         UInt64 lowest_seq,
         std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
-        PageEntriesV3 & entries_removed,
+        PageEntriesV3 * entries_removed,
         const PageLock & page_lock);
     bool derefAndClean(
         UInt64 lowest_seq,
         PageIdV3Internal page_id,
         const PageVersion & deref_ver,
         Int64 deref_count,
-        PageEntriesV3 & entries_removed);
+        PageEntriesV3 * entries_removed);
 
     void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);
 
@@ -360,7 +360,9 @@ public:
 
     bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr);
 
-    PageEntriesV3 gcInMemEntries();
+    // Perform a GC for in-memory entries and return the removed entries.
+    // If `return_removed_entries` is false, then just return an empty set.
+    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true);
 
     std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
 
