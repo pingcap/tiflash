@@ -274,6 +274,16 @@ void DTWorkload::scanAll(ThreadStat & read_stat)
         while (writing_threads.load(std::memory_order_relaxed) > 0)
         {
             const auto & columns = store->getTableColumns();
+            ColumnDefines real_columns;
+
+            for (const auto& col : columns)
+            {
+                if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
+                {
+                    real_columns.emplace_back(col);
+                }
+            }
+
             int stream_count = opts->read_stream_count;
             std::atomic<uint64_t> read_count = 0;
             auto count_row = [&read_count](BlockInputStreamPtr in, [[maybe_unused]] uint64_t read_ts) {
@@ -283,10 +293,10 @@ void DTWorkload::scanAll(ThreadStat & read_stat)
                 }
             };
             Stopwatch sw;
-            read(columns, stream_count, count_row);
+            read(real_columns, stream_count, count_row);
             read_stat.ms = sw.elapsedMilliseconds();
             read_stat.count = read_count;
-            LOG_FMT_INFO(log, "scanAll: columns {} streams {} read_stat {}", columns.size(), stream_count, read_stat.toString());
+            LOG_FMT_INFO(log, "scanAll: columns {} streams {} read_stat {}", real_columns.size(), stream_count, read_stat.toString());
         }
     }
     catch (...)

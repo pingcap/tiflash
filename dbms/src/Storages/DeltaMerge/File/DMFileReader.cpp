@@ -210,6 +210,7 @@ DMFileReader::DMFileReader(
     bool is_common_handle_,
     // clean read
     bool enable_clean_read_,
+    bool is_raw_read_,
     UInt64 max_read_version_,
     // filters
     DMFilePackFilter && pack_filter_,
@@ -230,6 +231,7 @@ DMFileReader::DMFileReader(
     , read_one_pack_every_time(read_one_pack_every_time_)
     , single_file_mode(dmfile_->isSingleFileMode())
     , enable_clean_read(enable_clean_read_)
+    , is_raw_read(is_raw_read_)
     , max_read_version(max_read_version_)
     , pack_filter(std::move(pack_filter_))
     , skip_packs_by_column(read_columns.size(), 0)
@@ -338,8 +340,9 @@ Block DMFileReader::read()
     }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
-    bool do_clean_read = enable_clean_read && expected_handle_res == All && not_clean_rows == 0;
-    if (do_clean_read)
+    bool do_clean_read = enable_clean_read && expected_handle_res == All && (not_clean_rows == 0 || is_raw_read);
+
+    if (do_clean_read && !is_raw_read)
     {
         UInt64 max_version = 0;
         for (size_t pack_id = start_pack_id; pack_id < next_pack_id; ++pack_id)

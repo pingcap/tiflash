@@ -39,6 +39,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include <memory>
 #include <numeric>
 
 namespace ProfileEvents
@@ -505,16 +506,40 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                bool filter_delete_mark,
                                                size_t expected_block_size)
 {
+    /// Now, we use filter_delete_mark to determine whether it is in fast mode or just from `selraw * xxxx`
+    /// But this way seems not to be robustness enough, maybe we need another flag?
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
+    bool enable_clean_read = true;
 
-    new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+    new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle)); //所以这条不是必要的？
+    if (filter_delete_mark)
+    {
+        new_columns_to_read->push_back(getTagColumnDefine());
+    }
 
     for (const auto & c : columns_to_read)
     {
         if (c.id != EXTRA_HANDLE_COLUMN_ID)
-            new_columns_to_read->push_back(c);
+        {
+            if (!(filter_delete_mark && c.id == TAG_COLUMN_ID))
+                new_columns_to_read->push_back(c);
+        }
+        else
+        {
+            enable_clean_read = false;
+        }
     }
+
+    /// Whether fast mode or raw read(selraw), if columns_to_read does not include EXTRA_HANDLE_COLUMN_ID,
+    /// we can try to use clean read to make optimization in stable part.
+
+    /// Especially for fast mode,
+    /// when the pack is under totally data_ranges and has no rows whose del_mark = 1 --> we don't need read handle_column/tag_column/version_column
+    /// when the pack is under totally data_ranges and has rows whose del_mark = 1 --> we don't need read handle_column/version_column
+    /// others --> we don't need read version_column
+
+    /// Actually, we first ignore the tag_column optimization
 
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -523,7 +548,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
-        false);
+        enable_clean_read,
+        true);
 
     DeltaValueInputStream delta_stream(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
     auto memtable_stream = delta_stream.getMemTableInputStream();
@@ -564,6 +590,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         streams.push_back(persisted_files_stream);
         streams.push_back(stable_stream);
     }
+
     return std::make_shared<ConcatBlockInputStream>(streams, /*req_id=*/"");
 }
 
