@@ -1751,6 +1751,120 @@ public:
     }
 };
 
+class FunctionGetFormat : public IFunction
+{
+private:
+    static String get_format(const StringRef & time_type, const StringRef & location)
+    {
+        if (time_type == "DATE")
+        {
+            if (location == "USA")
+                return "%m.%d.%Y";
+            else if (location == "JIS")
+                return "%Y-%m-%d";
+            else if (location == "ISO")
+                return "%Y-%m-%d";
+            else if (location == "EUR")
+                return "%d.%m.%Y";
+            else if (location == "INTERNAL")
+                return "%Y%m%d";
+        }
+        else if (time_type == "DATETIME" || time_type == "TIMESTAMP")
+        {
+            if (location == "USA")
+                return "%Y-%m-%d %H.%i.%s";
+            else if (location == "JIS")
+                return "%Y-%m-%d %H:%i:%s";
+            else if (location == "ISO")
+                return "%Y-%m-%d %H:%i:%s";
+            else if (location == "EUR")
+                return "%Y-%m-%d %H.%i.%s";
+            else if (location == "INTERNAL")
+                return "%Y%m%d%H%i%s";
+        }
+        else if (time_type == "TIME")
+        {
+            if (location == "USA")
+                return "%h:%i:%s %p";
+            else if (location == "JIS")
+                return "%H:%i:%s";
+            else if (location == "ISO")
+                return "%H:%i:%s";
+            else if (location == "EUR")
+                return "%H.%i.%s";
+            else if (location == "INTERNAL")
+                return "%H%i%s";
+        }
+        return "";
+    }
+
+public:
+    static constexpr auto name = "getFormat";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionGetFormat>(); };
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (!arguments[0].type->isString())
+            throw Exception("First argument for function " + getName() + " must be String", ErrorCodes::ILLEGAL_COLUMN);
+        if (!arguments[1].type->isString())
+            throw Exception("Second argument for function " + getName() + " must be String", ErrorCodes::ILLEGAL_COLUMN);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    /**
+     * @brief The first argument is designed as a MySQL reserved word. You would encounter a syntax error when wrap it around with quote in SQL.
+     * For example, select GET_FORMAT("DATE", "USA") will fail. Removing the quote can solve the problem.
+     * Thus the first argument should always be a ColumnConst. See details in the link below:
+     * https://dev.mysql.com/doc/refman/5.7/en/date-and-time-functions.html#function_get-format
+     *
+     * @return ColumnNumbers
+     */
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
+    {
+        const auto * location_col = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[1]).column.get());
+        assert(location_col);
+        size_t size = location_col->size();
+        const auto & time_type_col = block.getByPosition(arguments[0]).column;
+        auto col_to = ColumnString::create();
+
+        if (time_type_col->isColumnConst())
+        {
+            const auto & time_type_col_const = checkAndGetColumnConst<ColumnString>(time_type_col.get());
+            const auto & time_type = time_type_col_const->getValue<String>();
+
+            ColumnString::Chars_t & data_to = col_to->getChars();
+            ColumnString::Offsets & offsets_to = col_to->getOffsets();
+            auto max_length = 18;
+            data_to.resize(size * max_length);
+            offsets_to.resize(size);
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            for (size_t i = 0; i < size; ++i)
+            {
+                const auto & location = location_col->getDataAt(i);
+                const auto & result = get_format(StringRef(time_type), location);
+                write_buffer.write(result.c_str(), result.size());
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+            data_to.resize(write_buffer.count());
+            block.getByPosition(result).column = std::move(col_to);
+        }
+        else
+        {
+            throw Exception("First argument for function " + getName() + " must be String constant", ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+};
+
 struct NameStrToDateDate
 {
     static constexpr auto name = "strToDateDate";
