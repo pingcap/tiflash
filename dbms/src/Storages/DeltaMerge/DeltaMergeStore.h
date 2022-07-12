@@ -383,7 +383,7 @@ public:
     /// If there is no segment found by the start key, nullopt is returned.
     ///
     /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
-    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key,  TaskRunThread run_thread);
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, TaskRunThread run_thread);
 
     /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
     /// This is a minor compaction as it does not merge the delta into stable layer.
