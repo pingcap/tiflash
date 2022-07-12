@@ -21,7 +21,7 @@ mysql> insert into test.f values('li',-1,1);
 mysql> insert into test.f values(null,4,1);
 mysql> insert into test.f values('ww',null,1);
 mysql> alter table test.f set tiflash replica 1;
-
+func> wait_table test f
 mysql> use test; set @@tidb_isolation_read_engines='tiflash'; set @@tidb_allow_mpp=1;set @@tidb_enforce_mpp=1;  select a,b,repeat(a,b) from test.f;
 +---------+------+----------------+
 | a       | b    | repeat(a,b)    |
