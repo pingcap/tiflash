@@ -340,6 +340,7 @@ Block DMFileReader::read()
     }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
+    // bool do_clean_read = enable_clean_read && expected_handle_res == All && not_clean_rows == 0 ;
     bool do_clean_read = enable_clean_read && expected_handle_res == All && (not_clean_rows == 0 || is_raw_read);
 
     if (do_clean_read && !is_raw_read)

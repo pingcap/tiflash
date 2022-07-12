@@ -539,7 +539,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     /// when the pack is under totally data_ranges and has rows whose del_mark = 1 --> we don't need read handle_column/version_column
     /// others --> we don't need read version_column
 
-    /// Actually, we first ignore the tag_column optimization
+    /// Actually, we first ignore whether we need to read tag_column, just deal it the same with handle column
 
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -551,25 +551,22 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         enable_clean_read,
         true);
 
-    DeltaValueInputStream delta_stream(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
-    auto memtable_stream = delta_stream.getMemTableInputStream();
-    auto persisted_files_stream = delta_stream.getPersistedFilesInputStream();
+    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 
-    memtable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(memtable_stream, data_ranges, 0);
-    persisted_files_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(persisted_files_stream, data_ranges, 0); // related to minor compaction sorted
+    //delta_stream = std::make_shared<SquashingBlockInputStream>(delta_stream, 16384, 0, /*req_id=*/""); // For test
+
+    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
     stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
 
 
     if (filter_delete_mark)
     {
-        memtable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(memtable_stream, columns_to_read);
-        persisted_files_stream = std::make_shared<DMDeleteFilterBlockInputStream>(persisted_files_stream, columns_to_read);
+        delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read);
         stable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(stable_stream, columns_to_read);
     }
     else
     {
-        memtable_stream = std::make_shared<DMColumnFilterBlockInputStream>(memtable_stream, columns_to_read);
-        persisted_files_stream = std::make_shared<DMColumnFilterBlockInputStream>(persisted_files_stream, columns_to_read);
+        delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
         stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
     }
 
@@ -577,8 +574,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
 
     if (dm_context.read_delta_only)
     {
-        streams.push_back(memtable_stream);
-        streams.push_back(persisted_files_stream);
+        streams.push_back(delta_stream);
     }
     else if (dm_context.read_stable_only)
     {
@@ -586,8 +582,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     }
     else
     {
-        streams.push_back(memtable_stream);
-        streams.push_back(persisted_files_stream);
+        streams.push_back(delta_stream);
         streams.push_back(stable_stream);
     }
 
@@ -1484,7 +1479,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext & dm_conte
 {
     if (unlikely(rowkey_ranges.empty()))
         throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
-
+        
     SkippableBlockInputStreamPtr stable_input_stream
         = stable_snap->getInputStream(dm_context, read_columns, rowkey_ranges, filter, max_version, expected_block_size, false);
     RowKeyRange rowkey_range = rowkey_ranges.size() == 1 ? rowkey_ranges[0] : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
