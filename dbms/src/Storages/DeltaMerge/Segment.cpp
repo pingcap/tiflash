@@ -512,7 +512,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
 
     bool enable_clean_read = true;
 
-    new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle)); //所以这条不是必要的？
+    new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+    
     if (filter_delete_mark)
     {
         new_columns_to_read->push_back(getTagColumnDefine());
@@ -558,7 +559,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
     stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
 
-
     if (filter_delete_mark)
     {
         delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read);
@@ -569,6 +569,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
         stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
     }
+
 
     BlockInputStreams streams;
 
