@@ -857,12 +857,14 @@ CreatingSets
      MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
-   SharedQuery: <restore concurrency>
-    ParallelAggregating, max_threads: 10, final: true
-     Expression x 10: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_2>
-       Expression: <final projection>
-        MockTableScan)";
+   Expression: <cast after aggregation>
+    SharedQuery: <restore concurrency>
+     ParallelAggregating, max_threads: 10, final: true
+      Expression x 10: <before aggregation>
+       Expression: <remove useless column after join>
+        HashJoinProbe: <join probe, join_executor_id = Join_2>
+         Expression: <final projection>
+          MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -886,15 +888,18 @@ CreatingSets
      MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
-   SharedQuery: <restore concurrency>
-    ParallelAggregating, max_threads: 10, final: true
-     Expression x 10: <remove useless column after join>
-      HashJoinProbe: <join probe, join_executor_id = Join_2>
-       Expression: <append join key and join filters for probe side>
-        Expression: <final projection>
-         MockTableScan
-     Expression x 10: <remove useless column after join>
-      NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+   Expression: <cast after aggregation>
+    SharedQuery: <restore concurrency>
+     ParallelAggregating, max_threads: 10, final: true
+      Expression x 10: <before aggregation>
+       Expression: <remove useless column after join>
+        HashJoinProbe: <join probe, join_executor_id = Join_2>
+         Expression: <append join key and join filters for probe side>
+          Expression: <final projection>
+           MockTableScan
+      Expression x 10: <before aggregation>
+       Expression: <remove useless column after join>
+        NonJoined: <add stream with non_joined_data if full_or_right_join>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
 
@@ -920,21 +925,23 @@ CreatingSets
      MockExchangeReceiver
  Union: <for test>
   MockExchangeSender x 20
-   SharedQuery: <restore concurrency>
-    Limit, limit = 10
-     Union: <for partial limit>
-      Limit x 20, limit = 10
-       Expression: <final projection>
-        Expression: <before order and select>
+   Expression: <final projection>
+    SharedQuery: <restore concurrency>
+     Limit, limit = 10
+      Union: <for partial limit>
+       Limit x 20, limit = 10
+        Expression: <cast after aggregation>
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 20, final: true
-           Expression x 20: <remove useless column after join>
-            HashJoinProbe: <join probe, join_executor_id = Join_2>
-             Expression: <append join key and join filters for probe side>
-              Expression: <final projection>
-               MockExchangeReceiver
-           Expression x 20: <remove useless column after join>
-            NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+           Expression x 20: <before aggregation>
+            Expression: <remove useless column after join>
+             HashJoinProbe: <join probe, join_executor_id = Join_2>
+              Expression: <append join key and join filters for probe side>
+               Expression: <final projection>
+                MockExchangeReceiver
+           Expression x 20: <before aggregation>
+            Expression: <remove useless column after join>
+             NonJoined: <add stream with non_joined_data if full_or_right_join>)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
     }
 }

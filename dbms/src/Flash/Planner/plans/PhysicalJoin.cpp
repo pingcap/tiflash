@@ -72,8 +72,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Join & join,
-    PhysicalPlanNodePtr left,
-    PhysicalPlanNodePtr right)
+    const PhysicalPlanNodePtr & left,
+    const PhysicalPlanNodePtr & right)
 {
     assert(left);
     assert(right);
@@ -86,11 +86,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     JoinInterpreterHelper::TiFlashJoin tiflash_join{join};
 
-    const auto & build_plan = tiflash_join.build_side_index == 0 ? left : right;
     const auto & probe_plan = tiflash_join.build_side_index == 0 ? right : left;
+    const auto & build_plan = tiflash_join.build_side_index == 0 ? left : right;
 
-    const Block & build_side_header = build_plan->getSampleBlock();
     const Block & probe_side_header = probe_plan->getSampleBlock();
+    const Block & build_side_header = build_plan->getSampleBlock();
 
     String match_helper_name = tiflash_join.genMatchHelperName(left_input_header, right_input_header);
     NamesAndTypesList columns_added_by_join = tiflash_join.genColumnsAddedByJoin(build_side_header, match_helper_name);
@@ -154,12 +154,12 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         executor_id,
         join_output_schema,
         log->identifier(),
-        build_plan,
         probe_plan,
+        build_plan,
         join_ptr,
         columns_added_by_join,
-        build_side_prepare_actions,
         probe_side_prepare_actions,
+        build_side_prepare_actions,
         is_tiflash_right_join,
         PhysicalPlanHelper::constructBlockFromSchema(join_output_schema));
     return physical_join;
@@ -167,11 +167,11 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
 void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    DAGPipeline build_pipeline;
-    build()->transform(build_pipeline, context, max_streams);
-
     DAGPipeline & probe_pipeline = pipeline;
     probe()->transform(probe_pipeline, context, max_streams);
+
+    DAGPipeline build_pipeline;
+    build()->transform(build_pipeline, context, max_streams);
 
     const auto & settings = context.getSettingsRef();
 

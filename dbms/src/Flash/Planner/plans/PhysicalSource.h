@@ -23,6 +23,7 @@ class PhysicalSource : public PhysicalLeaf
 {
 public:
     static PhysicalPlanNodePtr build(
+        const String & executor_id,
         const BlockInputStreams & source_streams,
         const LoggerPtr & log);
 

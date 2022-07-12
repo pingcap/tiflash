@@ -29,26 +29,26 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Join & join,
-        PhysicalPlanNodePtr left,
-        PhysicalPlanNodePtr right);
+        const PhysicalPlanNodePtr & left,
+        const PhysicalPlanNodePtr & right);
 
     PhysicalJoin(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & build_,
         const PhysicalPlanNodePtr & probe_,
+        const PhysicalPlanNodePtr & build_,
         const JoinPtr & join_ptr_,
         const NamesAndTypesList & columns_added_by_join_,
-        const ExpressionActionsPtr & build_side_prepare_actions_,
         const ExpressionActionsPtr & probe_side_prepare_actions_,
+        const ExpressionActionsPtr & build_side_prepare_actions_,
         bool has_non_joined_,
         const Block & sample_block_)
-        : PhysicalBinary(executor_id_, PlanType::Join, schema_, req_id, build_, probe_)
+        : PhysicalBinary(executor_id_, PlanType::Join, schema_, req_id, probe_, build_)
         , join_ptr(join_ptr_)
         , columns_added_by_join(columns_added_by_join_)
-        , build_side_prepare_actions(build_side_prepare_actions_)
         , probe_side_prepare_actions(probe_side_prepare_actions_)
+        , build_side_prepare_actions(build_side_prepare_actions_)
         , has_non_joined(has_non_joined_)
         , sample_block(sample_block_)
     {}
@@ -60,16 +60,16 @@ public:
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
-    const PhysicalPlanNodePtr & build() const { return left; }
-    const PhysicalPlanNodePtr & probe() const { return right; }
+    const PhysicalPlanNodePtr & probe() const { return left; }
+    const PhysicalPlanNodePtr & build() const { return right; }
 
 private:
     JoinPtr join_ptr;
 
     NamesAndTypesList columns_added_by_join;
 
-    ExpressionActionsPtr build_side_prepare_actions;
     ExpressionActionsPtr probe_side_prepare_actions;
+    ExpressionActionsPtr build_side_prepare_actions;
 
     bool has_non_joined;
 

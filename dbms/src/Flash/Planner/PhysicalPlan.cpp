@@ -84,13 +84,23 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         break;
     case tipb::ExecType::TypeJoin:
     {
-        if (dagContext().isTest())
-            buildFinalProjection(fmt::format("{}_l_", executor_id), false);
+        auto right = popBack();
         auto left = popBack();
 
-        if (dagContext().isTest())
+        // use for gtest_physical_plan
+        if (dagContext().isTest() && right->tp() != PlanType::Source)
+        {
+            pushBack(right);
             buildFinalProjection(fmt::format("{}_r_", executor_id), false);
-        auto right = popBack();
+            right = popBack();
+        }
+
+        if (dagContext().isTest() && right->tp() != PlanType::Source)
+        {
+            pushBack(left);
+            buildFinalProjection(fmt::format("{}_l_", executor_id), false);
+            left = popBack();
+        }
 
         pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), left, right));
         break;
@@ -140,9 +150,9 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
     return back;
 }
 
-void PhysicalPlan::buildSource(const BlockInputStreams & source_streams)
+void PhysicalPlan::buildSource(const String & executor_id, const BlockInputStreams & source_streams)
 {
-    pushBack(PhysicalSource::build(source_streams, log));
+    pushBack(PhysicalSource::build(executor_id, source_streams, log));
 }
 
 void PhysicalPlan::outputAndOptimize()

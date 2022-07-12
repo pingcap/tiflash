@@ -19,6 +19,7 @@
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalSource::build(
+    const String & executor_id,
     const BlockInputStreams & source_streams,
     const LoggerPtr & log)
 {
@@ -27,7 +28,7 @@ PhysicalPlanNodePtr PhysicalSource::build(
     NamesAndTypes schema;
     for (const auto & col : sample_block)
         schema.emplace_back(col.name, col.type);
-    return std::make_shared<PhysicalSource>("source", schema, log->identifier(), sample_block, source_streams);
+    return std::make_shared<PhysicalSource>(executor_id, schema, log->identifier(), sample_block, source_streams);
 }
 
 void PhysicalSource::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
