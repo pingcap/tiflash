@@ -1060,6 +1060,13 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
             segment = segment_it->second;
         }
 
+        if (!segment->flushCache(*dm_context))
+        {
+            // If the flush failed, it means there are parallel updates to the segment in the background.
+            // In this case, we try again.
+            continue;
+        }
+
         const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
         if (new_segment)
         {

@@ -54,10 +54,15 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <Server/HTTPHandlerFactory.h>
+#include <Server/MetricsPrometheus.h>
+#include <Server/MetricsTransmitter.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>
 #include <Server/ServerInfo.h>
+#include <Server/StatusFile.h>
 #include <Server/StorageConfigParser.h>
+#include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
@@ -81,12 +86,6 @@
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
-
-#include "HTTPHandlerFactory.h"
-#include "MetricsPrometheus.h"
-#include "MetricsTransmitter.h"
-#include "StatusFile.h"
-#include "TCPHandlerFactory.h"
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
@@ -177,6 +176,12 @@ namespace
     }
 }
 } // namespace
+
+namespace CurrentMetrics
+{
+extern const Metric LogicalCPUCores;
+extern const Metric MemoryCapacity;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -1138,6 +1143,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
+    /// Initialize the background & blockable background thread pool.
+    Settings & settings = global_context->getSettingsRef();
+    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
+    auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
+    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
+
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
@@ -1254,13 +1265,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
-    Settings & settings = global_context->getSettingsRef();
-
-    /// Initialize the background thread pool.
-    /// It internally depends on settings.background_pool_size,
-    /// so must be called after settings has been load.
-    auto & bg_pool = global_context->getBackgroundPool();
-    auto & blockable_bg_pool = global_context->getBlockableBackgroundPool();
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
@@ -1427,6 +1431,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         {
             // on ARM processors it can show only enabled at current moment cores
+            CurrentMetrics::set(CurrentMetrics::LogicalCPUCores, server_info.cpu_info.logical_cores);
+            CurrentMetrics::set(CurrentMetrics::MemoryCapacity, server_info.memory_info.capacity);
             LOG_FMT_INFO(
                 log,
                 "Available RAM = {}; physical cores = {}; logical cores = {}.",

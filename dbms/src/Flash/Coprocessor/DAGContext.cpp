@@ -30,6 +30,8 @@ extern const int DIVIDED_BY_ZERO;
 extern const int INVALID_TIME;
 } // namespace ErrorCodes
 
+const String enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
+
 bool strictSqlMode(UInt64 sql_mode)
 {
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
@@ -73,6 +75,11 @@ void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subqu
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
+}
+
+void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
+{
+    final_concurrency = std::min(std::max(final_concurrency, cur_streams_size), streams_upper_limit);
 }
 
 void DAGContext::initExecutorIdToJoinIdMap()

@@ -5,15 +5,29 @@
 /* Defined if alloc_size attribute is supported. */
 #define JEMALLOC_HAVE_ATTR_ALLOC_SIZE
 
+/* Defined if format_arg(...) attribute is supported. */
+#define JEMALLOC_HAVE_ATTR_FORMAT_ARG
+
+/* Defined if format(gnu_printf, ...) attribute is supported. */
+/* #undef JEMALLOC_HAVE_ATTR_FORMAT_GNU_PRINTF */
+
 /* Defined if format(printf, ...) attribute is supported. */
 #define JEMALLOC_HAVE_ATTR_FORMAT_PRINTF
+
+/* Defined if fallthrough attribute is supported. */
+#define JEMALLOC_HAVE_ATTR_FALLTHROUGH
+
+/* Defined if cold attribute is supported. */
+#define JEMALLOC_HAVE_ATTR_COLD
 
 /*
  * Define overrides for non-standard allocator-related functions if they are
  * present on the system.
  */
+#if !defined(USE_MUSL)
 #define JEMALLOC_OVERRIDE_MEMALIGN
 #define JEMALLOC_OVERRIDE_VALLOC
+#endif
 
 /*
  * At least Linux omits the "const" in:
@@ -32,11 +46,11 @@
 #define JEMALLOC_USE_CXX_THROW
 
 #ifdef _MSC_VER
-#  ifdef _WIN64
-#    define LG_SIZEOF_PTR_WIN 3
-#  else
-#    define LG_SIZEOF_PTR_WIN 2
-#  endif
+#ifdef _WIN64
+#define LG_SIZEOF_PTR_WIN 3
+#else
+#define LG_SIZEOF_PTR_WIN 2
+#endif
 #endif
 
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
