@@ -41,7 +41,7 @@ def exec_func(cmd):
     err = p.close()
     return output, err
 
-# translate string to unescaped version in shell environment
+# translate string to avoid being escaped in shell environment
 # we only need to consider '$', '`' and '\'
 # ref: https://www.gnu.org/software/bash/manual/html_node/Double-Quotes.html
 def to_unescaped_str(cmd):
