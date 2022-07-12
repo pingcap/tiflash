@@ -381,6 +381,9 @@ Block DMFileReader::read()
                 else if (cd.id == TAG_COLUMN_ID)
                 {
                     column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
+                    // for (size_t index = 0; index < column->size(); index++){
+                    //     std::cout << "sub1 index is " << index << " (*column)[index] is " << (*column)[index].toString() << std::endl;
+                    // }
                 }
 
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
@@ -460,6 +463,7 @@ Block DMFileReader::read()
                         dmfile->path());
                     // New column after ddl is not exist in this DMFile, fill with default value
                     ColumnPtr column = createColumnWithDefaultValue(cd, read_rows);
+
                     res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
                     skip_packs_by_column[i] = 0;
                 }
