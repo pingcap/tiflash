@@ -44,3 +44,52 @@ int_val
 1,234.000
 
 mysql> drop table if exists test.t
+
+mysql> create table test.t(id int, value decimal(65,4))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values(1,9999999999999999999999999999999999999999999999999999999999999.9999)
+
+func> wait_table test t
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(value,-3) as result from test.t
+result
+10,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(value,0) as result from test.t
+result
+10,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(value,3) as result from test.t
+result
+10,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000.000
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(value,10) as result from test.t
+result
+9,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999.9999000000
+
+
+mysql> drop table if exists test.t
+
+mysql> create table test.t(id int, value decimal(7,4))
+mysql> alter table test.t set tiflash replica 1
+mysql> insert into test.t values(1,999.9999)
+
+func> wait_table test t
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(value,-2) as result from test.t
+result
+1,000
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(value,0) as result from test.t
+result
+1,000
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(value,2) as result from test.t
+result
+1,000.00
+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select format(value,10) as result from test.t
+result
+999.9999000000
+
+mysql> drop table if exists test.t

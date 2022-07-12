@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Functions/CollationOperatorOptimized.h>
 #include <Poco/String.h>
 #include <Storages/Transaction/Collator.h>
 
@@ -29,17 +30,10 @@ TiDBCollators dummy_collators;
 std::vector<std::string> dummy_sort_key_contaners;
 std::string dummy_sort_key_contaner;
 
-std::string_view rtrim(const char * s, size_t length)
+ALWAYS_INLINE std::string_view rtrim(const char * s, size_t length)
 {
     auto v = std::string_view(s, length);
-    size_t end = v.find_last_not_of(' ');
-    return end == std::string_view::npos ? "" : v.substr(0, end + 1);
-}
-
-template <typename T>
-int signum(T val)
-{
-    return (0 < val) - (val < 0);
+    return DB::RightTrim(v);
 }
 
 using Rune = int32_t;
@@ -183,26 +177,26 @@ private:
 };
 
 template <typename T, bool padding = false>
-class BinCollator : public ITiDBCollator
+class BinCollator final : public ITiDBCollator
 {
 public:
     explicit BinCollator(int32_t id)
         : ITiDBCollator(id)
     {}
+
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
         if constexpr (padding)
-            return signum(rtrim(s1, length1).compare(rtrim(s2, length2)));
+            return DB::RtrimStrCompare({s1, length1}, {s2, length2});
         else
-            return signum(std::string_view(s1, length1).compare(std::string_view(s2, length2)));
+            return DB::RawStrCompare({s1, length1}, {s2, length2});
     }
 
     StringRef sortKey(const char * s, size_t length, std::string &) const override
     {
         if constexpr (padding)
         {
-            auto v = rtrim(s, length);
-            return StringRef(v.data(), v.length());
+            return StringRef(rtrim(s, length));
         }
         else
         {
@@ -249,7 +243,7 @@ using WeightType = uint16_t;
 extern const std::array<WeightType, 256 * 256> weight_lut;
 } // namespace GeneralCI
 
-class GeneralCICollator : public ITiDBCollator
+class GeneralCICollator final : public ITiDBCollator
 {
 public:
     explicit GeneralCICollator(int32_t id)
@@ -270,7 +264,7 @@ public:
             auto sk2 = weight(c2);
             auto cmp = sk1 - sk2;
             if (cmp != 0)
-                return signum(cmp);
+                return DB::signum(cmp);
         }
 
         return (offset1 < v1.length()) - (offset2 < v2.length());
@@ -365,7 +359,7 @@ const std::array<long_weight, 23> weight_lut_long = {
 
 } // namespace UnicodeCI
 
-class UnicodeCICollator : public ITiDBCollator
+class UnicodeCICollator final : public ITiDBCollator
 {
 public:
     explicit UnicodeCICollator(int32_t id)
@@ -420,7 +414,7 @@ public:
                 }
                 else
                 {
-                    return signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
+                    return DB::signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
                 }
             }
         }
@@ -593,6 +587,8 @@ private:
     friend class Pattern<UnicodeCICollator>;
 };
 
+using UTF8MB4_BIN_TYPE = BinCollator<Rune, true>;
+
 TiDBCollatorPtr ITiDBCollator::getCollator(int32_t id)
 {
     switch (id)
@@ -607,10 +603,10 @@ TiDBCollatorPtr ITiDBCollator::getCollator(int32_t id)
         static const auto latin1_collator = BinCollator<char, true>(LATIN1_BIN);
         return &latin1_collator;
     case ITiDBCollator::UTF8MB4_BIN:
-        static const auto utf8mb4_collator = BinCollator<Rune, true>(UTF8MB4_BIN);
+        static const auto utf8mb4_collator = UTF8MB4_BIN_TYPE(UTF8MB4_BIN);
         return &utf8mb4_collator;
     case ITiDBCollator::UTF8_BIN:
-        static const auto utf8_collator = BinCollator<Rune, true>(UTF8_BIN);
+        static const auto utf8_collator = UTF8MB4_BIN_TYPE(UTF8_BIN);
         return &utf8_collator;
     case ITiDBCollator::UTF8_GENERAL_CI:
         static const auto utf8_general_ci_collator = GeneralCICollator(UTF8_GENERAL_CI);
