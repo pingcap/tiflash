@@ -60,9 +60,9 @@ public:
 
         context.addMockTable("multi_test", "t4", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {3, 2, 0}), toVec<Int32>("b", {4, 2, 0})});
 
-        context.addMockTable("join_agg", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 3}), toVec<Int32>("b", {1, 1, 4})});
+        context.addMockTable("join_agg", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
 
-        context.addMockTable("join_agg", "t2", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 4}), toVec<Int32>("b", {2, 6})});
+        context.addMockTable("join_agg", "t2", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 4, 2}), toVec<Int32>("b", {2, 6, 2})});
 
         context.addExchangeReceiver("exchange_r_table",
                                     {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
@@ -366,7 +366,7 @@ try
                        .build(context);
 
     {
-        executeWithConcurrency(request, {toNullableVec<Int32>({1}), toNullableVec<Int32>({1}), toVec<UInt64>({2}), toNullableVec<Int32>({1})});
+        executeWithConcurrency(request, {toNullableVec<Int32>({4}), toNullableVec<Int32>({1}), toVec<UInt64>({3}), toNullableVec<Int32>({1})});
     }
 
     request = context.scan("join_agg", "t1")
@@ -375,7 +375,7 @@ try
                   .build(context);
 
     {
-        executeWithConcurrency(request, {toNullableVec<Int32>({1, 3}), toNullableVec<Int32>({1, 3}), toVec<UInt64>({2, 1}), toNullableVec<Int32>({1, 4})});
+        executeWithConcurrency(request, {toNullableVec<Int32>({4, 3}), toNullableVec<Int32>({1, 3}), toVec<UInt64>({3, 1}), toNullableVec<Int32>({1, 4})});
     }
 
     request = context.scan("join_agg", "t1")
@@ -384,7 +384,7 @@ try
                   .build(context);
 
     {
-        executeWithConcurrency(request, {toNullableVec<Int32>({1, {}}), toNullableVec<Int32>({1, {}}), toVec<UInt64>({2, 0}), toNullableVec<Int32>({1, {}})});
+        executeWithConcurrency(request, {toNullableVec<Int32>({4, {}}), toNullableVec<Int32>({1, {}}), toVec<UInt64>({3, 0}), toNullableVec<Int32>({1, {}})});
     }
 }
 CATCH
