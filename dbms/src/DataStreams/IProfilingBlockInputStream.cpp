@@ -17,9 +17,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
 
-#include <mutex>
-
-
 namespace DB
 {
 
@@ -57,7 +54,7 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     UInt64 start_time;
     Block res;
     {
-        UniqueLockGuard lock(shared, mutex);
+        UniqueLockGuard lock = get_lock();
         if (!info.started)
         {
             info.total_stopwatch.start();
@@ -85,7 +82,7 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     if (res)
     {
         {
-            UniqueLockGuard lock(shared, mutex);
+            UniqueLockGuard lock = get_lock();
             info.update(res);
 
             if (enabled_extremes)
@@ -121,7 +118,7 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 #endif
 
     {
-        UniqueLockGuard lock(shared, mutex);
+        UniqueLockGuard lock = get_lock();
         info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
     }
     return res;
@@ -132,7 +129,7 @@ void IProfilingBlockInputStream::readPrefix()
 {
     UInt64 start_time;
     {
-        UniqueLockGuard lock(shared, mutex);
+        UniqueLockGuard lock = get_lock();
         start_time = info.total_stopwatch.elapsed();
     }
     readPrefixImpl();
@@ -142,7 +139,7 @@ void IProfilingBlockInputStream::readPrefix()
         return false;
     });
     {
-        UniqueLockGuard lock(shared, mutex);
+        UniqueLockGuard lock = get_lock();
         info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
     }
 }
@@ -152,7 +149,7 @@ void IProfilingBlockInputStream::readSuffix()
 {
     UInt64 start_time;
     {
-        UniqueLockGuard lock(shared, mutex);
+        UniqueLockGuard lock = get_lock();
         start_time = info.total_stopwatch.elapsed();
     }
 
@@ -163,7 +160,7 @@ void IProfilingBlockInputStream::readSuffix()
 
     readSuffixImpl();
     {
-        UniqueLockGuard lock(shared, mutex);
+        UniqueLockGuard lock = get_lock();
         info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
     }
 }
@@ -274,7 +271,7 @@ void IProfilingBlockInputStream::checkQuota(Block & block)
         time_t current_time = time(nullptr);
         double total_elapsed;
         {
-            UniqueLockGuard lock(shared, mutex);
+            UniqueLockGuard lock = get_lock();
             total_elapsed = info.total_stopwatch.elapsedSeconds();
         }
 
@@ -352,7 +349,7 @@ void IProfilingBlockInputStream::progressImpl(const Progress & value)
         {
             double total_elapsed;
             {
-                UniqueLockGuard lock(shared, mutex);
+                UniqueLockGuard lock = get_lock();
                 total_elapsed = info.total_stopwatch.elapsedSeconds();
             }
             if (total_elapsed > limits.timeout_before_checking_execution_speed.totalMicroseconds() / 1000000.0)

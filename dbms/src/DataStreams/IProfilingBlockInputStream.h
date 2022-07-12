@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/UniqueLockGuard.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/SizeLimits.h>
@@ -24,7 +25,6 @@
 #include <fmt/core.h>
 
 #include <atomic>
-
 
 namespace DB
 {
@@ -197,6 +197,10 @@ protected:
     std::atomic<bool> is_killed{false};
     ProgressCallback progress_callback;
     ProcessListElement * process_list_elem = nullptr;
+
+    std::function<UniqueLockGuard<std::mutex>()> get_lock = [&]() {
+        return UniqueLockGuard<std::mutex>();
+    };
 
     /// Additional information that can be generated during the work process.
 

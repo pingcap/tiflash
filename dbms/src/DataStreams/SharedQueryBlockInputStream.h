@@ -43,11 +43,16 @@ public:
         , log(Logger::get(NAME, req_id))
         , in(in_)
     {
-        shared = shared_;
+        if (shared_)
+        {
+            get_lock = [&]() {
+                return UniqueLockGuard<std::mutex>(mutex);
+            };
+        }
         children.push_back(in);
     }
 
-    ~SharedQueryBlockInputStream()
+    ~SharedQueryBlockInputStream() override
     {
         try
         {
@@ -107,7 +112,7 @@ public:
         ptr->cancel(kill);
     }
 
-    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    void collectNewThreadCountOfThisLevel(int & cnt) override
     {
         ++cnt;
     }

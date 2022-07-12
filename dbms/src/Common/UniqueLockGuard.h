@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#pragma once
 
 #include <mutex>
 
@@ -19,11 +20,12 @@ struct UniqueLockGuard
 {
     using UniqueLockType = std::unique_lock<Mutex>;
 
-    UniqueLockGuard(bool enable, Mutex & mu)
+    explicit UniqueLockGuard(Mutex & mu)
     {
-        if (enable)
-            lock = std::make_unique<UniqueLockType>(mu);
+        lock = std::make_unique<UniqueLockType>(mu);
     }
+
+    UniqueLockGuard() = default;
 
     std::unique_ptr<UniqueLockType> lock{};
 };
