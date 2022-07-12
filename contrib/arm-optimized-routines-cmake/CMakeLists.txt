@@ -40,6 +40,11 @@ file(GLOB TIFLASH_AARCH64_MATH_FILES ${TIFLASH_AOR_DIR}/math/*.c)
 add_library(tiflash-aarch64-math STATIC ${TIFLASH_AARCH64_MATH_FILES})
 target_include_directories(tiflash-aarch64-math PRIVATE ${TIFLASH_AOR_DIR}/math/include)
 
+file(GLOB TIFLASH_AARCH64_MATH_FILES ${TIFLASH_AOR_DIR}/pl/math/*.c)
+add_library(tiflash-aarch64-pl-math STATIC ${TIFLASH_AARCH64_MATH_FILES})
+target_include_directories(tiflash-aarch64-pl-math PRIVATE ${TIFLASH_AOR_DIR}/pl/math/include)
+
 # it is reasonable to keep these libraries optimized
 target_compile_options(tiflash-aarch64-string PRIVATE -O3 -g3 -fno-omit-frame-pointer -ffunction-sections -fdata-sections)
 target_compile_options(tiflash-aarch64-math PRIVATE -O3 -g3 -fno-omit-frame-pointer -ffunction-sections -fdata-sections)
+target_compile_options(tiflash-aarch64-pl-math PRIVATE -O3 -g3 -fno-omit-frame-pointer -ffunction-sections -fdata-sections)

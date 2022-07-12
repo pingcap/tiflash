@@ -15,10 +15,10 @@
 #pragma once
 
 #if defined(__linux__) && (defined(__aarch64__) || defined(__x86_64__))
-#define TIFLASH_HAS_UNARY_MATH_VECTORIZATION_SUPPORT
-namespace DB::UnaryMath
+#define TIFLASH_HAS_MATH_VECTORIZATION_SUPPORT
+namespace DB::MathVectorization
 {
 void disableVectorization();
 void enableVectorization();
-} // namespace DB::UnaryMath
+} // namespace DB::MathVectorization
 #endif

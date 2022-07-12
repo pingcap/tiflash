@@ -28,11 +28,11 @@
 #include <fmt/core.h>
 
 #if defined(__linux__) && defined(__aarch64__)
-#include <Functions/UnaryMath/ARM64.h>
+#include <Functions/MathVectorization/ARM64.h>
 #endif
 
 #if defined(__linux__) && defined(__x86_64__)
-#include <Functions/UnaryMath/AMD64.h>
+#include <Functions/MathVectorization/AMD64.h>
 #endif
 
 namespace DB
@@ -42,7 +42,7 @@ namespace ErrorCodes
 extern const int ILLEGAL_COLUMN;
 }
 
-struct UnaryFunctionVectorizedTag
+struct MathFunctionVectorizationTag
 {
 };
 
@@ -143,7 +143,7 @@ private:
             }
             else
             {
-                if constexpr (std::is_base_of_v<UnaryFunctionVectorizedTag, Impl>)
+                if constexpr (std::is_base_of_v<MathFunctionVectorizationTag, Impl>)
                 {
                     Impl::transform(&src_data[0], &dst_data[0], rows_size);
                 }
@@ -668,21 +668,21 @@ struct PowName
 
 #pragma push_macro("UNARY_FUNCTION_IMPL")
 #pragma push_macro("UNARY_FUNCTION_IMPL_NORMAL")
-#define UNARY_FUNCTION_IMPL(X, FUNC)                                             \
-    struct X##FunctionImpl : public UnaryFunctionVectorizedTag                   \
-    {                                                                            \
-        static constexpr auto name = X##Name::name;                              \
-        static constexpr auto rows_per_iteration = 1;                            \
-        template <typename T>                                                    \
-        static void transform(const T * src, Float64 * dst, size_t size)         \
-        {                                                                        \
-            ::DB::UnaryMath::FUNC##Transform<T>(src, dst, size);                 \
-        }                                                                        \
-        template <typename T>                                                    \
-        static void execute(const T * src, Float64 * dst)                        \
-        {                                                                        \
-            dst[0] = static_cast<Float64>(::FUNC(static_cast<Float64>(src[0]))); \
-        }                                                                        \
+#define UNARY_FUNCTION_IMPL(X, FUNC)                                                \
+    struct X##FunctionImpl : public MathFunctionVectorizationTag                      \
+    {                                                                               \
+        static constexpr auto name = X##Name::name;                                 \
+        static constexpr auto rows_per_iteration = 1;                               \
+        template <typename T>                                                       \
+        static void transform(const T * src, Float64 * dst, size_t size)            \
+        {                                                                           \
+            ::DB::MathVectorization::UnaryMath::FUNC##Transform<T>(src, dst, size); \
+        }                                                                           \
+        template <typename T>                                                       \
+        static void execute(const T * src, Float64 * dst)                           \
+        {                                                                           \
+            dst[0] = static_cast<Float64>(::FUNC(static_cast<Float64>(src[0])));    \
+        }                                                                           \
     }
 
 #define UNARY_FUNCTION_IMPL_NORMAL(X, FUNC) \
@@ -691,16 +691,16 @@ struct PowName
 #if defined(__linux__) && defined(__aarch64__)
 UNARY_FUNCTION_IMPL(Log, log);
 UNARY_FUNCTION_IMPL_NORMAL(Log2, log2);
-UNARY_FUNCTION_IMPL_NORMAL(Log10, log10);
+UNARY_FUNCTION_IMPL(Log10, log10);
 UNARY_FUNCTION_IMPL_NORMAL(Cbrt, cbrt);
 UNARY_FUNCTION_IMPL(Sin, sin);
 UNARY_FUNCTION_IMPL(Cos, cos);
 UNARY_FUNCTION_IMPL_NORMAL(Tan, tan);
 UNARY_FUNCTION_IMPL_NORMAL(Asin, asin);
 UNARY_FUNCTION_IMPL_NORMAL(Acos, acos);
-UNARY_FUNCTION_IMPL_NORMAL(Atan, atan);
-UNARY_FUNCTION_IMPL_NORMAL(Erf, erf);
-UNARY_FUNCTION_IMPL_NORMAL(Erfc, erfc);
+UNARY_FUNCTION_IMPL(Atan, atan);
+UNARY_FUNCTION_IMPL(Erf, erf);
+UNARY_FUNCTION_IMPL(Erfc, erfc);
 UNARY_FUNCTION_IMPL(Exp, exp);
 UNARY_FUNCTION_IMPL_NORMAL(Exp2, exp2);
 #elif defined(__linux__) && defined(__x86_64__)

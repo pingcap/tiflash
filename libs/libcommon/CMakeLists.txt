@@ -200,5 +200,5 @@ if (ARCH_AMD64)
 endif()
 
 if (ARCH_AARCH64 AND ARCH_LINUX)
-    target_link_libraries (common PUBLIC tiflash-aarch64-string tiflash-aarch64-math)
+    target_link_libraries (common PUBLIC tiflash-aarch64-string tiflash-aarch64-math tiflash-aarch64-pl-math)
 endif()

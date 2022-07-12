@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/UnaryMath/Switch.h>
+#include <Functions/MathVectorization/Switch.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
@@ -35,14 +35,14 @@ struct VectorizationGardian
     VectorizationGardian()
         : holder(vectorization_mutex)
     {
-#ifdef TIFLASH_HAS_UNARY_MATH_VECTORIZATION_SUPPORT
-        UnaryMath::enableVectorization();
+#ifdef TIFLASH_HAS_MATH_VECTORIZATION_SUPPORT
+        MathVectorization::enableVectorization();
 #endif
     }
     ~VectorizationGardian()
     {
-#ifdef TIFLASH_HAS_UNARY_MATH_VECTORIZATION_SUPPORT
-        UnaryMath::disableVectorization();
+#ifdef TIFLASH_HAS_MATH_VECTORIZATION_SUPPORT
+        MathVectorization::disableVectorization();
 #endif
     }
 };

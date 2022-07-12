@@ -108,7 +108,7 @@
 #include <fiu.h>
 #endif
 
-#include <Functions/UnaryMath/Switch.h>
+#include <Functions/MathVectorization/Switch.h>
 
 #if USE_MIMALLOC
 #define TRY_LOAD_CONF(NAME)                          \
@@ -780,15 +780,15 @@ public:
             return address;
         };
 
-        /// Check unary math vectorization
-#ifdef TIFLASH_HAS_UNARY_MATH_VECTORIZATION_SUPPORT
-        if (config.getBool("unary_math_vectorization", false))
+        /// Check math vectorization
+#ifdef TIFLASH_HAS_MATH_VECTORIZATION_SUPPORT
+        if (config.getBool("math_vectorization", false))
         {
-            DB::UnaryMath::enableVectorization();
+            DB::MathVectorization::enableVectorization();
         }
         else
         {
-            DB::UnaryMath::disableVectorization();
+            DB::MathVectorization::disableVectorization();
         }
 #endif
 

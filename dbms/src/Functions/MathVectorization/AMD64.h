@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace DB::UnaryMath
+namespace DB::MathVectorization::UnaryMath
 {
 
 #pragma push_macro("UNARY_FUNCTION_LIST")
@@ -257,4 +257,4 @@ static inline void disableVectorizationImpl()
 #pragma pop_macro("DISABLE")
 
 #pragma pop_macro("UNARY_FUNCTION_LIST")
-} // namespace DB::UnaryMath
+} // namespace DB::MathVectorization::UnaryMath

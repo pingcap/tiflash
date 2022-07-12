@@ -18,26 +18,27 @@
 #include <cmath>
 #include <cstddef>
 
-namespace DB::UnaryMath
+namespace DB::MathVectorization::UnaryMath
 {
 
 #pragma push_macro("UNARY_FUNCTION_LIST")
 #define UNARY_FUNCTION_LIST(M) \
     M(sin)                     \
     M(cos)                     \
+    M(atan)                    \
+    M(erf)                     \
+    M(erfc)                    \
     M(exp)                     \
-    M(log)
+    M(log)                     \
+    M(log10)
 
-#pragma push_macro("__vpcs")
 // The following functions are provided by arm-optimized-routines.
-#define __vpcs __attribute__((__aarch64_vector_pcs__))
+#pragma push_macro("PROTOTYPE")
+#define PROTOTYPE(X) __attribute__((__aarch64_vector_pcs__)) float64x2_t __vn_##X(float64x2_t);
 extern "C" {
-__vpcs float64x2_t __vn_sin(float64x2_t);
-__vpcs float64x2_t __vn_cos(float64x2_t);
-__vpcs float64x2_t __vn_exp(float64x2_t);
-__vpcs float64x2_t __vn_log(float64x2_t);
+UNARY_FUNCTION_LIST(PROTOTYPE)
 }
-#pragma pop_macro("__vpcs")
+#pragma pop_macro("PROTOTYPE")
 
 static constexpr size_t BATCH_SIZE = 64;
 static constexpr size_t VECTOR_SIZE = sizeof(float64x2_t) / sizeof(float64_t);
@@ -117,4 +118,4 @@ static inline void disableVectorizationImpl()
 #pragma pop_macro("DISABLE")
 
 #pragma pop_macro("UNARY_FUNCTION_LIST")
-} // namespace DB::UnaryMath
+} // namespace DB::MathVectorization::UnaryMath
