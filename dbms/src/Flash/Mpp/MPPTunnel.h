@@ -116,6 +116,7 @@ protected:
         }
 
     private:
+        friend class TunnelSender;
         std::promise<String> promise;
         std::shared_future<String> future;
         std::atomic<bool> msg_has_set{false};
@@ -124,7 +125,6 @@ protected:
     DataPacketMPMCQueuePtr send_queue;
     ConsumerState consumer_state;
     PacketWriter * writer;
-    std::mutex state_mu;
     const LoggerPtr log;
     String tunnel_id;
 };
