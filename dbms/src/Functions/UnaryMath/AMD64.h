@@ -207,8 +207,8 @@ UNARY_FUNCTION_LIST(SELECT)
 #pragma push_macro("TRANSFORM")
 #define TRANSFORM(X)                                                                                 \
     template <typename T>                                                                            \
-    static inline void X##Transform(double * __restrict dst,                                         \
-                                    const T * __restrict src,                                        \
+    static inline void X##Transform(const T * __restrict src,                                        \
+                                    double * __restrict dst,                                         \
                                     size_t size)                                                     \
     {                                                                                                \
         auto * batch = X##TransformBatch;                                                            \

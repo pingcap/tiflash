@@ -145,7 +145,7 @@ private:
             {
                 if constexpr (std::is_base_of_v<UnaryFunctionVectorizedTag, Impl>)
                 {
-                    Impl::transform(&dst_data[0], &src_data[0], rows_size);
+                    Impl::transform(&src_data[0], &dst_data[0], rows_size);
                 }
                 else
                 {
@@ -674,9 +674,9 @@ struct PowName
         static constexpr auto name = X##Name::name;                              \
         static constexpr auto rows_per_iteration = 1;                            \
         template <typename T>                                                    \
-        static void transform(Float64 * dst, const T * src, size_t size)         \
+        static void transform(const T * src, Float64 * dst, size_t size)         \
         {                                                                        \
-            ::DB::UnaryMath::FUNC##Transform<T>(dst, src, size);                 \
+            ::DB::UnaryMath::FUNC##Transform<T>(src, dst, size);                 \
         }                                                                        \
         template <typename T>                                                    \
         static void execute(const T * src, Float64 * dst)                        \

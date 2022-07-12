@@ -74,7 +74,7 @@ UNARY_FUNCTION_LIST(TRANSFORM)
 #pragma push_macro("TRANSFORM")
 #define TRANSFORM(X)                                                                     \
     template <typename T>                                                                \
-    static inline void X##Transform(double * __restrict dst, const T * src, size_t size) \
+    static inline void X##Transform(const T * src, double * __restrict dst, size_t size) \
     {                                                                                    \
         auto * dst_f64 = reinterpret_cast<float64_t *>(dst);                             \
         auto * batch = X##TransformBatch;                                                \
