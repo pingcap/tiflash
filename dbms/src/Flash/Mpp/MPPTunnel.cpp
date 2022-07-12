@@ -131,6 +131,7 @@ void MPPTunnel::close(const String & reason)
             break;
         }
         case TunnelStatus::WaitingForSenderFinish:
+            break;
         case TunnelStatus::Finished:
             return;
         default:
