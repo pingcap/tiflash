@@ -25,8 +25,8 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
-#include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
+#include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -1498,8 +1498,8 @@ try
 {
     {
         PageStorage::Config config;
-        config.blob_heavy_gc_valid_rate = 1.0;   /// always run full gc
-        config.wal_roll_size = 1 * 1024 * 1024;  /// make the wal file more easy to roll
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        config.wal_roll_size = 1 * 1024 * 1024; /// make the wal file more easy to roll
         config.wal_max_persisted_log_files = 10; /// avoid checkpoint when gc
         page_storage = reopenWithConfig(config);
     }
@@ -1564,8 +1564,8 @@ try
 {
     {
         PageStorage::Config config;
-        config.blob_heavy_gc_valid_rate = 1.0;   /// always run full gc
-        config.wal_roll_size = 1 * 1024 * 1024;  /// make the wal file more easy to roll
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        config.wal_roll_size = 1 * 1024 * 1024; /// make the wal file more easy to roll
         config.wal_max_persisted_log_files = 10; /// avoid checkpoint when gc
         page_storage = reopenWithConfig(config);
     }
