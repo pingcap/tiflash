@@ -98,7 +98,7 @@ struct EntryOrDelete
             .entry = entry,
         };
     }
-    static EntryOrDelete newRepalcingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
+    static EntryOrDelete newReplacingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
     {
         return EntryOrDelete{
             .is_delete = false,
@@ -224,13 +224,15 @@ public:
         UInt64 lowest_seq,
         std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
         PageEntriesV3 * entries_removed,
-        const PageLock & page_lock);
+        const PageLock & page_lock,
+        bool keep_last_valid_var_entry = false);
     bool derefAndClean(
         UInt64 lowest_seq,
         PageIdV3Internal page_id,
         const PageVersion & deref_ver,
         Int64 deref_count,
-        PageEntriesV3 * entries_removed);
+        PageEntriesV3 * entries_removed,
+        bool keep_last_valid_var_entry = false);
 
     void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);
 
@@ -358,11 +360,14 @@ public:
 
     void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr);
+    bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
-    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true);
+    // When dump snapshot, we first load edit record from underlying wal files, and call gcInMemEntries to remove obsolete entries.
+    // But there may be some upsert entry in later wal files which are not included in the snapshot.
+    // So if the last valid var entry is deleted for some page, we need to keep them and its delete entry to reclaim possible future upsert entry.
+    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
 
     std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
 
