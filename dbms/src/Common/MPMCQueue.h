@@ -74,9 +74,15 @@ public:
             destruct(getObj(read_pos));
     }
 
-    /// Block until:
-    /// 1. The queue is normal or finished, pop succeeds with a valid T: return true.
-    /// 2. The queue is cancelled: return false.
+    /*
+    * | Previous Status  | Empty      | Behavior                 |
+    * |------------------|------------|--------------------------|
+    * | Normal           | Yes        | Block                    |
+    * | Normal           | No         | Pop and return true      |
+    * | Finished         | Yes        | return false             |
+    * | Finished         | No         | Pop and return true      |
+    * | Cancelled        | Yes/No     | return false             |
+    * */
     ALWAYS_INLINE bool pop(T & obj)
     {
         return popObj<true>(obj);
@@ -99,9 +105,14 @@ public:
         return popObj<false>(obj);
     }
 
-    /// Block until:
-    /// 1. The queue is normal, push succeeds and return true.
-    /// 2. The queue is cancelled or finished, return false.
+    /*
+    * | Previous Status  | Full       | Behavior                 |
+    * |------------------|------------|--------------------------|
+    * | Normal           | Yes        | Block                    |
+    * | Normal           | No         | Push and return true     |
+    * | Finished         | Yes/No     | return false             |
+    * | Cancelled        | Yes/No     | return false             |
+    * */
     template <typename U>
     ALWAYS_INLINE bool push(U && u)
     {
