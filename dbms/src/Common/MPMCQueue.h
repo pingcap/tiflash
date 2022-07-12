@@ -75,9 +75,8 @@ public:
     }
 
     /// Block until:
-    /// 1. Pop succeeds with a valid T: return true.
+    /// 1. The queue is normal or finished, pop succeeds with a valid T: return true.
     /// 2. The queue is cancelled: return false.
-    /// 3. The queue is finished: return true if the queue is not empty.
     ALWAYS_INLINE bool pop(T & obj)
     {
         return popObj<true>(obj);
@@ -101,9 +100,8 @@ public:
     }
 
     /// Block until:
-    /// 1. Push succeeds and return true.
-    /// 2. The queue is cancelled and return false.
-    /// 3. The queue has finished and return false.
+    /// 1. The queue is normal, push succeeds and return true.
+    /// 2. The queue is cancelled or finished, return false.
     template <typename U>
     ALWAYS_INLINE bool push(U && u)
     {

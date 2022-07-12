@@ -253,6 +253,7 @@ public:
 
 private:
     friend class tests::TestMPPTunnel;
+    // TODO(hyb): Extract Cancelled status from Finished to distinguish Completed and Cancelled situation
     enum class TunnelStatus
     {
         Unconnected, // Not connect to any writer, not able to accept new data

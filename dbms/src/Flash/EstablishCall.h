@@ -116,7 +116,7 @@ private:
         FINISH
     };
     CallStatus state; // The current serving state.
-    std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender = nullptr;
+    std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::shared_ptr<Stopwatch> stopwatch;
 };
 } // namespace DB
