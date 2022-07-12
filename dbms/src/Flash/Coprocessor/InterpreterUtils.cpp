@@ -17,6 +17,7 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
 
@@ -42,32 +43,6 @@ void restoreConcurrency(
     }
 }
 
-BlockInputStreamPtr combinedNonJoinedDataStream(
-    DAGPipeline & pipeline,
-    size_t max_threads,
-    const LoggerPtr & log,
-    bool ignore_block)
-{
-    BlockInputStreamPtr ret = nullptr;
-    if (pipeline.streams_with_non_joined_data.size() == 1)
-        ret = pipeline.streams_with_non_joined_data.at(0);
-    else if (pipeline.streams_with_non_joined_data.size() > 1)
-    {
-        if (ignore_block)
-        {
-            ret = std::make_shared<UnionWithoutBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log->identifier());
-            ret->setExtraInfo("combine non joined(ignore block)");
-        }
-        else
-        {
-            ret = std::make_shared<UnionWithBlock>(pipeline.streams_with_non_joined_data, nullptr, max_threads, log->identifier());
-            ret->setExtraInfo("combine non joined");
-        }
-    }
-    pipeline.streams_with_non_joined_data.clear();
-    return ret;
-}
-
 void executeUnion(
     DAGPipeline & pipeline,
     size_t max_streams,
@@ -75,21 +50,33 @@ void executeUnion(
     bool ignore_block,
     const String & extra_info)
 {
-    if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty())
-        return;
-    auto non_joined_data_stream = combinedNonJoinedDataStream(pipeline, max_streams, log, ignore_block);
-    if (!pipeline.streams.empty())
+    switch (pipeline.streams.size() + pipeline.streams_with_non_joined_data.size())
     {
-        if (ignore_block)
-            pipeline.firstStream() = std::make_shared<UnionWithoutBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
-        else
-            pipeline.firstStream() = std::make_shared<UnionWithBlock>(pipeline.streams, non_joined_data_stream, max_streams, log->identifier());
-        pipeline.firstStream()->setExtraInfo(extra_info);
-        pipeline.streams.resize(1);
+    case 0:
+        break;
+    case 1:
+    {
+        if (pipeline.streams.size() == 1)
+            break;
+        // streams_with_non_joined_data's size is 1.
+        pipeline.streams.push_back(pipeline.streams_with_non_joined_data.at(0));
+        pipeline.streams_with_non_joined_data.clear();
+        break;
     }
-    else if (non_joined_data_stream != nullptr)
+    default:
     {
-        pipeline.streams.push_back(non_joined_data_stream);
+        BlockInputStreamPtr stream;
+        if (ignore_block)
+            stream = std::make_shared<UnionWithoutBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+        else
+            stream = std::make_shared<UnionWithBlock>(pipeline.streams, pipeline.streams_with_non_joined_data, max_streams, log->identifier());
+        stream->setExtraInfo(extra_info);
+
+        pipeline.streams.resize(1);
+        pipeline.streams_with_non_joined_data.clear();
+        pipeline.firstStream() = std::move(stream);
+        break;
+    }
     }
 }
 
@@ -126,10 +113,14 @@ void orderStreams(
     size_t max_streams,
     SortDescription order_descr,
     Int64 limit,
+    bool enable_fine_grained_shuffle,
     const Context & context,
     const LoggerPtr & log)
 {
     const Settings & settings = context.getSettingsRef();
+    String extra_info;
+    if (enable_fine_grained_shuffle)
+        extra_info = enableFineGrainedShuffleExtraInfo;
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, log->identifier(), limit);
@@ -141,19 +132,37 @@ void orderStreams(
         sorting_stream->setLimits(limits);
 
         stream = sorting_stream;
+        stream->setExtraInfo(extra_info);
     });
 
-    /// If there are several streams, we merge them into one
-    executeUnion(pipeline, max_streams, log, false, "for partial order");
+    if (enable_fine_grained_shuffle)
+    {
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<MergeSortingBlockInputStream>(
+                stream,
+                order_descr,
+                settings.max_block_size,
+                limit,
+                settings.max_bytes_before_external_sort,
+                context.getTemporaryPath(),
+                log->identifier());
+            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
+        });
+    }
+    else
+    {
+        /// If there are several streams, we merge them into one
+        executeUnion(pipeline, max_streams, log, false, "for partial order");
 
-    /// Merge the sorted blocks.
-    pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
-        pipeline.firstStream(),
-        order_descr,
-        settings.max_block_size,
-        limit,
-        settings.max_bytes_before_external_sort,
-        context.getTemporaryPath(),
-        log->identifier());
+        /// Merge the sorted blocks.
+        pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(
+            pipeline.firstStream(),
+            order_descr,
+            settings.max_block_size,
+            limit,
+            settings.max_bytes_before_external_sort,
+            context.getTemporaryPath(),
+            log->identifier());
+    }
 }
 } // namespace DB

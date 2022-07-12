@@ -43,15 +43,14 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
     const String & executor_id,
     const LoggerPtr & log)
 {
-    const auto & mpp_exchange_receiver_map = context.getDAGContext()->getMPPExchangeReceiverMap();
-
-    auto it = mpp_exchange_receiver_map.find(executor_id);
-    if (unlikely(it == mpp_exchange_receiver_map.end()))
+    auto mpp_exchange_receiver = context.getDAGContext()->getMPPExchangeReceiver(executor_id);
+    if (unlikely(mpp_exchange_receiver == nullptr))
         throw TiFlashException(
             fmt::format("Can not find exchange receiver for {}", executor_id),
             Errors::Planner::Internal);
+    /// todo support fine grained shuffle
+    assert(!enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount()));
 
-    const auto & mpp_exchange_receiver = it->second;
     NamesAndTypes schema = toNamesAndTypes(mpp_exchange_receiver->getOutputSchema());
     auto physical_exchange_receiver = std::make_shared<PhysicalExchangeReceiver>(
         executor_id,
@@ -69,7 +68,7 @@ void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & c
     auto & exchange_receiver_io_input_streams = dag_context.getInBoundIOInputStreamsMap()[executor_id];
     for (size_t i = 0; i < max_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(mpp_exchange_receiver, log->identifier(), executor_id);
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(mpp_exchange_receiver, log->identifier(), executor_id, /*stream_id=*/0);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         stream->setExtraInfo("squashing after exchange receiver");
