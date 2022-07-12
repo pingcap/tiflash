@@ -290,14 +290,11 @@ StringRef MPPTunnel::statusToString()
     }
 }
 
-void TunnelSender::consumerFinish(const String & err_msg)
+void TunnelSender::consumerFinish(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue->finish();
-    bool old_value = false;
-    if (!consumer_state.msg_has_set.compare_exchange_strong(old_value, true, std::memory_order_seq_cst, std::memory_order_relaxed))
-        return;
-    consumer_state.setMsg(err_msg);
+    consumer_state.setMsg(msg);
 }
 
 SyncTunnelSender::~SyncTunnelSender()

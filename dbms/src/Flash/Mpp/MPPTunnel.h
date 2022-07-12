@@ -107,8 +107,10 @@ protected:
         }
         void setMsg(const String & msg)
         {
+            bool old_value = false;
+            if (!msg_has_set.compare_exchange_strong(old_value, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+                return;
             promise.set_value(msg);
-            msg_has_set = true;
         }
         bool msgHasSet() const
         {
