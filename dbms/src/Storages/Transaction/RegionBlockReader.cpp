@@ -186,6 +186,7 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         }
         else
         {
+            // For common handle, sometimes we need to decode the value from encoded key instead of encoded value
             auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
             raw_extra_column->insertData(pk->data(), pk->size());
             /// decode key and insert pk columns if needed
@@ -207,6 +208,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
         }
         index++;
     }
+    block.checkNumberOfRows();
+
     return true;
 }
 

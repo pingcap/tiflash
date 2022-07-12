@@ -367,14 +367,14 @@ public:
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
 
-    /// Force flush all data to disk.
-    void flushCache(const Context & context, const RowKeyRange & range)
+    /// Try flush all data in `range` to disk and return whether the task succeed.
+    bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
     {
         auto dm_context = newDMContext(context, context.getSettingsRef());
-        flushCache(dm_context, range);
+        return flushCache(dm_context, range, try_until_succeed);
     }
 
-    void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
+    bool flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed = true);
 
     /// Merge delta into the stable layer for all segments.
     ///

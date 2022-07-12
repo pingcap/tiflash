@@ -41,7 +41,7 @@ class Block;
 class RegionBlockReader : private boost::noncopyable
 {
 public:
-    RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schema_snapshot_);
+    explicit RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schema_snapshot_);
 
     /// Read `data_list` as a block.
     ///

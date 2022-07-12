@@ -12,7 +12,7 @@ TiFlash repository is based on [ClickHouse](https://github.com/ClickHouse/ClickH
 
 ### Start with TiDB Cloud
 
-Quickly explore TiFlash with [a free trial of TiDB Cloud](https://tidbcloud.com/signup).
+Quickly explore TiFlash with [a free trial of TiDB Cloud](https://tidbcloud.com/free-trial).
 
 See [TiDB Cloud Quick Start Guide](https://docs.pingcap.com/tidbcloud/tidb-cloud-quickstart).
 
@@ -242,7 +242,30 @@ LSAN_OPTIONS=suppressions=$WORKSPACE/tiflash/test/sanitize/asan.suppression
 
 ## Run Integration Tests
 
-TBD.
+1. Build your own tiflash binary in $BUILD with `-DCMAKE_BUILD_TYPE=DEBUG`.
+```
+cd $BUILD
+cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
+ninja tiflash
+```
+2. Run tidb cluster locally using tiup playgroud or other tools. 
+```
+tiup playground nightly --tiflash.binpath $BUILD/dbms/src/Server/tiflash
+```
+3. Check $WORKSPACE/tests/_env.sh to make the port and build dir right.
+4. Run your integration tests using commands like "./run-test.sh fullstack-test2/ddl" under $WORKSPACE/tests dir
+
+## Run MicroBenchmark Tests
+
+To run micro benchmark tests, you need to build with -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON:
+
+```shell
+cd $BUILD
+cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON
+ninja bench_dbms       
+```
+
+And the microbenchmark-test executables are at `$BUILD/dbms/bench_dbms`, you can run it with `./bench_dbms` or `./bench_dbms --benchmark_filter=xxx` . More usage please check with `./bench_dbms --help`.
 
 ## Generate LLVM Coverage Report
 

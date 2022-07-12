@@ -98,12 +98,14 @@ protected:
     void testCannotTryPush(MPMCQueue<T> & queue)
     {
         auto old_size = queue.size();
-        auto res = queue.tryPush(ValueHelper<T>::make(-1), std::chrono::microseconds(1));
-        auto new_size = queue.size();
-        if (res)
+        bool ok1 = queue.tryPush(ValueHelper<T>::make(-1));
+        auto new_size1 = queue.size();
+        bool ok2 = queue.pushTimeout(ValueHelper<T>::make(-1), std::chrono::microseconds(1));
+        auto new_size2 = queue.size();
+        if (ok1 || ok2)
             throw TiFlashTestException("Should push fail");
-        if (old_size != new_size)
-            throw TiFlashTestException(fmt::format("Size changed from {} to {} without push", old_size, new_size));
+        if (old_size != new_size1 || old_size != new_size2)
+            throw TiFlashTestException(fmt::format("Size changed from {} to {} and {} without push", old_size, new_size1, new_size2));
     }
 
     template <typename T>
@@ -124,12 +126,14 @@ protected:
     {
         auto old_size = queue.size();
         T res;
-        bool ok = queue.tryPop(res, std::chrono::microseconds(1));
-        auto new_size = queue.size();
-        if (ok)
+        bool ok1 = queue.tryPop(res);
+        auto new_size1 = queue.size();
+        bool ok2 = queue.popTimeout(res, std::chrono::microseconds(1));
+        auto new_size2 = queue.size();
+        if (ok1 || ok2)
             throw TiFlashTestException("Should pop fail");
-        if (old_size != new_size)
-            throw TiFlashTestException(fmt::format("Size changed from {} to {} without pop", old_size, new_size));
+        if (old_size != new_size1 || old_size != new_size2)
+            throw TiFlashTestException(fmt::format("Size changed from {} to {} and {} without pop", old_size, new_size1, new_size2));
     }
 
     template <typename T>
@@ -473,7 +477,6 @@ protected:
         {
             throwOrMove(std::move(rhs));
         }
-
 
         ThrowInjectable & operator=(ThrowInjectable && rhs)
         {

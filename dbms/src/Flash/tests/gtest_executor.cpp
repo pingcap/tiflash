@@ -59,180 +59,170 @@ public:
                              {toVec<String>("s", {"banana", "banana"}),
                               toVec<String>("join_c", {"apple", "banana"})});
     }
-
-    void executeExecutor(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency = 1)
-    {
-        std::vector<String> enable_planners{"true", "false"};
-        for (auto enable : enable_planners)
-        {
-            context.context.setSetting("enable_planner", enable);
-            executeStreams(request, expect_columns, concurrency);
-        }
-    }
 };
 
 TEST_F(ExecutorTestRunner, Filter)
 try
 {
-    auto request = context
-                       .scan("test_db", "test_table")
-                       .filter(eq(col("s1"), col("s2")))
-                       .build(context);
-    {
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana"}),
-                         toNullableVec<String>({"banana"})});
-    }
+    wrapForDisEnablePlanner([&]() {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .build(context);
+        {
+            ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                                createColumns({toNullableVec<String>({"banana"}),
+                                               toNullableVec<String>({"banana"})}));
+        }
 
-    request = context.receive("exchange1")
-                  .filter(eq(col("s1"), col("s2")))
-                  .build(context);
-    {
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana"}),
-                         toNullableVec<String>({"banana"})});
-    }
+        request = context.receive("exchange1")
+                      .filter(eq(col("s1"), col("s2")))
+                      .build(context);
+        {
+            ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                                createColumns({toNullableVec<String>({"banana"}),
+                                               toNullableVec<String>({"banana"})}));
+        }
+    });
 }
 CATCH
 
 TEST_F(ExecutorTestRunner, JoinWithTableScan)
 try
 {
-    auto request = context
-                       .scan("test_db", "l_table")
-                       .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
-                       .topN("join_c", false, 2)
-                       .build(context);
-    {
-        String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
-                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          "  table_scan_0 | {<0, String>, <1, String>}\n"
-                          "  table_scan_1 | {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"})},
-                        2);
+    wrapForDisEnablePlanner([&]() {
+        auto request = context
+                           .scan("test_db", "l_table")
+                           .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                           .topN("join_c", false, 2)
+                           .build(context);
+        {
+            String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+                              " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                              "  table_scan_0 | {<0, String>, <1, String>}\n"
+                              "  table_scan_1 | {<0, String>, <1, String>}\n";
+            ASSERT_DAGREQUEST_EQAUL(expected, request);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request, 2),
+                                createColumns({toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"})}));
 
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"})},
-                        5);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request, 5),
+                                createColumns({toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"})}));
 
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"})});
-    }
-    request = context
-                  .scan("test_db", "l_table")
-                  .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
-                  .project({"s", "join_c"})
-                  .topN("join_c", false, 2)
-                  .build(context);
-    {
-        String expected = "topn_4 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
-                          " project_3 | {<0, String>, <1, String>}\n"
-                          "  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          "   table_scan_0 | {<0, String>, <1, String>}\n"
-                          "   table_scan_1 | {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"})},
-                        2);
-    }
+            ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                                createColumns({toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"})}));
+        }
+        request = context
+                      .scan("test_db", "l_table")
+                      .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                      .project({"s", "join_c"})
+                      .topN("join_c", false, 2)
+                      .build(context);
+        {
+            String expected = "topn_4 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+                              " project_3 | {<0, String>, <1, String>}\n"
+                              "  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                              "   table_scan_0 | {<0, String>, <1, String>}\n"
+                              "   table_scan_1 | {<0, String>, <1, String>}\n";
+            ASSERT_DAGREQUEST_EQAUL(expected, request);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request, 2),
+                                createColumns({toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"})}));
+        }
 
-    request = context
-                  .scan("test_db", "l_table")
-                  .join(context.scan("test_db", "r_table_2"), {col("join_c")}, ASTTableJoin::Kind::Left)
-                  .topN("join_c", false, 4)
-                  .build(context);
-    {
-        String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 4\n"
-                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          "  table_scan_0 | {<0, String>, <1, String>}\n"
-                          "  table_scan_1 | {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
-                         toNullableVec<String>({"apple", "apple", "apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana", "banana", {}}),
-                         toNullableVec<String>({"apple", "apple", "apple", {}})},
-                        2);
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
-                         toNullableVec<String>({"apple", "apple", "apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana", "banana", {}}),
-                         toNullableVec<String>({"apple", "apple", "apple", {}})},
-                        3);
-    }
+        request = context
+                      .scan("test_db", "l_table")
+                      .join(context.scan("test_db", "r_table_2"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                      .topN("join_c", false, 4)
+                      .build(context);
+        {
+            String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 4\n"
+                              " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                              "  table_scan_0 | {<0, String>, <1, String>}\n"
+                              "  table_scan_1 | {<0, String>, <1, String>}\n";
+            ASSERT_DAGREQUEST_EQAUL(expected, request);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request, 2),
+                                createColumns({toNullableVec<String>({"banana", "banana", "banana", "banana"}),
+                                               toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana", "banana", {}}),
+                                               toNullableVec<String>({"apple", "apple", "apple", {}})}));
+            ASSERT_COLUMNS_EQ_R(executeStreams(request, 3),
+                                createColumns({toNullableVec<String>({"banana", "banana", "banana", "banana"}),
+                                               toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana", "banana", {}}),
+                                               toNullableVec<String>({"apple", "apple", "apple", {}})}));
+        }
+    });
 }
 CATCH
 
 TEST_F(ExecutorTestRunner, JoinWithExchangeReceiver)
 try
 {
-    auto request = context
-                       .receive("exchange_l_table")
-                       .join(context.receive("exchange_r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
-                       .topN("join_c", false, 2)
-                       .build(context);
-    {
-        String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
-                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          "  exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>}\n"
-                          "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"})},
-                        2);
+    wrapForDisEnablePlanner([&]() {
+        auto request = context
+                           .receive("exchange_l_table")
+                           .join(context.receive("exchange_r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                           .topN("join_c", false, 2)
+                           .build(context);
+        {
+            String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+                              " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                              "  exchange_receiver_0 | type:PassThrough, {<0, String>, <1, String>}\n"
+                              "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
+            ASSERT_DAGREQUEST_EQAUL(expected, request);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request, 2),
+                                createColumns({toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"})}));
 
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"})},
-                        5);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request, 5),
+                                createColumns({toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"})}));
 
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"})});
-    }
+            ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                                createColumns({toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"})}));
+        }
+    });
 }
 CATCH
 
 TEST_F(ExecutorTestRunner, JoinWithTableScanAndReceiver)
 try
 {
-    auto request = context
-                       .scan("test_db", "l_table")
-                       .join(context.receive("exchange_r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
-                       .topN("join_c", false, 2)
-                       .build(context);
-    {
-        String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
-                          " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-                          "  table_scan_0 | {<0, String>, <1, String>}\n"
-                          "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
-        ASSERT_DAGREQUEST_EQAUL(expected, request);
-        executeExecutor(request,
-                        {toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"}),
-                         toNullableVec<String>({"banana", "banana"}),
-                         toNullableVec<String>({"apple", "banana"})},
-                        2);
-    }
+    wrapForDisEnablePlanner([&]() {
+        auto request = context
+                           .scan("test_db", "l_table")
+                           .join(context.receive("exchange_r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                           .topN("join_c", false, 2)
+                           .build(context);
+        {
+            String expected = "topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+                              " Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+                              "  table_scan_0 | {<0, String>, <1, String>}\n"
+                              "  exchange_receiver_1 | type:PassThrough, {<0, String>, <1, String>}\n";
+            ASSERT_DAGREQUEST_EQAUL(expected, request);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request, 2),
+                                createColumns({toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"}),
+                                               toNullableVec<String>({"banana", "banana"}),
+                                               toNullableVec<String>({"apple", "banana"})}));
+        }
+    });
 }
 CATCH
 

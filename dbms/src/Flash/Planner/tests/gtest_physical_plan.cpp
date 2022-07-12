@@ -98,7 +98,7 @@ public:
             ASSERT_EQ(Poco::trim(expected_streams), Poco::trim(fb.toString()));
         }
 
-        readAndAssertBlock(final_stream, expect_columns);
+        ASSERT_COLUMNS_EQ_R(readBlock(final_stream), expect_columns);
     }
 
     LoggerPtr log = Logger::get("PhysicalPlanTestRunner", "test_physical_plan");

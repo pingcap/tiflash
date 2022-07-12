@@ -25,6 +25,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_during_mpp_close_tunnel[];
+extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 
 template <typename Writer>
@@ -219,7 +220,11 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
         err_msg = "fatal error in sendJob()";
     }
     if (!err_msg.empty())
+    {
+        /// append tunnel id to error message
+        err_msg = fmt::format("{} meet error: {}", tunnel_id, err_msg);
         LOG_ERROR(log, err_msg);
+    }
     consumerFinish(err_msg, need_lock);
     if (is_async)
         writer->writeDone(grpc::Status::OK);
@@ -322,6 +327,7 @@ void MPPTunnelBase<Writer>::waitUntilConnectedOrFinished(std::unique_lock<std::m
         auto res = cv_for_connected_or_finished.wait_for(lk, timeout, connected_or_finished);
         LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
 
+        fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, res = false;);
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
