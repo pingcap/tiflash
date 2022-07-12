@@ -64,17 +64,16 @@ private:
     void handleExchangeReceiver(DAGPipeline & pipeline);
     void handleMockExchangeReceiver(DAGPipeline & pipeline);
     void handleProjection(DAGPipeline & pipeline, const tipb::Projection & projection);
-    void handleWindow(DAGPipeline & pipeline, const tipb::Window & window);
-    void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort);
+    void handleWindow(DAGPipeline & pipeline, const tipb::Window & window, bool enable_fine_grained_shuffle);
+    void handleWindowOrder(DAGPipeline & pipeline, const tipb::Sort & window_sort, bool enable_fine_grained_shuffle);
     void executeWhere(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column, const String & extra_info = "");
-    void executeExpression(DAGPipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, const String & extra_info = "");
-    void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc);
-    void orderStreams(DAGPipeline & pipeline, SortDescription order_descr, Int64 limit);
+    void executeWindowOrder(DAGPipeline & pipeline, SortDescription sort_desc, bool enable_fine_grained_shuffle);
     void executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns);
     void executeLimit(DAGPipeline & pipeline);
     void executeWindow(
         DAGPipeline & pipeline,
-        WindowDescription & window_description);
+        WindowDescription & window_description,
+        bool enable_fine_grained_shuffle);
     void executeAggregation(
         DAGPipeline & pipeline,
         const ExpressionActionsPtr & expression_actions_ptr,

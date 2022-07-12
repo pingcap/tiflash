@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/SimpleIntrusiveNode.h>
+#include <Common/nocopyable.h>
 #include <common/defines.h>
 #include <common/types.h>
 
@@ -73,6 +74,11 @@ public:
         for (; read_pos < write_pos; ++read_pos)
             destruct(getObj(read_pos));
     }
+
+    // Cannot to use copy/move constructor,
+    // because MPMCQueue maybe used by different threads.
+    // Copy and move it is dangerous.
+    DISALLOW_COPY_AND_MOVE(MPMCQueue);
 
     /// Block until:
     /// 1. Pop succeeds with a valid T: return true.
