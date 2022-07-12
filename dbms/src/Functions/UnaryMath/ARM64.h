@@ -67,7 +67,7 @@ struct InputArray
             dst[j] = ::X(input.data[j]);                                   \
         }                                                                  \
     }                                                                      \
-    static inline decltype(X##TransformBatchScalar) * X##TransformBatch = X##TransformBatchScalar;
+    static inline decltype(X##TransformBatchScalar) * X##TransformBatch = &X##TransformBatchScalar;
 UNARY_FUNCTION_LIST(TRANSFORM)
 #pragma pop_macro("TRANSFORM")
 
@@ -79,14 +79,17 @@ UNARY_FUNCTION_LIST(TRANSFORM)
         auto * dst_f64 = reinterpret_cast<float64_t *>(dst);                             \
         auto * batch = X##TransformBatch;                                                \
         size_t i = 0;                                                                    \
-        for (; i + BATCH_SIZE <= size; i += BATCH_SIZE)                                  \
+        if (batch != &X##TransformBatchScalar)                                           \
         {                                                                                \
-            InputArray buffer{};                                                         \
-            for (size_t j = 0; j < BATCH_SIZE; j++)                                      \
+            for (; i + BATCH_SIZE <= size; i += BATCH_SIZE)                              \
             {                                                                            \
-                buffer.data[j] = static_cast<double>(src[i + j]);                        \
+                InputArray buffer{};                                                     \
+                for (size_t j = 0; j < BATCH_SIZE; j++)                                  \
+                {                                                                        \
+                    buffer.data[j] = static_cast<double>(src[i + j]);                    \
+                }                                                                        \
+                batch(&dst_f64[i], buffer);                                              \
             }                                                                            \
-            batch(&dst_f64[i], buffer);                                                  \
         }                                                                                \
         for (; i < size; i++)                                                            \
         {                                                                                \

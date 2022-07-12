@@ -205,34 +205,37 @@ UNARY_FUNCTION_LIST(SELECT)
 #pragma pop_macro("SELECT")
 
 #pragma push_macro("TRANSFORM")
-#define TRANSFORM(X)                                                                             \
-    template <typename T>                                                                        \
-    static inline void X##Transform(double * __restrict dst,                                     \
-                                    const T * __restrict src,                                    \
-                                    size_t size)                                                 \
-    {                                                                                            \
-        InputArray input_data;                                                                   \
-        auto address = reinterpret_cast<uintptr_t>(dst);                                         \
-        auto remainder = address % BATCH_SIZE;                                                   \
-        auto offset = (BATCH_SIZE - (remainder == 0 ? BATCH_SIZE : remainder)) / sizeof(double); \
-        auto * batch = X##TransformBatch;                                                        \
-        size_t i = 0;                                                                            \
-        for (; i < offset; ++i)                                                                  \
-        {                                                                                        \
-            dst[i] = ::X(static_cast<double>(src[i]));                                           \
-        }                                                                                        \
-        for (; i + BATCH_SIZE <= size; i += BATCH_SIZE)                                          \
-        {                                                                                        \
-            for (size_t j = 0; j < BATCH_SIZE; ++j)                                              \
-            {                                                                                    \
-                input_data.data[j] = static_cast<double>(src[i + j]);                            \
-            }                                                                                    \
-            batch(&dst[i], input_data);                                                          \
-        }                                                                                        \
-        for (; i < size; ++i)                                                                    \
-        {                                                                                        \
-            dst[i] = ::X(static_cast<double>(src[i]));                                           \
-        }                                                                                        \
+#define TRANSFORM(X)                                                                                 \
+    template <typename T>                                                                            \
+    static inline void X##Transform(double * __restrict dst,                                         \
+                                    const T * __restrict src,                                        \
+                                    size_t size)                                                     \
+    {                                                                                                \
+        auto * batch = X##TransformBatch;                                                            \
+        size_t i = 0;                                                                                \
+        if (batch != &X##TransformBatchScalar)                                                       \
+        {                                                                                            \
+            InputArray input_data;                                                                   \
+            auto address = reinterpret_cast<uintptr_t>(dst);                                         \
+            auto remainder = address % BATCH_SIZE;                                                   \
+            auto offset = (BATCH_SIZE - (remainder == 0 ? BATCH_SIZE : remainder)) / sizeof(double); \
+            for (; i < offset; ++i)                                                                  \
+            {                                                                                        \
+                dst[i] = ::X(static_cast<double>(src[i]));                                           \
+            }                                                                                        \
+            for (; i + BATCH_SIZE <= size; i += BATCH_SIZE)                                          \
+            {                                                                                        \
+                for (size_t j = 0; j < BATCH_SIZE; ++j)                                              \
+                {                                                                                    \
+                    input_data.data[j] = static_cast<double>(src[i + j]);                            \
+                }                                                                                    \
+                batch(&dst[i], input_data);                                                          \
+            }                                                                                        \
+        }                                                                                            \
+        for (; i < size; ++i)                                                                        \
+        {                                                                                            \
+            dst[i] = ::X(static_cast<double>(src[i]));                                               \
+        }                                                                                            \
     }
 UNARY_FUNCTION_LIST(TRANSFORM)
 #pragma pop_macro("TRANSFORM")
