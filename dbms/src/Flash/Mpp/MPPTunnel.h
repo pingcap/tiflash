@@ -234,7 +234,7 @@ public:
     void close(const String & reason);
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
-    virtual void connect(PacketWriter * writer);
+    void connect(PacketWriter * writer);
 
     // wait until all the data has been transferred.
     void waitForFinish();
