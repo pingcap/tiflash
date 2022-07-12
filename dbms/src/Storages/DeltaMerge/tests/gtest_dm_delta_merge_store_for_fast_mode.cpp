@@ -495,16 +495,16 @@ try
         case TestMode::V2_Mix:
         {
             int block_index = 0;
-            int begin_value = num_write_rows; // memory first, then persist, finally stable
+            int begin_value = 0; // persist first, then memory, finally stable
             while (Block block = in->read())
             {
                 if (block_index == 1)
                 {
-                    begin_value = 0;
+                    begin_value = num_write_rows * 2;
                 }
                 else if (block_index == 2)
                 {
-                    begin_value = num_write_rows * 2;
+                    begin_value = num_write_rows;
                 }
                 for (auto && iter : block)
                 {

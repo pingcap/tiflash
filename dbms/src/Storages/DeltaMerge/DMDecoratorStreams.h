@@ -16,10 +16,12 @@
 
 #include <Columns/ColumnsCommon.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <common/logger_useful.h>
 
 #include <unordered_set>
+
+#include "common/logger_useful.h"
 
 
 namespace DB
@@ -36,14 +38,14 @@ public:
     DMDeleteFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
         : columns_to_read(columns_to_read_)
         , header(toEmptyBlock(columns_to_read))
-        , log(&Poco::Logger::get("DMDeleteFilterBlockInputStream"))
+        , log(Logger::get("DMDeleteFilterBlockInputStream", /*req_id=*/""))
     {
         children.emplace_back(input);
         delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
     }
     ~DMDeleteFilterBlockInputStream()
     {
-        LOG_FMT_DEBUG(log,
+        LOG_FMT_TRACE(log,
                       "Total rows: {}, pass: {:.2f}%"
                       ", complete pass: {:.2f}%, complete not pass: {:.2f}%",
                       total_rows,
@@ -139,7 +141,7 @@ private:
     size_t complete_passed = 0;
     size_t complete_not_passed = 0;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 class DMColumnFilterBlockInputStream : public IBlockInputStream

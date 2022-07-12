@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/BlocksListBlockInputStream.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 
@@ -25,13 +25,11 @@ namespace
 {
 constexpr const char * str_col_name = "col_a";
 
-class DebugBlockInputStream : public IProfilingBlockInputStream
+class DebugBlockInputStream : public BlocksListBlockInputStream
 {
 public:
-    DebugBlockInputStream(const BlocksList & blocks, bool is_common_handle_)
-        : begin(blocks.begin())
-        , end(blocks.end())
-        , it(blocks.begin())
+    DebugBlockInputStream(BlocksList & blocks, bool is_common_handle_)
+        : BlocksListBlockInputStream(std::move(blocks))
         , is_common_handle(is_common_handle_)
     {
     }
@@ -43,23 +41,11 @@ public:
         return toEmptyBlock(*cds);
     }
 
-protected:
-    Block readImpl() override
-    {
-        if (it == end)
-            return Block();
-        else
-            return *(it++);
-    }
-
 private:
-    BlocksList::const_iterator begin;
-    BlocksList::const_iterator end;
-    BlocksList::const_iterator it;
     bool is_common_handle;
 };
 
-BlockInputStreamPtr genColumnFilterInputStream(const BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
+BlockInputStreamPtr genColumnFilterInputStream(BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
 {
     ColumnDefine handle_define(
         TiDBPkColumnID,
@@ -71,7 +57,7 @@ BlockInputStreamPtr genColumnFilterInputStream(const BlocksList & blocks, const 
         columns);
 }
 
-BlockInputStreamPtr genDeleteFilterInputStream(const BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
+BlockInputStreamPtr genDeleteFilterInputStream(BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
 {
     ColumnDefine handle_define(
         TiDBPkColumnID,
