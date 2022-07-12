@@ -219,7 +219,7 @@ public:
         bool is_async_,
         const String & req_id);
 
-    virtual ~MPPTunnel();
+    ~MPPTunnel();
 
     const String & id() const { return tunnel_id; }
 
