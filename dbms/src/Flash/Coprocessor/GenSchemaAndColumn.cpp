@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -60,10 +59,8 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
         switch (column_info.id)
         {
         case TiDBPkColumnID:
-        {
             names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, getPkType(column_info));
             break;
-        }
         case ExtraTableIDColumnID:
             names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, MutableSupport::extra_table_id_column_type);
             break;
