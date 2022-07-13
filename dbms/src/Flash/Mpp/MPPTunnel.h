@@ -118,7 +118,6 @@ protected:
         }
 
     private:
-        friend class TunnelSender;
         std::promise<String> promise;
         std::shared_future<String> future;
         std::atomic<bool> msg_has_set{false};
