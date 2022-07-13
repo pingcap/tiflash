@@ -86,7 +86,7 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         }
         else if (it->second->to_be_cancelled)
         {
-            LOG_WARNING(log, fmt::format("{} already in cancel process, skip this cancel", query_id));
+            LOG_WARNING(log, fmt::format("{} already in cancel process, skip cancel", query_id));
             return;
         }
         it->second->to_be_cancelled = true;
