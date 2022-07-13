@@ -738,6 +738,7 @@ UNARY_FUNCTION_IMPL_NORMAL(Exp2, exp2);
 #pragma pop_macro("UNARY_FUNCTION_IMPL")
 #pragma pop_macro("UNARY_FUNCTION_IMPL_NORMAL")
 
+/// vectorization of binary functions and nullable functions is currently not supported
 using FunctionRadians = FunctionMathUnaryFloat64<UnaryFunctionPlain<RadiansName, DB::degToRad>>;
 using FunctionDegrees = FunctionMathUnaryFloat64<UnaryFunctionPlain<DegreesName, DB::radToDeg>>;
 using FunctionSign = FunctionMathUnaryFloat64<UnaryFunctionPlain<SignName, DB::sign>>;
@@ -762,7 +763,6 @@ using FunctionErf = FunctionMathUnaryFloat64<ErfFunctionImpl>;
 using FunctionErfc = FunctionMathUnaryFloat64<ErfcFunctionImpl>;
 using FunctionLGamma = FunctionMathUnaryFloat64<UnaryFunctionPlain<LGammaName, std::lgamma>>;
 using FunctionTGamma = FunctionMathUnaryFloat64<UnaryFunctionPlain<TGammaName, std::tgamma>>;
-/// vectorization of binary functions are not currently supported
 using FunctionPow = FunctionMathBinaryFloat64<BinaryFunctionPlain<PowName, pow>>;
 
 } // namespace DB
