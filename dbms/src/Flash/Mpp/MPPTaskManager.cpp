@@ -146,15 +146,11 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     return true;
 }
 
-bool MPPTaskManager::isTaskToBeCancelled(const MPPTaskId & task_id)
+bool MPPTaskManager::isQueryToBeCancelled(UInt64 query_id)
 {
     std::unique_lock lock(mu);
-    auto it = mpp_query_map.find(task_id.start_ts);
-    if (it != mpp_query_map.end() && it->second->to_be_cancelled)
-    {
-        return it->second->task_map.find(task_id) != it->second->task_map.end();
-    }
-    return false;
+    auto it = mpp_query_map.find(query_id);
+    return it != mpp_query_map.end() && it->second->to_be_cancelled;
 }
 
 void MPPTaskManager::unregisterTask(MPPTask * task)
