@@ -3564,7 +3564,6 @@ class DeltaMergeStoreMergeDeltaBySegmentTest
 public:
     DeltaMergeStoreMergeDeltaBySegmentTest()
     {
-        log = &Poco::Logger::get(DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
         std::tie(ps_ver, pk_type) = GetParam();
     }
 
@@ -3607,8 +3606,6 @@ protected:
 
     UInt64 ps_ver;
     DMTestEnv::PkType pk_type;
-
-    [[maybe_unused]] Poco::Logger * log;
 };
 
 INSTANTIATE_TEST_CASE_P(
@@ -3760,6 +3757,55 @@ try
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
         helper->expected_delta_rows[1] = 0;
         helper->verifyExpectedRowsForAllSegments();
+    }
+}
+CATCH
+
+
+// Verify that unflushed data will also be compacted.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, Flush)
+try
+{
+    {
+        // Write data to first 3 segments and flush.
+        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+        helper->expected_delta_rows[0] += helper->rows_by_segments[0];
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+
+        auto segment1 = std::next(store->segments.begin())->second;
+        ASSERT_EQ(segment1->getDelta()->getUnsavedRows(), 0);
+    }
+    {
+        // Write new data to segment[1] without flush.
+        auto newly_written_rows = helper->rows_by_segments[1];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->verifyExpectedRowsForAllSegments();
+
+        auto segment1 = std::next(store->segments.begin())->second;
+        ASSERT_GT(segment1->getDelta()->getUnsavedRows(), 0);
+    }
+    {
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+
+        segment1 = std::next(store->segments.begin())->second;
+        ASSERT_EQ(*result, segment1->getRowKeyRange());
+
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+
+        ASSERT_EQ(segment1->getDelta()->getUnsavedRows(), 0);
     }
 }
 CATCH

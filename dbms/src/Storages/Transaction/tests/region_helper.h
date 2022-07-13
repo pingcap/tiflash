@@ -18,8 +18,10 @@
 
 #include <optional>
 
-using namespace DB;
-
+namespace DB
+{
+namespace tests
+{
 #define ASSERT_CHECK(cond, res)                                  \
     do                                                           \
     {                                                            \
@@ -37,7 +39,7 @@ using namespace DB;
 #define ASSERT_CHECK_EQUAL(a, b, res)                                         \
     do                                                                        \
     {                                                                         \
-        if (!(a == b))                                                        \
+        if (!((a) == (b)))                                                    \
         {                                                                     \
             std::cerr << __FILE__ << ":" << __LINE__ << ":"                   \
                       << " Assertion " << #a << " == " << #b << " failed.\n"; \
@@ -76,3 +78,16 @@ inline RegionMeta createRegionMeta(UInt64 id, DB::TableID table_id, std::optiona
                       /*region=*/createRegionInfo(id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300)),
                       /*apply_state_=*/apply_state.value_or(initialApplyState()));
 }
+
+inline RegionPtr makeRegion(UInt64 id, const std::string start_key, const std::string end_key, const TiFlashRaftProxyHelper * proxy_helper = nullptr)
+{
+    return std::make_shared<Region>(
+        RegionMeta(
+            createPeer(2, true),
+            createRegionInfo(id, std::move(start_key), std::move(end_key)),
+            initialApplyState()),
+        proxy_helper);
+}
+
+} // namespace tests
+} // namespace DB
