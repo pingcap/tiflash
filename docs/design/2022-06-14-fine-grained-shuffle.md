@@ -14,7 +14,6 @@
     * [Compatibility Tests](#compatibility-tests)
     * [Benchmark Tests](#benchmark-tests)
 * [Impacts & Risks](#impacts--risks)
-* [Investigation & Alternatives](#investigation--alternatives)
 * [Unresolved Questions](#unresolved-questions)
 
 ## Introduction
