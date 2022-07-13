@@ -27,6 +27,8 @@
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
+#include <Flash/Planner/plans/PhysicalWindow.h>
+#include <Flash/Planner/plans/PhysicalWindowSort.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 
@@ -80,6 +82,12 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
     case tipb::ExecType::TypeProjection:
         pushBack(PhysicalProjection::build(context, executor_id, log, executor->projection(), popBack()));
+        break;
+    case tipb::ExecType::TypeWindow:
+        pushBack(PhysicalWindow::build(context, executor_id, log, executor->window(), popBack()));
+        break;
+    case tipb::ExecType::TypeSort:
+        pushBack(PhysicalWindowSort::build(context, executor_id, log, executor->sort(), popBack()));
         break;
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
