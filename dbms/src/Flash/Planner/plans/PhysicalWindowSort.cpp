@@ -24,12 +24,12 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalWindowSort::build(
+PhysicalPlanNodePtr PhysicalWindowSort::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Sort & window_sort,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
 

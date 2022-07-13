@@ -23,18 +23,18 @@ namespace DB
 class PhysicalWindow : public PhysicalUnary
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Window & window,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     PhysicalWindow(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_,
+        const PhysicalPlanNodePtr & child_,
         const WindowDescription & window_description_)
         : PhysicalUnary(executor_id_, PlanType::Window, schema_, req_id, child_)
         , window_description(window_description_)

@@ -23,19 +23,21 @@ namespace DB
 class PhysicalWindowSort : public PhysicalUnary
 {
 public:
-    static PhysicalPlanPtr build(
+    static PhysicalPlanNodePtr build(
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Sort & window_sort,
-        const PhysicalPlanPtr & child);
+        const PhysicalPlanNodePtr & child);
 
     PhysicalWindowSort(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanPtr & child_)
+        const PhysicalPlanNodePtr & child_,
+        const SortDescription & order_descr_)
         : PhysicalUnary(executor_id_, PlanType::WindowSort, schema_, req_id, child_)
+        , order_descr(order_descr_)
     {}
 
     void finalize(const Names & parent_require) override;

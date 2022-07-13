@@ -25,12 +25,12 @@
 
 namespace DB
 {
-PhysicalPlanPtr PhysicalWindow::build(
+PhysicalPlanNodePtr PhysicalWindow::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Window & window,
-    const PhysicalPlanPtr & child)
+    const PhysicalPlanNodePtr & child)
 {
     assert(child);
     child->disableRestoreConcurrency();
