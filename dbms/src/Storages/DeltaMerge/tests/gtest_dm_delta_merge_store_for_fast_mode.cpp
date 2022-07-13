@@ -1504,7 +1504,7 @@ try
 
     store->mergeDeltaAll(*db_context);
 
-    // could do clean read with del optimization
+    // could do clean read with no optimization
     {
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(*db_context,
@@ -1551,11 +1551,12 @@ try
 
     store->mergeDeltaAll(*db_context);
 
-    // could do clean read with handle and del optimization
+    // could do clean read with handle optimization
     {
         const auto & columns = store->getTableColumns();
-        ColumnDefines real_columns ;
-        for (auto & col : columns){
+        ColumnDefines real_columns;
+        for (auto & coconst l : columns)
+        {
             if (col.name != EXTRA_HANDLE_COLUMN_NAME)
             {
                 real_columns.emplace_back(col);
@@ -1581,10 +1582,6 @@ try
 
         ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
     }
-
-    
-
-    
 }
 CATCH
 } // namespace tests

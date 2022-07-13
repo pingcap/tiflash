@@ -18,13 +18,11 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/DMContext.h>
-
-#include <unordered_set>
-#include "common/types.h"
-
 #include <common/logger_useful.h>
 
+#include <unordered_set>
+
+#include "common/types.h"
 
 
 namespace DB
@@ -70,21 +68,10 @@ public:
                 return {};
             if (!block.rows())
                 continue;
-            
-            /// if the pack is in clean read, it's del column return a const column, with size 1.
-            /// In this case, all the del_mark must be 0. Thus we don't need extra filter.
-            if (block.getByPosition(delete_col_pos).column->isColumnConst()) {
-                //std::cout << "del optimization" << std::endl;
-                ++total_blocks;
-                ++complete_passed;
-                total_rows += block.rows();
-                passed_rows += block.rows();
 
-                return getNewBlockByHeader(header, block);
-            }
 
             delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
-            
+
 
             size_t rows = block.rows();
             delete_filter.resize(rows);

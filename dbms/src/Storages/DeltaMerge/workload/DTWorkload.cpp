@@ -276,7 +276,7 @@ void DTWorkload::scanAll(ThreadStat & read_stat)
             const auto & columns = store->getTableColumns();
             ColumnDefines real_columns;
 
-            for (const auto& col : columns)
+            for (const auto & col : columns)
             {
                 if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
                 {

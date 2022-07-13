@@ -511,7 +511,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
     new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
-    
+
     if (filter_delete_mark)
     {
         new_columns_to_read->push_back(getTagColumnDefine());

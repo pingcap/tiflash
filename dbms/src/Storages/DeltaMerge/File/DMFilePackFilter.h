@@ -84,14 +84,6 @@ public:
         return minmax_index->getUInt64MinMax(pack_id).second;
     }
 
-    UInt64 getMaxDel(size_t pack_id)
-    {
-        if (!param.indexes.count(TAG_COLUMN_ID))
-            tryLoadIndex(TAG_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(TAG_COLUMN_ID)->second.minmax;
-        return minmax_index->getUInt64MinMax(pack_id).second;
-    }
-
     // Get valid rows and bytes after filter invalid packs by handle_range and filter
     std::pair<size_t, size_t> validRowsAndBytes()
     {
