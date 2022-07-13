@@ -534,7 +534,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     /// when the pack is under totally data_ranges and has rows whose del_mark = 1 --> we don't need read handle_column/version_column
     /// others --> we don't need read version_column
 
-    /// Actually, we first ignore whether we need to read tag_column, just deal it the same with handle column
+    /// Considering the del min max index has some problem now, we first only handle with handle column.
 
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,

@@ -1555,7 +1555,7 @@ try
     {
         const auto & columns = store->getTableColumns();
         ColumnDefines real_columns;
-        for (auto & coconst l : columns)
+        for (auto & col : columns)
         {
             if (col.name != EXTRA_HANDLE_COLUMN_NAME)
             {
