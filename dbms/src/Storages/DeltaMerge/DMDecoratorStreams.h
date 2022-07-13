@@ -24,7 +24,6 @@
 
 #include "common/types.h"
 
-
 namespace DB
 {
 namespace DM

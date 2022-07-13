@@ -178,6 +178,11 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
     table_name = vm["table_name"].as<std::string>();
     is_fast_mode = vm["is_fast_mode"].as<bool>();
 
+    if (is_fast_mode && verification)
+    {
+        return {false, fmt::format("When in_fast_mode, we should set verification as false")};
+    }
+
     return {true, toString()};
 }
 
