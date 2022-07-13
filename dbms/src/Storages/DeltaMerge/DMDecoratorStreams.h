@@ -18,10 +18,9 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <common/logger_useful.h>
 
 #include <unordered_set>
-
-#include "common/logger_useful.h"
 
 
 namespace DB
