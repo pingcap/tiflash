@@ -16,6 +16,7 @@
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -48,8 +49,6 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
         throw TiFlashException(
             fmt::format("Can not find exchange receiver for {}", executor_id),
             Errors::Planner::Internal);
-    /// todo support fine grained shuffle
-    assert(!enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount()));
 
     NamesAndTypes schema = toNamesAndTypes(mpp_exchange_receiver->getOutputSchema());
     auto physical_exchange_receiver = std::make_shared<PhysicalExchangeReceiver>(
@@ -66,12 +65,25 @@ void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & c
     auto & dag_context = *context.getDAGContext();
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dag_context.getInBoundIOInputStreamsMap()[executor_id];
-    for (size_t i = 0; i < max_streams; ++i)
+
+    const bool enable_fine_grained_shuffle = enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
+    String extra_info = "squashing after exchange receiver";
+    size_t stream_count = max_streams;
+    if (enable_fine_grained_shuffle)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(mpp_exchange_receiver, log->identifier(), executor_id, /*stream_id=*/0);
+        extra_info += ", " + enableFineGrainedShuffleExtraInfo;
+        stream_count = std::min(max_streams, mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
+    }
+
+    for (size_t i = 0; i < stream_count; ++i)
+    {
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(mpp_exchange_receiver,
+                                                                                   log->identifier(),
+                                                                                   execId(),
+                                                                                   /*stream_id=*/enable_fine_grained_shuffle ? i : 0);
         exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
-        stream->setExtraInfo("squashing after exchange receiver");
+        stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
 }

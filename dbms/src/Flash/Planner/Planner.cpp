@@ -87,17 +87,11 @@ BlockInputStreams Planner::execute()
 
 bool Planner::isSupported(const DAGQueryBlock & query_block)
 {
-    /// todo support fine grained shuffle
-    static auto disable_fine_frained_shuffle = [](const DAGQueryBlock & query_block) {
-        return !enableFineGrainedShuffle(query_block.source->fine_grained_shuffle_stream_count())
-            && (!query_block.exchange_sender || !enableFineGrainedShuffle(query_block.exchange_sender->fine_grained_shuffle_stream_count()));
-    };
     return query_block.source
         && (query_block.source->tp() == tipb::ExecType::TypeProjection
             || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
             || query_block.source->tp() == tipb::ExecType::TypeWindow
-            || (query_block.source->tp() == tipb::ExecType::TypeSort && query_block.source->sort().ispartialsort()))
-        && disable_fine_frained_shuffle(query_block);
+            || (query_block.source->tp() == tipb::ExecType::TypeSort && query_block.source->sort().ispartialsort()));
 }
 
 DAGContext & Planner::dagContext() const

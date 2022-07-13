@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/SortDescription.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Planner/plans/PhysicalUnary.h>
 #include <tipb/executor.pb.h>
 
@@ -28,6 +29,7 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Sort & window_sort,
+        const FineGrainedShuffle & fine_grained_shuffle,
         const PhysicalPlanNodePtr & child);
 
     PhysicalWindowSort(
@@ -35,9 +37,11 @@ public:
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        const SortDescription & order_descr_)
+        const SortDescription & order_descr_,
+        const FineGrainedShuffle & fine_grained_shuffle_)
         : PhysicalUnary(executor_id_, PlanType::WindowSort, schema_, req_id, child_)
         , order_descr(order_descr_)
+        , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -49,5 +53,6 @@ private:
 
 private:
     SortDescription order_descr;
+    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Planner/plans/PhysicalUnary.h>
 #include <Interpreters/WindowDescription.h>
 #include <tipb/executor.pb.h>
@@ -28,6 +29,7 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Window & window,
+        const FineGrainedShuffle & fine_grained_shuffle,
         const PhysicalPlanNodePtr & child);
 
     PhysicalWindow(
@@ -35,9 +37,11 @@ public:
         const NamesAndTypes & schema_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        const WindowDescription & window_description_)
+        const WindowDescription & window_description_,
+        const FineGrainedShuffle & fine_grained_shuffle_)
         : PhysicalUnary(executor_id_, PlanType::Window, schema_, req_id, child_)
         , window_description(window_description_)
+        , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -49,5 +53,6 @@ private:
 
 private:
     WindowDescription window_description;
+    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

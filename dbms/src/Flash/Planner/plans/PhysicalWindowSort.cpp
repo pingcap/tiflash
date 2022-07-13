@@ -29,6 +29,7 @@ PhysicalPlanNodePtr PhysicalWindowSort::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Sort & window_sort,
+    const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
     assert(child);
@@ -44,7 +45,8 @@ PhysicalPlanNodePtr PhysicalWindowSort::build(
         child->getSchema(),
         log->identifier(),
         child,
-        order_descr);
+        order_descr,
+        fine_grained_shuffle);
     return physical_window_sort;
 }
 
@@ -52,8 +54,7 @@ void PhysicalWindowSort::transformImpl(DAGPipeline & pipeline, Context & context
 {
     child->transform(pipeline, context, max_streams);
 
-    // todo enable_fine_grained_shuffle
-    orderStreams(pipeline, max_streams, order_descr, 0, false, context, log);
+    orderStreams(pipeline, max_streams, order_descr, 0, fine_grained_shuffle.enable(), context, log);
 }
 
 void PhysicalWindowSort::finalize(const Names & parent_require)
