@@ -103,10 +103,17 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         fmt_buf.fmtAppend("{} ", it->first.toString());
         auto current_task = it->second;
         it = task_set->task_map.erase(it);
-        thread_manager->schedule(false, "CancelMPPTask", [task_ptr = std::move(current_task), &reason] { task_ptr->cancel(reason); });
+        thread_manager->schedule(false, "CancelMPPTask", [task = std::move(current_task), &reason] { task->cancel(reason); });
     }
     LOG_WARNING(log, fmt_buf.toString());
     thread_manager->wait();
+    {
+        std::lock_guard lock(mu);
+        auto it = mpp_query_map.find(query_id);
+        /// just to double check the query still exists
+        if (it != mpp_query_map.end())
+            mpp_query_map.erase(it);
+    }
     LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
 }
 
