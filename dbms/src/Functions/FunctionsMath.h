@@ -716,8 +716,8 @@ UNARY_FUNCTION_IMPL(Acos, acos);
 UNARY_FUNCTION_IMPL(Atan, atan);
 UNARY_FUNCTION_IMPL(Erf, erf);
 UNARY_FUNCTION_IMPL(Erfc, erfc);
-UNARY_FUNCTION_IMPL_NORMAL(Exp, exp);
-UNARY_FUNCTION_IMPL_NORMAL(Exp2, exp2);
+UNARY_FUNCTION_IMPL_NORMAL(Exp, exp); // vectorization is possible but not faster
+UNARY_FUNCTION_IMPL_NORMAL(Exp2, exp2); // vectorization is possible but not faster
 #else
 UNARY_FUNCTION_IMPL_NORMAL(Log, log);
 UNARY_FUNCTION_IMPL_NORMAL(Log2, log2);
