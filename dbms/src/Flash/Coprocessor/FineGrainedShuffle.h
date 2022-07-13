@@ -42,4 +42,4 @@ struct FineGrainedShuffle
     const UInt64 stream_count;
     const UInt64 batch_size;
 };
-}
+} // namespace DB

@@ -36,6 +36,11 @@ public:
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                                      toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+        context.addExchangeReceiver("exchange2",
+                                    {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
+                                    {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+                                     toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
     }
 
     void execute(
@@ -69,7 +74,7 @@ public:
             ASSERT_EQ(Poco::trim(expected_streams), Poco::trim(fb.toString()));
         }
 
-        ASSERT_COLUMNS_EQ_R(readBlock(final_stream), expect_columns);
+        ASSERT_COLUMNS_EQ_R(expect_columns, readBlock(final_stream));
     }
 
     LoggerPtr log = Logger::get("PhysicalPlanTestRunner", "test_physical_plan");
@@ -218,6 +223,56 @@ try
 MockExchangeReceiver)",
         {toNullableVec<String>({"banana", {}, "banana"}),
          toNullableVec<String>({"apple", {}, "banana"})});
+}
+CATCH
+
+TEST_F(PhysicalPlanTestRunner, WindowFunction)
+try
+{
+    auto get_request = [&](bool enable_fine_grained_shuffle) {
+        static const uint64_t enable = 8;
+        static const uint64_t disable = 0;
+        bool fine_grained_shuffle_stream_count = enable_fine_grained_shuffle ? enable : disable;
+        return context
+            .receive("exchange2", fine_grained_shuffle_stream_count)
+            .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true, fine_grained_shuffle_stream_count)
+            .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame(), fine_grained_shuffle_stream_count)
+            .build(context);
+    };
+
+    auto request = get_request(false);
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Window, window_2> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>, <CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+ <WindowSort, sort_1> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>)",
+        /*expected_streams=*/R"(
+Expression: <cast after window>
+ Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+  MergeSorting, limit = 0
+   PartialSorting: limit = 0
+    MockExchangeReceiver)",
+        {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+         toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
+
+    request = get_request(true);
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Window, window_2> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>, <CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+ <WindowSort, sort_1> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>)",
+        /*expected_streams=*/R"(
+Expression: <cast after window>
+ Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
+  MergeSorting: <enable fine grained shuffle>, limit = 0
+   PartialSorting: <enable fine grained shuffle>: limit = 0
+    MockExchangeReceiver)",
+        {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+         toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
 }
 CATCH
 

@@ -625,8 +625,6 @@ Union: <for test>
 }
 CATCH
 
-/// todo support FineGrainedShuffle
-/*
 TEST_F(PlannerInterpreterExecuteTest, FineGrainedShuffle)
 try
 {
@@ -659,8 +657,8 @@ Union: <for test>
                             .build(context);
     String topn_expected = R"(
 Union: <for test>
- SharedQuery x 10: <restore concurrency>
-  Expression: <final projection>
+ Expression x 10: <final projection>
+  SharedQuery: <restore concurrency>
    MergeSorting, limit = 10
     Union: <for partial order>
      PartialSorting x 10: limit = 10
@@ -698,7 +696,6 @@ Union: <for test>
     ASSERT_BLOCKINPUTSTREAM_EQAUL(topn_expected, topn_request, 10);
 }
 CATCH
-*/
 
 TEST_F(PlannerInterpreterExecuteTest, Join)
 try

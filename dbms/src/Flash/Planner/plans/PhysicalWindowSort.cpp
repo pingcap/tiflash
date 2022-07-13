@@ -47,6 +47,8 @@ PhysicalPlanNodePtr PhysicalWindowSort::build(
         child,
         order_descr,
         fine_grained_shuffle);
+    // TODO remove this line after DAGQueryBlock removed.
+    physical_window_sort->disableRestoreConcurrency();
     return physical_window_sort;
 }
 
