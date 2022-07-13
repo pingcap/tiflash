@@ -88,6 +88,7 @@ public:
         const ColumnsWithTypeAndName & source_columns,
         SourceType type = TableScan,
         size_t concurrency = 1);
+
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;

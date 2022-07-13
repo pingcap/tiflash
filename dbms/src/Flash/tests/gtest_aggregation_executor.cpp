@@ -66,7 +66,17 @@ public:
     const String table_name{"clerk"};
     const std::vector<String> col_name{"age", "gender", "country", "salary"};
     ColumnWithNullableInt32 col_age{30, {}, 27, 32, 25, 36, {}, 22, 34};
-    ColumnWithNullableString col_gender{"male", "female", "female", "male", "female", "female", "male", "female", "male", };
+    ColumnWithNullableString col_gender{
+        "male",
+        "female",
+        "female",
+        "male",
+        "female",
+        "female",
+        "male",
+        "female",
+        "male",
+    };
     ColumnWithNullableString col_country{"russia", "korea", "usa", "usa", "usa", "china", "china", "china", "china"};
     ColumnWithNullableInt32 col_salary{1000, 1300, 0, {}, -200, 900, -999, 2000, -300};
 };
@@ -85,8 +95,7 @@ try
     /// Prepare some data for max function test
     std::vector<ColumnsWithTypeAndName> expect_cols{
         {toNullableVec<Int32>("max(age)", ColumnWithNullableInt32{36, 32, 30, {}})},
-        {toNullableVec<Int32>("max(salary)", ColumnWithNullableInt32{2000, 1300, 1000, 0, -300, {}})}
-    };
+        {toNullableVec<Int32>("max(salary)", ColumnWithNullableInt32{2000, 1300, 1000, 0, -300, {}})}};
     std::vector<MockAstVec> group_by_exprs{{group_by_expr0}, {group_by_expr10, group_by_expr11}};
     std::vector<MockColumnNameVec> projections{{"max(age)"}, {"max(salary)"}};
     std::vector<MockOrderByItemVec> order_by_items{{MockOrderByItem("max(age)", true)}, {MockOrderByItem("max(salary)", true)}};
@@ -107,8 +116,7 @@ try
 
     expect_cols = {
         {toNullableVec<Int32>("min(age)", ColumnWithNullableInt32{30, 25, 22, {}})},
-        {toNullableVec<Int32>("min(salary)", ColumnWithNullableInt32{1300, 1000, 900, -200, -999, {}})}
-    };
+        {toNullableVec<Int32>("min(salary)", ColumnWithNullableInt32{1300, 1000, 900, -200, -999, {}})}};
     projections = {{"min(age)"}, {"min(salary)"}};
     order_by_items = {{MockOrderByItem("min(age)", true)}, {MockOrderByItem("min(salary)", true)}};
     agg_funcs = {{agg_func0}, {agg_func1}};
@@ -136,10 +144,9 @@ try
     auto group_by_expr10 = col(col_name[2]);
     auto group_by_expr11 = col(col_name[1]);
 
-    std::vector<ColumnsWithTypeAndName> expect_cols {
+    std::vector<ColumnsWithTypeAndName> expect_cols{
         {toVec<UInt64>("count(age)", ColumnWithUInt64{3, 3, 1, 0})},
-        {toVec<UInt64>("count(gender)", ColumnWithUInt64{2, 2, 2, 1, 1, 1})}
-    };
+        {toVec<UInt64>("count(gender)", ColumnWithUInt64{2, 2, 2, 1, 1, 1})}};
     std::vector<MockAstVec> group_by_exprs{{group_by_expr0}, {group_by_expr10, group_by_expr11}};
     std::vector<MockColumnNameVec> projections{{"count(age)"}, {"count(gender)"}};
     std::vector<MockOrderByItemVec> order_by_items{{MockOrderByItem("count(age)", true)}, {MockOrderByItem("count(gender)", true)}};
