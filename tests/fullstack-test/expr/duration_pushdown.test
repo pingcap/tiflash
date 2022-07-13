@@ -106,6 +106,14 @@ mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflas
 # |         123500 |
 # +----------------+
 
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select time_to_sec(a) from t;
++----------------+
+| time_to_sec(a) |
++----------------+
+|        2520610 |
+|       -2520610 |
++----------------+
+
 
 mysql> drop table if exists test.time_test;
 mysql> create table test.time_test(id int(11),v1 time(3) not null, v2 time(3));

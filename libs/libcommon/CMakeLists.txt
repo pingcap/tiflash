@@ -198,3 +198,7 @@ if (ARCH_AMD64)
             src/crc64_sse2_asimd.cpp
             APPEND COMPILE_FLAGS "-mpclmul")
 endif()
+
+if (ARCH_AARCH64 AND ARCH_LINUX)
+    target_link_libraries (common PUBLIC tiflash-aarch64-string tiflash-aarch64-math)
+endif()

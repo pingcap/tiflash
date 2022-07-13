@@ -15,18 +15,19 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Common/FmtUtils.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TestUtils/executorSerializer.h>
 #include <TestUtils/mockExecutor.h>
+#include <WindowFunctions/registerWindowFunctions.h>
+
 namespace DB::tests
 {
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
+
+::testing::AssertionResult check_columns_equality(const ColumnsWithTypeAndName & expected, const ColumnsWithTypeAndName & actual, bool _restrict);
+
 class ExecutorTest : public ::testing::Test
 {
 protected:
@@ -52,39 +53,41 @@ public:
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
-    void executeStreams(
+    enum SourceType
+    {
+        TableScan,
+        ExchangeReceiver
+    };
+
+    // for single source query, the source executor name is ${type}_0
+    static String getSourceName(SourceType type)
+    {
+        switch (type)
+        {
+        case TableScan:
+            return "table_scan_0";
+        case ExchangeReceiver:
+            return "exchange_receiver_0";
+        default:
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                            "Unknown Executor Source type {}",
+                            type);
+        }
+    }
+
+    ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
-        const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
-    void executeStreams(
+    ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
-    template <typename T>
-    ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
-    {
-        return createColumn<Nullable<T>>(v);
-    }
-
-    template <typename T>
-    ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
-    {
-        return createColumn<T>(v);
-    }
-
-    template <typename T>
-    ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
-    {
-        return createColumn<Nullable<T>>(v, name);
-    }
-
-    template <typename T>
-    ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
-    {
-        return createColumn<T>(v, name);
-    }
+    ColumnsWithTypeAndName executeStreamsWithSingleSource(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        const ColumnsWithTypeAndName & source_columns,
+        SourceType type = TableScan,
+        size_t concurrency = 1);
 
 protected:
     MockDAGRequestContext context;

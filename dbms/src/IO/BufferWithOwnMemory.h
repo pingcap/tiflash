@@ -21,14 +21,6 @@
 
 #include <boost/noncopyable.hpp>
 
-
-namespace ProfileEvents
-{
-extern const Event IOBufferAllocs;
-extern const Event IOBufferAllocBytes;
-} // namespace ProfileEvents
-
-
 namespace DB
 {
 /** Replacement for std::vector<char> to use in buffers.
@@ -118,9 +110,6 @@ private:
             m_data = nullptr;
             return;
         }
-
-        ProfileEvents::increment(ProfileEvents::IOBufferAllocs);
-        ProfileEvents::increment(ProfileEvents::IOBufferAllocBytes, m_capacity);
 
         size_t new_capacity = align(m_capacity, alignment);
         m_data = static_cast<char *>(Allocator::alloc(new_capacity, alignment));
