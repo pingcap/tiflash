@@ -86,4 +86,55 @@ mysql> alter table test.t add partition (partition p2 values less than (2010));
 └────────────────────────────────────────────┘
 
 
+## test correctness in simple case
+mysql> drop table if exists test.t
+mysql> create table test.t (a int, b int)
+mysql> alter table test.t set tiflash mode fast
+mysql> alter table test.t set tiflash replica 1
 
+func> wait_table test t
+
+mysql> insert into test.t values(1,2);
+mysql> insert into test.t values(2,4);
+mysql> insert into test.t values(5,7);
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    1 |    2|
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+mysql> delete from test.t where a = 1;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    1 |    2|
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+mysql> alter table test.t set tiflash mode normal;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+mysql> alter table test.t set tiflash mode fast;
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    1 |    2|
+|    2 |    4|
+|    5 |    7|
++------+-----+
