@@ -217,15 +217,5 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTopNTestRunner, T)
-try
-{
-    auto request = context.scan(db_name, table_name).aggregation({Max(col(col_name[3]))}, {col(col_name[1]), col(col_name[2])}).build(context);
-    std::vector<ColumnsWithTypeAndName> expect_cols{{toNullableVec<Int32>(col_name[0], ColumnWithInt32{1300})}};
-
-    executeStreams(request, expect_cols[0]);
-}
-CATCH
-
 } // namespace tests
 } // namespace DB
