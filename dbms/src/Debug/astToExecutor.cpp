@@ -170,6 +170,7 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"cast_decimal_datetime", tipb::ScalarFuncSig::CastDecimalAsTime},
     {"cast_time_datetime", tipb::ScalarFuncSig::CastTimeAsTime},
     {"cast_string_datetime", tipb::ScalarFuncSig::CastStringAsTime},
+    {"concat", tipb::ScalarFuncSig::Concat},
     {"round_int", tipb::ScalarFuncSig::RoundInt},
     {"round_uint", tipb::ScalarFuncSig::RoundInt},
     {"round_dec", tipb::ScalarFuncSig::RoundDec},
@@ -458,6 +459,14 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
         expr->set_sig(it_sig->second);
         auto * ft = expr->mutable_field_type();
         ft->set_tp(TiDB::TypeDouble);
+        ft->set_collate(collator_id);
+        break;
+    }
+    case tipb::ScalarFuncSig::Concat:
+    {
+        expr->set_sig(it_sig->second);
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(TiDB::TypeString);
         ft->set_collate(collator_id);
         break;
     }
@@ -851,6 +860,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t c
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
     tipb_executor->set_executor_id(name);
+    tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
     for (auto & field : output_schema)
     {
@@ -1354,6 +1364,7 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
 {
     tipb_executor->set_tp(tipb::ExecType::TypeWindow);
     tipb_executor->set_executor_id(name);
+    tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::Window * window = tipb_executor->mutable_window();
     auto & input_schema = children[0]->output_schema;
     for (const auto & expr : func_descs)
@@ -1430,6 +1441,7 @@ bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
 {
     tipb_executor->set_tp(tipb::ExecType::TypeSort);
     tipb_executor->set_executor_id(name);
+    tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::Sort * sort = tipb_executor->mutable_sort();
     sort->set_ispartialsort(is_partial_sort);
 
@@ -1545,7 +1557,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
             }
-            else if (func->name == "max" || func->name == "min" || func->name == "first_row")
+            else if (func->name == "max" || func->name == "min" || func->name == "first_row" || func->name == "sum")
             {
                 ci = children_ci[0];
                 ci.flag &= ~TiDB::ColumnFlagNotNull;
@@ -1629,7 +1641,6 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
             }
         }
     }
-
     auto project = std::make_shared<mock::Project>(executor_index, output_schema, std::move(exprs));
     project->children.push_back(input);
     return project;
@@ -1666,13 +1677,13 @@ ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, ti
     return exchange_sender;
 }
 
-ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
+ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count)
 {
-    ExecutorPtr exchange_receiver = std::make_shared<mock::ExchangeReceiver>(executor_index, schema);
+    ExecutorPtr exchange_receiver = std::make_shared<mock::ExchangeReceiver>(executor_index, schema, fine_grained_shuffle_stream_count);
     return exchange_receiver;
 }
 
-ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame)
+ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
 {
     std::vector<ASTPtr> partition_columns;
     if (partition_by_expr_list != nullptr)
@@ -1740,12 +1751,13 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
         window_exprs,
         std::move(partition_columns),
         std::move(order_columns),
-        frame);
+        frame,
+        fine_grained_shuffle_stream_count);
     window->children.push_back(input);
     return window;
 }
 
-ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort)
+ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count)
 {
     std::vector<ASTPtr> order_columns;
     if (order_by_expr_list != nullptr)
@@ -1759,7 +1771,7 @@ ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order
             compileExpr(input->output_schema, elem->children[0]);
         }
     }
-    ExecutorPtr sort = std::make_shared<mock::Sort>(executor_index, input->output_schema, std::move(order_columns), is_partial_sort);
+    ExecutorPtr sort = std::make_shared<mock::Sort>(executor_index, input->output_schema, std::move(order_columns), is_partial_sort, fine_grained_shuffle_stream_count);
     sort->children.push_back(input);
     return sort;
 }

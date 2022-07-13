@@ -39,6 +39,11 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
 
+    // initialize background & blockable background thread pool
+    Settings & settings = global_context->getSettingsRef();
+    global_context->initializeBackgroundPool(settings.background_pool_size);
+    global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
+
     // Theses global variables should be initialized by the following order
     // 1. capacity
     // 2. path pool

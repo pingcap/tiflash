@@ -73,6 +73,8 @@ public:
 
     void unregisterTask(MPPTask * task);
 
+    bool isTaskToBeCancelled(const MPPTaskId & task_id);
+
     bool tryToScheduleTask(const MPPTaskPtr & task);
 
     void releaseThreadsFromScheduler(const int needed_threads);

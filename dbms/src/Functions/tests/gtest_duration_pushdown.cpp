@@ -166,5 +166,85 @@ try
     ASSERT_COLUMN_EQ(microSecond_out, executeFunction("microSecond", input4));
 }
 CATCH
+
+TEST_F(DurationPushDown, timeToSecPushDownTest)
+try
+{
+    ColumnWithTypeAndName input(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(838 * 3600 + 59 * 60 + 59) * 1000000000L + 999999000L,
+                                                               -(838 * 3600 + 59 * 60 + 59) * 1000000000L - 123456000L,
+                                                               0,
+                                                               (1 * 3600 + 2 * 60 + 3) * 1000000000L + 4000L})
+            .column,
+        makeNullable(std::make_shared<DataTypeMyDuration>(6)),
+        "input");
+    auto second_output = createColumn<Nullable<Int64>>({3020399, -3020399, 0, 3723});
+    ASSERT_COLUMN_EQ(second_output, executeFunction("tidbTimeToSec", input));
+
+    // Test Overflow
+    ColumnWithTypeAndName input2(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(838 * 3600 + 59 * 60 + 59) * 1000000000L + 999999000L + 1000L}).column,
+        makeNullable(std::make_shared<DataTypeMyDuration>(6)),
+        "result");
+    try
+    {
+        auto result = executeFunction("tidbTimeToSec", input2);
+        FAIL() << "Expected overflow";
+    }
+    catch (DB::Exception & e)
+    {
+        ASSERT_EQ(e.message(), std::string("nanos must >= -3020399999999000 and <= 3020399999999000"));
+    }
+    catch (...)
+    {
+        FAIL() << "Expected overflow";
+    };
+
+    ColumnWithTypeAndName input3(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({-(838 * 3600 + 59 * 60 + 59) * 1000000000L - 999999000L - 1000L}).column,
+        makeNullable(std::make_shared<DataTypeMyDuration>(6)),
+        "result");
+    try
+    {
+        auto result = executeFunction("tidbTimeToSec", input3);
+        FAIL() << "Expected overflow";
+    }
+    catch (DB::Exception & e)
+    {
+        ASSERT_EQ(e.message(), std::string("nanos must >= -3020399999999000 and <= 3020399999999000"));
+    }
+    catch (...)
+    {
+        FAIL() << "Expected overflow";
+    };
+
+    // Random Test
+    constexpr int rowNum = 1000;
+    auto dur_column = ColumnVector<Int64>::create();
+    auto & dur_data = dur_column->getData();
+    auto second_column = ColumnVector<Int64>::create();
+    auto & second_data = second_column->getData();
+    dur_data.resize(rowNum);
+    second_data.resize(rowNum);
+
+    std::random_device rd;
+    std::default_random_engine gen = std::default_random_engine(rd());
+    std::uniform_int_distribution<int> sign_dis(0, 1), hour_dis(0, 838), minute_dis(0, 59), second_dis(0, 59), microSecond_dis(0, 999999);
+    for (int i = 0; i < rowNum; ++i)
+    {
+        auto sign = (sign_dis(gen) == 0) ? 1 : -1;
+        auto hour = hour_dis(gen);
+        auto minute = minute_dis(gen);
+        auto second = second_dis(gen);
+        auto microSecond = microSecond_dis(gen);
+        dur_data[i] = sign * ((hour * 3600 + minute * 60 + second) * 1000000000L + microSecond * 1000L);
+        second_data[i] = sign * (hour * 3600 + minute * 60 + second);
+    }
+
+    ColumnWithTypeAndName input4(std::move(dur_column), std::make_shared<DataTypeMyDuration>(6), "duration");
+    ColumnWithTypeAndName second_out(std::move(second_column), std::make_shared<DataTypeInt64>(), "time_to_sec");
+    ASSERT_COLUMN_EQ(second_out, executeFunction("tidbTimeToSec", input4));
+}
+CATCH
 } // namespace tests
 } // namespace DB

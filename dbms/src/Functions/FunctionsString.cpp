@@ -4621,7 +4621,9 @@ public:
             using NumberFieldType = typename NumberType::FieldType;
             using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
             const auto * number_raw = block.getByPosition(arguments[0]).column.get();
+
             TiDBDecimalRoundInfo info{number_type, number_type};
+            info.output_prec = info.output_prec < 65 ? info.output_prec + 1 : 65;
 
             return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
@@ -4771,10 +4773,11 @@ private:
     static void format(
         T number,
         size_t max_num_decimals,
-        const TiDBDecimalRoundInfo & info,
+        TiDBDecimalRoundInfo & info,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
+        info.output_scale = std::min(max_num_decimals, static_cast<size_t>(info.input_scale));
         auto round_number = round(number, max_num_decimals, info);
         std::string round_number_str = number2Str(round_number, info);
         std::string buffer = Format::apply(round_number_str, max_num_decimals);
