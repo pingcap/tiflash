@@ -762,6 +762,7 @@ using FunctionErf = FunctionMathUnaryFloat64<ErfFunctionImpl>;
 using FunctionErfc = FunctionMathUnaryFloat64<ErfcFunctionImpl>;
 using FunctionLGamma = FunctionMathUnaryFloat64<UnaryFunctionPlain<LGammaName, std::lgamma>>;
 using FunctionTGamma = FunctionMathUnaryFloat64<UnaryFunctionPlain<TGammaName, std::tgamma>>;
+/// vectorization of binary functions are not currently supported
 using FunctionPow = FunctionMathBinaryFloat64<BinaryFunctionPlain<PowName, pow>>;
 
 } // namespace DB
