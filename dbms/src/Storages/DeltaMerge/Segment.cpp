@@ -517,12 +517,16 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         new_columns_to_read->push_back(getTagColumnDefine());
     }
 
+    bool enable_clean_read = filter_delete_mark;
+
     for (const auto & c : columns_to_read)
     {
         if (c.id != EXTRA_HANDLE_COLUMN_ID)
         {
             if (!(filter_delete_mark && c.id == TAG_COLUMN_ID))
                 new_columns_to_read->push_back(c);
+        } else {
+            enable_clean_read = false;
         }
     }
 
@@ -543,7 +547,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
-        /* enable_clean_read */ filter_delete_mark,
+        /* enable_clean_read */ enable_clean_read,
         /* is_raw_read */ filter_delete_mark);
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);

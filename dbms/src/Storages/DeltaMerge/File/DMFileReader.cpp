@@ -345,7 +345,7 @@ Block DMFileReader::read()
     bool do_clean_read_on_normal_mode = enable_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_raw_read);
 
     // when is in fast mode and all pack's max del index is 0, then we don't need to read del column
-    bool do_clean_read_on_handle = is_raw_read && expected_handle_res == All;
+    bool do_clean_read_on_handle = enable_clean_read && is_raw_read && expected_handle_res == All;
 
     if (do_clean_read_on_normal_mode)
     {
