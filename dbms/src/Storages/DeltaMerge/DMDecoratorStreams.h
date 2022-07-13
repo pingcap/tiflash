@@ -55,7 +55,6 @@ public:
                       passed_rows * 100.0 / total_rows,
                       complete_passed * 100.0 / total_blocks,
                       complete_not_passed * 100.0 / total_blocks);
-        std::cout << "Total rows: " << total_rows << ", pass: " << passed_rows * 100.0 / total_rows << ", complete pass: " << complete_passed * 100.0 / total_blocks << "complete not pass: " << complete_not_passed * 100.0 / total_blocks << std::endl;
     }
 
     String getName() const override { return "DMColumnFilter"; }
@@ -71,52 +70,49 @@ public:
                 return {};
             if (!block.rows())
                 continue;
+            
+            /// if the pack is in clean read, it's del column return a const column, with size 1.
+            /// In this case, all the del_mark must be 0. Thus we don't need extra filter.
+            if (block.getByPosition(delete_col_pos).column->isColumnConst()) {
+                //std::cout << "del optimization" << std::endl;
+                ++total_blocks;
+                ++complete_passed;
+                total_rows += block.rows();
+                passed_rows += block.rows();
 
-            std::cout << "block.dumpStructure()" << block.dumpStructure() << std::endl;
+                return getNewBlockByHeader(header, block);
+            }
 
-            delete_col_data = toColumnVectorDataPtr<UInt8>(block.getByName(TAG_COLUMN_NAME).column);
-            //delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
+            delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
             
 
             size_t rows = block.rows();
             delete_filter.resize(rows);
 
-            // const size_t batch_rows = (rows - 1) / UNROLL_BATCH * UNROLL_BATCH;
+            const size_t batch_rows = (rows - 1) / UNROLL_BATCH * UNROLL_BATCH;
 
-            // // The following is trying to unroll the filtering operations,
-            // // so that optimizer could use vectorized optimization.
-            // // The original logic can be seen in #checkWithNextIndex().
-            // {
-            //     UInt8 * filter_pos = delete_filter.data();
-            //     auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
-            //     for (size_t i = 0; i < batch_rows; ++i)
-            //     {
-            //         (*filter_pos) = (*delete_pos) == 0;
+            // The following is trying to unroll the filtering operations,
+            // so that optimizer could use vectorized optimization.
+            // The original logic can be seen in #checkWithNextIndex().
+            {
+                UInt8 * filter_pos = delete_filter.data();
+                auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*filter_pos) = (*delete_pos) == 0;
 
-            //         //std::cout << "(*filter_pos) is " <<  (*filter_pos) << " (*delete_pos) is " << (*delete_pos) << std::endl;
-            //         ++filter_pos;
-            //         ++delete_pos;
-            //     }
-            // }
+                    ++filter_pos;
+                    ++delete_pos;
+                }
+            }
 
             for (size_t i = 0; i < rows; ++i)
             {
-                if ((*delete_col_data)[i] == 0) {
-                    delete_filter[i] = 1;
-                } else {
-                    delete_filter[i] = 0;
-                    std::cout << " (*delete_col_data)[i] is not 0 " << (*delete_col_data)[i] << std::endl;
-                }
-                //delete_filter[i] = ((*delete_col_data)[i] == 0);
+                delete_filter[i] = ((*delete_col_data)[i] == 0);
             }
 
             const size_t passed_count = countBytesInFilter(delete_filter);
 
-            if (passed_count != rows){
-                for (size_t index = 0; index < delete_col_data->size(); index++){
-                    std::cout << "index is " << index << " (*delete_col_data)[index] is " << (*delete_col_data)[index] << " delete_filter[index] is " << delete_filter[index] << " passed_count is " << passed_count << " rows is " << rows << " " << delete_col_data->size() << std::endl;
-                }
-            }
             ++total_blocks;
             total_rows += rows;
             passed_rows += passed_count;

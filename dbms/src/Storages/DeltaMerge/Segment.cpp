@@ -510,8 +510,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     /// But this way seems not to be robustness enough, maybe we need another flag?
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
-    bool enable_clean_read = true;
-
     new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
     
     if (filter_delete_mark)
@@ -525,10 +523,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         {
             if (!(filter_delete_mark && c.id == TAG_COLUMN_ID))
                 new_columns_to_read->push_back(c);
-        }
-        else
-        {
-            enable_clean_read = false;
         }
     }
 
@@ -549,8 +543,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
-        enable_clean_read,
-        true);
+        /* enable_clean_read */ filter_delete_mark,
+        /* is_raw_read */ filter_delete_mark);
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 
@@ -1480,7 +1474,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext & dm_conte
 {
     if (unlikely(rowkey_ranges.empty()))
         throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
-        
+
     SkippableBlockInputStreamPtr stable_input_stream
         = stable_snap->getInputStream(dm_context, read_columns, rowkey_ranges, filter, max_version, expected_block_size, false);
     RowKeyRange rowkey_range = rowkey_ranges.size() == 1 ? rowkey_ranges[0] : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
