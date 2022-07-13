@@ -93,7 +93,7 @@ public:
                 }
             }
 
-            for (size_t i = 0; i < rows; ++i)
+            for (size_t i = batch_rows; i < rows; ++i)
             {
                 delete_filter[i] = ((*delete_col_data)[i] == 0);
             }
