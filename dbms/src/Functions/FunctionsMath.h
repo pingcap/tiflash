@@ -669,7 +669,7 @@ struct PowName
 #pragma push_macro("UNARY_FUNCTION_IMPL")
 #pragma push_macro("UNARY_FUNCTION_IMPL_NORMAL")
 #define UNARY_FUNCTION_IMPL(X, FUNC)                                                \
-    struct X##FunctionImpl : public MathFunctionVectorizationTag                      \
+    struct X##FunctionImpl : public MathFunctionVectorizationTag                    \
     {                                                                               \
         static constexpr auto name = X##Name::name;                                 \
         static constexpr auto rows_per_iteration = 1;                               \

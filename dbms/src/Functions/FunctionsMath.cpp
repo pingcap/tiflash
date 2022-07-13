@@ -61,7 +61,7 @@ void enableVectorization()
 {
     UnaryMath::enableVectorizationImpl();
 }
-} // namespace UnaryMath
+} // namespace MathVectorization
 #endif
 
 } // namespace DB
