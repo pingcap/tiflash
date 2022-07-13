@@ -11,29 +11,59 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
+namespace
+{
+TiDB::ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
+{
+    TiDB::ColumnInfo tidb_column_info;
+    tidb_column_info.tp = static_cast<TiDB::TP>(tipb_column_info.tp());
+    tidb_column_info.id = tipb_column_info.column_id();
+    tidb_column_info.flag = tipb_column_info.flag();
+    tidb_column_info.flen = tipb_column_info.columnlen();
+    tidb_column_info.decimal = tipb_column_info.decimal();
+    for (int i = 0; i < tipb_column_info.elems_size(); ++i)
+        tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);
+    return tidb_column_info;
+}
+
+DataTypePtr getPkType(const ColumnInfo & column_info)
+{
+    const auto & pk_data_type = getDataTypeByColumnInfoForComputingLayer(column_info);
+    /// primary key type must be tidb_pk_column_int_type or tidb_pk_column_string_type.
+    if (unlikely(!pk_data_type->equals(*MutableSupport::tidb_pk_column_int_type) && !pk_data_type->equals(*MutableSupport::tidb_pk_column_string_type)))
+        throw Exception(
+            fmt::format(
+                "Actual pk_data_type {} is not {} or {}",
+                pk_data_type->getName(),
+                MutableSupport::tidb_pk_column_int_type->getName(),
+                MutableSupport::tidb_pk_column_string_type->getName()),
+            ErrorCodes::LOGICAL_ERROR);
+    return pk_data_type;
+}
+} // namespace
+
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix)
 {
     NamesAndTypes names_and_types;
     names_and_types.reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
-        TiDB::ColumnInfo column_info;
-        const auto & ci = table_scan.getColumns()[i];
-        column_info.tp = static_cast<TiDB::TP>(ci.tp());
-        column_info.id = ci.column_id();
-
+        auto column_info = toTiDBColumnInfo(table_scan.getColumns()[i]);
         switch (column_info.id)
         {
         case TiDBPkColumnID:
-            // TODO: need to check if the type of pk_handle_columns matches the type that used in delta merge tree.
-            names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, getDataTypeByColumnInfoForComputingLayer(column_info));
+        {
+            names_and_types.emplace_back(MutableSupport::tidb_pk_column_name, getPkType(column_info));
             break;
+        }
         case ExtraTableIDColumnID:
             names_and_types.emplace_back(MutableSupport::extra_table_id_column_name, MutableSupport::extra_table_id_column_type);
             break;
