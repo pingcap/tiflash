@@ -95,7 +95,9 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     return dag_request_ptr;
 }
 
-void collectUsedColumns(ExecutorPtr executor)
+// Currently Sort and Window Executors don't support columnPrune.
+// TODO: support columnPrume for Sort and Window.
+void columnPrune(ExecutorPtr executor)
 {
     std::unordered_set<String> used_columns;
     for (auto & schema : executor->output_schema)
@@ -103,9 +105,12 @@ void collectUsedColumns(ExecutorPtr executor)
     executor->columnPrune(used_columns);
 }
 
+
+// Split a DAGRequest into multiple QueryTasks which can be dispatched to multiple Compute nodes.
+// Currently we don't support window functions.
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context)
 {
-    collectUsedColumns(root);
+    columnPrune(root);
     // enable mpp
     properties.is_mpp_query = true;
     auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
