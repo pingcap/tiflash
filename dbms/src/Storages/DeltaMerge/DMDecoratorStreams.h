@@ -27,12 +27,11 @@ namespace DB
 {
 namespace DM
 {
-
-static constexpr size_t UNROLL_BATCH = 64;
-
 /// DMDeleteFilterBlockInputStream is used to filter the column and filter out the rows whose del_mark is true
 class DMDeleteFilterBlockInputStream : public IBlockInputStream
 {
+    static constexpr size_t UNROLL_BATCH = 64;
+
 public:
     DMDeleteFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_, const String & tracing_id = "")
         : columns_to_read(columns_to_read_)

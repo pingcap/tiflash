@@ -34,7 +34,7 @@ namespace DM
 {
 
 
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, 
+extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
@@ -178,6 +178,6 @@ protected:
 
     constexpr static const char * TRACING_NAME = "DeltaMergeStoreRWTest";
 };
-}
-}
-}
+} // namespace tests
+} // namespace DM
+} // namespace DB
