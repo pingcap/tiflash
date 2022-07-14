@@ -53,12 +53,12 @@ struct EmptyImpl
     }
 
     /// Only make sense if is_fixed_to_constant.
-    static void vector_fixed_to_constant(const ColumnString::Chars_t & /*data*/, size_t /*n*/, UInt8 & /*res*/)
+    static void vectorFixedToConstant(const ColumnString::Chars_t & /*data*/, size_t /*n*/, UInt8 & /*res*/)
     {
-        throw Exception("Logical error: 'vector_fixed_to_constant method' is called", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Logical error: 'vectorFixedToConstant method' is called", ErrorCodes::LOGICAL_ERROR);
     }
 
-    static void vector_fixed_to_vector(const ColumnString::Chars_t & data, size_t n, PaddedPODArray<UInt8> & res)
+    static void vectorFixedToVector(const ColumnString::Chars_t & data, size_t n, PaddedPODArray<UInt8> & res)
     {
         std::vector<char> empty_chars(n);
         size_t size = data.size() / n;
@@ -93,12 +93,12 @@ struct LengthImpl
             res[i] = i == 0 ? (offsets[i] - 1) : (offsets[i] - 1 - offsets[i - 1]);
     }
 
-    static void vector_fixed_to_constant(const ColumnString::Chars_t & /*data*/, size_t n, UInt64 & res)
+    static void vectorFixedToConstant(const ColumnString::Chars_t & /*data*/, size_t n, UInt64 & res)
     {
         res = n;
     }
 
-    static void vector_fixed_to_vector(const ColumnString::Chars_t & /*data*/, size_t /*n*/, PaddedPODArray<UInt64> & /*res*/)
+    static void vectorFixedToVector(const ColumnString::Chars_t & /*data*/, size_t /*n*/, PaddedPODArray<UInt64> & /*res*/)
     {
     }
 
@@ -132,11 +132,11 @@ struct LengthUTF8Impl
         }
     }
 
-    static void vector_fixed_to_constant(const ColumnString::Chars_t & /*data*/, size_t /*n*/, UInt64 & /*res*/)
+    static void vectorFixedToConstant(const ColumnString::Chars_t & /*data*/, size_t /*n*/, UInt64 & /*res*/)
     {
     }
 
-    static void vector_fixed_to_vector(const ColumnString::Chars_t & data, size_t n, PaddedPODArray<UInt64> & res)
+    static void vectorFixedToVector(const ColumnString::Chars_t & data, size_t n, PaddedPODArray<UInt64> & res)
     {
         size_t size = data.size() / n;
 
@@ -210,7 +210,7 @@ struct LowerUpperImpl
         array(data.data(), data.data() + data.size(), res_data.data());
     }
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t /*n*/, ColumnString::Chars_t & res_data)
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t /*n*/, ColumnString::Chars_t & res_data)
     {
         res_data.resize(data.size());
         array(data.data(), data.data() + data.size(), res_data.data());
@@ -247,7 +247,7 @@ struct ReverseImpl
         }
     }
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data)
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data)
     {
         res_data.resize(data.size());
         size_t size = data.size() / n;
@@ -307,7 +307,7 @@ struct ReverseUTF8Impl
         }
     }
 
-    static void vector_fixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
+    static void vectorFixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
     {
         throw Exception("Cannot apply function reverseUTF8 to fixed string.", ErrorCodes::ILLEGAL_COLUMN);
     }
@@ -333,7 +333,7 @@ template <char not_case_lower_bound,
           char not_case_upper_bound,
           int to_case(int),
           void cyrillic_to_case(const UInt8 *&, UInt8 *&)>
-void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::vector_fixed(
+void LowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case, cyrillic_to_case>::vectorFixed(
     const ColumnString::Chars_t & data,
     size_t /*n*/,
     ColumnString::Chars_t & res_data)
@@ -615,7 +615,7 @@ void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>
 template <char not_case_lower_bound,
           char not_case_upper_bound,
           int to_case(int)>
-void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vector_fixed(
+void TiDBLowerUpperUTF8Impl<not_case_lower_bound, not_case_upper_bound, to_case>::vectorFixed(
     const ColumnString::Chars_t & data,
     size_t /*n*/,
     ColumnString::Chars_t & res_data)
@@ -813,7 +813,7 @@ struct RightUTF8Impl
                 else
                     current += 1;
             }
-            if (start_offsets.size() == 0)
+            if (start_offsets.empty())
             {
                 // null
                 res_data.resize(res_data.size() + 1);
@@ -889,7 +889,7 @@ public:
             if (Impl::is_fixed_to_constant)
             {
                 ResultType res = 0;
-                Impl::vector_fixed_to_constant(col->getChars(), col->getN(), res);
+                Impl::vectorFixedToConstant(col->getChars(), col->getN(), res);
 
                 block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col->size(), toField(res));
             }
@@ -899,7 +899,7 @@ public:
 
                 typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
                 vec_res.resize(col->size());
-                Impl::vector_fixed_to_vector(col->getChars(), col->getN(), vec_res);
+                Impl::vectorFixedToVector(col->getChars(), col->getN(), vec_res);
 
                 block.getByPosition(result).column = std::move(col_res);
             }
@@ -972,7 +972,7 @@ public:
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column.get()))
         {
             auto col_res = ColumnFixedString::create(col->getN());
-            ReverseImpl::vector_fixed(col->getChars(), col->getN(), col_res->getChars());
+            ReverseImpl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
         }
         else if (checkColumn<ColumnArray>(column.get()))
@@ -1043,7 +1043,7 @@ class ConcatImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    ConcatImpl(const Context & context)
+    explicit ConcatImpl(const Context & context)
         : context(context)
     {}
     static FunctionPtr create(const Context & context)
@@ -1085,7 +1085,7 @@ public:
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = arguments[arg_idx].get();
+            const auto * const arg = arguments[arg_idx].get();
             if (!arg->isStringOrFixedString())
                 throw Exception{
                     "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
@@ -1167,7 +1167,7 @@ private:
 
 public:
     static constexpr auto name = NameTiDBConcat::name;
-    FunctionTiDBConcat(const Context & context)
+    explicit FunctionTiDBConcat(const Context & context)
         : context(context)
     {}
     static FunctionPtr create(const Context & context)
@@ -1184,7 +1184,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() < 1)
+        if (arguments.empty())
             throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size())
                                 + ", should be at least 1.",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -1539,7 +1539,7 @@ public:
             UInt64 u_start = start_field.get<UInt64>();
             if (u_start >= 0x8000000000000000ULL)
                 throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-            start = (Int64)u_start;
+            start = static_cast<Int64>(u_start);
         }
 
         bool implicit_length = true;
@@ -1658,7 +1658,7 @@ public:
             UInt64 u_start = length_field.get<UInt64>();
             if (u_start >= 0x8000000000000000ULL)
                 throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-            length = (Int64)u_start;
+            length = static_cast<Int64>(u_start);
         }
 
         if (length <= 0)
@@ -1733,7 +1733,7 @@ private:
         if (trailing_char_str.size() != 1)
             throw Exception{"Second argument of function " + getName() + " must be a one-character string", ErrorCodes::BAD_ARGUMENTS};
 
-        if (const auto col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * const col = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_res = ColumnString::create();
 
@@ -1757,7 +1757,7 @@ private:
                 src_offset = src_offsets[i];
                 dst_offset += src_length;
 
-                if (src_length > 1 && dst_data[dst_offset - 2] != trailing_char_str.front())
+                if (src_length > 1 && dst_data[dst_offset - 2] != static_cast<unsigned char>(trailing_char_str.front()))
                 {
                     dst_data[dst_offset - 1] = trailing_char_str.front();
                     dst_data[dst_offset] = 0;
@@ -1783,7 +1783,7 @@ class TrimImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit TrimImpl() {}
+    explicit TrimImpl() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<TrimImpl>();
@@ -1810,7 +1810,7 @@ public:
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = arguments[arg_idx].get();
+            const auto * const arg = arguments[arg_idx].get();
             if (!arg->isStringOrFixedString())
                 throw Exception{
                     "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function " + getName(),
@@ -1884,7 +1884,7 @@ class TrimUTF8Impl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit TrimUTF8Impl() {}
+    explicit TrimUTF8Impl() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<TrimUTF8Impl>();
@@ -1912,7 +1912,7 @@ public:
 
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = arguments[arg_idx].get();
+            const auto * const arg = arguments[arg_idx].get();
             if (!arg->isStringOrFixedString())
                 throw Exception{
                     "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function "
@@ -1949,7 +1949,7 @@ private:
             vector(c0_string->getChars(), c0_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (c0_const_string)
         {
-            auto c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
+            const auto * c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
             vector(c0_c_string->getChars(), c0_c_string->getOffsets(), c0_const_string->size(), c_res->getChars(), c_res->getOffsets());
         }
         else
@@ -1966,7 +1966,7 @@ private:
         const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
         const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
         const ColumnConst * c1_const_string = checkAndGetColumnConst<ColumnString>(c1);
-        auto column_trim_string = checkAndGetColumn<ColumnString>(c1_const_string->getDataColumnPtr().get());
+        const auto * column_trim_string = checkAndGetColumn<ColumnString>(c1_const_string->getDataColumnPtr().get());
 
         auto c_res = ColumnString::create();
 
@@ -1974,7 +1974,7 @@ private:
             vectorWS(c0_string->getChars(), c0_string->getOffsets(), column_trim_string->getChars(), column_trim_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (c0_const_string)
         {
-            auto c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
+            const auto * c0_c_string = checkAndGetColumn<ColumnString>(c0_const_string->getDataColumnPtr().get());
             vectorWS(c0_c_string->getChars(), c0_c_string->getOffsets(), c0_const_string->size(), column_trim_string->getChars(), column_trim_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         }
         else
@@ -2415,7 +2415,7 @@ public:
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
-            const auto arg = arguments[arg_idx].get();
+            const auto * const arg = arguments[arg_idx].get();
             if (arg_idx < 2 && !arg->isString())
                 throw Exception{
                     "Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function "
@@ -2461,7 +2461,7 @@ private:
         const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
         static const std::string default_rem = " ";
-        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)default_rem.c_str(), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
+        vectorConst(ltrim, rtrim, data_col->getChars(), data_col->getOffsets(), reinterpret_cast<const UInt8 *>(default_rem.c_str()), default_rem.size() + 1, res_col->getChars(), res_col->getOffsets());
 
         block.getByPosition(result).column = std::move(res_col);
     }
@@ -2482,7 +2482,7 @@ private:
             const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
 
             std::string data = data_col->getValue<String>();
-            constVector(is_ltrim, is_rtrim, (UInt8 *)data.c_str(), data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
+            constVector(is_ltrim, is_rtrim, reinterpret_cast<const UInt8 *>(data.c_str()), data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
         }
         else if (remstr_const && !data_const)
         {
@@ -2490,7 +2490,7 @@ private:
             const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
             std::string remstr = remstr_col->getValue<String>();
-            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), (UInt8 *)remstr.c_str(), remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
+            vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), reinterpret_cast<const UInt8 *>(remstr.c_str()), remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
         }
         else
         {
@@ -2542,7 +2542,7 @@ private:
     {
         const UInt8 * left = data_begin;
         const UInt8 * right = data_begin + data_size - 1;
-        const long remstr_real_size = remstr_size - 1;
+        const Int64 remstr_real_size = remstr_size - 1;
 
         if (remstr_real_size > 0 && is_ltrim)
         {
@@ -2576,7 +2576,7 @@ private:
         bool is_rtrim,
         const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        UInt8 * remstr,
+        const UInt8 * remstr,
         size_t remstr_size,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
@@ -2599,7 +2599,7 @@ private:
     static void constVector(
         bool is_ltrim,
         bool is_rtrim,
-        UInt8 * data,
+        const UInt8 * data,
         size_t data_size,
         const ColumnString::Chars_t & remstr,
         const ColumnString::Offsets & remstr_offsets,
@@ -2660,7 +2660,7 @@ private:
     }
 };
 
-class tidbPadImpl
+class TidbPadImpl
 {
 public:
     template <typename IntType, bool IsUTF8, bool IsLeft>
@@ -2773,19 +2773,19 @@ public:
 
             if (is_padding_const && is_length_const)
             {
-                const_const<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                constConst<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (is_padding_const && !is_length_const)
             {
-                const_const<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                constConst<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (!is_padding_const && is_length_const)
             {
-                const_column<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                constColumn<IntType, IsUTF8, IsLeft, true>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (!is_padding_const && !is_length_const)
             {
-                const_column<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                constColumn<IntType, IsUTF8, IsLeft, false>(str_val, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
         }
         else
@@ -2796,26 +2796,26 @@ public:
 
             if (is_padding_const && is_length_const)
             {
-                column_const<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                columnConst<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (is_padding_const && !is_length_const)
             {
-                column_const<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
+                columnConst<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding, padding_size, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (!is_padding_const && is_length_const)
             {
-                column_column<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                columnColumn<IntType, IsUTF8, IsLeft, true>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
             else if (!is_padding_const && !is_length_const)
             {
-                column_column<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
+                columnColumn<IntType, IsUTF8, IsLeft, false>(string_data, string_offsets, column_length, target_len, padding_data, padding_offsets, vec_result_null_map, size, result_data, result_offsets);
             }
         }
         block.getByPosition(result).column = ColumnNullable::create(std::move(column_result), std::move(result_null_map));
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void column_column(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void columnColumn(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
         ColumnString::Offset string_prev_offset = 0;
         ColumnString::Offset padding_prev_offset = 0;
@@ -2853,7 +2853,7 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void column_const(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void columnConst(const ColumnString::Chars_t & string_data, const ColumnString::Offsets & string_offsets, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
         ColumnString::Offset string_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
@@ -2889,7 +2889,7 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void const_column(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void constColumn(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const ColumnString::Chars_t * padding_data, const ColumnString::Offsets * padding_offsets, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
         ColumnString::Offset padding_prev_offset = 0;
         ColumnString::Offset res_prev_offset = 0;
@@ -2925,7 +2925,7 @@ public:
     }
 
     template <typename IntType, bool IsUTF8, bool IsLeft, bool IsLengthConst>
-    static void const_const(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
+    static void constConst(const String & str_val, const ColumnVector<IntType> * column_length [[maybe_unused]], IntType target_len, const UInt8 * padding, size_t padding_size, ColumnUInt8::Container & vec_result_null_map, size_t size, ColumnString::Chars_t & result_data, ColumnString::Offsets & result_offsets)
     {
         ColumnString::Offset res_prev_offset = 0;
 
@@ -3107,7 +3107,7 @@ class PadImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit PadImpl() {}
+    explicit PadImpl() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<PadImpl>();
@@ -3209,28 +3209,28 @@ private:
         switch (type_index)
         {
         case TypeIndex::UInt8:
-            tidbPadImpl::tidbExecutePadImpl<UInt8, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt8, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt16:
-            tidbPadImpl::tidbExecutePadImpl<UInt16, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt16, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt32:
-            tidbPadImpl::tidbExecutePadImpl<UInt32, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt32, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt64:
-            tidbPadImpl::tidbExecutePadImpl<UInt64, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt64, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int8:
-            tidbPadImpl::tidbExecutePadImpl<Int8, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int8, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int16:
-            tidbPadImpl::tidbExecutePadImpl<Int16, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int16, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int32:
-            tidbPadImpl::tidbExecutePadImpl<Int32, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int32, false, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int64:
-            tidbPadImpl::tidbExecutePadImpl<Int64, false, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int64, false, is_left>(block, arguments, result, getName());
             break;
         default:
             throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -3243,7 +3243,7 @@ class PadUTF8Impl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit PadUTF8Impl() {}
+    explicit PadUTF8Impl() = default;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<PadUTF8Impl>();
@@ -3308,7 +3308,7 @@ private:
         }
 
         auto c_res = ColumnString::create();
-        auto column_padding_string = checkAndGetColumn<ColumnString>(column_padding_const->getDataColumnPtr().get());
+        const auto * column_padding_string = checkAndGetColumn<ColumnString>(column_padding_const->getDataColumnPtr().get());
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
             vector(col->getChars(), col->getOffsets(), length_value, column_padding_string->getChars(), column_padding_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_string.get()))
@@ -3316,26 +3316,26 @@ private:
         else if (const ColumnConst * col = checkAndGetColumnConst<ColumnString>(column_string.get()))
         {
             const auto * col_string = checkAndGetColumn<ColumnString>(col->getDataColumnPtr().get());
-            vector_const(col_string->getChars(),
-                         col_string->getOffsets(),
-                         col->size(),
-                         length_value,
-                         column_padding_string->getChars(),
-                         column_padding_string->getOffsets(),
-                         c_res->getChars(),
-                         c_res->getOffsets());
+            vectorConst(col_string->getChars(),
+                        col_string->getOffsets(),
+                        col->size(),
+                        length_value,
+                        column_padding_string->getChars(),
+                        column_padding_string->getOffsets(),
+                        c_res->getChars(),
+                        c_res->getOffsets());
         }
         else if (const ColumnConst * col = checkAndGetColumnConst<ColumnFixedString>(column_string.get()))
         {
             const auto * col_string = checkAndGetColumn<ColumnFixedString>(col->getDataColumnPtr().get());
-            vector_const(col_string->getChars(),
-                         col_string->getN(),
-                         col->size(),
-                         length_value,
-                         column_padding_string->getChars(),
-                         column_padding_string->getOffsets(),
-                         c_res->getChars(),
-                         c_res->getOffsets());
+            vectorConst(col_string->getChars(),
+                        col_string->getN(),
+                        col->size(),
+                        length_value,
+                        column_padding_string->getChars(),
+                        column_padding_string->getOffsets(),
+                        c_res->getChars(),
+                        c_res->getOffsets());
         }
 
         block.getByPosition(result).column = std::move(c_res);
@@ -3576,14 +3576,14 @@ private:
         }
     }
 
-    static void vector_const(const ColumnString::Chars_t & data,
-                             const ColumnString::Offsets & offsets,
-                             size_t size, /// number of rows of const column
-                             size_t length,
-                             const ColumnString::Chars_t & pad_data,
-                             const ColumnString::Offsets & pad_offsets,
-                             ColumnString::Chars_t & res_data,
-                             ColumnString::Offsets & res_offsets)
+    static void vectorConst(const ColumnString::Chars_t & data,
+                            const ColumnString::Offsets & offsets,
+                            size_t size, /// number of rows of const column
+                            size_t length,
+                            const ColumnString::Chars_t & pad_data,
+                            const ColumnString::Offsets & pad_offsets,
+                            ColumnString::Chars_t & res_data,
+                            ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(3 * length * size);
         res_offsets.resize(size);
@@ -3689,14 +3689,14 @@ private:
         }
     }
 
-    static void vector_const(const ColumnString::Chars_t & data,
-                             size_t, /// length of fixed colomn
-                             size_t size, /// number of row
-                             size_t length,
-                             const ColumnString::Chars_t & pad_data,
-                             const ColumnString::Offsets & pad_offsets,
-                             ColumnString::Chars_t & res_data,
-                             ColumnString::Offsets & res_offsets)
+    static void vectorConst(const ColumnString::Chars_t & data,
+                            size_t, /// length of fixed colomn
+                            size_t size, /// number of row
+                            size_t length,
+                            const ColumnString::Chars_t & pad_data,
+                            const ColumnString::Offsets & pad_offsets,
+                            ColumnString::Chars_t & res_data,
+                            ColumnString::Offsets & res_offsets)
     {
         res_data.reserve(3 * length * size);
         res_offsets.resize(size);
@@ -3813,28 +3813,28 @@ private:
         switch (type_index)
         {
         case TypeIndex::UInt8:
-            tidbPadImpl::tidbExecutePadImpl<UInt8, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt8, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt16:
-            tidbPadImpl::tidbExecutePadImpl<UInt16, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt16, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt32:
-            tidbPadImpl::tidbExecutePadImpl<UInt32, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt32, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::UInt64:
-            tidbPadImpl::tidbExecutePadImpl<UInt64, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<UInt64, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int8:
-            tidbPadImpl::tidbExecutePadImpl<Int8, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int8, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int16:
-            tidbPadImpl::tidbExecutePadImpl<Int16, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int16, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int32:
-            tidbPadImpl::tidbExecutePadImpl<Int32, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int32, true, is_left>(block, arguments, result, getName());
             break;
         case TypeIndex::Int64:
-            tidbPadImpl::tidbExecutePadImpl<Int64, true, is_left>(block, arguments, result, getName());
+            TidbPadImpl::tidbExecutePadImpl<Int64, true, is_left>(block, arguments, result, getName());
             break;
         default:
             throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -3846,7 +3846,7 @@ class FunctionASCII : public IFunction
 {
 public:
     static constexpr auto name = "ascii";
-    FunctionASCII(const Context & context)
+    explicit FunctionASCII(const Context & context)
         : context(context)
     {}
 
@@ -3886,7 +3886,7 @@ public:
         {
             c0_col->get(i, res_field);
             String handled_str = res_field.get<String>();
-            Int64 res = handled_str.size() == 0 ? 0 : static_cast<Int64>(handled_str[0]);
+            Int64 res = handled_str.empty() ? 0 : static_cast<Int64>(handled_str[0]);
             col_res->insert(res);
         }
 
@@ -3901,7 +3901,7 @@ class FunctionLength : public IFunction
 {
 public:
     static constexpr auto name = "length";
-    FunctionLength(const Context & context)
+    explicit FunctionLength(const Context & context)
         : context(context)
     {}
 
@@ -3955,7 +3955,7 @@ class FunctionPosition : public IFunction
 {
 public:
     static constexpr auto name = "position";
-    FunctionPosition(const Context & context)
+    explicit FunctionPosition(const Context & context)
         : context(context)
     {}
 
@@ -4018,12 +4018,12 @@ public:
     }
 
 private:
-    Int64 getPositionUTF8(const String & c1_str, Int64 idx) const
+    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
     {
         if (idx == -1)
             return 0;
 
-        auto data = reinterpret_cast<const UInt8 *>(c1_str.data());
+        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
         return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
 
@@ -4350,7 +4350,9 @@ public:
             using NumberFieldType = typename NumberType::FieldType;
             using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
             const auto * number_raw = block.getByPosition(arguments[0]).column.get();
+
             TiDBDecimalRoundInfo info{number_type, number_type};
+            info.output_prec = info.output_prec < 65 ? info.output_prec + 1 : 65;
 
             return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
@@ -4500,10 +4502,11 @@ private:
     static void format(
         T number,
         size_t max_num_decimals,
-        const TiDBDecimalRoundInfo & info,
+        TiDBDecimalRoundInfo & info,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
+        info.output_scale = std::min(max_num_decimals, static_cast<size_t>(info.input_scale));
         auto round_number = round(number, max_num_decimals, info);
         std::string round_number_str = number2Str(round_number, info);
         std::string buffer = Format::apply(round_number_str, max_num_decimals);
