@@ -25,9 +25,12 @@ class ExecutorAggTestRunner : public DB::tests::ExecutorTest
 public:
     using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
     using ColInt32NullableType = std::optional<typename TypeTraits<Int32>::FieldType>;
+    using ColFloat64NullableType = std::optional<typename TypeTraits<Float64>::FieldType>;
     using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
+
     using ColumnWithNullableString = std::vector<ColStringNullableType>;
     using ColumnWithNullableInt32 = std::vector<ColInt32NullableType>;
+    using ColumnWithNullableFloat64 = std::vector<ColFloat64NullableType>;
     using ColumnWithUInt64 = std::vector<ColUInt64Type>;
 
     void initializeContext() override
@@ -38,24 +41,24 @@ public:
                              {{col_name[0], TiDB::TP::TypeLong},
                               {col_name[1], TiDB::TP::TypeString},
                               {col_name[2], TiDB::TP::TypeString},
-                              {col_name[3], TiDB::TP::TypeLong}},
+                              {col_name[3], TiDB::TP::TypeDouble}},
                              {toNullableVec<Int32>(col_name[0], col_age),
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
-                              toNullableVec<Int32>(col_name[3], col_salary)});
+                              toNullableVec<Float64>(col_name[3], col_salary)});
     }
 
-    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(MockAstVec agg_funcs, MockAstVec group_by_exprs, MockOrderByItemVec order_by_items, MockColumnNameVec proj)
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(MockAstVec agg_funcs, MockAstVec group_by_exprs, MockColumnNameVec proj)
     {
         /// We can filter the group by column with project operator.
-        /// topN is applied to get stable results in concurrency environment.
-        return context.scan(db_name, table_name).aggregation(agg_funcs, group_by_exprs).topN(order_by_items, 100).project(proj).build(context);
+        /// project is applied to get single column for comparison
+        return context.scan(db_name, table_name).aggregation(agg_funcs, group_by_exprs).project(proj).build(context);
     }
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
-        for (size_t i = 1; i < max_concurrency; i += step)
-            ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request, i));
+        for (size_t i = 1; i <= max_concurrency; i += step)
+            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
     }
 
     size_t max_concurrency = 10;
@@ -78,7 +81,7 @@ public:
         "male",
     };
     ColumnWithNullableString col_country{"russia", "korea", "usa", "usa", "usa", "china", "china", "china", "china"};
-    ColumnWithNullableInt32 col_salary{1000, 1300, 0, {}, -200, 900, -999, 2000, -300};
+    ColumnWithNullableFloat64 col_salary{1000.1, 1300.2, 0.3, {}, -200.4, 900.5, -999.6, 2000.7, -300.8};
 };
 
 TEST_F(ExecutorAggTestRunner, AggregationMaxAndMin)
@@ -95,17 +98,16 @@ try
     /// Prepare some data for max function test
     std::vector<ColumnsWithTypeAndName> expect_cols{
         {toNullableVec<Int32>("max(age)", ColumnWithNullableInt32{36, 32, 30, {}})},
-        {toNullableVec<Int32>("max(salary)", ColumnWithNullableInt32{2000, 1300, 1000, 0, -300, {}})}};
+        {toNullableVec<Float64>("max(salary)", ColumnWithNullableFloat64{2000.7, 1300.2, 1000.1, 0.3, -300.8, {}})}};
     std::vector<MockAstVec> group_by_exprs{{group_by_expr0}, {group_by_expr10, group_by_expr11}};
     std::vector<MockColumnNameVec> projections{{"max(age)"}, {"max(salary)"}};
-    std::vector<MockOrderByItemVec> order_by_items{{MockOrderByItem("max(age)", true)}, {MockOrderByItem("max(salary)", true)}};
     std::vector<MockAstVec> agg_funcs{{agg_func0}, {agg_func1}};
     size_t test_num = expect_cols.size();
 
     /// Start to test max function
     for (size_t i = 0; i < test_num; ++i)
     {
-        request = buildDAGRequest(agg_funcs[i], group_by_exprs[i], order_by_items[i], projections[i]);
+        request = buildDAGRequest(agg_funcs[i], group_by_exprs[i], projections[i]);
         executeWithConcurrency(request, expect_cols[i]);
     }
 
@@ -116,16 +118,15 @@ try
 
     expect_cols = {
         {toNullableVec<Int32>("min(age)", ColumnWithNullableInt32{30, 25, 22, {}})},
-        {toNullableVec<Int32>("min(salary)", ColumnWithNullableInt32{1300, 1000, 900, -200, -999, {}})}};
+        {toNullableVec<Float64>("min(salary)", ColumnWithNullableFloat64{1300.2, 1000.1, 900.5, -200.4, -999.6, {}})}};
     projections = {{"min(age)"}, {"min(salary)"}};
-    order_by_items = {{MockOrderByItem("min(age)", true)}, {MockOrderByItem("min(salary)", true)}};
     agg_funcs = {{agg_func0}, {agg_func1}};
     test_num = expect_cols.size();
 
     /// Start to test min function
     for (size_t i = 0; i < test_num; ++i)
     {
-        request = buildDAGRequest(agg_funcs[i], group_by_exprs[i], order_by_items[i], projections[i]);
+        request = buildDAGRequest(agg_funcs[i], group_by_exprs[i], projections[i]);
         executeWithConcurrency(request, expect_cols[i]);
     }
 }
@@ -149,13 +150,12 @@ try
         {toVec<UInt64>("count(gender)", ColumnWithUInt64{2, 2, 2, 1, 1, 1})}};
     std::vector<MockAstVec> group_by_exprs{{group_by_expr0}, {group_by_expr10, group_by_expr11}};
     std::vector<MockColumnNameVec> projections{{"count(age)"}, {"count(gender)"}};
-    std::vector<MockOrderByItemVec> order_by_items{{MockOrderByItem("count(age)", true)}, {MockOrderByItem("count(gender)", true)}};
     size_t test_num = expect_cols.size();
 
     /// Start to test
     for (size_t i = 0; i < test_num; ++i)
     {
-        request = buildDAGRequest({agg_funcs[i]}, group_by_exprs[i], order_by_items[i], projections[i]);
+        request = buildDAGRequest({agg_funcs[i]}, group_by_exprs[i], projections[i]);
         executeWithConcurrency(request, expect_cols[i]);
     }
 }
