@@ -364,9 +364,7 @@ public:
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
-    // When dump snapshot, we first load edit record from underlying wal files, and call gcInMemEntries to remove obsolete entries.
-    // But there may be some upsert entry in later wal files which are not included in the snapshot.
-    // So if the last valid var entry is deleted for some page, we need to keep them and its delete entry to reclaim possible future upsert entry.
+    // When dump snapshot, we need to keep the last valid entry. Check out `tryDumpSnapshot` for the reason.
     PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
 
     std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
