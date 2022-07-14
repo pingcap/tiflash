@@ -47,29 +47,46 @@ MockFixedRowsBlockInputStream::MockFixedRowsBlockInputStream(size_t total_rows_,
     , blocks(blocks_)
 {}
 
-Block makeBlock(int row_num)
+Block makeBlock(int row_num, bool skew)
 {
-    std::mt19937 mt(rd());
-    std::uniform_int_distribution<Int64> int64_dist;
-    std::uniform_int_distribution<int> len_dist(10, 20);
-    std::uniform_int_distribution<char> char_dist;
-
     InferredDataVector<Nullable<Int64>> int64_vec;
     InferredDataVector<Nullable<Int64>> int64_vec2;
-    for (int i = 0; i < row_num; ++i)
-    {
-        int64_vec.emplace_back(int64_dist(mt));
-        int64_vec2.emplace_back(int64_dist(mt));
-    }
-
     InferredDataVector<Nullable<String>> string_vec;
-    for (int i = 0; i < row_num; ++i)
+
+    if (skew)
     {
-        int len = len_dist(mt);
-        String s;
-        for (int j = 0; j < len; ++j)
-            s.push_back(char_dist(mt));
-        string_vec.push_back(std::move(s));
+        for (int i = 0; i < row_num; ++i)
+        {
+            int64_vec.emplace_back(100);
+            int64_vec2.emplace_back(100);
+        }
+
+        for (int i = 0; i < row_num; ++i)
+        {
+            string_vec.push_back("abcdefg");
+        }
+    }
+    else
+    {
+        std::mt19937 mt(rd());
+        std::uniform_int_distribution<Int64> int64_dist;
+        std::uniform_int_distribution<int> len_dist(10, 20);
+        std::uniform_int_distribution<char> char_dist;
+
+        for (int i = 0; i < row_num; ++i)
+        {
+            int64_vec.emplace_back(int64_dist(mt));
+            int64_vec2.emplace_back(int64_dist(mt));
+        }
+
+        for (int i = 0; i < row_num; ++i)
+        {
+            int len = len_dist(mt);
+            String s;
+            for (int j = 0; j < len; ++j)
+                s.push_back(char_dist(mt));
+            string_vec.push_back(std::move(s));
+        }
     }
 
     auto int64_data_type = makeDataType<Nullable<Int64>>();
@@ -82,11 +99,11 @@ Block makeBlock(int row_num)
     return Block({int64_column, string_column, int64_column2});
 }
 
-std::vector<Block> makeBlocks(int block_num, int row_num)
+std::vector<Block> makeBlocks(int block_num, int row_num, bool skew)
 {
     std::vector<Block> blocks;
     for (int i = 0; i < block_num; ++i)
-        blocks.push_back(makeBlock(row_num));
+        blocks.push_back(makeBlock(row_num, skew));
     return blocks;
 }
 
@@ -139,32 +156,10 @@ void printException(const Exception & e)
                   << e.getStackTrace().toString() << std::endl;
 }
 
-void sendPacket(const std::vector<PacketPtr> & packets, const PacketQueuePtr & queue, StopFlag & stop_flag)
-{
-    std::mt19937 mt(rd());
-    std::uniform_int_distribution<int> dist(0, packets.size() - 1);
-
-    while (!stop_flag.load())
-    {
-        int i = dist(mt);
-        queue->tryPush(packets[i], std::chrono::milliseconds(10));
-    }
-    queue->finish();
-}
-
-void receivePacket(const PacketQueuePtr & queue)
-{
-    while (true)
-    {
-        PacketPtr packet;
-        if (!queue->pop(packet))
-            break;
-    }
-}
-
-ReceiverHelper::ReceiverHelper(int concurrency_, int source_num_)
+ReceiverHelper::ReceiverHelper(int concurrency_, int source_num_, uint32_t fine_grained_shuffle_stream_count_)
     : concurrency(concurrency_)
     , source_num(source_num_)
+    , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
 {
     pb_exchange_receiver.set_tp(tipb::Hash);
     for (int i = 0; i < source_num; ++i)
@@ -198,16 +193,21 @@ MockExchangeReceiverPtr ReceiverHelper::buildReceiver()
         source_num,
         concurrency,
         "mock_req_id",
-        "mock_exchange_receiver_id");
+        "mock_exchange_receiver_id",
+        fine_grained_shuffle_stream_count);
 }
 
 std::vector<BlockInputStreamPtr> ReceiverHelper::buildExchangeReceiverStream()
 {
     auto receiver = buildReceiver();
     std::vector<BlockInputStreamPtr> streams(concurrency);
+    // NOTE: check if need fine_grained_shuffle_stream_count
     for (int i = 0; i < concurrency; ++i)
     {
-        streams[i] = std::make_shared<MockExchangeReceiverInputStream>(receiver, "mock_req_id", "mock_executor_id" + std::to_string(i));
+        streams[i] = std::make_shared<MockExchangeReceiverInputStream>(receiver,
+                                                                       "mock_req_id",
+                                                                       "mock_executor_id" + std::to_string(i),
+                                                                       /*stream_id=*/enableFineGrainedShuffle(fine_grained_shuffle_stream_count) ? i : 0);
     }
     return streams;
 }
@@ -215,7 +215,7 @@ std::vector<BlockInputStreamPtr> ReceiverHelper::buildExchangeReceiverStream()
 BlockInputStreamPtr ReceiverHelper::buildUnionStream()
 {
     auto streams = buildExchangeReceiverStream();
-    return std::make_shared<UnionBlockInputStream<>>(streams, nullptr, concurrency, /*req_id=*/"");
+    return std::make_shared<UnionBlockInputStream<>>(streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
 }
 
 void ReceiverHelper::finish()
@@ -230,10 +230,14 @@ void ReceiverHelper::finish()
 SenderHelper::SenderHelper(
     int source_num_,
     int concurrency_,
+    uint32_t fine_grained_shuffle_stream_count_,
+    int64_t fine_grained_shuffle_batch_size_,
     const std::vector<PacketQueuePtr> & queues_,
     const std::vector<tipb::FieldType> & fields)
     : source_num(source_num_)
     , concurrency(concurrency_)
+    , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
+    , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
     , queues(queues_)
 {
     mpp::TaskMeta task_meta;
@@ -277,20 +281,41 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(
     for (int i = 0; i < concurrency; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<MockBlockInputStream>(blocks, stop_flag);
-        std::unique_ptr<DAGResponseWriter> response_writer(
-            new StreamingDAGResponseWriter<MockTunnelSetPtr>(
-                tunnel_set,
-                {0, 1, 2},
-                TiDB::TiDBCollators(3),
-                tipb::Hash,
-                -1,
-                -1,
-                true,
-                *dag_context));
-        send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer(
+                new StreamingDAGResponseWriter<MockTunnelSetPtr, true>(
+                    tunnel_set,
+                    {0, 1, 2},
+                    TiDB::TiDBCollators(3),
+                    tipb::Hash,
+                    -1,
+                    -1,
+                    true,
+                    *dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        }
+        else
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer(
+                new StreamingDAGResponseWriter<MockTunnelSetPtr, false>(
+                    tunnel_set,
+                    {0, 1, 2},
+                    TiDB::TiDBCollators(3),
+                    tipb::Hash,
+                    -1,
+                    -1,
+                    true,
+                    *dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        }
     }
 
-    return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");
+    return std::make_shared<UnionBlockInputStream<>>(send_streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
 }
 
 BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std::vector<Block> & blocks)
@@ -299,20 +324,41 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std:
     for (int i = 0; i < concurrency; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<MockFixedRowsBlockInputStream>(total_rows / concurrency, blocks);
-        std::unique_ptr<DAGResponseWriter> response_writer(
-            new StreamingDAGResponseWriter<MockTunnelSetPtr>(
-                tunnel_set,
-                {0, 1, 2},
-                TiDB::TiDBCollators(3),
-                tipb::Hash,
-                -1,
-                -1,
-                true,
-                *dag_context));
-        send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer(
+                new StreamingDAGResponseWriter<MockTunnelSetPtr, true>(
+                    tunnel_set,
+                    {0, 1, 2},
+                    TiDB::TiDBCollators(3),
+                    tipb::Hash,
+                    -1,
+                    -1,
+                    true,
+                    *dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        }
+        else
+        {
+            std::unique_ptr<DAGResponseWriter> response_writer(
+                new StreamingDAGResponseWriter<MockTunnelSetPtr, false>(
+                    tunnel_set,
+                    {0, 1, 2},
+                    TiDB::TiDBCollators(3),
+                    tipb::Hash,
+                    -1,
+                    -1,
+                    true,
+                    *dag_context,
+                    fine_grained_shuffle_stream_count,
+                    fine_grained_shuffle_batch_size));
+            send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
+        }
     }
 
-    return std::make_shared<UnionBlockInputStream<>>(send_streams, nullptr, concurrency, /*req_id=*/"");
+    return std::make_shared<UnionBlockInputStream<>>(send_streams, BlockInputStreams{}, concurrency, /*req_id=*/"");
 }
 
 void SenderHelper::finish()
@@ -327,13 +373,12 @@ void SenderHelper::finish()
 
 void ExchangeBench::SetUp(const benchmark::State &)
 {
-    Poco::Logger::root().setLevel("error");
-
     DynamicThreadPool::global_instance = std::make_unique<DynamicThreadPool>(
         /*fixed_thread_num=*/300,
         std::chrono::milliseconds(100000));
 
-    input_blocks = makeBlocks(/*block_num=*/100, /*row_num=*/1024);
+    uniform_blocks = makeBlocks(/*block_num=*/100, /*row_num=*/1024);
+    skew_blocks = makeBlocks(/*block_num=*/100, /*row_num=*/1024, /*skew=*/true);
 
     try
     {
@@ -348,7 +393,8 @@ void ExchangeBench::SetUp(const benchmark::State &)
 
 void ExchangeBench::TearDown(const benchmark::State &)
 {
-    input_blocks.clear();
+    uniform_blocks.clear();
+    skew_blocks.clear();
     // NOTE: Must reset here, otherwise DynamicThreadPool::fixedWork() may core because metrics already destroyed.
     DynamicThreadPool::global_instance.reset();
 }
@@ -383,25 +429,38 @@ try
     const int concurrency = state.range(0);
     const int source_num = state.range(1);
     const int total_rows = state.range(2);
+    const int fine_grained_shuffle_stream_count = state.range(3);
+    const int fine_grained_shuffle_batch_size = state.range(4);
     Context context = TiFlashTestEnv::getContext();
 
     for (auto _ : state)
     {
-        std::shared_ptr<ReceiverHelper> receiver_helper = std::make_shared<ReceiverHelper>(concurrency, source_num);
+        std::shared_ptr<ReceiverHelper> receiver_helper = std::make_shared<ReceiverHelper>(concurrency, source_num, fine_grained_shuffle_stream_count);
         BlockInputStreamPtr receiver_stream = receiver_helper->buildUnionStream();
 
         std::shared_ptr<SenderHelper> sender_helper = std::make_shared<SenderHelper>(source_num,
                                                                                      concurrency,
+                                                                                     fine_grained_shuffle_stream_count,
+                                                                                     fine_grained_shuffle_batch_size,
                                                                                      receiver_helper->queues,
                                                                                      receiver_helper->fields);
-        BlockInputStreamPtr sender_stream = sender_helper->buildUnionStream(total_rows, input_blocks);
+        BlockInputStreamPtr sender_stream = sender_helper->buildUnionStream(total_rows, uniform_blocks);
 
         runAndWait(receiver_helper, receiver_stream, sender_helper, sender_stream);
     }
 }
 CATCH
 BENCHMARK_REGISTER_F(ExchangeBench, basic_send_receive)
-    ->Args({8, 1, 1024 * 1000});
+    ->Args({8, 1, 1024 * 1000, 0, 4096})
+    ->Args({8, 1, 1024 * 1000, 4, 4096})
+    ->Args({8, 1, 1024 * 1000, 8, 4096})
+    ->Args({8, 1, 1024 * 1000, 16, 4096})
+    ->Args({8, 1, 1024 * 1000, 32, 4096})
+    ->Args({8, 1, 1024 * 1000, 8, 1})
+    ->Args({8, 1, 1024 * 1000, 8, 1000})
+    ->Args({8, 1, 1024 * 1000, 8, 10000})
+    ->Args({8, 1, 1024 * 1000, 8, 100000});
+
 
 } // namespace tests
 } // namespace DB

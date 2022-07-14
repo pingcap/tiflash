@@ -76,7 +76,7 @@ TEST_F(MockDAGRequestTest, Projection)
 try
 {
     auto request = context.scan("test_db", "test_table")
-                       .project("s1")
+                       .project({"s1"})
                        .build(context);
     {
         String expected = "project_1 | {<0, String>}\n"

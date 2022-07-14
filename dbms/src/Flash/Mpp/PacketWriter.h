@@ -27,6 +27,7 @@ namespace DB
 {
 // PacketWriter is a common interface of both sync and async gRPC writer.
 // It is used as the template parameter of `MPPTunnel`.
+class AsyncTunnelSender;
 class PacketWriter
 {
 public:
@@ -41,6 +42,9 @@ public:
     // the caller can't know if the rpc session is ready for writing.
     // If it is not ready, caller can't write a packet.
     virtual void tryFlushOne() {}
+
+    // Attach async sender to async writer so that async writer can use it to get/transfer DataPacket and set consumer finish msg directly
+    virtual void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> &) {}
 
     // Finish rpc with a status. Needed by async writer. For sync writer it is useless but not harmful.
     virtual void writeDone(const ::grpc::Status & /*status*/) {}

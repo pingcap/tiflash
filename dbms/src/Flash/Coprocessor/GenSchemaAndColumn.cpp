@@ -54,4 +54,15 @@ ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_
     }
     return column_with_type_and_names;
 }
+
+NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema)
+{
+    NamesAndTypes names_and_types;
+    for (const auto & col : dag_schema)
+    {
+        auto tp = getDataTypeByColumnInfoForComputingLayer(col.second);
+        names_and_types.emplace_back(col.first, tp);
+    }
+    return names_and_types;
+}
 } // namespace DB
