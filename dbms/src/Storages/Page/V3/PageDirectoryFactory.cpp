@@ -34,7 +34,7 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
     return createFromReader(storage_name, reader, std::move(wal));
 }
 
-PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal)
+PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal, bool for_dump_snapshot)
 {
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(storage_name, std::move(wal));
     loadFromDisk(dir, std::move(reader));
@@ -44,10 +44,15 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
 
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
+<<<<<<< HEAD
     dir->gcInMemEntries();
+=======
+    // It's no need to remove the expired entries in BlobStore, so skip filling removed_entries to improve performance.
+    dir->gcInMemEntries(/*return_removed_entries=*/false, /* keep_last_delete_entry */ for_dump_snapshot);
+>>>>>>> c40c262576 (keep delete entry when dump snapshot (#5357))
     LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory", storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
-    if (blob_stats)
+    if (!for_dump_snapshot && blob_stats)
     {
         // After all entries restored to `mvcc_table_directory`, only apply
         // the latest entry to `blob_stats`, or we may meet error since
