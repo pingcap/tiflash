@@ -63,7 +63,7 @@ public:
             Block block = children.back()->read();
             if (!block)
                 return {};
-            if (!block.rows())
+            if (block.rows() == 0)
                 continue;
 
             delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
