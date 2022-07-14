@@ -400,7 +400,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
 
-         // should record for agg before restore concurrency. See #3804.
+        // should record for agg before restore concurrency. See #3804.
         recordProfileStreams(pipeline, query_block.aggregation_name);
         restorePipelineConcurrency(pipeline);
     }
