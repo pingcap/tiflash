@@ -1119,8 +1119,9 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
     }
 }
 
-// Read data without mvcc filtering && delete-range filtering.
+// Read data without mvcc filtering && delete mark = 1 filtering.
 // just for debug
+// readRaw is called under 'selraw  xxxx'
 BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                                            const DB::Settings & db_settings,
                                            const ColumnDefines & columns_to_read,
@@ -1197,7 +1198,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         UInt64 max_version,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
-                                        bool is_raw_read,
+                                        bool is_fast_mode,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
@@ -1233,8 +1234,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             filter,
             max_version,
             expected_block_size,
-            is_raw_read,
-            true,
+            /* is_raw_ */ is_fast_mode,
+            /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
             extra_table_id_index,
             physical_table_id,
             req_info);
