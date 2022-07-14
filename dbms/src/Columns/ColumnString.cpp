@@ -342,7 +342,14 @@ struct ColumnString::lessWithCollation
             parent.sizeAt(rhs) - 1) // remove tail '\0'
             ;
 
-        return positive ? (res < 0) : (res > 0);
+        if constexpr (positive)
+        {
+            return (res < 0);
+        }
+        else
+        {
+            return (res > 0);
+        }
     }
 };
 
