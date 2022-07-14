@@ -28,17 +28,16 @@ namespace DB
 {
 namespace DM
 {
-
-static constexpr size_t UNROLL_BATCH = 64;
-
 /// DMDeleteFilterBlockInputStream is used to filter the column and filter out the rows whose del_mark is true
 class DMDeleteFilterBlockInputStream : public IBlockInputStream
 {
+    static constexpr size_t UNROLL_BATCH = 64;
+
 public:
-    DMDeleteFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
+    DMDeleteFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_, const String & tracing_id = "")
         : columns_to_read(columns_to_read_)
         , header(toEmptyBlock(columns_to_read))
-        , log(Logger::get("DMDeleteFilterBlockInputStream", /*req_id=*/""))
+        , log(Logger::get("DMDeleteFilterBlockInputStream", tracing_id))
     {
         children.emplace_back(input);
         delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
@@ -54,7 +53,7 @@ public:
                       complete_not_passed * 100.0 / total_blocks);
     }
 
-    String getName() const override { return "DMColumnFilter"; }
+    String getName() const override { return "DMDeleteFilter"; }
 
     Block getHeader() const override { return header; }
 
@@ -65,12 +64,10 @@ public:
             Block block = children.back()->read();
             if (!block)
                 return {};
-            if (!block.rows())
+            if (block.rows() == 0)
                 continue;
 
-
             delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
-
 
             size_t rows = block.rows();
             delete_filter.resize(rows);
@@ -79,22 +76,17 @@ public:
 
             // The following is trying to unroll the filtering operations,
             // so that optimizer could use vectorized optimization.
-            // The original logic can be seen in #checkWithNextIndex().
             {
                 UInt8 * filter_pos = delete_filter.data();
                 auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
                     (*filter_pos) = (*delete_pos) == 0;
-
-                    ++filter_pos;
-                    ++delete_pos;
                 }
-            }
 
             for (size_t i = batch_rows; i < rows; ++i)
             {
-                delete_filter[i] = ((*delete_col_data)[i] == 0);
+                delete_filter[i] = !(*delete_col_data)[i];
             }
 
             const size_t passed_count = countBytesInFilter(delete_filter);
@@ -147,17 +139,17 @@ private:
     LoggerPtr log;
 };
 
-class DMColumnFilterBlockInputStream : public IBlockInputStream
+class DMColumnProjectionBlockInputStream : public IBlockInputStream
 {
 public:
-    DMColumnFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
+    DMColumnProjectionBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
         : columns_to_read(columns_to_read_)
         , header(toEmptyBlock(columns_to_read))
     {
         children.emplace_back(input);
     }
 
-    String getName() const override { return "DMColumnFilter"; }
+    String getName() const override { return "DMColumnProjection"; }
 
     Block getHeader() const override { return header; }
 

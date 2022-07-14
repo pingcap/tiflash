@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
+#include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Row.h>
 #include <DataTypes/DataTypeNothing.h>
@@ -120,6 +121,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     {
         const auto & expected_col = expected.getByPosition(i);
         const auto & actual_col = actual.getByPosition(i);
+
         auto cmp_res = columnEqual(expected_col, actual_col);
         if (!cmp_res)
             return cmp_res;
@@ -375,9 +377,63 @@ ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<Strin
     return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
 }
 
+String getColumnsContent(const ColumnsWithTypeAndName & cols)
+{
+    if (cols.size() <= 0)
+        return "";
+    return getColumnsContent(cols, 0, cols[0].column->size() - 1);
+}
+
+String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
+{
+    const size_t col_num = cols.size();
+    if (col_num <= 0)
+        return "";
+
+    const size_t col_size = cols[0].column->size();
+    assert(begin <= end);
+    assert(col_size > end);
+    assert(col_size > begin);
+
+    bool is_same = true;
+
+    for (size_t i = 1; i < col_num; ++i)
+    {
+        if (cols[i].column->size() != col_size)
+            is_same = false;
+    }
+
+    assert(is_same); /// Ensure the sizes of columns in cols are the same
+
+    std::vector<std::pair<size_t, String>> col_content;
+    FmtBuffer fmt_buf;
+    for (size_t i = 0; i < col_num; ++i)
+    {
+        /// Push the column name
+        fmt_buf.append(fmt::format("{}: (", cols[i].name));
+        for (size_t j = begin; j <= end; ++j)
+            col_content.push_back(std::make_pair(j, (*cols[i].column)[j].toString()));
+
+        /// Add content
+        fmt_buf.joinStr(
+            col_content.begin(),
+            col_content.end(),
+            [](const auto & content, FmtBuffer & fmt_buf) {
+                fmt_buf.append(fmt::format("{}: {}", content.first, content.second));
+            },
+            ", ");
+
+        fmt_buf.append(")\n");
+        col_content.clear();
+    }
+
+    return fmt_buf.toString();
+}
+
 ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols)
 {
     return cols;
 }
+
 } // namespace tests
 } // namespace DB
