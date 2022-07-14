@@ -18,6 +18,7 @@
 #include <Storages/Transaction/Collator.h>
 
 #include <array>
+#include <unordered_map>
 
 namespace DB::ErrorCodes
 {
@@ -186,22 +187,12 @@ public:
 
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
-        if constexpr (padding)
-            return DB::RtrimStrCompare({s1, length1}, {s2, length2});
-        else
-            return DB::RawStrCompare({s1, length1}, {s2, length2});
+        return DB::BinCollatorCompare<padding>(s1, length1, s2, length2);
     }
 
     StringRef sortKey(const char * s, size_t length, std::string &) const override
     {
-        if constexpr (padding)
-        {
-            return StringRef(rtrim(s, length));
-        }
-        else
-        {
-            return StringRef(s, length);
-        }
+        return DB::BinCollatorSortKey<padding>(s, length);
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
@@ -593,6 +584,9 @@ TiDBCollatorPtr ITiDBCollator::getCollator(int32_t id)
 {
     switch (id)
     {
+    case ITiDBCollator::UTF8MB4_BIN:
+        static const auto utf8mb4_collator = UTF8MB4_BIN_TYPE(UTF8MB4_BIN);
+        return &utf8mb4_collator;
     case ITiDBCollator::BINARY:
         static const auto binary_collator = BinCollator<char, false>(BINARY);
         return &binary_collator;
@@ -602,9 +596,6 @@ TiDBCollatorPtr ITiDBCollator::getCollator(int32_t id)
     case ITiDBCollator::LATIN1_BIN:
         static const auto latin1_collator = BinCollator<char, true>(LATIN1_BIN);
         return &latin1_collator;
-    case ITiDBCollator::UTF8MB4_BIN:
-        static const auto utf8mb4_collator = UTF8MB4_BIN_TYPE(UTF8MB4_BIN);
-        return &utf8mb4_collator;
     case ITiDBCollator::UTF8_BIN:
         static const auto utf8_collator = UTF8MB4_BIN_TYPE(UTF8_BIN);
         return &utf8_collator;

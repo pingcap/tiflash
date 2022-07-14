@@ -19,6 +19,7 @@
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
+#include <Storages/Transaction/Collator.h>
 #include <string.h>
 
 
@@ -52,8 +53,8 @@ private:
     template <bool positive>
     struct less;
 
-    template <bool positive>
-    struct lessWithCollation;
+    template <bool positive, typename Derived>
+    struct LessWithCollation;
 
     ColumnString() = default;
 
@@ -118,7 +119,7 @@ public:
 
     void insert(const Field & x) override
     {
-        const String & s = DB::get<const String &>(x);
+        const auto & s = DB::get<const String &>(x);
         const size_t old_size = chars.size();
         const size_t size_to_append = s.size() + 1;
         const size_t new_size = old_size + size_to_append;
@@ -134,7 +135,7 @@ public:
 
     void insertFrom(const IColumn & src_, size_t n) override
     {
-        const ColumnString & src = static_cast<const ColumnString &>(src_);
+        const auto & src = static_cast<const ColumnString &>(src_);
 
         if (n != 0)
         {
@@ -207,21 +208,20 @@ public:
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
-        const void * src = &chars[offset];
 
         StringRef res;
 
-        if (collator != nullptr)
-        {
-            /// Skip last zero byte.
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
-            string_size = sort_key.size;
-            src = sort_key.data;
-        }
+        StringRef sort_key{reinterpret_cast<const char *>(&chars[offset]), string_size};
+
+        // Skip last zero byte.
+        collator->sortKeyNullable(sort_key.data, sort_key.size - 1, sort_key_container, sort_key);
+
+        string_size = sort_key.size;
+
         res.size = sizeof(string_size) + string_size;
         char * pos = arena.allocContinue(res.size, begin);
         memcpy(pos, &string_size, sizeof(string_size));
-        memcpy(pos + sizeof(string_size), src, string_size);
+        memcpy(pos + sizeof(string_size), sort_key.data, string_size);
         res.data = pos;
         return res;
     }
@@ -244,33 +244,47 @@ public:
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
-        if (collator != nullptr)
-        {
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
-            string_size = sort_key.size;
-            hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-            hash.update(sort_key.data, sort_key.size);
-        }
-        else
-        {
-            hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-            hash.update(reinterpret_cast<const char *>(&chars[offset]), string_size);
-        }
+
+        StringRef sort_key{reinterpret_cast<const char *>(&chars[offset]), string_size};
+
+        // Skip last zero byte.
+        collator->sortKeyNullable(sort_key.data, sort_key.size - 1, sort_key_container, sort_key);
+        string_size = sort_key.size;
+        hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+        hash.update(sort_key.data, sort_key.size);
     }
 
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
     {
         if (collator != nullptr)
         {
-            for (size_t i = 0; i < offsets.size(); ++i)
+            if (collator->canUseFastPath())
             {
-                size_t string_size = sizeAt(i);
-                size_t offset = offsetAt(i);
+                for (size_t i = 0; i < offsets.size(); ++i)
+                {
+                    size_t string_size = sizeAt(i);
+                    size_t offset = offsetAt(i);
 
-                auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
-                string_size = sort_key.size;
-                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-                hash_values[i].update(sort_key.data, sort_key.size);
+                    // Skip last zero byte.
+                    auto sort_key = collator->fastPathSortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1);
+                    string_size = sort_key.size;
+                    hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                    hash_values[i].update(sort_key.data, sort_key.size);
+                }
+            }
+            else
+            {
+                for (size_t i = 0; i < offsets.size(); ++i)
+                {
+                    size_t string_size = sizeAt(i);
+                    size_t offset = offsetAt(i);
+
+                    // Skip last zero byte.
+                    auto sort_key = collator->sortKeyIndirect(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
+                    string_size = sort_key.size;
+                    hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                    hash_values[i].update(sort_key.data, sort_key.size);
+                }
             }
         }
         else
@@ -302,7 +316,7 @@ public:
 
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
-        const ColumnString & rhs = static_cast<const ColumnString &>(rhs_);
+        const auto & rhs = static_cast<const ColumnString &>(rhs_);
 
         const size_t size = sizeAt(n);
         const size_t rhs_size = rhs.sizeAt(m);
