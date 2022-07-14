@@ -533,7 +533,9 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         {
             if (!(filter_delete_mark && c.id == TAG_COLUMN_ID))
                 new_columns_to_read->push_back(c);
-        } else {
+        }
+        else
+        {
             enable_clean_read = false;
         }
     }
@@ -573,7 +575,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         delta_stream = std::make_shared<DMColumnProjectionBlockInputStream>(delta_stream, columns_to_read);
         stable_stream = std::make_shared<DMColumnProjectionBlockInputStream>(stable_stream, columns_to_read);
     }
-
 
 
     BlockInputStreams streams;
