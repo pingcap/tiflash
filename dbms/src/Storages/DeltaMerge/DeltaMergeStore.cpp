@@ -1179,8 +1179,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             EMPTY_FILTER,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
-            true,
-            false,
+            /* is_raw_ */ true,
+            /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
             extra_table_id_index,
             physical_table_id,
             req_info);

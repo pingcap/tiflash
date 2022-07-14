@@ -532,20 +532,18 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 
-    //delta_stream = std::make_shared<SquashingBlockInputStream>(delta_stream, 16384, 0, /*req_id=*/""); // For test
-
     delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
     stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
 
     if (filter_delete_mark)
     {
-        delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read);
-        stable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(stable_stream, columns_to_read);
+        delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read, dm_context.tracing_id);
+        stable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(stable_stream, columns_to_read, dm_context.tracing_id);
     }
     else
     {
-        delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
-        stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
+        delta_stream = std::make_shared<DMColumnProjectionBlockInputStream>(delta_stream, columns_to_read);
+        stable_stream = std::make_shared<DMColumnProjectionBlockInputStream>(stable_stream, columns_to_read);
     }
 
 
@@ -564,7 +562,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         streams.push_back(delta_stream);
         streams.push_back(stable_stream);
     }
-    return std::make_shared<ConcatBlockInputStream>(streams, /*req_id=*/"");
+    return std::make_shared<ConcatBlockInputStream>(streams, dm_context.tracing_id);
 }
 
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read, bool filter_delete_mark)

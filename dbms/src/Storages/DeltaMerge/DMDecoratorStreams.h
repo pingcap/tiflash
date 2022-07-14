@@ -34,10 +34,10 @@ static constexpr size_t UNROLL_BATCH = 64;
 class DMDeleteFilterBlockInputStream : public IBlockInputStream
 {
 public:
-    DMDeleteFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
+    DMDeleteFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_, const String & tracing_id = "")
         : columns_to_read(columns_to_read_)
         , header(toEmptyBlock(columns_to_read))
-        , log(Logger::get("DMDeleteFilterBlockInputStream", /*req_id=*/""))
+        , log(Logger::get("DMDeleteFilterBlockInputStream", tracing_id))
     {
         children.emplace_back(input);
         delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
@@ -76,13 +76,12 @@ public:
 
             // The following is trying to unroll the filtering operations,
             // so that optimizer could use vectorized optimization.
-            // The original logic can be seen in #checkWithNextIndex().
             {
                 UInt8 * filter_pos = delete_filter.data();
                 auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*filter_pos) = (*delete_pos) == 0;
+                    (*filter_pos) = !(*delete_pos);
                     ++filter_pos;
                     ++delete_pos;
                 }
@@ -143,10 +142,10 @@ private:
     LoggerPtr log;
 };
 
-class DMColumnFilterBlockInputStream : public IBlockInputStream
+class DMColumnProjectionBlockInputStream : public IBlockInputStream
 {
 public:
-    DMColumnFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
+    DMColumnProjectionBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
         : columns_to_read(columns_to_read_)
         , header(toEmptyBlock(columns_to_read))
     {

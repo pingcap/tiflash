@@ -52,7 +52,7 @@ BlockInputStreamPtr genColumnFilterInputStream(BlocksList & blocks, const Column
         DMTestEnv::pk_name,
         is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE);
 
-    return std::make_shared<DMColumnFilterBlockInputStream>(
+    return std::make_shared<DMColumnProjectionBlockInputStream>(
         std::make_shared<DebugBlockInputStream>(blocks, is_common_handle),
         columns);
 }
@@ -107,7 +107,7 @@ TEST(DeleteFilterTest, NormalCase)
         ASSERT_EQ(val, "TiFlash");
 
         block = in->read();
-        ASSERT_EQ(block.rows(), 0);
+        ASSERT_FALSE(block); // ensure the stream is ended
         in->readSuffix();
     }
 }
@@ -162,7 +162,7 @@ TEST(ColumnFilterTest, NormalCase)
         ASSERT_EQ(val, "Storage");
 
         block = in->read();
-        ASSERT_EQ(block.rows(), 0);
+        ASSERT_FALSE(block); // ensure the stream is ended
         in->readSuffix();
     }
 }
