@@ -187,7 +187,7 @@ try
                   .join(context.scan("simple_test", "t1"), {col("b")}, ASTTableJoin::Kind::Right)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4" ,"3", "3", {}, {}})});
+        executeWithConcurrency(request, {toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})});
     }
 }
 CATCH
