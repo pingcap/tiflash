@@ -48,9 +48,9 @@ public:
                              {toVec<String>("s", {"banana", "banana"}),
                               toVec<String>("join_c", {"apple", "banana"})});
 
-        context.addMockTable("simple_test", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toVec<String>("a", {"1", "2"}), toVec<String>("b", {"3", "4"})});
+        context.addMockTable("simple_test", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
 
-        context.addMockTable("simple_test", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toVec<String>("a", {"1", "3"}), toVec<String>("b", {"3", "4"})});
+        context.addMockTable("simple_test", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
 
         context.addMockTable("multi_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
 
@@ -96,28 +96,28 @@ try
                        .join(context.scan("simple_test", "t2"), {col("a")}, ASTTableJoin::Kind::Inner)
                        .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1"}), toNullableVec<String>({"3"}), toNullableVec<String>({"1"}), toNullableVec<String>({"3"})});
+        executeWithConcurrency(request, {toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({{}, "3", {}, "3"}), toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({"3", "3", {}, {}})});
     }
 
     request = context.scan("simple_test", "t2")
                   .join(context.scan("simple_test", "t1"), {col("a")}, ASTTableJoin::Kind::Inner)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1"}), toNullableVec<String>({"3"}), toNullableVec<String>({"1"}), toNullableVec<String>({"3"})});
+        executeWithConcurrency(request, {toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({{}, "3", {}, "3"}), toNullableVec<String>({"1", "1", "1", "1"}), toNullableVec<String>({"3", "3", {}, {}})});
     }
 
     request = context.scan("simple_test", "t1")
                   .join(context.scan("simple_test", "t2"), {col("b")}, ASTTableJoin::Kind::Inner)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", "2"}), toNullableVec<String>({"3", "4"}), toNullableVec<String>({"1", "3"}), toNullableVec<String>({"3", "4"})});
+        executeWithConcurrency(request, {toNullableVec<String>({{}, "1", "2", {}, "1"}), toNullableVec<String>({"3", "3", "4", "3", "3"}), toNullableVec<String>({"1", "1", "3", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3"})});
     }
 
     request = context.scan("simple_test", "t2")
                   .join(context.scan("simple_test", "t1"), {col("b")}, ASTTableJoin::Kind::Inner)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", "3"}), toNullableVec<String>({"3", "4"}), toNullableVec<String>({"1", "2"}), toNullableVec<String>({"3", "4"})});
+        executeWithConcurrency(request, {toNullableVec<String>({{}, "1", "3", {}, "1"}), toNullableVec<String>({"3", "3", "4", "3", "3"}), toNullableVec<String>({"1", "1", "2", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3"})});
     }
 }
 CATCH
@@ -129,28 +129,28 @@ try
                        .join(context.scan("simple_test", "t2"), {col("a")}, ASTTableJoin::Kind::Left)
                        .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", "2"}), toNullableVec<String>({"3", "4"}), toNullableVec<String>({"1", {}}), toNullableVec<String>({"3", {}})});
+        executeWithConcurrency(request, {toNullableVec<String>({"1", "1", "2", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}}), toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}})});
     }
 
     request = context.scan("simple_test", "t2")
                   .join(context.scan("simple_test", "t1"), {col("a")}, ASTTableJoin::Kind::Left)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", "3"}), toNullableVec<String>({"3", "4"}), toNullableVec<String>({"1", {}}), toNullableVec<String>({"3", {}})});
+        executeWithConcurrency(request, {toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}}), toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}})});
     }
 
     request = context.scan("simple_test", "t1")
                   .join(context.scan("simple_test", "t2"), {col("b")}, ASTTableJoin::Kind::Left)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", "2"}), toNullableVec<String>({"3", "4"}), toNullableVec<String>({"1", "3"}), toNullableVec<String>({"3", "4"})});
+        executeWithConcurrency(request, {toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})});
     }
 
     request = context.scan("simple_test", "t2")
                   .join(context.scan("simple_test", "t1"), {col("b")}, ASTTableJoin::Kind::Left)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", "3"}), toNullableVec<String>({"3", "4"}), toNullableVec<String>({"1", "2"}), toNullableVec<String>({"3", "4"})});
+        executeWithConcurrency(request, {toNullableVec<String>({"1", "1", "3", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({{}, "1", "2", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})});
     }
 }
 CATCH
@@ -163,7 +163,7 @@ try
                        .join(context.scan("simple_test", "t2"), {col("a")}, ASTTableJoin::Kind::Right)
                        .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", {}}), toNullableVec<String>({"3", {}}), toNullableVec<String>({"1", "3"}), toNullableVec<String>({"3", "4"})});
+        executeWithConcurrency(request, {toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}), toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})});
     }
 
     request = context
@@ -171,7 +171,7 @@ try
                   .join(context.scan("simple_test", "t1"), {col("a")}, ASTTableJoin::Kind::Right)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", {}}), toNullableVec<String>({"3", {}}), toNullableVec<String>({"1", "2"}), toNullableVec<String>({"3", "4"})});
+        executeWithConcurrency(request, {toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}), toNullableVec<String>({"1", "1", "2", {}, "1", "1", {}}), toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})});
     }
 
     request = context
@@ -179,7 +179,7 @@ try
                   .join(context.scan("simple_test", "t2"), {col("b")}, ASTTableJoin::Kind::Right)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", "2"}), toNullableVec<String>({"3", "4"}), toNullableVec<String>({"1", "3"}), toNullableVec<String>({"3", "4"})});
+        executeWithConcurrency(request, {toNullableVec<String>({{}, "1", "2", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({"1", "1", "3", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}})});
     }
 
     request = context
@@ -187,7 +187,7 @@ try
                   .join(context.scan("simple_test", "t1"), {col("b")}, ASTTableJoin::Kind::Right)
                   .build(context);
     {
-        executeWithConcurrency(request, {toNullableVec<String>({"1", "3"}), toNullableVec<String>({"3", "4"}), toNullableVec<String>({"1", "2"}), toNullableVec<String>({"3", "4"})});
+        executeWithConcurrency(request, {toNullableVec<String>({{}, "1", "3", {}, "1", {}, {}}), toNullableVec<String>({"3", "3", "4", "3", "3", {}, {}}), toNullableVec<String>({"1", "1", "2", {}, {}, "1", {}}), toNullableVec<String>({"3", "3", "4" ,"3", "3", {}, {}})});
     }
 }
 CATCH
