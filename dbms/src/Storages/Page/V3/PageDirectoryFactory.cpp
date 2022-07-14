@@ -34,9 +34,6 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
     return createFromReader(storage_name, reader, std::move(wal));
 }
 
-/// When create PageDirectory for dump snapshot, we should keep the last valid var_entry when it is deleted.
-/// Because there may be some upsert entry in later wal files, and we should keep the valid var_entry and the delete entry to delete the later upsert entry.
-/// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
 PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal, bool for_dump_snapshot)
 {
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(storage_name, std::move(wal));
