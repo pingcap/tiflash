@@ -14,9 +14,6 @@
 
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <sys/_types/_size_t.h>
-
-#include "TestUtils/TiFlashTestBasic.h"
 
 namespace DB
 {

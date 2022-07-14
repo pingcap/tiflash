@@ -16,10 +16,10 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/astToExecutor.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <tipb/executor.pb.h>
-#include <Debug/dbgFuncCoprocessor.h>
 
 namespace DB::tests
 {
