@@ -183,7 +183,7 @@ public:
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column.get()))
         {
             auto col_res = ColumnFixedString::create(col->getN());
-            Impl::vector_fixed(col->getChars(), col->getN(), col_res->getChars());
+            Impl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
         }
         else
