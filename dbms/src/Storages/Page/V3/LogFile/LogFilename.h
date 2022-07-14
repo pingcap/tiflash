@@ -39,21 +39,21 @@ struct LogFilename
 
     static LogFilename parseFrom(const String & parent_path, const String & filename, LoggerPtr log);
 
-    inline String filename(LogFileStage stage) const
+    inline String filename(LogFileStage file_stage) const
     {
-        assert(stage != LogFileStage::Invalid);
+        assert(file_stage != LogFileStage::Invalid);
         return fmt::format(
             "{}_{}_{}",
-            ((stage == LogFileStage::Temporary) ? LOG_FILE_PREFIX_TEMP : LOG_FILE_PREFIX_NORMAL),
+            ((file_stage == LogFileStage::Temporary) ? LOG_FILE_PREFIX_TEMP : LOG_FILE_PREFIX_NORMAL),
             log_num,
             level_num);
     }
 
-    inline String fullname(LogFileStage stage) const
+    inline String fullname(LogFileStage file_stage) const
     {
-        assert(stage != LogFileStage::Invalid);
+        assert(file_stage != LogFileStage::Invalid);
         assert(!parent_path.empty());
-        return fmt::format("{}/{}", parent_path, filename(stage));
+        return fmt::format("{}/{}", parent_path, filename(file_stage));
     }
 };
 
