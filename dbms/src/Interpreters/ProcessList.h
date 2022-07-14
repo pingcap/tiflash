@@ -287,9 +287,9 @@ private:
 
     /// Stores info about queries grouped by their priority
     QueryPriorities priorities;
-
+public:
     /// Limit and counter for memory of all simultaneously running queries.
-    MemoryTracker total_memory_tracker;
+    MemoryTracker total_memory_tracker; //server.context().getGlobalContext().getProcessList().total_memory_tracker
 
     /// Limit network bandwidth for all users
     ThrottlerPtr total_network_throttler;

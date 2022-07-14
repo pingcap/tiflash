@@ -124,7 +124,11 @@ public:
     // do finish work for consumer, if need_lock is false, it means it has been protected by a mutex lock.
     void consumerFinish(const String & err_msg, bool need_lock = true);
 
-    bool isSendQueueNextPopNonBlocking() { return send_queue.isNextPopNonBlocking(); }
+    bool isSendQueueNextPopNonBlocking() { 
+        // FOR PLAYGROUND, make it consuming slowly.
+        // return send_queue.isNextPopNonBlocking() && (send_queue.getStatus()==MPMCQueueStatus::FINISHED || !send_queue.isNextPushNonBlocking()); 
+        return send_queue.isNextPopNonBlocking();
+    }
 
     // In async mode, do a singe send operation when Writer::TryWrite() succeeds.
     // In sync mode, as a background task to keep sending until done.

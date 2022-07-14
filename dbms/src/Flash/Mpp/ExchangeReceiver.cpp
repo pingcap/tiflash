@@ -598,6 +598,10 @@ template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header)
 {
     std::shared_ptr<ReceivedMessage> recv_msg;
+    //FOR PLAYGROUND make consume slow
+    // while(!(msg_channel.isNextPopNonBlocking() && (msg_channel.getStatus()==MPMCQueueStatus::FINISHED || !msg_channel.isNextPushNonBlocking()))) {
+        // usleep(100000);
+    // }
     if (!msg_channel.pop(recv_msg))
     {
         std::unique_lock lock(mu);

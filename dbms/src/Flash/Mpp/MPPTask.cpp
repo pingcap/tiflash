@@ -344,7 +344,6 @@ void MPPTask::runImpl()
         auto from = dag_context->getBlockIO().in;
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
-
         while (from->read())
             continue;
 

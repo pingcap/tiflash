@@ -44,6 +44,7 @@ inline size_t estimateAllocatedSize(const mpp::MPPDataPacket & data)
     return ret;
 }
 
+
 struct TrackedMppDataPacket
 {
     explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data)
@@ -65,41 +66,9 @@ struct TrackedMppDataPacket
     //        , packet(std::make_shared<mpp::MPPDataPacket>())
     //    {}
 
-    void alloc()
-    {
-        if (size)
-        {
-            try
-            {
-                // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
-                // CurrentMemoryTracker::alloc(size);
-                tracked_proto += size;
-                //update track mem
-                tracked_mem += size;
-                long long cur_mem = tracked_mem;
-                if (cur_mem > tracked_peak) {
-                    tracked_peak = cur_mem;
-                }
-            }
-            catch (...)
-            {
-                has_err = true;
-                tracked_proto -= size;
-                std::rethrow_exception(std::current_exception());
-            }
-        }
-    }
+    void alloc();
 
-    void trackFree() const
-    {
-        if (size && !has_err)
-        {
-            // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
-            // CurrentMemoryTracker::free(size);
-            tracked_proto -= size;
-            tracked_mem -= size;
-        }
-    }
+    void trackFree() const;
 
     ~TrackedMppDataPacket()
     {

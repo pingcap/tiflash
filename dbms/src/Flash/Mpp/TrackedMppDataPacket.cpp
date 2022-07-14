@@ -15,3 +15,56 @@
 #include "TrackedMppDataPacket.h"
 
 std::atomic<long long> tracked_proto{0};
+namespace DB
+{
+ void TrackedMppDataPacket::alloc()
+    {
+        if (size)
+        {
+            try
+            {
+                // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
+                // server.context().getGlobalContext().getProcessList().total_memory_tracker.alloc(size);
+                if (proc_memory_tracker) {
+                    proc_memory_tracker->alloc(size);
+                //     current_memory_tracker->alloc(size);
+
+
+                    tracked_proto += size;
+                    //update track mem
+                    tracked_mem += size;
+                    long long cur_mem = tracked_mem;
+                    if (cur_mem > tracked_peak) {
+                        tracked_peak = cur_mem;
+                    }
+                }
+                //CurrentMemoryTracker::alloc(size);
+                
+            }
+            catch (...)
+            {
+                has_err = true;
+                tracked_proto -= size;
+                std::rethrow_exception(std::current_exception());
+            }
+        }
+    }
+
+    void TrackedMppDataPacket::trackFree() const
+    {
+        if (size && !has_err)
+        {
+            // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
+            if (proc_memory_tracker) {
+                proc_memory_tracker->free(size);
+                //     current_memory_tracker->free(size);
+
+                tracked_proto -= size;
+                tracked_mem -= size;
+            }
+            // CurrentMemoryTracker::free(size);
+            
+        }
+    }
+
+}

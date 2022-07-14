@@ -24,6 +24,7 @@
 std::atomic<long long> tracked_mem{0}, tracked_peak{0};
 std::atomic<long long> tracked_alloc{0}, tracked_reloc{0}, tracked_free{0};
 std::atomic<long long> tracked_rec_alloc{0}, tracked_rec_reloc{0}, tracked_rec_free{0};
+MemoryTracker* proc_memory_tracker = nullptr;
 MemoryTracker::~MemoryTracker()
 {
     if (peak)

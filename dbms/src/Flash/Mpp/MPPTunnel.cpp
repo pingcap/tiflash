@@ -196,6 +196,8 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
         MemoryTrackerSetter setter(!current_memory_tracker, mem_tracker);
         /// TODO(fzh) reuse it later
         MPPDataPacketPtr res;
+        // send_queue.isNextPushNonBlocking() or send_queue.getStatus()==MPMCQueueStatus::FINISHED
+        
         while (send_queue.pop(res))
         {
             if (!writer->write(*(res->packet)))

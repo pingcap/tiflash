@@ -1060,20 +1060,17 @@ void NO_INLINE joinBlockImplTypeCase(
     const std::vector<size_t> & right_indexes,
     const TiDB::TiDBCollators & collators)
 {
-    Stopwatch watch;
     size_t num_columns_to_add = right_indexes.size();
 
     KeyGetter key_getter(key_columns, key_sizes, collators);
     std::vector<std::string> sort_key_containers;
     sort_key_containers.resize(key_columns.size());
     Arena pool;
-    int find_cnt = 0, notfind_cnt=0,null_cnt = 0;
-    long long s1 = 0, s2_succ = 0,s2_fail = 0,s2_null=0, else_cnt = 0;
+
     for (size_t i = 0; i < rows; ++i)
     {
         if (has_null_map && (*null_map)[i])
         {
-            auto t1 = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC);
             Adder<KIND, STRICTNESS, Map>::addNotFound(
                 num_columns_to_add,
                 added_columns,
@@ -1081,13 +1078,9 @@ void NO_INLINE joinBlockImplTypeCase(
                 filter.get(),
                 current_offset,
                 offsets_to_replicate.get());
-            auto t2 = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC);
-            s2_null+=t2-t1;
-            null_cnt++;
         }
         else
         {
-            else_cnt++;
             auto key_holder = key_getter.getKeyHolder(i, &pool, sort_key_containers);
             auto key = keyHolderGetKey(key_holder);
             size_t segment_index = 0;
@@ -1099,9 +1092,7 @@ void NO_INLINE joinBlockImplTypeCase(
             }
             auto & internal_map = map.getSegmentTable(segment_index);
             /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-            auto t1 = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC);
             auto it = map.getSegmentSize() > 0 ? internal_map.find(key, hash_value) : internal_map.find(key);
-            auto t2 = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC);
 
             if (it != internal_map.end())
             {
@@ -1115,11 +1106,8 @@ void NO_INLINE joinBlockImplTypeCase(
                     current_offset,
                     offsets_to_replicate.get(),
                     right_indexes);
-                find_cnt++;
-                auto t3 = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC);
-                s2_succ+=t3-t2;
             }
-            else {
+            else
                 Adder<KIND, STRICTNESS, Map>::addNotFound(
                     num_columns_to_add,
                     added_columns,
@@ -1127,17 +1115,9 @@ void NO_INLINE joinBlockImplTypeCase(
                     filter.get(),
                     current_offset,
                     offsets_to_replicate.get());
-                notfind_cnt++;
-                auto t3 = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC);
-                s2_fail+=t3-t2;
-            }
             keyHolderDiscardKey(key_holder);
-            
-            s1+=t2-t1;
-            // s2+=t3-t2;
         }
     }
-   std::cerr<<"join_cost: "<<watch.elapsedMilliseconds()<<"ms ,map_size: "<<map.rowCount()<<" s1:"<<s1<<" s2_find:"<<s2_succ<<" "<<(find_cnt? s2_succ/find_cnt:0)<<" s2_notfound:"<<s2_fail<<" "<<(notfind_cnt? s2_fail/notfind_cnt:0)<<" cnt:"<<else_cnt<<" output_rows:"<<added_columns[0]->size()<<std::endl;
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
@@ -1533,47 +1513,22 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     default:
         throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
-    std::cerr<<"debug:"<<block.safeGetByPosition(0).column->size()<<" "<<added_columns[0]->size()<<" "<<(int)kind<<" "<<(int)strictness<<std::endl;
+
     for (size_t i = 0; i < num_columns_to_add; ++i)
     {
         const ColumnWithTypeAndName & sample_col = sample_block_with_columns_to_add.getByPosition(i);
         block.insert(ColumnWithTypeAndName(std::move(added_columns[i]), sample_col.type, sample_col.name));
     }
 
-    auto minv = block.safeGetByPosition(0).column->size();
-    auto maxv = block.safeGetByPosition(0).column->size();
-    for(int i = 0; i < block.columns(); i++) {
-        minv = std::min(minv, block.safeGetByPosition(i).column->size());
-        maxv = std::max(maxv, block.safeGetByPosition(i).column->size());
-    }
-    std::cerr<<"debug#2:"<<block.columns()<<" "<<existing_columns<<" "<<minv<<" "<<maxv<<std::endl;
-
     /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
     if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
         for (size_t i = 0; i < existing_columns; ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
 
-    minv = block.safeGetByPosition(0).column->size();
-    maxv = block.safeGetByPosition(0).column->size();
-    for(int i = 0; i < block.columns(); i++) {
-        minv = std::min(minv, block.safeGetByPosition(i).column->size());
-        maxv = std::max(maxv, block.safeGetByPosition(i).column->size());
-    }
-    std::cerr<<"debug#3:"<<block.columns()<<" "<<existing_columns<<" "<<minv<<" "<<maxv<<std::endl;
-
     /// If ALL ... JOIN - we replicate all the columns except the new ones.
     if (offsets_to_replicate)
         for (size_t i = 0; i < existing_columns; ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->replicate(*offsets_to_replicate);
-
-    minv = block.safeGetByPosition(0).column->size();
-    maxv = block.safeGetByPosition(0).column->size();
-    for(int i = 0; i < block.columns(); i++) {
-        minv = std::min(minv, block.safeGetByPosition(i).column->size());
-        maxv = std::max(maxv, block.safeGetByPosition(i).column->size());
-    }
-    std::cerr<<"debug#4:"<<block.columns()<<" "<<existing_columns<<" "<<minv<<" "<<maxv<<std::endl;
-
 
     /// handle other conditions
     if (!other_filter_column.empty() || !other_eq_filter_from_in_column.empty())
@@ -1582,7 +1537,6 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
         handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
     }
-    
 }
 
 namespace
