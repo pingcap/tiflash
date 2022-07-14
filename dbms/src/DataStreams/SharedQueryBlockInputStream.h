@@ -46,7 +46,7 @@ public:
         if (shared_)
         {
             get_lock = [&]() {
-                return UniqueLockGuard<std::mutex>(mutex);
+                return std::unique_lock<std::mutex>(mutex);
             };
         }
         children.push_back(in);
