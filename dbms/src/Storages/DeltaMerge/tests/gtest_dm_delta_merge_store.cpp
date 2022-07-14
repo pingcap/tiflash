@@ -3318,11 +3318,11 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
-<<<<<<< HEAD
-                                             /* is_raw_read= */ false,
-=======
                                              /* is_fast_mode= */ false,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t num_rows_read = 0;
         while (Block block = in->read())
+        {
             num_rows_read += block.rows();
             for (auto && iter : block)
             {
@@ -3392,11 +3392,7 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
-<<<<<<< HEAD
-                                                /* is_raw_read= */ false,
-=======
                                                 /* is_fast_mode= */ false,
->>>>>>> 2bbe02bb41d557cd5cf297cc99a145071c17ccf8
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];

@@ -1180,13 +1180,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             EMPTY_FILTER,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
-<<<<<<< HEAD
-            true,
-            false,
-=======
             /* is_raw_ */ true,
             /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
->>>>>>> 2bbe02bb41d557cd5cf297cc99a145071c17ccf8
             extra_table_id_index,
             physical_table_id,
             req_info);
@@ -1203,11 +1198,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         UInt64 max_version,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
-<<<<<<< HEAD
-                                        bool is_raw_read,
-=======
                                         bool is_fast_mode,
->>>>>>> 2bbe02bb41d557cd5cf297cc99a145071c17ccf8
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
@@ -1243,13 +1234,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             filter,
             max_version,
             expected_block_size,
-<<<<<<< HEAD
-            is_raw_read,
-            true,
-=======
             /* is_raw_ */ is_fast_mode,
             /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
->>>>>>> 2bbe02bb41d557cd5cf297cc99a145071c17ccf8
             extra_table_id_index,
             physical_table_id,
             req_info);

@@ -22,8 +22,6 @@
 
 #include <unordered_set>
 
-#include "common/types.h"
-
 namespace DB
 {
 namespace DM
@@ -81,8 +79,11 @@ public:
                 auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*filter_pos) = (*delete_pos) == 0;
+                    (*filter_pos) = !(*delete_pos);
+                    ++filter_pos;
+                    ++delete_pos;
                 }
+            }
 
             for (size_t i = batch_rows; i < rows; ++i)
             {
