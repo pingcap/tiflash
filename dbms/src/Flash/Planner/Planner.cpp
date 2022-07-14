@@ -90,11 +90,13 @@ bool Planner::isSupported(const DAGQueryBlock & query_block)
         return !enableFineGrainedShuffle(query_block.source->fine_grained_shuffle_stream_count())
             && (!query_block.exchange_sender || !enableFineGrainedShuffle(query_block.exchange_sender->fine_grained_shuffle_stream_count()));
     };
-    return query_block.source
-        && (query_block.source->tp() == tipb::ExecType::TypeProjection
-            || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
-            || query_block.isTableScanSource())
-        && disable_fine_frained_shuffle(query_block);
+    static auto has_supported_source = [](const DAGQueryBlock & query_block) {
+        return query_block.source
+            && (query_block.source->tp() == tipb::ExecType::TypeProjection
+                || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
+                || query_block.isTableScanSource());
+    };
+    return has_supported_source(query_block) && disable_fine_frained_shuffle(query_block);
 }
 
 DAGContext & Planner::dagContext() const
