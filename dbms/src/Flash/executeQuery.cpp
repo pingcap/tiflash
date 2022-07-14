@@ -12,41 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/Logger.h>
-#include <DataStreams/IBlockInputStream.h>
+#include <Flash/executeQuery.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Planner/PlanQuerySource.h>
+#include <Interpreters/executeQuery.h>
 
 namespace DB
 {
-class Context;
-class DAGContext;
-
-class Planner : public IInterpreter
+BlockIO executeQuery(
+    Context & context,
+    bool internal,
+    QueryProcessingStage::Enum stage)
 {
-public:
-    Planner(
-        Context & context_,
-        const PlanQuerySource & plan_source_);
-
-    ~Planner() = default;
-
-    BlockIO execute() override;
-
-private:
-    DAGContext & dagContext() const;
-
-    void executeImpl(DAGPipeline & pipeline);
-
-private:
-    Context & context;
-
-    const PlanQuerySource & plan_source;
-
-    /// Max streams we will do processing.
-    size_t max_streams = 1;
-
-    LoggerPtr log;
-};
-} // namespace DB
+    if (context.getSettingsRef().enable_planner)
+    {
+        PlanQuerySource plan(context);
+        return executeQuery(plan, context, internal, stage);
+    }
+    else
+    {
+        DAGQuerySource dag(context);
+        return executeQuery(dag, context, internal, stage);
+    }
+}
+}

@@ -14,39 +14,26 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <DataStreams/IBlockInputStream.h>
-#include <Flash/Planner/PlanQuerySource.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/IQuerySource.h>
 
 namespace DB
 {
-class Context;
-class DAGContext;
-
-class Planner : public IInterpreter
+class PlanQuerySource : public IQuerySource
 {
 public:
-    Planner(
-        Context & context_,
-        const PlanQuerySource & plan_source_);
+    explicit PlanQuerySource(Context & context_);
 
-    ~Planner() = default;
+    std::tuple<std::string, ASTPtr> parse(size_t) override;
+    String str(size_t max_query_size) override;
+    std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
-    BlockIO execute() override;
-
-private:
-    DAGContext & dagContext() const;
-
-    void executeImpl(DAGPipeline & pipeline);
+    DAGContext & getDAGContext() const { return *context.getDAGContext(); }
+    const tipb::DAGRequest & getDAGRequest() const { return *getDAGContext().dag_request; }
 
 private:
     Context & context;
-
-    const PlanQuerySource & plan_source;
-
-    /// Max streams we will do processing.
-    size_t max_streams = 1;
-
-    LoggerPtr log;
 };
+
 } // namespace DB

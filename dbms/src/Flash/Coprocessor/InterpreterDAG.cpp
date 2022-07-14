@@ -17,7 +17,6 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Planner/Planner.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -55,25 +54,12 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
         BlockInputStreams child_streams = executeQueryBlock(*child);
         input_streams_vec.push_back(child_streams);
     }
-    if (context.getSettingsRef().enable_planner && Planner::isSupported(query_block))
-    {
-        LOG_FMT_DEBUG(dagContext().log, "use planer for query block with source {}", query_block.source_name);
-        Planner planner(
-            context,
-            input_streams_vec,
-            query_block,
-            max_streams);
-        return planner.execute();
-    }
-    else
-    {
-        DAGQueryBlockInterpreter query_block_interpreter(
-            context,
-            input_streams_vec,
-            query_block,
-            max_streams);
-        return query_block_interpreter.execute();
-    }
+    DAGQueryBlockInterpreter query_block_interpreter(
+        context,
+        input_streams_vec,
+        query_block,
+        max_streams);
+    return query_block_interpreter.execute();
 }
 
 BlockIO InterpreterDAG::execute()
