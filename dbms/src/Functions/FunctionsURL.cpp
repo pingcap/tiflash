@@ -107,7 +107,7 @@ void DecodeURLComponentImpl::vector(const ColumnString::Chars_t & data, const Co
 }
 
 
-void DecodeURLComponentImpl::vector_fixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
+void DecodeURLComponentImpl::vectorFixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
 {
     throw Exception("Column of type FixedString is not supported by URL functions", ErrorCodes::ILLEGAL_COLUMN);
 }
