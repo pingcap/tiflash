@@ -39,7 +39,12 @@ inline UInt64 clock_gettime_ns(clockid_t clock_type = CLOCK_MONOTONIC)
 inline UInt64 clock_gettime_ns_adjusted(UInt64 prev_time, clockid_t clock_type = CLOCK_MONOTONIC)
 {
     UInt64 current_time = clock_gettime_ns(clock_type);
-    return std::max(prev_time, current_time);
+    if (likely(prev_time <= current_time))
+    return current_time;
+
+    /// Something probably went completely wrong if time stepped back for more than 1 second.
+    assert(prev_time - current_time <= 1000000000ULL);
+    return prev_time;
 }
 
 /** Differs from Poco::Stopwatch only by using 'clock_gettime' instead of 'gettimeofday',
