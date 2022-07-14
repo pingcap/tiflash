@@ -1105,10 +1105,11 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     };
 
     const auto config_file_limit = config.file_limit_size.get();
+    // If `total_page_size` is greater than `config_file_limit`, we need to write the page data into multiple `BlobFile`s to 
+    // make the memory consumption smooth during GC.
     auto alloc_size = total_page_size > config_file_limit ? config_file_limit : total_page_size;
     BlobFileOffset remaining_page_size = total_page_size - alloc_size;
 
-    // We could make the memory consumption smooth during GC.
     char * data_buf = static_cast<char *>(alloc(alloc_size));
     SCOPE_EXIT({
         free(data_buf, alloc_size);
