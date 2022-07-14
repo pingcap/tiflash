@@ -409,7 +409,7 @@ void DAGQueryBlockInterpreter::executeAggregation(
         pipeline.firstStream() = std::move(stream);
 
         // should record for agg before restore concurrency. See #3804.
-        recordProfileStreams(pipeline, query_block.aggregation_name);
+        recordProfileStream(pipeline.firstStream(), max_streams, query_block.aggregation_name);
         restorePipelineConcurrency(pipeline);
     }
     else
@@ -449,6 +449,17 @@ void DAGQueryBlockInterpreter::recordProfileStreams(DAGPipeline & pipeline, cons
 {
     auto & profile_streams = dagContext().getProfileStreamsMap()[key];
     pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
+}
+
+void DAGQueryBlockInterpreter::recordProfileStream(const BlockInputStreamPtr & stream, size_t concurrency, const String & key)
+{
+    assert(stream);
+    auto & profile_streams = dagContext().getProfileStreamsMap()[key];
+    profile_streams.push_back(stream);
+    const auto & header = stream->getHeader();
+    /// We consider the number of streams as the concurrency of the operator and pass it to tidb.
+    for (size_t i = 1; i < concurrency; ++i)
+        profile_streams.emplace_back(std::make_shared<NullBlockInputStream>(header));
 }
 
 void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
