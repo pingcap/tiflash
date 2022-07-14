@@ -21,6 +21,11 @@
 
 namespace DB
 {
+/**
+ * A physical plan node that generates MockTableScanBlockInputStream.
+ * Used in gtest to test execution logic.
+ * Only available with `DAGContext.isTest() == true`.
+ */
 class PhysicalMockTableScan : public PhysicalLeaf
 {
 public:

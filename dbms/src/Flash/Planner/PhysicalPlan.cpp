@@ -34,6 +34,23 @@
 
 namespace DB
 {
+namespace
+{
+bool pushDownSelection(const PhysicalPlanNodePtr & plan, const String & executor_id, const tipb::Selection & selection)
+{
+    if (plan->tp() == PlanType::TableScan)
+    {
+        auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
+        if (!physical_table_scan->hasPushDownFilter())
+        {
+            physical_table_scan->pushDownFilter(executor_id, selection);
+            return true;
+        }
+    }
+    return false;
+}
+} // namespace
+
 void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 {
     assert(dag_request);
@@ -60,17 +77,10 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeSelection:
     {
         auto child = popBack();
-        if (child->tp() == PlanType::TableScan)
-        {
-            auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(child);
-            if (!physical_table_scan->hasPushDownFilter())
-            {
-                physical_table_scan->pushDownFilter(executor_id, executor->selection());
-                pushBack(physical_table_scan);
-                break;
-            }
-        }
-        pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
+        if (pushDownSelection(child, executor_id, executor->selection()))
+            pushBack(child);
+        else
+            pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
         break;
     }
     case tipb::ExecType::TypeAggregation:

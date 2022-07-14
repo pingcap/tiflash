@@ -20,6 +20,11 @@
 
 namespace DB
 {
+/**
+ * A physical plan node that generates MockExchangeReceiverInputStream.
+ * Used in gtest to test execution logic.
+ * Only available with `DAGContext.isTest() == true`.
+ */
 class PhysicalMockExchangeReceiver : public PhysicalLeaf
 {
 public:
@@ -43,6 +48,7 @@ public:
 private:
     void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
+private:
     Block sample_block;
 
     BlockInputStreams mock_streams;

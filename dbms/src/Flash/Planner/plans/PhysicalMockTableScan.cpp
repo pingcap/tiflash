@@ -37,6 +37,44 @@
 
 namespace DB
 {
+namespace
+{
+std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
+    Context & context,
+    const String & executor_id,
+    const LoggerPtr & log,
+    const TiDBTableScan & table_scan)
+{
+    NamesAndTypes schema;
+    BlockInputStreams mock_streams;
+
+    auto & dag_context = *context.getDAGContext();
+    size_t max_streams = dag_context.initialize_concurrency;
+    assert(max_streams > 0);
+
+    if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
+    {
+        /// build with default blocks.
+        schema = genNamesAndTypes(table_scan, "mock_table_scan");
+        auto columns_with_type_and_name = getColumnWithTypeAndName(schema);
+        for (size_t i = 0; i < max_streams; ++i)
+            mock_streams.emplace_back(std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size));
+    }
+    else
+    {
+        /// build from user input blocks.
+        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id);
+        schema = std::move(names_and_types);
+        mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
+    }
+
+    assert(!schema.empty());
+    assert(!mock_streams.empty());
+
+    return {std::move(schema), std::move(mock_streams)};
+}
+} // namespace
+
 PhysicalMockTableScan::PhysicalMockTableScan(
     const String & executor_id_,
     const NamesAndTypes & schema_,
@@ -54,26 +92,9 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
     const LoggerPtr & log,
     const TiDBTableScan & table_scan)
 {
-    NamesAndTypes schema;
-    BlockInputStreams mock_streams;
-    auto & dag_context = *context.getDAGContext();
-    size_t max_streams = dag_context.initialize_concurrency;
-    assert(max_streams > 0);
-    if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
-    {
-        schema = genNamesAndTypes(table_scan, "mock_table_scan");
-        auto columns_with_type_and_name = getColumnWithTypeAndName(schema);
-        for (size_t i = 0; i < max_streams; ++i)
-            mock_streams.emplace_back(std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size));
-    }
-    else
-    {
-        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id);
-        schema = std::move(names_and_types);
-        mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
-    }
-    assert(!schema.empty());
-    assert(!mock_streams.empty());
+    assert(context.getDAGContext()->isTest());
+
+    auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
 
     auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
