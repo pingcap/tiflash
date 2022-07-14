@@ -20,10 +20,16 @@ mysql> insert into test.t values('one week’s time test');
 mysql> insert into test.t values('abc测试def');
 mysql> insert into test.t values('abcテストabc');
 mysql> insert into test.t values('ѐёђѓєѕіїјљњћќѝўџ');
-mysql> insert into test.t values('+ѐ-ё*ђ/ѓ!є@ѕ#і@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^');
+mysql> insert into test.t values('+ѐ-ё*ђ/ѓ!є@ѕ#і$@ї%ј……љ&њ（ћ）ќ￥ѝ#ў@џ！^');
 mysql> insert into test.t values('αβγδεζηθικλμνξοπρστυφχψωσ');
 mysql> insert into test.t values('▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕');
 mysql> insert into test.t values('թփձջրչճժծքոեռտըւիօպասդֆգհյկլխզղցվբնմշ');
+mysql> insert into test.t values('\$$\$$\$$');
+mysql> insert into test.t values('\$$\$$\$$\$');
+mysql> insert into test.t values('\`\$$\$$\$');
+mysql> insert into test.t values('\`$$`\$$\$$\$');
+mysql> insert into test.t values('\\$```');
+mysql> insert into test.t values('\\\```');
 mysql> insert into test.t values(NULL);
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
@@ -36,9 +42,15 @@ mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select
 | fed试测cba                                                                                      |
 | cbaトステcba                                                                                    |
 | џўѝќћњљјїіѕєѓђёѐ                                                                                |
-| ^！џ@ў#ѝ￥ќ）ћ（њ&љ……ј%ї@і#ѕ@є!ѓ/ђ*ё-ѐ+                                                         |
+| ^！џ@ў#ѝ￥ќ）ћ（њ&љ……ј%ї@$і#ѕ@є!ѓ/ђ*ё-ѐ+                                                        |
 | σωψχφυτσρποξνμλκιθηζεδγβα                                                                       |
 | ✕σ★ω♘ψχ♖φυ♥τσ℉ρπ✚οξ✓νμ♫λκ€ιθ✂ηζ☎εδ➨γβ▼α▲                                                        |
 | շմնբվցղզխլկյհգֆդսապօիւըտռեոքծժճչրջձփթ                                                           |
+| $$$$$$                                                                                          |
+| $$$$$$$                                                                                         |
+| $$$$$`                                                                                          |
+| $$$$$`$$`                                                                                       |
+| ```$\\                                                                                          |
+| ```\\                                                                                           |
 | NULL                                                                                            |
 +-------------------------------------------------------------------------------------------------+
