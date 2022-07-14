@@ -52,7 +52,7 @@ private:
     template <bool positive>
     struct less;
 
-    template <bool positive>
+    template <bool positive, typename Derived>
     struct lessWithCollation;
 
     ColumnString() = default;

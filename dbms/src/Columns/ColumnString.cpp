@@ -17,6 +17,7 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <Functions/CollationOperatorOptimized.h>
 #include <fmt/core.h>
 
 /// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
@@ -320,53 +321,87 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
         rhs.sizeAt(m));
 }
 
-
-template <bool positive>
+// Derived must implement function `int compare(const char *, size_t, const char *, size_t)`.
+template <bool positive, typename Derived>
 struct ColumnString::lessWithCollation
 {
     const ColumnString & parent;
-    const ICollator & collator;
+    const Derived & inner;
 
-    lessWithCollation(const ColumnString & parent_, const ICollator & collator_)
+    lessWithCollation(const ColumnString & parent_, const Derived & inner_)
         : parent(parent_)
-        , collator(collator_)
+        , inner(inner_)
     {}
 
     bool operator()(size_t lhs, size_t rhs) const
     {
-        int res = collator.compare(
+        int res = inner.compare(
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(lhs)]),
-            parent.sizeAt(lhs),
+            parent.sizeAt(lhs) - 1, // remove tail '\0'
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(rhs)]),
-            parent.sizeAt(rhs));
+            parent.sizeAt(rhs) - 1) // remove tail '\0'
+            ;
 
         return positive ? (res < 0) : (res > 0);
     }
 };
 
+struct Utf8MB4BinCmp
+{
+    static inline int compare(const char * s1, size_t length1, const char * s2, size_t length2)
+    {
+        return DB::BinCollatorCompare<true>(s1, length1, s2, length2);
+    }
+};
+
+// common util functions
+template <>
+struct ColumnString::lessWithCollation<false, void>
+{
+    // `CollationCmpImpl` must implement function `int compare(const char *, size_t, const char *, size_t)`.
+    template <typename CollationCmpImpl>
+    static void getPermutationWithCollationImpl(const ColumnString & src, const CollationCmpImpl & collator_cmp_impl, bool reverse, size_t limit, Permutation & res)
+    {
+        size_t s = src.offsets.size();
+        res.resize(s);
+        for (size_t i = 0; i < s; ++i)
+            res[i] = i;
+
+        if (limit >= s)
+            limit = 0;
+
+        if (limit)
+        {
+            if (reverse)
+                std::partial_sort(res.begin(), res.begin() + limit, res.end(), lessWithCollation<false, CollationCmpImpl>(src, collator_cmp_impl));
+            else
+                std::partial_sort(res.begin(), res.begin() + limit, res.end(), lessWithCollation<true, CollationCmpImpl>(src, collator_cmp_impl));
+        }
+        else
+        {
+            if (reverse)
+                std::sort(res.begin(), res.end(), lessWithCollation<false, CollationCmpImpl>(src, collator_cmp_impl));
+            else
+                std::sort(res.begin(), res.end(), lessWithCollation<true, CollationCmpImpl>(src, collator_cmp_impl));
+        }
+    }
+};
+
 void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res) const
 {
-    size_t s = offsets.size();
-    res.resize(s);
-    for (size_t i = 0; i < s; ++i)
-        res[i] = i;
+    using PermutationWithCollationUtils = ColumnString::lessWithCollation<false, void>;
 
-    if (limit >= s)
-        limit = 0;
-
-    if (limit)
+    // optimize path for default collator `UTF8MB4_BIN`
+    if (&collator == TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN))
     {
-        if (reverse)
-            std::partial_sort(res.begin(), res.begin() + limit, res.end(), lessWithCollation<false>(*this, collator));
-        else
-            std::partial_sort(res.begin(), res.begin() + limit, res.end(), lessWithCollation<true>(*this, collator));
+        Utf8MB4BinCmp cmp_impl;
+        PermutationWithCollationUtils::getPermutationWithCollationImpl(*this, cmp_impl, reverse, limit, res);
+        ///
+        return;
     }
-    else
+
     {
-        if (reverse)
-            std::sort(res.begin(), res.end(), lessWithCollation<false>(*this, collator));
-        else
-            std::sort(res.begin(), res.end(), lessWithCollation<true>(*this, collator));
+        PermutationWithCollationUtils::getPermutationWithCollationImpl(*this, collator, reverse, limit, res);
     }
 }
 
