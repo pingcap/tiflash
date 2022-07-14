@@ -930,8 +930,149 @@ try
 }
 CATCH
 
-// Insert + Delete
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDelete)
+// Insert + Delete row
+TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteRow)
+try
+{
+    const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
+    const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
+
+        store = reload(table_column_defines);
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        Block block1;
+        {
+            block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of col2:String for test
+            block1.insert(DB::tests::createColumn<String>(
+                createNumberStrings(0, num_rows_write),
+                col_str_define.name,
+                col_str_define.id));
+            // Add a column of i8:Int8 for test
+            block1.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_i8_define.name,
+                col_i8_define.id));
+        }
+
+        Block block2;
+        {
+            block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, 1.5 * num_rows_write, false, 3, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_INT_TYPE, false, 1, true, true);
+            // Add a column of col2:String for test
+            block2.insert(DB::tests::createColumn<String>(
+                createNumberStrings(0.5 * num_rows_write, num_rows_write),
+                col_str_define.name,
+                col_str_define.id));
+            // Add a column of i8:Int8 for test
+            block2.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0.5 * num_rows_write, num_rows_write),
+                col_i8_define.name,
+                col_i8_define.id));
+        }
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+            store->write(*db_context, db_context->getSettingsRef(), block1);
+            store->write(*db_context, db_context->getSettingsRef(), block2);
+            break;
+        default:
+            auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            auto range = range1.merge(range2);
+            auto file_ids = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
+            store->ingestFiles(dm_context, range, file_ids, false);
+            break;
+        }
+    }
+
+    // Read after deletion
+    {
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* is_raw_read= */ true,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t num_rows_read = 0;
+
+        // filter del mark = 1， thus just read the insert data before delete
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        ASSERT_EQ(c->getInt(i), i);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    store->mergeDeltaAll(*db_context);
+
+    {
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* is_raw_read= */ true,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t num_rows_read = 0;
+
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        ASSERT_EQ(c->getInt(i), i);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+// Insert + Delete Range
+TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteRange)
 try
 {
     const size_t num_rows_write = 128;
