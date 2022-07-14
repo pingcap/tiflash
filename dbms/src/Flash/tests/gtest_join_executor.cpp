@@ -22,7 +22,7 @@ namespace tests
 {
 class JoinExecutorTestRunner : public DB::tests::ExecutorTest
 {
-    const size_t max_concurrency_level = 10;
+    static const size_t max_concurrency_level = 10;
 
 public:
     void initializeContext() override
