@@ -44,12 +44,8 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
 
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
-<<<<<<< HEAD
-    dir->gcInMemEntries();
-=======
-    // It's no need to remove the expired entries in BlobStore, so skip filling removed_entries to improve performance.
-    dir->gcInMemEntries(/*return_removed_entries=*/false, /* keep_last_delete_entry */ for_dump_snapshot);
->>>>>>> c40c262576 (keep delete entry when dump snapshot (#5357))
+    dir->gcInMemEntries(/* keep_last_delete_entry */ for_dump_snapshot);
+
     LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory", storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
     if (!for_dump_snapshot && blob_stats)

@@ -478,14 +478,9 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
 bool VersionedPageEntries::cleanOutdatedEntries(
     UInt64 lowest_seq,
     std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
-<<<<<<< HEAD
     PageEntriesV3 & entries_removed,
-    const PageLock & /*page_lock*/)
-=======
-    PageEntriesV3 * entries_removed,
     const PageLock & /*page_lock*/,
     bool keep_last_valid_var_entry)
->>>>>>> c40c262576 (keep delete entry when dump snapshot (#5357))
 {
     if (type == EditRecordType::VAR_EXTERNAL)
     {
@@ -576,11 +571,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     return entries.empty() || (entries.size() == 1 && entries.begin()->second.isDelete());
 }
 
-<<<<<<< HEAD
-bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 & entries_removed)
-=======
-bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 * entries_removed, bool keep_last_valid_var_entry)
->>>>>>> c40c262576 (keep delete entry when dump snapshot (#5357))
+bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 & entries_removed, bool keep_last_valid_var_entry)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
@@ -1263,11 +1254,7 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
     return done_any_io;
 }
 
-<<<<<<< HEAD
-PageEntriesV3 PageDirectory::gcInMemEntries()
-=======
-PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool keep_last_valid_var_entry)
->>>>>>> c40c262576 (keep delete entry when dump snapshot (#5357))
+PageEntriesV3 PageDirectory::gcInMemEntries(bool keep_last_valid_var_entry)
 {
     UInt64 lowest_seq = sequence.load();
 
@@ -1331,14 +1318,9 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool ke
         const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
             &normal_entries_to_deref,
-<<<<<<< HEAD
             all_del_entries,
-            iter->second->acquireLock());
-=======
-            return_removed_entries ? &all_del_entries : nullptr,
             iter->second->acquireLock(),
             keep_last_valid_var_entry);
->>>>>>> c40c262576 (keep delete entry when dump snapshot (#5357))
 
         {
             std::unique_lock write_lock(table_rw_mutex);
@@ -1376,12 +1358,8 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool ke
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
-<<<<<<< HEAD
-            all_del_entries);
-=======
-            return_removed_entries ? &all_del_entries : nullptr,
+            all_del_entries,
             keep_last_valid_var_entry);
->>>>>>> c40c262576 (keep delete entry when dump snapshot (#5357))
 
         if (all_deleted)
         {

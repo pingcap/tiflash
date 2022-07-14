@@ -1118,12 +1118,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             new_entry.size = entry.size;
 
             new_entry.file_id = blobfile_id;
-<<<<<<< HEAD
-            new_entry.offset = file_offset_beg + offset_in_data;
-=======
             new_entry.offset = file_offset_begin + offset_in_data;
-            new_entry.padded_size = 0; // reset padded size to be zero
->>>>>>> c40c262576 (keep delete entry when dump snapshot (#5357))
 
             offset_in_data += new_entry.size;
             data_pos += new_entry.size;
