@@ -52,7 +52,7 @@ public:
                       complete_not_passed * 100.0 / total_blocks);
     }
 
-    String getName() const override { return "DMColumnFilter"; }
+    String getName() const override { return "DMDeleteFilter"; }
 
     Block getHeader() const override { return header; }
 
@@ -151,7 +151,7 @@ public:
         children.emplace_back(input);
     }
 
-    String getName() const override { return "DMColumnFilter"; }
+    String getName() const override { return "DMColumnProjection"; }
 
     Block getHeader() const override { return header; }
 
