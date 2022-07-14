@@ -98,6 +98,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 }
 
 const bool fix_huge_block_of_flash2tidb = true;
+const bool fix_huge_block_of_flash2tiflash = false;
 const int rows_of_single_msg = 1024;
 
 template <class StreamWriterPtr>
@@ -226,11 +227,12 @@ template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(
     std::vector<Block> & input_blocks,
-    tipb::SelectResponse & response) const
+    tipb::SelectResponse & response, bool div) const
 {
-    std::cerr<<"DAG.partitionAndEncodeThenWriteBlocks: "<<dag_context.encode_type<<" "<< dag_context.isMPPTask()<<" "<<(input_blocks.size()? input_blocks[0].rows():0)<<" "<<input_blocks.size()<<std::endl;
+    
     int pcnt = this->partition_num;
-    // int partition_num = this->partition_num*10;
+    int partition_num = this->partition_num*40;
+    std::cerr<<"DAG.partitionAndEncodeThenWriteBlocks: "<<dag_context.encode_type<<" "<< dag_context.isMPPTask()<<" "<<(input_blocks.size()? input_blocks[0].rows():0)<<" "<<input_blocks.size()<<" div:"<<div<<" virt_partcnt: "<< partition_num<<std::endl;
     std::vector<mpp::MPPDataPacket> packet(partition_num);
 
     std::vector<size_t> responses_row_count(partition_num);
@@ -247,7 +249,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         {
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
-                writer->write(packet[part_id], part_id%pcnt);
+                if (div) writer->write(packet[part_id]);
+                else 
+                    writer->write(packet[part_id], part_id%pcnt);
             }
         }
         return;
@@ -291,10 +295,14 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
         IColumn::Selector selector(rows);
         for (size_t row = 0; row < rows; ++row)
         {
+            if (div) {
+                selector[row] = row%partition_num;
+            } else {
             /// Row from interval [(2^32 / partition_num) * i, (2^32 / partition_num) * (i + 1)) goes to bucket with number i.
             selector[row] = hash_data[row]; /// [0, 2^32)
             selector[row] *= partition_num; /// [0, partition_num * 2^32), selector stores 64 bit values.
             selector[row] >>= 32u; /// [0, partition_num)
+            }
         }
 
         for (size_t col_id = 0; col_id < block.columns(); ++col_id)
@@ -317,7 +325,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
 
             if (responses_row_count[part_id] > 1024) {
                 std::cerr<<"DAG.partitionAndEncodeThenWriteBlocks.write: "<<part_id<<" "<< responses_row_count[part_id]<<std::endl;
-                writer->write(packet[part_id], part_id%pcnt);
+                if (div) writer->write(packet[part_id]);
+                else 
+                    writer->write(packet[part_id], part_id%pcnt);
                 responses_row_count[part_id] = 0;
                 packet[part_id].clear_chunks();
             }
@@ -328,13 +338,17 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     {
         if constexpr (send_exec_summary_at_last)
         {
-            writer->write(packet[part_id], part_id%pcnt);
+            if (div) writer->write(packet[part_id]);
+            else 
+                    writer->write(packet[part_id], part_id%pcnt);
         }
         else
         {
             if (responses_row_count[part_id] > 0) {
                 std::cerr<<"DAG.partitionAndEncodeThenWriteBlocks.write: "<<part_id<<" "<< responses_row_count[part_id]<<std::endl;
-                writer->write(packet[part_id], part_id%pcnt);
+                if (div) writer->write(packet[part_id]);
+                else 
+                    writer->write(packet[part_id], part_id%pcnt);
             }
         }
     }
@@ -353,7 +367,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
     }
     else
     {
-        encodeThenWriteBlocks<send_exec_summary_at_last>(blocks, response);
+
+        if (fix_huge_block_of_flash2tiflash && dag_context.encode_type == tipb::EncodeType::TypeCHBlock && blocks.size() && blocks[0].rows()> 65535) {
+            partitionAndEncodeThenWriteBlocks<send_exec_summary_at_last>(blocks, response, true);
+        } else {
+            encodeThenWriteBlocks<send_exec_summary_at_last>(blocks, response);
+        }
     }
     blocks.clear();
     rows_in_blocks = 0;
