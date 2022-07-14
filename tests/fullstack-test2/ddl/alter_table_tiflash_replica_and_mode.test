@@ -53,6 +53,8 @@ func> wait_table test t
 │ 1                                  │
 └────────────────────────────────────┘
 
+>> DBGInvoke __refresh_schemas()
+
 >> DBGInvoke get_tiflash_mode("test", "t")
 ┌─get_tiflash_mode(test, t)──────────┐
 │ fast                               │
