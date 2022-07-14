@@ -333,7 +333,7 @@ struct ColumnString::lessWithCollation
         , inner(inner_)
     {}
 
-    bool operator()(size_t lhs, size_t rhs) const
+    INLINE_FLATTEN_PURE inline bool operator()(size_t lhs, size_t rhs) const
     {
         int res = inner.compare(
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(lhs)]),
@@ -348,7 +348,7 @@ struct ColumnString::lessWithCollation
 
 struct Utf8MB4BinCmp
 {
-    static inline int compare(const char * s1, size_t length1, const char * s2, size_t length2)
+    static INLINE_FLATTEN_PURE inline int compare(const char * s1, size_t length1, const char * s2, size_t length2)
     {
         return DB::BinCollatorCompare<true>(s1, length1, s2, length2);
     }
