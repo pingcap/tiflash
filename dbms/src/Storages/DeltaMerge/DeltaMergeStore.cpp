@@ -1751,7 +1751,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
-    LOG_FMT_DEBUG(log,
+    LOG_FMT_TRACE(log,
                   "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
                   table_name,
                   next_gc_check_key.toDebugString(),
@@ -1845,7 +1845,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
-                    LOG_FMT_INFO(
+                    LOG_FMT_DEBUG(
                         log,
                         "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
                         segment_id,
@@ -1854,7 +1854,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 }
                 else
                 {
-                    LOG_FMT_INFO(
+                    LOG_FMT_DEBUG(
                         log,
                         "GC aborted on Segment [{}] [range={}] [table={}]",
                         segment_id,
@@ -1877,7 +1877,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
     }
 
-    LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    if (gc_segments_num != 0)
+    {
+        LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    }
     return gc_segments_num;
 }
 

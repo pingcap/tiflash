@@ -66,7 +66,7 @@ public:
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfoVec & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoVec & columns);
 
-    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns);
+    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -93,16 +93,16 @@ public:
     DAGRequestBuilder & aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs);
 
     // window
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame);
-    DAGRequestBuilder & window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame);
-    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame);
-    DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort);
-    DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
-    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfoVec & columns);
+    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     ExecutorPtr root;
     DAGProperties properties;
@@ -139,7 +139,7 @@ public:
     std::unordered_map<String, ColumnsWithTypeAndName> & executorIdColumnsMap() { return executor_id_columns_map; }
 
     DAGRequestBuilder scan(String db_name, String table_name);
-    DAGRequestBuilder receive(String exchange_name);
+    DAGRequestBuilder receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
 private:
     size_t index;
@@ -166,6 +166,7 @@ MockWindowFrame buildDefaultRowsFrame();
 
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
+#define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))
