@@ -82,7 +82,7 @@ public:
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
-        for (size_t i = 1; i < max_concurrency_level; ++i)
+        for (size_t i = 1; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         }
