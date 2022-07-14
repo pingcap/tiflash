@@ -42,7 +42,7 @@ bool GCManager::work()
         return false;
     }
 
-    LOG_FMT_INFO(log, "Start GC with table id: {}", next_table_id);
+    LOG_FMT_DEBUG(log, "Start GC with table id: {}", next_table_id);
     // Get a storage snapshot with weak_ptrs first
     // TODO: avoid gc on storage which have no data?
     std::map<TableID, std::weak_ptr<IManageableStorage>> storages;
@@ -97,7 +97,7 @@ bool GCManager::work()
     if (iter == storages.end())
         iter = storages.begin();
     next_table_id = iter->first;
-    LOG_FMT_INFO(log, "End GC and next gc will start with table id: {}", next_table_id);
+    LOG_FMT_DEBUG(log, "End GC and next gc will start with table id: {}", next_table_id);
     gc_check_stop_watch.restart();
     // Always return false
     return false;
