@@ -355,7 +355,7 @@ public:
 
 
     /// Read rows in two modes:
-    ///     when is_raw_read == true, read rows witch MVCC filtering
+    ///     when is_raw_read == true, read rows with MVCC filtering
     ///     when is_raw_read == false, read rows without MVCC and sorted merge
     /// `sorted_ranges` should be already sorted and merged
     BlockInputStreams read(const Context & db_context,
