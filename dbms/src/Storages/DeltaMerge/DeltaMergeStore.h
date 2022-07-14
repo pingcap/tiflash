@@ -355,7 +355,7 @@ public:
 
 
     /// Read rows in two modes:
-    ///     when is_fast_mode == false, we are in normal mode. Thus we will read rows with MVCC filtering, del mark = 1 filter and sorted merge
+    ///     when is_fast_mode == false, we are in normal mode. Thus we will read rows with MVCC filtering, del mark !=0  filter and sorted merge
     ///     when is_fast_mode == true, we are in fast mode. Thus we will read rows without MVCC and sorted merge
     /// `sorted_ranges` should be already sorted and merged
     BlockInputStreams read(const Context & db_context,

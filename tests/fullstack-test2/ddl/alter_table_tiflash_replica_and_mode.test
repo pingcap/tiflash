@@ -43,8 +43,8 @@ mysql> alter table test.t set tiflash mode fast
 # test replica for partition tables
 mysql> drop table if exists test.t
 mysql> create table test.t (x int) partition by range (x) (partition p0 values less than (5), partition p1 values less than (10));
-mysql> alter table test.t set tiflash mode fast
 mysql> alter table test.t set tiflash replica 1
+mysql> alter table test.t set tiflash mode fast
 
 func> wait_table test t
 
@@ -91,8 +91,8 @@ mysql> alter table test.t add partition (partition p2 values less than (2010));
 ## test correctness in simple case
 mysql> drop table if exists test.t
 mysql> create table test.t (a int, b int)
-mysql> alter table test.t set tiflash mode fast
 mysql> alter table test.t set tiflash replica 1
+mysql> alter table test.t set tiflash mode fast
 
 func> wait_table test t
 

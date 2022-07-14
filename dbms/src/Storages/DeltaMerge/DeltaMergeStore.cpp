@@ -1119,7 +1119,7 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
     }
 }
 
-// Read data without mvcc filtering && delete mark = 1 filtering.
+// Read data without mvcc filtering && delete mark != 0 filtering.
 // just for debug
 // readRaw is called under 'selraw  xxxx'
 BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,

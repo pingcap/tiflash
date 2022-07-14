@@ -501,11 +501,11 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
 /// we will call getInputStreamRaw in two condition:
 ///     1. Using 'selraw xxxx' statement, which is always in test for debug. (when filter_delete_mark = false)
 ///        In this case, we will read all the data without mvcc filtering,
-///        del_mark = 1 filtering and sorted merge.
+///        del_mark != 0 filtering and sorted merge.
 ///        We will just read all the data and return.
 ///     2. We read in fast mode. (when filter_delete_mark = true)
 ///        In this case, we will read all the data without mvcc filtering and sorted merge,
-///        but we will do del_mark = 1 filtering.
+///        but we will do del_mark != 0 filtering.
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                const ColumnDefines & columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
