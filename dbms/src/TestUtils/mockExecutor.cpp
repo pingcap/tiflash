@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Debug/astToExecutor.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -22,6 +23,8 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
+
+#include <unordered_set>
 
 namespace DB::tests
 {
@@ -90,6 +93,29 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     root.reset();
     executor_index = 0;
     return dag_request_ptr;
+}
+
+void collectUsedColumns(ExecutorPtr executor)
+{
+    std::unordered_set<String> used_columns;
+    for (auto & schema : executor->output_schema)
+        used_columns.emplace(schema.first);
+    executor->columnPrune(used_columns);
+}
+
+QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context)
+{
+    collectUsedColumns(root);
+    // enable mpp
+    properties.is_mpp_query = true;
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    for (const auto & task : query_tasks)
+    {
+        task.dag_request->PrintDebugString();
+    }
+    root.reset();
+    executor_index = 0;
+    return query_tasks;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, const MockColumnInfoVec & columns)
