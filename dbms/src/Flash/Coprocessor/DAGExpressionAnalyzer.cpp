@@ -169,6 +169,8 @@ void DAGExpressionAnalyzer::fillArgumentDetailForAggFuncBitwise(
     const Block & sample_block = actions->getSampleBlock();
     String name = getActions(arg, actions);
     DataTypePtr orig_type = sample_block.getByName(name).type;
+    // Bitwise operations can only be applied to integer types.
+    // So we need to cast the argument to UInt64.
     if (!removeNullable(orig_type)->equals(*uint64_type))
     {
         if (orig_type->isNullable())
