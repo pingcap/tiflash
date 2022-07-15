@@ -268,6 +268,7 @@ private:
 private:
     WriterPtr checkAndRenewWriter(
         WritingPageFile & writing_file,
+        PageFileIdAndLevel max_page_file_id_lvl_hint,
         const String & parent_path_hint,
         WriterPtr && old_writer = nullptr,
         const String & logging_msg = "");

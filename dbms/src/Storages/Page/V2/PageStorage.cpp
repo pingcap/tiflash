@@ -312,6 +312,7 @@ void PageStorage::restore()
     }
 
     // Fill write_files
+    PageFileIdAndLevel max_page_file_id_lvl{0, 0};
     {
         const size_t num_delta_paths = delegator->numPaths();
         std::vector<size_t> next_write_fill_idx(num_delta_paths);
@@ -319,6 +320,7 @@ void PageStorage::restore()
         // Only insert location of PageFile when it storing delta data
         for (const auto & page_file : page_files)
         {
+            max_page_file_id_lvl = std::max(max_page_file_id_lvl, page_file.fileIdLevel());
             // Checkpoint file is always stored on `delegator`'s default path, so no need to insert it's location here
             size_t idx_in_delta_paths = delegator->addPageFileUsedSize(
                 page_file.fileIdLevel(),
@@ -342,7 +344,7 @@ void PageStorage::restore()
     std::vector<String> store_paths = delegator->listPaths();
     for (size_t i = 0; i < write_files.size(); ++i)
     {
-        auto writer = checkAndRenewWriter(write_files[i], /*parent_path_hint=*/store_paths[i % store_paths.size()]);
+        auto writer = checkAndRenewWriter(write_files[i], max_page_file_id_lvl, /*parent_path_hint=*/store_paths[i % store_paths.size()]);
         idle_writers.emplace_back(std::move(writer));
     }
 #endif
@@ -400,6 +402,7 @@ DB::PageEntry PageStorage::getEntry(NamespaceId /*ns_id*/, PageId page_id, Snaps
 //   The <id,level> of the new `page_file` is <max_id + 1, 0> of all `write_files`
 PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
     WritingPageFile & writing_file,
+    PageFileIdAndLevel max_page_file_id_lvl_hint,
     const String & parent_path_hint,
     PageStorage::WriterPtr && old_writer,
     const String & logging_msg)
@@ -440,8 +443,7 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
             // Check whether caller has defined a hint path
             pf_parent_path = parent_path_hint;
         }
-
-        PageFileIdAndLevel max_writing_id_lvl{0, 0};
+        PageFileIdAndLevel max_writing_id_lvl{max_page_file_id_lvl_hint};
         for (const auto & wf : write_files)
             max_writing_id_lvl = std::max(max_writing_id_lvl, wf.file.fileIdLevel());
         delegator->addPageFileUsedSize( //
@@ -454,7 +456,6 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
         writing_file.file
             = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log);
         writing_file.persisted.meta_offset = 0;
-
         write_file_writer = writing_file.file.createWriter(config.sync_on_write, true);
     }
     return write_file_writer;
@@ -557,7 +558,7 @@ void PageStorage::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limi
 
         // Check whether we need to roll to new PageFile and its writer
         const auto logging_msg = " PageFile_" + DB::toString(writing_file.file.getFileId()) + "_0 is full,";
-        file_to_write = checkAndRenewWriter(writing_file, "", std::move(file_to_write), logging_msg);
+        file_to_write = checkAndRenewWriter(writing_file, {0, 0}, "", std::move(file_to_write), logging_msg);
 
         idle_writers.emplace_back(std::move(file_to_write));
 
