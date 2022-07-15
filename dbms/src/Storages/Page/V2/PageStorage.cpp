@@ -450,10 +450,7 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
         }
         PageFileIdAndLevel max_writing_id_lvl{max_page_file_id_lvl_hint};
         for (const auto & wf : write_files)
-        {
             max_writing_id_lvl = std::max(max_writing_id_lvl, wf.file.fileIdLevel());
-        }
-
         delegator->addPageFileUsedSize( //
             PageFileIdAndLevel(max_writing_id_lvl.first + 1, 0),
             0,
@@ -464,7 +461,6 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
         writing_file.file
             = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log);
         writing_file.persisted.meta_offset = 0;
-        max_writing_id_lvl.first += 1;
         write_file_writer = writing_file.file.createWriter(config.sync_on_write, true);
     }
     return write_file_writer;
