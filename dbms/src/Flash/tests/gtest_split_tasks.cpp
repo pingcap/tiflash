@@ -26,10 +26,8 @@ public:
     {
         ExecutorTest::initializeContext();
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
-        context.addMockTable({"test_db", "l_table"},
-                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
-        context.addMockTable({"test_db", "r_table"},
-                             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addMockTable({"test_db", "l_table"}, {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
+        context.addMockTable({"test_db", "r_table"}, {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
     }
 };
 
