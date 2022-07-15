@@ -41,8 +41,8 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
 
     // initialize background & blockable background thread pool
     Settings & settings = global_context->getSettingsRef();
-    global_context->initializeBackgroundPool(bg_thread_count == 0 ? settings.background_pool_size : bg_thread_count);
-    global_context->initializeBlockableBackgroundPool(bg_thread_count == 0 ? settings.background_pool_size : bg_thread_count);
+    global_context->initializeBackgroundPool(bg_thread_count == 0 ? settings.background_pool_size.get() : bg_thread_count);
+    global_context->initializeBlockableBackgroundPool(bg_thread_count == 0 ? settings.background_pool_size.get() : bg_thread_count);
 
     // Theses global variables should be initialized by the following order
     // 1. capacity
