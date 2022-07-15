@@ -18,6 +18,7 @@
 #include <Storages/Transaction/Collator.h>
 
 #include <array>
+#include <unordered_map>
 
 namespace DB::ErrorCodes
 {
@@ -191,14 +192,7 @@ public:
 
     StringRef sortKey(const char * s, size_t length, std::string &) const override
     {
-        if constexpr (padding)
-        {
-            return StringRef(rtrim(s, length));
-        }
-        else
-        {
-            return StringRef(s, length);
-        }
+        return DB::BinCollatorSortKey<padding>(s, length);
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }

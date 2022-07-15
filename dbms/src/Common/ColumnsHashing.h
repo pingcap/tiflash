@@ -99,7 +99,7 @@ struct HashMethodString
     HashMethodString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
-        const ColumnString & column_string = assert_cast<const ColumnString &>(column);
+        const auto & column_string = assert_cast<const ColumnString &>(column);
         offsets = column_string.getOffsets().data();
         chars = column_string.getChars().data();
         if (!collators.empty())
@@ -113,12 +113,13 @@ struct HashMethodString
     auto getKeyHolder(ssize_t row, [[maybe_unused]] Arena * pool, std::vector<String> & sort_key_containers) const
     {
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
+
+        // Skip last zero byte.
         StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
 
         if constexpr (place_string_to_arena)
         {
-            if (collator)
-                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
+            collator->sortKeyNullable(key.data, key.size, sort_key_containers[0], key);
             return ArenaKeyHolder{key, *pool};
         }
         else
@@ -147,7 +148,7 @@ struct HashMethodFixedString
     HashMethodFixedString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
-        const ColumnFixedString & column_string = assert_cast<const ColumnFixedString &>(column);
+        const auto & column_string = assert_cast<const ColumnFixedString &>(column);
         n = column_string.getN();
         chars = &column_string.getChars();
         if (!collators.empty())
@@ -158,10 +159,7 @@ struct HashMethodFixedString
     {
         StringRef key(&(*chars)[row * n], n);
 
-        if (collator)
-        {
-            key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
-        }
+        collator->sortKeyNullable(key.data, key.size, sort_key_containers[0], key);
 
         if constexpr (place_string_to_arena)
         {
@@ -387,7 +385,7 @@ struct HashMethodHashed
 
     ALWAYS_INLINE Key getKeyHolder(size_t row, Arena *, std::vector<String> & sort_key_containers) const
     {
-        return hash128(row, key_columns.size(), key_columns, collators, sort_key_containers);
+        return Hash128(row, key_columns.size(), key_columns, collators, sort_key_containers);
     }
 };
 

@@ -17,7 +17,7 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <Functions/CollationOperatorOptimized.h>
+#include <Storages/Transaction/CollatorUtils.h>
 #include <fmt/core.h>
 
 /// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
@@ -323,17 +323,17 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
 
 // Derived must implement function `int compare(const char *, size_t, const char *, size_t)`.
 template <bool positive, typename Derived>
-struct ColumnString::lessWithCollation
+struct ColumnString::LessWithCollation
 {
     const ColumnString & parent;
     const Derived & inner;
 
-    lessWithCollation(const ColumnString & parent_, const Derived & inner_)
+    LessWithCollation(const ColumnString & parent_, const Derived & inner_)
         : parent(parent_)
         , inner(inner_)
     {}
 
-    INLINE_FLATTEN_PURE inline bool operator()(size_t lhs, size_t rhs) const
+    FLATTEN_INLINE_PURE inline bool operator()(size_t lhs, size_t rhs) const
     {
         int res = inner.compare(
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(lhs)]),
@@ -355,7 +355,7 @@ struct ColumnString::lessWithCollation
 
 struct Utf8MB4BinCmp
 {
-    static INLINE_FLATTEN_PURE inline int compare(const char * s1, size_t length1, const char * s2, size_t length2)
+    static FLATTEN_INLINE_PURE inline int compare(const char * s1, size_t length1, const char * s2, size_t length2)
     {
         return DB::BinCollatorCompare<true>(s1, length1, s2, length2);
     }
@@ -363,7 +363,7 @@ struct Utf8MB4BinCmp
 
 // common util functions
 template <>
-struct ColumnString::lessWithCollation<false, void>
+struct ColumnString::LessWithCollation<false, void>
 {
     // `CollationCmpImpl` must implement function `int compare(const char *, size_t, const char *, size_t)`.
     template <typename CollationCmpImpl>
@@ -380,26 +380,26 @@ struct ColumnString::lessWithCollation<false, void>
         if (limit)
         {
             if (reverse)
-                std::partial_sort(res.begin(), res.begin() + limit, res.end(), lessWithCollation<false, CollationCmpImpl>(src, collator_cmp_impl));
+                std::partial_sort(res.begin(), res.begin() + limit, res.end(), LessWithCollation<false, CollationCmpImpl>(src, collator_cmp_impl));
             else
-                std::partial_sort(res.begin(), res.begin() + limit, res.end(), lessWithCollation<true, CollationCmpImpl>(src, collator_cmp_impl));
+                std::partial_sort(res.begin(), res.begin() + limit, res.end(), LessWithCollation<true, CollationCmpImpl>(src, collator_cmp_impl));
         }
         else
         {
             if (reverse)
-                std::sort(res.begin(), res.end(), lessWithCollation<false, CollationCmpImpl>(src, collator_cmp_impl));
+                std::sort(res.begin(), res.end(), LessWithCollation<false, CollationCmpImpl>(src, collator_cmp_impl));
             else
-                std::sort(res.begin(), res.end(), lessWithCollation<true, CollationCmpImpl>(src, collator_cmp_impl));
+                std::sort(res.begin(), res.end(), LessWithCollation<true, CollationCmpImpl>(src, collator_cmp_impl));
         }
     }
 };
 
 void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res) const
 {
-    using PermutationWithCollationUtils = ColumnString::lessWithCollation<false, void>;
+    using PermutationWithCollationUtils = ColumnString::LessWithCollation<false, void>;
 
     // optimize path for default collator `UTF8MB4_BIN`
-    if (&collator == TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN))
+    if (TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN) == &collator)
     {
         Utf8MB4BinCmp cmp_impl;
         PermutationWithCollationUtils::getPermutationWithCollationImpl(*this, cmp_impl, reverse, limit, res);
@@ -425,16 +425,35 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
 
     if (collator != nullptr)
     {
-        for (const auto & offset : offsets)
+        if (collator->canUseFastPath())
         {
-            auto str_size = offset - prev_offset;
-            /// Skip last zero byte.
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(pos), str_size - 1, sort_key_container);
-            *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
+            for (const auto & offset : offsets)
+            {
+                auto str_size = offset - prev_offset;
 
-            pos += str_size;
-            prev_offset = offset;
-            ++hash_data;
+                // Skip last zero byte.
+                auto sort_key = collator->fastPathSortKey(reinterpret_cast<const char *>(pos), str_size - 1);
+                *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
+
+                pos += str_size;
+                prev_offset = offset;
+                ++hash_data;
+            }
+        }
+        else
+        {
+            for (const auto & offset : offsets)
+            {
+                auto str_size = offset - prev_offset;
+
+                // Skip last zero byte.
+                auto sort_key = collator->sortKeyIndirect(reinterpret_cast<const char *>(pos), str_size - 1, sort_key_container);
+                *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
+
+                pos += str_size;
+                prev_offset = offset;
+                ++hash_data;
+            }
         }
     }
     else

@@ -21,9 +21,13 @@
 #include <Common/SipHash.h>
 #include <Common/WeakHash.h>
 #include <Core/Field.h>
-#include <Storages/Transaction/Collator.h>
 #include <common/StringRef.h>
 #include <fmt/core.h>
+
+namespace TiDB
+{
+struct TiDBCollatorPtr;
+}
 
 namespace DB
 {
@@ -178,7 +182,7 @@ public:
       * Parameter begin should be used with Arena::allocContinue.
       */
     virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const { return serializeValueIntoArena(n, arena, begin, nullptr, TiDB::dummy_sort_key_contaner); }
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const;
 
     /** Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
       * Returns pointer to the position after the read data.
@@ -194,23 +198,23 @@ public:
       *     the complex column will be ok.
       */
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
-    const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
+    const char * deserializeAndInsertFromArena(const char * pos);
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
     ///  passed bytes to hash must identify sequence of values unambiguously.
     virtual void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
-    void updateHashWithValue(size_t n, SipHash & hash) const { updateHashWithValue(n, hash, nullptr, TiDB::dummy_sort_key_contaner); }
+    void updateHashWithValue(size_t n, SipHash & hash) const;
 
     using HashValues = PaddedPODArray<SipHash>;
     virtual void updateHashWithValues(HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
-    void updateHashWithValues(HashValues & hash_values) const { updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner); }
+    void updateHashWithValues(HashValues & hash_values) const;
 
     /// Update hash function value. Hash is calculated for each element.
     /// It's a fast weak hash function. Mainly need to scatter data between threads.
     /// WeakHash32 must have the same size as column.
     virtual void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const = 0;
-    void updateWeakHash32(WeakHash32 & hash) const { updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner); }
+    void updateWeakHash32(WeakHash32 & hash) const;
 
     /** Removes elements that don't match the filter.
       * Is used in WHERE and HAVING operations.

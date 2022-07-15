@@ -15,7 +15,7 @@
 #include <Columns/IColumn.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
-
+#include <Storages/Transaction/Collator.h>
 
 namespace DB
 {
@@ -32,6 +32,30 @@ String IColumn::dumpStructure() const
 
     res << ")";
     return res.str();
+}
+
+StringRef IColumn::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
+{
+    return serializeValueIntoArena(n, arena, begin, nullptr, TiDB::dummy_sort_key_contaner);
+}
+void IColumn::updateHashWithValue(size_t n, SipHash & hash) const
+{
+    updateHashWithValue(n, hash, nullptr, TiDB::dummy_sort_key_contaner);
+}
+
+void IColumn::updateHashWithValues(HashValues & hash_values) const
+{
+    updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner);
+}
+
+void IColumn::updateWeakHash32(WeakHash32 & hash) const
+{
+    updateWeakHash32(hash, nullptr, TiDB::dummy_sort_key_contaner);
+}
+
+const char * IColumn::deserializeAndInsertFromArena(const char * pos)
+{
+    return deserializeAndInsertFromArena(pos, nullptr);
 }
 
 } // namespace DB
