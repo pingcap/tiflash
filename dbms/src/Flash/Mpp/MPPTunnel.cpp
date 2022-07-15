@@ -150,7 +150,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
             std::unique_lock lk(mu);
             waitUntilConnectedOrFinished(lk);
             if (status == TunnelStatus::Finished)
-                throw Exception("write to tunnel which is already closed," + tunnel_sender->getConsumerFinishMsg());
+                throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
         }
 
         if (send_queue->push(std::make_shared<mpp::MPPDataPacket>(data)))
@@ -178,7 +178,7 @@ void MPPTunnel::writeDone()
     {
         std::unique_lock lk(mu);
         if (status == TunnelStatus::Finished)
-            throw Exception("write to tunnel which is already closed," + tunnel_sender->getConsumerFinishMsg());
+            throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrFinished(lk);
         finishSendQueue();
@@ -238,6 +238,10 @@ void MPPTunnel::waitForSenderFinish(bool allow_throw)
     LOG_FMT_TRACE(log, "start wait for consumer finish!");
     {
         std::unique_lock lock(mu);
+        if (status == TunnelStatus::Finished)
+        {
+            return;
+        }
         status = TunnelStatus::WaitingForSenderFinish;
     }
     String err_msg = tunnel_sender->getConsumerFinishMsg(); // may blocking

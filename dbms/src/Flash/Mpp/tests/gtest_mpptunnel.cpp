@@ -301,6 +301,38 @@ try
 }
 CATCH
 
+TEST_F(TestMPPTunnel, WriteAfterUnconnectFinished)
+{
+    try
+    {
+        auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
+        std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
+        setTunnelFinished(mpp_tunnel_ptr);
+        data_packet_ptr->set_data("First");
+        mpp_tunnel_ptr->write(*data_packet_ptr);
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
+    }
+}
+
+TEST_F(TestMPPTunnel, WriteDoneAfterUnconnectFinished)
+{
+    try
+    {
+        auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
+        setTunnelFinished(mpp_tunnel_ptr);
+        mpp_tunnel_ptr->writeDone();
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
+    }
+}
+
 TEST_F(TestMPPTunnel, ConnectWriteCancel)
 try
 {
