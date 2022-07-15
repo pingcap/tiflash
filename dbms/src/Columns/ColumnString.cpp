@@ -461,7 +461,7 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
         for (const auto & offset : offsets)
         {
             auto str_size = offset - prev_offset;
-            /// Skip last zero byte.
+            // Skip last zero byte.
             *hash_data = ::updateWeakHash32(pos, str_size - 1, *hash_data);
 
             pos += str_size;
