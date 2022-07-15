@@ -457,7 +457,6 @@ Block DMFileReader::read()
                         }
                         // Cast column's data from DataType in disk to what we need now
                         auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(result_column), cd);
-
                         res.insert(ColumnWithTypeAndName{converted_column, cd.type, cd.name, cd.id});
                     }
                     else

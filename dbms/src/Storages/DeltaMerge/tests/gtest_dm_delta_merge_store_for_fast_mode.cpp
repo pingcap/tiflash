@@ -290,7 +290,7 @@ try
                                              /* is_raw_read= */ true,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
-
+        in->readSuffix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -364,7 +364,7 @@ try
         }
         }
 
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
@@ -436,7 +436,7 @@ try
                                              /* is_raw_read= */ true,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
-
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -509,8 +509,7 @@ try
             break;
         }
         }
-
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
@@ -585,6 +584,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -630,6 +630,7 @@ try
         {
             int block_index = 0;
             int begin_value = 0;
+
             while (Block block = in->read())
             {
                 if (block_index == 1)
@@ -657,8 +658,7 @@ try
             break;
         }
         }
-
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
@@ -735,6 +735,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -750,7 +751,7 @@ try
                 }
             }
         }
-
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
@@ -829,6 +830,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -866,6 +868,7 @@ try
         {
             auto block_index = 0;
             auto begin_value = 0;
+
             while (Block block = in->read())
             {
                 if (block_index == 1)
@@ -896,6 +899,7 @@ try
         {
             auto block_index = 0;
             auto begin_value = num_write_rows;
+
             while (Block block = in->read())
             {
                 if (block_index == 1)
@@ -920,11 +924,12 @@ try
                 num_rows_read += block.rows();
                 block_index += 1;
             }
+
             break;
         }
         }
 
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
@@ -1010,6 +1015,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         // filter del mark = 1， thus just read the insert data before delete
         while (Block block = in->read())
         {
@@ -1026,7 +1032,7 @@ try
                 }
             }
         }
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
 
@@ -1050,6 +1056,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1065,6 +1072,7 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
@@ -1109,6 +1117,7 @@ try
                                              /* is_raw_read= */ true,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1124,7 +1133,7 @@ try
                 }
             }
         }
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
     // Delete range [0, 64)
@@ -1149,6 +1158,7 @@ try
         size_t num_rows_read = 0;
 
         // filter del mark = 1， thus just read the insert data before delete
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1164,6 +1174,7 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
@@ -1222,6 +1233,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1237,6 +1249,7 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
     }
@@ -1322,6 +1335,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -1416,7 +1430,7 @@ try
             break;
         }
         }
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 
@@ -1434,6 +1448,8 @@ try
                                              /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
+
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1449,6 +1465,7 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, 1.5 * num_write_rows);
     }
@@ -1500,6 +1517,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1515,6 +1533,7 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
@@ -1556,10 +1575,12 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
     }
