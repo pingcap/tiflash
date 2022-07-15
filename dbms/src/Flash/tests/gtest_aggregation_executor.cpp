@@ -37,11 +37,13 @@ public:
     {
         ExecutorTest::initializeContext();
 
-        context.addMockTable({db_name, table_name},
+        context.addMockTable(/* name= */ {db_name, table_name},
+                             /* columnInfos= */
                              {{col_name[0], TiDB::TP::TypeLong},
                               {col_name[1], TiDB::TP::TypeString},
                               {col_name[2], TiDB::TP::TypeString},
                               {col_name[3], TiDB::TP::TypeDouble}},
+                             /* columns= */
                              {toNullableVec<Int32>(col_name[0], col_age),
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
