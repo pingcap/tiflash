@@ -189,7 +189,7 @@ void RegionPersister::forceTransformKVStoreV2toV3()
         const auto & page_transform_entry = page_reader->getPageEntry(page.page_id);
         if (!page_transform_entry.field_offsets.empty())
         {
-            throw Exception(fmt::format("Can't transform kvstore from V2 to V3, [page_id={}] {}",
+            throw Exception(fmt::format("Can't transfrom kvstore from V2 to V3, [page_id={}] {}",
                                         page.page_id,
                                         page_transform_entry.toDebugString()),
                             ErrorCodes::LOGICAL_ERROR);
