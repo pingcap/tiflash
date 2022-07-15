@@ -20,6 +20,7 @@
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
+#include <Storages/Transaction/Collator.h>
 
 #include <array>
 
@@ -205,7 +206,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
 */
 
 /// Almost the same as above but it doesn't return any reference to key data.
-static inline UInt128 ALWAYS_INLINE Hash128(
+static inline UInt128 ALWAYS_INLINE hash128(
     size_t i,
     size_t keys_size,
     const ColumnRawPtrs & key_columns,

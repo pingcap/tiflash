@@ -1345,7 +1345,7 @@ void FunctionArrayUniq::executeHashed(
         set.clear();
         size_t off = offsets[i];
         for (size_t j = prev_off; j < off; ++j)
-            set.insert(Hash128(j, count, columns, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners));
+            set.insert(hash128(j, count, columns, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners));
 
         res_values[i] = set.size();
         prev_off = off;
@@ -1631,7 +1631,7 @@ void FunctionArrayEnumerateUniq::executeHashed(
         for (size_t j = prev_off; j < off; ++j)
         {
             // todo support collation
-            res_values[j] = ++indices[Hash128(j, count, columns, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners)];
+            res_values[j] = ++indices[hash128(j, count, columns, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners)];
         }
         prev_off = off;
     }

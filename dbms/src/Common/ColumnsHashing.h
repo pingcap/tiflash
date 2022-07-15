@@ -385,7 +385,7 @@ struct HashMethodHashed
 
     ALWAYS_INLINE Key getKeyHolder(size_t row, Arena *, std::vector<String> & sort_key_containers) const
     {
-        return Hash128(row, key_columns.size(), key_columns, collators, sort_key_containers);
+        return hash128(row, key_columns.size(), key_columns, collators, sort_key_containers);
     }
 };
 
