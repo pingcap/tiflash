@@ -58,8 +58,15 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
+    void probeSideTransform(DAGPipeline & probe_pipeline, Context & context);
+
+    void buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams);
+
+    void doSchemaProject(DAGPipeline & pipeline, Context & context);
+
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
+    /// the right side is the build side.
     const PhysicalPlanNodePtr & probe() const { return left; }
     const PhysicalPlanNodePtr & build() const { return right; }
 

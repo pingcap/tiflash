@@ -165,37 +165,10 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     return physical_join;
 }
 
-void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & context)
 {
-    DAGPipeline & probe_pipeline = pipeline;
-    probe()->transform(probe_pipeline, context, max_streams);
-
-    DAGPipeline build_pipeline;
-    build()->transform(build_pipeline, context, max_streams);
-
     const auto & settings = context.getSettingsRef();
-
-    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
-
     auto & dag_context = *context.getDAGContext();
-
-    /// build side streams
-    executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
-    // add a HashJoinBuildBlockInputStream to build a shared hash table
-    auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
-    String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
-    build_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
-        stream->setExtraInfo(join_build_extra_info);
-    });
-    // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dag_context.isTest(), "for join");
-
-    SubqueryForSet build_query;
-    build_query.source = build_pipeline.firstStream();
-    build_query.join = join_ptr;
-    join_ptr->init(build_query.source->getHeader(), join_build_concurrency);
-    dag_context.addSubquery(execId(), std::move(build_query));
 
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
@@ -221,7 +194,54 @@ void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size
         stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_probe_actions, log->identifier());
         stream->setExtraInfo(join_probe_extra_info);
     }
+}
 
+void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams)
+{
+    auto & dag_context = *context.getDAGContext();
+    const auto & settings = context.getSettingsRef();
+
+    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
+
+    /// build side streams
+    executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
+    // add a HashJoinBuildBlockInputStream to build a shared hash table
+    auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
+    String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
+    build_pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
+        stream->setExtraInfo(join_build_extra_info);
+    });
+    // for test, join executor need the return blocks to output.
+    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dag_context.isTest(), "for join");
+
+    SubqueryForSet build_query;
+    build_query.source = build_pipeline.firstStream();
+    build_query.join = join_ptr;
+    join_ptr->init(build_query.source->getHeader(), join_build_concurrency);
+    dag_context.addSubquery(execId(), std::move(build_query));
+}
+
+void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
+{
+    /// The build side needs to be transformed first.
+    {
+        DAGPipeline build_pipeline;
+        build()->transform(build_pipeline, context, max_streams);
+        buildSideTransform(build_pipeline, context, max_streams);
+    }
+
+    {
+        DAGPipeline & probe_pipeline = pipeline;
+        probe()->transform(probe_pipeline, context, max_streams);
+        probeSideTransform(probe_pipeline, context);
+    }
+
+    doSchemaProject(pipeline, context);
+}
+
+void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline, Context & context)
+{
     /// add a project to remove all the useless column
     NamesWithAliases schema_project_cols;
     for (auto & c : schema)
@@ -231,9 +251,9 @@ void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size
         schema_project_cols.emplace_back(c.name, c.name);
     }
     assert(!schema_project_cols.empty());
-    ExpressionActionsPtr schema_project = generateProjectExpressionActions(probe_pipeline.firstStream(), context, schema_project_cols);
+    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);
     assert(schema_project && !schema_project->getActions().empty());
-    executeExpression(probe_pipeline, schema_project, log, "remove useless column after join");
+    executeExpression(pipeline, schema_project, log, "remove useless column after join");
 }
 
 void PhysicalJoin::finalize(const Names & parent_require)

@@ -87,7 +87,11 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         auto right = popBack();
         auto left = popBack();
 
-        // use for gtest_physical_plan
+        /// Both sides of the join need to have non-root-final-projection to ensure that
+        /// there are no duplicate columns in the blocks on the build and probe sides.
+
+        /// After DAGQueryBlock removed, `dagContext().isTest() && right->tp() != PlanType::Source`
+        /// and `dagContext().isTest() && right->tp() != PlanType::Source` will be removed.
         if (dagContext().isTest() && right->tp() != PlanType::Source)
         {
             pushBack(right);
