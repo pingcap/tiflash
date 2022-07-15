@@ -33,7 +33,7 @@ ALWAYS_INLINE inline int signum(T val)
 // Check equality is much faster than other comparison.
 // - check size first
 // - return 0 if equal else 1
-FLATTEN_INLINE_PURE inline uint8_t RawStrEqualCompare(const std::string_view & lhs, const std::string_view & rhs)
+FLATTEN_INLINE_PURE inline int RawStrEqualCompare(const std::string_view & lhs, const std::string_view & rhs)
 {
     return StringRef(lhs) == StringRef(rhs) ? 0 : 1;
 }

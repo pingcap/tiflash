@@ -83,7 +83,13 @@ public:
 
     ~ITiDBCollator() override = default;
 
+    /**
+        0   compare equal
+        <0	{s1, length1} < {s2, length2} with collation
+        >0	{s1, length1} > {s2, length2} with collation
+    */
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override = 0;
+
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
 
