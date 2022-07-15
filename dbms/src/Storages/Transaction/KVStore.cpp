@@ -418,7 +418,8 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         }
         else
         {
-            return canFlushRegionDataImpl(curr_region_ptr, true, /* try_until_succeed */ false, tmt, region_task_lock);
+            // When CompactLog is not filtered, we
+            return true;
         }
     };
 
