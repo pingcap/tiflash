@@ -624,9 +624,9 @@ BlockInputStreams StorageDeltaMerge::read(
     }
 
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-    if (select_query.raw_for_mutable)
+    if (select_query.raw_for_mutable) // for selraw
     {
-        // Read without MVCC filtering
+        // Read without MVCC filtering and del_mark = 1 filtering
         return store->readRaw(
             context,
             context.getSettingsRef(),
@@ -756,6 +756,7 @@ BlockInputStreams StorageDeltaMerge::read(
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
         query_info.req_id,
+        /* is_fast_mode */ tidb_table_info.tiflash_mode == TiDB::TiFlashMode::Fast, // read in normal mode or read in fast mode
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
@@ -775,12 +776,12 @@ void StorageDeltaMerge::checkStatus(const Context & context)
 
 void StorageDeltaMerge::flushCache(const Context & context)
 {
-    flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
+    flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size), /* try_until_succeed */ true);
 }
 
-void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush)
+bool StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush, bool try_until_succeed)
 {
-    getAndMaybeInitStore()->flushCache(context, range_to_flush);
+    return getAndMaybeInitStore()->flushCache(context, range_to_flush, try_until_succeed);
 }
 
 void StorageDeltaMerge::mergeDelta(const Context & context)

@@ -30,6 +30,8 @@ extern const int DIVIDED_BY_ZERO;
 extern const int INVALID_TIME;
 } // namespace ErrorCodes
 
+const String enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
+
 bool strictSqlMode(UInt64 sql_mode)
 {
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
@@ -73,6 +75,11 @@ void DAGContext::addSubquery(const String & subquery_id, SubqueryForSet && subqu
 std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap()
 {
     return profile_streams_map;
+}
+
+void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
+{
+    final_concurrency = std::min(std::max(final_concurrency, cur_streams_size), streams_upper_limit);
 }
 
 void DAGContext::initExecutorIdToJoinIdMap()
@@ -206,12 +213,20 @@ void DAGContext::attachBlockIO(const BlockIO & io_)
     io = io_;
 }
 
-const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext::getMPPExchangeReceiverMap() const
+ExchangeReceiverPtr DAGContext::getMPPExchangeReceiver(const String & executor_id) const
 {
     if (!isMPPTask())
         throw TiFlashException("mpp_exchange_receiver_map is used in mpp only", Errors::Coprocessor::Internal);
-    RUNTIME_ASSERT(mpp_exchange_receiver_map != nullptr, log, "MPPTask without exchange receiver map");
-    return *mpp_exchange_receiver_map;
+    RUNTIME_ASSERT(mpp_receiver_set != nullptr, log, "MPPTask without receiver set");
+    return mpp_receiver_set->getExchangeReceiver(executor_id);
+}
+
+void DAGContext::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
+{
+    if (!isMPPTask())
+        return;
+    RUNTIME_ASSERT(mpp_receiver_set != nullptr, log, "MPPTask without receiver set");
+    return mpp_receiver_set->addCoprocessorReader(coprocessor_reader);
 }
 
 bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const

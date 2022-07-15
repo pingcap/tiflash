@@ -69,14 +69,14 @@
 
 #include <boost/functional/hash/hash.hpp>
 #include <pcg_random.hpp>
+#include <set>
 #include <unordered_map>
+
 
 namespace ProfileEvents
 {
 extern const Event ContextLock;
 }
-
-#include <set>
 
 namespace CurrentMetrics
 {
@@ -1438,13 +1438,6 @@ void Context::dropCaches() const
         shared->mark_cache->reset();
 }
 
-BackgroundProcessingPool & Context::getBackgroundPool()
-{
-    // Note: shared->background_pool should be initialized first.
-    auto lock = getLock();
-    return *shared->background_pool;
-}
-
 BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
 {
     auto lock = getLock();
@@ -1453,12 +1446,10 @@ BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
     return *shared->background_pool;
 }
 
-BackgroundProcessingPool & Context::getBlockableBackgroundPool()
+BackgroundProcessingPool & Context::getBackgroundPool()
 {
-    // TODO: maybe a better name for the pool
-    // Note: shared->blockable_background_pool should be initialized first.
     auto lock = getLock();
-    return *shared->blockable_background_pool;
+    return *shared->background_pool;
 }
 
 BackgroundProcessingPool & Context::initializeBlockableBackgroundPool(UInt16 pool_size)
@@ -1466,6 +1457,13 @@ BackgroundProcessingPool & Context::initializeBlockableBackgroundPool(UInt16 poo
     auto lock = getLock();
     if (!shared->blockable_background_pool)
         shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
+    return *shared->blockable_background_pool;
+}
+
+BackgroundProcessingPool & Context::getBlockableBackgroundPool()
+{
+    // TODO: maybe a better name for the pool
+    auto lock = getLock();
     return *shared->blockable_background_pool;
 }
 

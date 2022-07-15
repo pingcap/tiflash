@@ -18,6 +18,7 @@
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
+#include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -150,6 +151,7 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
 namespace
 {
 [[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
@@ -175,6 +177,12 @@ namespace
 }
 } // namespace
 
+namespace CurrentMetrics
+{
+extern const Metric LogicalCPUCores;
+extern const Metric MemoryCapacity;
+} // namespace CurrentMetrics
+
 namespace DB
 {
 namespace ErrorCodes
@@ -183,6 +191,7 @@ extern const int NO_ELEMENTS_IN_CONFIG;
 extern const int SUPPORT_IS_DISABLED;
 extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int INVALID_CONFIG_PARAMETER;
+extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
 
 namespace Debug
@@ -620,6 +629,10 @@ public:
             }
         }
         flash_grpc_server = builder.BuildAndStart();
+        if (!flash_grpc_server)
+        {
+            throw Exception("Exception happens when start grpc server, the flash.service_addr may be invalid, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
+        }
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
         if (enable_async_server)
@@ -960,7 +973,10 @@ public:
             LOG_DEBUG(log, debug_msg);
     }
 
-    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const { return servers; }
+    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const
+    {
+        return servers;
+    }
 
 private:
     Server & server;
@@ -976,6 +992,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Poco::Logger * log = &logger();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
+    FailPointHelper::initRandomFailPoints(config(), log);
 #endif
 
     UpdateMallocConfig(log);
@@ -995,7 +1012,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
-
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
@@ -1127,16 +1143,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
-    /// if default value of background_pool_size is 0
-    /// set it to the a quarter of the number of logical CPU cores of machine.
-    Settings & settings = global_context->getSettingsRef();
-    if (settings.background_pool_size == 0)
-    {
-        global_context->setSetting("background_pool_size", std::to_string(server_info.cpu_info.logical_cores / 4));
-    }
-    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
-
     /// Initialize the background & blockable background thread pool.
+    Settings & settings = global_context->getSettingsRef();
+    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
 
@@ -1407,7 +1416,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         auto size = settings.grpc_completion_queue_pool_size;
         if (size == 0)
-            size = server_info.cpu_info.logical_cores;
+            size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
     }
 
@@ -1422,6 +1431,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         {
             // on ARM processors it can show only enabled at current moment cores
+            CurrentMetrics::set(CurrentMetrics::LogicalCPUCores, server_info.cpu_info.logical_cores);
+            CurrentMetrics::set(CurrentMetrics::MemoryCapacity, server_info.memory_info.capacity);
             LOG_FMT_INFO(
                 log,
                 "Available RAM = {}; physical cores = {}; logical cores = {}.",

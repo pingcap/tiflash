@@ -980,14 +980,14 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range)
+bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed)
 {
     RowKeyRange cur_range = range;
     while (!cur_range.none())
     {
         RowKeyRange segment_range;
 
-        // Keep trying until succeeded.
+        // Keep trying until succeeded if needed.
         while (true)
         {
             SegmentPtr segment;
@@ -1010,10 +1010,15 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             {
                 break;
             }
+            else if (!try_until_succeed)
+            {
+                return false;
+            }
         }
 
         cur_range.setStart(segment_range.end);
     }
+    return true;
 }
 
 void DeltaMergeStore::mergeDeltaAll(const Context & context)
@@ -1053,6 +1058,13 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
                 return std::nullopt;
             }
             segment = segment_it->second;
+        }
+
+        if (!segment->flushCache(*dm_context))
+        {
+            // If the flush failed, it means there are parallel updates to the segment in the background.
+            // In this case, we try again.
+            continue;
         }
 
         const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
@@ -1107,8 +1119,9 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
     }
 }
 
-// Read data without mvcc filtering && delete-range filtering.
+// Read data without mvcc filtering && delete mark != 0 filtering.
 // just for debug
+// readRaw is called under 'selraw  xxxx'
 BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                                            const DB::Settings & db_settings,
                                            const ColumnDefines & columns_to_read,
@@ -1167,8 +1180,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             EMPTY_FILTER,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
-            true,
-            db_settings.dt_raw_filter_range,
+            /* is_raw_ */ true,
+            /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
             extra_table_id_index,
             physical_table_id,
             req_info);
@@ -1185,6 +1198,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         UInt64 max_version,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
+                                        bool is_fast_mode,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
@@ -1220,8 +1234,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             filter,
             max_version,
             expected_block_size,
-            false,
-            db_settings.dt_raw_filter_range,
+            /* is_raw_ */ is_fast_mode,
+            /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
             extra_table_id_index,
             physical_table_id,
             req_info);
@@ -1347,6 +1361,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         && (delta_rows - delta_last_try_flush_rows >= delta_cache_limit_rows
             || delta_bytes - delta_last_try_flush_bytes >= delta_cache_limit_bytes);
     bool should_foreground_flush = unsaved_rows >= delta_cache_limit_rows * 3 || unsaved_bytes >= delta_cache_limit_bytes * 3;
+    /// For write thread, we want to avoid foreground flush to block the process of apply raft command.
+    /// So we increase the threshold of foreground flush for write thread.
+    if (thread_type == ThreadType::Write)
+    {
+        should_foreground_flush = unsaved_rows >= delta_cache_limit_rows * 10 || unsaved_bytes >= delta_cache_limit_bytes * 10;
+    }
 
     bool should_background_merge_delta = ((delta_check_rows >= delta_limit_rows || delta_check_bytes >= delta_limit_bytes) //
                                           && (delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows
@@ -1404,9 +1424,16 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         }
         else if (should_background_flush)
         {
-            delta_last_try_flush_rows = delta_rows;
-            delta_last_try_flush_bytes = delta_bytes;
-            try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
+            /// It's meaningless to add more flush tasks if the segment is flushing.
+            /// Because only one flush task can proceed at any time.
+            /// And after the current flush task finished,
+            /// it will call `checkSegmentUpdate` again to check whether there is more flush task to do.
+            if (!segment->isFlushing())
+            {
+                delta_last_try_flush_rows = delta_rows;
+                delta_last_try_flush_bytes = delta_bytes;
+                try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
+            }
         }
     }
 
@@ -1502,7 +1529,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_bg_compact = [&]() {
-        if (should_compact)
+        /// Compact task should be a really low priority task.
+        /// And if the segment is flushing,
+        /// we should avoid adding background compact task to reduce lock contention on the segment and save disk throughput.
+        /// And after the current flush task complete,
+        /// it will call `checkSegmentUpdate` again to check whether there is other kinds of task to do.
+        if (should_compact && !segment->isFlushing())
         {
             delta_last_try_compact_column_files = column_file_count;
             try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment, {}});
@@ -1720,7 +1752,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
-    LOG_FMT_DEBUG(log,
+    LOG_FMT_TRACE(log,
                   "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
                   table_name,
                   next_gc_check_key.toDebugString(),
@@ -1814,7 +1846,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
-                    LOG_FMT_INFO(
+                    LOG_FMT_DEBUG(
                         log,
                         "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
                         segment_id,
@@ -1823,7 +1855,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 }
                 else
                 {
-                    LOG_FMT_INFO(
+                    LOG_FMT_DEBUG(
                         log,
                         "GC aborted on Segment [{}] [range={}] [table={}]",
                         segment_id,
@@ -1846,7 +1878,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
     }
 
-    LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    if (gc_segments_num != 0)
+    {
+        LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    }
     return gc_segments_num;
 }
 

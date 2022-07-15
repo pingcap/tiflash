@@ -1179,6 +1179,12 @@ void RegionKVStoreTest::testKVStore()
             ASSERT_EQ(e.message(), "unsupported admin command type InvalidAdmin");
         }
     }
+    {
+        // There shall be data to flush.
+        ASSERT_EQ(kvs.needFlushRegionData(19, ctx.getTMTContext()), true);
+        // Force flush until succeed only for testing.
+        ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext()), true);
+    }
 }
 
 void test_mergeresult()
