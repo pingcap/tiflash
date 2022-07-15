@@ -30,7 +30,7 @@ inline UInt64 clock_gettime_ns(clockid_t clock_type = CLOCK_MONOTONIC)
     {
     };
     clock_gettime(clock_type, &ts);
-    return UInt64(ts.tv_sec * 1000000000LL + ts.tv_nsec);
+    return UInt64(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
 }
 
 /// Sometimes monotonic clock may not be monotonic (due to bug in kernel?).
@@ -40,7 +40,7 @@ inline UInt64 clock_gettime_ns_adjusted(UInt64 prev_time, clockid_t clock_type =
 {
     UInt64 current_time = clock_gettime_ns(clock_type);
     if (likely(prev_time <= current_time))
-    return current_time;
+        return current_time;
 
     /// Something probably went completely wrong if time stepped back for more than 1 second.
     assert(prev_time - current_time <= 1000000000ULL);
