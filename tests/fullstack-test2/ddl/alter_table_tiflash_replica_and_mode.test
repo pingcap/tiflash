@@ -19,6 +19,8 @@ mysql> alter table test.t set tiflash replica 1
 
 func> wait_table test t
 
+>> DBGInvoke __refresh_schemas()
+
 >> DBGInvoke get_tiflash_replica_count("test", "t")
 ┌─get_tiflash_replica_count(test, t)─┐
 │ 1                                  │
