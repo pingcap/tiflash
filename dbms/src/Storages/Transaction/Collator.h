@@ -84,9 +84,10 @@ public:
     ~ITiDBCollator() override = default;
 
     /**
-        0   compare equal
-        <0	{s1, length1} < {s2, length2} with collation
-        >0	{s1, length1} > {s2, length2} with collation
+        compare with collation
+        0   equal
+        <0  {s1, length1} < {s2, length2} with collation
+        >0  {s1, length1} > {s2, length2} with collation
     */
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override = 0;
 
