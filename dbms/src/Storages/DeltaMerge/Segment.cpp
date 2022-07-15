@@ -514,6 +514,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                bool filter_delete_mark,
                                                size_t expected_block_size)
 {
+    /// Now, we use filter_delete_mark to determine whether it is in fast mode or just from `selraw * xxxx`
+    /// But this way seems not to be robustness enough, maybe we need another flag?
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
 
@@ -523,11 +525,27 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         new_columns_to_read->push_back(getTagColumnDefine());
     }
 
+    bool enable_clean_read = filter_delete_mark;
+
     for (const auto & c : columns_to_read)
     {
-        if (c.id != EXTRA_HANDLE_COLUMN_ID && (!(filter_delete_mark && c.id == TAG_COLUMN_ID)))
-            new_columns_to_read->push_back(c);
+        if (c.id != EXTRA_HANDLE_COLUMN_ID)
+        {
+            if (!(filter_delete_mark && c.id == TAG_COLUMN_ID))
+                new_columns_to_read->push_back(c);
+        }
+        else
+        {
+            enable_clean_read = false;
+        }
     }
+
+    /// when we read in fast mode, if columns_to_read does not include EXTRA_HANDLE_COLUMN_ID,
+    /// we can try to use clean read to make optimization in stable part.
+    /// when the pack is under totally data_ranges and has no rows whose del_mark = 1 --> we don't need read handle_column/tag_column/version_column
+    /// when the pack is under totally data_ranges and has rows whose del_mark = 1 --> we don't need read handle_column/version_column
+    /// others --> we don't need read version_column
+    /// Considering the del min max index has some problem now, we first only optimize with handle column.
 
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -536,7 +554,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
-        false);
+        /* enable_clean_read */ enable_clean_read,
+        /* is_fast_mode */ filter_delete_mark);
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 
