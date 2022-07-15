@@ -47,7 +47,8 @@ std::string WorkloadOptions::toString(std::string seperator) const
         fmt::format("ps_run_mode {}{}", ps_run_mode, seperator) + //
         fmt::format("bg_thread_count {}{}", bg_thread_count, seperator) + //
         fmt::format("table_id {}{}", table_id, seperator) + //
-        fmt::format("table_name {}{}", table_name, seperator);
+        fmt::format("table_name {}{}", table_name, seperator) + //
+        fmt::format("is_fast_mode {}{}", is_fast_mode, seperator);
 }
 
 std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv[])
@@ -94,6 +95,7 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
         //
         ("table_name", value<std::string>()->default_value(""), "") //
         ("table_id", value<int64_t>()->default_value(-1), "") //
+        ("is_fast_mode", value<bool>()->default_value(false), "default is false, means normal mode. When we in fast mode, we should set verification as false") //
         ;
 
     boost::program_options::variables_map vm;
@@ -174,6 +176,12 @@ std::pair<bool, std::string> WorkloadOptions::parseOptions(int argc, char * argv
 
     table_id = vm["table_id"].as<int64_t>();
     table_name = vm["table_name"].as<std::string>();
+    is_fast_mode = vm["is_fast_mode"].as<bool>();
+
+    if (is_fast_mode && verification)
+    {
+        return {false, fmt::format("When in_fast_mode, we should set verification as false")};
+    }
 
     return {true, toString()};
 }

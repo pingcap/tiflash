@@ -87,7 +87,7 @@ struct Helper<MPMCQueue<T>>
     template <typename U>
     static void pushOneTo(MPMCQueue<T> & queue, U && data)
     {
-        queue.tryPush(std::forward<U>(data), std::chrono::milliseconds(1));
+        queue.pushTimeout(std::forward<U>(data), std::chrono::milliseconds(1));
     }
 };
 

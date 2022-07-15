@@ -297,7 +297,6 @@ grpc::Status FlashService::Coprocessor(
     Stopwatch stopwatch;
     if (calldata)
     {
-        calldata->attachTunnel(tunnel);
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
