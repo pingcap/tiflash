@@ -540,15 +540,12 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         }
     }
 
-    /// Whether fast mode or raw read(selraw), if columns_to_read does not include EXTRA_HANDLE_COLUMN_ID,
+    /// when we read in fast mode, if columns_to_read does not include EXTRA_HANDLE_COLUMN_ID,
     /// we can try to use clean read to make optimization in stable part.
-
-    /// Especially for fast mode,
     /// when the pack is under totally data_ranges and has no rows whose del_mark = 1 --> we don't need read handle_column/tag_column/version_column
     /// when the pack is under totally data_ranges and has rows whose del_mark = 1 --> we don't need read handle_column/version_column
     /// others --> we don't need read version_column
-
-    /// Considering the del min max index has some problem now, we first only handle with handle column.
+    /// Considering the del min max index has some problem now, we first only optimize with handle column.
 
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -558,7 +555,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
         /* enable_clean_read */ enable_clean_read,
-        /* is_raw_read */ filter_delete_mark);
+        /* is_fast_mode */ filter_delete_mark);
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 

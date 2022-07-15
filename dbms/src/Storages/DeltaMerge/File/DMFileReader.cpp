@@ -212,7 +212,7 @@ DMFileReader::DMFileReader(
     bool is_common_handle_,
     // clean read
     bool enable_clean_read_,
-    bool is_raw_read_,
+    bool is_fast_mode_,
     UInt64 max_read_version_,
     // filters
     DMFilePackFilter && pack_filter_,
@@ -233,7 +233,7 @@ DMFileReader::DMFileReader(
     , read_one_pack_every_time(read_one_pack_every_time_)
     , single_file_mode(dmfile_->isSingleFileMode())
     , enable_clean_read(enable_clean_read_)
-    , is_raw_read(is_raw_read_)
+    , is_fast_mode(is_fast_mode_)
     , max_read_version(max_read_version_)
     , pack_filter(std::move(pack_filter_))
     , skip_packs_by_column(read_columns.size(), 0)
@@ -342,10 +342,9 @@ Block DMFileReader::read()
     }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
-    bool do_clean_read_on_normal_mode = enable_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_raw_read);
+    bool do_clean_read_on_normal_mode = enable_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
 
-    // when is in fast mode and all pack's max del index is 0, then we don't need to read del column
-    bool do_clean_read_on_handle = enable_clean_read && is_raw_read && expected_handle_res == All;
+    bool do_clean_read_on_handle = enable_clean_read && is_fast_mode && expected_handle_res == All;
 
     if (do_clean_read_on_normal_mode)
     {

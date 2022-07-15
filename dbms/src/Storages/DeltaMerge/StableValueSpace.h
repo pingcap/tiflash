@@ -151,7 +151,7 @@ public:
                                                     UInt64 max_data_version,
                                                     size_t expected_block_size,
                                                     bool enable_clean_read,
-                                                    bool is_raw_read = false);
+                                                    bool is_fast_mode = false);
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
