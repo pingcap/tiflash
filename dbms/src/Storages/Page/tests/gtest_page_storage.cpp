@@ -442,6 +442,38 @@ try
 }
 CATCH
 
+TEST_F(PageStorage_test, RenewWriter)
+try
+{
+    constexpr size_t buf_sz = 100;
+    char             c_buff[buf_sz];
+
+    {
+        WriteBatch wb;
+        memset(c_buff, 0xf, buf_sz);
+        auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        wb.putPage(1, 0, buf, buf_sz);
+        storage->write(std::move(wb));
+    }
+
+    {
+        PageStorage::ListPageFilesOption opt;
+        auto                             page_files = storage->listAllPageFiles(file_provider, storage->delegator, storage->log, opt);
+        ASSERT_EQ(page_files.size(), 1UL);
+    }
+
+    PageStorage::Config config;
+    config.file_roll_size = 10; // make it easy to renew a new page file for write
+    storage               = reopenWithConfig(config);
+
+    {
+        PageStorage::ListPageFilesOption opt;
+        auto                             page_files = storage->listAllPageFiles(file_provider, storage->delegator, storage->log, opt);
+        ASSERT_EQ(page_files.size(), 2UL);
+    }
+}
+CATCH
+
 /// Check if we can correctly do read / write after restore from disk.
 TEST_F(PageStorage_test, WriteReadRestore)
 try
