@@ -21,8 +21,6 @@ String PlanType::toString() const
 {
     switch (enum_value)
     {
-    case Source:
-        return "Source";
     case Limit:
         return "Limit";
     case TopN:

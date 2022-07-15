@@ -14,10 +14,11 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 
 namespace DB
 {
 class Context;
-PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan);
+PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan, const LoggerPtr & log);
 } // namespace DB

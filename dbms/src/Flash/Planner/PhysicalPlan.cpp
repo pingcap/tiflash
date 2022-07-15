@@ -25,7 +25,6 @@
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
-#include <Flash/Planner/plans/PhysicalSource.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
@@ -64,6 +63,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         break;
     case tipb::ExecType::TypeExchangeSender:
     {
+        buildFinalProjection(executor_id, true);
         if (unlikely(dagContext().isTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
         else
@@ -126,9 +126,16 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
     return back;
 }
 
-void PhysicalPlan::buildSource(const BlockInputStreams & source_streams)
+/// We should add root final projection for batchcop/cop.
+void PhysicalPlan::addRootFinalProjectionForCop()
 {
-    pushBack(PhysicalSource::build(source_streams, log));
+    assert(root_node);
+    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
+    {
+        pushBack(root_node);
+        buildFinalProjection(root_node->execId(), true);
+        root_node = popBack();
+    }
 }
 
 void PhysicalPlan::outputAndOptimize()
@@ -136,13 +143,14 @@ void PhysicalPlan::outputAndOptimize()
     RUNTIME_ASSERT(!root_node, log, "root_node shoud be nullptr before `outputAndOptimize`");
     RUNTIME_ASSERT(cur_plan_nodes.size() == 1, log, "There can only be one plan node output, but here are {}", cur_plan_nodes.size());
     root_node = popBack();
+    addRootFinalProjectionForCop();
 
     LOG_FMT_DEBUG(
         log,
         "build unoptimized physical plan: \n{}",
         toString());
 
-    root_node = optimize(context, root_node);
+    root_node = optimize(context, root_node, log);
     RUNTIME_ASSERT(root_node, log, "root_node shoudn't be nullptr after `outputAndOptimize`");
 }
 
