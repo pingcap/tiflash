@@ -23,9 +23,9 @@
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
+#include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <pingcap/Exception.h>
@@ -92,7 +92,7 @@ try
     DAGQuerySource dag(context);
     DAGContext & dag_context = *context.getDAGContext();
 
-    BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
+    BlockIO streams = executeQuery(context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);

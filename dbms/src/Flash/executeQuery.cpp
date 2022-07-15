@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/executeQuery.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Planner/PlanQuerySource.h>
+#include <Flash/executeQuery.h>
 #include <Interpreters/executeQuery.h>
 
 namespace DB
@@ -35,4 +35,4 @@ BlockIO executeQuery(
         return executeQuery(dag, context, internal, stage);
     }
 }
-}
+} // namespace DB

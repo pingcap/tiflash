@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/Planner.h>
@@ -22,8 +22,8 @@
 namespace DB
 {
 Planner::Planner(
-        Context & context_,
-        const PlanQuerySource & plan_source_)
+    Context & context_,
+    const PlanQuerySource & plan_source_)
     : context(context_)
     , plan_source(plan_source_)
     , max_streams(context.getMaxStreams())
@@ -53,7 +53,7 @@ BlockIO Planner::execute()
     }
     BlockIO res;
     res.in = pipeline.firstStream();
-    return pipeline.streams;
+    return res;
 }
 
 DAGContext & Planner::dagContext() const

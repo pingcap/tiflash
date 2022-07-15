@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Planner/PlanQuerySource.h>
 
 namespace DB
