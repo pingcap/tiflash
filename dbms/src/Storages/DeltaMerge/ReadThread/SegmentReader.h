@@ -32,6 +32,11 @@ private:
     Poco::Logger * log;
 };
 
+// SegmentReaderPoolManager is a NUMA-aware singleton that manages several SegmentReaderPool objects.
+// The number of SegmentReadPool object is the same as the number of CPU NUMA node.
+// Thread number of a SegmentReadPool object is the same as the number of CPU logical core of a CPU NUMA node.
+// Function `addTask` dispatches MergedTask to SegmentReadPool by their segment id, so a segment read task
+// wouldn't be processed across NUMA nodes.
 class SegmentReaderPoolManager
 {
 public:
@@ -41,11 +46,6 @@ public:
         return pool_manager;
     }
 
-    static void init(Poco::Logger * log);
-
-    void init(Poco::Logger * log, int threads_per_node, const std::vector<std::vector<int>> & numa_nodes);
-
-    SegmentReaderPoolManager();
     ~SegmentReaderPoolManager();
     SegmentReaderPoolManager(const SegmentReaderPoolManager &) = delete;
     SegmentReaderPoolManager & operator=(const SegmentReaderPoolManager &) = delete;
@@ -55,7 +55,11 @@ public:
     void addTask(MergedTaskPtr && task);
 
 private:
+    SegmentReaderPoolManager();
+    void init();
+
     std::vector<std::unique_ptr<SegmentReaderPool>> reader_pools;
+    Poco::Logger * log;
 };
 
 } // namespace DB::DM

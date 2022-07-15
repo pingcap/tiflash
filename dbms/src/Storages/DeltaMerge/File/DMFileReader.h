@@ -92,7 +92,8 @@ public:
         const ReadLimiterPtr & read_limiter,
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
-        const String & tracing_id_);
+        const String & tracing_id_,
+        bool enable_col_sharing_cache);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -109,7 +110,6 @@ public:
         return dmfile->path();
     }
     void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
-    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 
 private:
     bool shouldSeek(size_t pack_id);
@@ -127,7 +127,7 @@ private:
                     size_t read_rows,
                     size_t skip_packs,
                     bool force_seek);
-
+    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 private:
     DMFilePtr dmfile;
     ColumnDefines read_columns;
@@ -165,7 +165,7 @@ private:
 
     LoggerPtr log;
 
-    ColumnSharingCacheMap col_data_cache;
+    std::unique_ptr<ColumnSharingCacheMap> col_data_cache;
 };
 
 } // namespace DM

@@ -1134,6 +1134,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     SegmentReadTasks tasks;
 
     auto dm_context = newDMContext(db_context, db_settings, fmt::format("read_raw_{}", db_context.getCurrentQueryId()));
+    // TODO(jinhelin): If keep order is required, disable read thread.
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
     {
         std::shared_lock lock(read_write_mutex);
@@ -1166,7 +1167,16 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
-    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(physical_table_id, dm_context, columns_to_read, EMPTY_FILTER, std::numeric_limits<UInt64>::max(), DEFAULT_BLOCK_SIZE, true, db_settings.dt_raw_filter_range, std::move(tasks));
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        physical_table_id,
+        dm_context,
+        columns_to_read,
+        EMPTY_FILTER,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        true,
+        db_settings.dt_raw_filter_range,
+        std::move(tasks));
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
@@ -1176,6 +1186,15 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     {
         BlockInputStreamPtr stream;
         if (enable_read_thread)
+        {
+            stream = std::make_shared<UnorderedInputStream>(
+                read_task_pool,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id,
+                req_info);
+        }
+        else
         {
             stream = std::make_shared<DMSegmentThreadInputStream>(
                 dm_context,
@@ -1187,15 +1206,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 DEFAULT_BLOCK_SIZE,
                 /* is_raw_ */ true,
                 /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
-                extra_table_id_index,
-                physical_table_id,
-                req_info);
-        }
-        else
-        {
-            stream = std::make_shared<UnorderedInputStream>(
-                read_task_pool,
-                columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
                 req_info);
@@ -1224,6 +1234,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
+    // TODO(jinhelin): If keep order is required, disable read thread.
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, !enable_read_thread);
 
@@ -1237,7 +1248,16 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
-    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(physical_table_id, dm_context, columns_to_read, filter, max_version, expected_block_size, false, db_settings.dt_raw_filter_range, std::move(tasks));
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        physical_table_id,
+        dm_context,
+        columns_to_read,
+        filter,
+        max_version,
+        expected_block_size,
+        false,
+        db_settings.dt_raw_filter_range,
+        std::move(tasks));
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())

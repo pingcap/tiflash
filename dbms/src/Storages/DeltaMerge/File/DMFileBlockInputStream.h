@@ -29,21 +29,20 @@ namespace DM
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    explicit DMFileBlockInputStream(DMFileReader && reader_, bool enable_read_thread_)
+    explicit DMFileBlockInputStream(DMFileReader && reader_)
         : reader(std::move(reader_))
-        , enable_read_thread(enable_read_thread_)
     {
-        if (enable_read_thread)
+        if (DMFileReaderPool::instance() != nullptr)
         {
-            DMFileReaderPool::instance().add(reader);
+            DMFileReaderPool::instance()->add(reader);
         }
     }
 
     ~DMFileBlockInputStream()
     {
-        if (enable_read_thread)
+        if (DMFileReaderPool::instance() != nullptr)
         {
-            DMFileReaderPool::instance().del(reader);
+            DMFileReaderPool::instance()->del(reader);
         }
     }
 
@@ -57,7 +56,6 @@ public:
 
 private:
     DMFileReader reader;
-    bool enable_read_thread;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;

@@ -3,6 +3,8 @@
 #include <Storages/DeltaMerge/ReadThread/CircularScanList.h>
 #include <Storages/DeltaMerge/ReadThread/MergedTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+
+#include <memory>
 namespace DB::DM
 {
 
@@ -11,12 +13,12 @@ using SegmentReadTaskPoolList = CircularScanList<SegmentReadTaskPool>;
 // SegmentReadTaskScheduler is a global singleton.
 // All SegmentReadTaskPool will be added to it and be scheduled by it.
 
-// 1. DeltaMergeStore::read will call SegmentReadTaskScheduler::add to add a SegmentReadTaskPool object to `the read_pools list` and
+// 1. DeltaMergeStore::read/readRaw will call SegmentReadTaskScheduler::add to add a SegmentReadTaskPool object to the `read_pools` list and
 // index segments information into `merging_segments`.
 // 2. A schedule-thread will scheduling read tasks:
 //   a. It scans the read_pools list and choosing a SegmentReadTaskPool.
-//   b. Chooses a segment of the SegmentReadTaskPool in step a, and build a MergedTask.
-//   c. Sends the MergedTask to read threads.
+//   b. Chooses a segment of the SegmentReadTaskPool and build a MergedTask.
+//   c. Sends the MergedTask to read threads(SegmentReader).
 class SegmentReadTaskScheduler
 {
 public:

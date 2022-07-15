@@ -163,18 +163,18 @@ SegmentReaderPool::~SegmentReaderPool()
     task_queue.finish();
 }
 
-void SegmentReaderPoolManager::init(Poco::Logger * log)
+SegmentReaderPoolManager::SegmentReaderPoolManager()
+    : log(&Poco::Logger::get("SegmentReaderPoolManager"))
 {
-    auto numa_nodes = getNumaNodes();
-    SegmentReaderPoolManager::instance().init(log, numa_nodes.front().size(), numa_nodes);
+    init();
 }
-
-SegmentReaderPoolManager::SegmentReaderPoolManager() = default;
 
 SegmentReaderPoolManager::~SegmentReaderPoolManager() = default;
 
-void SegmentReaderPoolManager::init(Poco::Logger * log, int threads_per_node, const std::vector<std::vector<int>> & numa_nodes)
+void SegmentReaderPoolManager::init()
 {
+    auto numa_nodes = getNumaNodes();
+    int threads_per_node = numa_nodes.front().size();
     LOG_FMT_DEBUG(log, "SegmentReaderPoolManager::init threads_per_node {} numa_nodes {}", threads_per_node, numa_nodes.size());
     for (const auto & node : numa_nodes)
     {

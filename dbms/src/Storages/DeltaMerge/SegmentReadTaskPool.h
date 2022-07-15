@@ -208,9 +208,9 @@ private:
     const size_t expected_block_size;
     const bool is_raw;
     const bool do_range_filter_for_raw;
+    SegmentReadTasks tasks;
 
     std::mutex mutex;
-    SegmentReadTasks tasks;
     std::unordered_set<uint64_t> active_segment_ids;
     WorkQueue<Block> q;
     BlockStat blk_stat;

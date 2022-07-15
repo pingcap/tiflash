@@ -3,6 +3,7 @@
 #include <Columns/IColumn.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <memory>
 
 namespace DB::DM
 {
@@ -91,13 +92,20 @@ private:
 class ColumnSharingCacheMap
 {
 public:
-    ColumnSharingCacheMap()
-        : stats(static_cast<int>(ColumnCacheStatus::_TOTAL_COUNT))
-    {}
-
-    void addColumn(int64_t col_id)
+    ColumnSharingCacheMap(const std::string & dmfile_name_, const ColumnDefines & cds, LoggerPtr & log_)
+        : dmfile_name(dmfile_name_)
+        , stats(static_cast<int>(ColumnCacheStatus::_TOTAL_COUNT))
+        , log(log_)
     {
-        cols[col_id];
+        for (const auto & cd : cds)
+        {
+            addColumn(cd.id);
+        }
+    }
+
+    ~ColumnSharingCacheMap()
+    {
+        LOG_FMT_DEBUG(log, "dmfile {} stat {}", dmfile_name, statString());
     }
 
     void addStale()
@@ -137,6 +145,11 @@ public:
         }
     }
 
+private:
+    void addColumn(int64_t col_id)
+    {
+        cols[col_id];
+    }
     std::string statString() const
     {
         auto add_count = stats[static_cast<int>(ColumnCacheStatus::ADD_COUNT)].load(std::memory_order_relaxed);
@@ -158,10 +171,10 @@ public:
                            get_copy,
                            get_total > 0 ? get_cached * 1.0 / get_total : 0);
     }
-
-private:
+    std::string dmfile_name;
     std::unordered_map<int64_t, ColumnSharingCache> cols;
     std::vector<std::atomic<int64_t>> stats;
+    LoggerPtr log;
 };
 
 class DMFileReader;
@@ -171,7 +184,8 @@ class DMFileReader;
 class DMFileReaderPool
 {
 public:
-    static DMFileReaderPool & instance();
+    static DMFileReaderPool * instance();
+    static void init();
 
     void add(DMFileReader & reader);
     void del(DMFileReader & reader);
@@ -180,6 +194,8 @@ public:
 private:
     std::mutex mtx;
     std::unordered_map<std::string, std::unordered_set<DMFileReader *>> readers;
+
+    inline static std::unique_ptr<DMFileReaderPool> reader_pool;
 };
 
 } // namespace DB::DM

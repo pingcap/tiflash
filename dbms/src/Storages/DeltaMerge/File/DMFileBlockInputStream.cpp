@@ -73,8 +73,9 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         read_limiter,
         rows_threshold_per_read,
         read_one_pack_every_time,
-        tracing_id);
+        tracing_id,
+        DMFileReaderPool::instance() != nullptr);
 
-    return std::make_shared<DMFileBlockInputStream>(std::move(reader), enable_read_thread);
+    return std::make_shared<DMFileBlockInputStream>(std::move(reader));
 }
 } // namespace DB::DM
