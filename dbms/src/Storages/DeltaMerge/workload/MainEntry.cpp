@@ -269,7 +269,7 @@ int DTWorkload::mainEntry(int argc, char ** argv)
     init(opts);
 
     // For mixed mode, we need to run the test in ONLY_V2 mode first.
-    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == PageStorageRunMode::ONLY_V3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2);
+    TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == PageStorageRunMode::ONLY_V3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2, opts.bg_thread_count);
     if (opts.testing_type == "daily_perf")
     {
         dailyPerformanceTest(opts);
