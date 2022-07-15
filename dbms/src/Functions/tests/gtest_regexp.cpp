@@ -66,8 +66,8 @@ protected:
 TEST_F(Regexp, testRegexpMatchType)
 {
     UInt8 res = false;
-    const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
-    const auto * ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    const auto binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    const auto ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     DB::MatchImpl<false, false, true>::constantConstant("a\nB\n", "(?m)(?i)^b", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 1);
     DB::MatchImpl<false, false, true>::constantConstant("a\nB\n", "^b", '\\', "mi", nullptr, res);
@@ -1744,8 +1744,8 @@ TEST_F(Regexp, testRegexpMySQLCases)
 TEST_F(Regexp, testRegexpTiDBCase)
 {
     UInt8 res;
-    const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
-    const auto * ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    const auto binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    const auto ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     DB::MatchImpl<false, false, true>::constantConstant("a", "^$", '\\', "", nullptr, res);
     ASSERT_TRUE(res == 0);
     DB::MatchImpl<false, false, true>::constantConstant("a", "a", '\\', "", nullptr, res);
@@ -1782,7 +1782,7 @@ TEST_F(Regexp, testRegexpTiDBCase)
 
 TEST_F(Regexp, testRegexp)
 {
-    const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    const auto binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
     auto string_type = std::make_shared<DataTypeString>();
     auto nullable_string_type = makeNullable(string_type);
     auto uint8_type = std::make_shared<DataTypeUInt8>();
@@ -1954,8 +1954,8 @@ TEST_F(Regexp, testRegexpCustomerCases)
 TEST_F(Regexp, testRegexpReplaceMatchType)
 {
     String res;
-    const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
-    const auto * ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    const auto binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    const auto ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "(?m)(?i)^b", "xxx", 1, 0, "", nullptr, res);
     ASSERT_TRUE(res == "a\nxxx\nc");
     DB::ReplaceRegexpImpl<false>::constant("a\nB\nc", "^b", "xxx", 1, 0, "mi", nullptr, res);
@@ -2020,7 +2020,7 @@ TEST_F(Regexp, testRegexpReplaceMySQLCases)
 
 TEST_F(Regexp, testRegexpReplace)
 {
-    const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    const auto binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
     auto string_type = std::make_shared<DataTypeString>();
     auto nullable_string_type = makeNullable(string_type);
     auto uint8_type = std::make_shared<DataTypeUInt8>();
