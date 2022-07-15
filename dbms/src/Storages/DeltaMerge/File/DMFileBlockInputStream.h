@@ -29,11 +29,11 @@ namespace DM
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    explicit DMFileBlockInputStream(DMFileReader && reader_, bool use_read_thread_)
+    explicit DMFileBlockInputStream(DMFileReader && reader_, bool enable_read_thread_)
         : reader(std::move(reader_))
-        , use_read_thread(use_read_thread_)
+        , enable_read_thread(enable_read_thread_)
     {
-        if (use_read_thread)
+        if (enable_read_thread)
         {
             DMFileReaderPool::instance().add(reader);
         }
@@ -41,7 +41,7 @@ public:
 
     ~DMFileBlockInputStream()
     {
-        if (use_read_thread)
+        if (enable_read_thread)
         {
             DMFileReaderPool::instance().del(reader);
         }
@@ -57,7 +57,7 @@ public:
 
 private:
     DMFileReader reader;
-    bool use_read_thread;
+    bool enable_read_thread;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
@@ -142,7 +142,7 @@ private:
         enable_column_cache = settings.dt_enable_stable_column_cache;
         aio_threshold = settings.min_bytes_to_use_direct_io;
         max_read_buffer_size = settings.max_read_buffer_size;
-        use_read_thread = settings.dt_use_read_thread;
+        enable_read_thread = settings.dt_enable_read_thread;
         return *this;
     }
     DMFileBlockInputStreamBuilder & setCaches(const MarkCachePtr & mark_cache_, const MinMaxIndexCachePtr & index_cache_)
@@ -173,7 +173,7 @@ private:
     size_t max_read_buffer_size{};
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
-    bool use_read_thread = false;
+    bool enable_read_thread = false;
     String tracing_id;
 };
 

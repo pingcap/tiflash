@@ -1134,7 +1134,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     SegmentReadTasks tasks;
 
     auto dm_context = newDMContext(db_context, db_settings, fmt::format("read_raw_{}", db_context.getCurrentQueryId()));
-    auto use_read_thread = db_context.getSettingsRef().dt_use_read_thread;
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
     {
         std::shared_lock lock(read_write_mutex);
 
@@ -1175,7 +1175,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     for (size_t i = 0; i < final_num_stream; ++i)
     {
         BlockInputStreamPtr stream;
-        if (use_read_thread)
+        if (enable_read_thread)
         {
             stream = std::make_shared<DMSegmentThreadInputStream>(
                 dm_context,
@@ -1202,7 +1202,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         }
         res.push_back(stream);
     }
-    if (use_read_thread)
+    if (enable_read_thread)
     {
         SegmentReadTaskScheduler::instance().add(read_task_pool);
     }
@@ -1224,8 +1224,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
-    auto use_read_thread = db_context.getSettingsRef().dt_use_read_thread;
-    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, !use_read_thread);
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, !enable_read_thread);
 
     auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
     LOG_FMT_DEBUG(tracing_logger, "Read create segment snapshot done");
@@ -1246,7 +1246,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     for (size_t i = 0; i < final_num_stream; ++i)
     {
         BlockInputStreamPtr stream;
-        if (use_read_thread)
+        if (enable_read_thread)
         {
             stream = std::make_shared<UnorderedInputStream>(
                 read_task_pool,
@@ -1273,7 +1273,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         }
         res.push_back(stream);
     }
-    if (use_read_thread)
+    if (enable_read_thread)
     {
         SegmentReadTaskScheduler::instance().add(read_task_pool);
     }

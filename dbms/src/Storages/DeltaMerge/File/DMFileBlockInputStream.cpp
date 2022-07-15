@@ -75,6 +75,6 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         read_one_pack_every_time,
         tracing_id);
 
-    return std::make_shared<DMFileBlockInputStream>(std::move(reader), use_read_thread);
+    return std::make_shared<DMFileBlockInputStream>(std::move(reader), enable_read_thread);
 }
 } // namespace DB::DM
