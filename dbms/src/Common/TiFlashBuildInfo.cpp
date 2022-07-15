@@ -101,6 +101,23 @@ std::string getEnabledFeatures()
 #if ENABLE_THINLTO
             "thinlto",
 #endif
+
+// Profile instrumentation
+#if ENABLE_LLVM_PROFILE_INSTR
+            "profile-instr",
+#endif
+
+// PGO
+#if ENABLE_LLVM_PGO_USE_SAMPLE
+            "pgo-sample",
+#elif ENABLE_LLVM_PGO
+            "pgo-instr",
+#endif
+
+// FDO
+#if USE_LLVM_FDO
+            "fdo",
+#endif
     };
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
 }
