@@ -290,7 +290,7 @@ try
                                              /* is_raw_read= */ true,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
-        in->readSuffix();
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
