@@ -241,7 +241,12 @@ private:
 
 private:
     WriterPtr checkAndRenewWriter(
+<<<<<<< HEAD
         WritingPageFile & page_file,
+=======
+        WritingPageFile & writing_file,
+        PageFileIdAndLevel max_page_file_id_lvl_hint,
+>>>>>>> f7be36209f (fix pagestorage v2 restore (#5384))
         const String & parent_path_hint,
         WriterPtr && old_writer = nullptr,
         const String & logging_msg = "");
