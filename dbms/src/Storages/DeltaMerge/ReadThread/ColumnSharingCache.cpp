@@ -4,14 +4,10 @@
 namespace DB::DM
 {
 
-DMFileReaderPool * DMFileReaderPool::instance()
+DMFileReaderPool & DMFileReaderPool::instance()
 {
-    return reader_pool.get();
-}
-
-void DMFileReaderPool::init()
-{
-    reader_pool = std::make_unique<DMFileReaderPool>();
+    static DMFileReaderPool reader_pool;
+    return reader_pool;
 }
 
 void DMFileReaderPool::add(DMFileReader & reader)

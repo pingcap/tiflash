@@ -1340,12 +1340,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_FMT_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
-    if (global_context->getSettingsRef().dt_enable_read_thread)
-    {
-        DM::SegmentReaderPoolManager::instance();
-        DM::SegmentReadTaskScheduler::instance();
-        DM::DMFileReaderPool::init();
-    }
+    DM::SegmentReaderPoolManager::instance();
+    DM::SegmentReadTaskScheduler::instance();
+    DM::DMFileReaderPool::instance();
 
     {
         // Note that this must do before initialize schema sync service.

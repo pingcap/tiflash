@@ -23,7 +23,7 @@ public:
     SegmentReaderPool & operator=(SegmentReaderPool &&) = delete;
 
     void addTask(MergedTaskPtr && task);
-
+    std::vector<std::thread::id> getReaderIds() const;
 private:
     void init(int thread_count, const std::vector<int> & cpus);
 
@@ -53,12 +53,13 @@ public:
     SegmentReaderPoolManager & operator=(SegmentReaderPoolManager &&) = delete;
 
     void addTask(MergedTaskPtr && task);
-
+    bool isSegmentReader() const;
 private:
     SegmentReaderPoolManager();
     void init();
 
     std::vector<std::unique_ptr<SegmentReaderPool>> reader_pools;
+    std::unordered_set<std::thread::id> reader_ids;
     Poco::Logger * log;
 };
 

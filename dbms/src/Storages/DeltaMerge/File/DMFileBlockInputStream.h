@@ -16,7 +16,7 @@
 
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
-#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 namespace DB
@@ -29,20 +29,21 @@ namespace DM
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    explicit DMFileBlockInputStream(DMFileReader && reader_)
+    explicit DMFileBlockInputStream(DMFileReader && reader_, bool enable_read_thread_)
         : reader(std::move(reader_))
+        , enable_read_thread(enable_read_thread_)
     {
-        if (DMFileReaderPool::instance() != nullptr)
+        if (enable_read_thread)
         {
-            DMFileReaderPool::instance()->add(reader);
+            DMFileReaderPool::instance().add(reader);
         }
     }
 
     ~DMFileBlockInputStream()
     {
-        if (DMFileReaderPool::instance() != nullptr)
+        if (enable_read_thread)
         {
-            DMFileReaderPool::instance()->del(reader);
+            DMFileReaderPool::instance().del(reader);
         }
     }
 
@@ -56,6 +57,7 @@ public:
 
 private:
     DMFileReader reader;
+    bool enable_read_thread;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;

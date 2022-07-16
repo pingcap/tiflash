@@ -555,9 +555,9 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
         readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, true /*force_seek*/);
         column = std::move(col);
     }
-    if (DMFileReaderPool::instance() != nullptr)
+    if (col_data_cache != nullptr)
     {
-        DMFileReaderPool::instance()->set(*this, column_define.id, start_pack_id, pack_count, column);
+        DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
     }
 }
 

@@ -34,6 +34,10 @@ public:
         LOG_FMT_DEBUG(log, "SegmentReader stop end");
     }
 
+    std::thread::id getId() const
+    {
+        return t.get_id();
+    }
 private:
     void setCPUAffinity()
     {
@@ -163,6 +167,16 @@ SegmentReaderPool::~SegmentReaderPool()
     task_queue.finish();
 }
 
+std::vector<std::thread::id> SegmentReaderPool::getReaderIds() const
+{
+    std::vector<std::thread::id> ids;
+    for (const auto & r : readers)
+    {
+        ids.push_back(r->getId());
+    }
+    return ids;
+}
+
 SegmentReaderPoolManager::SegmentReaderPoolManager()
     : log(&Poco::Logger::get("SegmentReaderPoolManager"))
 {
@@ -175,11 +189,14 @@ void SegmentReaderPoolManager::init()
 {
     auto numa_nodes = getNumaNodes();
     int threads_per_node = numa_nodes.front().size();
-    LOG_FMT_DEBUG(log, "SegmentReaderPoolManager::init threads_per_node {} numa_nodes {}", threads_per_node, numa_nodes.size());
+    LOG_FMT_INFO(log, "threads_per_node {} numa_nodes {}", threads_per_node, numa_nodes.size());
     for (const auto & node : numa_nodes)
     {
         reader_pools.push_back(std::make_unique<SegmentReaderPool>(threads_per_node, node));
+        auto ids = reader_pools.back()->getReaderIds();
+        reader_ids.insert(ids.begin(), ids.end());
     }
+    LOG_FMT_INFO(log, "readers count {}", reader_ids.size());
 }
 
 void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)
@@ -189,4 +206,8 @@ void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)
     reader_pools[idx]->addTask(std::move(task));
 }
 
+bool SegmentReaderPoolManager::isSegmentReader() const
+{
+    return reader_ids.find(std::this_thread::get_id()) != reader_ids.end();
+}
 } // namespace DB::DM

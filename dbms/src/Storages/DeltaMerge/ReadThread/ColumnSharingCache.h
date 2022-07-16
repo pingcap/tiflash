@@ -184,8 +184,7 @@ class DMFileReader;
 class DMFileReaderPool
 {
 public:
-    static DMFileReaderPool * instance();
-    static void init();
+    static DMFileReaderPool & instance();
 
     void add(DMFileReader & reader);
     void del(DMFileReader & reader);
@@ -194,8 +193,6 @@ public:
 private:
     std::mutex mtx;
     std::unordered_map<std::string, std::unordered_set<DMFileReader *>> readers;
-
-    inline static std::unique_ptr<DMFileReaderPool> reader_pool;
 };
 
 } // namespace DB::DM
