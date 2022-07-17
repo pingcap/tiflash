@@ -172,20 +172,12 @@ bool SegmentReadTaskScheduler::schedule()
 
 void SegmentReadTaskScheduler::schedThread()
 {
-    using namespace std::chrono_literals;
-    std::chrono::time_point<std::chrono::system_clock> last;
     while (!isStop())
     {
         if (!schedule())
         {
-            std::this_thread::sleep_for(2ms); // TODO(jinhelin): use notify
-        }
-        auto cur = std::chrono::system_clock::now();
-        std::chrono::duration<double> elapsed_seconds = cur - last;
-        if (elapsed_seconds.count() > 1)
-        {
-            last = cur;
-            LOG_FMT_DEBUG(log, "passive_merged_segments {}", MergedTask::getPassiveMergedSegments());
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(2ms);
         }
     }
 }
