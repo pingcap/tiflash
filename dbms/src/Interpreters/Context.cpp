@@ -78,8 +78,6 @@ namespace ProfileEvents
 extern const Event ContextLock;
 }
 
-#include <set>
-
 namespace CurrentMetrics
 {
 extern const Metric GlobalStorageRunMode;

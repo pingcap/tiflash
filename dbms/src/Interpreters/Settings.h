@@ -367,7 +367,6 @@ struct Settings
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
                                                                                                                                                                                                                                         \
     M(SettingBool, enable_planner, true, "Enable planner")
-
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 
