@@ -138,7 +138,7 @@ public:
         SettingUInt64 blob_file_limit_size = BLOBFILE_LIMIT_SIZE;
         SettingUInt64 blob_spacemap_type = 2;
         SettingUInt64 blob_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
-        SettingDouble blob_heavy_gc_valid_rate = 0.2;
+        SettingDouble blob_heavy_gc_valid_rate = 0.5;
         SettingUInt64 blob_block_alignment_bytes = 0;
 
         SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
