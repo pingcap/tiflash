@@ -559,6 +559,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 
+    delta_stream = std::make_shared<SquashingBlockInputStream>(delta_stream, DEFAULT_MERGE_BLOCK_SIZE, 0, dm_context.tracing_id);
+
     delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
     stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
 
