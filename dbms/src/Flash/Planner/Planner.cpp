@@ -87,11 +87,19 @@ BlockInputStreams Planner::execute()
 
 bool Planner::isSupported(const DAGQueryBlock & query_block)
 {
-    return query_block.source
-        && (query_block.source->tp() == tipb::ExecType::TypeProjection
-            || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
-            || query_block.source->tp() == tipb::ExecType::TypeWindow
-            || (query_block.source->tp() == tipb::ExecType::TypeSort && query_block.source->sort().ispartialsort()));
+    /// todo support fine grained shuffle
+    static auto disable_fine_frained_shuffle = [](const DAGQueryBlock & query_block) {
+        return !enableFineGrainedShuffle(query_block.source->fine_grained_shuffle_stream_count())
+            && (!query_block.exchange_sender || !enableFineGrainedShuffle(query_block.exchange_sender->fine_grained_shuffle_stream_count()));
+    };
+    static auto has_supported_source = [](const DAGQueryBlock & query_block) {
+        return query_block.source
+            && (query_block.source->tp() == tipb::ExecType::TypeProjection
+                || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
+                || query_block.source->tp() == tipb::ExecType::TypeWindow
+                || (query_block.source->tp() == tipb::ExecType::TypeSort && query_block.source->sort().ispartialsort()));
+    };
+    return has_supported_source(query_block) && disable_fine_frained_shuffle(query_block);
 }
 
 DAGContext & Planner::dagContext() const

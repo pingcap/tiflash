@@ -49,6 +49,8 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
         throw TiFlashException(
             fmt::format("Can not find exchange receiver for {}", executor_id),
             Errors::Planner::Internal);
+    /// todo support fine grained shuffle
+    assert(!enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount()));
 
     NamesAndTypes schema = toNamesAndTypes(mpp_exchange_receiver->getOutputSchema());
     auto physical_exchange_receiver = std::make_shared<PhysicalExchangeReceiver>(
