@@ -39,6 +39,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include <memory>
 #include <numeric>
 
 namespace ProfileEvents
@@ -497,53 +498,81 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
     return data_stream;
 }
 
+/// we will call getInputStreamRaw in two condition:
+///     1. Using 'selraw xxxx' statement, which is always in test for debug. (when filter_delete_mark = false)
+///        In this case, we will read all the data without mvcc filtering,
+///        del_mark != 0 filtering and sorted merge.
+///        We will just read all the data and return.
+///     2. We read in fast mode. (when filter_delete_mark = true)
+///        In this case, we will read all the data without mvcc filtering and sorted merge,
+///        but we will do del_mark != 0 filtering.
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                const ColumnDefines & columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-                                               bool do_range_filter,
+                                               const RowKeyRanges & data_ranges,
+                                               const RSOperatorPtr & filter,
+                                               bool filter_delete_mark,
                                                size_t expected_block_size)
 {
+    /// Now, we use filter_delete_mark to determine whether it is in fast mode or just from `selraw * xxxx`
+    /// But this way seems not to be robustness enough, maybe we need another flag?
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
-    if (!do_range_filter)
-    {
-        (*new_columns_to_read) = columns_to_read;
-    }
-    else
-    {
-        new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
 
-        for (const auto & c : columns_to_read)
+    new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+    if (filter_delete_mark)
+    {
+        new_columns_to_read->push_back(getTagColumnDefine());
+    }
+
+    bool enable_clean_read = filter_delete_mark;
+
+    for (const auto & c : columns_to_read)
+    {
+        if (c.id != EXTRA_HANDLE_COLUMN_ID)
         {
-            if (c.id != EXTRA_HANDLE_COLUMN_ID)
+            if (!(filter_delete_mark && c.id == TAG_COLUMN_ID))
                 new_columns_to_read->push_back(c);
+        }
+        else
+        {
+            enable_clean_read = false;
         }
     }
 
+    /// when we read in fast mode, if columns_to_read does not include EXTRA_HANDLE_COLUMN_ID,
+    /// we can try to use clean read to make optimization in stable part.
+    /// when the pack is under totally data_ranges and has no rows whose del_mark = 1 --> we don't need read handle_column/tag_column/version_column
+    /// when the pack is under totally data_ranges and has rows whose del_mark = 1 --> we don't need read handle_column/version_column
+    /// others --> we don't need read version_column
+    /// Considering the del min max index has some problem now, we first only optimize with handle column.
 
-    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, //
-                                                                               segment_snap->delta,
-                                                                               new_columns_to_read,
-                                                                               this->rowkey_range);
-
-    RowKeyRanges rowkey_ranges{rowkey_range};
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *new_columns_to_read,
-        rowkey_ranges,
-        EMPTY_FILTER,
+        data_ranges,
+        filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
-        false);
+        /* enable_clean_read */ enable_clean_read,
+        /* is_fast_mode */ filter_delete_mark);
 
-    if (do_range_filter)
+    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
+
+    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
+    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
+
+    if (filter_delete_mark)
     {
-        delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, rowkey_ranges, 0);
-        delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
-
-        stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, rowkey_ranges, 0);
-        stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
+        delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read, dm_context.tracing_id);
+        stable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(stable_stream, columns_to_read, dm_context.tracing_id);
     }
+    else
+    {
+        delta_stream = std::make_shared<DMColumnProjectionBlockInputStream>(delta_stream, columns_to_read);
+        stable_stream = std::make_shared<DMColumnProjectionBlockInputStream>(stable_stream, columns_to_read);
+    }
+
 
     BlockInputStreams streams;
 
@@ -560,15 +589,15 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         streams.push_back(delta_stream);
         streams.push_back(stable_stream);
     }
-    return std::make_shared<ConcatBlockInputStream>(streams, /*req_id=*/"");
+    return std::make_shared<ConcatBlockInputStream>(streams, dm_context.tracing_id);
 }
 
-BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
+BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read, bool filter_delete_mark)
 {
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
     if (!segment_snap)
         return {};
-    return getInputStreamRaw(dm_context, columns_to_read, segment_snap, true);
+    return getInputStreamRaw(dm_context, columns_to_read, segment_snap, {rowkey_range}, EMPTY_FILTER, filter_delete_mark);
 }
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const

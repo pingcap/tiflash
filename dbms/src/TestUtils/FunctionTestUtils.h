@@ -514,12 +514,16 @@ ColumnWithTypeAndName createConstColumn(
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
 
+String getColumnsContent(const ColumnsWithTypeAndName & cols);
+
+/// We can designate the range of columns printed with begin and end. range: [begin, end]
+String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end);
+
 // This wrapper function only serves to construct columns input for function-like macros,
 // since preprocessor recognizes `{col1, col2, col3}` as three arguments instead of one.
 // E.g. preprocessor does not allow us to write `ASSERT_COLUMNS_EQ_R({col1, col2, col3}, actual_cols)`,
 //  but with this func we can write `ASSERT_COLUMNS_EQ_R(createColumns{col1, col2, col3}, actual_cols)` instead.
 ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
-
 
 ::testing::AssertionResult dataTypeEqual(
     const DataTypePtr & expected,

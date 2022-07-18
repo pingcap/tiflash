@@ -37,6 +37,7 @@ function install_llvm() {
     mkdir -p llvm-project/build
     cd llvm-project/build
 
+    # TODO: enable `bolt` for >= 14.0.0. https://github.com/llvm/llvm-project/tree/main/bolt
     cmake -DCMAKE_BUILD_TYPE=Release \
         -GNinja \
         -DLLVM_ENABLE_PROJECTS="clang;lld;polly;clang-tools-extra" \

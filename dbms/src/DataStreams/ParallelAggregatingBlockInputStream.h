@@ -36,7 +36,7 @@ public:
       */
     ParallelAggregatingBlockInputStream(
         const BlockInputStreams & inputs,
-        const BlockInputStreamPtr & additional_input_at_end,
+        const BlockInputStreams & additional_inputs_at_end,
         const Aggregator::Params & params_,
         const FileProviderPtr & file_provider_,
         bool final_,
