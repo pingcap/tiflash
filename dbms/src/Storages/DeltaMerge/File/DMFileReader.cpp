@@ -25,6 +25,8 @@
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
 
+#include <string>
+
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -210,6 +212,7 @@ DMFileReader::DMFileReader(
     bool is_common_handle_,
     // clean read
     bool enable_clean_read_,
+    bool is_fast_mode_,
     UInt64 max_read_version_,
     // filters
     DMFilePackFilter && pack_filter_,
@@ -230,6 +233,7 @@ DMFileReader::DMFileReader(
     , read_one_pack_every_time(read_one_pack_every_time_)
     , single_file_mode(dmfile_->isSingleFileMode())
     , enable_clean_read(enable_clean_read_)
+    , is_fast_mode(is_fast_mode_)
     , max_read_version(max_read_version_)
     , pack_filter(std::move(pack_filter_))
     , skip_packs_by_column(read_columns.size(), 0)
@@ -338,13 +342,16 @@ Block DMFileReader::read()
     }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
-    bool do_clean_read = enable_clean_read && expected_handle_res == All && not_clean_rows == 0;
-    if (do_clean_read)
+    bool do_clean_read_on_normal_mode = enable_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
+
+    bool do_clean_read_on_handle = enable_clean_read && is_fast_mode && expected_handle_res == All;
+
+    if (do_clean_read_on_normal_mode)
     {
         UInt64 max_version = 0;
         for (size_t pack_id = start_pack_id; pack_id < next_pack_id; ++pack_id)
             max_version = std::max(pack_filter.getMaxVersion(pack_id), max_version);
-        do_clean_read = max_version <= max_read_version;
+        do_clean_read_on_normal_mode = max_version <= max_read_version;
     }
 
     for (size_t i = 0; i < read_columns.size(); ++i)
@@ -353,7 +360,24 @@ Block DMFileReader::read()
         {
             // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
             auto & cd = read_columns[i];
-            if (do_clean_read && isExtraColumn(cd))
+            if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle)
+            {
+                // Return the first row's handle
+                ColumnPtr column;
+                if (is_common_handle)
+                {
+                    StringRef min_handle = pack_filter.getMinStringHandle(start_pack_id);
+                    column = cd.type->createColumnConst(read_rows, Field(min_handle.data, min_handle.size));
+                }
+                else
+                {
+                    Handle min_handle = pack_filter.getMinHandle(start_pack_id);
+                    column = cd.type->createColumnConst(read_rows, Field(min_handle));
+                }
+                res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+                skip_packs_by_column[i] = read_packs;
+            }
+            else if (do_clean_read_on_normal_mode && isExtraColumn(cd))
             {
                 ColumnPtr column;
                 if (cd.id == EXTRA_HANDLE_COLUMN_ID)
@@ -441,6 +465,7 @@ Block DMFileReader::read()
                         auto column = data_type->createColumn();
                         readFromDisk(cd, column, start_pack_id, read_rows, skip_packs_by_column[i], single_file_mode);
                         auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
+
                         res.insert(ColumnWithTypeAndName{std::move(converted_column), cd.type, cd.name, cd.id});
                         skip_packs_by_column[i] = 0;
                     }
@@ -456,6 +481,7 @@ Block DMFileReader::read()
                         dmfile->path());
                     // New column after ddl is not exist in this DMFile, fill with default value
                     ColumnPtr column = createColumnWithDefaultValue(cd, read_rows);
+
                     res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
                     skip_packs_by_column[i] = 0;
                 }
