@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Planner/plans/PhysicalLeaf.h>
 
 namespace DB
