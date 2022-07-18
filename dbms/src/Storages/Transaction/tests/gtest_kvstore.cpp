@@ -101,10 +101,12 @@ void RegionKVStoreTest::testNewProxy()
         // test CompactLog
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
-        kvs.setRegionCompactLogConfig(1000, 1000, 1000);
+        kvs.markCompactLog();
+        kvs.setRegionCompactLogConfig(100000, 1000, 1000);
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
-        // CompactLog always returns true now. We use a tryFlushData to pre-filter.
+        // CompactLog always returns true now, even if we can't do a flush.
+        // We use a tryFlushData to pre-filter.
         ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         // Filter
