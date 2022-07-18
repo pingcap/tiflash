@@ -1029,20 +1029,17 @@ void RegionKVStoreTest::testKVStore()
 
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
-
-        raft_cmdpb::AdminRequest first_request = request;
         raft_cmdpb::AdminResponse first_response = response;
-
-        ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(first_request), std::move(first_response), 7, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
+        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(first_response), 7, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         raft_cmdpb::AdminResponse second_response = response;
-        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(second_response), 7, 23, 6, ctx.getTMTContext()), EngineStoreApplyRes::None);
-        request.set_cmd_type(::raft_cmdpb::AdminCmdType::ComputeHash);
+        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(second_response), 7, 23, 6, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::ComputeHash);
         raft_cmdpb::AdminResponse third_response = response;
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(third_response), 7, 24, 6, ctx.getTMTContext()), EngineStoreApplyRes::None);
-        request.set_cmd_type(::raft_cmdpb::AdminCmdType::VerifyHash);
 
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::VerifyHash);
         raft_cmdpb::AdminResponse fourth_response = response;
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(fourth_response), 7, 25, 6, ctx.getTMTContext()), EngineStoreApplyRes::None);
 
