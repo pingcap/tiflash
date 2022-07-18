@@ -198,7 +198,7 @@ void PageStorage::restore()
     /// Restore current version from both formal and legacy page files
 
     MetaMergingQueue merging_queue;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         if (!(page_file.getType() == PageFile::Type::Formal || page_file.getType() == PageFile::Type::Legacy
               || page_file.getType() == PageFile::Type::Checkpoint))
@@ -286,7 +286,7 @@ void PageStorage::restore()
         // Remove old checkpoints and archive obsolete PageFiles that have not been archived yet during gc for some reason.
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_FMT_TRACE(log, "{} These file would be archive:", storage_name);
-        for (auto & pf : page_files_to_remove)
+        for (const auto & pf : page_files_to_remove)
             LOG_FMT_TRACE(log, "{} {}", storage_name, pf.toString());
 #else
         // when restore `PageStorage`, the `PageFile` in `page_files_to_remove` is not counted in the total size,
@@ -348,7 +348,7 @@ PageId PageStorage::getMaxId()
     return versioned_page_entries.getSnapshot()->version()->maxId();
 }
 
-PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
+PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot) // NOLINT(google-default-arguments)
 {
     if (!snapshot)
     {
@@ -359,7 +359,7 @@ PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
     return is_ref_id ? normal_page_id : page_id;
 }
 
-DB::PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
+DB::PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot) // NOLINT(google-default-arguments)
 {
     if (!snapshot)
     {
@@ -470,7 +470,7 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     return pages_reader;
 }
 
-void PageStorage::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter)
+void PageStorage::write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter) // NOLINT(google-default-arguments)
 {
     if (unlikely(wb.empty()))
         return;
@@ -578,7 +578,7 @@ std::tuple<size_t, double, unsigned> PageStorage::getSnapshotsStat() const
     return versioned_page_entries.getSnapshotsStat();
 }
 
-DB::Page PageStorage::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+DB::Page PageStorage::read(PageId page_id, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) // NOLINT(google-default-arguments)
 {
     if (!snapshot)
     {
@@ -594,7 +594,7 @@ DB::Page PageStorage::read(PageId page_id, const ReadLimiterPtr & read_limiter, 
     return file_reader->read(to_read, read_limiter)[page_id];
 }
 
-PageMap PageStorage::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorage::read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) // NOLINT(google-default-arguments)
 {
     if (!snapshot)
     {
@@ -637,7 +637,7 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, const ReadLimite
     return page_map;
 }
 
-void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) // NOLINT(google-default-arguments)
 {
     if (!snapshot)
     {
@@ -677,7 +677,7 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
     }
 }
 
-PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot)
+PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) // NOLINT(google-default-arguments)
 {
     if (!snapshot)
         snapshot = this->getSnapshot();
@@ -719,7 +719,7 @@ PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, const
     return page_map;
 }
 
-void PageStorage::traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+void PageStorage::traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) // NOLINT(google-default-arguments)
 {
     if (!snapshot)
     {
@@ -903,7 +903,7 @@ WriteBatch::SequenceID PageStorage::WritingFilesSnapshot::minPersistedSequence()
     return seq;
 }
 
-bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) // NOLINT(google-default-arguments)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -1080,8 +1080,9 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
         LegacyCompactor compactor(*this, write_limiter, read_limiter);
         PageFileSet page_files_to_archive;
+        auto files_to_compact = std::move(page_files);
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
-            = compactor.tryCompact(std::move(page_files), writing_files_snapshot);
+            = compactor.tryCompact(std::move(files_to_compact), writing_files_snapshot);
         archivePageFiles(page_files_to_archive, true);
         gc_context.num_files_archive_in_compact_legacy = page_files_to_archive.size();
     }
@@ -1150,7 +1151,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
         if (!archive_dir.exists())
             archive_dir.createDirectory();
 
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             Poco::Path path(page_file.folderPath());
             auto dest = archive_path.toString() + "/" + path.getFileName();
@@ -1219,7 +1220,7 @@ PageStorage::gcRemoveObsoleteData(PageFileSet & page_files,
 {
     size_t num_data_removed = 0;
     size_t num_bytes_removed = 0;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         const auto page_id_and_lvl = page_file.fileIdLevel();
         if (page_id_and_lvl >= writing_file_id_level)
