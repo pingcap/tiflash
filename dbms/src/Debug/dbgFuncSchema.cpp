@@ -24,6 +24,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <fmt/core.h>
@@ -136,5 +137,6 @@ void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printe
     }
     output(fmt_buf.toString());
 }
+
 
 } // namespace DB

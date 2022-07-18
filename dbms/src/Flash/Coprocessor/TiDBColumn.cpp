@@ -28,7 +28,7 @@ template <typename T>
 void encodeLittleEndian(const T & value, WriteBuffer & ss)
 {
     auto v = toLittleEndian(value);
-    ss.write(reinterpret_cast<const char *>(&v), sizeof(v));
+    ss.template writeFixed<T>(&v);
 }
 
 TiDBColumn::TiDBColumn(Int8 element_len_)
@@ -141,10 +141,10 @@ void TiDBColumn::append(const TiDBDecimal & decimal)
     encodeLittleEndian<UInt8>(decimal.digits_int, *data);
     encodeLittleEndian<UInt8>(decimal.digits_frac, *data);
     encodeLittleEndian<UInt8>(decimal.result_frac, *data);
-    encodeLittleEndian<UInt8>((UInt8)decimal.negative, *data);
-    for (int i = 0; i < MAX_WORD_BUF_LEN; i++)
+    encodeLittleEndian<UInt8>(static_cast<UInt8>(decimal.negative), *data);
+    for (int i : decimal.word_buf)
     {
-        encodeLittleEndian<Int32>(decimal.word_buf[i], *data);
+        encodeLittleEndian<Int32>(i, *data);
     }
     finishAppendFixed();
 }

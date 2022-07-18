@@ -98,7 +98,7 @@ struct EntryOrDelete
             .entry = entry,
         };
     }
-    static EntryOrDelete newRepalcingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
+    static EntryOrDelete newReplacingEntry(const EntryOrDelete & ori_entry, const PageEntryV3 & entry)
     {
         return EntryOrDelete{
             .is_delete = false,
@@ -223,14 +223,16 @@ public:
     bool cleanOutdatedEntries(
         UInt64 lowest_seq,
         std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
-        PageEntriesV3 & entries_removed,
-        const PageLock & page_lock);
+        PageEntriesV3 * entries_removed,
+        const PageLock & page_lock,
+        bool keep_last_valid_var_entry = false);
     bool derefAndClean(
         UInt64 lowest_seq,
         PageIdV3Internal page_id,
         const PageVersion & deref_ver,
         Int64 deref_count,
-        PageEntriesV3 & entries_removed);
+        PageEntriesV3 * entries_removed,
+        bool keep_last_valid_var_entry = false);
 
     void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);
 
@@ -358,9 +360,15 @@ public:
 
     void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
-    bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr);
+    /// When create PageDirectory for dump snapshot, we should keep the last valid var_entry when it is deleted.
+    /// Because there may be some upsert entry in later wal files, and we should keep the valid var_entry and the delete entry to delete the later upsert entry.
+    /// And we don't restore the entries in blob store, because this PageDirectory is just read only for its entries.
+    bool tryDumpSnapshot(const ReadLimiterPtr & read_limiter = nullptr, const WriteLimiterPtr & write_limiter = nullptr, bool force = false);
 
-    PageEntriesV3 gcInMemEntries();
+    // Perform a GC for in-memory entries and return the removed entries.
+    // If `return_removed_entries` is false, then just return an empty set.
+    // When dump snapshot, we need to keep the last valid entry. Check out `tryDumpSnapshot` for the reason.
+    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
 
     std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
 

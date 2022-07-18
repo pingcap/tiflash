@@ -1124,6 +1124,24 @@ std::pair<bool, BoolVec> DAGExpressionAnalyzer::isCastRequiredForRootFinalProjec
     return std::make_pair(need_append_type_cast, std::move(need_append_type_cast_vec));
 }
 
+NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
+    ExpressionActionsChain & chain,
+    const std::vector<tipb::FieldType> & schema,
+    const std::vector<Int32> & output_offsets,
+    const String & column_prefix,
+    bool keep_session_timezone_info)
+{
+    auto & step = initAndGetLastStep(chain);
+
+    NamesWithAliases final_project = buildFinalProjection(step.actions, schema, output_offsets, column_prefix, keep_session_timezone_info);
+
+    for (const auto & name : final_project)
+    {
+        step.required_output.push_back(name.first);
+    }
+    return final_project;
+}
+
 NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
     const ExpressionActionsPtr & actions,
     const std::vector<tipb::FieldType> & schema,
@@ -1146,24 +1164,6 @@ NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
 
     // generate project aliases from source_columns.
     return genRootFinalProjectAliases(column_prefix, output_offsets);
-}
-
-NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
-    ExpressionActionsChain & chain,
-    const std::vector<tipb::FieldType> & schema,
-    const std::vector<Int32> & output_offsets,
-    const String & column_prefix,
-    bool keep_session_timezone_info)
-{
-    auto & step = initAndGetLastStep(chain);
-
-    NamesWithAliases final_project = buildFinalProjection(step.actions, schema, output_offsets, column_prefix, keep_session_timezone_info);
-
-    for (const auto & name : final_project)
-    {
-        step.required_output.push_back(name.first);
-    }
-    return final_project;
 }
 
 String DAGExpressionAnalyzer::alignReturnType(

@@ -14,6 +14,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
@@ -555,7 +556,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
 
     for (const auto & [page_id_v3, entry] : entries)
     {
-        auto blob_file = read(entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
+        auto blob_file = read(page_id_v3, entry.file_id, entry.offset, data_buf, entry.size, read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
@@ -635,7 +636,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read = end_offset - beg_offset;
-            auto blob_file = read(entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+            auto blob_file = read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
@@ -732,7 +733,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     PageMap page_map;
     for (const auto & [page_id_v3, entry] : entries)
     {
-        auto blob_file = read(entry.file_id, entry.offset, pos, entry.size, read_limiter);
+        auto blob_file = read(page_id_v3, entry.file_id, entry.offset, pos, entry.size, read_limiter);
 
         if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
         {
@@ -797,7 +798,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         free(p, buf_size);
     });
 
-    auto blob_file = read(entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
+    auto blob_file = read(page_id_v3, entry.file_id, entry.offset, data_buf, buf_size, read_limiter);
     if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
     {
         ChecksumClass digest;
@@ -824,11 +825,20 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     return page;
 }
 
-BlobFilePtr BlobStore::read(BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
+BlobFilePtr BlobStore::read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter, bool background)
 {
     assert(buffers != nullptr);
-    auto blob_file = getBlobFile(blob_id);
-    blob_file->read(buffers, offset, size, read_limiter, background);
+    BlobFilePtr blob_file = getBlobFile(blob_id);
+    try
+    {
+        blob_file->read(buffers, offset, size, read_limiter, background);
+    }
+    catch (DB::Exception & e)
+    {
+        // add debug message
+        e.addMessage(fmt::format("(error while reading page data [page_id={}] [blob_id={}] [offset={}] [size={}] [background={}])", page_id_v3, blob_id, offset, size, background));
+        e.rethrow();
+    }
     return blob_file;
 }
 
@@ -841,8 +851,8 @@ struct BlobStoreGCInfo
                            toTypeString("Read-Only Blob", 0),
                            toTypeString("No GC Blob", 1),
                            toTypeString("Full GC Blob", 2),
-                           toTypeString("Truncated Blob", 3),
-                           toTypeString("Big Blob", 4));
+                           toTypeString("Big Blob", 3),
+                           toTypeTruncateString("Truncated Blob"));
     }
 
     void appendToReadOnlyBlob(const BlobFileId blob_id, double valid_rate)
@@ -860,23 +870,24 @@ struct BlobStoreGCInfo
         blob_gc_info[2].emplace_back(std::make_pair(blob_id, valid_rate));
     }
 
-    void appendToTruncatedBlob(const BlobFileId blob_id, double valid_rate)
+    void appendToBigBlob(const BlobFileId blob_id, double valid_rate)
     {
         blob_gc_info[3].emplace_back(std::make_pair(blob_id, valid_rate));
     }
 
-    void appendToBigBlob(const BlobFileId blob_id, double valid_rate)
+    void appendToTruncatedBlob(const BlobFileId blob_id, UInt64 origin_size, UInt64 truncated_size, double valid_rate)
     {
-        blob_gc_info[4].emplace_back(std::make_pair(blob_id, valid_rate));
+        blob_gc_truncate_info.emplace_back(std::make_tuple(blob_id, origin_size, truncated_size, valid_rate));
     }
 
 private:
     // 1. read only blob
     // 2. no need gc blob
     // 3. full gc blob
-    // 4. need truncate blob
-    // 5. big blob
-    std::vector<std::pair<BlobFileId, double>> blob_gc_info[5];
+    // 4. big blob
+    std::vector<std::pair<BlobFileId, double>> blob_gc_info[4];
+
+    std::vector<std::tuple<BlobFileId, UInt64, UInt64, double>> blob_gc_truncate_info;
 
     String toTypeString(const std::string_view prefix, const size_t index) const
     {
@@ -899,6 +910,32 @@ private:
             fmt_buf.append("]");
         }
 
+        return fmt_buf.toString();
+    }
+
+    String toTypeTruncateString(const std::string_view prefix) const
+    {
+        FmtBuffer fmt_buf;
+        if (blob_gc_truncate_info.empty())
+        {
+            fmt_buf.fmtAppend("{}: [null]", prefix);
+        }
+        else
+        {
+            fmt_buf.fmtAppend("{}: [", prefix);
+            fmt_buf.joinStr(
+                blob_gc_truncate_info.begin(),
+                blob_gc_truncate_info.end(),
+                [](const auto arg, FmtBuffer & fb) {
+                    fb.fmtAppend("{} origin: {} truncate: {} rate: {:.2f}", //
+                                 std::get<0>(arg), // blob id
+                                 std::get<1>(arg), // origin size
+                                 std::get<2>(arg), // truncated size
+                                 std::get<3>(arg)); // valid rate
+                },
+                ", ");
+            fmt_buf.append("]");
+        }
         return fmt_buf.toString();
     }
 };
@@ -943,7 +980,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             }
 
             auto lock = stat->lock();
-            auto right_margin = stat->smap->getRightMargin();
+            auto right_margin = stat->smap->getUsedBoundary();
 
             // Avoid divide by zero
             if (right_margin == 0)
@@ -956,14 +993,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                                                 stat->sm_valid_rate));
                 }
 
-                LOG_FMT_TRACE(log, "Current blob is empty [blob_id={}, total size(all invalid)={}] [valid_rate={}].", stat->id, stat->sm_total_size, stat->sm_valid_rate);
-
                 // If current blob empty, the size of in disk blob may not empty
                 // So we need truncate current blob, and let it be reused.
                 auto blobfile = getBlobFile(stat->id);
-                LOG_FMT_TRACE(log, "Truncate empty blob file [blob_id={}] to 0.", stat->id);
+                LOG_FMT_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
                 blobfile->truncate(right_margin);
-                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
+                stat->sm_total_size = right_margin;
                 continue;
             }
 
@@ -1004,9 +1040,10 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 auto blobfile = getBlobFile(stat->id);
                 LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
                 blobfile->truncate(right_margin);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
+
                 stat->sm_total_size = right_margin;
                 stat->sm_valid_rate = stat->sm_valid_size * 1.0 / stat->sm_total_size;
-                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_valid_rate);
             }
         }
     }
@@ -1031,26 +1068,10 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     }
     LOG_FMT_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
 
-    const auto config_file_limit = config.file_limit_size.get();
-    auto alloc_size = total_page_size > config_file_limit ? config_file_limit : total_page_size;
-    BlobFileOffset remaining_page_size = total_page_size - alloc_size;
-
-    // We could make the memory consumption smooth during GC.
-    char * data_buf = static_cast<char *>(alloc(alloc_size));
-    SCOPE_EXIT({
-        free(data_buf, alloc_size);
-    });
-
-    char * data_pos = data_buf;
-    BlobFileOffset offset_in_data = 0;
-    BlobFileId blobfile_id;
-    BlobFileOffset file_offset_beg;
-    std::tie(blobfile_id, file_offset_beg) = getPosFromStats(alloc_size);
-
     auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
-                                                                              char * data_beg,
+                                                                              char * data_begin,
                                                                               const BlobFileOffset & file_offset,
-                                                                              const BlobFileOffset & data_size) {
+                                                                              const PageSize & data_size) {
         try
         {
             auto blob_file = getBlobFile(file_id);
@@ -1064,7 +1085,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 file_offset,
                 data_size,
                 total_page_size);
-            blob_file->write(data_beg, file_offset, data_size, write_limiter, /*background*/ true);
+            blob_file->write(data_begin, file_offset, data_size, write_limiter, /*background*/ true);
         }
         catch (DB::Exception & e)
         {
@@ -1083,6 +1104,23 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
     };
 
+    const auto config_file_limit = config.file_limit_size.get();
+    // If `total_page_size` is greater than `config_file_limit`, we need to write the page data into multiple `BlobFile`s to
+    // make the memory consumption smooth during GC.
+    auto alloc_size = total_page_size > config_file_limit ? config_file_limit : total_page_size;
+    BlobFileOffset remaining_page_size = total_page_size - alloc_size;
+
+    char * data_buf = static_cast<char *>(alloc(alloc_size));
+    SCOPE_EXIT({
+        free(data_buf, alloc_size);
+    });
+
+    char * data_pos = data_buf;
+    BlobFileOffset offset_in_data = 0;
+    BlobFileId blobfile_id;
+    BlobFileOffset file_offset_begin;
+    std::tie(blobfile_id, file_offset_begin) = getPosFromStats(alloc_size);
+
     // blob_file_0, [<page_id_0, ver0, entry0>,
     //               <page_id_0, ver1, entry1>,
     //               <page_id_1, ver1, entry1>, ... ]
@@ -1092,11 +1130,16 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         for (const auto & [page_id, versioned, entry] : versioned_pageid_entry_list)
         {
-            // When we can't load the remaining data.
-            // we will use the original buffer to find an area to load the remaining data
-            if (offset_in_data + entry.size > config_file_limit)
+            /// If `total_page_size` is greater than `config_file_limit`, we need to write the page data into multiple `BlobFile`s.
+            /// So there may be some page entry that cannot be fit into the current blob file, and we need to write it into the next one.
+            /// And we need perform the following steps before writing data into the current blob file:
+            ///   1. reclaim unneeded space allocated from current blob stat if `offset_in_data` < `alloc_size`;
+            ///   2. update `remaining_page_size`;
+            /// After writing data into the current blob file, we reuse the original buffer for future write.
+            if (offset_in_data + entry.size > alloc_size)
             {
-                assert(file_offset_beg == 0);
+                assert(alloc_size == config_file_limit);
+                assert(file_offset_begin == 0);
                 // Remove the span that is not actually used
                 if (offset_in_data != alloc_size)
                 {
@@ -1105,7 +1148,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 remaining_page_size += alloc_size - offset_in_data;
 
                 // Write data into Blob.
-                write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
+                write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
 
                 // Reset the position to reuse the buffer allocated
                 data_pos = data_buf;
@@ -1114,24 +1157,18 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 // Acquire a span from stats for remaining data
                 auto next_alloc_size = (remaining_page_size > config_file_limit ? config_file_limit : remaining_page_size);
                 remaining_page_size -= next_alloc_size;
-                std::tie(blobfile_id, file_offset_beg) = getPosFromStats(next_alloc_size);
+                std::tie(blobfile_id, file_offset_begin) = getPosFromStats(next_alloc_size);
             }
 
-            PageEntryV3 new_entry;
+            // Read the data into buffer by old entry
+            read(page_id, file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
 
-            read(file_id, entry.offset, data_pos, entry.size, read_limiter, /*background*/ true);
-
-            // No need do crc again, crc won't be changed.
-            new_entry.checksum = entry.checksum;
-
-            // Need copy the field_offsets
-            new_entry.field_offsets = entry.field_offsets;
-
-            // Entry size won't be changed.
-            new_entry.size = entry.size;
-
+            // Most vars of the entry is not changed, but the file id and offset
+            // need to be updated.
+            PageEntryV3 new_entry = entry;
             new_entry.file_id = blobfile_id;
-            new_entry.offset = file_offset_beg + offset_in_data;
+            new_entry.offset = file_offset_begin + offset_in_data;
+            new_entry.padded_size = 0; // reset padded size to be zero
 
             offset_in_data += new_entry.size;
             data_pos += new_entry.size;
@@ -1140,9 +1177,10 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
     }
 
+    // write remaining data in `data_buf` into BlobFile
     if (offset_in_data != 0)
     {
-        write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
+        write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
     }
 
     return edit;

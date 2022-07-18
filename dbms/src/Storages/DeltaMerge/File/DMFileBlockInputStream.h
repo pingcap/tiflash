@@ -69,14 +69,18 @@ public:
 
     // **** filters **** //
 
-    // Only set this param to true when
-    // 1. There is no delta.
-    // 2. You don't need pk, version and delete_tag columns
+    // Only set enable param to true when
+    // in normal mode:
+    //    1. There is no delta.
+    //    2. You don't need pk, version and delete_tag columns
+    // in fast mode:
+    //    1. You don't need pk columns
     // If you have no idea what it means, then simply set it to false.
     // `max_data_version_` is the MVCC filter version for reading. Used by clean read check
-    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable, UInt64 max_data_version_)
+    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable, bool is_fast_mode_, UInt64 max_data_version_)
     {
         enable_clean_read = enable;
+        is_fast_mode = is_fast_mode_;
         max_data_version = max_data_version_;
         return *this;
     }
@@ -139,6 +143,7 @@ private:
 
     // clean read
     bool enable_clean_read = false;
+    bool is_fast_mode = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // Rough set filter
     RSOperatorPtr rs_filter;
@@ -150,8 +155,8 @@ private:
     bool enable_column_cache = false;
     ColumnCachePtr column_cache;
     ReadLimiterPtr read_limiter;
-    size_t aio_threshold;
-    size_t max_read_buffer_size;
+    size_t aio_threshold{};
+    size_t max_read_buffer_size{};
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
 

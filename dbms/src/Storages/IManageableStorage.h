@@ -68,7 +68,7 @@ public:
 
     virtual void flushCache(const Context & /*context*/) {}
 
-    virtual void flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/) {}
+    virtual bool flushCache(const Context & /*context*/, const DM::RowKeyRange & /*range_to_flush*/, [[maybe_unused]] bool try_until_succeed = true) { return true; }
 
     virtual BlockInputStreamPtr status() { return {}; }
 

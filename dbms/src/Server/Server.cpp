@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "Server.h"
-
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/CPUAffinityManager.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DynamicThreadPool.h>
+#include <Common/FailPoint.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -55,8 +54,15 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <Server/HTTPHandlerFactory.h>
+#include <Server/MetricsPrometheus.h>
+#include <Server/MetricsTransmitter.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/Server.h>
+#include <Server/ServerInfo.h>
+#include <Server/StatusFile.h>
 #include <Server/StorageConfigParser.h>
+#include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
@@ -72,7 +78,6 @@
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
-#include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
@@ -81,12 +86,6 @@
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
-
-#include "HTTPHandlerFactory.h"
-#include "MetricsPrometheus.h"
-#include "MetricsTransmitter.h"
-#include "StatusFile.h"
-#include "TCPHandlerFactory.h"
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
@@ -152,6 +151,7 @@ void loadMiConfig(Logger * log)
 }
 #undef TRY_LOAD_CONF
 #endif
+
 namespace
 {
 [[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
@@ -179,8 +179,9 @@ namespace
 
 namespace CurrentMetrics
 {
-extern const Metric Revision;
-}
+extern const Metric LogicalCPUCores;
+extern const Metric MemoryCapacity;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -190,6 +191,7 @@ extern const int NO_ELEMENTS_IN_CONFIG;
 extern const int SUPPORT_IS_DISABLED;
 extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int INVALID_CONFIG_PARAMETER;
+extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
 
 namespace Debug
@@ -627,6 +629,10 @@ public:
             }
         }
         flash_grpc_server = builder.BuildAndStart();
+        if (!flash_grpc_server)
+        {
+            throw Exception("Exception happens when start grpc server, the flash.service_addr may be invalid, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
+        }
         LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
         Debug::setServiceAddr(raft_config.flash_server_addr);
         if (enable_async_server)
@@ -967,7 +973,10 @@ public:
             LOG_DEBUG(log, debug_msg);
     }
 
-    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const { return servers; }
+    const std::vector<std::unique_ptr<Poco::Net::TCPServer>> & getServers() const
+    {
+        return servers;
+    }
 
 private:
     Server & server;
@@ -983,6 +992,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Poco::Logger * log = &logger();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
+    FailPointHelper::initRandomFailPoints(config(), log);
 #endif
 
     UpdateMallocConfig(log);
@@ -1002,7 +1012,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
-
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
@@ -1049,7 +1058,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_FMT_INFO(log, "tiflash proxy thread is joined");
     });
 
-    CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
+    /// get CPU/memory/disk info of this server
+    if (tiflash_instance_wrap.proxy_helper)
+    {
+        diagnosticspb::ServerInfoRequest request;
+        request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+        diagnosticspb::ServerInfoResponse response;
+        std::string req = request.SerializeAsString();
+        auto * helper = tiflash_instance_wrap.proxy_helper;
+        helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
+        server_info.parseSysInfo(response);
+        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
+    }
+    else
+    {
+        LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+    }
 
     // print necessary grpc log.
     grpc_log = &Poco::Logger::get("grpc");
@@ -1118,6 +1142,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
+
+    /// Initialize the background & blockable background thread pool.
+    Settings & settings = global_context->getSettingsRef();
+    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
+    auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
+    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
 
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
@@ -1235,13 +1265,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
-    Settings & settings = global_context->getSettingsRef();
-
-    /// Initialize the background thread pool.
-    /// It internally depends on settings.background_pool_size,
-    /// so must be called after settings has been load.
-    auto & bg_pool = global_context->getBackgroundPool();
-    auto & blockable_bg_pool = global_context->getBlockableBackgroundPool();
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
@@ -1408,12 +1431,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         {
             // on ARM processors it can show only enabled at current moment cores
+            CurrentMetrics::set(CurrentMetrics::LogicalCPUCores, server_info.cpu_info.logical_cores);
+            CurrentMetrics::set(CurrentMetrics::MemoryCapacity, server_info.memory_info.capacity);
             LOG_FMT_INFO(
                 log,
-                "Available RAM = {}; physical cores = {}; threads = {}.",
-                formatReadableSizeWithBinarySuffix(getMemoryAmount()),
-                getNumberOfPhysicalCPUCores(),
-                std::thread::hardware_concurrency());
+                "Available RAM = {}; physical cores = {}; logical cores = {}.",
+                server_info.memory_info.capacity,
+                server_info.cpu_info.physical_cores,
+                server_info.cpu_info.logical_cores);
         }
 
         LOG_FMT_INFO(log, "Ready for connections.");

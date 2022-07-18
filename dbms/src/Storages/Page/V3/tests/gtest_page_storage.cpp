@@ -25,6 +25,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
@@ -52,7 +53,7 @@ public:
         auto path = getTemporaryPath();
         createIfNotExist(path);
         file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-        auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         page_storage = std::make_shared<PageStorageImpl>("test.t", delegator, config, file_provider);
         page_storage->restore();
     }
@@ -60,7 +61,7 @@ public:
     std::shared_ptr<PageStorageImpl> reopenWithConfig(const PageStorage::Config & config_)
     {
         auto path = getTemporaryPath();
-        auto delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
         auto storage = std::make_shared<PageStorageImpl>("test.t", delegator, config_, file_provider);
         storage->restore();
         return storage;
@@ -70,6 +71,7 @@ public:
 protected:
     FileProviderPtr file_provider;
     std::unique_ptr<StoragePathPool> path_pool;
+    PSDiskDelegatorPtr delegator;
     PageStorage::Config config;
     std::shared_ptr<PageStorageImpl> page_storage;
 
@@ -1441,6 +1443,197 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, EntryTagAfterFullGC)
+try
+{
+    {
+        PageStorage::Config config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageId page_id = 120;
+    UInt64 tag = 12345;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        auto entry = page_storage->getEntry(page_id);
+        ASSERT_EQ(entry.tag, tag);
+        auto page = page_storage->read(page_id);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    {
+        auto entry = page_storage->getEntry(page_id);
+        ASSERT_EQ(entry.tag, tag);
+        auto page = page_storage->read(page_id);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+}
+CATCH
+
+TEST_F(PageStorageTest, DumpPageStorageSnapshot)
+try
+{
+    {
+        PageStorage::Config config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        config.wal_roll_size = 1 * 1024 * 1024; /// make the wal file more easy to roll
+        config.wal_max_persisted_log_files = 10; /// avoid checkpoint when gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageId page_id0 = 120;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id0, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    // create a snapshot to avoid gc
+    auto snap = page_storage->getSnapshot();
+
+    {
+        WriteBatch batch;
+        batch.delPage(page_id0);
+        page_storage->write(std::move(batch));
+    }
+
+    auto getLogFileNum = [&]() {
+        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get("PageStorageTest", ""));
+        return log_files.size();
+    };
+
+    // write until there are more than one wal file
+    while (getLogFileNum() <= 1)
+    {
+        WriteBatch batch;
+        PageId page_id1 = 130;
+        batch.putPage(page_id1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+    ASSERT_ANY_THROW(page_storage->read(page_id0));
+
+    // write an upsert entry into the current writing log file
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+    ASSERT_TRUE(done_snapshot);
+
+    {
+        PageStorage::Config config;
+        page_storage = reopenWithConfig(config);
+    }
+
+    ASSERT_ANY_THROW(page_storage->read(page_id0));
+}
+CATCH
+
+TEST_F(PageStorageTest, DumpPageStorageSnapshotWithRefPage)
+try
+{
+    {
+        PageStorage::Config config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        config.wal_roll_size = 1 * 1024 * 1024; /// make the wal file more easy to roll
+        config.wal_max_persisted_log_files = 10; /// avoid checkpoint when gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageId page_id0 = 120;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id0, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+    PageId page_id1 = 121;
+    {
+        WriteBatch batch;
+        batch.putRefPage(page_id1, page_id0);
+        page_storage->write(std::move(batch));
+    }
+    // create a snapshot to avoid gc
+    auto snap = page_storage->getSnapshot();
+
+    {
+        WriteBatch batch;
+        batch.delPage(page_id0);
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.delPage(page_id1);
+        page_storage->write(std::move(batch));
+    }
+
+    auto getLogFileNum = [&]() {
+        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get("PageStorageTest", ""));
+        return log_files.size();
+    };
+
+    // write until there are more than one wal file
+    while (getLogFileNum() <= 1)
+    {
+        WriteBatch batch;
+        PageId page_id2 = 130;
+        batch.putPage(page_id2, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+    ASSERT_ANY_THROW(page_storage->read(page_id0));
+
+    // write an upsert entry into the current writing log file
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+    ASSERT_TRUE(done_snapshot);
+
+    {
+        PageStorage::Config config;
+        page_storage = reopenWithConfig(config);
+    }
+
+    ASSERT_ANY_THROW(page_storage->read(page_id0));
+}
+CATCH
 
 } // namespace PS::V3::tests
 } // namespace DB

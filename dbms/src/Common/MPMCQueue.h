@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/SimpleIntrusiveNode.h>
+#include <Common/nocopyable.h>
 #include <common/defines.h>
 #include <common/types.h>
 
@@ -74,56 +75,95 @@ public:
             destruct(getObj(read_pos));
     }
 
-    /// Block util:
-    /// 1. Pop succeeds with a valid T: return true.
-    /// 2. The queue is cancelled or finished: return false.
-    bool pop(T & obj)
+    // Cannot to use copy/move constructor,
+    // because MPMCQueue maybe used by different threads.
+    // Copy and move it is dangerous.
+    DISALLOW_COPY_AND_MOVE(MPMCQueue);
+
+    /*
+    * | Previous Status  | Empty      | Behavior                 |
+    * |------------------|------------|--------------------------|
+    * | Normal           | Yes        | Block                    |
+    * | Normal           | No         | Pop and return true      |
+    * | Finished         | Yes        | return false             |
+    * | Finished         | No         | Pop and return true      |
+    * | Cancelled        | Yes/No     | return false             |
+    * */
+    ALWAYS_INLINE bool pop(T & obj)
     {
-        return popObj(obj);
+        return popObj<true>(obj);
     }
 
-    /// Besides all conditions mentioned at `pop`, `tryPop` will return false if `timeout` is exceeded.
+    /// Besides all conditions mentioned at `pop`, `popTimeout` will return false if `timeout` is exceeded.
     template <typename Duration>
-    bool tryPop(T & obj, const Duration & timeout)
+    ALWAYS_INLINE bool popTimeout(T & obj, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
-        return popObj(obj, &deadline);
+        return popObj<true>(obj, &deadline);
     }
 
-    /// Block util:
-    /// 1. Push succeeds and return true.
-    /// 2. The queue is cancelled and return false.
-    /// 3. The queue has finished and return false.
+    /// Non-blocking function.
+    /// Return true if pop succeed.
+    /// else return false.
+    ALWAYS_INLINE bool tryPop(T & obj)
+    {
+        return popObj<false>(obj);
+    }
+
+    /*
+    * | Previous Status  | Full       | Behavior                 |
+    * |------------------|------------|--------------------------|
+    * | Normal           | Yes        | Block                    |
+    * | Normal           | No         | Push and return true     |
+    * | Finished         | Yes/No     | return false             |
+    * | Cancelled        | Yes/No     | return false             |
+    * */
     template <typename U>
     ALWAYS_INLINE bool push(U && u)
     {
-        return pushObj(std::forward<U>(u));
+        return pushObj<true>(std::forward<U>(u));
     }
 
-    /// Besides all conditions mentioned at `push`, `tryPush` will return false if `timeout` is exceeded.
+    /// Besides all conditions mentioned at `push`, `pushTimeout` will return false if `timeout` is exceeded.
     template <typename U, typename Duration>
-    ALWAYS_INLINE bool tryPush(U && u, const Duration & timeout)
+    ALWAYS_INLINE bool pushTimeout(U && u, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
-        return pushObj(std::forward<U>(u), &deadline);
+        return pushObj<true>(std::forward<U>(u), &deadline);
+    }
+
+    /// Non-blocking function.
+    /// Return true if push succeed.
+    /// else return false.
+    template <typename U>
+    ALWAYS_INLINE bool tryPush(U && u)
+    {
+        return pushObj<false>(std::forward<U>(u));
     }
 
     /// The same as `push` except it will construct the object in place.
     template <typename... Args>
     ALWAYS_INLINE bool emplace(Args &&... args)
     {
-        return emplaceObj(nullptr, std::forward<Args>(args)...);
+        return emplaceObj<true>(nullptr, std::forward<Args>(args)...);
     }
 
-    /// The same as `tryPush` except it will construct the object in place.
+    /// The same as `pushTimeout` except it will construct the object in place.
     template <typename... Args, typename Duration>
-    ALWAYS_INLINE bool tryEmplace(Args &&... args, const Duration & timeout)
+    ALWAYS_INLINE bool emplaceTimeout(Args &&... args, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
-        return emplaceObj(&deadline, std::forward<Args>(args)...);
+        return emplaceObj<true>(&deadline, std::forward<Args>(args)...);
+    }
+
+    /// The same as `tryPush` except it will construct the object in place.
+    template <typename... Args>
+    ALWAYS_INLINE bool tryEmplace(Args &&... args)
+    {
+        return emplaceObj<false>(nullptr, std::forward<Args>(args)...);
     }
 
     /// Cancel a NORMAL queue will wake up all blocking readers and writers.
@@ -233,7 +273,8 @@ private:
         }
     }
 
-    bool popObj(T & res, const TimePoint * deadline = nullptr)
+    template <bool need_wait>
+    bool popObj(T & res, [[maybe_unused]] const TimePoint * deadline = nullptr)
     {
 #ifdef __APPLE__
         WaitingNode node;
@@ -241,14 +282,16 @@ private:
         thread_local WaitingNode node;
 #endif
         {
-            /// read_pos < write_pos means the queue isn't empty
-            auto pred = [&] {
-                return read_pos < write_pos || !isNormal();
-            };
-
             std::unique_lock lock(mu);
 
-            wait(lock, reader_head, node, pred, deadline);
+            if constexpr (need_wait)
+            {
+                /// read_pos < write_pos means the queue isn't empty
+                auto pred = [&] {
+                    return read_pos < write_pos || !isNormal();
+                };
+                wait(lock, reader_head, node, pred, deadline);
+            }
 
             if (!isCancelled() && read_pos < write_pos)
             {
@@ -272,21 +315,23 @@ private:
         return false;
     }
 
-    template <typename F>
-    bool assignObj(const TimePoint * deadline, F && assigner)
+    template <bool need_wait, typename F>
+    bool assignObj([[maybe_unused]] const TimePoint * deadline, F && assigner)
     {
 #ifdef __APPLE__
         WaitingNode node;
 #else
         thread_local WaitingNode node;
 #endif
-        auto pred = [&] {
-            return write_pos - read_pos < capacity || !isNormal();
-        };
-
         std::unique_lock lock(mu);
 
-        wait(lock, writer_head, node, pred, deadline);
+        if constexpr (need_wait)
+        {
+            auto pred = [&] {
+                return write_pos - read_pos < capacity || !isNormal();
+            };
+            wait(lock, writer_head, node, pred, deadline);
+        }
 
         /// double check status after potential wait
         /// check write_pos because timeouted will also reach here.
@@ -305,16 +350,16 @@ private:
         return false;
     }
 
-    template <typename U>
+    template <bool need_wait, typename U>
     ALWAYS_INLINE bool pushObj(U && u, const TimePoint * deadline = nullptr)
     {
-        return assignObj(deadline, [&](void * addr) { new (addr) T(std::forward<U>(u)); });
+        return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<U>(u)); });
     }
 
-    template <typename... Args>
+    template <bool need_wait, typename... Args>
     ALWAYS_INLINE bool emplaceObj(const TimePoint * deadline, Args &&... args)
     {
-        return assignObj(deadline, [&](void * addr) { new (addr) T(std::forward<Args>(args)...); });
+        return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<Args>(args)...); });
     }
 
     ALWAYS_INLINE bool isNormal() const

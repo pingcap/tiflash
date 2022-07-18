@@ -20,7 +20,6 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
-#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -41,7 +40,7 @@ extern const int NOT_IMPLEMENTED;
 const IColumn * getNestedCol(const IColumn * flash_col)
 {
     if (flash_col->isColumnNullable())
-        return dynamic_cast<const ColumnNullable *>(flash_col)->getNestedColumnPtr().get();
+        return static_cast<const ColumnNullable *>(flash_col)->getNestedColumnPtr().get();
     else
         return flash_col;
 }
@@ -75,8 +74,8 @@ bool flashDecimalColToArrowColInternal(
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
     if (checkColumn<ColumnDecimal<T>>(nested_col) && checkDataType<DataTypeDecimal<T>>(data_type))
     {
-        const ColumnDecimal<T> * flash_col = checkAndGetColumn<ColumnDecimal<T>>(nested_col);
-        const DataTypeDecimal<T> * type = checkAndGetDataType<DataTypeDecimal<T>>(data_type);
+        const auto * flash_col = checkAndGetColumn<ColumnDecimal<T>>(nested_col);
+        const auto * type = checkAndGetDataType<DataTypeDecimal<T>>(data_type);
         UInt32 scale = type->getScale();
         for (size_t i = start_index; i < end_index; i++)
         {
@@ -92,8 +91,8 @@ bool flashDecimalColToArrowColInternal(
             std::vector<Int32> digits;
             digits.reserve(type->getPrec());
             decimalToVector<typename T::NativeType>(dec.value, digits, scale);
-            TiDBDecimal tiDecimal(scale, digits, dec.value < 0);
-            dag_column.append(tiDecimal);
+            TiDBDecimal ti_decimal(scale, digits, dec.value < 0);
+            dag_column.append(ti_decimal);
         }
         return true;
     }
@@ -121,7 +120,7 @@ template <typename T, bool is_nullable>
 bool flashIntegerColToArrowColInternal(TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index)
 {
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
-    if (const ColumnVector<T> * flash_col = checkAndGetColumn<ColumnVector<T>>(nested_col))
+    if (const auto * flash_col = checkAndGetColumn<ColumnVector<T>>(nested_col))
     {
         constexpr bool is_unsigned = std::is_unsigned_v<T>;
         for (size_t i = start_index; i < end_index; i++)
@@ -135,9 +134,9 @@ bool flashIntegerColToArrowColInternal(TiDBColumn & dag_column, const IColumn * 
                 }
             }
             if constexpr (is_unsigned)
-                dag_column.append((UInt64)flash_col->getElement(i));
+                dag_column.append(static_cast<UInt64>(flash_col->getElement(i)));
             else
-                dag_column.append((Int64)flash_col->getElement(i));
+                dag_column.append(static_cast<UInt64>(flash_col->getElement(i)));
         }
         return true;
     }
@@ -148,7 +147,7 @@ template <typename T, bool is_nullable>
 void flashDoubleColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index)
 {
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
-    if (const ColumnVector<T> * flash_col = checkAndGetColumn<ColumnVector<T>>(nested_col))
+    if (const auto * flash_col = checkAndGetColumn<ColumnVector<T>>(nested_col))
     {
         for (size_t i = start_index; i < end_index; i++)
         {
@@ -160,7 +159,7 @@ void flashDoubleColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col
                     continue;
                 }
             }
-            dag_column.append((T)flash_col->getElement(i));
+            dag_column.append(static_cast<T>(flash_col->getElement(i)));
         }
         return;
     }
@@ -196,7 +195,7 @@ void flashDateOrDateTimeColToArrowCol(
 {
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
     using DateFieldType = DataTypeMyTimeBase::FieldType;
-    auto * flash_col = checkAndGetColumn<ColumnVector<DateFieldType>>(nested_col);
+    const auto * flash_col = checkAndGetColumn<ColumnVector<DateFieldType>>(nested_col);
     for (size_t i = start_index; i < end_index; i++)
     {
         if constexpr (is_nullable)
@@ -217,7 +216,7 @@ void flashStringColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col
 {
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
     // columnFixedString is not used so do not check it
-    auto * flash_col = checkAndGetColumn<ColumnString>(nested_col);
+    const auto * flash_col = checkAndGetColumn<ColumnString>(nested_col);
     for (size_t i = start_index; i < end_index; i++)
     {
         // todo check if we can convert flash_col to DAG col directly since the internal representation is almost the same
@@ -242,7 +241,7 @@ void flashBitColToArrowCol(
     const tipb::FieldType & field_type)
 {
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
-    auto * flash_col = checkAndGetColumn<ColumnVector<UInt64>>(nested_col);
+    const auto * flash_col = checkAndGetColumn<ColumnVector<UInt64>>(nested_col);
     for (size_t i = start_index; i < end_index; i++)
     {
         if constexpr (is_nullable)
@@ -267,7 +266,7 @@ void flashEnumColToArrowCol(
     const IDataType * data_type)
 {
     const IColumn * nested_col = getNestedCol(flash_col_untyped);
-    auto * flash_col = checkAndGetColumn<ColumnVector<DataTypeEnum16::FieldType>>(nested_col);
+    const auto * flash_col = checkAndGetColumn<ColumnVector<DataTypeEnum16::FieldType>>(nested_col);
     const auto * enum_type = checkAndGetDataType<DataTypeEnum16>(data_type);
     size_t enum_value_size = enum_type->getValues().size();
     for (size_t i = start_index; i < end_index; i++)
@@ -280,10 +279,10 @@ void flashEnumColToArrowCol(
                 continue;
             }
         }
-        auto enum_value = (UInt64)flash_col->getElement(i);
+        auto enum_value = static_cast<UInt64>(flash_col->getElement(i));
         if (enum_value == 0 || enum_value > enum_value_size)
             throw TiFlashException("number of enum overflow enum boundary", Errors::Coprocessor::Internal);
-        TiDBEnum ti_enum(enum_value, enum_type->getNameForValue((const DataTypeEnum16::FieldType)enum_value));
+        TiDBEnum ti_enum(enum_value, enum_type->getNameForValue(static_cast<const DataTypeEnum16::FieldType>(enum_value)));
         dag_column.append(ti_enum);
     }
 }
@@ -300,7 +299,7 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
         throw TiFlashException("Flash column and TiDB column has different not null flag", Errors::Coprocessor::Internal);
     }
     if (type->isNullable())
-        type = dynamic_cast<const DataTypeNullable *>(type)->getNestedType().get();
+        type = static_cast<const DataTypeNullable *>(type)->getNestedType().get();
 
     switch (tidb_column_info.tp)
     {
@@ -457,7 +456,7 @@ const char * arrowEnumColToFlashCol(
     {
         if (checkNull(i, null_count, null_bitmap, col))
             continue;
-        const auto enum_value = (Int64)toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos + offsets[i])));
+        const auto enum_value = static_cast<Int64>(toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos + offsets[i]))));
         col.column->assumeMutable()->insert(Field(enum_value));
     }
     return pos + offsets[length];
@@ -479,11 +478,11 @@ const char * arrowBitColToFlashCol(
             continue;
         const String value = String(pos + offsets[i], pos + offsets[i + 1]);
         if (value.length() == 0)
-            col.column->assumeMutable()->insert(Field(UInt64(0)));
+            col.column->assumeMutable()->insert(Field(static_cast<UInt64>(0)));
         UInt64 result = 0;
-        for (auto & c : value)
+        for (const auto & c : value)
         {
-            result = (result << 8u) | (UInt8)c;
+            result = (result << 8u) | static_cast<UInt8>(c);
         }
         col.column->assumeMutable()->insert(Field(result));
     }
@@ -500,7 +499,7 @@ T toCHDecimal(UInt8 digits_int, UInt8 digits_frac, bool negative, const Int32 * 
     UInt8 tailing_digit = digits_frac % DIGITS_PER_WORD;
 
     typename T::NativeType value = 0;
-    const int word_max = int(1e9);
+    const int word_max = static_cast<int>(1e9);
     for (int i = 0; i < word_int; i++)
     {
         value = value * word_max + word_buf[i];
@@ -552,28 +551,28 @@ const char * arrowDecimalColToFlashCol(
         pos += 1;
         Int32 word_buf[MAX_WORD_BUF_LEN];
         const DataTypePtr decimal_type
-            = col.type->isNullable() ? dynamic_cast<const DataTypeNullable *>(col.type.get())->getNestedType() : col.type;
-        for (int j = 0; j < MAX_WORD_BUF_LEN; j++)
+            = col.type->isNullable() ? static_cast<const DataTypeNullable *>(col.type.get())->getNestedType() : col.type;
+        for (int & j : word_buf)
         {
-            word_buf[j] = toLittleEndian(*(reinterpret_cast<const Int32 *>(pos)));
+            j = toLittleEndian(*(reinterpret_cast<const Int32 *>(pos)));
             pos += 4;
         }
-        if (auto * type32 = checkDecimal<Decimal32>(*decimal_type))
+        if (const auto * type32 = checkDecimal<Decimal32>(*decimal_type))
         {
             auto res = toCHDecimal<Decimal32>(digits_int, digits_frac, negative, word_buf);
             col.column->assumeMutable()->insert(DecimalField<Decimal32>(res, type32->getScale()));
         }
-        else if (auto * type64 = checkDecimal<Decimal64>(*decimal_type))
+        else if (const auto * type64 = checkDecimal<Decimal64>(*decimal_type))
         {
             auto res = toCHDecimal<Decimal64>(digits_int, digits_frac, negative, word_buf);
             col.column->assumeMutable()->insert(DecimalField<Decimal64>(res, type64->getScale()));
         }
-        else if (auto * type128 = checkDecimal<Decimal128>(*decimal_type))
+        else if (const auto * type128 = checkDecimal<Decimal128>(*decimal_type))
         {
             auto res = toCHDecimal<Decimal128>(digits_int, digits_frac, negative, word_buf);
             col.column->assumeMutable()->insert(DecimalField<Decimal128>(res, type128->getScale()));
         }
-        else if (auto * type256 = checkDecimal<Decimal256>(*decimal_type))
+        else if (const auto * type256 = checkDecimal<Decimal256>(*decimal_type))
         {
             auto res = toCHDecimal<Decimal256>(digits_int, digits_frac, negative, word_buf);
             col.column->assumeMutable()->insert(DecimalField<Decimal256>(res, type256->getScale()));
@@ -600,13 +599,13 @@ const char * arrowDateColToFlashCol(
             continue;
         }
         UInt64 chunk_time = toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos)));
-        UInt16 year = (UInt16)((chunk_time & MyTimeBase::YEAR_BIT_FIELD_MASK) >> MyTimeBase::YEAR_BIT_FIELD_OFFSET);
-        UInt8 month = (UInt8)((chunk_time & MyTimeBase::MONTH_BIT_FIELD_MASK) >> MyTimeBase::MONTH_BIT_FIELD_OFFSET);
-        UInt8 day = (UInt8)((chunk_time & MyTimeBase::DAY_BIT_FIELD_MASK) >> MyTimeBase::DAY_BIT_FIELD_OFFSET);
-        UInt16 hour = (UInt16)((chunk_time & MyTimeBase::HOUR_BIT_FIELD_MASK) >> MyTimeBase::HOUR_BIT_FIELD_OFFSET);
-        UInt8 minute = (UInt8)((chunk_time & MyTimeBase::MINUTE_BIT_FIELD_MASK) >> MyTimeBase::MINUTE_BIT_FIELD_OFFSET);
-        UInt8 second = (UInt8)((chunk_time & MyTimeBase::SECOND_BIT_FIELD_MASK) >> MyTimeBase::SECOND_BIT_FIELD_OFFSET);
-        UInt32 micro_second = (UInt32)((chunk_time & MyTimeBase::MICROSECOND_BIT_FIELD_MASK) >> MyTimeBase::MICROSECOND_BIT_FIELD_OFFSET);
+        auto year = static_cast<UInt16>((chunk_time & MyTimeBase::YEAR_BIT_FIELD_MASK) >> MyTimeBase::YEAR_BIT_FIELD_OFFSET);
+        auto month = static_cast<UInt8>((chunk_time & MyTimeBase::MONTH_BIT_FIELD_MASK) >> MyTimeBase::MONTH_BIT_FIELD_OFFSET);
+        auto day = static_cast<UInt8>((chunk_time & MyTimeBase::DAY_BIT_FIELD_MASK) >> MyTimeBase::DAY_BIT_FIELD_OFFSET);
+        auto hour = static_cast<UInt16>((chunk_time & MyTimeBase::HOUR_BIT_FIELD_MASK) >> MyTimeBase::HOUR_BIT_FIELD_OFFSET);
+        auto minute = static_cast<UInt8>((chunk_time & MyTimeBase::MINUTE_BIT_FIELD_MASK) >> MyTimeBase::MINUTE_BIT_FIELD_OFFSET);
+        auto second = static_cast<UInt8>((chunk_time & MyTimeBase::SECOND_BIT_FIELD_MASK) >> MyTimeBase::SECOND_BIT_FIELD_OFFSET);
+        auto micro_second = static_cast<UInt32>((chunk_time & MyTimeBase::MICROSECOND_BIT_FIELD_MASK) >> MyTimeBase::MICROSECOND_BIT_FIELD_OFFSET);
         MyDateTime mt(year, month, day, hour, minute, second, micro_second);
         pos += field_length;
         col.column->assumeMutable()->insert(Field(mt.toPackedUInt()));
@@ -659,7 +658,7 @@ const char * arrowNumColToFlashCol(
         case TiDB::TypeFloat:
             u32 = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
             std::memcpy(&f32, &u32, sizeof(Float32));
-            col.column->assumeMutable()->insert(Field((Float64)f32));
+            col.column->assumeMutable()->insert(Field(static_cast<Float64>(f32)));
             break;
         case TiDB::TypeDouble:
             u64 = toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos)));

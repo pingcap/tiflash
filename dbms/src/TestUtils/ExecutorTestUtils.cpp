@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
+
+#include <functional>
+
 namespace DB::tests
 {
 DAGContext & ExecutorTest::getDAGContext()
@@ -34,15 +38,20 @@ void ExecutorTest::initializeContext()
 
 void ExecutorTest::SetUpTestCase()
 {
-    try
-    {
-        DB::registerFunctions();
-        DB::registerAggregateFunctions();
-    }
-    catch (DB::Exception &)
-    {
-        // Maybe another test has already registered, ignore exception here.
-    }
+    auto register_func = [](std::function<void()> func) {
+        try
+        {
+            func();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registered, ignore exception here.
+        }
+    };
+
+    register_func(DB::registerFunctions);
+    register_func(DB::registerAggregateFunctions);
+    register_func(DB::registerWindowFunctions);
 }
 
 void ExecutorTest::initializeClientInfo()
@@ -96,33 +105,43 @@ Block mergeBlocks(Blocks blocks)
 }
 } // namespace
 
-void ExecutorTest::readAndAssertBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns)
+DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 {
     Blocks actual_blocks;
-    Block except_block(expect_columns);
     stream->readPrefix();
     while (auto block = stream->read())
     {
         actual_blocks.push_back(block);
     }
     stream->readSuffix();
-    Block actual_block = mergeBlocks(actual_blocks);
-    ASSERT_BLOCK_EQ(except_block, actual_block);
+    return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 
-void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
+void ExecutorTest::enablePlanner(bool is_enable)
+{
+    context.context.setSetting("enable_planner", is_enable ? "true" : "false");
+}
+
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
     dag_context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
-    readAndAssertBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
+    return readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in);
 }
 
-void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
-    executeStreams(request, context.executorIdColumnsMap(), expect_columns, concurrency);
+    return executeStreams(request, context.executorIdColumnsMap(), concurrency);
+}
+
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, SourceType type, size_t concurrency)
+{
+    std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
+    source_columns_map[getSourceName(type)] = source_columns;
+    return executeStreams(request, source_columns_map, concurrency);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

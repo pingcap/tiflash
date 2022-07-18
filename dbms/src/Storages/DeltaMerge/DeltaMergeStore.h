@@ -353,7 +353,10 @@ public:
                               const SegmentIdSet & read_segments = {},
                               size_t extra_table_id_index = InvalidColumnID);
 
-    /// Read rows with MVCC filtering
+
+    /// Read rows in two modes:
+    ///     when is_fast_mode == false, we are in normal mode. Thus we will read rows with MVCC filtering, del mark !=0  filter and sorted merge
+    ///     when is_fast_mode == true, we are in fast mode. Thus we will read rows without MVCC and sorted merge
     /// `sorted_ranges` should be already sorted and merged
     BlockInputStreams read(const Context & db_context,
                            const DB::Settings & db_settings,
@@ -363,18 +366,19 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            const String & tracing_id,
+                           bool is_fast_mode = false, // set true when read in fast mode
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
 
-    /// Force flush all data to disk.
-    void flushCache(const Context & context, const RowKeyRange & range)
+    /// Try flush all data in `range` to disk and return whether the task succeed.
+    bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
     {
         auto dm_context = newDMContext(context, context.getSettingsRef());
-        flushCache(dm_context, range);
+        return flushCache(dm_context, range, try_until_succeed);
     }
 
-    void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
+    bool flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed = true);
 
     /// Merge delta into the stable layer for all segments.
     ///
