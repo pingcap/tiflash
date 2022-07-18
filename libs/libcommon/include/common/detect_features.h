@@ -42,6 +42,7 @@ static inline const struct CPUFeatures
     bool asimd = detect("hw.optional.neon");
     bool sve = false; // currently not supported
     bool sve2 = false; // currently not supported
+
     bool atomics = detect("hw.optional.armv8_1_atomics");
     bool hpfp = detect("hw.optional.neon_hpfp");
     bool fp16 = detect("hw.optional.neon_fp16");
@@ -49,6 +50,14 @@ static inline const struct CPUFeatures
     bool crc32 = detect("hw.optional.armv8_crc32");
     bool sha512 = detect("hw.optional.armv8_2_sha512");
     bool sha3 = detect("hw.optional.armv8_2_sha3");
+
+    // the followings are assumed to be true.
+    // see https://github.com/golang/sys/pull/114/files
+    bool cpuid = true;
+    bool aes = true;
+    bool pmull = true;
+    bool sha1 = true;
+    bool sha2 = true;
 } cpu_feature_flags;
 } // namespace common
 #endif
