@@ -136,6 +136,12 @@ target_include_directories (common PUBLIC ${COMMON_INCLUDE_DIR})
 
 target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
+if(APPLE AND ARCH_AARCH64)
+    set(CPU_FEATURES_LIBRARY)
+else()
+    set(CPU_FEATURES_LIBRARY cpu_features)
+endif()
+
 # `libcommon` provides a bridge for many other libs.
 # We expose the linkage to public because we want headers to be inherited.
 target_link_libraries (
@@ -151,7 +157,7 @@ target_link_libraries (
     ${GLIBC_COMPATIBILITY_LIBRARIES}
     ${MEMCPY_LIBRARIES}
     fmt
-    cpu_features
+    ${CPU_FEATURES_LIBRARY}
 )
 
 if (RT_LIBRARY)
