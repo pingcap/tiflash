@@ -410,20 +410,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
 
-    const auto check_sync_log = [&]() {
-        if (cmd_type != raft_cmdpb::AdminCmdType::CompactLog)
-        {
-            // ignore ComputeHash, VerifyHash or other useless cmd.
-            return false;
-        }
-        else
-        {
-            // When CompactLog is not filtered, we
-            return true;
-        }
-    };
-
-    if (check_sync_log())
+    if (cmd_type == raft_cmdpb::AdminCmdType::CompactLog)
     {
         return EngineStoreApplyRes::Persist;
     }
