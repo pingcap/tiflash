@@ -35,7 +35,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
 
     auto & dag_context = *context.getDAGContext();
     size_t max_streams = dag_context.initialize_concurrency;
-    assert(max_streams > 1);
+    assert(max_streams > 0);
 
     if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
     {
