@@ -1466,7 +1466,6 @@ TEST_F(RegionKVStoreTest, KVStore)
 try
 {
     testKVStore();
-    testNewProxy();
 }
 CATCH
 
@@ -1481,6 +1480,13 @@ TEST_F(RegionKVStoreTest, ReadIndex)
 try
 {
     testReadIndex();
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, NewProxy)
+try
+{
+    testNewProxy();
 }
 CATCH
 
