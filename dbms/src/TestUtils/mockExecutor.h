@@ -16,6 +16,7 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/astToExecutor.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <tipb/executor.pb.h>
@@ -62,6 +63,7 @@ public:
     }
 
     std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
+    QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
 
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfoVec & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoVec & columns);
