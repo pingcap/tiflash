@@ -407,7 +407,7 @@ DB::PageEntry PageStorage::getEntryImpl(NamespaceId /*ns_id*/, PageId page_id, S
 // - Writable, reuse `old_writer` if it is not a nullptr, otherwise, create a new writer from `page_file`
 // - Not writable, renew the `page_file` and its belonging writer.
 //   The <id,level> of the new `page_file` is <max_id + 1, 0> of all `write_files`
-// If `force` is true, we always roll writing_file unless it is empty.
+// If `force` is true, always create new page file for writing.
 PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
     WritingPageFile & writing_file,
     PageFileIdAndLevel max_page_file_id_lvl_hint,
