@@ -453,7 +453,6 @@ try
 [profiles]
 [profiles.default]
 dt_enable_rough_set_filter = false
-dt_raw_filter_range = 0
 dt_read_delta_only = 1
 dt_read_stable_only = true
         )"};
@@ -468,7 +467,6 @@ dt_read_stable_only = true
 
         global_ctx.reloadDeltaTreeConfig(*config);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, false);
-        ASSERT_EQ(global_ctx.getSettingsRef().dt_raw_filter_range, false);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_read_delta_only, true);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_read_stable_only, true);
     }

@@ -114,26 +114,26 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 
 struct LocalExchangePacketReader : public ExchangePacketReader
 {
-    MPPTunnelPtr tunnel;
+    LocalTunnelSenderPtr local_tunnel_sender;
 
-    explicit LocalExchangePacketReader(const std::shared_ptr<MPPTunnel> & tunnel_)
-        : tunnel(tunnel_)
+    explicit LocalExchangePacketReader(const LocalTunnelSenderPtr & local_tunnel_sender_)
+        : local_tunnel_sender(local_tunnel_sender_)
     {}
 
     /// put the implementation of dtor in .cpp so we don't need to put the specialization of
     /// pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> in header file.
     ~LocalExchangePacketReader() override
     {
-        if (tunnel)
+        if (local_tunnel_sender)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            tunnel->consumerFinish("Receiver closed");
+            local_tunnel_sender->consumerFinish("Receiver closed");
         }
     }
 
     bool read(MPPDataPacketPtr & packet) override
     {
-        MPPDataPacketPtr tmp_packet = tunnel->readForLocal();
+        MPPDataPacketPtr tmp_packet = local_tunnel_sender->readForLocal();
         bool success = tmp_packet != nullptr;
         if (success)
             packet = tmp_packet;
@@ -142,7 +142,9 @@ struct LocalExchangePacketReader : public ExchangePacketReader
 
     ::grpc::Status finish() override
     {
-        tunnel.reset();
+        if (local_tunnel_sender)
+            local_tunnel_sender->consumerFinish("Receiver finished!");
+        local_tunnel_sender.reset();
         return ::grpc::Status::OK;
     }
 };
@@ -222,7 +224,7 @@ ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvReques
         {
             throw Exception("Exchange receiver meet error : " + status.error_message());
         }
-        return std::make_shared<LocalExchangePacketReader>(tunnel);
+        return std::make_shared<LocalExchangePacketReader>(tunnel->getLocalTunnelSender());
     }
     else
     {
