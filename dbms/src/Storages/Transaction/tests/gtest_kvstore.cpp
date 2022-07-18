@@ -55,7 +55,8 @@ private:
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
 };
 
-void RegionKVStoreTest::testNewProxy() {
+void RegionKVStoreTest::testNewProxy()
+{
     std::string path = TiFlashTestEnv::getTemporaryPath("/region_kvs_tmp") + "/basic";
 
     Poco::File file(path);
@@ -1462,6 +1463,7 @@ TEST_F(RegionKVStoreTest, KVStore)
 try
 {
     testKVStore();
+    testNewProxy();
 }
 CATCH
 
