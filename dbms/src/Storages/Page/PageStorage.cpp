@@ -66,7 +66,7 @@ String PageStorage::StatisticsInfo::toString() const
     return ss.str();
 }
 
-bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
+bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs) const
 {
     return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
 }
@@ -260,7 +260,7 @@ void PageStorage::restore()
     /// Restore current version from both formal and legacy page files
 
     MetaMergingQueue merging_queue;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         if (!(page_file.getType() == PageFile::Type::Formal || page_file.getType() == PageFile::Type::Legacy
               || page_file.getType() == PageFile::Type::Checkpoint))
@@ -350,7 +350,7 @@ void PageStorage::restore()
         // Remove old checkpoints and archive obsolete PageFiles that have not been archived yet during gc for some reason.
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_TRACE(log, storage_name << " These file would be archive:");
-        for (auto & pf : page_files_to_remove)
+        for (const auto & pf : page_files_to_remove)
             LOG_TRACE(log, storage_name << pf.toString());
 #else
         // when restore `PageStorage`, the `PageFile` in `page_files_to_remove` is not counted in the total size,
@@ -367,7 +367,7 @@ void PageStorage::restore()
         std::vector<size_t> next_write_fill_idx(num_delta_paths);
         std::iota(next_write_fill_idx.begin(), next_write_fill_idx.end(), 0);
         // Only insert location of PageFile when it storing delta data
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             max_page_file_id_lvl = std::max(max_page_file_id_lvl, page_file.fileIdLevel());
             // Checkpoint file is always stored on `delegator`'s default path, so no need to insert it's location here
@@ -1099,7 +1099,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
             LOG_TRACE(log, storage_name << " GC exit with no files to gc.");
             return false;
         }
-    } while (0);
+    } while (false);
 
     Stopwatch watch;
     if (gc_type == GCType::LowWrite)
@@ -1140,8 +1140,9 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
         // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
         LegacyCompactor compactor(*this, write_limiter, read_limiter);
         PageFileSet page_files_to_archive;
+        auto files_to_compact = std::move(page_files);
         std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
-            = compactor.tryCompact(std::move(page_files), writing_files_snapshot);
+            = compactor.tryCompact(std::move(files_to_compact), writing_files_snapshot);
         archivePageFiles(page_files_to_archive, true);
         gc_context.num_files_archive_in_compact_legacy = page_files_to_archive.size();
     }
@@ -1179,7 +1180,7 @@ bool PageStorage::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const
            << ", compact legacy archive files: " << gc_context.num_files_archive_in_compact_legacy
            << ", remove data files: " << gc_context.num_files_remove_data << ", gc apply: " << gc_context.gc_apply_stat.toString();
         // Log warning if the GC run for a long time.
-        constexpr double EXIST_LONG_GC = 30.0;
+        static constexpr double EXIST_LONG_GC = 30.0;
         if (elapsed_sec > EXIST_LONG_GC)
             LOG_WARNING(log, ss.str());
         else
@@ -1201,7 +1202,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
         if (!archive_dir.exists())
             archive_dir.createDirectory();
 
-        for (auto & page_file : page_files)
+        for (const auto & page_file : page_files)
         {
             Poco::Path path(page_file.folderPath());
             auto dest = archive_path.toString() + "/" + path.getFileName();
@@ -1218,7 +1219,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
             }
         }
         LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
-    } while (0);
+    } while (false);
 
     // Maybe there are a large number of files left on disk by TiFlash version v4.0.0~v4.0.11, or some files left on disk
     // by unexpected crash in the middle of archiving PageFiles.
@@ -1232,7 +1233,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
     if (archive_page_files.empty())
         return;
 
-    const size_t MAX_NUM_OF_FILE_TO_REMOVED = 30;
+    static constexpr size_t MAX_NUM_OF_FILE_TO_REMOVED = 30;
     size_t num_removed = 0;
     for (const auto & pf_dir : archive_page_files)
     {
@@ -1267,7 +1268,7 @@ PageStorage::gcRemoveObsoleteData(PageFileSet & page_files,
 {
     size_t num_data_removed = 0;
     size_t num_bytes_removed = 0;
-    for (auto & page_file : page_files)
+    for (const auto & page_file : page_files)
     {
         const auto page_id_and_lvl = page_file.fileIdLevel();
         if (page_id_and_lvl >= writing_file_id_level)

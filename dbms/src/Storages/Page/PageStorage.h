@@ -118,7 +118,7 @@ public:
         String toString() const;
         void mergeEdits(const PageEntriesEdit & edit);
 
-        bool equals(const StatisticsInfo & rhs);
+        bool equals(const StatisticsInfo & rhs) const;
     };
 
 public:
@@ -131,7 +131,7 @@ public:
 
     PageId getMaxId();
 
-    void write(WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr);
+    void write(WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     SnapshotPtr getSnapshot();
     // Get some statistics of all living snapshots and the oldest living snapshot.
@@ -265,7 +265,7 @@ private:
     StatisticsInfo last_gc_statistics;
 
 private:
-    WriterPtr checkAndRenewWriter(WritingPageFile & page_file,
+    WriterPtr checkAndRenewWriter(WritingPageFile & writing_file,
                                   PageFileIdAndLevel max_page_file_id_lvl_hint,
                                   const String & parent_path_hint,
                                   WriterPtr && old_writer = nullptr,
