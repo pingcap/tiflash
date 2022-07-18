@@ -37,7 +37,6 @@ namespace DB::DM::tests
 DB::Settings createSettings(const WorkloadOptions & opts)
 {
     DB::Settings settings;
-    settings.set("background_pool_size", std::to_string(opts.bg_thread_count));
     if (!opts.config_file.empty())
     {
         auto table = cpptoml::parse_file(opts.config_file);
