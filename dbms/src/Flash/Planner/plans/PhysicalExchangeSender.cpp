@@ -55,10 +55,11 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
 
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
 
+    /// todo support fine grained shuffle
     int stream_id = 0;
     pipeline.transform([&](auto & stream) {
         // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, false>>(
             dag_context.tunnel_set,
             partition_col_ids,
             partition_col_collators,
@@ -66,7 +67,9 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
             stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-            dag_context);
+            dag_context,
+            0,
+            0);
         stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
     });
 }
