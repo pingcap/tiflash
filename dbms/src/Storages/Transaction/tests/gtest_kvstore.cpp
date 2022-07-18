@@ -101,7 +101,8 @@ void RegionKVStoreTest::testNewProxy()
         // test CompactLog
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
-        kvs.markCompactLog();
+        auto region = kvs.getRegion(1);
+        region->markCompactLog();
         kvs.setRegionCompactLogConfig(100000, 1000, 1000);
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
