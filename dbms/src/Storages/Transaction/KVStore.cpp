@@ -410,20 +410,12 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
 
-    const auto check_sync_log = [&]() {
-        if (cmd_type != raft_cmdpb::AdminCmdType::CompactLog)
-        {
-            // ignore ComputeHash, VerifyHash or other useless cmd.
-            return false;
-        }
-        else
-        {
-            return canFlushRegionDataImpl(curr_region_ptr, true, /* try_until_succeed */ false, tmt, region_task_lock);
-        }
-    };
-
-    if (check_sync_log())
+    if (cmd_type == raft_cmdpb::AdminCmdType::CompactLog)
     {
+        // Before CompactLog, we ought to make sure all data of this region are persisted.
+        // So proxy will firstly call an FFI `fn_try_flush_data` to trigger a attempt to flush data on TiFlash's side.
+        // If the attempt fails, Proxy will filter execution of this CompactLog, which means every CompactLog observed by TiFlash can ALWAYS succeed now.
+        // ref. https://github.com/pingcap/tidb-engine-ext/blob/e83a37d2d8d8ae1778fe279c5f06a851f8c9e56a/components/raftstore/src/engine_store_ffi/observer.rs#L175
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;
