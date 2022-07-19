@@ -118,7 +118,8 @@ void EstablishCallData::setFinishState(const String & msg)
     if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
     {
         async_tunnel_sender->consumerFinish(fmt::format("{}: {}",
-                                                        async_tunnel_sender->getTunnelId(), msg)); //trigger mpp tunnel finish work
+                                                        async_tunnel_sender->getTunnelId(),
+                                                        msg)); //trigger mpp tunnel finish work
     }
 }
 
