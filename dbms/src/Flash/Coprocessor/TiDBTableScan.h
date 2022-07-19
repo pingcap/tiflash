@@ -51,7 +51,10 @@ public:
     {
         return executor_id;
     }
-
+    bool keepOrder() const
+    {
+        return keep_order;
+    }
 private:
     const tipb::Executor * table_scan;
     String executor_id;
@@ -66,6 +69,7 @@ private:
     /// physical_table_ids contains the table ids of its partitions
     std::vector<Int64> physical_table_ids;
     Int64 logical_table_id;
+    bool keep_order;
 };
 
 } // namespace DB

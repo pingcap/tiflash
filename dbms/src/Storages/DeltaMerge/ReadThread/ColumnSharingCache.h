@@ -8,6 +8,8 @@
 
 namespace DB::DM
 {
+using PackId = size_t;
+
 enum class ColumnCacheStatus
 {
     ADD_COUNT = 0,
@@ -87,9 +89,15 @@ public:
 private:
     std::mutex mtx;
     // start_pack_id -> <pack_count, col_data>
-    std::map<size_t, ColumnData> packs;
+    std::map<PackId, ColumnData> packs;
 };
 
+// `ColumnSharingCacheMap` is a per DMFileReader cache.
+// It store a ColumnSharingCache(std::map) for each column.
+// When read threads are enable, each DMFileReader will be add to DMFileReaderPool,
+// so we can find DMFileReaders of the same DMFile easily.
+// Each DMFileReader will add the block that they read to other DMFileReaders' cache if the start_pack_id of the block
+// is greater or equal than the next_pack_id of the DMFileReader —— This means that the DMFileReader maybe read the block later.
 class ColumnSharingCacheMap
 {
 public:
@@ -109,6 +117,7 @@ public:
         LOG_FMT_DEBUG(log, "dmfile {} stat {}", dmfile_name, statString());
     }
 
+    // `addStale` just do some statistics.
     void addStale()
     {
         stats[static_cast<int>(ColumnCacheStatus::ADD_STALE)].fetch_add(1, std::memory_order_relaxed);
@@ -137,6 +146,8 @@ public:
         return status == ColumnCacheStatus::GET_HIT || status == ColumnCacheStatus::GET_COPY;
     }
 
+    // Each read operator of DMFileReader will advance the next_pack_id.
+    // So we can delete packs if their pack_id is less than next_pack_id to save memory.
     void del(int64_t col_id, size_t upper_start_pack_id)
     {
         auto itr = cols.find(col_id);

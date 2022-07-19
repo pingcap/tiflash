@@ -1128,14 +1128,15 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                                            const DB::Settings & db_settings,
                                            const ColumnDefines & columns_to_read,
                                            size_t num_streams,
+                                           bool keep_order,
                                            const SegmentIdSet & read_segments,
                                            size_t extra_table_id_index)
 {
     SegmentReadTasks tasks;
 
     auto dm_context = newDMContext(db_context, db_settings, fmt::format("read_raw_{}", db_context.getCurrentQueryId()));
-    // TODO(jinhelin): If keep order is required, disable read thread.
-    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
+    // If keep order is required, disable read thread.
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     {
         std::shared_lock lock(read_write_mutex);
 
@@ -1227,6 +1228,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         UInt64 max_version,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
+                                        bool keep_order,
                                         bool is_fast_mode,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
@@ -1234,8 +1236,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
-    // TODO(jinhelin): If keep order is required, disable read thread.
-    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
+    // If keep order is required, disable read thread.
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
     // Also, too many read tasks of a segment with different samll ranges is not good for data sharing cache.
