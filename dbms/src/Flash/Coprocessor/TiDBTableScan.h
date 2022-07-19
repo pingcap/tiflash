@@ -55,6 +55,7 @@ public:
     {
         return keep_order;
     }
+
 private:
     const tipb::Executor * table_scan;
     String executor_id;

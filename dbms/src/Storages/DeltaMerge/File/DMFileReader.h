@@ -128,6 +128,7 @@ private:
                     size_t skip_packs,
                     bool force_seek);
     bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
+
 private:
     DMFilePtr dmfile;
     ColumnDefines read_columns;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Columns/IColumn.h>
+#include <Common/Logger.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 
