@@ -32,7 +32,6 @@ namespace DM
 {
 namespace tests
 {
-
 class ColumnFileTest
     : public DB::base::TiFlashStorageTestBasic
 {
@@ -101,7 +100,7 @@ try
     ColumnDefinesPtr column_defines = std::make_shared<ColumnDefines>();
     column_defines->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
     column_defines->emplace_back(getVersionColumnDefine());
-    auto column_file_big_reader = column_file_big.getReader(dmContext(), /*storage_snap*/nullptr, column_defines);
+    auto column_file_big_reader = column_file_big.getReader(dmContext(), /*storage_snap*/ nullptr, column_defines);
     {
         size_t num_rows_read = 0;
         while (Block in = column_file_big_reader->readNextBlock())
@@ -163,6 +162,6 @@ try
 }
 CATCH
 
-}
-}
-}
+} // namespace tests
+} // namespace DM
+} // namespace DB
