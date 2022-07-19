@@ -60,5 +60,29 @@ try
 }
 CATCH
 
+// todo: move this test to gtest_aggregation_executor.cpp
+TEST_F(ExecutorTestRunner, AggNull)
+try
+{
+    auto request = context
+                        .scan("test_db", "test_table")
+                        .aggregation({Max(col("s1"))}, {})
+                        .build(context);
+    {
+        ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                            createColumns({toNullableVec<String>({"banana"})}));
+    }
+
+    request = context
+                .scan("test_db", "test_table")
+                .aggregation({}, {col("s1")})
+                .build(context);
+    {
+        ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                            createColumns({toNullableVec<String>("s1", {{}, "banana"})}));
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
