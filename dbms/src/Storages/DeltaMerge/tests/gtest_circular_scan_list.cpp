@@ -43,9 +43,9 @@ TEST(CircularScanListTest, Normal)
 
     {
         ASSERT_EQ(lst.next(), nullptr);
-        auto [unvalid, valid] = lst.count(0);
-        ASSERT_EQ(unvalid, 0);
+        auto [valid, invalid] = lst.count(0);
         ASSERT_EQ(valid, 0);
+        ASSERT_EQ(invalid, 0);
         ASSERT_EQ(lst.get(1), nullptr);
     }
 
@@ -55,9 +55,9 @@ TEST(CircularScanListTest, Normal)
     }
 
     {
-        auto [unvalid, valid] = lst.count(0);
-        ASSERT_EQ(unvalid, 10);
-        ASSERT_EQ(valid, 0);
+        auto [valid, invalid] = lst.count(0);
+        ASSERT_EQ(valid, 10);
+        ASSERT_EQ(invalid, 0);
     }
 
     for (uint64_t i = 0; i < 20; i++)
@@ -71,33 +71,33 @@ TEST(CircularScanListTest, Normal)
     lst.get(5)->setInvalid();
 
     {
-        auto [unvalid, valid] = lst.count(0);
-        ASSERT_EQ(unvalid, 7);
-        ASSERT_EQ(valid, 3);
+        auto [valid, invalid] = lst.count(0);
+        ASSERT_EQ(valid, 7);
+        ASSERT_EQ(invalid, 3);
     }
 
-    const std::vector<uint64_t> unvalid_ids = {0, 2, 4, 6, 7, 8, 9};
+    const std::vector<uint64_t> valid_ids = {0, 2, 4, 6, 7, 8, 9};
     for (uint64_t i = 0; i < 20; i++)
     {
         auto sp = lst.next();
-        ASSERT_EQ(sp->poolId(), unvalid_ids[i % unvalid_ids.size()]);
+        ASSERT_EQ(sp->poolId(), valid_ids[i % valid_ids.size()]);
     }
 
     {
-        auto [unvalid, valid] = lst.count(0);
-        ASSERT_EQ(unvalid, 7);
-        ASSERT_EQ(valid, 0);
+        auto [valid, invalid] = lst.count(0);
+        ASSERT_EQ(valid, 7);
+        ASSERT_EQ(invalid, 0);
     }
 
-    for (uint64_t id : unvalid_ids)
+    for (uint64_t id : valid_ids)
     {
         lst.get(id)->setInvalid();
     }
 
     {
-        auto [unvalid, valid] = lst.count(0);
-        ASSERT_EQ(unvalid, 0);
-        ASSERT_EQ(valid, 7);
+        auto [valid, invalid] = lst.count(0);
+        ASSERT_EQ(valid, 0);
+        ASSERT_EQ(invalid, 7);
     }
 
     ASSERT_EQ(lst.next(), nullptr);
