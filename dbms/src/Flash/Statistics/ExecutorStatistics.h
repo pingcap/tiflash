@@ -84,7 +84,7 @@ public:
         {
             for (const auto & input_stream : it->second)
             {
-                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get()))
+                if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(input_stream.get()); p_stream)
                 {
                     const auto & profile_info = p_stream->getProfileInfo();
                     base.append(profile_info);
