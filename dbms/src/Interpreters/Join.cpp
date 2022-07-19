@@ -788,6 +788,7 @@ bool Join::insertFromBlock(const Block & block)
     std::unique_lock lock(rwlock);
     if (unlikely(!initialized))
         throw Exception("Logical error: Join was not initialized", ErrorCodes::LOGICAL_ERROR);
+    total_input_build_rows += block.rows();
     blocks.push_back(block);
     Block * stored_block = &blocks.back();
     return insertFromBlockInternal(stored_block, 0);
@@ -805,6 +806,7 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
     Block * stored_block = nullptr;
     {
         std::lock_guard lk(blocks_lock);
+        total_input_build_rows += block.rows();
         blocks.push_back(block);
         stored_block = &blocks.back();
         original_blocks.push_back(block);
