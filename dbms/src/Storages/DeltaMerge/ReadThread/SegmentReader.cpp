@@ -209,6 +209,10 @@ void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)
     reader_pools[idx]->addTask(std::move(task));
 }
 
+// `isSegmentReader` checks whether this thread is a `SegmentReader`.
+// Use this function in DMFileBlockInputSteam to check whether enable read thread of this read request,
+// Maybe we can pass the argument from DeltaMerge -> SegmentReadTaskPool -> ... -> DMFileBlockInputSteam.
+// But this is a long code path and can affect a lot a code.
 bool SegmentReaderPoolManager::isSegmentReader() const
 {
     return reader_ids.find(std::this_thread::get_id()) != reader_ids.end();
