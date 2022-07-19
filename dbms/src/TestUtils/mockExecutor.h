@@ -177,6 +177,8 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr))
 #define Max(expr) makeASTFunction("max", (expr))
+#define Min(expr) makeASTFunction("min", (expr))
+#define Count(expr) makeASTFunction("count", (expr))
 #define Sum(expr) makeASTFunction("sum", (expr))
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
