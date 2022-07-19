@@ -21,8 +21,14 @@ namespace tests
 {
 
 #define DT DecimalField<Decimal32>
-#define COL_GROUP2(a, b) {col(types_col_name[a]), col(types_col_name[b])}
-#define COL_PROJ2(a, b) {types_col_name[a], types_col_name[b]}
+#define COL_GROUP2(a, b)                               \
+    {                                                  \
+        col(types_col_name[a]), col(types_col_name[b]) \
+    }
+#define COL_PROJ2(a, b)                      \
+    {                                        \
+        types_col_name[a], types_col_name[b] \
+    }
 
 class ExecutorAggTestRunner : public DB::tests::ExecutorTest
 {
@@ -113,13 +119,13 @@ public:
     size_t step = 2;
 
     const String db_name{"test_db"};
-    
+
     /// Prepare some data and names for tests of group by
     const String table_types{"types"};
     const std::vector<String> types_col_name{"id", "decimal_", "tinyint_", "smallint_", "int_", "bigint_", "float_", "double_", "date_", "datetime_", "string_"};
     ColumnWithNullableInt32 col_id{1, 2, 3, 4, 5, 6, 7, 8, 9};
     ColumnWithNullableDecimal col_decimal{DT(55, 1), {}, DT(-24, 1), DT(40, 1), DT(-40, 1), DT(40, 1), {}, DT(55, 1), DT(0, 1)};
-    ColumnWithNullableInt8 col_tinyint{1,2,3,{},{},0,0,-1,-2};
+    ColumnWithNullableInt8 col_tinyint{1, 2, 3, {}, {}, 0, 0, -1, -2};
     ColumnWithNullableInt16 col_smallint{2, 3, {}, {}, 0, -1, -2, 4, 0};
     ColumnWithNullableInt32 col_int{4, {}, {}, 0, 123, -1, -1, 123, 4};
     ColumnWithNullableInt64 col_bigint{2, 2, {}, 0, -1, {}, -1, 0, 123};
@@ -157,25 +163,25 @@ try
     std::vector<MockColumnNameVec> projections;
     std::vector<ColumnsWithTypeAndName> expect_cols;
     size_t test_num;
-    
+
     {
         /// group by single column
         group_by_exprs = {{col(types_col_name[2])}, {col(types_col_name[3])}, {col(types_col_name[4])}, {col(types_col_name[5])}, {col(types_col_name[6])}, {col(types_col_name[7])}, {col(types_col_name[8])}, {col(types_col_name[9])}, {col(types_col_name[10])}};
         projections = {{types_col_name[2]}, {types_col_name[3]}, {types_col_name[4]}, {types_col_name[5]}, {types_col_name[6]}, {types_col_name[7]}, {types_col_name[8]}, {types_col_name[9]}, {types_col_name[10]}};
         expect_cols = {
-                       {toNullableVec<Int8>(types_col_name[2], ColumnWithNullableInt8{-1, 2, {}, 0, 1, 3, -2})}, /// select tinyint_ from test_db.types group by tinyint_;
-                       {toNullableVec<Int16>(types_col_name[3], ColumnWithNullableInt16{-1, 2, -2, {}, 0, 4, 3})}, /// select smallint_ from test_db.types group by smallint_;
-                       {toNullableVec<Int32>(types_col_name[4], ColumnWithNullableInt32{-1, {}, 4, 0, 123})}, /// select int_ from test_db.types group by int_;
-                       {toNullableVec<Int64>(types_col_name[5], ColumnWithNullableInt64{2, -1, 0, 123, {}})}, /// select bigint_ from test_db.types group by bigint_;
-                       {toNullableVec<Float32>(types_col_name[6], ColumnWithNullableFloat32{0, 4, 3.3, {}, 5.6, -0.1})}, /// select float_ from test_db.types group by float_;
-                       {toNullableVec<Float64>(types_col_name[7], ColumnWithNullableFloat64{0, {}, -1.2, 1.1, 1.2, 0.1})}, /// select double_ from test_db.types group by double_;
-                       {toNullableVec<MyDate>(types_col_name[8], ColumnWithNullableMyDate{{}, 0, 300000, 1000000, 2000000})}, /// select date_ from test_db.types group by date_;
-                       {toNullableVec<MyDateTime>(types_col_name[9], ColumnWithNullableMyDateTime{{}, 0, 1000000, 2000000, 3000000})}, /// select datetime_ from test_db.types group by datetime_;
-                       {toNullableVec<String>(types_col_name[10], ColumnWithNullableString{{}, "pingcap", "PingCAP", "PINGCAP", "Shanghai"})}}; /// select string_ from test_db.types group by string_;
+            {toNullableVec<Int8>(types_col_name[2], ColumnWithNullableInt8{-1, 2, {}, 0, 1, 3, -2})}, /// select tinyint_ from test_db.types group by tinyint_;
+            {toNullableVec<Int16>(types_col_name[3], ColumnWithNullableInt16{-1, 2, -2, {}, 0, 4, 3})}, /// select smallint_ from test_db.types group by smallint_;
+            {toNullableVec<Int32>(types_col_name[4], ColumnWithNullableInt32{-1, {}, 4, 0, 123})}, /// select int_ from test_db.types group by int_;
+            {toNullableVec<Int64>(types_col_name[5], ColumnWithNullableInt64{2, -1, 0, 123, {}})}, /// select bigint_ from test_db.types group by bigint_;
+            {toNullableVec<Float32>(types_col_name[6], ColumnWithNullableFloat32{0, 4, 3.3, {}, 5.6, -0.1})}, /// select float_ from test_db.types group by float_;
+            {toNullableVec<Float64>(types_col_name[7], ColumnWithNullableFloat64{0, {}, -1.2, 1.1, 1.2, 0.1})}, /// select double_ from test_db.types group by double_;
+            {toNullableVec<MyDate>(types_col_name[8], ColumnWithNullableMyDate{{}, 0, 300000, 1000000, 2000000})}, /// select date_ from test_db.types group by date_;
+            {toNullableVec<MyDateTime>(types_col_name[9], ColumnWithNullableMyDateTime{{}, 0, 1000000, 2000000, 3000000})}, /// select datetime_ from test_db.types group by datetime_;
+            {toNullableVec<String>(types_col_name[10], ColumnWithNullableString{{}, "pingcap", "PingCAP", "PINGCAP", "Shanghai"})}}; /// select string_ from test_db.types group by string_;
         test_num = expect_cols.size();
         ASSERT_EQ(group_by_exprs.size(), test_num);
         ASSERT_EQ(projections.size(), test_num);
-        
+
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
@@ -187,16 +193,22 @@ try
         /// group by two columns
         group_by_exprs = {COL_GROUP2(2, 6), COL_GROUP2(3, 9), COL_GROUP2(4, 7), COL_GROUP2(5, 10), COL_GROUP2(8, 9), COL_GROUP2(9, 10)};
         projections = {COL_PROJ2(2, 6), COL_PROJ2(3, 9), COL_PROJ2(4, 7), COL_PROJ2(5, 10), COL_PROJ2(8, 9), COL_PROJ2(9, 10)};
-        expect_cols = {{toNullableVec<Int8>(types_col_name[2], ColumnWithNullableInt8{1, 2, {}, 3, 0, 0, -1, {}, -2}),
+        expect_cols = {/// select tinyint_, float_ from test_db.types group by tinyint_, float_;
+                       {toNullableVec<Int8>(types_col_name[2], ColumnWithNullableInt8{1, 2, {}, 3, 0, 0, -1, {}, -2}),
                         toNullableVec<Float32>(types_col_name[6], ColumnWithNullableFloat32{3.3, {}, 4, 0, -0.1, 5.6, -0.1, 3.3, {}})},
+                       /// select smallint_, datetime_ from test_db.types group by smallint_, datetime_;
                        {toNullableVec<Int16>(types_col_name[3], ColumnWithNullableInt16{2, 3, {}, {}, 0, -1, -2, 4}),
                         toNullableVec<MyDateTime>(types_col_name[9], ColumnWithNullableMyDateTime{2000000, 0, {}, 3000000, 1000000, {}, 0, 2000000})},
+                       /// select int_, double_ from test_db.types group by int_, double_;
                        {toNullableVec<Int32>(types_col_name[4], ColumnWithNullableInt32{{}, 123, -1, 0, {}, 4, 4, 123}),
                         toNullableVec<Float64>(types_col_name[7], ColumnWithNullableFloat64{0, -1.2, {}, 1.1, 1.1, -1.2, 0.1, 1.2})},
+                       /// select bigint_, string_ from test_db.types group by bigint_, string_;
                        {toNullableVec<Int64>(types_col_name[5], ColumnWithNullableInt64{-1, 0, 0, 123, 2, {}, -1, 2}),
                         toNullableVec<String>(types_col_name[10], ColumnWithNullableString{{}, {}, "Shanghai", "Shanghai", {}, "PingCAP", "PINGCAP", "pingcap"})},
+                       /// select date_, datetime_ from test_db.types group by date_, datetime_;
                        {toNullableVec<MyDate>(types_col_name[8], ColumnWithNullableMyDate{1000000, 2000000, {}, 300000, 1000000, 0, 2000000, {}}),
                         toNullableVec<MyDateTime>(types_col_name[9], ColumnWithNullableMyDateTime{2000000, 0, {}, 3000000, 1000000, 0, 2000000, 1000000})},
+                       /// select datetime_, string_ from test_db.types group by datetime_, string_;
                        {toNullableVec<MyDateTime>(types_col_name[9], ColumnWithNullableMyDateTime{2000000, 0, {}, 3000000, 1000000, 0, 2000000, 1000000}),
                         toNullableVec<String>(types_col_name[10], ColumnWithNullableString{{}, "pingcap", "PingCAP", {}, "PINGCAP", {}, "Shanghai", "Shanghai"})}};
         test_num = expect_cols.size();
