@@ -84,7 +84,9 @@ private:
 
     void finishTunnelAndResponder();
 
-    void setFinishStatus();
+    // will try to call async_sender's consumerFinish if needed
+    void setFinishState();
+
     void responderFinish(const grpc::Status & status);
 
     std::mutex mu;
