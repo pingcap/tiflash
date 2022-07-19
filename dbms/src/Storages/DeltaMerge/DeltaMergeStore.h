@@ -350,6 +350,7 @@ public:
                               const DB::Settings & db_settings,
                               const ColumnDefines & columns_to_read,
                               size_t num_streams,
+                              bool keep_order,
                               const SegmentIdSet & read_segments = {},
                               size_t extra_table_id_index = InvalidColumnID);
 
@@ -366,6 +367,7 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            const String & tracing_id,
+                           bool keep_order,
                            bool is_fast_mode = false, // set true when read in fast mode
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
