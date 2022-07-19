@@ -1,0 +1,2 @@
+race:dbms/src/Common/TiFlashMetrics.h
+race:dbms/src/DataStreams/BlockStreamProfileInfo.h
