@@ -1021,7 +1021,7 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             // #2. There is another flush in progress, for example, triggered in background
             // Let's sleep 5ms ~ 100ms and then retry flush again.
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
-            sleep_ms = std::min(sleep_ms * 2, 200);
+            sleep_ms = std::min(sleep_ms * 2, 100);
         }
 
         cur_range.setStart(segment_range.end);
