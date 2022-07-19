@@ -163,10 +163,11 @@ bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Se
     return done_anything;
 }
 
-StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool, const String & name)
+StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool_, const String & name)
     : logger(Logger::get("StoragePool", !name.empty() ? name : DB::toString(ns_id_)))
     , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
+    , storage_path_pool(storage_path_pool_)
     , global_context(global_ctx)
     , storage_pool_metrics(CurrentMetrics::StoragePoolV3Only, 0)
 {
@@ -219,18 +220,42 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
         data_storage_v3 = global_storage_pool->data_storage;
         meta_storage_v3 = global_storage_pool->meta_storage;
 
-        log_storage_v2 = PageStorage::create(name + ".log",
-                                             storage_path_pool.getPSDiskDelegatorMulti("log"),
-                                             extractConfig(global_context.getSettingsRef(), StorageType::Log),
-                                             global_context.getFileProvider());
-        data_storage_v2 = PageStorage::create(name + ".data",
-                                              storage_path_pool.getPSDiskDelegatorMulti("data"),
-                                              extractConfig(global_context.getSettingsRef(), StorageType::Data),
-                                              global_ctx.getFileProvider());
-        meta_storage_v2 = PageStorage::create(name + ".meta",
-                                              storage_path_pool.getPSDiskDelegatorMulti("meta"),
-                                              extractConfig(global_context.getSettingsRef(), StorageType::Meta),
-                                              global_ctx.getFileProvider());
+        if (storage_path_pool.isPSV2Deleted())
+        {
+            LOG_FMT_INFO(logger, "PageStorage V2 is already mark deleted. Current pagestorage change from {} to {} [ns_id={}]", //
+                         static_cast<UInt8>(PageStorageRunMode::MIX_MODE), //
+                         static_cast<UInt8>(PageStorageRunMode::ONLY_V3), //
+                         ns_id);
+            log_storage_v2 = nullptr;
+            data_storage_v2 = nullptr;
+            meta_storage_v2 = nullptr;
+            run_mode = PageStorageRunMode::ONLY_V3;
+            storage_path_pool.clearPSV2ObsoleteData();
+        }
+        else
+        {
+            // Although there is no more write to ps v2 in mixed mode, the ps instances will keep running if there is some data in log storage when restart,
+            // so we keep its original config here.
+            // And we rely on the mechanism that writing file will be rotated if no valid pages in non writing files to reduce the disk space usage of these ps instances.
+            log_storage_v2 = PageStorage::create(name + ".log",
+                                                 storage_path_pool.getPSDiskDelegatorMulti("log"),
+                                                 extractConfig(global_context.getSettingsRef(), StorageType::Log),
+                                                 global_context.getFileProvider(),
+                                                 /* use_v3 */ false,
+                                                 /* no_more_write_to_v2 */ true);
+            data_storage_v2 = PageStorage::create(name + ".data",
+                                                  storage_path_pool.getPSDiskDelegatorMulti("data"),
+                                                  extractConfig(global_context.getSettingsRef(), StorageType::Data),
+                                                  global_ctx.getFileProvider(),
+                                                  /* use_v3 */ false,
+                                                  /* no_more_write_to_v2 */ true);
+            meta_storage_v2 = PageStorage::create(name + ".meta",
+                                                  storage_path_pool.getPSDiskDelegatorMulti("meta"),
+                                                  extractConfig(global_context.getSettingsRef(), StorageType::Meta),
+                                                  global_ctx.getFileProvider(),
+                                                  /* use_v3 */ false,
+                                                  /* no_more_write_to_v2 */ true);
+        }
 
         log_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, log_storage_v2, log_storage_v3, nullptr);
         data_storage_reader = std::make_shared<PageReader>(run_mode, ns_id, data_storage_v2, data_storage_v3, nullptr);
@@ -272,7 +297,7 @@ void StoragePool::forceTransformMetaV2toV3()
         const auto & page_transform_entry = meta_transform_storage_reader->getPageEntry(page_transform.page_id);
         if (!page_transform_entry.field_offsets.empty())
         {
-            throw Exception(fmt::format("Can't transfrom meta from V2 to V3, [page_id={}] {}", //
+            throw Exception(fmt::format("Can't transform meta from V2 to V3, [page_id={}] {}", //
                                         page_transform.page_id,
                                         page_transform_entry.toDebugString()),
                             ErrorCodes::LOGICAL_ERROR);
@@ -431,18 +456,23 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current pool.data translate already done before restored [ns_id={}] ", ns_id);
+            LOG_FMT_INFO(logger, "Current pool.data translate already done before restored [ns_id={}]", ns_id);
         }
 
         // Check number of valid pages in v2
         // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
-            // TODO: Need drop V2 in disk and check.
-            LOG_FMT_INFO(logger, "Current pagestorage change from {} to {}", //
+            LOG_FMT_INFO(logger, "Current pagestorage change from {} to {} [ns_id={}]", //
                          static_cast<UInt8>(PageStorageRunMode::MIX_MODE),
-                         static_cast<UInt8>(PageStorageRunMode::ONLY_V3));
-
+                         static_cast<UInt8>(PageStorageRunMode::ONLY_V3),
+                         ns_id);
+            if (storage_path_pool.createPSV2DeleteMarkFile())
+            {
+                log_storage_v2->drop();
+                data_storage_v2->drop();
+                meta_storage_v2->drop();
+            }
             log_storage_v2 = nullptr;
             data_storage_v2 = nullptr;
             meta_storage_v2 = nullptr;

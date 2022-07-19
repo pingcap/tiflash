@@ -290,7 +290,7 @@ try
                                              /* is_raw_read= */ true,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
-
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -364,7 +364,7 @@ try
         }
         }
 
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
@@ -436,7 +436,7 @@ try
                                              /* is_raw_read= */ true,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
-
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -509,8 +509,7 @@ try
             break;
         }
         }
-
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
@@ -585,6 +584,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -630,6 +630,7 @@ try
         {
             int block_index = 0;
             int begin_value = 0;
+
             while (Block block = in->read())
             {
                 if (block_index == 1)
@@ -657,8 +658,7 @@ try
             break;
         }
         }
-
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
@@ -735,6 +735,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -750,7 +751,7 @@ try
                 }
             }
         }
-
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
@@ -829,6 +830,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -866,6 +868,7 @@ try
         {
             auto block_index = 0;
             auto begin_value = 0;
+
             while (Block block = in->read())
             {
                 if (block_index == 1)
@@ -896,6 +899,7 @@ try
         {
             auto block_index = 0;
             auto begin_value = num_write_rows;
+
             while (Block block = in->read())
             {
                 if (block_index == 1)
@@ -920,17 +924,18 @@ try
                 num_rows_read += block.rows();
                 block_index += 1;
             }
+
             break;
         }
         }
 
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
 CATCH
 
-
+// Insert + Delete row
 TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteRow)
 try
 {
@@ -1010,6 +1015,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         // filter del mark = 1， thus just read the insert data before delete
         while (Block block = in->read())
         {
@@ -1026,7 +1032,7 @@ try
                 }
             }
         }
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
 
@@ -1050,6 +1056,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1065,6 +1072,7 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
@@ -1109,6 +1117,7 @@ try
                                              /* is_raw_read= */ true,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1124,7 +1133,7 @@ try
                 }
             }
         }
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
     // Delete range [0, 64)
@@ -1149,6 +1158,7 @@ try
         size_t num_rows_read = 0;
 
         // filter del mark = 1， thus just read the insert data before delete
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1164,6 +1174,7 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
@@ -1222,6 +1233,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1237,6 +1249,7 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
     }
@@ -1322,6 +1335,7 @@ try
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
 
+        in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -1416,7 +1430,7 @@ try
             break;
         }
         }
-
+        in->readSuffix();
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 
@@ -1434,6 +1448,8 @@ try
                                              /* is_raw_read= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
+
+        in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
@@ -1449,12 +1465,127 @@ try
                 }
             }
         }
+        in->readSuffix();
 
         ASSERT_EQ(num_rows_read, 1.5 * num_write_rows);
     }
 }
 CATCH
 
+TEST_P(DeltaMergeStoreRWTest, TestFastModeForCleanRead)
+try
+{
+    const size_t num_rows_write = 128;
+    {
+        // Create a block with sequential Int64 handle in range [0, 128)
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+            store->write(*db_context, db_context->getSettingsRef(), block);
+            break;
+        default:
+        {
+            auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+            auto [range, file_ids] = genDMFile(*dm_context, block);
+            store->ingestFiles(dm_context, range, file_ids, false);
+            break;
+        }
+        }
+    }
+
+    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    store->mergeDeltaAll(*db_context);
+
+    // could do clean read with no optimization
+    {
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* is_raw_read= */ true,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t num_rows_read = 0;
+
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        ASSERT_EQ(c->getInt(i), i);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    // Delete range [0, 64)
+    const size_t num_deleted_rows = 64;
+    {
+        HandleRange range(0, num_deleted_rows);
+        store->deleteRange(*db_context, db_context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
+    }
+
+    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    store->mergeDeltaAll(*db_context);
+
+    // could do clean read with handle optimization
+    {
+        const auto & columns = store->getTableColumns();
+        ColumnDefines real_columns;
+        for (auto & col : columns)
+        {
+            if (col.name != EXTRA_HANDLE_COLUMN_NAME)
+            {
+                real_columns.emplace_back(col);
+            }
+        }
+
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             real_columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* is_raw_read= */ true,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t num_rows_read = 0;
+
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+
+        ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DM
 } // namespace DB
