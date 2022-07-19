@@ -72,6 +72,7 @@ std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
     auto merged_task = merged_task_pool.pop(pool->poolId());
     if (merged_task != nullptr)
     {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_from_cache).Increment();
         return {merged_task, true};
     }
 
@@ -79,6 +80,7 @@ std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
     if (!segment)
     {
         // The number of active segments reaches the limit.
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_segment).Increment();
         return {nullptr, true};
     }
     auto pools = getPoolsUnlock(segment->second);
@@ -94,6 +96,7 @@ std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
     {
         tasks.push_back(pool->getTask(segment->first));
     }
+    GET_METRIC(tiflash_storage_read_thread_counter, type_sche_new_task).Increment();
     return {std::make_shared<MergedTask>(segment->first, std::move(pools), std::move(tasks)), true};
 }
 
@@ -122,6 +125,14 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
         {
             return pool;
         }
+    }
+    if (unexpired == 0)
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_pool).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_sche_no_slot).Increment();
     }
     return nullptr;
 }
