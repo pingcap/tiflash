@@ -230,8 +230,8 @@ TEST_F(ExecutorAggTestRunner, AggregationMaxAndMin)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
-    auto agg_func0 = Max(col(col_name[0])); /// select max(age) from clerk group by country order by max(age) DESC limit 100;
-    auto agg_func1 = Max(col(col_name[3])); /// select max(salary) from clerk group by country, gender order by max(salary) DESC limit 100;
+    auto agg_func0 = Max(col(col_name[0])); /// select max(age) from clerk group by country;
+    auto agg_func1 = Max(col(col_name[3])); /// select max(salary) from clerk group by country, gender;
 
     auto group_by_expr0 = col(col_name[2]);
     auto group_by_expr10 = col(col_name[2]);
