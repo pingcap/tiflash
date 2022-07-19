@@ -105,7 +105,7 @@ public:
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(std::pair<String, String> src, MockAstVec agg_funcs, MockAstVec group_by_exprs, MockColumnNameVec proj)
     {
         /// We can filter the group by column with project operator.
-        /// project is applied to get single column for comparison
+        /// project is applied to get partial aggregation output, so that we can remove redundant outputs and compare results with less handwriting codes.
         return context.scan(src.first, src.second).aggregation(agg_funcs, group_by_exprs).project(proj).build(context);
     }
 
@@ -115,8 +115,8 @@ public:
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
     }
 
-    size_t max_concurrency = 10;
-    size_t step = 2;
+    static const size_t max_concurrency = 10;
+    static const size_t step = 2;
 
     const String db_name{"test_db"};
 
