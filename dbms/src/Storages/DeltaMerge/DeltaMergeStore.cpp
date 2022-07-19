@@ -1174,8 +1174,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         EMPTY_FILTER,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
-        true,
-        db_settings.dt_raw_filter_range,
+        /* is_raw = */ true,
+        /* do_delete_mark_filter_for_raw = */ false,
         std::move(tasks));
 
     String req_info;
@@ -1236,7 +1236,10 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
     // TODO(jinhelin): If keep order is required, disable read thread.
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
-    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, !enable_read_thread);
+    // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
+    // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
+    // Also, too many read tasks of a segment with different samll ranges is not good for data sharing cache.
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
 
     auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
     LOG_FMT_DEBUG(tracing_logger, "Read create segment snapshot done");
@@ -1255,8 +1258,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        false,
-        db_settings.dt_raw_filter_range,
+        /* is_raw = */ is_fast_mode,
+        /* do_delete_mark_filter_for_raw = */ is_fast_mode,
         std::move(tasks));
 
     String req_info;

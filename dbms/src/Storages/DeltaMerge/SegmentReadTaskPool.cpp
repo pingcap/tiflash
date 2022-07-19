@@ -102,7 +102,7 @@ BlockInputStreamPtr SegmentReadTaskPool::getInputStream(uint64_t seg_id, Segment
     BlockInputStreamPtr stream;
     if (is_raw)
     {
-        stream = seg->getInputStreamRaw(*dm_context, columns_to_read, t->read_snapshot, do_range_filter_for_raw);
+        stream = seg->getInputStreamRaw(*dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, do_range_filter_for_raw);
     }
     else
     {
