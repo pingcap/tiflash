@@ -42,7 +42,7 @@ public:
     using ColFloat64NullableType = std::optional<typename TypeTraits<Float64>::FieldType>;
     using ColMyDateNullableType = std::optional<typename TypeTraits<MyDate>::FieldType>;
     using ColMyDateTimeNullableType = std::optional<typename TypeTraits<MyDateTime>::FieldType>;
-    using ColDecimalNullableType = std::optional<typename TypeTraits<Decimal<Int32>>::FieldType>;
+    using ColDecimalNullableType = std::optional<typename TypeTraits<Decimal32>::FieldType>;
     using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
 
     using ColumnWithNullableString = std::vector<ColStringNullableType>;
