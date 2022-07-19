@@ -178,6 +178,10 @@ Block NativeBlockInputStream::readImpl()
         rows = index_block_it->num_rows;
     }
 
+    std::cout << "ywq test header schema again...." << std::endl;
+    for (const auto & column : header)
+        std::cout << column.type << ": " << column.type->getName() << std::endl;
+
     if (header)
         checkColumnSize(header.columns(), columns);
     else if (!output_names.empty())

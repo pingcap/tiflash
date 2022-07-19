@@ -514,7 +514,7 @@ struct QueryFragment
         dag_request.set_time_zone_name(properties.tz_name);
         dag_request.set_time_zone_offset(properties.tz_offset);
         dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
-
+        std::cout << "ywq test encode type: " << properties.encode_type << std::endl;
         if (is_top_fragment)
         {
             if (properties.encode_type == "chunk")

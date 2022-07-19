@@ -79,7 +79,10 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
         dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
 
     for (size_t i = 0; i < root->output_schema.size(); ++i)
+    {
+        std::cout << "ywq test add output offset:" << root->output_schema[i].first << std::endl;
         dag_request.add_output_offsets(i);
+    }
 }
 
 // traval the AST tree to build tipb::Executor recursively.
@@ -117,6 +120,35 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     root.reset();
     executor_index = 0;
     return query_tasks;
+}
+
+BlockInputStreamPtr DAGRequestBuilder::testExecute(MockDAGRequestContext & mock_context)
+{
+    MakeResOutputStream func_wrap_output_stream = [](BlockInputStreamPtr in) {
+        return in;
+    };
+    columnPrune(root);
+    // enable mpp
+    properties.is_mpp_query = true;
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+
+
+    // ywq todo bug here, output_offsets bug...
+    // for (const auto & task : query_tasks)
+    // {
+    //     initDAGRequest(*task.dag_request);
+    //     std::cout << "ywq test inited output offsets" << std::endl;
+    //     for (auto i : task.dag_request->output_offsets())
+    //     {
+    //         std::cout << i << " ";
+    //     }
+    //     std::cout << std::endl;
+    // }
+
+    auto res = executeQuery(mock_context.context, -1, properties, query_tasks, func_wrap_output_stream);
+    root.reset();
+    executor_index = 0;
+    return res;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, const MockColumnInfoVec & columns)

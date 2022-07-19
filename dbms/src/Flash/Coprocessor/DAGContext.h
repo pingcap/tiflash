@@ -166,7 +166,8 @@ public:
         // ywq test....
         // only mpp task has join executor.
         // initExecutorIdToJoinIdMap();
-        // initOutputInfo();
+        std::cout << "ywq test reach here... init output info...." << std::endl;
+        initOutputInfo();
     }
 
     // for test

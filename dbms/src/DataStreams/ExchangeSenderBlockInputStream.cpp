@@ -37,6 +37,10 @@ Block ExchangeSenderBlockInputStream::readImpl()
     }
 
     Block block = children.back()->read();
+    std::cout << "ywq test sender header....." << std::endl;
+    for (auto c : getHeader()) {
+        std::cout << c.name << ":" << c.type << std::endl;
+    }
     if (block)
     {
         total_rows += block.rows();

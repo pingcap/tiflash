@@ -82,6 +82,9 @@ QueryTasks queryPlanToQueryTasks(
     ExecutorPtr root_executor,
     size_t & executor_index,
     const Context & context);
+
+BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
+
 namespace Debug
 {
 void setServiceAddr(const std::string & addr);

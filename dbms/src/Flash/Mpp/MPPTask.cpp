@@ -123,12 +123,7 @@ void MPPTask::finishWrite()
 
 void MPPTask::run()
 {
-    // newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] { self->runImpl(); });
-    newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] {
-        std::cout << "ywq test before sleep" << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(10));
-        std::cout << "ywq test after sleep" << std::endl;
-    });
+    newThreadManager()->scheduleThenDetach(true, "MPPTask", [self = shared_from_this()] { self->runImpl(); });
 }
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
@@ -317,8 +312,8 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Failed to register MPP Task", Errors::Coprocessor::BadRequest);
     }
 
-    // mpp_task_statistics.initializeExecutorDAG(dag_context.get());
-    // mpp_task_statistics.logTracingJson();
+    mpp_task_statistics.initializeExecutorDAG(dag_context.get());
+    mpp_task_statistics.logTracingJson();
 }
 
 void MPPTask::preprocess()

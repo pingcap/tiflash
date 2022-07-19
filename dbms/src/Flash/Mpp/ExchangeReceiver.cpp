@@ -607,7 +607,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 has_data = true;
                 if (packet->has_error())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
+            
 
+                std::cout << "ywq show read packet..." << std::endl;
+                packet->PrintDebugString();
                 if (!pushPacket<enable_fine_grained_shuffle, true>(req.source_index, req_info, packet, msg_channels, log))
                 {
                     meet_error = true;
@@ -686,6 +689,9 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     for (const String * chunk : recv_msg->chunks)
     {
+        std::cout << "ywq test header schema...." << std::endl;
+        for (const auto & column : header)
+         std::cout << column.type << ": " << column.type->getName() << std::endl;
         Block block = CHBlockChunkCodec::decode(*chunk, header);
         detail.rows += block.rows();
         if (unlikely(block.rows() == 0))
