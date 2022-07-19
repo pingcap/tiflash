@@ -1070,30 +1070,31 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
             segment = segment_it->second;
         }
 
-        if (!segment->flushCache(*dm_context))
+        if (segment->flushCache(*dm_context))
         {
-            // If the flush failed, it means there are parallel updates to the segment in the background.
-            // In this case, we try again.
-            continue;
-        }
-
-        const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
-        if (new_segment)
-        {
-            const auto segment_end = new_segment->getRowKeyRange().end;
-            if (unlikely(*segment_end.value <= *start_key.value))
+            const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
+            if (new_segment)
             {
-                // The next start key must be > current start key
-                LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
-                throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
-            }
-            return new_segment->getRowKeyRange();
-        }
+                const auto segment_end = new_segment->getRowKeyRange().end;
+                if (unlikely(*segment_end.value <= *start_key.value))
+                {
+                    // The next start key must be > current start key
+                    LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
+                    throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
+                }
+                return new_segment->getRowKeyRange();
+            } // else: sleep and retry
+        } // else: sleep and retry
 
         // Typical cases:
-        // #1. The segment is abandoned (due to an update is finished)
-        // #2. The segment is updating (e.g. a split-preparation is working, which occupies a for-write snapshot).
-        // It could be possible that #2 takes seconds to finish, so let's sleep for a short time (50ms ~ 1000ms) and then retry.
+        // #1. flushCache failed
+        //    - The segment is abandoned (due to segment updated)
+        //    - There is another flush in progress (e.g. triggered in background)
+        // #2. segmentMergeDelta failed
+        //    - The segment is abandoned (due to segment updated)
+        //    - The segment is updating (e.g. a split-preparation is working, which occupies a for-write snapshot).
+        // It could be possible to take seconds to finish the segment updating, so let's sleep for a short time
+        // (50ms ~ 1000ms) and then retry.
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
         sleep_ms = std::min(sleep_ms * 2, 1000);
     }
