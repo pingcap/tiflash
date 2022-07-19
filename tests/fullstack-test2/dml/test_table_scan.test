@@ -13,378 +13,428 @@
 # limitations under the License.
 
 # TINYINT
-mysql> drop table if exists test.t
-mysql> create table test.t(pk TINYINT NOT NULL, col1 TINYINT, col2 TINYINT NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0, NULL, 0);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+----+------+------+
-| pk | col1 | col2 |
-+----+------+------+
-|  0 | NULL |    0 |
-+----+------+------+
+mysql> drop table if exists test.t_TINYINT
+mysql> create table test.t_TINYINT(pk TINYINT NOT NULL, col1 TINYINT, col2 TINYINT NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_TINYINT values(0, NULL, 0);
+mysql> alter table test.t_TINYINT set tiflash replica 1
 
 # SMALLINT
-mysql> drop table if exists test.t
-mysql> create table test.t(pk SMALLINT NOT NULL, col1 SMALLINT, col2 SMALLINT NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0, NULL, 0);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+----+------+------+
-| pk | col1 | col2 |
-+----+------+------+
-|  0 | NULL |    0 |
-+----+------+------+
+mysql> drop table if exists test.t_SMALLINT
+mysql> create table test.t_SMALLINT(pk SMALLINT NOT NULL, col1 SMALLINT, col2 SMALLINT NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_SMALLINT values(0, NULL, 0);
+mysql> alter table test.t_SMALLINT set tiflash replica 1
 
 # MEDIUMINT
-mysql> drop table if exists test.t
-mysql> create table test.t(pk MEDIUMINT NOT NULL, col1 MEDIUMINT, col2 MEDIUMINT NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0, NULL, 0);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+----+------+------+
-| pk | col1 | col2 |
-+----+------+------+
-|  0 | NULL |    0 |
-+----+------+------+
+mysql> drop table if exists test.t_MEDIUMINT
+mysql> create table test.t_MEDIUMINT(pk MEDIUMINT NOT NULL, col1 MEDIUMINT, col2 MEDIUMINT NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_MEDIUMINT values(0, NULL, 0);
+mysql> alter table test.t_MEDIUMINT set tiflash replica 1
 
 # INT
-mysql> drop table if exists test.t
-mysql> create table test.t(pk INT NOT NULL, col1 INT, col2 INT NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0, NULL, 0);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+----+------+------+
-| pk | col1 | col2 |
-+----+------+------+
-|  0 | NULL |    0 |
-+----+------+------+
+mysql> drop table if exists test.t_INT
+mysql> create table test.t_INT(pk INT NOT NULL, col1 INT, col2 INT NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_INT values(0, NULL, 0);
+mysql> alter table test.t_INT set tiflash replica 1
 
 # BIGINT
-mysql> drop table if exists test.t
-mysql> create table test.t(pk BIGINT NOT NULL, col1 BIGINT, col2 BIGINT NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0, NULL, 0);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+----+------+------+
-| pk | col1 | col2 |
-+----+------+------+
-|  0 | NULL |    0 |
-+----+------+------+
+mysql> drop table if exists test.t_BIGINT
+mysql> create table test.t_BIGINT(pk BIGINT NOT NULL, col1 BIGINT, col2 BIGINT NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_BIGINT values(0, NULL, 0);
+mysql> alter table test.t_BIGINT set tiflash replica 1
 
 # FLOAT
-mysql> drop table if exists test.t
-mysql> create table test.t(pk FLOAT NOT NULL, col1 FLOAT, col2 FLOAT NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0.0, NULL, 0.0);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+----+------+------+
-| pk | col1 | col2 |
-+----+------+------+
-|  0 | NULL |    0 |
-+----+------+------+
+mysql> drop table if exists test.t_FLOAT
+mysql> create table test.t_FLOAT(pk FLOAT NOT NULL, col1 FLOAT, col2 FLOAT NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_FLOAT values(0.0, NULL, 0.0);
+mysql> alter table test.t_FLOAT set tiflash replica 1
 
 # DOUBLE
-mysql> drop table if exists test.t
-mysql> create table test.t(pk DOUBLE NOT NULL, col1 DOUBLE, col2 DOUBLE NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0.0, NULL, 0.0);
-mysql> alter table test.t set tiflash replica 1
+mysql> drop table if exists test.t_DOUBLE
+mysql> create table test.t_DOUBLE(pk DOUBLE NOT NULL, col1 DOUBLE, col2 DOUBLE NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_DOUBLE values(0.0, NULL, 0.0);
+mysql> alter table test.t_DOUBLE set tiflash replica 1
 
-func> wait_table test t
+# DECIMAL32
+mysql> drop table if exists test.t_DECIMAL32
+mysql> create table test.t_DECIMAL32(pk decimal(9, 1) NOT NULL, col1 decimal(9, 1), col2 decimal(9, 1) NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_DECIMAL32 values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL32 set tiflash replica 1
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+# DECIMAL64
+mysql> drop table if exists test.t_DECIMAL64
+mysql> create table test.t_DECIMAL64(pk decimal(18, 1) NOT NULL, col1 decimal(18, 1), col2 decimal(18, 1) NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_DECIMAL64 values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL64 set tiflash replica 1
+
+# DECIMAL128
+mysql> drop table if exists test.t_DECIMAL128
+mysql> create table test.t_DECIMAL128(pk decimal(38, 1) NOT NULL, col1 decimal(38, 1), col2 decimal(38, 1) NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_DECIMAL128 values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL128 set tiflash replica 1
+
+# DECIMAL256
+mysql> drop table if exists test.t_DECIMAL256
+mysql> create table test.t_DECIMAL256(pk decimal(65, 1) NOT NULL, col1 decimal(65, 1), col2 decimal(65, 1) NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_DECIMAL256 values(0.1, NULL, 0.1);
+mysql> alter table test.t_DECIMAL256 set tiflash replica 1
+
+# CHAR
+mysql> drop table if exists test.t_CHAR
+mysql> create table test.t_CHAR(pk CHAR NOT NULL, col1 CHAR, col2 CHAR NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_CHAR values('a', NULL, 'b');
+mysql> alter table test.t_CHAR set tiflash replica 1
+
+# VARCHAR
+mysql> drop table if exists test.t_VARCHAR
+mysql> create table test.t_VARCHAR(pk VARCHAR(30) NOT NULL, col1 VARCHAR(30), col2 VARCHAR(30) NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_VARCHAR values('a', NULL, 'b');
+mysql> alter table test.t_VARCHAR set tiflash replica 1
+
+# BINARY
+mysql> drop table if exists test.t_BINARY
+mysql> create table test.t_BINARY(pk BINARY NOT NULL, col1 BINARY, col2 BINARY NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_BINARY values('1', NULL, '2');
+mysql> alter table test.t_BINARY set tiflash replica 1
+
+# VARBINARY
+mysql> drop table if exists test.t_VARBINARY
+mysql> create table test.t_VARBINARY(pk VARBINARY(30) NOT NULL, col1 VARBINARY(30), col2 VARBINARY(30) NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_VARBINARY values('1234', NULL, '5678');
+mysql> alter table test.t_VARBINARY set tiflash replica 1
+
+# BLOB
+mysql> drop table if exists test.t_BLOB
+mysql> create table test.t_BLOB(col1 BLOB, col2 BLOB NOT NULL);
+mysql> insert into test.t_BLOB values(NULL, '1234');
+mysql> alter table test.t_BLOB set tiflash replica 1
+
+# TEXT
+mysql> drop table if exists test.t_TEXT
+mysql> create table test.t_TEXT(col1 TEXT, col2 TEXT NOT NULL);
+mysql> insert into test.t_TEXT values(NULL, 'b');
+mysql> alter table test.t_TEXT set tiflash replica 1
+
+# ENUM
+mysql> drop table if exists test.t_ENUM
+mysql> create table test.t_ENUM(pk enum('a','b') NOT NULL, col1 enum('a','b'), col2 enum('a','b') NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_ENUM values('a', NULL, 'b');
+mysql> alter table test.t_ENUM set tiflash replica 1
+
+# SET
+mysql> drop table if exists test.t_SET
+mysql> create table test.t_SET(pk set('a','b') NOT NULL, col1 set('a','b'), col2 set('a','b') NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_SET values('a', NULL, 'b');
+mysql> alter table test.t_SET set tiflash replica 1
+
+# DATE
+mysql> drop table if exists test.t_DATE
+mysql> create table test.t_DATE(pk DATE NOT NULL, col1 DATE, col2 DATE NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_DATE values('2010-01-01', NULL, '2010-01-02');
+mysql> alter table test.t_DATE set tiflash replica 1
+
+# TIME
+mysql> drop table if exists test.t_TIME
+mysql> create table test.t_TIME(pk TIME NOT NULL, col1 TIME, col2 TIME NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_TIME values('10:00:00', NULL, '11:00:00');
+mysql> alter table test.t_TIME set tiflash replica 1
+
+# DATETIME
+mysql> drop table if exists test.t_DATETIME
+mysql> create table test.t_DATETIME(pk DATETIME NOT NULL, col1 DATETIME, col2 DATETIME NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_DATETIME values('2010-01-01 11:00:00', NULL, '2011-01-01 12:00:00');
+mysql> alter table test.t_DATETIME set tiflash replica 1
+
+# TIMESTAMP
+mysql> drop table if exists test.t_TIMESTAMP
+mysql> create table test.t_TIMESTAMP(pk TIMESTAMP NOT NULL, col1 TIMESTAMP, col2 TIMESTAMP NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_TIMESTAMP values('2010-01-01 11:00:00', NULL, '2011-01-01 12:00:00');
+mysql> alter table test.t_TIMESTAMP set tiflash replica 1
+
+# YEAR
+mysql> drop table if exists test.t_YEAR
+mysql> create table test.t_YEAR(pk YEAR NOT NULL, col1 YEAR, col2 YEAR NOT NULL, PRIMARY KEY (pk));
+mysql> insert into test.t_YEAR values('2021', NULL, '2022');
+mysql> alter table test.t_YEAR set tiflash replica 1
+
+# JSON
+mysql> drop table if exists test.t_JSON;
+mysql> create table test.t_JSON(col1 JSON, col2 JSON NOT NULL);
+mysql> insert into test.t_JSON values(NULL, '[1, 2, 3]');
+mysql> alter table test.t_JSON set tiflash replica 1
+
+# wait table
+func> wait_table test t_TINYINT
+func> wait_table test t_SMALLINT
+func> wait_table test t_MEDIUMINT
+func> wait_table test t_INT
+func> wait_table test t_BIGINT
+func> wait_table test t_FLOAT
+func> wait_table test t_DOUBLE
+func> wait_table test t_DECIMAL32
+func> wait_table test t_DECIMAL64
+func> wait_table test t_DECIMAL128
+func> wait_table test t_DECIMAL256
+func> wait_table test t_CHAR
+func> wait_table test t_VARCHAR
+func> wait_table test t_BINARY
+func> wait_table test t_VARBINARY
+func> wait_table test t_BLOB
+func> wait_table test t_TEXT
+func> wait_table test t_ENUM
+func> wait_table test t_SET
+func> wait_table test t_DATE
+func> wait_table test t_TIME
+func> wait_table test t_DATETIME
+func> wait_table test t_TIMESTAMP
+func> wait_table test t_YEAR
+func> wait_table test t_JSON
+
+# TINYINT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TINYINT;
 +----+------+------+
 | pk | col1 | col2 |
 +----+------+------+
 |  0 | NULL |    0 |
 +----+------+------+
 
+mysql> drop table if exists test.t_TINYINT
+
+# SMALLINT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_SMALLINT;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+mysql> drop table if exists test.t_SMALLINT;
+
+# MEDIUMINT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_MEDIUMINT;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+mysql> drop table if exists test.t_MEDIUMINT
+
+# INT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_INT;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+mysql> drop table if exists test.t_INT
+
+# BIGINT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_BIGINT;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+mysql> drop table if exists test.t_BIGINT
+
+# FLOAT
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_FLOAT;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+mysql> drop table if exists test.t_FLOAT
+
+# DOUBLE
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DOUBLE;
++----+------+------+
+| pk | col1 | col2 |
++----+------+------+
+|  0 | NULL |    0 |
++----+------+------+
+
+mysql> drop table if exists test.t_DOUBLE
+
 # DECIMAL32
-mysql> drop table if exists test.t
-mysql> create table test.t(pk decimal(9, 1) NOT NULL, col1 decimal(9, 1), col2 decimal(9, 1) NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0.1, NULL, 0.1);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL32;
 +-----+------+------+
 | pk  | col1 | col2 |
 +-----+------+------+
 | 0.1 | NULL |  0.1 |
 +-----+------+------+
+
+mysql> drop table if exists test.t_DECIMAL32
 
 # DECIMAL64
-mysql> drop table if exists test.t
-mysql> create table test.t(pk decimal(18, 1) NOT NULL, col1 decimal(18, 1), col2 decimal(18, 1) NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0.1, NULL, 0.1);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL64;
 +-----+------+------+
 | pk  | col1 | col2 |
 +-----+------+------+
 | 0.1 | NULL |  0.1 |
 +-----+------+------+
+
+mysql> drop table if exists test.t_DECIMAL64
 
 # DECIMAL128
-mysql> drop table if exists test.t
-mysql> create table test.t(pk decimal(38, 1) NOT NULL, col1 decimal(38, 1), col2 decimal(38, 1) NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0.1, NULL, 0.1);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL128;
 +-----+------+------+
 | pk  | col1 | col2 |
 +-----+------+------+
 | 0.1 | NULL |  0.1 |
 +-----+------+------+
+
+mysql> drop table if exists test.t_DECIMAL128
 
 # DECIMAL256
-mysql> drop table if exists test.t
-mysql> create table test.t(pk decimal(65, 1) NOT NULL, col1 decimal(65, 1), col2 decimal(65, 1) NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values(0.1, NULL, 0.1);
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DECIMAL256;
 +-----+------+------+
 | pk  | col1 | col2 |
 +-----+------+------+
 | 0.1 | NULL |  0.1 |
 +-----+------+------+
 
+mysql> drop table if exists test.t_DECIMAL256
+
 # CHAR
-mysql> drop table if exists test.t
-mysql> create table test.t(pk CHAR NOT NULL, col1 CHAR, col2 CHAR NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('a', NULL, 'b');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_CHAR;
 +----+------+------+
 | pk | col1 | col2 |
 +----+------+------+
 | a  | NULL | b    |
 +----+------+------+
+
+mysql> drop table if exists test.t_CHAR
 
 # VARCHAR
-mysql> drop table if exists test.t
-mysql> create table test.t(pk VARCHAR(30) NOT NULL, col1 VARCHAR(30), col2 VARCHAR(30) NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('a', NULL, 'b');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_VARCHAR;
 +----+------+------+
 | pk | col1 | col2 |
 +----+------+------+
 | a  | NULL | b    |
 +----+------+------+
 
+mysql> drop table if exists test.t_VARCHAR
+
 # BINARY
-mysql> drop table if exists test.t
-mysql> create table test.t(pk BINARY NOT NULL, col1 BINARY, col2 BINARY NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('1', NULL, '2');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_BINARY;
 +----+------+------+
 | pk | col1 | col2 |
 +----+------+------+
 |  1 | NULL |    2 |
 +----+------+------+
 
+mysql> drop table if exists test.t_BINARY
+
 # VARBINARY
-mysql> drop table if exists test.t
-mysql> create table test.t(pk VARBINARY(30) NOT NULL, col1 VARBINARY(30), col2 VARBINARY(30) NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('1234', NULL, '5678');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_VARBINARY;
 +------+------+------+
 | pk   | col1 | col2 |
 +------+------+------+
 | 1234 | NULL | 5678 |
 +------+------+------+
 
+mysql> drop table if exists test.t_VARBINARY
+
 # BLOB
-mysql> drop table if exists test.t
-mysql> create table test.t(col1 BLOB, col2 BLOB NOT NULL);
-mysql> insert into test.t values(NULL, '1234');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_BLOB;
 +------+------+
 | col1 | col2 |
 +------+------+
 | NULL | 1234 |
 +------+------+
 
+mysql> drop table if exists test.t_BLOB
+
 # TEXT
-mysql> drop table if exists test.t
-mysql> create table test.t(col1 TEXT, col2 TEXT NOT NULL);
-mysql> insert into test.t values(NULL, 'b');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TEXT;
 +------+------+
 | col1 | col2 |
 +------+------+
 | NULL | b    |
 +------+------+
 
+mysql> drop table if exists test.t_TEXT
+
 # ENUM
-mysql> drop table if exists test.t
-mysql> create table test.t(pk enum('a','b') NOT NULL, col1 enum('a','b'), col2 enum('a','b') NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('a', NULL, 'b');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_ENUM;
 +----+------+------+
 | pk | col1 | col2 |
 +----+------+------+
 | a  | NULL | b    |
 +----+------+------+
+
+mysql> drop table if exists test.t_ENUM
 
 # SET
-mysql> drop table if exists test.t
-mysql> create table test.t(pk set('a','b') NOT NULL, col1 set('a','b'), col2 set('a','b') NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('a', NULL, 'b');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_SET;
 +----+------+------+
 | pk | col1 | col2 |
 +----+------+------+
 | a  | NULL | b    |
 +----+------+------+
 
+mysql> drop table if exists test.t_SET
+
 # DATE
-mysql> drop table if exists test.t
-mysql> create table test.t(pk DATE NOT NULL, col1 DATE, col2 DATE NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('2010-01-01', NULL, '2010-01-02');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DATE;
 +------------+------+------------+
 | pk         | col1 | col2       |
 +------------+------+------------+
 | 2010-01-01 | NULL | 2010-01-02 |
 +------------+------+------------+
 
+mysql> drop table if exists test.t_DATE
+
 # TIME
-mysql> drop table if exists test.t
-mysql> create table test.t(pk TIME NOT NULL, col1 TIME, col2 TIME NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('10:00:00', NULL, '11:00:00');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TIME;
 +----------+------+----------+
 | pk       | col1 | col2     |
 +----------+------+----------+
 | 10:00:00 | NULL | 11:00:00 |
 +----------+------+----------+
 
+mysql> drop table if exists test.t_TIME
+
 # DATETIME
-mysql> drop table if exists test.t
-mysql> create table test.t(pk DATETIME NOT NULL, col1 DATETIME, col2 DATETIME NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('2010-01-01 11:00:00', NULL, '2011-01-01 12:00:00');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_DATETIME;
 +---------------------+------+---------------------+
 | pk                  | col1 | col2                |
 +---------------------+------+---------------------+
 | 2010-01-01 11:00:00 | NULL | 2011-01-01 12:00:00 |
 +---------------------+------+---------------------+
+
+mysql> drop table if exists test.t_DATETIME
 
 # TIMESTAMP
-mysql> drop table if exists test.t
-mysql> create table test.t(pk TIMESTAMP NOT NULL, col1 TIMESTAMP, col2 TIMESTAMP NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('2010-01-01 11:00:00', NULL, '2011-01-01 12:00:00');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_TIMESTAMP;
 +---------------------+------+---------------------+
 | pk                  | col1 | col2                |
 +---------------------+------+---------------------+
 | 2010-01-01 11:00:00 | NULL | 2011-01-01 12:00:00 |
 +---------------------+------+---------------------+
 
+mysql> drop table if exists test.t_TIMESTAMP
+
 # YEAR
-mysql> drop table if exists test.t
-mysql> create table test.t(pk YEAR NOT NULL, col1 YEAR, col2 YEAR NOT NULL, PRIMARY KEY (pk));
-mysql> insert into test.t values('2021', NULL, '2022');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_YEAR;
 +------+------+------+
 | pk   | col1 | col2 |
 +------+------+------+
 | 2021 | NULL | 2022 |
 +------+------+------+
 
+mysql> drop table if exists test.t_YEAR
+
 # JSON
-mysql> drop table if exists test.t;
-mysql> create table test.t(col1 JSON, col2 JSON NOT NULL);
-mysql> insert into test.t values(NULL, '[1, 2, 3]');
-mysql> alter table test.t set tiflash replica 1
-
-func> wait_table test t
-
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_JSON;
 +------+-----------+
 | col1 | col2      |
 +------+-----------+
 | NULL | [1, 2, 3] |
 +------+-----------+
 
-mysql> drop table if exists test.t;
+mysql> drop table if exists test.t_JSON;
