@@ -205,8 +205,13 @@ namespace DB
         F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                         \
         F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))                                                         \
     M(tiflash_task_scheduler_waiting_duration_seconds, "Bucketed histogram of task waiting for scheduling duration", Histogram,           \
-        F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets{0.001, 2, 20}))
-
+        F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets{0.001, 2, 20}))                           \
+    M(tiflash_storage_read_thread_counter, "The counter of storage read thread", Counter,                                                 \
+        F(type_sche_empty, {"type", "sche_empty"}),                                                                                       \
+        F(type_sche_no_free, {"type", "sche_no_free"}),                                                                                   \
+        F(type_sche_one_task, {"type", "sche_one_task"}))                                                                                 \
+    M(tiflash_storage_read_thread_gauge, "The gauge of storage read thread", Gauge,                                                       \
+        F(type_merged_task, {"type", "merged_task"}))
 // clang-format on
 
 struct ExpBuckets

@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
-
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-
-namespace CurrentMetrics
-{
-extern const Metric RT_MergedTaskCount;
-}
 
 namespace DB::DM
 {
@@ -42,12 +37,12 @@ public:
         , log(&Poco::Logger::get("MergedTask"))
     {
         passive_merged_segments.fetch_add(pools.size() - 1, std::memory_order_relaxed);
-        CurrentMetrics::add(CurrentMetrics::RT_MergedTaskCount);
+        GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Increment();
     }
     ~MergedTask()
     {
         passive_merged_segments.fetch_sub(pools.size() - 1, std::memory_order_relaxed);
-        CurrentMetrics::sub(CurrentMetrics::RT_MergedTaskCount);
+        GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Decrement();
     }
 
     int readBlock();
