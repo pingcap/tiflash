@@ -76,6 +76,7 @@ std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
     }
 
     std::vector<SegmentReadTaskPtr> tasks;
+    tasks.reserve(pools.size());
     for (auto & pool : pools)
     {
         tasks.push_back(pool->getTask(segment->first));
