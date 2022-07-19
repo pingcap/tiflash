@@ -14,6 +14,7 @@
 #pragma once
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Common/Stopwatch.h>
 
 namespace DB::DM
 {
@@ -43,6 +44,7 @@ public:
     {
         passive_merged_segments.fetch_sub(pools.size() - 1, std::memory_order_relaxed);
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Decrement();
+        GET_METRIC(tiflash_storage_read_thread_seconds, type_merged_task).Observe(sw.elapsedSeconds());
     }
 
     int readBlock();
@@ -114,7 +116,7 @@ private:
     int cur_idx;
     size_t finished_count;
     Poco::Logger * log;
-
+    Stopwatch sw;
     inline static std::atomic<int64_t> passive_merged_segments{0};
 };
 

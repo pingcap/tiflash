@@ -15,6 +15,7 @@
 
 #include <Columns/IColumn.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 
@@ -47,6 +48,7 @@ public:
 
     void add(size_t start_pack_id, size_t pack_count, ColumnPtr & col_data)
     {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_succ).Increment();
         std::lock_guard lock(mtx);
         auto & value = packs[start_pack_id];
         if (value.pack_count < pack_count)
@@ -63,19 +65,23 @@ public:
         auto target = packs.find(start_pack_id);
         if (target == packs.end())
         {
+            GET_METRIC(tiflash_storage_read_thread_counter, type_get_cache_miss).Increment();
             status = ColumnCacheStatus::GET_MISS;
         }
         else if (target->second.pack_count < pack_count)
         {
+            GET_METRIC(tiflash_storage_read_thread_counter, type_get_cache_part).Increment();
             status = ColumnCacheStatus::GET_PART;
         }
         else if (target->second.pack_count == pack_count)
         {
+            GET_METRIC(tiflash_storage_read_thread_counter, type_get_cache_hit).Increment();
             status = ColumnCacheStatus::GET_HIT;
             col_data = target->second.col_data;
         }
         else
         {
+            GET_METRIC(tiflash_storage_read_thread_counter, type_get_cache_copy).Increment();
             status = ColumnCacheStatus::GET_COPY;
             auto column = data_type->createColumn();
             column->insertRangeFrom(*(target->second.col_data), 0, read_rows);
@@ -134,6 +140,7 @@ public:
     // `addStale` just do some statistics.
     void addStale()
     {
+        GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_stale).Increment();
         stats[static_cast<int>(ColumnCacheStatus::ADD_STALE)].fetch_add(1, std::memory_order_relaxed);
     }
 
