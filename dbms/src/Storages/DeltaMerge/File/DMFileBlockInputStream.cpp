@@ -17,7 +17,7 @@
 
 namespace DB::DM
 {
-DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & context)
+DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & context, bool * need_column_cache)
     : file_provider(context.getFileProvider())
     , read_limiter(context.getReadLimiter())
 {
@@ -26,6 +26,10 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setCaches(global_context.getMarkCache(), global_context.getMinMaxIndexCache());
     // init from settings
     setFromSettings(context.getSettingsRef());
+    if (need_column_cache)
+    {
+        need_update_column_cache = *need_column_cache;
+    }
 }
 
 DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr & dmfile, const ColumnDefines & read_columns, const RowKeyRanges & rowkey_ranges)
@@ -72,7 +76,8 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         read_limiter,
         rows_threshold_per_read,
         read_one_pack_every_time,
-        tracing_id);
+        tracing_id,
+        need_update_column_cache);
 
     return std::make_shared<DMFileBlockInputStream>(std::move(reader));
 }

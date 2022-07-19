@@ -90,7 +90,8 @@ public:
         const ReadLimiterPtr & read_limiter,
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
-        const String & tracing_id_);
+        const String & tracing_id_,
+        bool need_update_column_cache = true);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -143,6 +144,8 @@ private:
     FileProviderPtr file_provider;
 
     LoggerPtr log;
+    // In scenarios where place index is not needed, there is no need to insert column cache when read stable data.
+    bool need_update_column_cache = true;
 };
 
 } // namespace DM

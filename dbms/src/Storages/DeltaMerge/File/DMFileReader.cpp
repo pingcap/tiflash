@@ -223,7 +223,8 @@ DMFileReader::DMFileReader(
     const ReadLimiterPtr & read_limiter,
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
-    const String & tracing_id_)
+    const String & tracing_id_,
+    bool need_update_column_cache)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
@@ -239,6 +240,7 @@ DMFileReader::DMFileReader(
     , rows_threshold_per_read(rows_threshold_per_read_)
     , file_provider(file_provider_)
     , log(Logger::get("DMFileReader", tracing_id_))
+    , need_update_column_cache(need_update_column_cache)
 {
     for (const auto & cd : read_columns)
     {
@@ -425,11 +427,14 @@ Block DMFileReader::read()
                             }
                         }
                         ColumnPtr result_column = std::move(column);
-                        size_t rows_offset = 0;
-                        for (size_t cursor = start_pack_id; cursor < start_pack_id + read_packs; cursor++)
+                        if (need_update_column_cache)
                         {
-                            column_cache->tryPutColumn(cursor, cd.id, result_column, rows_offset, pack_stats[cursor].rows);
-                            rows_offset += pack_stats[cursor].rows;
+                            size_t rows_offset = 0;
+                            for (size_t cursor = start_pack_id; cursor < start_pack_id + read_packs; cursor++)
+                            {
+                                column_cache->tryPutColumn(cursor, cd.id, result_column, rows_offset, pack_stats[cursor].rows);
+                                rows_offset += pack_stats[cursor].rows;
+                            }
                         }
                         // Cast column's data from DataType in disk to what we need now
                         auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(result_column), cd);

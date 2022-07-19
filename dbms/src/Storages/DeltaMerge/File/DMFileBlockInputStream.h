@@ -58,7 +58,7 @@ public:
     // - current settings from this context
     // - current read limiter form this context
     // - current file provider from this context
-    explicit DMFileBlockInputStreamBuilder(const Context & context);
+    explicit DMFileBlockInputStreamBuilder(const Context & context, bool * need_column_cache = nullptr);
 
     // Build the final stream ptr.
     // Should not use the builder again after `build` is called.
@@ -148,6 +148,8 @@ private:
     MinMaxIndexCachePtr index_cache;
     // column cache
     bool enable_column_cache = false;
+    // In scenarios where place index is not needed, there is no need to insert column cache when read stable data.
+    bool need_update_column_cache = true;
     ColumnCachePtr column_cache;
     ReadLimiterPtr read_limiter;
     size_t aio_threshold;

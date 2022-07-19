@@ -328,14 +328,15 @@ StableValueSpace::Snapshot::getInputStream(
     const RSOperatorPtr & filter,
     UInt64 max_data_version,
     size_t expected_block_size,
-    bool enable_clean_read)
+    bool enable_clean_read,
+    bool need_update_column_cache)
 {
     LOG_FMT_DEBUG(log, "max_data_version: {}, enable_clean_read: {}", max_data_version, enable_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)
     {
-        DMFileBlockInputStreamBuilder builder(context.db_context);
+        DMFileBlockInputStreamBuilder builder(context.db_context, &need_update_column_cache);
         builder
             .enableCleanRead(enable_clean_read, max_data_version)
             .setRSOperator(filter)
