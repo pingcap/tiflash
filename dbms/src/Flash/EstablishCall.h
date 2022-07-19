@@ -85,7 +85,7 @@ private:
     void finishTunnelAndResponder();
 
     // will try to call async_sender's consumerFinish if needed
-    void setFinishState();
+    void setFinishState(const String & msg);
 
     void responderFinish(const grpc::Status & status);
 
