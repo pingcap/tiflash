@@ -243,8 +243,8 @@ try
 
     /// Min function tests
 
-    agg_func0 = Min(col(col_name[0])); /// select min(age) from clerk group by country order by min(age) DESC limit 100;
-    agg_func1 = Min(col(col_name[3])); /// select min(salary) from clerk group by country, gender order by min(salary) DESC limit 100;
+    agg_func0 = Min(col(col_name[0])); /// select min(age) from clerk group by country;
+    agg_func1 = Min(col(col_name[3])); /// select min(salary) from clerk group by country, gender;
 
     expect_cols = {
         {toNullableVec<Int32>("min(age)", ColumnWithNullableInt32{30, 25, 22, {}})},
@@ -267,8 +267,8 @@ try
 {
     /// Prepare some data
     std::shared_ptr<tipb::DAGRequest> request;
-    auto agg_func0 = Count(col(col_name[0])); /// select count(age) from clerk group by country order by count(age) DESC limit 100;
-    auto agg_func1 = Count(col(col_name[1])); /// select count(gender) from clerk group by country, gender order by count(gender) DESC limit 100;
+    auto agg_func0 = Count(col(col_name[0])); /// select count(age) from clerk group by country;
+    auto agg_func1 = Count(col(col_name[1])); /// select count(gender) from clerk group by country, gender;
     std::vector<MockAstVec> agg_funcs = {{agg_func0}, {agg_func1}};
 
     auto group_by_expr0 = col(col_name[2]);
