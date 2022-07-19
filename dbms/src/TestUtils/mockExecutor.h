@@ -180,8 +180,8 @@ MockWindowFrame buildDefaultRowsFrame();
 // Aggregation functions
 #define Max(expr) makeASTFunction("max", (expr))
 #define Min(expr) makeASTFunction("min", (expr))
-#define Sum(expr) makeASTFunction("sum", (expr))
 #define Count(expr) makeASTFunction("count", (expr))
+#define Sum(expr) makeASTFunction("sum", (expr))
 
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
