@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Common/Stopwatch.h>
 
 namespace DB::DM
 {
