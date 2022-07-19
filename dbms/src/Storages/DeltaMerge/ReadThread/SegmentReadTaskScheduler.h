@@ -7,7 +7,6 @@
 #include <memory>
 namespace DB::DM
 {
-
 using SegmentReadTaskPoolList = CircularScanList<SegmentReadTaskPool>;
 
 // SegmentReadTaskScheduler is a global singleton.

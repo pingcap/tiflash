@@ -38,9 +38,14 @@ public:
     {
         return t.get_id();
     }
+
 private:
     void setCPUAffinity()
     {
+        if (cpus.empty())
+        {
+            return;
+        }
 #ifdef __linux__
         cpu_set_t cpu_set;
         CPU_ZERO(&cpu_set);
@@ -179,20 +184,18 @@ std::vector<std::thread::id> SegmentReaderPool::getReaderIds() const
 
 SegmentReaderPoolManager::SegmentReaderPoolManager()
     : log(&Poco::Logger::get("SegmentReaderPoolManager"))
-{
-    init();
-}
+{}
 
 SegmentReaderPoolManager::~SegmentReaderPoolManager() = default;
 
-void SegmentReaderPoolManager::init()
+void SegmentReaderPoolManager::init(const ServerInfo & server_info)
 {
-    auto numa_nodes = getNumaNodes();
-    int threads_per_node = numa_nodes.front().size();
-    LOG_FMT_INFO(log, "threads_per_node {} numa_nodes {}", threads_per_node, numa_nodes.size());
+    auto numa_nodes = getNumaNodes(log);
+    LOG_FMT_INFO(log, "numa_nodes {} => {}", numa_nodes.size(), numa_nodes);
     for (const auto & node : numa_nodes)
     {
-        reader_pools.push_back(std::make_unique<SegmentReaderPool>(threads_per_node, node));
+        int thread_count = node.empty() ? server_info.cpu_info.logical_cores : node.size();
+        reader_pools.push_back(std::make_unique<SegmentReaderPool>(thread_count, node));
         auto ids = reader_pools.back()->getReaderIds();
         reader_ids.insert(ids.begin(), ids.end());
     }

@@ -1340,7 +1340,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_FMT_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
-    DM::SegmentReaderPoolManager::instance();
+    DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
     DM::DMFileReaderPool::instance();
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <common/logger_useful.h>
@@ -24,6 +25,7 @@ public:
 
     void addTask(MergedTaskPtr && task);
     std::vector<std::thread::id> getReaderIds() const;
+
 private:
     void init(int thread_count, const std::vector<int> & cpus);
 
@@ -45,7 +47,7 @@ public:
         static SegmentReaderPoolManager pool_manager;
         return pool_manager;
     }
-
+    void init(const ServerInfo & server_info);
     ~SegmentReaderPoolManager();
     SegmentReaderPoolManager(const SegmentReaderPoolManager &) = delete;
     SegmentReaderPoolManager & operator=(const SegmentReaderPoolManager &) = delete;
@@ -54,10 +56,9 @@ public:
 
     void addTask(MergedTaskPtr && task);
     bool isSegmentReader() const;
+
 private:
     SegmentReaderPoolManager();
-    void init();
-
     std::vector<std::unique_ptr<SegmentReaderPool>> reader_pools;
     std::unordered_set<std::thread::id> reader_ids;
     Poco::Logger * log;

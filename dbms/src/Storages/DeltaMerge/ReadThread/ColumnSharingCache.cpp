@@ -3,7 +3,6 @@
 
 namespace DB::DM
 {
-
 DMFileReaderPool & DMFileReaderPool::instance()
 {
     static DMFileReaderPool reader_pool;

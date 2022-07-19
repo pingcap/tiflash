@@ -2,7 +2,6 @@
 
 namespace DB::DM
 {
-
 int MergedTask::readBlock()
 {
     initOnce();
