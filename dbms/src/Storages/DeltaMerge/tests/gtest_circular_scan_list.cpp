@@ -37,7 +37,7 @@ private:
     bool v;
 };
 
-TEST(CircularScanList_test, Normal)
+TEST(CircularScanListTest, Normal)
 {
     CircularScanList<Node> lst;
 
@@ -103,7 +103,7 @@ TEST(CircularScanList_test, Normal)
     ASSERT_EQ(lst.next(), nullptr);
 }
 
-TEST(CircularScanList_test, valid)
+TEST(CircularScanListTest, valid)
 {
     CircularScanList<Node> l;
     l.add(std::make_shared<Node>(1));

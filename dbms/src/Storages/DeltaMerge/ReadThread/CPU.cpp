@@ -10,7 +10,7 @@
 
 namespace DB::DM
 {
-// In Linux a numa node is represented by a device directory, such as '/sys/devices/system/node/node0', ''/sys/devices/system/node/node01'.
+// In Linux a numa node is represented by a device directory, such as '/sys/devices/system/node/node0', '/sys/devices/system/node/node01'.
 static inline bool isNodeDir(const std::string & name)
 {
     return name.size() > 4 && name.substr(0, 4) == "node" && std::all_of(name.begin() + 4, name.end(), [](unsigned char c) { return std::isdigit(c); });
