@@ -303,7 +303,8 @@ try
 }
 CATCH
 
-// TODO more aggregation functions...
+// TODO support more type of min, max, count.
+//      support more aggregation functions: sum, forst_row, group_concat
 
 } // namespace tests
 } // namespace DB
