@@ -406,6 +406,12 @@ public:
     // Those paths are generated from the first path of `latest_path_infos` and `prefix`
     PSDiskDelegatorPtr getPSDiskDelegatorSingle(const String & prefix) { return std::make_shared<PSDiskDelegatorSingle>(*this, prefix); }
 
+    bool createPSV2DeleteMarkFile();
+
+    bool isPSV2Deleted() const;
+
+    void clearPSV2ObsoleteData();
+
     void rename(const String & new_database, const String & new_table, bool clean_rename);
 
     void drop(bool recursive, bool must_success = true);
@@ -414,6 +420,8 @@ private:
     String getStorePath(const String & extra_path_root, const String & database_name, const String & table_name) const;
 
     void renamePath(const String & old_path, const String & new_path);
+
+    String getPSV2DeleteMarkFilePath() const;
 
 private:
     using DMFilePathMap = std::unordered_map<UInt64, UInt32>;
