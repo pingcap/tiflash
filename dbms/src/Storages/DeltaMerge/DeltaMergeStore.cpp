@@ -982,6 +982,8 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
 bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed)
 {
+    size_t sleep_ms = 5;
+
     RowKeyRange cur_range = range;
     while (!cur_range.none())
     {
@@ -1005,7 +1007,6 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             }
             segment_range = segment->getRowKeyRange();
 
-            // Flush could fail.
             if (segment->flushCache(*dm_context))
             {
                 break;
@@ -1014,6 +1015,13 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             {
                 return false;
             }
+
+            // Flush could fail. Typical cases:
+            // #1. The segment is abandoned (due to an update is finished)
+            // #2. There is another flush in progress, for example, triggered in background
+            // Let's sleep 5ms ~ 100ms and then retry flush again.
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+            sleep_ms = std::min(sleep_ms * 2, 200);
         }
 
         cur_range.setStart(segment_range.end);
@@ -1047,6 +1055,8 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
     auto dm_context = newDMContext(context, context.getSettingsRef(),
                                    /*tracing_id*/ fmt::format("mergeDeltaBySegment_{}", latest_gc_safe_point.load(std::memory_order_relaxed)));
 
+    size_t sleep_ms = 50;
+
     while (true)
     {
         SegmentPtr segment;
@@ -1072,6 +1082,13 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
             }
             return new_segment->getRowKeyRange();
         }
+
+        // Typical cases:
+        // #1. The segment is abandoned (due to an update is finished)
+        // #2. The segment is updating (e.g. a split-preparation is working, which occupies a for-write snapshot).
+        // It could be possible that #2 takes seconds to finish, so let's sleep for a short time (50ms ~ 1000ms) and then retry.
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+        sleep_ms = std::min(sleep_ms * 2, 1000);
     }
 }
 
