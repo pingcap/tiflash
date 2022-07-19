@@ -84,6 +84,7 @@ private:
 
     void finishTunnelAndResponder();
 
+    void setFinishStatus();
     void responderFinish(const grpc::Status & status);
 
     std::mutex mu;
