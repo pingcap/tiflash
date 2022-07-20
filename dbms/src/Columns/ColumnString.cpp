@@ -336,9 +336,10 @@ struct ColumnString::lessWithCollation
     {
         int res = collator.compare(
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(lhs)]),
-            parent.sizeAt(lhs),
+            parent.sizeAt(lhs) - 1, // Skip last zero byte.
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(rhs)]),
-            parent.sizeAt(rhs));
+            parent.sizeAt(rhs) - 1 // Skip last zero byte.
+        );
 
         return positive ? (res < 0) : (res > 0);
     }

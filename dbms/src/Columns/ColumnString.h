@@ -246,7 +246,8 @@ public:
         size_t offset = offsetAt(n);
         if (collator != nullptr)
         {
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
+            // Skip last zero byte.
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
             string_size = sort_key.size;
             hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
             hash.update(sort_key.data, sort_key.size);
@@ -267,7 +268,8 @@ public:
                 size_t string_size = sizeAt(i);
                 size_t offset = offsetAt(i);
 
-                auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
+                /// Skip last zero byte.
+                auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
                 string_size = sort_key.size;
                 hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
                 hash_values[i].update(sort_key.data, sort_key.size);
