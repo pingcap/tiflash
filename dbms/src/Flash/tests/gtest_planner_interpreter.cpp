@@ -38,6 +38,51 @@ public:
     }
 };
 
+TEST_F(PlannerInterpreterExecuteTest, StrangeQuery)
+try
+{
+    auto request = context.scan("test_db", "test_table_1")
+                       .filter(eq(col("s2"), col("s3")))
+                       .filter(eq(col("s1"), col("s3")))
+                       .filter(eq(col("s1"), col("s2")))
+                       .build(context);
+    {
+        String expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+                  .limit(10)
+                  .limit(9)
+                  .limit(8)
+                  .build(context);
+    {
+        String expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+                  .topN("s3", false, 10)
+                  .topN("s2", false, 9)
+                  .topN("s1", false, 8)
+                  .build(context);
+    {
+        String expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+
+    request = context.scan("test_db", "test_table_1")
+                  .topN("s3", false, 10)
+                  .topN("s2", false, 9)
+                  .topN("s1", false, 8)
+                  .build(context);
+    {
+        String expected = R"()";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
+    }
+}
+CATCH
+
 TEST_F(PlannerInterpreterExecuteTest, SingleQueryBlock)
 try
 {

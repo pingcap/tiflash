@@ -34,23 +34,7 @@ BlockIO Planner::execute()
 {
     DAGPipeline pipeline;
     executeImpl(pipeline);
-    /// add union to run in parallel if needed
-    if (unlikely(dagContext().isTest()))
-        executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for test");
-    else if (dagContext().isMPPTask())
-        /// MPPTask do not need the returned blocks.
-        executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for mpp");
-    else
-        executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for non mpp");
-    if (dagContext().hasSubquery())
-    {
-        const Settings & settings = context.getSettingsRef();
-        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
-            pipeline.firstStream(),
-            std::move(dagContext().moveSubqueries()),
-            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            log->identifier());
-    }
+    executeCreatingSets(pipeline, context, max_streams, log);
     BlockIO res;
     res.in = pipeline.firstStream();
     return res;
