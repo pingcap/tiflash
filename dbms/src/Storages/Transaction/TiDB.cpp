@@ -240,7 +240,7 @@ DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
 Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
-    auto collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
+    const auto * collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     if (!collator)
         // todo if new collation is enabled, should use "utf8mb4_bin"
         collator = ITiDBCollator::getCollator("binary");
@@ -257,7 +257,7 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 
 UInt64 ColumnInfo::getSetValue(const String & set_str) const
 {
-    auto collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
+    const auto * collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     if (!collator)
         // todo if new collation is enabled, should use "utf8mb4_bin"
         collator = ITiDBCollator::getCollator("binary");

@@ -17,8 +17,9 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <Functions/CollationOperatorOptimized.h>
 #include <fmt/core.h>
+
 
 /// Used in the `reserve` method, when the number of rows is known, but sizes of elements are not.
 #define APPROX_STRING_SIZE 64
@@ -419,54 +420,73 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
     if (hash.getData().size() != s)
         throw Exception(fmt::format("Size of WeakHash32 does not match size of column: column size is {}, hash size is {}", s, hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
 
-    const UInt8 * pos = chars.data();
     UInt32 * hash_data = hash.getData().data();
-    Offset prev_offset = 0;
 
     if (collator != nullptr)
     {
-        if (collator->canUseFastPath())
+        if (collator->getCollatorId() == TiDB::ITiDBCollator::UTF8MB4_BIN)
         {
-            for (const auto & offset : offsets)
-            {
-                auto str_size = offset - prev_offset;
-
-                // Skip last zero byte.
-                auto sort_key = collator->fastPathSortKey(reinterpret_cast<const char *>(pos), str_size - 1);
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
+                auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
                 *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
-
-                pos += str_size;
-                prev_offset = offset;
                 ++hash_data;
-            }
+            });
         }
         else
         {
-            for (const auto & offset : offsets)
-            {
-                auto str_size = offset - prev_offset;
-
-                // Skip last zero byte.
-                auto sort_key = collator->sortKeyIndirect(reinterpret_cast<const char *>(pos), str_size - 1, sort_key_container);
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
+                auto sort_key = collator->sortKey(view.data(), view.size(), sort_key_container);
                 *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
-
-                pos += str_size;
-                prev_offset = offset;
                 ++hash_data;
-            }
+            });
         }
     }
     else
     {
-        for (const auto & offset : offsets)
-        {
-            auto str_size = offset - prev_offset;
-            // Skip last zero byte.
-            *hash_data = ::updateWeakHash32(pos, str_size - 1, *hash_data);
-
-            pos += str_size;
-            prev_offset = offset;
+        // Skip last zero byte.
+        LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
+            *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(view.data()), view.size(), *hash_data);
             ++hash_data;
+        });
+    }
+}
+
+void ColumnString::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const
+{
+    if (collator != nullptr)
+    {
+        if (collator->getCollatorId() == TiDB::ITiDBCollator::UTF8MB4_BIN)
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&hash_values](const std::string_view & view, size_t i) {
+                auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
+                size_t string_size = sort_key.size;
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(sort_key.data, sort_key.size);
+            });
+        }
+        else
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t i) {
+                auto sort_key = collator->sortKey(view.data(), view.size(), sort_key_container);
+                size_t string_size = sort_key.size;
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(sort_key.data, sort_key.size);
+            });
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            size_t string_size = sizeAt(i);
+            size_t offset = offsetAt(i);
+
+            hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+            hash_values[i].update(reinterpret_cast<const char *>(&chars[offset]), string_size);
         }
     }
 }

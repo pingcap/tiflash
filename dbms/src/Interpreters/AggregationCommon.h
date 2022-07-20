@@ -20,7 +20,6 @@
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
-#include <Storages/Transaction/Collator.h>
 
 #include <array>
 

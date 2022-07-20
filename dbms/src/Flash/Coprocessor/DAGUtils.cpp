@@ -1329,7 +1329,7 @@ SortDescription getSortDescription(const std::vector<NameAndTypePair> & order_co
         if (removeNullable(order_columns[i].type)->isString())
             collator = getCollatorFromExpr(by_items[i].expr());
 
-        order_descr.emplace_back(name, direction, nulls_direction, collator.inner.ptr);
+        order_descr.emplace_back(name, direction, nulls_direction, collator);
     }
     return order_descr;
 }

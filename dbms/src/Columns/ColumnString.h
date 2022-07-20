@@ -19,7 +19,6 @@
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
-#include <Storages/Transaction/Collator.h>
 #include <string.h>
 
 
@@ -245,7 +244,7 @@ public:
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
-        if (collator)
+        if (collator != nullptr)
         {
             // Skip last zero byte.
             auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
@@ -260,51 +259,7 @@ public:
         }
     }
 
-    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
-    {
-        if (collator != nullptr)
-        {
-            if (collator->canUseFastPath())
-            {
-                for (size_t i = 0; i < offsets.size(); ++i)
-                {
-                    size_t string_size = sizeAt(i);
-                    size_t offset = offsetAt(i);
-
-                    // Skip last zero byte.
-                    auto sort_key = collator->fastPathSortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1);
-                    string_size = sort_key.size;
-                    hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-                    hash_values[i].update(sort_key.data, sort_key.size);
-                }
-            }
-            else
-            {
-                for (size_t i = 0; i < offsets.size(); ++i)
-                {
-                    size_t string_size = sizeAt(i);
-                    size_t offset = offsetAt(i);
-
-                    // Skip last zero byte.
-                    auto sort_key = collator->sortKeyIndirect(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
-                    string_size = sort_key.size;
-                    hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-                    hash_values[i].update(sort_key.data, sort_key.size);
-                }
-            }
-        }
-        else
-        {
-            for (size_t i = 0; i < offsets.size(); ++i)
-            {
-                size_t string_size = sizeAt(i);
-                size_t offset = offsetAt(i);
-
-                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-                hash_values[i].update(reinterpret_cast<const char *>(&chars[offset]), string_size);
-            }
-        }
-    }
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 

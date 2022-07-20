@@ -13,12 +13,11 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Functions/CollationOperatorOptimized.h>
 #include <Poco/String.h>
 #include <Storages/Transaction/Collator.h>
+#include <Storages/Transaction/CollatorUtils.h>
 
 #include <array>
-#include <unordered_map>
 
 namespace DB::ErrorCodes
 {

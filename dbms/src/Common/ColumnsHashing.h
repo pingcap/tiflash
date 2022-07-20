@@ -99,7 +99,7 @@ struct HashMethodString
     HashMethodString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
-        const auto & column_string = assert_cast<const ColumnString &>(column);
+        const ColumnString & column_string = assert_cast<const ColumnString &>(column);
         offsets = column_string.getOffsets().data();
         chars = column_string.getChars().data();
         if (!collators.empty())
@@ -113,8 +113,6 @@ struct HashMethodString
     auto getKeyHolder(ssize_t row, [[maybe_unused]] Arena * pool, std::vector<String> & sort_key_containers) const
     {
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
-
-        // Skip last zero byte.
         StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
 
         if constexpr (place_string_to_arena)
@@ -149,7 +147,7 @@ struct HashMethodFixedString
     HashMethodFixedString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
-        const auto & column_string = assert_cast<const ColumnFixedString &>(column);
+        const ColumnFixedString & column_string = assert_cast<const ColumnFixedString &>(column);
         n = column_string.getN();
         chars = &column_string.getChars();
         if (!collators.empty())

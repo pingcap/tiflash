@@ -17,6 +17,7 @@
 #include <Columns/ColumnString.h>
 #include <Core/AccurateComparison.h>
 #include <Functions/StringUtil.h>
+#include <Storages/Transaction/CollatorUtils.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
 
@@ -47,6 +48,7 @@ struct IsEqualRelated<DB::NotEqualsOp<A...>>
 };
 
 // Loop columns and invoke callback for each pair.
+// Remove last zero byte.
 template <typename F>
 __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
     const ColumnString::Chars_t & a_data,
@@ -56,18 +58,29 @@ __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
     size_t size,
     F && func)
 {
+    ColumnString::Offset a_prev_offset = 0;
+    ColumnString::Offset b_prev_offset = 0;
+    const auto * a_ptr = reinterpret_cast<const char *>(a_data.data());
+    const auto * b_ptr = reinterpret_cast<const char *>(b_data.data());
+
     for (size_t i = 0; i < size; ++i)
     {
-        size_t a_size = StringUtil::sizeAt(a_offsets, i) - 1;
-        size_t b_size = StringUtil::sizeAt(b_offsets, i) - 1;
-        const auto * a_ptr = reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]);
-        const auto * b_ptr = reinterpret_cast<const char *>(&b_data[StringUtil::offsetAt(b_offsets, i)]);
+        auto a_size = a_offsets[i] - a_prev_offset;
+        auto b_size = b_offsets[i] - b_prev_offset;
 
-        func({a_ptr, a_size}, {b_ptr, b_size}, i);
+        // Remove last zero byte.
+        func({a_ptr, a_size - 1}, {b_ptr, b_size - 1}, i);
+
+        a_ptr += a_size;
+        b_ptr += b_size;
+
+        a_prev_offset = a_offsets[i];
+        b_prev_offset = b_offsets[i];
     }
 }
 
 // Loop one column and invoke callback for each pair.
+// Remove last zero byte.
 template <typename F>
 __attribute__((flatten, always_inline)) inline void LoopOneColumn(
     const ColumnString::Chars_t & a_data,
@@ -75,12 +88,18 @@ __attribute__((flatten, always_inline)) inline void LoopOneColumn(
     size_t size,
     F && func)
 {
+    ColumnString::Offset a_prev_offset = 0;
+    const auto * a_ptr = reinterpret_cast<const char *>(a_data.data());
+
     for (size_t i = 0; i < size; ++i)
     {
-        size_t a_size = StringUtil::sizeAt(a_offsets, i) - 1;
-        const auto * a_ptr = reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]);
+        auto a_size = a_offsets[i] - a_prev_offset;
 
-        func({a_ptr, a_size}, i);
+        // Remove last zero byte.
+        func({a_ptr, a_size - 1}, i);
+
+        a_ptr += a_size;
+        a_prev_offset = a_offsets[i];
     }
 }
 
