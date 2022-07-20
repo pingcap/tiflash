@@ -30,18 +30,14 @@ mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select hex(a) from test.t;
-+----------------------------------------------------------------------+
-| hex(a)                                                               |
-+----------------------------------------------------------------------+
-| 7777772E70696E676361702E636F6D                                       |
-| 61626364                                                             |
-| E6B58BE8AF95E6B58BE8AF95E6B58BE8AF95E6B58BE8AF9561626364E6B58BE8AF95 |
-| NULL                                                                 |
-| E38195E38289E381ABE585A5                                             |
-| E6B58BE8AF95E6B58BE8AF95E6B58BE8AF95E6B58BE8AF9561626364E6B58BE8AF95 |
-|                                                                      |
-| F09F8DBB                                                             |
-| F09F8FB4E2808DE298A0EFB88F                                           |
-| 09                                                                   |
-| 0A                                                                   |
-+----------------------------------------------------------------------+
+hex(a)
+7777772E70696E676361702E636F6D
+61626364
+E6B58BE8AF95E6B58BE8AF95E6B58BE8AF95E6B58BE8AF9561626364E6B58BE8AF95
+NULL
+E38195E38289E381ABE585A5
+E6B58BE8AF95E6B58BE8AF95E6B58BE8AF95E6B58BE8AF9561626364E6B58BE8AF95
+F09F8DBB
+F09F8FB4E2808DE298A0EFB88F
+09
+0A

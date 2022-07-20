@@ -41,8 +41,6 @@ void DMVersionFilterBlockInputStream<MODE>::readSuffix()
     });
 }
 
-static constexpr size_t UNROLL_BATCH = 64;
-
 template <int MODE>
 Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool return_filter)
 {
