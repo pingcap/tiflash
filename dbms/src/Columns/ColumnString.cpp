@@ -317,9 +317,10 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
 
     return collator.compare(
         reinterpret_cast<const char *>(&chars[offsetAt(n)]),
-        sizeAt(n),
+        sizeAt(n) - 1, // Skip last zero byte.
         reinterpret_cast<const char *>(&rhs.chars[rhs.offsetAt(m)]),
-        rhs.sizeAt(m));
+        rhs.sizeAt(m) - 1 // Skip last zero byte.
+    );
 }
 
 // Derived must implement function `int compare(const char *, size_t, const char *, size_t)`.
@@ -338,9 +339,9 @@ struct ColumnString::LessWithCollation
     {
         int res = inner.compare(
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(lhs)]),
-            parent.sizeAt(lhs) - 1, // remove tail '\0'
+            parent.sizeAt(lhs) - 1, // Skip last zero byte.
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(rhs)]),
-            parent.sizeAt(rhs) - 1) // remove tail '\0'
+            parent.sizeAt(rhs) - 1) // Skip last zero byte.
             ;
 
         if constexpr (positive)
