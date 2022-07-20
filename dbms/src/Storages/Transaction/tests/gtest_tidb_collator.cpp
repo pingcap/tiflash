@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/Transaction/Collator.h>
+#include <Storages/Transaction/CollatorUtils.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
