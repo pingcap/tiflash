@@ -169,21 +169,6 @@ struct TiDBCollatorPtrImpl : TiDBCollatorID
         }
     }
 
-    ALWAYS_INLINE inline bool sortKeyNullable(const char * s, size_t length, std::string & container, StringRef & res) const
-    {
-        if (likely(canUseFastPath()))
-        {
-            res = fastPathSortKey(s, length);
-            return true;
-        }
-        else if (ptr)
-        {
-            res = sortKeyIndirect(s, length, container);
-            return true;
-        }
-        return false;
-    }
-
     static ALWAYS_INLINE inline StringRef fastPathSortKey(const char * s, size_t length)
     {
         return DB::BinCollatorSortKey<true>(s, length);
@@ -207,28 +192,28 @@ struct TiDBCollatorPtr
         : inner(ptr_, collator_id_)
     {
     }
-    TiDBCollatorPtr(class ITiDBCollator const * ptr_ = nullptr)
+    TiDBCollatorPtr(class ITiDBCollator const * ptr_ = nullptr) // NOLINT
         : inner(ptr_)
     {
     }
-    bool operator==(const void * tar) const
+    ALWAYS_INLINE bool operator==(const void * tar) const
     {
         return inner.ptr == tar;
     }
-    bool operator!=(const void * tar) const
+    ALWAYS_INLINE bool operator!=(const void * tar) const
     {
         return inner.ptr != tar;
     }
 
-    explicit operator bool() const
+    ALWAYS_INLINE explicit operator bool() const
     {
         return inner.ptr;
     }
-    TiDBCollatorPtrImpl * operator->()
+    ALWAYS_INLINE TiDBCollatorPtrImpl * operator->()
     {
         return &inner;
     }
-    const TiDBCollatorPtrImpl * operator->() const
+    ALWAYS_INLINE const TiDBCollatorPtrImpl * operator->() const
     {
         return &inner;
     }

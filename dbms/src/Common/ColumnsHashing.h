@@ -119,7 +119,8 @@ struct HashMethodString
 
         if constexpr (place_string_to_arena)
         {
-            collator->sortKeyNullable(key.data, key.size, sort_key_containers[0], key);
+            if (collator)
+                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
             return ArenaKeyHolder{key, *pool};
         }
         else
@@ -159,7 +160,10 @@ struct HashMethodFixedString
     {
         StringRef key(&(*chars)[row * n], n);
 
-        collator->sortKeyNullable(key.data, key.size, sort_key_containers[0], key);
+        if (collator)
+        {
+            key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
+        }
 
         if constexpr (place_string_to_arena)
         {

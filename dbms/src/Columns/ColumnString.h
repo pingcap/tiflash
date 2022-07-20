@@ -208,20 +208,21 @@ public:
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
+        const void * src = &chars[offset];
 
         StringRef res;
 
-        StringRef sort_key{reinterpret_cast<const char *>(&chars[offset]), string_size};
-
-        // Skip last zero byte.
-        collator->sortKeyNullable(sort_key.data, sort_key.size - 1, sort_key_container, sort_key);
-
-        string_size = sort_key.size;
-
+        if (collator != nullptr)
+        {
+            // Skip last zero byte.
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
+            string_size = sort_key.size;
+            src = sort_key.data;
+        }
         res.size = sizeof(string_size) + string_size;
         char * pos = arena.allocContinue(res.size, begin);
         memcpy(pos, &string_size, sizeof(string_size));
-        memcpy(pos + sizeof(string_size), sort_key.data, string_size);
+        memcpy(pos + sizeof(string_size), src, string_size);
         res.data = pos;
         return res;
     }
@@ -244,14 +245,19 @@ public:
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
-
-        StringRef sort_key{reinterpret_cast<const char *>(&chars[offset]), string_size};
-
-        // Skip last zero byte.
-        collator->sortKeyNullable(sort_key.data, sort_key.size - 1, sort_key_container, sort_key);
-        string_size = sort_key.size;
-        hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-        hash.update(sort_key.data, sort_key.size);
+        if (collator)
+        {
+            // Skip last zero byte.
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
+            string_size = sort_key.size;
+            hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+            hash.update(sort_key.data, sort_key.size);
+        }
+        else
+        {
+            hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+            hash.update(reinterpret_cast<const char *>(&chars[offset]), string_size);
+        }
     }
 
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
