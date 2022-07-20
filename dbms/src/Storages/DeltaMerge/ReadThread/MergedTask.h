@@ -25,9 +25,9 @@ struct MergedUnit
         , task(task_)
     {}
 
-    SegmentReadTaskPoolPtr pool;
-    SegmentReadTaskPtr task;
-    BlockInputStreamPtr stream;
+    SegmentReadTaskPoolPtr pool; // The information of a read request.
+    SegmentReadTaskPtr task; // The information of a segment that want to read.
+    BlockInputStreamPtr stream; // BlockInputStream of a segment, will be created by read threads.
 };
 
 // MergedTask merges the same segment of different SegmentReadTaskPools.
