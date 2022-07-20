@@ -1164,7 +1164,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         thread_hold_snapshots.detach();
     });
 
-    [[maybe_unused]] auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
+    auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
@@ -1177,7 +1177,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         DEFAULT_BLOCK_SIZE,
         /* is_raw = */ true,
         /* do_delete_mark_filter_for_raw = */ false,
-        std::move(tasks));
+        std::move(tasks),
+        after_segment_read);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
@@ -1244,9 +1245,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
 
     auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
-    LOG_FMT_DEBUG(tracing_logger, "Read create segment snapshot done");
+    LOG_FMT_DEBUG(tracing_logger,
+        "Read create segment snapshot done keep_order {} dt_enable_read_thread {} => enable_read_thread {}",
+        keep_order, db_context.getSettingsRef().dt_enable_read_thread, enable_read_thread);
 
-    [[maybe_unused]] auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
+    auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
@@ -1262,7 +1265,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         expected_block_size,
         /* is_raw = */ is_fast_mode,
         /* do_delete_mark_filter_for_raw = */ is_fast_mode,
-        std::move(tasks));
+        std::move(tasks),
+        after_segment_read);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())

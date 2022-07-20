@@ -123,7 +123,8 @@ public:
         size_t expected_block_size_,
         bool is_raw_,
         bool do_range_filter_for_raw_,
-        SegmentReadTasks && tasks_)
+        SegmentReadTasks && tasks_,
+        AfterSegmentRead after_segment_read_)
         : pool_id(nextPoolId())
         , table_id(table_id_)
         , dm_context(dm_context_)
@@ -134,6 +135,7 @@ public:
         , is_raw(is_raw_)
         , do_range_filter_for_raw(do_range_filter_for_raw_)
         , tasks(std::move(tasks_))
+        , after_segment_read(after_segment_read_)
         , log(&Poco::Logger::get("SegmentReadTaskPool"))
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
@@ -179,7 +181,7 @@ public:
 
     BlockInputStreamPtr getInputStream(uint64_t seg_id, SegmentReadTaskPtr & t);
 
-    bool readOneBlock(uint64_t seg_id, BlockInputStreamPtr & stream);
+    bool readOneBlock(uint64_t seg_id, BlockInputStreamPtr & stream, const SegmentPtr & seg);
     void popBlock(Block & block);
 
     std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
@@ -196,7 +198,7 @@ public:
 private:
     int64_t getFreeActiveSegmentCountUnlock();
     bool exceptionHappened() const;
-    void finishSegment(uint64_t seg_id);
+    void finishSegment(uint64_t seg_id, const SegmentPtr & seg);
     void pushBlock(Block && block);
 
     const uint64_t pool_id;
@@ -209,7 +211,7 @@ private:
     const bool is_raw;
     const bool do_range_filter_for_raw;
     SegmentReadTasks tasks;
-
+    AfterSegmentRead after_segment_read;
     std::mutex mutex;
     std::unordered_set<uint64_t> active_segment_ids;
     WorkQueue<Block> q;

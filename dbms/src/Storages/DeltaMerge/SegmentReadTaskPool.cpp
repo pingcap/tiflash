@@ -113,8 +113,9 @@ BlockInputStreamPtr SegmentReadTaskPool::getInputStream(uint64_t seg_id, Segment
     return stream;
 }
 
-void SegmentReadTaskPool::finishSegment(UInt64 seg_id)
+void SegmentReadTaskPool::finishSegment(UInt64 seg_id, const SegmentPtr & seg)
 {
+    after_segment_read(dm_context, seg);
     bool pool_finished = false;
     {
         std::lock_guard lock(mutex);
@@ -176,7 +177,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
     return target;
 }
 
-bool SegmentReadTaskPool::readOneBlock(uint64_t seg_id, BlockInputStreamPtr & stream)
+bool SegmentReadTaskPool::readOneBlock(uint64_t seg_id, BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
     MemoryTrackerSetter setter(true, mem_tracker);
     auto block = stream->read();
@@ -187,7 +188,7 @@ bool SegmentReadTaskPool::readOneBlock(uint64_t seg_id, BlockInputStreamPtr & st
     }
     else
     {
-        finishSegment(seg_id);
+        finishSegment(seg_id, seg);
         return false;
     }
 }

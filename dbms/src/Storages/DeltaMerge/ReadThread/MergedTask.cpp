@@ -37,7 +37,6 @@ void MergedTask::initOnce()
         }
         streams[cur_idx] = pools[cur_idx]->getInputStream(seg_id, tasks[cur_idx]);
     }
-    tasks.resize(0);
 }
 
 int MergedTask::readOneBlock()
@@ -52,6 +51,7 @@ int MergedTask::readOneBlock()
 
         auto & pool = pools[cur_idx];
         auto & stream = streams[cur_idx];
+        auto & task = tasks[cur_idx];
 
         if (!pool->valid())
         {
@@ -64,7 +64,7 @@ int MergedTask::readOneBlock()
             continue;
         }
 
-        if (pool->readOneBlock(seg_id, stream))
+        if (pool->readOneBlock(seg_id, stream, task->segment))
         {
             read_block_count++;
         }

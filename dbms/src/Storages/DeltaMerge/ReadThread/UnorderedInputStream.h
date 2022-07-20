@@ -70,7 +70,7 @@ protected:
         return readImpl(filter_ignored, false);
     }
 
-    // TODO(jinhelin): res_fiter, return_filter, after_segment_read
+    // Currently, res_fiter and return_filter is unused.
     Block readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/) override
     {
         if (done)
