@@ -220,7 +220,11 @@ void MPPTunnelBase<Writer>::sendJob(bool need_lock)
         err_msg = "fatal error in sendJob()";
     }
     if (!err_msg.empty())
+    {
+        /// append tunnel id to error message
+        err_msg = fmt::format("{} meet error: {}", tunnel_id, err_msg);
         LOG_ERROR(log, err_msg);
+    }
     consumerFinish(err_msg, need_lock);
     if (is_async)
         writer->writeDone(grpc::Status::OK);
