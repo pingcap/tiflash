@@ -90,14 +90,15 @@ std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
         return {nullptr, true};
     }
 
-    std::vector<SegmentReadTaskPtr> tasks;
-    tasks.reserve(pools.size());
+    std::vector<MergedUnit> units;
+    units.reserve(pools.size());
     for (auto & pool : pools)
     {
-        tasks.push_back(pool->getTask(segment->first));
+        units.emplace_back(pool, pool->getTask(segment->first));
     }
     GET_METRIC(tiflash_storage_read_thread_counter, type_sche_new_task).Increment();
-    return {std::make_shared<MergedTask>(segment->first, std::move(pools), std::move(tasks)), true};
+
+    return {std::make_shared<MergedTask>(segment->first, std::move(units)), true};
 }
 
 SegmentReadTaskPools SegmentReadTaskScheduler::getPoolsUnlock(const std::vector<uint64_t> & pool_ids)

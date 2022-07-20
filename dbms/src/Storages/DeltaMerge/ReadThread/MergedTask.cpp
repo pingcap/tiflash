@@ -23,35 +23,36 @@ int MergedTask::readBlock()
 
 void MergedTask::initOnce()
 {
-    if (!streams.empty())
+    if (inited)
     {
         return;
     }
-    streams.resize(pools.size(), nullptr);
-    for (cur_idx = 0; cur_idx < static_cast<int>(pools.size()); cur_idx++)
+
+    for (cur_idx = 0; cur_idx < static_cast<int>(units.size()); cur_idx++)
     {
-        if (!pools[cur_idx]->valid())
+        auto & [pool, task, stream] = units[cur_idx];
+        if (!pool->valid())
         {
             setStreamFinished(cur_idx);
             continue;
         }
-        streams[cur_idx] = pools[cur_idx]->buildInputStream(tasks[cur_idx]);
+        stream = pool->buildInputStream(task);
     }
+
+    inited = true;
 }
 
 int MergedTask::readOneBlock()
 {
     int read_block_count = 0;
-    for (cur_idx = 0; cur_idx < static_cast<int>(pools.size()); cur_idx++)
+    for (cur_idx = 0; cur_idx < static_cast<int>(units.size()); cur_idx++)
     {
         if (isStreamFinished(cur_idx))
         {
             continue;
         }
 
-        auto & pool = pools[cur_idx];
-        auto & stream = streams[cur_idx];
-        auto & task = tasks[cur_idx];
+        auto & [pool, task, stream] = units[cur_idx];
 
         if (!pool->valid())
         {
@@ -78,9 +79,9 @@ int MergedTask::readOneBlock()
 
 void MergedTask::setException(const DB::Exception & e)
 {
-    if (cur_idx >= 0 && cur_idx < static_cast<int>(pools.size()))
+    if (cur_idx >= 0 && cur_idx < static_cast<int>(units.size()))
     {
-        auto & pool = pools[cur_idx];
+        auto & pool = units[cur_idx].pool;
         if (pool != nullptr)
         {
             pool->setException(e);
@@ -88,11 +89,11 @@ void MergedTask::setException(const DB::Exception & e)
     }
     else
     {
-        for (auto & pool : pools)
+        for (auto & unit : units)
         {
-            if (pool != nullptr)
+            if (unit.pool != nullptr)
             {
-                pool->setException(e);
+                unit.pool->setException(e);
             }
         }
     }

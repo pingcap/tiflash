@@ -18,6 +18,18 @@
 
 namespace DB::DM
 {
+struct MergedUnit
+{
+    MergedUnit(const SegmentReadTaskPoolPtr & pool_, const SegmentReadTaskPtr & task_)
+        : pool(pool_)
+        , task(task_)
+    {}
+
+    SegmentReadTaskPoolPtr pool;
+    SegmentReadTaskPtr task;
+    BlockInputStreamPtr stream;
+};
+
 // MergedTask merges the same segment of different SegmentReadTaskPools.
 // Read segment input streams of different SegmentReadTaskPools sequentially to improve cache sharing.
 // MergedTask is NOT thread-safe.
@@ -29,20 +41,20 @@ public:
         return passive_merged_segments.load(std::memory_order_relaxed);
     }
 
-    MergedTask(uint64_t seg_id_, SegmentReadTaskPools && pools_, std::vector<SegmentReadTaskPtr> && tasks_)
+    MergedTask(uint64_t seg_id_, std::vector<MergedUnit> && units_)
         : seg_id(seg_id_)
-        , pools(std::move(pools_))
-        , tasks(std::move(tasks_))
+        , units(std::move(units_))
+        , inited(false)
         , cur_idx(-1)
         , finished_count(0)
         , log(&Poco::Logger::get("MergedTask"))
     {
-        passive_merged_segments.fetch_add(pools.size() - 1, std::memory_order_relaxed);
+        passive_merged_segments.fetch_add(units.size() - 1, std::memory_order_relaxed);
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Increment();
     }
     ~MergedTask()
     {
-        passive_merged_segments.fetch_sub(pools.size() - 1, std::memory_order_relaxed);
+        passive_merged_segments.fetch_sub(units.size() - 1, std::memory_order_relaxed);
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Decrement();
         GET_METRIC(tiflash_storage_read_thread_seconds, type_merged_task).Observe(sw.elapsedSeconds());
     }
@@ -51,7 +63,7 @@ public:
 
     bool allStreamsFinished() const
     {
-        return finished_count >= pools.size();
+        return finished_count >= units.size();
     }
 
     uint64_t getSegmentId() const
@@ -61,18 +73,18 @@ public:
 
     size_t getPoolCount() const
     {
-        return pools.size();
+        return units.size();
     }
 
     std::vector<uint64_t> getPoolIds() const
     {
         std::vector<uint64_t> ids;
-        ids.reserve(pools.size());
-        for (const auto & pool : pools)
+        ids.reserve(units.size());
+        for (const auto & unit : units)
         {
-            if (pool != nullptr)
+            if (unit.pool != nullptr)
             {
-                ids.push_back(pool->poolId());
+                ids.push_back(unit.pool->poolId());
             }
         }
         return ids;
@@ -80,9 +92,9 @@ public:
 
     bool containPool(uint64_t pool_id) const
     {
-        for (const auto & pool : pools)
+        for (const auto & unit : units)
         {
-            if (pool != nullptr && pool->poolId() == pool_id)
+            if (unit.pool != nullptr && unit.pool->poolId() == pool_id)
             {
                 return true;
             }
@@ -95,24 +107,25 @@ private:
     void initOnce();
     int readOneBlock();
 
-    bool isStreamFinished(size_t i)
+    bool isStreamFinished(size_t i) const
     {
-        return streams[i] == nullptr;
+        return units[i].pool == nullptr && units[i].task == nullptr && units[i].stream == nullptr;
     }
+
     void setStreamFinished(size_t i)
     {
         if (!isStreamFinished(i))
         {
-            streams[i] = nullptr;
-            pools[i] = nullptr;
+            units[i].pool = nullptr;
+            units[i].task = nullptr;
+            units[i].stream = nullptr;
             finished_count++;
         }
     }
 
     uint64_t seg_id;
-    SegmentReadTaskPools pools;
-    std::vector<SegmentReadTaskPtr> tasks;
-    BlockInputStreams streams;
+    std::vector<MergedUnit> units;
+    bool inited;
     int cur_idx;
     size_t finished_count;
     Poco::Logger * log;
