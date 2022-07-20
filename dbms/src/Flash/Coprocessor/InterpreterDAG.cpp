@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
@@ -67,7 +66,7 @@ BlockIO InterpreterDAG::execute()
     BlockInputStreams streams = executeQueryBlock(*dag.getRootQueryBlock());
     DAGPipeline pipeline;
     pipeline.streams = streams;
-    executeCreatingSets(pipeline, context, max_streams, log);
+    executeCreatingSets(pipeline, context, max_streams, dagContext().log);
     BlockIO res;
     res.in = pipeline.firstStream();
     return res;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
@@ -172,7 +173,7 @@ void executeCreatingSets(
     size_t max_streams,
     const LoggerPtr & log)
 {
-    const DAGContext & dag_context = *context->getDAGContext();
+    DAGContext & dag_context = *context.getDAGContext();
     /// add union to run in parallel if needed
     if (unlikely(dag_context.isTest()))
         executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for test");
