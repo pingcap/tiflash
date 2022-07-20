@@ -19,13 +19,13 @@ mysql> insert into test.t values('www.pingcap.com');
 mysql> insert into test.t values('abcd');
 mysql> insert into test.t values('测试测试测试测试abcd测试');
 mysql> insert into test.t values(NULL);
-mysql> insert into test.t values("さらに入");
-mysql> insert into test.t values("测试测试测试测试abcd测试");
-mysql> insert into test.t values("");
-mysql> insert into test.t values("🍻");
-mysql> insert into test.t values("🏴‍☠️");
-mysql> insert into test.t values("\t");
-mysql> insert into test.t values("\n");
+mysql> insert into test.t values('さらに入');
+mysql> insert into test.t values('测试测试测试测试abcd测试');
+mysql> insert into test.t values('');
+mysql> insert into test.t values('🍻');
+mysql> insert into test.t values('🏴‍☠️');
+mysql> insert into test.t values('\t');
+mysql> insert into test.t values('\n');
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
