@@ -60,8 +60,6 @@ std::string getEnabledFeatures()
         "jemalloc",
 #elif USE_MIMALLOC
         "mimalloc",
-#elif USE_TCMALLOC
-        "tcmalloc",
 #endif
 
 // mem-profiling
