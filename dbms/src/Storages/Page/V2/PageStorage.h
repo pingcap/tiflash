@@ -88,7 +88,8 @@ public:
     PageStorage(String name,
                 PSDiskDelegatorPtr delegator, //
                 const Config & config_,
-                const FileProviderPtr & file_provider_);
+                const FileProviderPtr & file_provider_,
+                bool no_more_insert_ = false);
     ~PageStorage() = default;
 
     void restore() override;
@@ -272,12 +273,17 @@ private:
 
     StatisticsInfo last_gc_statistics;
 
+    // true means this instance runs under mix mode
+    bool no_more_insert = false;
+
 private:
     WriterPtr checkAndRenewWriter(
         WritingPageFile & writing_file,
+        PageFileIdAndLevel max_page_file_id_lvl_hint,
         const String & parent_path_hint,
         WriterPtr && old_writer = nullptr,
-        const String & logging_msg = "");
+        const String & logging_msg = "",
+        bool force = false);
 };
 
 } // namespace PS::V2
