@@ -47,9 +47,9 @@ TEST_F(PrintColumnsTest, SimpleTest)
 try
 {
     EXPECT_EQ(getColumnsContent(test_cols), result1);
-    EXPECT_EQ(getColumnsContent(test_cols, 0, col_len - 1), result2);
-    EXPECT_EQ(getColumnsContent(test_cols, 0, 0), result3);
-    EXPECT_EQ(getColumnsContent(test_cols, 1, col_len - 2), result4);
+    EXPECT_EQ(getColumnsContent(test_cols, 0, col_len), result2);
+    EXPECT_EQ(getColumnsContent(test_cols, 0, 1), result3);
+    EXPECT_EQ(getColumnsContent(test_cols, 1, col_len - 1), result4);
 }
 CATCH
 

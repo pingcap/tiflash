@@ -101,8 +101,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual)
 {
-    auto ret = dataTypeEqual(expected.type, actual.type);
-    if (!ret)
+    if (auto ret = dataTypeEqual(expected.type, actual.type); !ret)
         return ret;
 
     return columnEqual(expected.column, actual.column);
@@ -115,7 +114,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     size_t columns = actual.columns();
     size_t expected_columns = expected.columns();
 
-    ASSERT_EQUAL(expected_columns, columns, "Block size mismatch");
+    ASSERT_EQUAL(expected_columns, columns, "Block column size mismatch");
 
     for (size_t i = 0; i < columns; ++i)
     {
@@ -381,7 +380,7 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols)
 {
     if (cols.size() <= 0)
         return "";
-    return getColumnsContent(cols, 0, cols[0].column->size() - 1);
+    return getColumnsContent(cols, 0, cols[0].column->size());
 }
 
 String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
@@ -392,7 +391,7 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
 
     const size_t col_size = cols[0].column->size();
     assert(begin <= end);
-    assert(col_size > end);
+    assert(col_size >= end);
     assert(col_size > begin);
 
     bool is_same = true;
@@ -411,7 +410,7 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
     {
         /// Push the column name
         fmt_buf.append(fmt::format("{}: (", cols[i].name));
-        for (size_t j = begin; j <= end; ++j)
+        for (size_t j = begin; j < end; ++j)
             col_content.push_back(std::make_pair(j, (*cols[i].column)[j].toString()));
 
         /// Add content

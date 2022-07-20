@@ -516,7 +516,7 @@ ColumnWithTypeAndName createConstColumn(
 
 String getColumnsContent(const ColumnsWithTypeAndName & cols);
 
-/// We can designate the range of columns printed with begin and end. range: [begin, end]
+/// We can designate the range of columns printed with begin and end. range: [begin, end)
 String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end);
 
 // This wrapper function only serves to construct columns input for function-like macros,
