@@ -70,16 +70,6 @@ try
         String expected = R"()";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
     }
-
-    request = context.scan("test_db", "test_table_1")
-                  .topN("s3", false, 10)
-                  .topN("s2", false, 9)
-                  .topN("s1", false, 8)
-                  .build(context);
-    {
-        String expected = R"()";
-        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 10);
-    }
 }
 CATCH
 
