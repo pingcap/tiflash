@@ -270,6 +270,10 @@ DMFileReader::DMFileReader(
     if (enable_col_sharing_cache)
     {
         col_data_cache = std::make_unique<ColumnSharingCacheMap>(path(), read_columns, log);
+        for (const auto & cd : read_columns)
+        {
+            last_read_from_cache[cd.id] = false;
+        }
     }
 }
 
@@ -546,15 +550,21 @@ void DMFileReader::readColumn(ColumnDefine & column_define,
                               size_t pack_count,
                               size_t read_rows,
                               size_t skip_packs,
-                              [[maybe_unused]] bool force_seek)
+                              bool force_seek)
 {
     if (!getCachedPacks(column_define.id, start_pack_id, pack_count, read_rows, column))
     {
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         auto col = data_type->createColumn();
-        readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, true /*force_seek*/);
+        readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, force_seek || last_read_from_cache[column_define.id]);
         column = std::move(col);
+        last_read_from_cache[column_define.id] = false;
     }
+    else
+    {
+        last_read_from_cache[column_define.id] = true;
+    }
+
     if (col_data_cache != nullptr)
     {
         DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
