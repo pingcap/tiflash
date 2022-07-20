@@ -293,6 +293,7 @@ if (ENABLE_TESTS)
     grep_gtest_sources(${TiFlash_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
         ${dbms_gtest_sources}
+        ${TiFlash_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/tests/DMTestEnv.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp

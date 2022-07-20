@@ -15,8 +15,10 @@
 #pragma once
 
 #include <Columns/ColumnVector.h>
+#include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
+#include <Core/Defines.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
@@ -28,18 +30,24 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <memory>
 #include <vector>
 
 namespace DB
 {
 namespace DM
 {
+class DeltaMergeStore;
+using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
 namespace tests
 {
 #define GET_REGION_RANGE(start, end, table_id) RowKeyRange::fromHandleRange(::DB::DM::HandleRange((start), (end))).toRegionRange((table_id))
 
 // Add this so that we can call typeFromString under namespace DB::DM::tests
 using DB::tests::typeFromString;
+using namespace DB::tests;
 
 /// helper functions for comparing HandleRange
 inline ::testing::AssertionResult HandleRangeCompare(
@@ -509,6 +517,47 @@ public:
         static int num = 0;
         return num++;
     }
+};
+
+class StoreInputStreamBuilder
+{
+public:
+    StoreInputStreamBuilder(DeltaMergeStorePtr store_, Context & context_, const ColumnDefines & cds)
+        : store(store_)
+        , query_context(context_)
+        , column_defines(cds)
+    {
+    }
+
+    StoreInputStreamBuilder & setKeyRanges(RowKeyRanges key_ranges_)
+    {
+        key_ranges = std::move(key_ranges_);
+        return *this;
+    }
+
+    StoreInputStreamBuilder & setReadTso(UInt64 read_tso_)
+    {
+        read_tso = read_tso_;
+        return *this;
+    }
+
+    StoreInputStreamBuilder & enableFastMode()
+    {
+        is_fast_mode = true;
+        return *this;
+    }
+
+    BlockInputStreamPtr build();
+
+private:
+    const DeltaMergeStorePtr store;
+    Context & query_context;
+    const ColumnDefines & column_defines;
+
+    std::optional<RowKeyRanges> key_ranges;
+    UInt64 read_tso = std::numeric_limits<UInt64>::max();
+    RSOperatorPtr rough_set_filter;
+    bool is_fast_mode = false;
 };
 
 } // namespace tests

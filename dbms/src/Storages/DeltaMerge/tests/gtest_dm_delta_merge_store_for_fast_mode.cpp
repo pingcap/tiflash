@@ -14,7 +14,10 @@
 
 #include <Common/Exception.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
+#include <TestUtils/FunctionTestUtils.h>
 
 /// This test file is mainly test on the correctness of read in fast mode.
 /// Because the basic functions are tested in gtest_dm_delta_merge_storage.cpp, we will not cover it here.
@@ -29,7 +32,6 @@ namespace DM
 {
 namespace tests
 {
-
 TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
 {
     /// test under only insert data (no update, no delete) with all range
@@ -81,43 +83,21 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
     {
         // read all columns from store with all range in fast mode
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
 
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                    else if (iter.name == col_str_define.name)
-                    {
-                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
-                    }
-                    else if (iter.name == col_i8_define.name)
-                    {
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
+            ASSERT_BLOCK_EQ(
+                block,
+                Block({
+                    createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), DMTestEnv::pk_name),
+                    createColumn<String>(createNumberStrings(0, num_rows_write), col_str_define.name),
+                    createColumn<Int8>(createSignedNumbers(0, num_rows_write), col_i8_define.name),
+                }));
         }
         in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
@@ -173,58 +153,39 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
     }
     {
         // read all columns from store with row key range in fast mode
+        size_t read_nums_limit = 64;
         WriteBufferFromOwnString start_key_ss;
         DB::EncodeInt64(0, start_key_ss);
 
         WriteBufferFromOwnString end_key_ss;
-        DB::EncodeInt64(64, end_key_ss);
-
+        DB::EncodeInt64(read_nums_limit, end_key_ss);
 
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange(
-                                                 RowKeyValue(false, std::make_shared<String>(start_key_ss.releaseStr()), 0),
-                                                 RowKeyValue(false, std::make_shared<String>(end_key_ss.releaseStr()), 64),
-                                                 false,
-                                                 store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        RowKeyRanges key_ranges{RowKeyRange(
+            RowKeyValue(false, std::make_shared<String>(start_key_ss.releaseStr()), 0),
+            RowKeyValue(false, std::make_shared<String>(end_key_ss.releaseStr()), read_nums_limit),
+            false,
+            store->getRowKeyColumnSize())};
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.setKeyRanges(key_ranges).enableFastMode().build();
 
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                    else if (iter.name == col_str_define.name)
-                    {
-                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
-                    }
-                    else if (iter.name == col_i8_define.name)
-                    {
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
+            ASSERT_COLUMN_EQ(
+                createColumn<Int64>(createNumbers<Int64>(0, read_nums_limit)),
+                block.getByName(DMTestEnv::pk_name));
+            ASSERT_COLUMN_EQ(
+                createColumn<String>(createNumberStrings(0, read_nums_limit)),
+                block.getByName(col_str_define.name));
+            ASSERT_COLUMN_EQ(
+                createColumn<Int8>(createSignedNumbers(0, read_nums_limit)),
+                block.getByName(col_i8_define.name));
         }
         in->readSuffix();
-        ASSERT_EQ(num_rows_read, 64);
+        ASSERT_EQ(num_rows_read, read_nums_limit);
     }
 }
 
@@ -281,41 +242,17 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder
+                      .enableFastMode()
+                      .build();
+
         size_t num_rows_read = 0;
         in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
         case TestMode::V2_BlockOnly:
-        {
-            while (Block block = in->read())
-            {
-                for (auto && iter : block)
-                {
-                    auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
-                    {
-                        if (iter.name == DMTestEnv::pk_name)
-                        {
-                            ASSERT_EQ(c->getInt(i), i + num_rows_read);
-                        }
-                    }
-                }
-                num_rows_read += block.rows();
-            }
-            break;
-        }
         case TestMode::V2_FileOnly:
         {
             while (Block block = in->read())
@@ -428,17 +365,11 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder
+                      .enableFastMode()
+                      .build();
+
         size_t num_rows_read = 0;
         in->readPrefix();
         switch (mode)
@@ -576,17 +507,9 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
+
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -728,17 +651,8 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -824,17 +738,8 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -1010,17 +915,8 @@ try
     // Read after deletion
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -1052,17 +948,8 @@ try
 
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -1115,17 +1002,8 @@ try
     // Test Reading first
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -1155,17 +1033,8 @@ try
     // Read after deletion
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order = */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         // filter del mark = 1， thus just read the insert data before delete
@@ -1232,17 +1101,8 @@ try
     // Read after merge delta
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -1335,17 +1195,8 @@ try
     // Read in fast mode
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -1450,17 +1301,11 @@ try
     // Read with version in normal case
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ false,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder
+                      .setReadTso(1)
+                      // .enableFastMode() // not enable, normal read
+                      .build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -1519,17 +1364,8 @@ try
     // could do clean read with no optimization
     {
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
@@ -1570,7 +1406,7 @@ try
     {
         const auto & columns = store->getTableColumns();
         ColumnDefines real_columns;
-        for (auto & col : columns)
+        for (const auto & col : columns)
         {
             if (col.name != EXTRA_HANDLE_COLUMN_NAME)
             {
@@ -1578,17 +1414,8 @@ try
             }
         }
 
-        BlockInputStreamPtr in = store->read(*db_context,
-                                             db_context->getSettingsRef(),
-                                             real_columns,
-                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             EMPTY_FILTER,
-                                             TRACING_NAME,
-                                             /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
-                                             /* expected_block_size= */ 1024)[0];
+        StoreInputStreamBuilder builder(store, *db_context, columns);
+        auto in = builder.enableFastMode().build();
         size_t num_rows_read = 0;
 
         in->readPrefix();
