@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
@@ -182,21 +183,13 @@ public:
         , total_rows(0)
         , stream_id(stream_id_)
     {
-        // generate sample block
-        ColumnsWithTypeAndName columns;
-        for (auto & dag_col : remote_reader->getOutputSchema())
-        {
-            auto tp = getDataTypeByColumnInfoForComputingLayer(dag_col.second);
-            ColumnWithTypeAndName col(tp, dag_col.first);
-            columns.emplace_back(col);
-        }
-        for (size_t i = 0; i < source_num; i++)
+        for (size_t i = 0; i < source_num; ++i)
         {
             execution_summaries_inited[i].store(false);
         }
         execution_summaries.resize(source_num);
         connection_profile_infos.resize(source_num);
-        sample_block = Block(columns);
+        sample_block = Block(getColumnWithTypeAndName(toNamesAndTypes(remote_reader->getOutputSchema())));
     }
 
     Block getHeader() const override { return sample_block; }

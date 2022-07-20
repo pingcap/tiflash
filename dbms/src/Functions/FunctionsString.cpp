@@ -4188,6 +4188,213 @@ public:
 private:
 };
 
+class FunctionRepeat : public IFunction
+{
+public:
+    static constexpr auto name = "repeat";
+    FunctionRepeat() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionRepeat>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!arguments[1]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeRepeat<UInt8>(block, arguments, result)
+            || executeRepeat<UInt16>(block, arguments, result)
+            || executeRepeat<UInt32>(block, arguments, result)
+            || executeRepeat<UInt64>(block, arguments, result)
+            || executeRepeat<Int8>(block, arguments, result)
+            || executeRepeat<Int16>(block, arguments, result)
+            || executeRepeat<Int32>(block, arguments, result)
+            || executeRepeat<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeRepeat(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
+        const ColumnPtr column_repeat_times = block.getByPosition(arguments[1]).column;
+
+        auto col_res = ColumnString::create();
+        if (const auto * col_string = checkAndGetColumn<ColumnString>(column_string.get()))
+        {
+            // vector const
+            if (column_repeat_times->isColumnConst())
+            {
+                const ColumnConst * col_const_repeat_times = checkAndGetColumnConst<ColumnVector<IntType>>(column_repeat_times.get());
+                if (col_const_repeat_times == nullptr)
+                {
+                    return false;
+                }
+                auto repeat_times = col_const_repeat_times->getValue<IntType>();
+                vectorConst(col_string->getChars(),
+                            col_string->getOffsets(),
+                            accurate::lessOp(INT32_MAX, repeat_times) ? INT32_MAX : repeat_times,
+                            col_res->getChars(),
+                            col_res->getOffsets());
+            }
+            // vector vector
+            else
+            {
+                const auto * col_vector_repeat_count = checkAndGetColumn<ColumnVector<IntType>>(column_repeat_times.get());
+                if (col_vector_repeat_count == nullptr)
+                {
+                    return false;
+                }
+                vectorVector(col_string->getChars(),
+                             col_string->getOffsets(),
+                             col_vector_repeat_count->getData(),
+                             col_res->getChars(),
+                             col_res->getOffsets());
+            }
+        }
+        else if (const ColumnConst * col_const = checkAndGetColumnConst<ColumnString>(column_string.get()))
+        {
+            // const vector
+            const auto * col_vector_repeat_count = checkAndGetColumn<ColumnVector<IntType>>(column_repeat_times.get());
+            if (col_vector_repeat_count == nullptr)
+            {
+                return false;
+            }
+            const auto * col_string_from_const = checkAndGetColumn<ColumnString>(col_const->getDataColumnPtr().get());
+            constVector(col_string_from_const->getChars(),
+                        col_string_from_const->getOffsets(),
+                        col_vector_repeat_count->getData(),
+                        col_res->getChars(),
+                        col_res->getOffsets());
+        }
+        else
+        {
+            // Impossible to reach here
+            throw Exception("Impossible to reach here. Please check logic", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+        return true;
+    }
+    static void vectorConst(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const Int32 repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            res_offset += doRepeat(data, prev_offset, offsets[i], repeat_times, res_data, res_offset);
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+
+    template <typename IntType>
+    static void vectorVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const PaddedPODArray<IntType> & repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            Int32 repeat_count = accurate::lessOp(INT32_MAX, repeat_times[i]) ? INT32_MAX : repeat_times[i];
+            res_offset += doRepeat(data, prev_offset, offsets[i], repeat_count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+
+    template <typename IntType>
+    static void constVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const PaddedPODArray<IntType> & repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = repeat_times.size();
+        res_offsets.resize(size);
+
+        const ColumnString::Offset start_offset = 0;
+        const ColumnString::Offset end_offset = offsets[0];
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            Int32 repeat_count = accurate::lessOp(INT32_MAX, repeat_times[i]) ? INT32_MAX : repeat_times[i];
+            res_offset += doRepeat(data, start_offset, end_offset, repeat_count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+    /// Todo: should handle maxAllowedPacket. Detail in https://github.com/pingcap/tiflash/issues/3669
+    static size_t doRepeat(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offset & start_offset,
+        const ColumnString::Offset & end_offset,
+        Int32 repeat_times,
+        ColumnString::Chars_t & res_data,
+        const ColumnString::Offset & res_offset)
+    {
+        if (repeat_times < 1)
+        {
+            res_data.resize(res_data.size() + 1);
+            res_data[res_offset] = 0;
+            return 1;
+        }
+        size_t size_to_copy = end_offset - start_offset - 1;
+        size_t size = repeat_times * size_to_copy;
+        res_data.resize(res_data.size() + size + 1);
+
+        for (Int32 i = 0; i < repeat_times; ++i)
+        {
+            memcpy(&res_data[res_offset + size_to_copy * i], &data[start_offset], size_to_copy);
+        }
+        res_data[res_offset + size] = '\0';
+        return size + 1;
+    }
+};
+
+
 class FunctionPosition : public IFunction
 {
 public:
@@ -4997,5 +5204,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSubStringIndex>();
     factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();
+    factory.registerFunction<FunctionRepeat>();
 }
 } // namespace DB

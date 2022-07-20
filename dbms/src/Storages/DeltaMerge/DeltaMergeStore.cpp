@@ -39,10 +39,6 @@
 #include <atomic>
 #include <ext/scope_guard.h>
 
-#if USE_TCMALLOC
-#include <gperftools/malloc_extension.h>
-#endif
-
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -469,11 +465,6 @@ void DeltaMergeStore::drop()
     // Drop data in storage path pool
     path_pool.drop(/*recursive=*/true, /*must_success=*/false);
     LOG_FMT_INFO(log, "Drop DeltaMerge done [{}.{}]", db_name, table_name);
-
-#if USE_TCMALLOC
-    // Reclaim memory.
-    MallocExtension::instance()->ReleaseFreeMemory();
-#endif
 }
 
 void DeltaMergeStore::shutdown()
@@ -982,6 +973,8 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
 bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed)
 {
+    size_t sleep_ms = 5;
+
     RowKeyRange cur_range = range;
     while (!cur_range.none())
     {
@@ -1005,7 +998,6 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             }
             segment_range = segment->getRowKeyRange();
 
-            // Flush could fail.
             if (segment->flushCache(*dm_context))
             {
                 break;
@@ -1014,6 +1006,13 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             {
                 return false;
             }
+
+            // Flush could fail. Typical cases:
+            // #1. The segment is abandoned (due to an update is finished)
+            // #2. There is another flush in progress, for example, triggered in background
+            // Let's sleep 5ms ~ 100ms and then retry flush again.
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+            sleep_ms = std::min(sleep_ms * 2, 100);
         }
 
         cur_range.setStart(segment_range.end);
@@ -1047,6 +1046,8 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
     auto dm_context = newDMContext(context, context.getSettingsRef(),
                                    /*tracing_id*/ fmt::format("mergeDeltaBySegment_{}", latest_gc_safe_point.load(std::memory_order_relaxed)));
 
+    size_t sleep_ms = 50;
+
     while (true)
     {
         SegmentPtr segment;
@@ -1060,25 +1061,33 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
             segment = segment_it->second;
         }
 
-        if (!segment->flushCache(*dm_context))
+        if (segment->flushCache(*dm_context))
         {
-            // If the flush failed, it means there are parallel updates to the segment in the background.
-            // In this case, we try again.
-            continue;
-        }
-
-        const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
-        if (new_segment)
-        {
-            const auto segment_end = new_segment->getRowKeyRange().end;
-            if (unlikely(*segment_end.value <= *start_key.value))
+            const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
+            if (new_segment)
             {
-                // The next start key must be > current start key
-                LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
-                throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
-            }
-            return new_segment->getRowKeyRange();
-        }
+                const auto segment_end = new_segment->getRowKeyRange().end;
+                if (unlikely(*segment_end.value <= *start_key.value))
+                {
+                    // The next start key must be > current start key
+                    LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
+                    throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
+                }
+                return new_segment->getRowKeyRange();
+            } // else: sleep and retry
+        } // else: sleep and retry
+
+        // Typical cases:
+        // #1. flushCache failed
+        //    - The segment is abandoned (due to segment updated)
+        //    - There is another flush in progress (e.g. triggered in background)
+        // #2. segmentMergeDelta failed
+        //    - The segment is abandoned (due to segment updated)
+        //    - The segment is updating (e.g. a split-preparation is working, which occupies a for-write snapshot).
+        // It could be possible to take seconds to finish the segment updating, so let's sleep for a short time
+        // (50ms ~ 1000ms) and then retry.
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+        sleep_ms = std::min(sleep_ms * 2, 1000);
     }
 }
 
@@ -1119,8 +1128,9 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
     }
 }
 
-// Read data without mvcc filtering && delete-range filtering.
+// Read data without mvcc filtering && delete mark != 0 filtering.
 // just for debug
+// readRaw is called under 'selraw  xxxx'
 BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                                            const DB::Settings & db_settings,
                                            const ColumnDefines & columns_to_read,
@@ -1179,8 +1189,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
             EMPTY_FILTER,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
-            true,
-            db_settings.dt_raw_filter_range,
+            /* is_raw_ */ true,
+            /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
             extra_table_id_index,
             physical_table_id,
             req_info);
@@ -1197,6 +1207,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         UInt64 max_version,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
+                                        bool is_fast_mode,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
@@ -1232,8 +1243,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
             filter,
             max_version,
             expected_block_size,
-            false,
-            db_settings.dt_raw_filter_range,
+            /* is_raw_ */ is_fast_mode,
+            /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
             extra_table_id_index,
             physical_table_id,
             req_info);
@@ -1750,7 +1761,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
-    LOG_FMT_DEBUG(log,
+    LOG_FMT_TRACE(log,
                   "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
                   table_name,
                   next_gc_check_key.toDebugString(),
@@ -1844,7 +1855,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
-                    LOG_FMT_INFO(
+                    LOG_FMT_DEBUG(
                         log,
                         "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
                         segment_id,
@@ -1853,7 +1864,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 }
                 else
                 {
-                    LOG_FMT_INFO(
+                    LOG_FMT_DEBUG(
                         log,
                         "GC aborted on Segment [{}] [range={}] [table={}]",
                         segment_id,
@@ -1876,7 +1887,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
     }
 
-    LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    if (gc_segments_num != 0)
+    {
+        LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    }
     return gc_segments_num;
 }
 

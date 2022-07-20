@@ -189,7 +189,7 @@ void RegionPersister::forceTransformKVStoreV2toV3()
         const auto & page_transform_entry = page_reader->getPageEntry(page.page_id);
         if (!page_transform_entry.field_offsets.empty())
         {
-            throw Exception(fmt::format("Can't transfrom kvstore from V2 to V3, [page_id={}] {}",
+            throw Exception(fmt::format("Can't transform kvstore from V2 to V3, [page_id={}] {}",
                                         page.page_id,
                                         page_transform_entry.toDebugString()),
                             ErrorCodes::LOGICAL_ERROR);
@@ -276,10 +276,12 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         }
         case PageStorageRunMode::MIX_MODE:
         {
+            // The ps v2 instance will be destroyed soon after transform its data to v3,
+            // so we can safely use some aggressive gc config for it.
             auto page_storage_v2 = std::make_shared<PS::V2::PageStorage>(
                 "RegionPersister",
                 delegator,
-                config,
+                PageStorage::getEasyGCConfig(),
                 provider);
             // V3 should not used getPSDiskDelegatorRaft
             // Because V2 will delete all invalid(unrecognized) file when it restore
@@ -300,7 +302,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                 LOG_FMT_INFO(log, "Current kvstore transform to V3 begin [pages_before_transform={}]", kvstore_remain_pages);
                 forceTransformKVStoreV2toV3();
                 const auto & kvstore_remain_pages_after_transform = page_storage_v2->getNumberOfPages();
-                LOG_FMT_INFO(log, "Current kvstore transfrom to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}] [pages_after_transform={}]", //
+                LOG_FMT_INFO(log, "Current kvstore transform to V3 finished. [ns_id={}] [done={}] [pages_before_transform={}] [pages_after_transform={}]", //
                              ns_id,
                              kvstore_remain_pages_after_transform == 0,
                              kvstore_remain_pages,
@@ -313,8 +315,10 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
             }
             else // no need do transform
             {
-                LOG_FMT_INFO(log, "Current kvstore translate already done before restored.");
+                LOG_FMT_INFO(log, "Current kvstore transform already done before restored.");
             }
+            // running gc on v2 to decrease its disk space usage
+            page_storage_v2->gcImpl(/*not_skip=*/true, nullptr, nullptr);
 
             // change run_mode to ONLY_V3
             page_storage_v2 = nullptr;
