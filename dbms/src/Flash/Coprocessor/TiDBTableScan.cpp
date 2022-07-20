@@ -24,7 +24,7 @@ TiDBTableScan::TiDBTableScan(
     , executor_id(executor_id_)
     , is_partition_table_scan(table_scan->tp() == tipb::TypePartitionTableScan)
     , columns(is_partition_table_scan ? table_scan->partition_table_scan().columns() : table_scan->tbl_scan().columns())
-    , keep_order(table_scan->tbl_scan().keep_order())
+    , keep_order(table_scan->tbl_scan().has_keep_order() ? table_scan->tbl_scan().keep_order() : true)
 {
     if (is_partition_table_scan)
     {
