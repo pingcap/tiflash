@@ -23,7 +23,7 @@ namespace DM
 {
 namespace tests
 {
-TEST(PKSquash_test, WithExtraSort)
+TEST(PKSquashTest, WithExtraSort)
 {
     BlocksList blocks;
 

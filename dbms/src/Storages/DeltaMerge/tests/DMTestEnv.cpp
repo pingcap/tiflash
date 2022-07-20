@@ -1,3 +1,4 @@
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 

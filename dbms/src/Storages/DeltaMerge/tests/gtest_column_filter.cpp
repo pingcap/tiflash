@@ -45,7 +45,7 @@ private:
     bool is_common_handle;
 };
 
-BlockInputStreamPtr genColumnFilterInputStream(BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
+BlockInputStreamPtr genColumnProjInputStream(BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
 {
     ColumnDefine handle_define(
         TiDBPkColumnID,
@@ -112,7 +112,7 @@ TEST(DeleteFilterTest, NormalCase)
     }
 }
 
-TEST(ColumnFilterTest, NormalCase)
+TEST(ColumnProjectionTest, NormalCase)
 {
     BlocksList blocks;
 
@@ -128,7 +128,7 @@ TEST(ColumnFilterTest, NormalCase)
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
     {
-        auto in = genColumnFilterInputStream(blocks, columns, false);
+        auto in = genColumnProjInputStream(blocks, columns, false);
         in->readPrefix();
         Block block = in->read();
         ASSERT_EQ(block.rows(), 1);

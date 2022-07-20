@@ -18,6 +18,8 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 
+#include "gtest/gtest.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -36,7 +38,6 @@ namespace DM
 {
 namespace tests
 {
-
 String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 {
     const auto mode = info.param;
@@ -117,6 +118,7 @@ try
              DMTestEnv::PkType::PkIsHandleInt32,
          })
     {
+        SCOPED_TRACE(fmt::format("Test case for {}", DMTestEnv::PkTypeToString(pk_type)));
         LOG_FMT_INFO(log, "Test case for {} begin.", DMTestEnv::PkTypeToString(pk_type));
 
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
@@ -141,8 +143,7 @@ try
         block1 = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block1));
         ASSERT_EQ(block1.rows(), nrows);
         ASSERT_TRUE(block1.has(EXTRA_HANDLE_COLUMN_NAME));
-        for (const auto & c : block1)
-            ASSERT_EQ(c.column->size(), nrows);
+        ASSERT_NO_THROW({ block1.checkNumberOfRows(); });
 
         // Make a block that is overlapped with `block1` and it should be squashed by `PKSquashingBlockInputStream`
         size_t nrows_2 = 2;
@@ -158,8 +159,7 @@ try
         block2 = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block2));
         ASSERT_EQ(block2.rows(), nrows_2);
         ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
-        for (const auto & c : block2)
-            ASSERT_EQ(c.column->size(), nrows_2);
+        ASSERT_NO_THROW({ block2.checkNumberOfRows(); });
 
 
         BlockInputStreamPtr stream = std::make_shared<BlocksListBlockInputStream>(BlocksList{block1, block2});
@@ -170,12 +170,7 @@ try
         while (Block block = stream->read())
         {
             num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                ASSERT_EQ(c->size(), block.rows())
-                    << "unexpected num of rows for column [name=" << iter.name << "] " << DMTestEnv::PkTypeToString(pk_type);
-            }
+            ASSERT_NO_THROW({ block.checkNumberOfRows(); });
         }
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, nrows + nrows_2);
