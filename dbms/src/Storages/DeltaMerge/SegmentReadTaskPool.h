@@ -179,9 +179,9 @@ public:
 
     const SegmentReadTasks & getTasks() const { return tasks; }
 
-    BlockInputStreamPtr getInputStream(uint64_t seg_id, SegmentReadTaskPtr & t);
+    BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
-    bool readOneBlock(uint64_t seg_id, BlockInputStreamPtr & stream, const SegmentPtr & seg);
+    bool readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg);
     void popBlock(Block & block);
 
     std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator scheduleSegment(
@@ -198,7 +198,7 @@ public:
 private:
     int64_t getFreeActiveSegmentCountUnlock();
     bool exceptionHappened() const;
-    void finishSegment(uint64_t seg_id, const SegmentPtr & seg);
+    void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
 
     const uint64_t pool_id;

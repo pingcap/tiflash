@@ -95,7 +95,7 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
     return result_tasks;
 }
 
-BlockInputStreamPtr SegmentReadTaskPool::getInputStream(uint64_t seg_id, SegmentReadTaskPtr & t)
+BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
     MemoryTrackerSetter setter(true, mem_tracker);
     auto seg = t->segment;
@@ -109,20 +109,20 @@ BlockInputStreamPtr SegmentReadTaskPool::getInputStream(uint64_t seg_id, Segment
         auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
         stream = seg->getInputStream(*dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
     }
-    LOG_FMT_DEBUG(log, "getInputStream pool {} seg_id {} succ", pool_id, seg_id);
+    LOG_FMT_DEBUG(log, "getInputStream pool {} seg_id {} succ", pool_id, seg->segmentId());
     return stream;
 }
 
-void SegmentReadTaskPool::finishSegment(UInt64 seg_id, const SegmentPtr & seg)
+void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
 {
     after_segment_read(dm_context, seg);
     bool pool_finished = false;
     {
         std::lock_guard lock(mutex);
-        active_segment_ids.erase(seg_id);
+        active_segment_ids.erase(seg->segmentId());
         pool_finished = active_segment_ids.empty() && tasks.empty();
     }
-    LOG_FMT_DEBUG(log, "finishSegment pool {} seg_id {} pool_finished {}", pool_id, seg_id, pool_finished);
+    LOG_FMT_DEBUG(log, "finishSegment pool {} seg_id {} pool_finished {}", pool_id, seg->segmentId(), pool_finished);
     if (pool_finished)
     {
         q.finish();
@@ -177,7 +177,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
     return target;
 }
 
-bool SegmentReadTaskPool::readOneBlock(uint64_t seg_id, BlockInputStreamPtr & stream, const SegmentPtr & seg)
+bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
     MemoryTrackerSetter setter(true, mem_tracker);
     auto block = stream->read();
@@ -188,7 +188,7 @@ bool SegmentReadTaskPool::readOneBlock(uint64_t seg_id, BlockInputStreamPtr & st
     }
     else
     {
-        finishSegment(seg_id, seg);
+        finishSegment(seg);
         return false;
     }
 }
