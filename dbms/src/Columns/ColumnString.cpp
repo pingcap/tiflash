@@ -315,9 +315,10 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
 
     return collator.compare(
         reinterpret_cast<const char *>(&chars[offsetAt(n)]),
-        sizeAt(n),
+        sizeAt(n) - 1, // Skip last zero byte.
         reinterpret_cast<const char *>(&rhs.chars[rhs.offsetAt(m)]),
-        rhs.sizeAt(m));
+        rhs.sizeAt(m) - 1 // Skip last zero byte.
+    );
 }
 
 
