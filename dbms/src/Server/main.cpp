@@ -25,10 +25,6 @@
 #include <utility> /// pair
 #include <vector>
 
-#if USE_TCMALLOC
-#include <gperftools/malloc_extension.h>
-#endif
-
 #if ENABLE_CLICKHOUSE_SERVER
 #include "Server.h"
 #endif
@@ -154,14 +150,6 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
 
 int main(int argc_, char ** argv_)
 {
-#if USE_TCMALLOC
-    /** Without this option, tcmalloc returns memory to OS too frequently for medium-sized memory allocations
-      *  (like IO buffers, column vectors, hash tables, etc.),
-      *  that lead to page faults and significantly hurts performance.
-      */
-    MallocExtension::instance()->SetNumericProperty("tcmalloc.aggressive_memory_decommit", false);
-#endif
-
     std::vector<char *> argv(argv_, argv_ + argc_);
 
     /// Print a basic help if nothing was matched
