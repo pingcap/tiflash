@@ -39,10 +39,6 @@
 #include <atomic>
 #include <ext/scope_guard.h>
 
-#if USE_TCMALLOC
-#include <gperftools/malloc_extension.h>
-#endif
-
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -469,11 +465,6 @@ void DeltaMergeStore::drop()
     // Drop data in storage path pool
     path_pool.drop(/*recursive=*/true, /*must_success=*/false);
     LOG_FMT_INFO(log, "Drop DeltaMerge done [{}.{}]", db_name, table_name);
-
-#if USE_TCMALLOC
-    // Reclaim memory.
-    MallocExtension::instance()->ReleaseFreeMemory();
-#endif
 }
 
 void DeltaMergeStore::shutdown()
