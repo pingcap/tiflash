@@ -62,10 +62,7 @@ public:
     }
     void init(const ServerInfo & server_info);
     ~SegmentReaderPoolManager();
-    SegmentReaderPoolManager(const SegmentReaderPoolManager &) = delete;
-    SegmentReaderPoolManager & operator=(const SegmentReaderPoolManager &) = delete;
-    SegmentReaderPoolManager(SegmentReaderPoolManager &&) = delete;
-    SegmentReaderPoolManager & operator=(SegmentReaderPoolManager &&) = delete;
+    DISALLOW_COPY_AND_MOVE(SegmentReaderPoolManager);
 
     void addTask(MergedTaskPtr && task);
     bool isSegmentReader() const;

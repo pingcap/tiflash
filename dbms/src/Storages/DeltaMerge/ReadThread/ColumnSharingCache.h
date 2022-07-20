@@ -218,6 +218,9 @@ class DMFileReaderPool
 {
 public:
     static DMFileReaderPool & instance();
+    DMFileReaderPool() = default;
+    ~DMFileReaderPool() = default;
+    DISALLOW_COPY_AND_MOVE(DMFileReaderPool);
 
     void add(DMFileReader & reader);
     void del(DMFileReader & reader);

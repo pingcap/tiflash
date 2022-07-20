@@ -41,10 +41,7 @@ public:
     }
 
     ~SegmentReadTaskScheduler();
-    SegmentReadTaskScheduler(const SegmentReadTaskScheduler &) = delete;
-    SegmentReadTaskScheduler & operator=(const SegmentReadTaskScheduler &) = delete;
-    SegmentReadTaskScheduler(SegmentReadTaskScheduler &&) = delete;
-    SegmentReadTaskScheduler & operator=(SegmentReadTaskScheduler &&) = delete;
+    DISALLOW_COPY_AND_MOVE(SegmentReadTaskScheduler);
 
     // Add SegmentReadTaskPool to `read_pools` and index segments into merging_segments.
     void add(const SegmentReadTaskPoolPtr & pool);
