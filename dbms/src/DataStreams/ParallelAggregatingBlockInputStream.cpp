@@ -203,13 +203,8 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
     parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
 
     if (!parent.executed)
-<<<<<<< HEAD
         /// kill the processor so ExchangeReceiver will be closed
-        parent.processor.cancel(true);
-=======
-        /// use cancel instead of kill to avoid too many useless error message
-        parent.cancel(false);
->>>>>>> 7b280755ba (fix a panic issue in parallel agg when exception is thrown (#5433))
+        parent.cancel(true);
 }
 
 
