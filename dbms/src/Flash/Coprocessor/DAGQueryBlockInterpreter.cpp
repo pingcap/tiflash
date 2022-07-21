@@ -743,8 +743,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
             stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
         });
-        RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, Exception, "exchange_sender has to be hash partition when fine grained shuffle is enabled");
-        RUNTIME_CHECK(stream_count <= 1024, Exception, "fine_grained_shuffle_stream_count should not be greater than 1024");
+        RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, Exception("exchange_sender has to be hash partition when fine grained shuffle is enabled"));
+        RUNTIME_CHECK(stream_count <= 1024, Exception("fine_grained_shuffle_stream_count should not be greater than 1024"));
     }
     else
     {
