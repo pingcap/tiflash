@@ -257,6 +257,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             if (subquery.join)
                 subquery.join->setTotals(profiling_in->getTotals());
         }
+        if (subquery.join)
+            head_rows = subquery.join->getTotalBuildInputRows();
 
         if (head_rows != 0)
         {

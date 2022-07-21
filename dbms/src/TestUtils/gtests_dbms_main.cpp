@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB::FailPoints
@@ -25,6 +28,10 @@ int main(int argc, char ** argv)
 {
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
+    DB::ServerInfo server_info;
+    DB::DM::SegmentReaderPoolManager::instance().init(server_info);
+    DB::DM::SegmentReadTaskScheduler::instance();
+    DB::DM::DMFileReaderPool::instance();
 
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint

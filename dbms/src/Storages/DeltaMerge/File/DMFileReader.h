@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
 
@@ -91,7 +92,8 @@ public:
         const ReadLimiterPtr & read_limiter,
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
-        const String & tracing_id_);
+        const String & tracing_id_,
+        bool enable_col_sharing_cache);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -99,6 +101,15 @@ public:
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
     Block read();
+    UInt64 fileId() const
+    {
+        return dmfile->fileId();
+    }
+    std::string path() const
+    {
+        return dmfile->path();
+    }
+    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
 
 private:
     bool shouldSeek(size_t pack_id);
@@ -109,6 +120,14 @@ private:
                       size_t read_rows,
                       size_t skip_packs,
                       bool force_seek);
+    void readColumn(ColumnDefine & column_define,
+                    ColumnPtr & column,
+                    size_t start_pack_id,
+                    size_t pack_count,
+                    size_t read_rows,
+                    size_t skip_packs,
+                    bool force_seek);
+    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 
 private:
     DMFilePtr dmfile;
@@ -146,6 +165,9 @@ private:
     FileProviderPtr file_provider;
 
     LoggerPtr log;
+
+    std::unique_ptr<ColumnSharingCacheMap> col_data_cache;
+    std::unordered_map<ColId, bool> last_read_from_cache;
 };
 
 } // namespace DM
