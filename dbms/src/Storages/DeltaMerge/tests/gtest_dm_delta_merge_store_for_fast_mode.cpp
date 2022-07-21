@@ -25,9 +25,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-} // namespace FailPoints
 
 namespace DM
 {
@@ -94,22 +91,6 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
                 createColumn<String>(createNumberStrings(0, num_rows_write)),
                 createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
             }));
-
-        // size_t num_rows_read = 0;
-        // in->readPrefix();
-        // while (Block block = in->read())
-        // {
-        //     num_rows_read += block.rows();
-        //     ASSERT_BLOCK_EQ(
-        //         block,
-        //         Block({
-        //             createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), DMTestEnv::pk_name),
-        //             createColumn<String>(createNumberStrings(0, num_rows_write), col_str_define.name),
-        //             createColumn<Int8>(createSignedNumbers(0, num_rows_write), col_i8_define.name),
-        //         }));
-        // }
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, num_rows_write);
     }
 }
 
@@ -185,23 +166,6 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
                 createColumn<String>(createNumberStrings(0, read_nums_limit)),
                 createColumn<Int8>(createSignedNumbers(0, read_nums_limit)),
             }));
-        // size_t num_rows_read = 0;
-        // in->readPrefix();
-        // while (Block block = in->read())
-        // {
-        //     num_rows_read += block.rows();
-        //     ASSERT_COLUMN_EQ(
-        //         createColumn<Int64>(createNumbers<Int64>(0, read_nums_limit)),
-        //         block.getByName(DMTestEnv::pk_name));
-        //     ASSERT_COLUMN_EQ(
-        //         createColumn<String>(createNumberStrings(0, read_nums_limit)),
-        //         block.getByName(col_str_define.name));
-        //     ASSERT_COLUMN_EQ(
-        //         createColumn<Int8>(createSignedNumbers(0, read_nums_limit)),
-        //         block.getByName(col_i8_define.name));
-        // }
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, read_nums_limit);
     }
 }
 
@@ -263,8 +227,6 @@ try
                       .enableFastMode()
                       .build();
 
-        // size_t num_rows_read = 0;
-        // in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -286,21 +248,6 @@ try
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
-            // while (Block block = in->read())
-            // {
-            //     for (auto && iter : block)
-            //     {
-            //         auto c = iter.column;
-            //         for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //         {
-            //             if (iter.name == DMTestEnv::pk_name)
-            //             {
-            //                 ASSERT_EQ(c->getInt(i), i + num_rows_read);
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            // }
             break;
         }
         case TestMode::V2_Mix:
@@ -321,38 +268,10 @@ try
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
-            // int block_index = 0;
-            // int begin_value = 0; // persist first, then memory, finally stable
-            // while (Block block = in->read())
-            // {
-            //     if (block_index == 1)
-            //     {
-            //         begin_value = num_write_rows * 2;
-            //     }
-            //     else if (block_index == 2)
-            //     {
-            //         begin_value = num_write_rows;
-            //     }
-            //     for (auto && iter : block)
-            //     {
-            //         auto c = iter.column;
-            //         for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //         {
-            //             if (iter.name == DMTestEnv::pk_name)
-            //             {
-            //                 ASSERT_EQ(c->getInt(i), i + begin_value);
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            //     block_index += 1;
-            // }
             break;
         }
         }
 
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
 CATCH
@@ -417,8 +336,6 @@ try
                       .enableFastMode()
                       .build();
 
-        // size_t num_rows_read = 0;
-        // in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -451,37 +368,9 @@ try
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({createColumn<Int64>(pk_coldata)}));
-            // int block_index = 0;
-            // int begin_value = 0;
-            // while (Block block = in->read())
-            // {
-            //     if (block_index == 1)
-            //     {
-            //         begin_value = num_write_rows * 2;
-            //     }
-            //     else if (block_index == 2)
-            //     {
-            //         begin_value = num_write_rows;
-            //     }
-            //     for (auto && iter : block)
-            //     {
-            //         auto c = iter.column;
-            //         for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //         {
-            //             if (iter.name == DMTestEnv::pk_name)
-            //             {
-            //                 ASSERT_EQ(c->getInt(i), i + begin_value);
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            //     block_index += 1;
-            // }
             break;
         }
         }
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
 CATCH
@@ -715,9 +604,7 @@ try
         const auto & columns = store->getTableColumns();
         StoreInputStreamBuilder builder(store, *db_context, columns);
         auto in = builder.enableFastMode().build();
-        // size_t num_rows_read = 0;
 
-        // in->readPrefix();
         switch (mode)
         {
         case TestMode::V1_BlockOnly:
@@ -740,33 +627,6 @@ try
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
-
-            // while (Block block = in->read())
-            // {
-            //     for (auto && iter : block)
-            //     {
-            //         if (iter.name == DMTestEnv::pk_name)
-            //         {
-            //             auto c = iter.column;
-            //             for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //             {
-            //                 if (i < Int64(num_write_rows / 2))
-            //                 {
-            //                     ASSERT_EQ(c->getInt(i), i);
-            //                 }
-            //                 else if (i < Int64(2.5 * num_write_rows))
-            //                 {
-            //                     ASSERT_EQ(c->getInt(i), (i - num_write_rows / 2) / 2 + num_write_rows / 2);
-            //                 }
-            //                 else
-            //                 {
-            //                     ASSERT_EQ(c->getInt(i), (i - num_write_rows * 2) + num_write_rows);
-            //                 }
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            // }
             break;
         }
         case TestMode::V2_FileOnly:
@@ -786,33 +646,6 @@ try
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
-            // auto block_index = 0;
-            // auto begin_value = 0;
-
-            // while (Block block = in->read())
-            // {
-            //     if (block_index == 1)
-            //     {
-            //         begin_value = num_write_rows;
-            //     }
-            //     else if (block_index == 2)
-            //     {
-            //         begin_value = num_write_rows / 2;
-            //     }
-            //     for (auto && iter : block)
-            //     {
-            //         if (iter.name == DMTestEnv::pk_name)
-            //         {
-            //             auto c = iter.column;
-            //             for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //             {
-            //                 ASSERT_EQ(c->getInt(i), i + begin_value);
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            //     block_index += 1;
-            // }
             break;
         }
         case TestMode::V2_Mix:
@@ -832,40 +665,9 @@ try
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
-            // auto block_index = 0;
-            // auto begin_value = num_write_rows;
-
-            // while (Block block = in->read())
-            // {
-            //     if (block_index == 1)
-            //     {
-            //         begin_value = 0;
-            //     }
-            //     else if (block_index == 2)
-            //     {
-            //         begin_value = num_write_rows / 2;
-            //     }
-            //     for (auto && iter : block)
-            //     {
-            //         if (iter.name == DMTestEnv::pk_name)
-            //         {
-            //             auto c = iter.column;
-            //             for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //             {
-            //                 ASSERT_EQ(c->getInt(i), i + begin_value);
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            //     block_index += 1;
-            // }
-
             break;
         }
         }
-
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
 }
 CATCH
@@ -945,26 +747,6 @@ try
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({createColumn<Int64>(createNumbers<Int64>(0, num_rows_write))}));
-        // size_t num_rows_read = 0;
-
-        // in->readPrefix();
-        // while (Block block = in->read())
-        // {
-        //     num_rows_read += block.rows();
-        //     for (auto && iter : block)
-        //     {
-        //         auto c = iter.column;
-        //         for (Int64 i = 0; i < Int64(c->size()); ++i)
-        //         {
-        //             if (iter.name == DMTestEnv::pk_name)
-        //             {
-        //                 ASSERT_EQ(c->getInt(i), i);
-        //             }
-        //         }
-        //     }
-        // }
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, num_rows_write);
     }
 
     store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
@@ -981,25 +763,6 @@ try
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({createColumn<Int64>(createNumbers<Int64>(0, num_rows_write))}));
-        // size_t num_rows_read = 0;
-        // in->readPrefix();
-        // while (Block block = in->read())
-        // {
-        //     num_rows_read += block.rows();
-        //     for (auto && iter : block)
-        //     {
-        //         auto c = iter.column;
-        //         for (Int64 i = 0; i < Int64(c->size()); ++i)
-        //         {
-        //             if (iter.name == DMTestEnv::pk_name)
-        //             {
-        //                 ASSERT_EQ(c->getInt(i), i);
-        //             }
-        //         }
-        //     }
-        // }
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, num_rows_write);
     }
 }
 CATCH
@@ -1037,25 +800,6 @@ try
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({createColumn<Int64>(createNumbers<Int64>(0, num_rows_write))}));
-        // size_t num_rows_read = 0;
-        // in->readPrefix();
-        // while (Block block = in->read())
-        // {
-        //     num_rows_read += block.rows();
-        //     for (auto && iter : block)
-        //     {
-        //         auto c = iter.column;
-        //         for (Int64 i = 0; i < Int64(c->size()); ++i)
-        //         {
-        //             if (iter.name == DMTestEnv::pk_name)
-        //             {
-        //                 ASSERT_EQ(c->getInt(i), i);
-        //             }
-        //         }
-        //     }
-        // }
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, num_rows_write);
     }
     // Delete range [0, 64)
     const size_t num_deleted_rows = 64;
@@ -1073,26 +817,6 @@ try
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({createColumn<Int64>(createNumbers<Int64>(0, num_rows_write))}));
-
-        // size_t num_rows_read = 0;
-        // in->readPrefix();
-        // while (Block block = in->read())
-        // {
-        //     num_rows_read += block.rows();
-        //     for (auto && iter : block)
-        //     {
-        //         auto c = iter.column;
-        //         for (Int64 i = 0; i < Int64(c->size()); ++i)
-        //         {
-        //             if (iter.name == DMTestEnv::pk_name)
-        //             {
-        //                 ASSERT_EQ(c->getInt(i), i);
-        //             }
-        //         }
-        //     }
-        // }
-        // in->readSuffix();
-        // ASSERT_EQ(num_rows_read, num_rows_write);
     }
 }
 CATCH
@@ -1145,27 +869,6 @@ try
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({createColumn<Int64>(pk_coldata)}));
-        // size_t num_rows_read = 0;
-
-        // in->readPrefix();
-        // while (Block block = in->read())
-        // {
-        //     num_rows_read += block.rows();
-        //     for (auto && iter : block)
-        //     {
-        //         auto c = iter.column;
-        //         for (Int64 i = 0; i < Int64(c->size()); ++i)
-        //         {
-        //             if (iter.name == DMTestEnv::pk_name)
-        //             {
-        //                 ASSERT_EQ(c->getInt(i), i + num_deleted_rows);
-        //             }
-        //         }
-        //     }
-        // }
-        // in->readSuffix();
-
-        // ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
     }
 }
 CATCH
@@ -1262,34 +965,6 @@ try
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
-            // while (Block block = in->read())
-            // {
-            //     for (auto && iter : block)
-            //     {
-            //         if (iter.name == DMTestEnv::pk_name)
-            //         {
-            //             auto c = iter.column;
-            //             for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //             {
-            //                 if (i < Int64(num_write_rows / 2))
-            //                 {
-            // [0, 64)
-            //                     ASSERT_EQ(c->getInt(i), i);
-            //                 }
-            //                 else if (i < Int64(2.5 * num_write_rows))
-            //                 {
-            // [64, 320) ->
-            //                     ASSERT_EQ(c->getInt(i), (i - num_write_rows / 2) / 2 + num_write_rows / 2);
-            //                 }
-            //                 else
-            //                 {
-            //                     ASSERT_EQ(c->getInt(i), (i - num_write_rows * 2) + num_write_rows);
-            //                 }
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            // }
             break;
         }
         case TestMode::V2_FileOnly:
@@ -1309,32 +984,6 @@ try
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
-            // auto block_index = 0;
-            // auto begin_value = 0;
-            // while (Block block = in->read())
-            // {
-            //     if (block_index == 1)
-            //     {
-            //         begin_value = num_write_rows;
-            //     }
-            //     else if (block_index == 2)
-            //     {
-            //         begin_value = num_write_rows / 2;
-            //     }
-            //     for (auto && iter : block)
-            //     {
-            //         if (iter.name == DMTestEnv::pk_name)
-            //         {
-            //             auto c = iter.column;
-            //             for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //             {
-            //                 ASSERT_EQ(c->getInt(i), i + begin_value);
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            //     block_index += 1;
-            // }
             break;
         }
         case TestMode::V2_Mix:
@@ -1354,32 +1003,6 @@ try
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
             ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
-            // auto block_index = 0;
-            // auto begin_value = num_write_rows;
-            // while (Block block = in->read())
-            // {
-            //     if (block_index == 1)
-            //     {
-            //         begin_value = 0;
-            //     }
-            //     else if (block_index == 2)
-            //     {
-            //         begin_value = num_write_rows / 2;
-            //     }
-            //     for (auto && iter : block)
-            //     {
-            //         if (iter.name == DMTestEnv::pk_name)
-            //         {
-            //             auto c = iter.column;
-            //             for (Int64 i = 0; i < Int64(c->size()); ++i)
-            //             {
-            //                 ASSERT_EQ(c->getInt(i), i + begin_value);
-            //             }
-            //         }
-            //     }
-            //     num_rows_read += block.rows();
-            //     block_index += 1;
-            // }
             break;
         }
         }
