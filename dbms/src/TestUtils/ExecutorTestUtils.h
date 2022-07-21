@@ -15,6 +15,7 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -88,6 +89,8 @@ public:
         const ColumnsWithTypeAndName & source_columns,
         SourceType type = TableScan,
         size_t concurrency = 1);
+
+    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks);
 
 protected:
     MockDAGRequestContext context;

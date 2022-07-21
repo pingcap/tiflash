@@ -226,7 +226,6 @@ void MPPTask::unregisterTask()
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
-    std::cout << "ywq test reach prepare..." << std::endl;
     dag_req = getDAGRequestFromStringWithRetry(task_request.encoded_plan());
 
     TMTContext & tmt_context = context->getTMTContext();
@@ -319,7 +318,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
-    std::cout << "ywq test preprocess" << std::endl;
     initExchangeReceivers();
     DAGQuerySource dag(*context);
     executeQuery(dag, *context, false, QueryProcessingStage::Complete);

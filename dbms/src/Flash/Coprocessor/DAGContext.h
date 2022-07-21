@@ -162,11 +162,9 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        // assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
-        // ywq test....
+        assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
         // only mpp task has join executor.
-        // initExecutorIdToJoinIdMap();
-        std::cout << "ywq test reach here... init output info...." << std::endl;
+        initExecutorIdToJoinIdMap();
         initOutputInfo();
     }
 

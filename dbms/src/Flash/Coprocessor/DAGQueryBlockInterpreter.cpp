@@ -139,17 +139,6 @@ AnalysisResult analyzeExpressions(
 
     const auto & dag_context = *context.getDAGContext();
     // Append final project results if needed.
-    if (query_block.isRootQueryBlock()) {
-        std::cout << "root query block...." << std::endl;
-        // query_block.root->PrintDebugString();
-        std::cout << "ywq test output offsets:";
-        for (auto c : dag_context.output_offsets) {
-            std::cout << c;
-        }
-        std::cout << std::endl;
-    }
-
-    std::cout << "query_block.isRoot:" << query_block.isRootQueryBlock() << std::endl;
     final_project = query_block.isRootQueryBlock()
         ? analyzer.appendFinalProjectForRootQueryBlock(
             chain,
@@ -177,10 +166,6 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     {
         auto names_and_types = genNamesAndTypes(table_scan);
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
-        for (auto kv : columns_with_type_and_name)
-        {
-            std::cout << kv.name << std::endl;
-        }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         for (size_t i = 0; i < max_streams; ++i)
         {
@@ -695,10 +680,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // execute final project action
     executeProject(pipeline, final_project, "final projection");
-    std::cout << "ywq test final Projection" << std::endl;
-    for (auto c : final_project) {
-        std::cout << c.first << ":" << c.second << std::endl;
-    }
 
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
@@ -714,7 +695,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         // if (unlikely(dagContext().isTest()))
         //     handleMockExchangeSender(pipeline);
         // else 
-        // ywq todo
+        // ywq test todo
             handleExchangeSender(pipeline);
         recordProfileStreams(pipeline, query_block.exchange_sender_name);
     }
@@ -754,7 +735,6 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     const uint64_t stream_count = query_block.exchange_sender->fine_grained_shuffle_stream_count();
     const uint64_t batch_size = query_block.exchange_sender->fine_grained_shuffle_batch_size();
 
-    std::cout << "ywq test enableFineGrainedShuffle: " << enableFineGrainedShuffle(stream_count) << std::endl;
     if (enableFineGrainedShuffle(stream_count))
     {
         pipeline.transform([&](auto & stream) {

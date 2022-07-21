@@ -39,7 +39,7 @@ void MPPHandler::handleError(const MPPTaskPtr & task, String error)
     }
 }
 // execute is responsible for making plan , register tasks and tunnels and start the running thread.
-grpc::Status MPPHandler::execute(const ContextPtr & context,std::unordered_map<String, ColumnsWithTypeAndName> columns, mpp::DispatchTaskResponse * response) // ywq test todo
+grpc::Status MPPHandler::execute(const ContextPtr & context,std::unordered_map<String, ColumnsWithTypeAndName> columns, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;
     current_memory_tracker = nullptr; /// to avoid reusing threads in gRPC

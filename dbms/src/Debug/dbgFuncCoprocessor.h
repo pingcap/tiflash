@@ -85,6 +85,7 @@ QueryTasks queryPlanToQueryTasks(
 
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 
+BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
 namespace Debug
 {
 void setServiceAddr(const std::string & addr);

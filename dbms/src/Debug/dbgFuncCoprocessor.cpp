@@ -56,6 +56,9 @@
 
 #include <utility>
 
+#include "Core/Block.h"
+#include "DataStreams/IBlockInputStream.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -183,154 +186,165 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
 }
 
+BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks)
+{
+    DAGSchema root_task_schema;
+    std::vector<Int64> root_task_ids;
+    for (auto & task : query_tasks)
+    {
+        if (task.is_root_task)
+        {
+            root_task_ids.push_back(task.task_id);
+            root_task_schema = task.result_schema;
+        }
+        auto req = std::make_shared<mpp::DispatchTaskRequest>();
+        auto * tm = req->mutable_meta();
+        tm->set_start_ts(properties.start_ts);
+        tm->set_partition_id(task.partition_id);
+        tm->set_address(Debug::LOCAL_HOST);
+        tm->set_task_id(task.task_id);
+        auto * encoded_plan = req->mutable_encoded_plan();
+        task.dag_request->AppendToString(encoded_plan);
+        req->set_timeout(properties.mpp_timeout);
+        req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+        auto table_id = task.table_id;
+        if (table_id != -1)
+        {
+            /// contains a table scan
+            const auto & table_info = MockTiDB::instance().getTableInfoByID(table_id);
+            if (table_info->is_partition_table)
+            {
+                size_t current_region_size = 0;
+                coprocessor::TableRegions * current_table_regions = nullptr;
+                for (const auto & partition : table_info->partition.definitions)
+                {
+                    const auto partition_id = partition.id;
+                    auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(partition_id);
+                    for (size_t i = 0; i < regions.size(); ++i)
+                    {
+                        if ((current_region_size + i) % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
+                            continue;
+                        if (current_table_regions != nullptr && current_table_regions->physical_table_id() != partition_id)
+                            current_table_regions = nullptr;
+                        if (current_table_regions == nullptr)
+                        {
+                            current_table_regions = req->add_table_regions();
+                            current_table_regions->set_physical_table_id(partition_id);
+                        }
+                        setTipbRegionInfo(current_table_regions->add_regions(), regions[i], partition_id);
+                    }
+                    current_region_size += regions.size();
+                }
+                if (current_region_size < static_cast<size_t>(properties.mpp_partition_num))
+                    throw Exception("Not supported: table region num less than mpp partition num");
+            }
+            else
+            {
+                auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+                if (regions.size() < static_cast<size_t>(properties.mpp_partition_num))
+                    throw Exception("Not supported: table region num less than mpp partition num");
+                for (size_t i = 0; i < regions.size(); ++i)
+                {
+                    if (i % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
+                        continue;
+                    setTipbRegionInfo(req->add_regions(), regions[i], table_id);
+                }
+            }
+        }
+        pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
+        context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
+        if (call.getResp()->has_error())
+            throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
+    }
+    tipb::ExchangeReceiver tipb_exchange_receiver;
+    for (const auto root_task_id : root_task_ids)
+    {
+        mpp::TaskMeta tm;
+        tm.set_start_ts(properties.start_ts);
+        tm.set_address(Debug::LOCAL_HOST);
+        tm.set_task_id(root_task_id);
+        tm.set_partition_id(-1);
+        auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
+        tm.AppendToString(tm_string);
+    }
+    for (auto & field : root_task_schema)
+    {
+        auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+        tipb_type.set_collate(properties.collator);
+        auto * field_type = tipb_exchange_receiver.add_field_types();
+        *field_type = tipb_type;
+    }
+    mpp::TaskMeta root_tm;
+    root_tm.set_start_ts(properties.start_ts);
+    root_tm.set_address(Debug::LOCAL_HOST);
+    root_tm.set_task_id(-1);
+    root_tm.set_partition_id(-1);
+    std::shared_ptr<ExchangeReceiver> exchange_receiver
+        = std::make_shared<ExchangeReceiver>(
+            std::make_shared<GRPCReceiverContext>(
+                tipb_exchange_receiver,
+                root_tm,
+                context.getTMTContext().getKVCluster(),
+                context.getTMTContext().getMPPTaskManager(),
+                context.getSettingsRef().enable_local_tunnel,
+                context.getSettingsRef().enable_async_grpc_client),
+            tipb_exchange_receiver.encoded_task_meta_size(),
+            10,
+            /*req_id=*/"",
+            /*executor_id=*/"",
+            /*fine_grained_shuffle_stream_count=*/0);
+    BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"", /*stream_id*/ 0);
+    return ret;
+}
+
+BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
+{
+    auto & task = query_tasks[0];
+    auto table_id = task.table_id;
+    RegionPtr region;
+    if (region_id == InvalidRegionID)
+    {
+        auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+        if (regions.empty())
+            throw Exception("No region for table", ErrorCodes::BAD_ARGUMENTS);
+        region = regions[0].second;
+        region_id = regions[0].first;
+    }
+    else
+    {
+        region = context.getTMTContext().getKVStore()->getRegion(region_id);
+        if (!region)
+            throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
+    }
+    auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
+    DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
+    DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
+    key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
+    tipb::SelectResponse dag_response = executeDAGRequest(
+        context,
+        *task.dag_request,
+        region_id,
+        region->version(),
+        region->confVer(),
+        properties.start_ts,
+        key_ranges);
+
+    return func_wrap_output_stream(outputDAGResponse(context, task.result_schema, dag_response));
+}
+
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
 {
     if (properties.is_mpp_query)
     {
-        DAGSchema root_task_schema;
-        std::vector<Int64> root_task_ids;
-        for (auto & task : query_tasks)
-        {
-            if (task.is_root_task)
-            {
-                root_task_ids.push_back(task.task_id);
-                root_task_schema = task.result_schema;
-            }
-            auto req = std::make_shared<mpp::DispatchTaskRequest>();
-            auto * tm = req->mutable_meta();
-            tm->set_start_ts(properties.start_ts);
-            tm->set_partition_id(task.partition_id);
-            tm->set_address(Debug::LOCAL_HOST);
-            tm->set_task_id(task.task_id);
-            auto * encoded_plan = req->mutable_encoded_plan();
-            task.dag_request->AppendToString(encoded_plan);
-            req->set_timeout(properties.mpp_timeout);
-            req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
-            auto table_id = task.table_id;
-            if (table_id != -1)
-            {
-                /// contains a table scan
-                const auto & table_info = MockTiDB::instance().getTableInfoByID(table_id);
-                if (table_info->is_partition_table)
-                {
-                    size_t current_region_size = 0;
-                    coprocessor::TableRegions * current_table_regions = nullptr;
-                    for (const auto & partition : table_info->partition.definitions)
-                    {
-                        const auto partition_id = partition.id;
-                        auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(partition_id);
-                        for (size_t i = 0; i < regions.size(); ++i)
-                        {
-                            if ((current_region_size + i) % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
-                                continue;
-                            if (current_table_regions != nullptr && current_table_regions->physical_table_id() != partition_id)
-                                current_table_regions = nullptr;
-                            if (current_table_regions == nullptr)
-                            {
-                                current_table_regions = req->add_table_regions();
-                                current_table_regions->set_physical_table_id(partition_id);
-                            }
-                            setTipbRegionInfo(current_table_regions->add_regions(), regions[i], partition_id);
-                        }
-                        current_region_size += regions.size();
-                    }
-                    if (current_region_size < static_cast<size_t>(properties.mpp_partition_num))
-                        throw Exception("Not supported: table region num less than mpp partition num");
-                }
-                else
-                {
-                    auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
-                    if (regions.size() < static_cast<size_t>(properties.mpp_partition_num))
-                        throw Exception("Not supported: table region num less than mpp partition num");
-                    for (size_t i = 0; i < regions.size(); ++i)
-                    {
-                        if (i % properties.mpp_partition_num != static_cast<size_t>(task.partition_id))
-                            continue;
-                        setTipbRegionInfo(req->add_regions(), regions[i], table_id);
-                    }
-                }
-            }
-            pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-            context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
-            if (call.getResp()->has_error())
-                throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
-        }
-        tipb::ExchangeReceiver tipb_exchange_receiver;
-        for (const auto root_task_id : root_task_ids)
-        {
-            mpp::TaskMeta tm;
-            tm.set_start_ts(properties.start_ts);
-            tm.set_address(Debug::LOCAL_HOST);
-            tm.set_task_id(root_task_id);
-            tm.set_partition_id(-1);
-            auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
-            tm.AppendToString(tm_string);
-        }
-        for (auto & field : root_task_schema)
-        {
-            auto tipb_type = TiDB::columnInfoToFieldType(field.second);
-            tipb_type.set_collate(properties.collator);
-            auto * field_type = tipb_exchange_receiver.add_field_types();
-            *field_type = tipb_type;
-        }
-        mpp::TaskMeta root_tm;
-        root_tm.set_start_ts(properties.start_ts);
-        root_tm.set_address(Debug::LOCAL_HOST);
-        root_tm.set_task_id(-1);
-        root_tm.set_partition_id(-1);
-        std::shared_ptr<ExchangeReceiver> exchange_receiver
-            = std::make_shared<ExchangeReceiver>(
-                std::make_shared<GRPCReceiverContext>(
-                    tipb_exchange_receiver,
-                    root_tm,
-                    context.getTMTContext().getKVCluster(),
-                    context.getTMTContext().getMPPTaskManager(),
-                    context.getSettingsRef().enable_local_tunnel,
-                    context.getSettingsRef().enable_async_grpc_client),
-                tipb_exchange_receiver.encoded_task_meta_size(),
-                10,
-                /*req_id=*/"",
-                /*executor_id=*/"",
-                /*fine_grained_shuffle_stream_count=*/0);
-        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"", /*stream_id*/ 0);
-        return ret;
+        return executeMPPQuery(context, properties, query_tasks);
     }
     else
     {
-        auto & task = query_tasks[0];
-        auto table_id = task.table_id;
-        RegionPtr region;
-        if (region_id == InvalidRegionID)
-        {
-            auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
-            if (regions.empty())
-                throw Exception("No region for table", ErrorCodes::BAD_ARGUMENTS);
-            region = regions[0].second;
-            region_id = regions[0].first;
-        }
-        else
-        {
-            region = context.getTMTContext().getKVStore()->getRegion(region_id);
-            if (!region)
-                throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
-        }
-        auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
-        std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
-        DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
-        DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
-        key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
-        tipb::SelectResponse dag_response = executeDAGRequest(
-            context,
-            *task.dag_request,
-            region_id,
-            region->version(),
-            region->confVer(),
-            properties.start_ts,
-            key_ranges);
-
-        return func_wrap_output_stream(outputDAGResponse(context, task.result_schema, dag_response));
+        return executeNonMPPQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
     }
 }
+
 
 void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
@@ -514,7 +528,6 @@ struct QueryFragment
         dag_request.set_time_zone_name(properties.tz_name);
         dag_request.set_time_zone_offset(properties.tz_offset);
         dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
-        std::cout << "ywq test encode type: " << properties.encode_type << std::endl;
         if (is_top_fragment)
         {
             if (properties.encode_type == "chunk")

@@ -1133,10 +1133,6 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     bool keep_session_timezone_info)
 {
     auto & step = initAndGetLastStep(chain);
-    std::cout << "ywq test schema, output offsets: "<< output_offsets.size() << std::endl;
-    for (auto k : schema) {
-       k.PrintDebugString();
-    }
 
     NamesWithAliases final_project = buildFinalProjection(step.actions, schema, output_offsets, column_prefix, keep_session_timezone_info);
 

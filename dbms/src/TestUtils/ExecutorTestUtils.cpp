@@ -139,6 +139,18 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const st
     return executeStreams(request, source_columns_map, concurrency);
 }
 
+ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks)
+{
+    DAGProperties properties;
+    // enable mpp
+    properties.is_mpp_query = true;
+    properties.mpp_partition_num = 3;
+    auto res = executeMPPQuery(context.context, properties, tasks);
+    auto columns = readBlock(res);
+    std::cout << getColumnsContent(columns) << std::endl;
+    return columns;
+}
+
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
 {
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));

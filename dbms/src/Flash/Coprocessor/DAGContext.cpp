@@ -242,10 +242,6 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
 ColumnsWithTypeAndName DAGContext::columnsForTest(String executor_id)
 {
     auto it = columns_for_test_map.find(executor_id);
-    std::cout << "ywq test executor_id:" << executor_id << std::endl;
-    for (auto c : columns_for_test_map) {
-        std::cout << c.first << ":" << c.second.front().name << std::endl;
-    }
     if (unlikely(it == columns_for_test_map.end()))
     {
         throw DB::Exception("Don't have columns for mock source executors");

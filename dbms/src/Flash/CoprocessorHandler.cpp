@@ -229,11 +229,6 @@ grpc::Status CoprocessorHandler::execute(std::unordered_map<String, ColumnsWithT
             dag_context.tables_regions_info = std::move(tables_regions_info);
             dag_context.log = Logger::get("CoprocessorHandler");
             dag_context.tidb_host = cop_context.db_context.getClientInfo().current_address.toString();
-            std::cout << "ywq test check columns: " << std::endl;
-            for (auto c : columns) {
-                std::cout << c.first <<", ";
-            }
-            std::cout << std::endl;
             dag_context.setColumnsForTest(columns);
             cop_context.db_context.setDAGContext(&dag_context);
 
