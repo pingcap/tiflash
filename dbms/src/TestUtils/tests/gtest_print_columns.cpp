@@ -19,7 +19,6 @@ namespace DB
 {
 namespace tests
 {
-
 class PrintColumnsTest : public DB::tests::ExecutorTest
 {
 public:

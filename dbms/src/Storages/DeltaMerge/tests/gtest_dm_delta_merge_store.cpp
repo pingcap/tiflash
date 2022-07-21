@@ -18,8 +18,6 @@
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 
-#include "gtest/gtest.h"
-
 namespace DB
 {
 namespace FailPoints
