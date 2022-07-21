@@ -123,11 +123,6 @@ Revision: 21d37dbaa45742c0bd23cc1e5a70b52cbc27f809
 Address: https://github.com/ClickHouse/ClickHouse/tree/b13313eecca9455f4fdc923f597fe863df409742/contrib/libsparsehash
 License: https://github.com/ClickHouse/ClickHouse/blob/b13313eecca9455f4fdc923f597fe863df409742/contrib/libsparsehash/COPYING
 --------------------------------------
-tcmalloc
-Revision: dde32f8bbc95312379f9f5a651799815bb6327c5
-Address: https://github.com/ClickHouse/ClickHouse/tree/b13313eecca9455f4fdc923f597fe863df409742/contrib/libtcmalloc
-License: https://github.com/ClickHouse/ClickHouse/blob/b13313eecca9455f4fdc923f597fe863df409742/contrib/libtcmalloc/COPYING
---------------------------------------
 libunwind
 Revision: 19a2c01b1e8ac20871ea09d20f596d425ba53aed
 Address: https://github.com/libunwind/libunwind
