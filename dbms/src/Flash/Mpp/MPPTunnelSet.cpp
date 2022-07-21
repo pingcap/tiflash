@@ -20,6 +20,22 @@
 
 namespace DB
 {
+
+struct TmpMemTracker {
+TmpMemTracker(size_t size):size(size) {
+    if (proc_memory_tracker) {
+        proc_memory_tracker->alloc(size);
+        tracked_mem += size;
+    }
+}
+~TmpMemTracker() {
+    if (proc_memory_tracker) {
+        proc_memory_tracker->free(size);
+        tracked_mem -= size;
+    }
+}
+size_t size;
+};
 namespace FailPoints
 {
 extern const char exception_during_mpp_write_err_to_tunnel[];
@@ -60,6 +76,7 @@ void MPPTunnelSetBase<Tunnel>::clearExecutionSummaries(tipb::SelectResponse & re
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 {
+    TmpMemTracker tmt(response.ByteSizeLong());
     auto packet = serializeToPacket(response);
     tunnels[0]->write(packet);
 
@@ -98,6 +115,7 @@ void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t partition_id)
 {
+    TmpMemTracker tmt(response.ByteSizeLong());
     if (partition_id != 0 && response.execution_summaries_size() > 0)
         clearExecutionSummaries(response);
 

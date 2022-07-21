@@ -25,6 +25,29 @@
 
 namespace DB
 {
+struct TmpMemTracker2 {
+TmpMemTracker2(size_t size):size(size) {
+    if (proc_memory_tracker) {
+        proc_memory_tracker->alloc(size);
+        tracked_mem += size;
+    }
+}
+void alloc(size_t delta) {
+    if (proc_memory_tracker) {
+        proc_memory_tracker->alloc(delta);
+        size += delta;
+        tracked_mem += delta;
+    }
+}
+~TmpMemTracker2() {
+    if (proc_memory_tracker) {
+        proc_memory_tracker->free(size);
+        tracked_mem -= size;
+    }
+}
+size_t size;
+};
+
 namespace ErrorCodes
 {
 extern const int UNSUPPORTED_PARAMETER;
@@ -97,7 +120,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     }
 }
 
-const bool fix_huge_block_of_flash2tidb = true;
+const bool fix_huge_block_of_flash2tidb = false;
 const bool fix_huge_block_of_flash2tiflash = false;
 const int rows_of_single_msg = 1024;
 
@@ -112,11 +135,20 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
     {
         if (dag_context.isMPPTask()) /// broadcast data among TiFlash nodes in MPP
         {
+            size_t tmtsize = 0;
+            if constexpr (send_exec_summary_at_last)
+            {
+                tmtsize = response.ByteSizeLong();
+            }
+            TmpMemTracker2 tmt(tmtsize);
+            
             mpp::MPPDataPacket packet;
             if constexpr (send_exec_summary_at_last)
             {
+                
                 serializeToPacket(packet, response);
             }
+
             if (input_blocks.empty())
             {
                 if constexpr (send_exec_summary_at_last)
@@ -129,7 +161,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             {
                 std::cerr<<"rows#2: "<<block.rows()<<std::endl;
                 chunk_codec_stream->encode(block, 0, block.rows());
-                packet.add_chunks(chunk_codec_stream->getString());
+                auto curstr = chunk_codec_stream->getString();
+                tmt.alloc(curstr.size());
+                packet.add_chunks(curstr);
                 chunk_codec_stream->clear();
             }
             writer->write(packet);
@@ -166,6 +200,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
             }
             return;
         }
+        TmpMemTracker2 tmt(0);
         bool writed = false;
         Int64 current_records_num = 0;
         Int64 resp_records_num = 0;
@@ -179,7 +214,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
                 if (current_records_num >= records_per_chunk)
                 {
                     auto * dag_chunk = response.add_chunks();
-                    dag_chunk->set_rows_data(chunk_codec_stream->getString());
+                    auto curstr = chunk_codec_stream->getString();
+                    tmt.alloc(curstr.size()); //warn!!! correct only when not fix_huge_block_of_flash2tidb
+                    dag_chunk->set_rows_data(curstr);
                     chunk_codec_stream->clear();
                     resp_records_num+=current_records_num;
                     current_records_num = 0;
@@ -214,7 +251,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(
         if (current_records_num > 0)
         {
             auto * dag_chunk = response.add_chunks();
-            dag_chunk->set_rows_data(chunk_codec_stream->getString());
+            auto curstr = chunk_codec_stream->getString();
+            tmt.alloc(curstr.size());
+            dag_chunk->set_rows_data(curstr);
             chunk_codec_stream->clear();
         }
         if (!fix_huge_block_of_flash2tidb || !(writed && response.chunks_size() == 0))
@@ -236,7 +275,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
     std::vector<mpp::MPPDataPacket> packet(partition_num);
 
     std::vector<size_t> responses_row_count(partition_num);
-
+    size_t tmtsize = 0;
+    if constexpr (send_exec_summary_at_last)
+    {
+        tmtsize = response.ByteSizeLong();
+    }
+    TmpMemTracker2 tmt(tmtsize);
     if constexpr (send_exec_summary_at_last)
     {
         /// Sending the response to only one node, default the first one.
@@ -320,7 +364,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlo
             dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
             responses_row_count[part_id] += dest_blocks[part_id].rows();
             chunk_codec_stream->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
-            packet[part_id].add_chunks(chunk_codec_stream->getString());
+            auto curstr = chunk_codec_stream->getString();
+            tmt.alloc(curstr.size());
+            packet[part_id].add_chunks(curstr);
             chunk_codec_stream->clear();
 
             if (responses_row_count[part_id] > 1024) {

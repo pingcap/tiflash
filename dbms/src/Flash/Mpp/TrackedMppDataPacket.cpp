@@ -25,6 +25,7 @@ namespace DB
             {
                 // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
                 // server.context().getGlobalContext().getProcessList().total_memory_tracker.alloc(size);
+                //TrackedMppDataPacket::proc_memory_tracker->alloc(size)
                 if (proc_memory_tracker) {
                     proc_memory_tracker->alloc(size);
                 //     current_memory_tracker->alloc(size);
@@ -44,7 +45,7 @@ namespace DB
             catch (...)
             {
                 has_err = true;
-                tracked_proto -= size;
+                // tracked_proto -= size;
                 std::rethrow_exception(std::current_exception());
             }
         }
