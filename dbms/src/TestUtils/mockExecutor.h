@@ -16,6 +16,7 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/astToExecutor.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <tipb/executor.pb.h>
@@ -62,6 +63,7 @@ public:
     }
 
     std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
+    QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
 
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfoVec & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoVec & columns);
@@ -166,6 +168,7 @@ MockWindowFrame buildDefaultRowsFrame();
 
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
+#define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))
@@ -173,8 +176,13 @@ MockWindowFrame buildDefaultRowsFrame();
 #define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr))
+
+// Aggregation functions
 #define Max(expr) makeASTFunction("max", (expr))
+#define Min(expr) makeASTFunction("min", (expr))
+#define Count(expr) makeASTFunction("count", (expr))
 #define Sum(expr) makeASTFunction("sum", (expr))
+
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
 #define Rank() makeASTFunction("Rank")

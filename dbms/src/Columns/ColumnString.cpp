@@ -341,8 +341,8 @@ struct ColumnString::LessWithCollation
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(lhs)]),
             parent.sizeAt(lhs) - 1, // Skip last zero byte.
             reinterpret_cast<const char *>(&parent.chars[parent.offsetAt(rhs)]),
-            parent.sizeAt(rhs) - 1) // Skip last zero byte.
-            ;
+            parent.sizeAt(rhs) - 1 // Skip last zero byte.
+        );
 
         if constexpr (positive)
         {
