@@ -14,6 +14,8 @@
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/InputStreamTestUtils.h>
 
 namespace DB
 {
@@ -85,31 +87,13 @@ TEST(DeleteFilterTest, NormalCase)
 
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
 
-    {
-        auto in = genDeleteFilterInputStream(blocks, columns, false);
-        in->readPrefix();
-        Block block = in->read();
-        ASSERT_EQ(block.rows(), 1);
-        auto col = block.getByName(str_col_name);
-        auto val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "hello");
-
-        block = in->read();
-        ASSERT_EQ(block.rows(), 1);
-        col = block.getByName(str_col_name);
-        val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "world");
-
-        block = in->read();
-        ASSERT_EQ(block.rows(), 1);
-        col = block.getByName(str_col_name);
-        val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "TiFlash");
-
-        block = in->read();
-        ASSERT_FALSE(block); // ensure the stream is ended
-        in->readSuffix();
-    }
+    auto in = genDeleteFilterInputStream(blocks, columns, false);
+    ASSERT_INPUTSTREAM_COLS_UR(
+        in,
+        Strings({str_col_name}),
+        createColumns({
+            createColumn<String>({"hello", "world", "TiFlash"}),
+        }));
 }
 
 TEST(ColumnProjectionTest, NormalCase)
@@ -125,46 +109,21 @@ TEST(ColumnProjectionTest, NormalCase)
         blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 1, str_col_name, "Storage", false, 1));
     }
 
+    // Only keep the column `str_col_name`
     ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
-
+    for (auto iter = columns.begin(); iter != columns.end(); /**/)
     {
-        auto in = genColumnProjInputStream(blocks, columns, false);
-        in->readPrefix();
-        Block block = in->read();
-        ASSERT_EQ(block.rows(), 1);
-        auto col = block.getByName(str_col_name);
-        auto val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "hello");
-
-        block = in->read();
-        ASSERT_EQ(block.rows(), 1);
-        col = block.getByName(str_col_name);
-        val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "world");
-
-        block = in->read();
-        ASSERT_EQ(block.rows(), 1);
-        col = block.getByName(str_col_name);
-        val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "");
-
-
-        block = in->read();
-        ASSERT_EQ(block.rows(), 1);
-        col = block.getByName(str_col_name);
-        val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "TiFlash");
-
-        block = in->read();
-        ASSERT_EQ(block.rows(), 1);
-        col = block.getByName(str_col_name);
-        val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "Storage");
-
-        block = in->read();
-        ASSERT_FALSE(block); // ensure the stream is ended
-        in->readSuffix();
+        if (iter->name != str_col_name)
+            iter = columns.erase(iter);
+        else
+            iter++;
     }
+
+    ASSERT_INPUTSTREAM_BLOCK_UR(
+        genColumnProjInputStream(blocks, columns, false),
+        Block({
+            createColumn<String>({"hello", "world", "", "TiFlash", "Storage"}, str_col_name),
+        }));
 }
 } // namespace tests
 } // namespace DM
