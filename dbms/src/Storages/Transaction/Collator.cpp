@@ -92,15 +92,12 @@ public:
                 tp = MatchType::Match;
                 if (offset < pattern.length())
                 {
-                    auto old_offset = offset;
-                    c = Collator::decodeChar(pattern.data(), old_offset);
-                    if (c == escape || c == '_' || c == '%')
-                        offset = old_offset;
-                    else
-                    {
-                        assert(escape >= 0);
-                        c = static_cast<decltype(c)>(escape); // NOLINT(bugprone-signed-char-misuse)
-                    }
+                    // use next char to match
+                    c = Collator::decodeChar(pattern.data(), offset);
+                }
+                else
+                {
+                    // use `escape` to match
                 }
             }
             else if (c == '_')
