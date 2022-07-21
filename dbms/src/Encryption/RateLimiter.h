@@ -46,6 +46,37 @@ enum class LimiterType
     BG_READ = 4,
 };
 
+/// IOInfo is used to store IO information.
+/// total_write_bytes is the total bytes of the write.
+/// total_read_bytes is the total bytes of the read.
+/// bg_write_bytes is the bytes of the background write.
+/// bg_read_bytes is the bytes of the background read.
+/// update_time is the time of the last update.
+struct IOInfo
+{
+    Int64 total_write_bytes;
+    Int64 total_read_bytes;
+    Int64 bg_write_bytes;
+    Int64 bg_read_bytes;
+    std::chrono::time_point<std::chrono::system_clock> update_time;
+
+    IOInfo()
+        : total_write_bytes(0)
+        , total_read_bytes(0)
+        , bg_write_bytes(0)
+        , bg_read_bytes(0)
+    {}
+
+    std::string toString() const
+    {
+        return fmt::format("total_write_bytes {} total_read_bytes {} bg_write_bytes {} bg_read_bytes {}",
+                           total_write_bytes,
+                           total_read_bytes,
+                           bg_write_bytes,
+                           bg_read_bytes);
+    }
+};
+
 // WriteLimiter is to control write rate (bytes per second).
 // Because of the storage engine is append-only, the amount of data written by the storage engine
 // is equal to the amount of data written to the disk by the operating system. So, WriteLimiter
@@ -159,35 +190,25 @@ public:
         std::function<Int64()> getIOStatistic_,
         Int64 rate_limit_per_sec_,
         LimiterType type_,
-        Int64 get_io_stat_period_us = 2000,
         UInt64 refill_period_ms_ = 100);
 
 #ifndef DBMS_PUBLIC_GTEST
 protected:
 #endif
 
-    virtual void refillAndAlloc() override;
-    virtual void consumeBytes(Int64 bytes) override;
-    virtual bool canGrant(Int64 bytes) override;
+    void refillAndAlloc() override;
+    void consumeBytes(Int64 bytes) override;
+    bool canGrant(Int64 bytes) override;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
 
     Int64 getAvailableBalance();
-    Int64 refreshAvailableBalance();
 
-    std::function<Int64()> getIOStatistic;
+    std::function<Int64()> get_io_statistic;
     Int64 last_stat_bytes;
-    using TimePoint = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
-    static TimePoint now()
-    {
-        return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
-    }
-    TimePoint last_stat_time;
     Poco::Logger * log;
-
-    Int64 get_io_statistic_period_us;
 };
 
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
@@ -209,31 +230,6 @@ public:
 
     void setStop();
 
-    struct IOInfo
-    {
-        Int64 total_write_bytes;
-        Int64 total_read_bytes;
-        Int64 bg_write_bytes;
-        Int64 bg_read_bytes;
-        std::chrono::time_point<std::chrono::system_clock> update_time;
-
-        IOInfo()
-            : total_write_bytes(0)
-            , total_read_bytes(0)
-            , bg_write_bytes(0)
-            , bg_read_bytes(0)
-        {}
-
-        std::string toString() const
-        {
-            return fmt::format("total_write_bytes {} total_read_bytes {} bg_write_bytes {} bg_read_bytes {}",
-                               total_write_bytes,
-                               total_read_bytes,
-                               bg_write_bytes,
-                               bg_read_bytes);
-        }
-    };
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -254,7 +250,7 @@ private:
     WriteLimiterPtr fg_write_limiter;
     ReadLimiterPtr bg_read_limiter;
     ReadLimiterPtr fg_read_limiter;
-    std::mutex mtx_;
+    std::mutex mtx;
 
     std::mutex bg_thread_ids_mtx;
     std::vector<pid_t> bg_thread_ids;
@@ -263,7 +259,9 @@ private:
     Poco::Logger * log;
 
     std::atomic<bool> stop;
-    std::thread auto_tune_thread;
+    std::thread auto_tune_and_get_io_info_thread;
+    IOInfo io_info;
+    const UInt64 update_io_stat_period_ms;
 
     // Noncopyable and nonmovable.
     DISALLOW_COPY_AND_MOVE(IORateLimiter);
