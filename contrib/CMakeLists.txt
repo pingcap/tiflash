@@ -159,7 +159,7 @@ SET (BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable google-benchmark testi
 add_subdirectory(benchmark)
 
 set (BUILD_TESTING OFF CACHE BOOL "Disable cpu-features testing" FORCE)
-if ((NOT APPLE) AND (NOT ARCH_AARCH64))
+if (NOT (APPLE AND ARCH_AARCH64))
     add_subdirectory(cpu_features)
 endif()
 
