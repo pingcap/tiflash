@@ -455,42 +455,42 @@ UInt64 StorageIORateLimitConfig::totalWeight() const
 
 UInt64 StorageIORateLimitConfig::getFgWriteMaxBytesPerSec() const
 {
-    if (totalWeight() <= 0 || writeWeight() <= 0)
+    if (writeWeight() <= 0 || totalWeight() <= 0)
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_write_weight
-                                 : max_write_bytes_per_sec / writeWeight() * fg_write_weight;
+    return use_max_bytes_per_sec ? static_cast<UInt64>(1.0 * max_bytes_per_sec / totalWeight() * fg_write_weight)
+                                 : static_cast<UInt64>(1.0 * max_write_bytes_per_sec / writeWeight() * fg_write_weight);
 }
 
 UInt64 StorageIORateLimitConfig::getBgWriteMaxBytesPerSec() const
 {
-    if (totalWeight() <= 0 || writeWeight() <= 0)
+    if (writeWeight() <= 0 || totalWeight() <= 0)
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_write_weight
-                                 : max_write_bytes_per_sec / writeWeight() * bg_write_weight;
+    return use_max_bytes_per_sec ? static_cast<UInt64>(1.0 * max_bytes_per_sec / totalWeight() * bg_write_weight)
+                                 : static_cast<UInt64>(1.0 * max_write_bytes_per_sec / writeWeight() * bg_write_weight);
 }
 
 UInt64 StorageIORateLimitConfig::getFgReadMaxBytesPerSec() const
 {
-    if (totalWeight() <= 0 || readWeight() <= 0)
+    if (readWeight() <= 0 || totalWeight() <= 0)
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_read_weight
-                                 : max_read_bytes_per_sec / readWeight() * fg_read_weight;
+    return use_max_bytes_per_sec ? static_cast<UInt64>(1.0 * max_bytes_per_sec / totalWeight() * fg_read_weight)
+                                 : static_cast<UInt64>(1.0 * max_read_bytes_per_sec / readWeight() * fg_read_weight);
 }
 
 UInt64 StorageIORateLimitConfig::getBgReadMaxBytesPerSec() const
 {
-    if (totalWeight() <= 0 || readWeight() <= 0)
+    if (readWeight() <= 0 || totalWeight() <= 0)
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_read_weight
-                                 : max_read_bytes_per_sec / readWeight() * bg_read_weight;
+    return use_max_bytes_per_sec ? static_cast<UInt64>(1.0 * max_bytes_per_sec / totalWeight() * bg_read_weight)
+                                 : static_cast<UInt64>(1.0 * max_read_bytes_per_sec / readWeight() * bg_read_weight);
 }
 
 UInt64 StorageIORateLimitConfig::getWriteMaxBytesPerSec() const
