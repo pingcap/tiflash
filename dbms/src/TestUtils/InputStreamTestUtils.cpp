@@ -1,9 +1,8 @@
+#include <Core/Block.h>
+#include <Core/ColumnWithTypeAndName.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
-
-#include "Core/ColumnWithTypeAndName.h"
-#include "TestUtils/FunctionTestUtils.h"
-#include "gtest/gtest.h"
 
 namespace DB
 {
@@ -150,7 +149,14 @@ namespace tests
         // else, compare the the `block` to the [prev_num_rows_read, num_rows_read) rows of `rhs`
         {
             // num of columns
-            if (auto res = ::testing::internal::EqHelper<false>::Compare("", "", block.columns(), rhs.columns()); !res)
+            auto read_cols_expr = fmt::format("{}.read().columns()", lhs_expr);
+            auto rcols_expr = fmt::format("{}.columns()", rhs_expr);
+            if (auto res = ::testing::internal::EqHelper<false>::Compare(
+                    read_cols_expr.c_str(),
+                    rcols_expr.c_str(),
+                    block.columns(),
+                    rhs.columns());
+                !res)
             {
                 return res;
             }
@@ -176,6 +182,7 @@ namespace tests
     if (num_rows_expect == num_rows_read)
         return ::testing::AssertionSuccess();
 
+    // Less rows than expected
     auto reason = fmt::format(R"r(  ({}).read() return num of rows
     Which is: {}
   the num rows of ({})
@@ -183,6 +190,86 @@ namespace tests
                               lhs_expr,
                               num_rows_read,
                               rhs_expr,
+                              num_rows_expect);
+    return ::testing::AssertionFailure() << reason;
+}
+
+::testing::AssertionResult InputStreamVSBlockUnrestrictlyCompareColumns(
+    const char * stream_expr,
+    const char * /*colnames_expr*/,
+    const char * columns_expr,
+    const BlockInputStreamPtr & stream,
+    const Strings & colnames,
+    const ColumnsWithTypeAndName & columns)
+{
+    RUNTIME_CHECK(stream != nullptr, Exception, fmt::format("The first param of ASSERT_INPUTSTREAM_COLS_UR, `{}` is nullptr!", stream_expr));
+    RUNTIME_CHECK(
+        colnames.size() == columns.size(),
+        Exception,
+        fmt::format("The length of second and thrid param of ASSERT_INPUTSTREAM_COLS_UR not match! {} != {}", colnames.size(), columns.size()));
+
+    Block expect_block(columns);
+    expect_block.checkNumberOfRows(); // check the input
+
+    size_t num_rows_expect = expect_block.rows();
+    size_t num_rows_read = 0;
+    size_t prev_num_rows_read = 0;
+    stream->readPrefix();
+    while (Block read_block = stream->read())
+    {
+        num_rows_read += read_block.rows();
+
+        if (num_rows_read > num_rows_expect)
+        {
+            auto reason = fmt::format(R"r(
+  ({}).read() return more rows({}) than expected
+  ({}).rows()
+    Which is: {})r",
+                                      stream_expr,
+                                      num_rows_read,
+                                      columns_expr,
+                                      num_rows_expect);
+            return ::testing::AssertionFailure() << reason;
+        }
+
+        // else, compare the the `read_block` to the [prev_num_rows_read, num_rows_read) rows of `expect_block`
+        for (size_t col_idx = 0; col_idx < colnames.size(); ++col_idx)
+        {
+            const auto & col_name = colnames[col_idx];
+            // Copy the [prev_num_rows_read, num_rows_read) of `expect_block`
+            const auto & expect_full_col = expect_block.getByPosition(col_idx);
+            auto expect_col = expect_full_col.cloneEmpty();
+            auto column_data = expect_col.type->createColumn();
+            column_data->insertRangeFrom(*expect_full_col.column, prev_num_rows_read, num_rows_read - prev_num_rows_read);
+            expect_col.column = std::move(column_data);
+
+            const auto & actual_col = read_block.getByName(col_name);
+            if (auto res = DB::tests::columnEqual(expect_col, actual_col); !res)
+            {
+                auto expect_expr = fmt::format("expect block: {}", getColumnsContent(expect_block.getColumnsWithTypeAndName(), prev_num_rows_read, num_rows_read));
+                Block actual_block_to_cmp;
+                for (const auto & col_name : colnames)
+                    actual_block_to_cmp.insert(read_block.getByName(col_name));
+                auto actual_expr = fmt::format("actual block: {}", getColumnsContent(actual_block_to_cmp.getColumnsWithTypeAndName()));
+                return res << fmt::format("\n  details: [column={}] [prev_nrows={}] [cur_nrows={}]:\n    {}\n    {}", col_name, prev_num_rows_read, num_rows_read, expect_expr, actual_expr);
+            }
+        }
+
+        prev_num_rows_read += read_block.rows();
+    }
+    stream->readSuffix();
+
+    if (num_rows_expect == num_rows_read)
+        return ::testing::AssertionSuccess();
+
+    // Less rows than expected
+    auto reason = fmt::format(R"r(  ({}).read() return num of rows
+    Which is: {}
+  the num rows of ({})
+    Which is: {})r",
+                              stream_expr,
+                              num_rows_read,
+                              columns_expr,
                               num_rows_expect);
     return ::testing::AssertionFailure() << reason;
 }

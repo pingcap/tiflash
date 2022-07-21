@@ -46,8 +46,8 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 {
     if (expected_v != actual_v)
     {
-        auto expected_str = fmt::format("\n{}: {}", expected_expr, expected_display);
-        auto actual_str = fmt::format("\n{}: {}", actual_expr, actual_display);
+        auto expected_str = fmt::format("\n  {}:\n    {}", expected_expr, expected_display);
+        auto actual_str = fmt::format("\n  {}:\n    {}", actual_expr, actual_display);
         return ::testing::AssertionFailure() << title << expected_str << actual_str;
     }
     return ::testing::AssertionSuccess();
@@ -92,7 +92,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
         auto expected_field = (*expected)[i];
         auto actual_field = (*actual)[i];
 
-        ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value {} mismatch", i), expected_field.toString(), actual_field.toString());
+        ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value at index {} mismatch", i), expected_field.toString(), actual_field.toString());
     }
     return ::testing::AssertionSuccess();
 }
@@ -114,7 +114,10 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     size_t columns = actual.columns();
     size_t expected_columns = expected.columns();
 
-    ASSERT_EQUAL(expected_columns, columns, "Block column size mismatch");
+    ASSERT_EQUAL(
+        expected_columns,
+        columns,
+        fmt::format("Block column size mismatch\nexpected_structure: {}\nstructure: {}", expected.dumpStructure(), actual.dumpStructure()));
 
     for (size_t i = 0; i < columns; ++i)
     {

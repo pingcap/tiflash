@@ -48,8 +48,6 @@ void ColumnWithTypeAndName::dumpStructure(WriteBuffer & out) const
         out << ' ' << column->dumpStructure();
     else
         out << " nullptr";
-
-    out << " " << column_id;
 }
 
 String ColumnWithTypeAndName::dumpStructure() const

@@ -184,7 +184,7 @@ try
 }
 CATCH
 
-TEST(InputStreamTestUtilsTest, CompareInputStream)
+TEST(InputStreamTestUtilsTest, CompareInputStreamNRows)
 try
 {
     // Only check number of rows
@@ -207,7 +207,12 @@ try
         BlockInputStreamPtr in = std::make_unique<BlocksListBlockInputStream>(std::move(blocks));
         ASSERT_INPUTSTREAM_NROWS(in, 6);
     }
+}
+CATCH
 
+TEST(InputStreamTestUtilsTest, CompareInputStreamBlock)
+try
+{
     // Check the block read
     {
         BlocksList blocks{};
@@ -236,6 +241,7 @@ try
 
     // unrestrictly check
     {
+        //the input stream return smaller blocks
         BlocksList blocks{Block({createColumn<String>({"hello", "world"}, "col1"),
                                  createColumn<Int64>({123, 456}, "col2")}),
                           Block({createColumn<String>({"tikv", "tidb", "pd", "tiflash"}, "col1"),
@@ -248,6 +254,7 @@ try
                    createColumn<Int64>({123, 456, 1, 2, 3, 4}, "col2")}));
     }
     {
+        //the input stream return excatly the same block
         BlocksList blocks{Block({createColumn<String>({"hello", "world", "tikv", "tidb", "pd", "tiflash"}, "col1"),
                                  createColumn<Int64>({123, 456, 1, 2, 3, 4}, "col2")})};
         BlockInputStreamPtr in = std::make_unique<BlocksListBlockInputStream>(std::move(blocks));
@@ -259,5 +266,37 @@ try
     }
 }
 CATCH
+
+TEST(InputStreamTestUtilsTest, CompareInputStreamColumns)
+try
+{
+    // unrestrictly check a part of columns
+    {
+        //the input stream return smaller blocks, only check col1
+        BlocksList blocks{Block({createColumn<String>({"hello", "world"}, "col1"),
+                                 createColumn<Int64>({123, 456}, "col2")}),
+                          Block({createColumn<String>({"tikv", "tidb", "pd", "tiflash"}, "col1"),
+                                 createColumn<Int64>({1, 2, 3, 4}, "col2")})};
+        BlockInputStreamPtr in = std::make_unique<BlocksListBlockInputStream>(std::move(blocks));
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({"col1"}),
+            createColumns({createColumn<String>({"hello", "world", "tikv", "tidb", "pd", "tiflash"})}));
+    }
+    {
+        //the input stream return smaller blocks, only check col2
+        BlocksList blocks{Block({createColumn<String>({"hello", "world"}, "col1"),
+                                 createColumn<Int64>({123, 456}, "col2")}),
+                          Block({createColumn<String>({"tikv", "tidb", "pd", "tiflash"}, "col1"),
+                                 createColumn<Int64>({1, 2, 3, 4}, "col2")})};
+        BlockInputStreamPtr in = std::make_unique<BlocksListBlockInputStream>(std::move(blocks));
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({"col2"}),
+            createColumns({createColumn<Int64>({123, 456, 1, 2, 3, 4})}));
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
