@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
@@ -131,14 +132,7 @@ try
         {
             // read written data (only in delta)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
 
         {
@@ -149,14 +143,7 @@ try
         {
             // read written data (only in stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
     }
 
@@ -180,14 +167,7 @@ try
         {
             // read written data (both in delta and stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
 
         {
@@ -198,14 +178,7 @@ try
         {
             // read written data (only in stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
     }
 }
@@ -249,14 +222,7 @@ try
         {
             // read written data (only in delta)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, expect_read_rows);
+            ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
 
         {
@@ -269,14 +235,7 @@ try
         {
             // read written data (only in stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, expect_read_rows);
+            ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
     }
 
@@ -302,14 +261,7 @@ try
         {
             // read written data (both in delta and stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, expect_read_rows_2);
+            ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
 
         {
@@ -321,14 +273,7 @@ try
         {
             // read written data (only in stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, expect_read_rows_2);
+            ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
     }
 }
@@ -363,14 +308,7 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
     {
@@ -431,14 +369,7 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
     {
@@ -524,14 +455,7 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
     {
@@ -759,15 +683,7 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
     const auto old_range = segment->getRowKeyRange();
@@ -822,15 +738,8 @@ try
             // TODO check segment epoch is increase
         }
         {
-            size_t num_rows_read = 0;
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            EXPECT_EQ(num_rows_read, num_rows_write);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
     }
 }

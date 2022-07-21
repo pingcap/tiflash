@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
@@ -94,15 +95,7 @@ void SegmentTestBasic::checkSegmentRow(PageId segment_id, size_t expected_row_nu
     auto segment = segments[segment_id];
     // read written data
     auto in = segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()});
-
-    size_t num_rows_read = 0;
-    in->readPrefix();
-    while (Block block = in->read())
-    {
-        num_rows_read += block.rows();
-    }
-    in->readSuffix();
-    ASSERT_EQ(num_rows_read, expected_row_num);
+    ASSERT_INPUTSTREAM_NROWS(in, expected_row_num);
 }
 
 std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id)
