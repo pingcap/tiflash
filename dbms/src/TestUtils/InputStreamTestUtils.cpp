@@ -119,30 +119,34 @@ namespace tests
 }
 
 ::testing::AssertionResult InputStreamVSBlockUnrestrictlyCompare(
-    const char * lhs_expr,
-    const char * rhs_expr,
-    const BlockInputStreamPtr & lhs,
-    const Block & rhs)
+    const char * stream_expr,
+    const char * block_expr,
+    const BlockInputStreamPtr & stream,
+    const Block & expect_block)
 {
-    RUNTIME_CHECK(lhs != nullptr, Exception, fmt::format("The first param of ASSERT_INPUTSTREAM_NROWS, `{}` is nullptr!", lhs_expr));
+    RUNTIME_CHECK(stream != nullptr, Exception, fmt::format("The first param of ASSERT_INPUTSTREAM_NROWS, `{}` is nullptr!", stream_expr));
 
-    size_t num_rows_expect = rhs.rows();
+    size_t num_rows_expect = expect_block.rows();
     size_t num_rows_read = 0;
     size_t prev_num_rows_read = 0;
-    lhs->readPrefix();
-    while (Block block = lhs->read())
+    stream->readPrefix();
+    while (Block read_block = stream->read())
     {
-        num_rows_read += block.rows();
+        num_rows_read += read_block.rows();
         // hot path, first block from inputstream and the rows is as expected
-        if (prev_num_rows_read == 0 && block.rows() == num_rows_expect)
+        if (prev_num_rows_read == 0 && read_block.rows() == num_rows_expect)
         {
-            if (auto res = DB::tests::blockEqual(rhs, block); !res)
+            if (auto res = DB::tests::blockEqual(expect_block, read_block); !res)
             {
                 auto reason = fmt::format(R"r(
-  ({}).read() return block is not equal to
-  the block ({}))r",
-                                          lhs_expr,
-                                          rhs_expr);
+  ({}).read() return block is not equal
+    structure() == {}
+  to the expect block ({})
+    structure() == {})r",
+                                          stream_expr,
+                                          read_block.dumpJsonStructure(),
+                                          block_expr,
+                                          expect_block.dumpJsonStructure());
                 return res << reason;
             }
         }
@@ -153,9 +157,9 @@ namespace tests
   ({}).read() return more rows({}) than expected
   ({}).rows()
     Which is: {})r",
-                                      lhs_expr,
+                                      stream_expr,
                                       num_rows_read,
-                                      rhs_expr,
+                                      block_expr,
                                       num_rows_expect);
             return ::testing::AssertionFailure() << reason;
         }
@@ -163,35 +167,60 @@ namespace tests
         // else, compare the the `block` to the [prev_num_rows_read, num_rows_read) rows of `rhs`
         {
             // num of columns
-            auto read_cols_expr = fmt::format("{}.read().columns()", lhs_expr);
-            auto rcols_expr = fmt::format("{}.columns()", rhs_expr);
+            auto read_cols_expr = fmt::format("{}.read().columns()", stream_expr);
+            auto rcols_expr = fmt::format("{}.columns()", block_expr);
             if (auto res = ::testing::internal::EqHelper<false>::Compare(
                     read_cols_expr.c_str(),
                     rcols_expr.c_str(),
-                    block.columns(),
-                    rhs.columns());
+                    read_block.columns(),
+                    expect_block.columns());
                 !res)
             {
                 return res;
             }
-            for (size_t i = 0; i < rhs.columns(); ++i)
+            for (size_t i = 0; i < expect_block.columns(); ++i)
             {
-                const auto & expected_full_col = rhs.getByPosition(i);
-                auto expect_col = expected_full_col.cloneEmpty();
-                auto column_data = expect_col.type->createColumn();
-                column_data->insertRangeFrom(*expected_full_col.column, prev_num_rows_read, num_rows_read - prev_num_rows_read);
-                expect_col.column = std::move(column_data);
-                const auto & actual_col = block.getByPosition(i);
-                if (auto res = DB::tests::columnEqual(expect_col, actual_col); !res)
+                const auto & actual_col = read_block.getByPosition(i);
+                const auto & expected_full_col = expect_block.getByPosition(i);
+                if (expected_full_col.column->isColumnConst() != actual_col.column->isColumnConst())
                 {
-                    return res;
+                    return ::testing::AssertionFailure() << fmt::format(
+                               "  block[{}].isColumnConst() from actual block\n    {}\n  expect_block[{}].isColumnConst()\n    {}",
+                               actual_col.name,
+                               actual_col.column->isColumnConst(),
+                               expected_full_col.name,
+                               expected_full_col.column->isColumnConst());
+                }
+                else if (expected_full_col.column->isColumnConst() && actual_col.column->isColumnConst())
+                {
+                    if (auto res = dataTypeEqual(expected_full_col.type, actual_col.type); !res)
+                        return res;
+                    if (auto res = ::testing::internal::EqHelper<false>::Compare("", "", actual_col.column->size(), expected_full_col.column->size()); !res)
+                    {
+                        return res;
+                    }
+                    if (actual_col.column->compareAt(0, 0, *expected_full_col.column, -1) != 0)
+                    {
+                        return ::testing::AssertionFailure() << "Column Const data mismatch";
+                    }
+                }
+                else
+                {
+                    auto expect_col = expected_full_col.cloneEmpty();
+                    auto column_data = expect_col.type->createColumn();
+                    column_data->insertRangeFrom(*expected_full_col.column, prev_num_rows_read, num_rows_read - prev_num_rows_read);
+                    expect_col.column = std::move(column_data);
+                    if (auto res = DB::tests::columnEqual(expect_col, actual_col); !res)
+                    {
+                        return res;
+                    }
                 }
             }
         }
 
-        prev_num_rows_read += block.rows();
+        prev_num_rows_read += read_block.rows();
     }
-    lhs->readSuffix();
+    stream->readSuffix();
 
     if (num_rows_expect == num_rows_read)
         return ::testing::AssertionSuccess();
@@ -201,9 +230,9 @@ namespace tests
     Which is: {}
   the num rows of ({})
     Which is: {})r",
-                              lhs_expr,
+                              stream_expr,
                               num_rows_read,
-                              rhs_expr,
+                              block_expr,
                               num_rows_expect);
     return ::testing::AssertionFailure() << reason;
 }

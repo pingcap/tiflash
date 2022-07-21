@@ -117,7 +117,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     ASSERT_EQUAL(
         expected_columns,
         columns,
-        fmt::format("Block column size mismatch\nexpected_structure: {}\nstructure: {}", expected.dumpStructure(), actual.dumpStructure()));
+        fmt::format("Block column size mismatch\nexpected_structure: {}\nstructure: {}", expected.dumpJsonStructure(), actual.dumpJsonStructure()));
 
     for (size_t i = 0; i < columns; ++i)
     {

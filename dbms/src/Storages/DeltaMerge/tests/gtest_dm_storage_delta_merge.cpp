@@ -40,6 +40,7 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/InputStreamTestUtils.h>
 
 #include <limits>
 
@@ -57,13 +58,14 @@ namespace tests
 TEST(StorageDeltaMergeTest, ReadWriteCase1)
 try
 {
+    size_t num_rows_write = 100;
     // prepare block data
     Block sample;
     sample.insert(DB::tests::createColumn<Int64>(
-        createNumbers<Int64>(0, 100, /*reversed*/ true),
+        createNumbers<Int64>(0, num_rows_write, /*reversed*/ true),
         "col1"));
     sample.insert(DB::tests::createColumn<String>(
-        Strings(100, "a"),
+        Strings(num_rows_write, "a"),
         "col2"));
 
     Context ctx = DMTestEnv::getContext();
@@ -120,30 +122,10 @@ try
     BlockInputStreams ins = storage->read(column_names, query_info, ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1);
     BlockInputStreamPtr in = ins[0];
-    in->readPrefix();
-
-    size_t num_rows_read = 0;
-    while (Block block = in->read())
-    {
-        num_rows_read += block.rows();
-        for (auto & iter : block)
-        {
-            auto c = iter.column;
-            for (unsigned int i = 0; i < c->size(); i++)
-            {
-                if (iter.name == "col1")
-                {
-                    ASSERT_EQ(c->getInt(i), i);
-                }
-                else if (iter.name == "col2")
-                {
-                    ASSERT_EQ(c->getDataAt(i), "a");
-                }
-            }
-        }
-    }
-    in->readSuffix();
-    ASSERT_EQ(num_rows_read, sample.rows());
+    ASSERT_INPUTSTREAM_BLOCK_UR(
+        in,
+        Block({createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), "col1"),
+               createColumn<String>(Strings(num_rows_write, "a"), "col2")}));
 
     auto store_status = storage->status();
     Block status = store_status->read();
@@ -157,7 +139,7 @@ try
         }
         else if (col_name->getDataAt(i) == String("total_rows"))
         {
-            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(num_rows_read)));
+            EXPECT_EQ(col_value->getDataAt(i), String(DB::toString(num_rows_write)));
         }
     }
     auto delta_store = storage->getStore();
@@ -167,7 +149,7 @@ try
     {
         total_segment_rows += stat.rows;
     }
-    EXPECT_EQ(total_segment_rows, num_rows_read);
+    EXPECT_EQ(total_segment_rows, num_rows_write);
     storage->drop();
     // remove the storage from TiFlash context manually
     storage->removeFromTMTContext();
@@ -609,12 +591,13 @@ TEST(StorageDeltaMergeTest, ReadExtraPhysicalTableID)
 try
 {
     // prepare block data
+    size_t num_rows_write = 100;
     Block sample;
     sample.insert(DB::tests::createColumn<Int64>(
-        createNumbers<Int64>(0, 100, /*reversed*/ true),
+        createNumbers<Int64>(0, num_rows_write, /*reversed*/ true),
         "col1"));
     sample.insert(DB::tests::createColumn<String>(
-        Strings(100, "a"),
+        Strings(num_rows_write, "a"),
         "col2"));
     constexpr TiDB::TableID table_id = 1;
     const String table_name = fmt::format("t_{}", table_id);
@@ -676,38 +659,14 @@ try
     BlockInputStreams ins = storage->read(read_columns, query_info, ctx, stage2, 8192, 1);
     ASSERT_EQ(ins.size(), 1);
     BlockInputStreamPtr in = ins[0];
-    in->readPrefix();
+    ASSERT_INPUTSTREAM_BLOCK_UR(
+        in,
+        Block({
+            createColumn<Int64>(createNumbers<Int64>(0, num_rows_write), "col1"),
+            createConstColumn<Nullable<Int64>>(num_rows_write, table_id, EXTRA_TABLE_ID_COLUMN_NAME),
+            createColumn<String>(Strings(num_rows_write, "a"), "col2"),
+        }));
 
-    size_t num_rows_read = 0;
-    while (Block block = in->read())
-    {
-        ASSERT_EQ(block.getByPosition(1).name, EXTRA_TABLE_ID_COLUMN_NAME);
-        num_rows_read += block.rows();
-        for (auto & iter : block)
-        {
-            auto c = iter.column;
-            for (unsigned int i = 0; i < c->size(); i++)
-            {
-                if (iter.name == "col1")
-                {
-                    ASSERT_EQ(c->getInt(i), i);
-                }
-                else if (iter.name == "col2")
-                {
-                    ASSERT_EQ(c->getDataAt(i), "a");
-                }
-                else if (iter.name == EXTRA_TABLE_ID_COLUMN_NAME)
-                {
-                    Field res;
-                    c->get(i, res);
-                    ASSERT_TRUE(!res.isNull());
-                    ASSERT_EQ(res.get<Int64>(), table_id);
-                }
-            }
-        }
-    }
-    in->readSuffix();
-    ASSERT_EQ(num_rows_read, sample.rows());
     storage->drop();
     // remove the storage from TiFlash context manually
     storage->removeFromTMTContext();

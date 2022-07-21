@@ -16,6 +16,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <TestUtils/InputStreamTestUtils.h>
 
 namespace DB
 {
