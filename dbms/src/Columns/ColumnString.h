@@ -52,8 +52,8 @@ private:
     template <bool positive>
     struct less;
 
-    template <bool positive>
-    struct lessWithCollation;
+    template <bool positive, typename Derived>
+    struct LessWithCollation;
 
     ColumnString() = default;
 
@@ -118,7 +118,7 @@ public:
 
     void insert(const Field & x) override
     {
-        const String & s = DB::get<const String &>(x);
+        const auto & s = DB::get<const String &>(x);
         const size_t old_size = chars.size();
         const size_t size_to_append = s.size() + 1;
         const size_t new_size = old_size + size_to_append;
@@ -134,7 +134,7 @@ public:
 
     void insertFrom(const IColumn & src_, size_t n) override
     {
-        const ColumnString & src = static_cast<const ColumnString &>(src_);
+        const auto & src = static_cast<const ColumnString &>(src_);
 
         if (n != 0)
         {
@@ -213,7 +213,7 @@ public:
 
         if (collator != nullptr)
         {
-            /// Skip last zero byte.
+            // Skip last zero byte.
             auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
             string_size = sort_key.size;
             src = sort_key.data;
@@ -259,34 +259,7 @@ public:
         }
     }
 
-    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override
-    {
-        if (collator != nullptr)
-        {
-            for (size_t i = 0; i < offsets.size(); ++i)
-            {
-                size_t string_size = sizeAt(i);
-                size_t offset = offsetAt(i);
-
-                /// Skip last zero byte.
-                auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
-                string_size = sort_key.size;
-                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-                hash_values[i].update(sort_key.data, sort_key.size);
-            }
-        }
-        else
-        {
-            for (size_t i = 0; i < offsets.size(); ++i)
-            {
-                size_t string_size = sizeAt(i);
-                size_t offset = offsetAt(i);
-
-                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-                hash_values[i].update(reinterpret_cast<const char *>(&chars[offset]), string_size);
-            }
-        }
-    }
+    void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override;
 
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
@@ -304,7 +277,7 @@ public:
 
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
-        const ColumnString & rhs = static_cast<const ColumnString &>(rhs_);
+        const auto & rhs = static_cast<const ColumnString &>(rhs_);
 
         const size_t size = sizeAt(n);
         const size_t rhs_size = rhs.sizeAt(m);
