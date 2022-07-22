@@ -28,6 +28,7 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
+
 #include "TestUtils/InputStreamTestUtils.h"
 
 namespace DB

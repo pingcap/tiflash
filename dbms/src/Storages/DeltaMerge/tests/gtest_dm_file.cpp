@@ -1120,7 +1120,8 @@ try
             Strings({DMTestEnv::pk_name}),
             createColumns({
                 createColumn<String>(common_handle_coldata),
-            })) << fmt::format("range: {}, first: {}, last: {}", range.range.toDebugString(), expect_first_pk, expect_last_pk);
+            }))
+            << fmt::format("range: {}, first: {}, last: {}", range.range.toDebugString(), expect_first_pk, expect_last_pk);
     }
 }
 CATCH
