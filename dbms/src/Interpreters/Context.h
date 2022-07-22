@@ -224,8 +224,8 @@ public:
     bool isExternalTableExist(const String & table_name) const;
     void assertTableExists(const String & database_name, const String & table_name) const;
 
-    bool isMPPTest()  { return is_mpp_test;}
-    void setMPPTest() { is_mpp_test = true;}
+    bool isMPPTest() { return is_mpp_test; }
+    void setMPPTest() { is_mpp_test = true; }
     /** The parameter check_database_access_rights exists to not check the permissions of the database again,
       * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
       * made this check.

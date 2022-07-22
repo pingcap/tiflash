@@ -72,7 +72,7 @@ public:
     }
 
     std::unordered_map<String, ColumnsWithTypeAndName> getColumns() override
-    {  
+    {
         return executor_id_columns_map;
     }
 

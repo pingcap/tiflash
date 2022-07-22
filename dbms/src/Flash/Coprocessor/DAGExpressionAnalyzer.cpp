@@ -34,7 +34,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-#include <iostream>
 
 namespace DB
 {

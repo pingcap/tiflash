@@ -381,7 +381,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         Poco::Net::SocketAddress client_address(client_ip);
 
         // context->setUser(user, password, client_address, quota_key); // ywq todo test no need user
-        
+
         String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
         context->setCurrentQueryId(query_id);
 

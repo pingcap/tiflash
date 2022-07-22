@@ -50,9 +50,6 @@
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 
-#include "Core/ColumnsWithTypeAndName.h"
-#include "Flash/Coprocessor/DAGContext.h"
-
 namespace DB
 {
 namespace FailPoints
@@ -591,7 +588,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        if (unlikely(dagContext().isTest()&& !context.isMPPTest()))
+        if (unlikely(dagContext().isTest() && !context.isMPPTest()))
             handleMockExchangeReceiver(pipeline);
         else
             handleExchangeReceiver(pipeline);
@@ -689,7 +686,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     {
         if (unlikely(dagContext().isTest() && !context.isMPPTest()))
             handleMockExchangeSender(pipeline);
-        else 
+        else
             handleExchangeSender(pipeline);
         recordProfileStreams(pipeline, query_block.exchange_sender_name);
     }

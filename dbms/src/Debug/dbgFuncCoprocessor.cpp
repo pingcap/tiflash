@@ -56,9 +56,6 @@
 
 #include <utility>
 
-#include "Core/Block.h"
-#include "DataStreams/IBlockInputStream.h"
-
 namespace DB
 {
 namespace ErrorCodes
