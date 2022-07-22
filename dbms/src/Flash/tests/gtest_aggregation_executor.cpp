@@ -100,6 +100,11 @@ public:
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
                               toNullableVec<Float64>(col_name[3], col_salary)});
+
+        context.addMockTable({"aggnull_test", "t1"},
+                             {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+                             {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+                              toNullableVec<String>("s2", {"apple", {}, "banana"})});
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(std::pair<String, String> src, MockAstVec agg_funcs, MockAstVec group_by_exprs, MockColumnNameVec proj)
@@ -302,6 +307,30 @@ try
     }
 }
 CATCH
+
+TEST_F(ExecutorAggTestRunner, AggNull)
+try
+{
+    auto request = context
+                       .scan("aggnull_test", "t1")
+                       .aggregation({Max(col("s1"))}, {})
+                       .build(context);
+    {
+        ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                            createColumns({toNullableVec<String>({"banana"})}));
+    }
+
+    request = context
+                  .scan("aggnull_test", "t1")
+                  .aggregation({}, {col("s1")})
+                  .build(context);
+    {
+        ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                            createColumns({toNullableVec<String>("s1", {{}, "banana"})}));
+    }
+}
+CATCH
+
 
 // TODO support more type of min, max, count.
 //      support more aggregation functions: sum, forst_row, group_concat

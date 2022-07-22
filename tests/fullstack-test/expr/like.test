@@ -39,3 +39,28 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where '
 +------+------+
 | aaaa | %a%  |
 +------+------+
+
+mysql> insert into test.t values ('1234', '');
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select a from test.t where a like '1234' escape '4';
++------+
+| a    |
++------+
+| 1234 |
++------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select a from test.t where a like '1234' escape '2';
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select a from test.t where a like '15234' escape '5';
++------+
+| a    |
++------+
+| 1234 |
++------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select a from test.t where a like '_223_' escape '2';
++------+
+| a    |
++------+
+| 1234 |
++------+
