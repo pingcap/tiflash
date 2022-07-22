@@ -160,12 +160,14 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
 PageStorage::PageStorage(String name,
                          PSDiskDelegatorPtr delegator_, //
                          const Config & config_,
-                         const FileProviderPtr & file_provider_)
+                         const FileProviderPtr & file_provider_,
+                         bool no_more_insert_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
     , write_files(std::max(1UL, config_.num_write_slots.get()))
     , page_file_log(&Poco::Logger::get("PageFile"))
     , log(&Poco::Logger::get("PageStorage"))
     , versioned_page_entries(storage_name, config.version_set_config, log)
+    , no_more_insert(no_more_insert_)
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots.get());
@@ -313,6 +315,7 @@ void PageStorage::restore()
     }
 
     // Fill write_files
+    PageFileIdAndLevel max_page_file_id_lvl{0, 0};
     {
         const size_t num_delta_paths = delegator->numPaths();
         std::vector<size_t> next_write_fill_idx(num_delta_paths);
@@ -320,6 +323,7 @@ void PageStorage::restore()
         // Only insert location of PageFile when it storing delta data
         for (const auto & page_file : page_files)
         {
+            max_page_file_id_lvl = std::max(max_page_file_id_lvl, page_file.fileIdLevel());
             // Checkpoint file is always stored on `delegator`'s default path, so no need to insert it's location here
             size_t idx_in_delta_paths = delegator->addPageFileUsedSize(
                 page_file.fileIdLevel(),
@@ -343,7 +347,7 @@ void PageStorage::restore()
     std::vector<String> store_paths = delegator->listPaths();
     for (size_t i = 0; i < write_files.size(); ++i)
     {
-        auto writer = checkAndRenewWriter(write_files[i], /*parent_path_hint=*/store_paths[i % store_paths.size()]);
+        auto writer = checkAndRenewWriter(write_files[i], max_page_file_id_lvl, /*parent_path_hint=*/store_paths[i % store_paths.size()]);
         idle_writers.emplace_back(std::move(writer));
     }
 #endif
@@ -403,17 +407,20 @@ DB::PageEntry PageStorage::getEntryImpl(NamespaceId /*ns_id*/, PageId page_id, S
 // - Writable, reuse `old_writer` if it is not a nullptr, otherwise, create a new writer from `page_file`
 // - Not writable, renew the `page_file` and its belonging writer.
 //   The <id,level> of the new `page_file` is <max_id + 1, 0> of all `write_files`
+// If `force` is true, always create new page file for writing.
 PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
     WritingPageFile & writing_file,
+    PageFileIdAndLevel max_page_file_id_lvl_hint,
     const String & parent_path_hint,
     PageStorage::WriterPtr && old_writer,
-    const String & logging_msg)
+    const String & logging_msg,
+    bool force)
 {
     WriterPtr write_file_writer;
 
     PageFile & page_file = writing_file.file;
-    bool is_writable = page_file.isValid() && page_file.getType() == PageFile::Type::Formal //
-        && isPageFileSizeFitsWritable(page_file, config);
+    bool is_writable = (!force && page_file.isValid() && page_file.getType() == PageFile::Type::Formal //
+                        && isPageFileSizeFitsWritable(page_file, config));
     if (is_writable)
     {
         if (old_writer)
@@ -445,10 +452,10 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
             // Check whether caller has defined a hint path
             pf_parent_path = parent_path_hint;
         }
-
-        PageFileIdAndLevel max_writing_id_lvl{0, 0};
+        PageFileIdAndLevel max_writing_id_lvl{max_page_file_id_lvl_hint};
         for (const auto & wf : write_files)
             max_writing_id_lvl = std::max(max_writing_id_lvl, wf.file.fileIdLevel());
+
         delegator->addPageFileUsedSize( //
             PageFileIdAndLevel(max_writing_id_lvl.first + 1, 0),
             0,
@@ -459,7 +466,6 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
         writing_file.file
             = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log);
         writing_file.persisted.meta_offset = 0;
-
         write_file_writer = writing_file.file.createWriter(config.sync_on_write, true);
     }
     return write_file_writer;
@@ -562,7 +568,7 @@ void PageStorage::writeImpl(DB::WriteBatch && wb, const WriteLimiterPtr & write_
 
         // Check whether we need to roll to new PageFile and its writer
         const auto logging_msg = " PageFile_" + DB::toString(writing_file.file.getFileId()) + "_0 is full,";
-        file_to_write = checkAndRenewWriter(writing_file, "", std::move(file_to_write), logging_msg);
+        file_to_write = checkAndRenewWriter(writing_file, {0, 0}, "", std::move(file_to_write), logging_msg);
 
         idle_writers.emplace_back(std::move(file_to_write));
 
@@ -1085,13 +1091,55 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         {
             external_pages_remover(external_pages, live_normal_pages);
         }
+
+        // This instance will accept no more write, and we check whether there is any valid page in non writing page file,
+        // If not, it's very possible that all data have been moved to v3, so we try to roll all writing files to make them can be gced
+        if (no_more_insert)
+        {
+            bool has_normal_non_writing_files = false;
+            bool has_non_empty_write_file = false;
+            for (const auto & page_file : page_files)
+            {
+                if (page_file.fileIdLevel() < min_writing_file_id_level)
+                {
+                    if (page_file.getType() == PageFile::Type::Formal)
+                    {
+                        has_normal_non_writing_files = true;
+                    }
+                }
+                else
+                {
+                    // writing files
+                    if (page_file.getDiskSize() > 0)
+                    {
+                        has_non_empty_write_file = true;
+                    }
+                }
+                if (has_normal_non_writing_files && has_non_empty_write_file)
+                    break;
+            }
+            if (!has_normal_non_writing_files && has_non_empty_write_file)
+            {
+                std::unique_lock lock(write_mutex);
+                LOG_FMT_DEBUG(log, "{} No valid pages in non writing page files and the writing page files are not all empty. Try to roll all {} writing page files", storage_name, write_files.size());
+                idle_writers.clear();
+                for (auto & write_file : write_files)
+                {
+                    auto writer = checkAndRenewWriter(write_file, {0, 0}, /*parent_path_hint=*/"", nullptr, "", /*force*/ true);
+                    idle_writers.emplace_back(std::move(writer));
+                }
+            }
+        }
     };
 
     GCType gc_type = GCType::Normal;
     // Ignore page files that maybe writing to.
     do
     {
-        if (not_skip) // For page_storage_ctl, don't skip the GC
+        // Don't skip the GC under the case:
+        //  1. For page_storage_ctl
+        //  2. After transform all data from v2 to v3
+        if (not_skip)
         {
             gc_type = GCType::Normal;
             break;
@@ -1101,6 +1149,10 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         {
             // If only few page files, running gc is useless.
             gc_type = GCType::Skip;
+        }
+        else if (no_more_insert)
+        {
+            gc_type = GCType::Normal;
         }
         else if (last_gc_statistics.equals(statistics_snapshot))
         {

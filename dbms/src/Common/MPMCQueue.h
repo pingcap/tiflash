@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/SimpleIntrusiveNode.h>
+#include <Common/nocopyable.h>
 #include <common/defines.h>
 #include <common/types.h>
 
@@ -74,9 +75,20 @@ public:
             destruct(getObj(read_pos));
     }
 
-    /// Block until:
-    /// 1. Pop succeeds with a valid T: return true.
-    /// 2. The queue is cancelled or finished: return false.
+    // Cannot to use copy/move constructor,
+    // because MPMCQueue maybe used by different threads.
+    // Copy and move it is dangerous.
+    DISALLOW_COPY_AND_MOVE(MPMCQueue);
+
+    /*
+    * | Previous Status  | Empty      | Behavior                 |
+    * |------------------|------------|--------------------------|
+    * | Normal           | Yes        | Block                    |
+    * | Normal           | No         | Pop and return true      |
+    * | Finished         | Yes        | return false             |
+    * | Finished         | No         | Pop and return true      |
+    * | Cancelled        | Yes/No     | return false             |
+    * */
     ALWAYS_INLINE bool pop(T & obj)
     {
         return popObj<true>(obj);
@@ -99,10 +111,14 @@ public:
         return popObj<false>(obj);
     }
 
-    /// Block until:
-    /// 1. Push succeeds and return true.
-    /// 2. The queue is cancelled and return false.
-    /// 3. The queue has finished and return false.
+    /*
+    * | Previous Status  | Full       | Behavior                 |
+    * |------------------|------------|--------------------------|
+    * | Normal           | Yes        | Block                    |
+    * | Normal           | No         | Push and return true     |
+    * | Finished         | Yes/No     | return false             |
+    * | Cancelled        | Yes/No     | return false             |
+    * */
     template <typename U>
     ALWAYS_INLINE bool push(U && u)
     {

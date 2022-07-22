@@ -4084,7 +4084,7 @@ private:
             break;
         default:
             throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        };
+        }
     }
 };
 
@@ -4188,6 +4188,213 @@ public:
 
 private:
 };
+
+class FunctionRepeat : public IFunction
+{
+public:
+    static constexpr auto name = "repeat";
+    FunctionRepeat() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionRepeat>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!arguments[1]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeRepeat<UInt8>(block, arguments, result)
+            || executeRepeat<UInt16>(block, arguments, result)
+            || executeRepeat<UInt32>(block, arguments, result)
+            || executeRepeat<UInt64>(block, arguments, result)
+            || executeRepeat<Int8>(block, arguments, result)
+            || executeRepeat<Int16>(block, arguments, result)
+            || executeRepeat<Int32>(block, arguments, result)
+            || executeRepeat<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeRepeat(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
+        const ColumnPtr column_repeat_times = block.getByPosition(arguments[1]).column;
+
+        auto col_res = ColumnString::create();
+        if (const auto * col_string = checkAndGetColumn<ColumnString>(column_string.get()))
+        {
+            // vector const
+            if (column_repeat_times->isColumnConst())
+            {
+                const ColumnConst * col_const_repeat_times = checkAndGetColumnConst<ColumnVector<IntType>>(column_repeat_times.get());
+                if (col_const_repeat_times == nullptr)
+                {
+                    return false;
+                }
+                auto repeat_times = col_const_repeat_times->getValue<IntType>();
+                vectorConst(col_string->getChars(),
+                            col_string->getOffsets(),
+                            accurate::lessOp(INT32_MAX, repeat_times) ? INT32_MAX : repeat_times,
+                            col_res->getChars(),
+                            col_res->getOffsets());
+            }
+            // vector vector
+            else
+            {
+                const auto * col_vector_repeat_count = checkAndGetColumn<ColumnVector<IntType>>(column_repeat_times.get());
+                if (col_vector_repeat_count == nullptr)
+                {
+                    return false;
+                }
+                vectorVector(col_string->getChars(),
+                             col_string->getOffsets(),
+                             col_vector_repeat_count->getData(),
+                             col_res->getChars(),
+                             col_res->getOffsets());
+            }
+        }
+        else if (const ColumnConst * col_const = checkAndGetColumnConst<ColumnString>(column_string.get()))
+        {
+            // const vector
+            const auto * col_vector_repeat_count = checkAndGetColumn<ColumnVector<IntType>>(column_repeat_times.get());
+            if (col_vector_repeat_count == nullptr)
+            {
+                return false;
+            }
+            const auto * col_string_from_const = checkAndGetColumn<ColumnString>(col_const->getDataColumnPtr().get());
+            constVector(col_string_from_const->getChars(),
+                        col_string_from_const->getOffsets(),
+                        col_vector_repeat_count->getData(),
+                        col_res->getChars(),
+                        col_res->getOffsets());
+        }
+        else
+        {
+            // Impossible to reach here
+            throw Exception("Impossible to reach here. Please check logic", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+        return true;
+    }
+    static void vectorConst(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const Int32 repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            res_offset += doRepeat(data, prev_offset, offsets[i], repeat_times, res_data, res_offset);
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+
+    template <typename IntType>
+    static void vectorVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const PaddedPODArray<IntType> & repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            Int32 repeat_count = accurate::lessOp(INT32_MAX, repeat_times[i]) ? INT32_MAX : repeat_times[i];
+            res_offset += doRepeat(data, prev_offset, offsets[i], repeat_count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+
+    template <typename IntType>
+    static void constVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const PaddedPODArray<IntType> & repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = repeat_times.size();
+        res_offsets.resize(size);
+
+        const ColumnString::Offset start_offset = 0;
+        const ColumnString::Offset end_offset = offsets[0];
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            Int32 repeat_count = accurate::lessOp(INT32_MAX, repeat_times[i]) ? INT32_MAX : repeat_times[i];
+            res_offset += doRepeat(data, start_offset, end_offset, repeat_count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+    /// Todo: should handle maxAllowedPacket. Detail in https://github.com/pingcap/tiflash/issues/3669
+    static size_t doRepeat(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offset & start_offset,
+        const ColumnString::Offset & end_offset,
+        Int32 repeat_times,
+        ColumnString::Chars_t & res_data,
+        const ColumnString::Offset & res_offset)
+    {
+        if (repeat_times < 1)
+        {
+            res_data.resize(res_data.size() + 1);
+            res_data[res_offset] = 0;
+            return 1;
+        }
+        size_t size_to_copy = end_offset - start_offset - 1;
+        size_t size = repeat_times * size_to_copy;
+        res_data.resize(res_data.size() + size + 1);
+
+        for (Int32 i = 0; i < repeat_times; ++i)
+        {
+            memcpy(&res_data[res_offset + size_to_copy * i], &data[start_offset], size_to_copy);
+        }
+        res_data[res_offset + size] = '\0';
+        return size + 1;
+    }
+};
+
 
 class FunctionPosition : public IFunction
 {
@@ -4574,7 +4781,9 @@ public:
             using NumberFieldType = typename NumberType::FieldType;
             using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
             const auto * number_raw = block.getByPosition(arguments[0]).column.get();
+
             TiDBDecimalRoundInfo info{number_type, number_type};
+            info.output_prec = info.output_prec < 65 ? info.output_prec + 1 : 65;
 
             return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
@@ -4724,10 +4933,11 @@ private:
     static void format(
         T number,
         size_t max_num_decimals,
-        const TiDBDecimalRoundInfo & info,
+        TiDBDecimalRoundInfo & info,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
+        info.output_scale = std::min(max_num_decimals, static_cast<size_t>(info.input_scale));
         auto round_number = round(number, max_num_decimals, info);
         std::string round_number_str = number2Str(round_number, info);
         std::string buffer = Format::apply(round_number_str, max_num_decimals);
@@ -4911,6 +5121,185 @@ private:
     }
 };
 
+class FunctionHexStr : public IFunction
+{
+public:
+    static constexpr auto name = "hexStr";
+    FunctionHexStr() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexStr>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto col_res = ColumnString::create();
+            vector(col->getChars(), col->getOffsets(), col_res->getChars(), col_res->getOffsets());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get()))
+        {
+            auto col_res = ColumnFixedString::create(col->getN() * 2);
+            vectorFixed(col->getChars(), col->getN(), col_res->getChars());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+private:
+    static constexpr UInt8 hexTable[17] = "0123456789ABCDEF";
+
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        // every string contains a tailing zero, which will not be hexed, so minus size to remove these doubled zeros
+        res_data.resize(data.size() * 2 - size);
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            for (size_t j = prev_offset; j < offsets[i] - 1; ++j)
+            {
+                ColumnString::Offset pos = j * 2 - i;
+                UInt8 byte = data[j];
+                res_data[pos] = hexTable[byte >> 4];
+                res_data[pos + 1] = hexTable[byte & 0x0f];
+            }
+            // the last element written by the previous loop is:
+            // `(offsets[i] - 2) * 2 - i + 1 = offsets[i] * 2 - i - 3`
+            // then the zero should be written to `offsets[i] * 2 - i - 2`
+            res_data[offsets[i] * 2 - i - 2] = 0;
+            res_offsets[i] = offsets[i] * 2 - i - 1;
+
+            prev_offset = offsets[i];
+        }
+    }
+
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t length, ColumnString::Chars_t & res_data)
+    {
+        size_t size = data.size() / length;
+        res_data.resize(data.size() * 2);
+
+        for (size_t i = 0; i < size; ++i)
+            for (size_t j = i * length; j < (i + 1) * length; ++j)
+            {
+                ColumnString::Offset pos = j * 2;
+                UInt8 byte = data[j];
+                res_data[pos] = hexTable[byte >> 4];
+                res_data[pos + 1] = hexTable[byte & 0x0f];
+            }
+    }
+};
+
+class FunctionHexInt : public IFunction
+{
+public:
+    static constexpr auto name = "hexInt";
+    FunctionHexInt() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexInt>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isNumber())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeHexInt<UInt8>(block, arguments, result)
+            || executeHexInt<UInt16>(block, arguments, result)
+            || executeHexInt<UInt32>(block, arguments, result)
+            || executeHexInt<UInt64>(block, arguments, result)
+            || executeHexInt<Int8>(block, arguments, result)
+            || executeHexInt<Int16>(block, arguments, result)
+            || executeHexInt<Int32>(block, arguments, result)
+            || executeHexInt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeHexInt(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        const auto col = checkAndGetColumn<ColumnVector<IntType>>(column.get());
+        if (col == nullptr)
+        {
+            return false;
+        }
+        size_t size = col->size();
+
+        auto col_res = ColumnString::create();
+
+        ColumnString::Chars_t & res_chars = col_res->getChars();
+        // Convert a UInt64 to hex, will cost 17 bytes at most
+        res_chars.reserve(size * 17);
+        ColumnString::Offsets & res_offsets = col_res->getOffsets();
+        res_offsets.resize(size);
+
+        size_t prev_res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            UInt64 number = col->getUInt(i);
+
+            int print_size = sprintf(reinterpret_cast<char *>(&res_chars[prev_res_offset]), "%lX", number);
+            res_chars[prev_res_offset + print_size] = 0;
+            // Add the size of printed string and a tailing zero
+            prev_res_offset += print_size + 1;
+            res_offsets[i] = prev_res_offset;
+        }
+        res_chars.resize(prev_res_offset);
+
+        block.getByPosition(result).column = std::move(col_res);
+
+        return true;
+    }
+};
+
 class FunctionBin : public IFunction
 {
 public:
@@ -5010,7 +5399,14 @@ public:
     {
         const IColumn * column = block.getByPosition(arguments[0]).column.get();
         ColumnPtr res_column;
-        if (tryExecuteUIntOrInt<UInt8>(column, res_column) || tryExecuteUIntOrInt<UInt16>(column, res_column) || tryExecuteUIntOrInt<UInt32>(column, res_column) || tryExecuteUIntOrInt<UInt64>(column, res_column) || tryExecuteUIntOrInt<Int8>(column, res_column) || tryExecuteUIntOrInt<Int16>(column, res_column) || tryExecuteUIntOrInt<Int32>(column, res_column) || tryExecuteUIntOrInt<Int64>(column, res_column))
+        if (tryExecuteUIntOrInt<UInt8>(column, res_column)
+            || tryExecuteUIntOrInt<UInt16>(column, res_column)
+            || tryExecuteUIntOrInt<UInt32>(column, res_column)
+            || tryExecuteUIntOrInt<UInt64>(column, res_column)
+            || tryExecuteUIntOrInt<Int8>(column, res_column)
+            || tryExecuteUIntOrInt<Int16>(column, res_column)
+            || tryExecuteUIntOrInt<Int32>(column, res_column)
+            || tryExecuteUIntOrInt<Int64>(column, res_column))
         {
             block.getByPosition(result).column = std::move(res_column);
             return;
@@ -5108,6 +5504,9 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSubStringIndex>();
     factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();
+    factory.registerFunction<FunctionHexStr>();
+    factory.registerFunction<FunctionHexInt>();
+    factory.registerFunction<FunctionRepeat>();
     factory.registerFunction<FunctionBin>();
 }
 } // namespace DB
