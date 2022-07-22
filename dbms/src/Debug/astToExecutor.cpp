@@ -798,7 +798,8 @@ std::pair<String, String> splitQualifiedName(const String & s)
     std::pair<String, String> ret;
     Poco::StringTokenizer string_tokens(s, ".");
 
-    switch (string_tokens.count()) {
+    switch (string_tokens.count())
+    {
     case 1:
         ret.second = s;
         break;

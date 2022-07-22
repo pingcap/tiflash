@@ -27,8 +27,8 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
-#include <tipb/select.pb.h>
 #include <tipb/executor.pb.h>
+#include <tipb/select.pb.h>
 
 #include <optional>
 

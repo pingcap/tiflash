@@ -132,9 +132,9 @@ try
         {
             const auto & [l, r, k] = join_cases[j];
             auto request = context.scan("simple_test", l)
-                .join(context.scan("simple_test", r), {col(k)}, join_types[i])
-                .build(context);
-            
+                               .join(context.scan("simple_test", r), {col(k)}, join_types[i])
+                               .build(context);
+
             {
                 executeWithConcurrency(request, expected_cols[i * simple_test_num + j]);
             }
