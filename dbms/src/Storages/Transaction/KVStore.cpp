@@ -369,10 +369,10 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     if (can_flush && flush_if_possible)
     {
-        LOG_FMT_DEBUG(log, "{} flush region due to can_flush_data", curr_region.toString(false));
+        LOG_FMT_DEBUG(log, "{} flush region due to canFlushRegionData", curr_region.toString(false));
         if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
         {
-            persistRegion(curr_region, region_task_lock, "compact raft log");
+            persistRegion(curr_region, region_task_lock, "canFlushRegionData before compact raft log");
             curr_region.markCompactLog();
             curr_region.cleanApproxMemCacheInfo();
             return true;
