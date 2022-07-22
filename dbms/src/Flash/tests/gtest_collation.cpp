@@ -42,6 +42,13 @@ public:
                              {toNullableVec<String>(chinese_col_name, chinese_col)});
     }
 
+    void setAndCheck(const String & table_name, const String & col_name, Int32 collation, const ColumnsWithTypeAndName & expect)
+    {
+        context.setCollation(collation);
+        auto request = context.scan(db_name, table_name).aggregation(MockAstVec{}, {col(col_name)}).project({col_name}).build(context);
+        ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request, 1));
+    }
+
     /// Prepare some names
     const String db_name{"test_db"};
     const String table_name{"collation_table"};
@@ -57,39 +64,19 @@ public:
 TEST_F(ExecutorCollation, Verification)
 try
 {
-    std::shared_ptr<tipb::DAGRequest> request;
-    {
-        /// Test default collation(utf8mb4_bin)
-        request = context.scan(db_name, table_name).aggregation(MockAstVec{}, {col(col_name)}).project({col_name}).build(context);
-        ASSERT_COLUMNS_EQ_UR(ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "CHINA", "USA", "china", "cHiNa "})}, executeStreams(request, 1));
+    /// Test utf8mb4_bin
+    setAndCheck(table_name, col_name, TiDB::ITiDBCollator::UTF8MB4_BIN, ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "CHINA", "USA", "china", "cHiNa "})});
+    setAndCheck(chinese_table, chinese_col_name, TiDB::ITiDBCollator::UTF8MB4_BIN, ColumnsWithTypeAndName{toNullableVec<String>(chinese_col_name, ColumnWithNullableString{"ShangHai", "北京", "北Bei京", "shanghai  ", "北bei京", "上海"})});
 
-        request = context.scan(db_name, chinese_table).aggregation(MockAstVec{}, {col(chinese_col_name)}).project({chinese_col_name}).build(context);
-        ASSERT_COLUMNS_EQ_UR(ColumnsWithTypeAndName{toNullableVec<String>(chinese_col_name, ColumnWithNullableString{"ShangHai", "北京", "北Bei京", "shanghai  ", "北bei京", "上海"})}, executeStreams(request, 1));
-    }
+    /// Test utf8mb4_general_ci
+    setAndCheck(table_name, col_name, TiDB::ITiDBCollator::UTF8_GENERAL_CI, ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "china"})});
+    setAndCheck(chinese_table, chinese_col_name, TiDB::ITiDBCollator::UTF8_GENERAL_CI, ColumnsWithTypeAndName{toNullableVec<String>(chinese_col_name, ColumnWithNullableString{"北京", "shanghai  ", "北bei京", "上海"})});
 
-    {
-        /// Test utf8mb4_general_ci
-        context.setCollation(TiDB::ITiDBCollator::UTF8_GENERAL_CI);
-        request = context.scan(db_name, table_name).aggregation(MockAstVec{}, {col(col_name)}).project({col_name}).build(context);
-        ASSERT_COLUMNS_EQ_UR(ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "china"})}, executeStreams(request, 1));
+    /// Test utf8_bin
+    setAndCheck(table_name, col_name, TiDB::ITiDBCollator::UTF8_BIN, ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"USA", "CHINA", "usa", "china", "cHiNa "})});
 
-        request = context.scan(db_name, chinese_table).aggregation(MockAstVec{}, {col(chinese_col_name)}).project({chinese_col_name}).build(context);
-        ASSERT_COLUMNS_EQ_UR(ColumnsWithTypeAndName{toNullableVec<String>(chinese_col_name, ColumnWithNullableString{"北京", "shanghai  ", "北bei京", "上海"})}, executeStreams(request, 1));
-    }
-
-    {
-        /// Test utf8_bin
-        context.setCollation(TiDB::ITiDBCollator::UTF8_BIN);
-        request = context.scan(db_name, table_name).aggregation(MockAstVec{}, {col(col_name)}).project({col_name}).build(context);
-        ASSERT_COLUMNS_EQ_UR(ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"USA", "CHINA", "usa", "china", "cHiNa "})}, executeStreams(request, 1));
-    }
-
-    {
-        /// Test utf8_unicode_CI
-        context.setCollation(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
-        request = context.scan(db_name, table_name).aggregation(MockAstVec{}, {col(col_name)}).project({col_name}).build(context);
-        ASSERT_COLUMNS_EQ_UR(ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"china", "usa"})}, executeStreams(request, 1));
-    }
+    /// Test utf8_unicode_CI
+    setAndCheck(table_name, col_name, TiDB::ITiDBCollator::UTF8_UNICODE_CI, ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"china", "usa"})});
 }
 CATCH
 
