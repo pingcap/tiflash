@@ -176,10 +176,6 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     else
     {
         auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getTableScanExecutorID());
-        for (auto kv : names_and_types)
-        {
-            std::cout << kv.name << std::endl;
-        }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
@@ -595,10 +591,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        // if (unlikely(dagContext().isTest()))
-        //     handleMockExchangeReceiver(pipeline);
-        // else
-        // ywq test todo in mpp task no need to use mock columns.
+        if (unlikely(dagContext().isTest()&& !context.isMPPTest()))
+            handleMockExchangeReceiver(pipeline);
+        else
             handleExchangeReceiver(pipeline);
         recordProfileStreams(pipeline, query_block.source_name);
     }
@@ -692,10 +687,9 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // execute exchange_sender
     if (query_block.exchange_sender)
     {
-        // if (unlikely(dagContext().isTest()))
-        //     handleMockExchangeSender(pipeline);
-        // else 
-        // ywq test todo
+        if (unlikely(dagContext().isTest() && !context.isMPPTest()))
+            handleMockExchangeSender(pipeline);
+        else 
             handleExchangeSender(pipeline);
         recordProfileStreams(pipeline, query_block.exchange_sender_name);
     }

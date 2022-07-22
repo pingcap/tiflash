@@ -62,6 +62,7 @@ try
         std::cout << ExecutorSerializer().serialize(tasks[i].dag_request.get()) << std::endl;
     }
 
+    TiFlashTestEnv::global_context->setMPPTest();
 
     MockExecutionServer app(TiFlashTestEnv::global_context, context.executorIdColumnsMap());
     std::vector<std::string> args;

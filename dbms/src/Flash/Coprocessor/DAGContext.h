@@ -187,7 +187,7 @@ public:
     explicit DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
         : dag_request(&dag_request_)
         , initialize_concurrency(concurrency)
-        , is_mpp_task(true)
+        , is_mpp_task(false)
         , is_root_mpp_task(false)
         , tunnel_set(nullptr)
         , log(Logger::get(log_identifier))
@@ -394,7 +394,7 @@ private:
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
 
-    bool is_test = true; /// switch for test, do not use it in production.
+    bool is_test = false; /// switch for test, do not use it in production.
     std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
 };
 
