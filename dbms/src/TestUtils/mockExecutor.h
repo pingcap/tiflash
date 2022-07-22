@@ -20,6 +20,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <tipb/executor.pb.h>
+#include <Storages/Transaction/Collator.h>
 
 namespace DB::tests
 {
@@ -52,9 +53,10 @@ public:
         return executor_index;
     }
 
-    explicit DAGRequestBuilder(size_t & index)
+    explicit DAGRequestBuilder(size_t & index, Int32 collator = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : executor_index(index)
     {
+        properties.collator = -abs(collator);
     }
 
     ExecutorPtr getRoot()
@@ -101,6 +103,9 @@ public:
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
+    void setCollation(Int32 collator_) { properties.collator = -abs(collator_); }
+    Int32 getCollation() const { return abs(properties.collator); }
+
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
@@ -117,8 +122,8 @@ private:
 class MockDAGRequestContext
 {
 public:
-    explicit MockDAGRequestContext(Context context_)
-        : context(context_)
+    explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
+        : context(context_), collation(-abs(collation_))
     {
         index = 0;
     }
@@ -143,6 +148,9 @@ public:
     DAGRequestBuilder scan(String db_name, String table_name);
     DAGRequestBuilder receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
+    void setCollation(Int32 collation_) { collation = -abs(collation_); }
+    Int32 getCollation() const { return abs(collation); }
+    
 private:
     size_t index;
     std::unordered_map<String, MockColumnInfoVec> mock_tables;
@@ -157,6 +165,7 @@ public:
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     Context context;
+    Int32 collation;
 };
 
 ASTPtr buildColumn(const String & column_name);
