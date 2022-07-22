@@ -531,7 +531,8 @@ ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
 
 ::testing::AssertionResult columnEqual(
     const ColumnPtr & expected,
-    const ColumnPtr & actual);
+    const ColumnPtr & actual,
+    bool is_floating_point = false);
 
 // ignore name
 ::testing::AssertionResult columnEqual(

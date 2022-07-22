@@ -64,30 +64,14 @@ size_t SegmentTestBasic::getSegmentRowNumWithoutMVCC(PageId segment_id)
 {
     auto segment = segments[segment_id];
     auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
-
-    size_t num_rows_read = 0;
-    in->readPrefix();
-    while (Block block = in->read())
-    {
-        num_rows_read += block.rows();
-    }
-    in->readSuffix();
-    return num_rows_read;
+    return getInputStreamNRows(in);
 }
 
 size_t SegmentTestBasic::getSegmentRowNum(PageId segment_id)
 {
     auto segment = segments[segment_id];
     auto in = segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()});
-
-    size_t num_rows_read = 0;
-    in->readPrefix();
-    while (Block block = in->read())
-    {
-        num_rows_read += block.rows();
-    }
-    in->readSuffix();
-    return num_rows_read;
+    return getInputStreamNRows(in);
 }
 
 void SegmentTestBasic::checkSegmentRow(PageId segment_id, size_t expected_row_num)

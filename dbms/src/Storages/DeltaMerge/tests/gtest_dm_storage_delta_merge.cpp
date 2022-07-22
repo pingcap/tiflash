@@ -760,15 +760,7 @@ try
         query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>(ctx.getSettingsRef().resolve_locks, std::numeric_limits<UInt64>::max());
         Names read_columns = {"col1", EXTRA_TABLE_ID_COLUMN_NAME, "col2"};
         BlockInputStreams ins = storage->read(read_columns, query_info, ctx, stage2, 8192, 1);
-        BlockInputStreamPtr in = ins[0];
-        in->readPrefix();
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        return num_rows_read;
+        return getInputStreamNRows(ins[0]);
     };
 
     // create table

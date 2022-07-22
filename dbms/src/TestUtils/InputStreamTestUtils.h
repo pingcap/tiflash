@@ -28,30 +28,36 @@ namespace tests
 {
 /// helper functions for comparing the result of input stream
 
+// Get the num of rows read from inputstream
+size_t getInputStreamNRows(const BlockInputStreamPtr & stream);
+
+// Checking the num of rows read from inputstream
 ::testing::AssertionResult InputStreamRowsLengthCompare(
-    const char * lhs_expr,
-    const char * rhs_expr,
-    const BlockInputStreamPtr & lhs,
-    size_t num_rows_expect);
+    const char * stream_expr,
+    const char * nrows_expr,
+    const BlockInputStreamPtr & stream,
+    const size_t num_rows_expect);
 #define ASSERT_INPUTSTREAM_NROWS(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::InputStreamRowsLengthCompare, val1, val2)
 
+// Checking the blocks read from inputstream.
+// The inputstream must return the blocks strictly equal to `blocks`.
 ::testing::AssertionResult InputStreamVSBlocksCompare(
-    const char * lhs_expr,
-    const char * rhs_expr,
-    const BlockInputStreamPtr & lhs,
-    const Blocks & rhs);
+    const char * stream_expr,
+    const char * blocks_expr,
+    const BlockInputStreamPtr & stream,
+    const Blocks & blocks);
 #define ASSERT_INPUTSTREAM_BLOCKS(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::InputStreamVSBlocksCompare, val1, val2)
 
-// unrestrictly checking the blocks read from inputstream.
+// Unrestrictly checking the blocks read from inputstream.
 // Allowing the inputstream break the rows into serval smaller blocks.
 ::testing::AssertionResult InputStreamVSBlockUnrestrictlyCompare(
-    const char * lhs_expr,
-    const char * rhs_expr,
-    const BlockInputStreamPtr & lhs,
-    const Block & rhs);
+    const char * stream_expr,
+    const char * block_expr,
+    const BlockInputStreamPtr & stream,
+    const Block & expect_block);
 #define ASSERT_INPUTSTREAM_BLOCK_UR(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::InputStreamVSBlockUnrestrictlyCompare, val1, val2)
 
-// unrestrictly checking a part of columns read from inputstream.
+// Unrestrictly checking a part of columns read from inputstream.
 // Allowing the inputstream break the rows into serval smaller blocks.
 // Only check the read columns with name in `colnames`
 // The size of `colnames` must be the same as `colunms`

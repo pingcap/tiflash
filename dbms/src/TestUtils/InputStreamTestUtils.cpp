@@ -22,31 +22,50 @@ namespace DB
 {
 namespace tests
 {
-::testing::AssertionResult InputStreamRowsLengthCompare(
-    const char * lhs_expr,
-    const char * rhs_expr,
-    const BlockInputStreamPtr & lhs,
-    const size_t num_rows_expect)
+size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
 {
-    RUNTIME_CHECK(lhs != nullptr, Exception, fmt::format("The first param of ASSERT_INPUTSTREAM_NROWS, `{}` is nullptr!", lhs_expr));
+    RUNTIME_CHECK(stream != nullptr, Exception, fmt::format("The inputstream is nullptr!"));
 
     size_t num_rows_read = 0;
-    lhs->readPrefix();
+    stream->readPrefix();
+    while (true)
+    {
+        Block block = stream->read();
+        // No more blocks
+        if (!block)
+            break;
+        block.checkNumberOfRows();
+        num_rows_read += block.rows();
+    }
+    stream->readSuffix();
+    return num_rows_read;
+}
+
+::testing::AssertionResult InputStreamRowsLengthCompare(
+    const char * stream_expr,
+    const char * nrows_expr,
+    const BlockInputStreamPtr & stream,
+    const size_t num_rows_expect)
+{
+    RUNTIME_CHECK(stream != nullptr, Exception, fmt::format("The first param of ASSERT_INPUTSTREAM_NROWS, `{}` is nullptr!", stream_expr));
+
+    size_t num_rows_read = 0;
+    stream->readPrefix();
     while (true)
     {
         try
         {
-            Block block = lhs->read();
+            Block block = stream->read();
             if (!block)
                 break;
             num_rows_read += block.rows();
         }
         catch (...)
         {
-            return ::testing::AssertionFailure() << fmt::format("exception thrown while reading from {}. Error: {}", lhs_expr, getCurrentExceptionMessage(true, false));
+            return ::testing::AssertionFailure() << fmt::format("exception thrown while reading from {}. Error: {}", stream_expr, getCurrentExceptionMessage(true, false));
         }
     }
-    lhs->readSuffix();
+    stream->readSuffix();
 
     if (num_rows_expect == num_rows_read)
         return ::testing::AssertionSuccess();
@@ -55,54 +74,54 @@ namespace tests
     Which is: {}
   {}
     Which is: {})r",
-                              lhs_expr,
+                              stream_expr,
                               num_rows_read,
-                              rhs_expr,
+                              nrows_expr,
                               num_rows_expect);
     return ::testing::AssertionFailure() << reason;
 }
 
 ::testing::AssertionResult InputStreamVSBlocksCompare(
-    const char * lhs_expr,
-    const char * rhs_expr,
-    const BlockInputStreamPtr & lhs,
-    const Blocks & rhs)
+    const char * stream_expr,
+    const char * blocks_expr,
+    const BlockInputStreamPtr & stream,
+    const Blocks & blocks)
 {
-    RUNTIME_CHECK(lhs != nullptr, Exception, fmt::format("The first param of ASSERT_INPUTSTREAM_NROWS, `{}` is nullptr!", lhs_expr));
+    RUNTIME_CHECK(stream != nullptr, Exception, fmt::format("The first param of ASSERT_INPUTSTREAM_NROWS, `{}` is nullptr!", stream_expr));
 
     size_t block_idx = 0;
     size_t num_rows_expect = 0;
     size_t num_rows_read = 0;
-    lhs->readPrefix();
-    while (Block block = lhs->read())
+    stream->readPrefix();
+    while (Block block = stream->read())
     {
-        if (block_idx == rhs.size())
+        if (block_idx == blocks.size())
         {
             auto reason = fmt::format(R"r(  ({}).read() return more blocks as expected
   {} only has {} blocks)r",
-                                      lhs_expr,
-                                      rhs_expr,
-                                      rhs.size());
+                                      stream_expr,
+                                      blocks_expr,
+                                      blocks.size());
             return ::testing::AssertionFailure() << reason;
         }
 
-        if (auto res = DB::tests::blockEqual(rhs[block_idx], block); !res)
+        if (auto res = DB::tests::blockEqual(blocks[block_idx], block); !res)
         {
             auto reason = fmt::format(R"r(
   ({}).read() return block is not equal to
   the {} block in ({}))r",
-                                      lhs_expr,
-                                      rhs_expr,
+                                      stream_expr,
+                                      blocks_expr,
                                       block_idx);
             return res << reason;
         }
 
         // continue to compare next block
         num_rows_read += block.rows();
-        num_rows_expect += rhs[block_idx].rows();
+        num_rows_expect += blocks[block_idx].rows();
         block_idx++;
     }
-    lhs->readSuffix();
+    stream->readSuffix();
 
     if (num_rows_expect == num_rows_read)
         return ::testing::AssertionSuccess();
@@ -111,9 +130,9 @@ namespace tests
     Which is: {}
   sum( ({}).rows() )
     Which is: {})r",
-                              lhs_expr,
+                              stream_expr,
                               num_rows_read,
-                              rhs_expr,
+                              blocks_expr,
                               num_rows_expect);
     return ::testing::AssertionFailure() << reason;
 }

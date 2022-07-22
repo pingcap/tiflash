@@ -701,29 +701,9 @@ try
     EXPECT_EQ(*s2_range.end.value, *old_range.end.value);
     // TODO check segment epoch is increase
 
-    size_t num_rows_seg1 = 0;
-    size_t num_rows_seg2 = 0;
-    {
-        {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_seg1 += block.rows();
-            }
-            in->readSuffix();
-        }
-        {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_seg2 += block.rows();
-            }
-            in->readSuffix();
-        }
-        ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
-    }
+    size_t num_rows_seg1 = getInputStreamNRows(segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)}));
+    size_t num_rows_seg2 = getInputStreamNRows(segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)}));
+    ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
 
     // merge segments
     // TODO: enable merge test!

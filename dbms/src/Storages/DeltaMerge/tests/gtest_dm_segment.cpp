@@ -367,15 +367,7 @@ try
 
     auto get_rows = [&](const RowKeyRange & range) {
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {range});
-        in->readPrefix();
-        size_t rows = 0;
-        while (Block block = in->read())
-        {
-            rows += block.rows();
-        }
-        in->readSuffix();
-
-        return rows;
+        return getInputStreamNRows(in);
     };
 
     // First place the block packs, so that we can only place DeleteRange below.
@@ -793,29 +785,9 @@ try
     EXPECT_EQ(*s2_range.end.value, *old_range.end.value);
     // TODO check segment epoch is increase
 
-    size_t num_rows_seg1 = 0;
-    size_t num_rows_seg2 = 0;
-    {
-        {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()});
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_seg1 += block.rows();
-            }
-            in->readSuffix();
-        }
-        {
-            auto in = new_segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()});
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_seg2 += block.rows();
-            }
-            in->readSuffix();
-        }
-        ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
-    }
+    size_t num_rows_seg1 = getInputStreamNRows(segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()}));
+    size_t num_rows_seg2 = getInputStreamNRows(new_segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()}));
+    ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
 
     // delete rows in the right segment
     {
@@ -1135,15 +1107,8 @@ try
     };
 
     auto read_rows = [&](const SegmentPtr & segment) {
-        size_t rows = 0;
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            rows += block.rows();
-        }
-        in->readSuffix();
-        return rows;
+        return getInputStreamNRows(in);
     };
 
     write_100_rows(segment);
