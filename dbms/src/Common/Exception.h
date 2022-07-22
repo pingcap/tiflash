@@ -259,16 +259,6 @@ inline void log(const char * filename, int lineno, const char * condition, const
             throw(ExceptionGenerationCode);               \
     } while (false)
 
-#define RUNTIME_ASSERT_IMPL(condition, logger, ...)                                                                 \
-    do                                                                                                              \
-    {                                                                                                               \
-        if (unlikely(!(condition)))                                                                                 \
-        {                                                                                                           \
-            LOG_FATAL((logger), exception_details::generateLogMessage(#condition, "Assert {} fail! " __VA_ARGS__)); \
-            std::terminate();                                                                                       \
-        }                                                                                                           \
-    } while (false)
-
 /// Usage:
 /// ```
 /// RUNTIME_ASSERT(a != b);
@@ -286,7 +276,7 @@ inline void log(const char * filename, int lineno, const char * condition, const
                 &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)], \
                 __LINE__,                                              \
                 #condition,                                            \
-                __VA_ARGS__);                                          \
+                ##__VA_ARGS__);                                        \
             std::terminate();                                          \
         }                                                              \
     } while (false)
