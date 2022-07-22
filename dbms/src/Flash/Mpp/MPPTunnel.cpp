@@ -349,11 +349,18 @@ void SyncTunnelSender::startSendThread()
 
 void AsyncTunnelSender::tryFlushOne()
 {
+    // When consumer finished, sending work is done already, just return
+    if (consumer_state.msgHasSet())
+        return;
     writer->tryFlushOne();
 }
 
 void AsyncTunnelSender::sendOne()
 {
+    // When consumer finished, sending work is done already, just return
+    if (consumer_state.msgHasSet())
+        return;
+
     String err_msg;
     bool queue_empty_flag = false;
     try
