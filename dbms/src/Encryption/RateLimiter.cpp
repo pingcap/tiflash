@@ -360,10 +360,10 @@ void ReadLimiter::refillAndAlloc()
     }
 }
 
-IORateLimiter::IORateLimiter()
+IORateLimiter::IORateLimiter(UInt64 update_io_stat_period_ms_)
     : log(&Poco::Logger::get("IORateLimiter"))
     , stop(false)
-    , update_io_stat_period_ms(200) // 200ms
+    , update_io_stat_period_ms(update_io_stat_period_ms_) // 200ms
 {}
 
 IORateLimiter::~IORateLimiter()

@@ -178,9 +178,7 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 //
 // Constructor parameters:
 //
-// `getIOStatistic_` is the function that obtain the amount of data read from /proc.
-//
-// `get_io_stat_period_us` is the interval between calling getIOStatistic_.
+// `getIOStatistic_` is the function that obtain the amount of data from `getCurrentIOInfo()` which read from /proc filesystem.
 //
 // Other parameters are the same as WriteLimiter.
 class ReadLimiter : public WriteLimiter
@@ -215,10 +213,14 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 
 // IORateLimiter is the wrapper of WriteLimiter and ReadLimiter.
 // Currently, It supports four limiter type: background write, foreground write, background read and foreground read.
+//
+// Constructor parameters:
+//
+// `update_io_stat_period_ms` is the interval between calling getCurrentIOInfo. Default is 200ms.
 class IORateLimiter
 {
 public:
-    IORateLimiter();
+    explicit IORateLimiter(UInt64 update_io_stat_period_ms = 200);
     ~IORateLimiter();
 
     WriteLimiterPtr getWriteLimiter();
