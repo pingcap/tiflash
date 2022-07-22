@@ -582,7 +582,11 @@ DataTypePtr getReturnTypeForFunction(
     bool raw_function_test = false);
 
 template <typename T>
-ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")
+ColumnWithTypeAndName createNullableColumn(
+    InferredDataVector<T> init_vec,
+    const std::vector<Int32> & null_map,
+    const String name = "",
+    Int64 column_id = 0)
 {
     static_assert(TypeTraits<T>::is_nullable == false);
     auto updated_vec = InferredDataVector<Nullable<T>>();
@@ -594,15 +598,19 @@ ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const
         else
             updated_vec.push_back(init_vec[i]);
     }
-    return createColumn<Nullable<T>>(updated_vec, name);
+    return createColumn<Nullable<T>>(updated_vec, name, column_id);
 }
 
 template <typename T>
-ColumnWithTypeAndName createNullableColumn(InferredDataInitializerList<T> init, const std::vector<Int32> & null_map, const String name = "")
+ColumnWithTypeAndName createNullableColumn(
+    InferredDataInitializerList<T> init,
+    const std::vector<Int32> & null_map,
+    const String name = "",
+    Int64 column_id = 0)
 {
     static_assert(TypeTraits<T>::is_nullable == false);
     auto vec = InferredDataVector<T>(init);
-    return createNullableColumn<T>(vec, null_map, name);
+    return createNullableColumn<T>(vec, null_map, name, column_id);
 }
 
 template <typename T, typename... Args>
