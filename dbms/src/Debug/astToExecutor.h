@@ -28,6 +28,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
+#include <tipb/executor.pb.h>
 
 #include <optional>
 
@@ -252,17 +253,20 @@ struct Project : public Executor
 
 struct Join : Executor
 {
-    ASTPtr params;
-    const ASTTableJoin & join_params;
-    Join(size_t & index_, const DAGSchema & output_schema_, ASTPtr params_)
+    tipb::JoinType tp;
+
+    const ASTPtr using_expr_list;
+
+    // todo(ljr): support on expr
+    const ASTPtr on_expr{};
+
+    Join(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, ASTPtr using_expr_list_)
         : Executor(index_, "Join_" + std::to_string(index_), output_schema_)
-        , params(params_)
-        , join_params(static_cast<const ASTTableJoin &>(*params))
+        , tp(tp_)
+        , using_expr_list(using_expr_list_)
     {
-        if (join_params.using_expression_list == nullptr)
+        if (using_expr_list == nullptr)
             throw Exception("No join condition found.");
-        if (join_params.strictness != ASTTableJoin::Strictness::All)
-            throw Exception("Only support join with strictness ALL");
     }
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
@@ -347,6 +351,8 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
 ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr select_list);
 
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
+
+ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, ASTPtr using_expr_list);
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
 
