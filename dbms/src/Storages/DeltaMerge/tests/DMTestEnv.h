@@ -98,6 +98,18 @@ inline std::vector<Int64> createSignedNumbers(size_t beg, size_t end)
     return values;
 }
 
+// Mock a common_pk_col that composed by number `rowkey_column_size` of int64 value
+inline String genMockCommonHandle(Int64 value, size_t rowkey_column_size)
+{
+    WriteBufferFromOwnString ss;
+    for (size_t index = 0; index < rowkey_column_size; index++)
+    {
+        ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
+        ::DB::EncodeInt64(value, ss);
+    }
+    return ss.releaseStr();
+}
+
 class DMTestEnv
 {
 public:
@@ -287,13 +299,7 @@ public:
             for (size_t i = 0; i < num_rows; i++)
             {
                 Int64 value = reversed ? end - 1 - i : beg + i;
-                WriteBufferFromOwnString ss;
-                for (size_t index = 0; index < rowkey_column_size; index++)
-                {
-                    ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-                    ::DB::EncodeInt64(value, ss);
-                }
-                values.emplace_back(ss.releaseStr());
+                values.emplace_back(genMockCommonHandle(value, rowkey_column_size));
             }
             block.insert(DB::tests::createColumn<String>(
                 std::move(values),
@@ -412,16 +418,7 @@ public:
         const size_t num_rows = 1;
         if (is_common_handle)
         {
-            Strings values;
-            {
-                WriteBufferFromOwnString ss;
-                for (size_t index = 0; index < rowkey_column_size; index++)
-                {
-                    ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-                    ::DB::EncodeInt64(pk, ss);
-                }
-                values.emplace_back(ss.releaseStr());
-            }
+            Strings values{genMockCommonHandle(pk, rowkey_column_size)};
             block.insert(DB::tests::createColumn<String>(
                 std::move(values),
                 pk_name,

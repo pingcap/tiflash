@@ -25,6 +25,9 @@
 #include <TestUtils/InputStreamTestUtils.h>
 #include <common/types.h>
 
+#include <algorithm>
+#include <iterator>
+
 namespace DB
 {
 namespace FailPoints
@@ -2421,7 +2424,7 @@ try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
     const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
-    size_t rowkey_column_size = 2;
+    const size_t rowkey_column_size = 2;
     {
         auto table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
         table_column_defines->emplace_back(col_str_define);
@@ -2493,71 +2496,42 @@ try
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                    else if (iter.name == col_str_define.name)
-                    {
-                        //printf("%s:%s\n", col_str_define.name.c_str(), c->getDataAt(i).data);
-                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
-                    }
-                    else if (iter.name == col_i8_define.name)
-                    {
-                        //printf("%s:%lld\n", col_i8_define.name.c_str(), c->getInt(i));
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, num_rows_write);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_i8_define.name, col_str_define.name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+                createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+                createColumn<String>(createNumberStrings(0, num_rows_write)),
+            }));
     }
 
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                    else if (iter.name == col_str_define.name)
-                    {
-                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
-                    }
-                    else if (iter.name == col_i8_define.name)
-                    {
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, num_rows_write);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_i8_define.name, col_str_define.name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+                createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+                createColumn<String>(createNumberStrings(0, num_rows_write)),
+            }));
     }
 }
 CATCH
@@ -2623,24 +2597,20 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, 3 * num_write_rows);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
 
     store = reload(table_column_defines, true, rowkey_column_size);
@@ -2699,24 +2669,20 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, 3 * num_write_rows);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
     // Read with version
     {
@@ -2732,24 +2698,20 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 2 * num_write_rows);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, 2 * num_write_rows);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), 2 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
 }
 CATCH
@@ -2758,7 +2720,7 @@ TEST_P(DeltaMergeStoreRWTest, DeleteReadWithCommonHandle)
 try
 {
     const size_t num_rows_write = 128;
-    size_t rowkey_column_size = 2;
+    const size_t rowkey_column_size = 2;
     {
         // Create a block with sequential Int64 handle in range [0, 128)
         auto table_column_difines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
@@ -2792,42 +2754,27 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, num_rows_write);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
     // Delete range [0, 64)
     const size_t num_deleted_rows = 64;
     {
-        WriteBufferFromOwnString ss;
-        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-        DB::EncodeInt64(Int64(0), ss);
-        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-        DB::EncodeInt64(Int64(0), ss);
-        RowKeyValue start(true, std::make_shared<String>(ss.releaseStr()));
-
-        ss.restart();
-        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-        DB::EncodeInt64(Int64(num_deleted_rows), ss);
-        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-        DB::EncodeInt64(Int64(num_deleted_rows), ss);
-        RowKeyValue end(true, std::make_shared<String>(ss.str()));
-        RowKeyRange range(start, end, true, 2);
+        RowKeyValue start(true, std::make_shared<String>(genMockCommonHandle(0, rowkey_column_size)));
+        RowKeyValue end(true, std::make_shared<String>(genMockCommonHandle(num_deleted_rows, rowkey_column_size)));
+        RowKeyRange range(start, end, true, rowkey_column_size);
         store->deleteRange(*db_context, db_context->getSettingsRef(), range);
     }
     // Read after deletion
@@ -2844,28 +2791,20 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        // Range after deletion is [64, 128)
-                        DMTestEnv::verifyClusteredIndexValue(
-                            c->operator[](i).get<String>(),
-                            i + Int64(num_deleted_rows),
-                            rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
+        // mock common handle, data range after deletion is [64, 128)
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(num_deleted_rows, num_rows_write);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), num_rows_write - num_deleted_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
 }
 CATCH

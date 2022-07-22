@@ -28,6 +28,7 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
+#include "TestUtils/InputStreamTestUtils.h"
 
 namespace DB
 {
@@ -125,9 +126,7 @@ bool checkMatch(
 
     const ColumnDefine & col_to_read = check_pk ? getExtraHandleColumnDefine(is_common_handle) : cd;
     auto streams = store->read(context, context.getSettingsRef(), {col_to_read}, {all_range}, 1, std::numeric_limits<UInt64>::max(), filter, name, false);
-    streams[0]->readPrefix();
-    auto rows = streams[0]->read().rows();
-    streams[0]->readSuffix();
+    auto rows = getInputStreamNRows(streams[0]);
     store->drop();
 
     return rows != 0;
