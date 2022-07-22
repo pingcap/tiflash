@@ -327,7 +327,7 @@ std::string Block::dumpJsonStructure() const
         it->dumpJsonStructure(out);
     }
     out << "]";
-    return out.str();
+    return out.releaseStr();
 }
 
 

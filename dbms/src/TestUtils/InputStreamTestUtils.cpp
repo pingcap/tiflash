@@ -55,10 +55,11 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     {
         try
         {
-            Block block = stream->read();
-            if (!block)
+            Block read_block = stream->read();
+            if (!read_block)
                 break;
-            num_rows_read += block.rows();
+            read_block.checkNumberOfRows();
+            num_rows_read += read_block.rows();
         }
         catch (...)
         {
@@ -93,8 +94,10 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     size_t num_rows_expect = 0;
     size_t num_rows_read = 0;
     stream->readPrefix();
-    while (Block block = stream->read())
+    while (Block read_block = stream->read())
     {
+        read_block.checkNumberOfRows();
+
         if (block_idx == blocks.size())
         {
             auto reason = fmt::format(R"r(  ({}).read() return more blocks as expected
@@ -105,7 +108,8 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
             return ::testing::AssertionFailure() << reason;
         }
 
-        if (auto res = DB::tests::blockEqual(blocks[block_idx], block); !res)
+        blocks[block_idx].checkNumberOfRows(); // check the input
+        if (auto res = DB::tests::blockEqual(blocks[block_idx], read_block); !res)
         {
             auto reason = fmt::format(R"r(
   ({}).read() return block is not equal to
@@ -117,7 +121,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
         }
 
         // continue to compare next block
-        num_rows_read += block.rows();
+        num_rows_read += read_block.rows();
         num_rows_expect += blocks[block_idx].rows();
         block_idx++;
     }
@@ -144,6 +148,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     const Block & expect_block)
 {
     RUNTIME_CHECK(stream != nullptr, Exception, fmt::format("The first param of ASSERT_INPUTSTREAM_NROWS, `{}` is nullptr!", stream_expr));
+    expect_block.checkNumberOfRows(); // check the input
 
     size_t num_rows_expect = expect_block.rows();
     size_t num_rows_read = 0;
@@ -151,6 +156,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     stream->readPrefix();
     while (Block read_block = stream->read())
     {
+        read_block.checkNumberOfRows();
         num_rows_read += read_block.rows();
         // hot path, first block from inputstream and the rows is as expected
         if (prev_num_rows_read == 0 && read_block.rows() == num_rows_expect)
