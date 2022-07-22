@@ -414,7 +414,7 @@ bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Re
 
     bool unequal_flag = false;
     DAGProperties properties = getDAGProperties("");
-    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::GenCopKeyRange(req.ranges());
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::genCopKeyRange(req.ranges());
     static auto log = Logger::get("MockDAG");
     LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
     tipb::SelectResponse dag_response;
