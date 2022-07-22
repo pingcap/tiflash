@@ -62,7 +62,7 @@ try
         /// Test default collation(utf8mb4_bin)
         request = context.scan(db_name, table_name).aggregation(MockAstVec{}, {col(col_name)}).project({col_name}).build(context);
         ASSERT_COLUMNS_EQ_UR(ColumnsWithTypeAndName{toNullableVec<String>(col_name, ColumnWithNullableString{"usa", "CHINA", "USA", "china", "cHiNa "})}, executeStreams(request, 1));
-       
+
         request = context.scan(db_name, chinese_table).aggregation(MockAstVec{}, {col(chinese_col_name)}).project({chinese_col_name}).build(context);
         ASSERT_COLUMNS_EQ_UR(ColumnsWithTypeAndName{toNullableVec<String>(chinese_col_name, ColumnWithNullableString{"ShangHai", "北京", "北Bei京", "shanghai  ", "北bei京", "上海"})}, executeStreams(request, 1));
     }

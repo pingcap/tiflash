@@ -19,8 +19,8 @@
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
-#include <tipb/executor.pb.h>
 #include <Storages/Transaction/Collator.h>
+#include <tipb/executor.pb.h>
 
 namespace DB::tests
 {
@@ -123,7 +123,8 @@ class MockDAGRequestContext
 {
 public:
     explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
-        : context(context_), collation(-abs(collation_))
+        : context(context_)
+        , collation(-abs(collation_))
     {
         index = 0;
     }
@@ -150,7 +151,7 @@ public:
 
     void setCollation(Int32 collation_) { collation = -abs(collation_); }
     Int32 getCollation() const { return abs(collation); }
-    
+
 private:
     size_t index;
     std::unordered_map<String, MockColumnInfoVec> mock_tables;
