@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Flash/Management/ManualCompact.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -31,10 +31,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char pause_before_server_merge_one_delta[];
-} // namespace FailPoints
 
 namespace tests
 {
@@ -336,47 +332,51 @@ CATCH
 TEST_P(BasicManualCompactTest, DuplicatedLogicalId)
 try
 {
-    using namespace std::chrono_literals;
+    using namespace SyncPointOps;
 
-    FailPointHelper::enableFailPoint(FailPoints::pause_before_server_merge_one_delta);
+    std::future<void> req1;
 
-    auto thread_1_is_ready = std::promise<void>();
-    std::thread t_req1([&]() {
-        // req1
-        auto request = ::kvrpcpb::CompactRequest();
-        request.set_physical_table_id(TABLE_ID);
-        request.set_logical_table_id(2);
-        auto response = ::kvrpcpb::CompactResponse();
-        thread_1_is_ready.set_value();
-        auto status_code = manager->handleRequest(&request, &response);
-        ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
-        ASSERT_FALSE(response.has_error());
-        helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
-        helper->expected_delta_rows[0] = 0;
-        helper->verifyExpectedRowsForAllSegments();
-    });
+    auto syncs = SyncPointSequence();
+    syncs
+        // req1: Send a request and suspend it at middle.
+        << Call([&]() {
+               req1 = std::async([&]() {
+                   // req1
+                   auto request = ::kvrpcpb::CompactRequest();
+                   request.set_physical_table_id(TABLE_ID);
+                   request.set_logical_table_id(2);
+                   auto response = ::kvrpcpb::CompactResponse();
+                   auto status_code = manager->handleRequest(&request, &response);
+                   ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+                   ASSERT_FALSE(response.has_error());
+                   helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
+                   helper->expected_delta_rows[0] = 0;
+                   helper->verifyExpectedRowsForAllSegments();
+               });
+           })
+        << WaitAndPause("before_DeltaMergeStore::mergeDeltaBySegment")
 
-    {
-        // send req1, wait request being processed.
-        thread_1_is_ready.get_future().wait();
-        std::this_thread::sleep_for(500ms); // TODO: Maybe better to use sync_channel to avoid hardcoded wait duration.
+        // req2: Another request with the same logical id.
+        // Although worker pool size is 1, this request will be returned immediately with an error,
+        // because there is already same logic id working in progress.
+        << Call([&]() {
+               auto request = ::kvrpcpb::CompactRequest();
+               request.set_physical_table_id(TABLE_ID);
+               request.set_logical_table_id(2);
+               auto response = ::kvrpcpb::CompactResponse();
+               auto status_code = manager->handleRequest(&request, &response);
+               ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+               ASSERT_TRUE(response.has_error());
+               ASSERT_TRUE(response.error().has_err_compact_in_progress());
+               helper->verifyExpectedRowsForAllSegments();
+           })
+        // Proceed the execution of req1. Everything should work normally.
+        << Next("before_DeltaMergeStore::mergeDeltaBySegment")
+        << Call([&]() {
+               req1.wait();
+           });
 
-        // req2: Now let's send another request with the same logical id.
-        // Although worker pool size is 1, this request will be returned immediately, but with an error.
-        auto request = ::kvrpcpb::CompactRequest();
-        request.set_physical_table_id(TABLE_ID);
-        request.set_logical_table_id(2);
-        auto response = ::kvrpcpb::CompactResponse();
-        auto status_code = manager->handleRequest(&request, &response);
-        ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
-        ASSERT_TRUE(response.has_error());
-        ASSERT_TRUE(response.error().has_err_compact_in_progress());
-        helper->verifyExpectedRowsForAllSegments();
-    }
-
-    // Now let's continue req1's work
-    FailPointHelper::disableFailPoint(FailPoints::pause_before_server_merge_one_delta);
-    t_req1.join();
+    syncs.execute();
 }
 CATCH
 

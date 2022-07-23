@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Core/SortDescription.h>
@@ -1051,6 +1052,8 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key, const TaskRunThread run_thread)
 {
+    SYNC_FOR("before_DeltaMergeStore::mergeDeltaBySegment");
+
     updateGCSafePoint();
     auto dm_context = newDMContext(context, context.getSettingsRef(),
                                    /*tracing_id*/ fmt::format("mergeDeltaBySegment_{}", latest_gc_safe_point.load(std::memory_order_relaxed)));
@@ -1085,6 +1088,8 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
                 return new_segment->getRowKeyRange();
             } // else: sleep and retry
         } // else: sleep and retry
+
+        SYNC_FOR("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
 
         // Typical cases:
         // #1. flushCache failed

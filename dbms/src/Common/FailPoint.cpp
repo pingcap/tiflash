@@ -104,13 +104,12 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_until_apply_raft_snapshot)         \
     M(pause_after_copr_streams_acquired_once)
 
-#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M)  \
-    M(pause_when_reading_from_dt_stream)   \
-    M(pause_when_writing_to_dt_store)      \
-    M(pause_when_ingesting_to_dt_store)    \
-    M(pause_when_altering_dt_store)        \
-    M(pause_after_copr_streams_acquired)   \
-    M(pause_before_server_merge_one_delta) \
+#define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
+    M(pause_when_reading_from_dt_stream)  \
+    M(pause_when_writing_to_dt_store)     \
+    M(pause_when_ingesting_to_dt_store)   \
+    M(pause_when_altering_dt_store)       \
+    M(pause_after_copr_streams_acquired)  \
     M(pause_query_init)
 
 
