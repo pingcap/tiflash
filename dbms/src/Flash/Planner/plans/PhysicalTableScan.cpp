@@ -83,6 +83,8 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
         assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
         schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
     }
+    /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
+    /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);
     executeExpression(pipeline, schema_project, log, "table scan schema projection");
 }

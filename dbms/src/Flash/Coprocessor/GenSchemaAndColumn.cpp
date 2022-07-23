@@ -14,25 +14,13 @@
 
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
 namespace
 {
-TiDB::ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
-{
-    TiDB::ColumnInfo tidb_column_info;
-    tidb_column_info.tp = static_cast<TiDB::TP>(tipb_column_info.tp());
-    tidb_column_info.id = tipb_column_info.column_id();
-    tidb_column_info.flag = tipb_column_info.flag();
-    tidb_column_info.flen = tipb_column_info.columnlen();
-    tidb_column_info.decimal = tipb_column_info.decimal();
-    for (int i = 0; i < tipb_column_info.elems_size(); ++i)
-        tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);
-    return tidb_column_info;
-}
-
 DataTypePtr getPkType(const ColumnInfo & column_info)
 {
     const auto & pk_data_type = getDataTypeByColumnInfoForComputingLayer(column_info);
@@ -55,7 +43,7 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
     names_and_types.reserve(table_scan.getColumnSize());
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
-        auto column_info = toTiDBColumnInfo(table_scan.getColumns()[i]);
+        auto column_info = TiDB::toTiDBColumnInfo(table_scan.getColumns()[i]);
         switch (column_info.id)
         {
         case TiDBPkColumnID:
