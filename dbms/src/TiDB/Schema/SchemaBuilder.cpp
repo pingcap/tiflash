@@ -1323,6 +1323,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashModeOnPhysicalTable(
 
     TiDB::TableInfo table_info = storage->getTableInfo();
     table_info.tiflash_mode = latest_table_info->tiflash_mode;
+    table_info.schema_version = target_version;
     AlterCommands commands;
 
     LOG_FMT_INFO(log, "Updating tiflash mode for {} to {}", name_mapper.debugCanonicalName(*db_info, table_info), TiFlashModeToString(table_info.tiflash_mode));

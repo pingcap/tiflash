@@ -270,8 +270,10 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group
 {
     auto agg_funcs = std::make_shared<ASTExpressionList>();
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
-    agg_funcs->children.push_back(agg_func);
-    group_by_exprs->children.push_back(group_by_expr);
+    if (agg_func)
+        agg_funcs->children.push_back(agg_func);
+    if (group_by_expr)
+        group_by_exprs->children.push_back(group_by_expr);
     return buildAggregation(agg_funcs, group_by_exprs);
 }
 

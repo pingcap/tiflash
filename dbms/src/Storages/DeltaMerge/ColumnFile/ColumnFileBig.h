@@ -104,6 +104,8 @@ private:
     const ColumnFileBig & column_file;
     const ColumnDefinesPtr col_defs;
 
+    Block header;
+
     bool pk_ver_only;
 
     DMFileBlockInputStreamPtr file_stream;
@@ -112,6 +114,7 @@ private:
     // we cache them to minimize the cost.
     std::vector<Columns> cached_pk_ver_columns;
     std::vector<size_t> cached_block_rows_end;
+    size_t next_block_index_in_cache = 0;
 
     // The data members for reading all columns, but can only read once.
     size_t rows_before_cur_block = 0;
@@ -131,7 +134,24 @@ public:
         , column_file(column_file_)
         , col_defs(col_defs_)
     {
-        pk_ver_only = col_defs->size() <= 2;
+        if (col_defs_->size() == 1)
+        {
+            if ((*col_defs)[0].id == EXTRA_HANDLE_COLUMN_ID)
+            {
+                pk_ver_only = true;
+            }
+        }
+        else if (col_defs_->size() == 2)
+        {
+            if ((*col_defs)[0].id == EXTRA_HANDLE_COLUMN_ID && (*col_defs)[1].id == VERSION_COLUMN_ID)
+            {
+                pk_ver_only = true;
+            }
+        }
+        else
+        {
+            pk_ver_only = false;
+        }
     }
 
     size_t readRows(MutableColumns & output_cols, size_t rows_offset, size_t rows_limit, const RowKeyRange * range) override;

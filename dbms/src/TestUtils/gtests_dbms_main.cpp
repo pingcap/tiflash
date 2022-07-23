@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 #include <signal.h>
@@ -57,6 +60,10 @@ int main(int argc, char ** argv)
 
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
+    DB::ServerInfo server_info;
+    DB::DM::SegmentReaderPoolManager::instance().init(server_info);
+    DB::DM::SegmentReadTaskScheduler::instance();
+    DB::DM::DMFileReaderPool::instance();
 
     // Turn all failures into exceptions, so that ASSERT will work in sub-functions.
     testing::UnitTest::GetInstance()->listeners().Append(new ThrowListener);

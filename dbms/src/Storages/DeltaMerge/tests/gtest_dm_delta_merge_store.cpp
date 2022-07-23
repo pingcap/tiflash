@@ -265,6 +265,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
@@ -304,7 +305,7 @@ try
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1)[0];
+        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
 
         size_t num_rows_read = 0;
         in->readPrefix();
@@ -408,6 +409,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
@@ -494,6 +496,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
@@ -566,6 +569,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -604,6 +608,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -690,6 +695,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -776,6 +782,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -808,6 +815,7 @@ try
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -864,6 +872,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -904,6 +913,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -964,6 +974,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -988,6 +999,7 @@ try
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1012,6 +1024,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1036,6 +1049,7 @@ try
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1098,6 +1112,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1136,6 +1151,7 @@ try
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1175,6 +1191,7 @@ try
                                             /* max_version= */ tso3 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1201,6 +1218,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1227,6 +1245,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1289,6 +1308,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
@@ -1327,6 +1347,7 @@ try
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
@@ -1366,6 +1387,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
@@ -1423,6 +1445,7 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
@@ -1461,6 +1484,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
@@ -1548,6 +1572,7 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
                                                 /* is_fast_mode= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
@@ -1657,6 +1682,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1765,6 +1791,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1854,6 +1881,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -1958,6 +1986,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2035,6 +2064,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2112,6 +2142,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2189,6 +2220,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2266,6 +2298,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2341,6 +2374,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2415,6 +2449,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2506,6 +2541,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -2641,6 +2677,7 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
                                             /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
@@ -2703,6 +2740,7 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
                                                 /* is_fast_mode= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
@@ -2803,6 +2841,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2857,6 +2896,7 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
                               /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
@@ -2974,6 +3014,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
@@ -3012,7 +3053,7 @@ try
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1)[0];
+        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
 
         size_t num_rows_read = 0;
         in->readPrefix();
@@ -3104,6 +3145,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -3179,6 +3221,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -3211,6 +3254,7 @@ try
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -3270,6 +3314,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -3321,6 +3366,7 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
@@ -3395,6 +3441,7 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
                                                 /* is_fast_mode= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
