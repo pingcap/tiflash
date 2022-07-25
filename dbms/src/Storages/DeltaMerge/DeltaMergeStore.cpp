@@ -98,6 +98,9 @@ extern const char exception_after_drop_segment[];
 
 namespace DM
 {
+// It is used to prevent hash conflict of file caches.
+static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
+
 // ================================================
 //   MergeDeltaTaskPool
 // ================================================
