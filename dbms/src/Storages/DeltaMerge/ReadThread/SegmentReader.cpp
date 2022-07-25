@@ -69,10 +69,13 @@ private:
         int ret = sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
         if (ret != 0)
         {
-            LOG_FMT_ERROR(log, "sched_setaffinity fail: {}", std::strerror(errno));
-            throw Exception(fmt::format("sched_setaffinity fail: {}", std::strerror(errno)));
+            // It can be failed due to some CPU core cannot access, such as CPU offline.
+            LOG_FMT_ERROR(log, "sched_setaffinity cpus {} fail: {}", cpus, std::strerror(errno));
         }
-        LOG_FMT_DEBUG(log, "sched_setaffinity cpus {} succ", cpus);
+        else
+        {
+            LOG_FMT_DEBUG(log, "sched_setaffinity cpus {} succ", cpus);
+        }
 #endif
     }
 
