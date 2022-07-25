@@ -269,9 +269,10 @@ ExecutionStatus::fromCurrentException(const std::string & start_of_message)
 
 namespace exception_details
 {
-Poco::Logger * getDefaultFatalLogger()
+const LoggerPtr & getDefaultFatalLogger()
 {
-    return &Poco::Logger::get("DefaultFatal");
+    static const auto logger = std::make_shared<Logger>("DefaultFatal", "");
+    return logger;
 }
 } // namespace exception_details
 

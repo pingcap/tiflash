@@ -344,7 +344,7 @@ protected:
     }
 };
 
-void UpdateMallocConfig([[maybe_unused]] Poco::Logger * log)
+void UpdateMallocConfig([[maybe_unused]] const LoggerPtr & log)
 {
 #ifdef RUN_FAIL_RETURN
     static_assert(false);
@@ -992,7 +992,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
-    Poco::Logger * log = &logger();
+    const auto log = std::make_shared<Logger>(&logger(), "");
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
     FailPointHelper::initRandomFailPoints(config(), log);

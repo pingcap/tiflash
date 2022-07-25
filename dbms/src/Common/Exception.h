@@ -184,16 +184,7 @@ inline Poco::Message generateLogMessage(const std::string & logger_name, const c
         lineno);
 }
 
-Poco::Logger * getDefaultFatalLogger();
-
-inline void log(const char * filename, int lineno, const char * condition, Poco::Logger * logger)
-{
-    if (likely(logger->fatal()))
-    {
-        auto message = generateLogMessage(logger->name(), filename, lineno, condition);
-        logger->log(message);
-    }
-}
+const LoggerPtr & getDefaultFatalLogger();
 
 inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger)
 {
@@ -211,22 +202,6 @@ inline void log(const char * filename, int lineno, const char * condition)
 
 template <typename... Args>
 inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, const char * fmt_str, Args &&... args)
-{
-    if (logger->fatal())
-    {
-        auto message = generateLogMessage(
-            logger->name(),
-            filename,
-            lineno,
-            condition,
-            fmt_str,
-            std::forward<Args>(args)...);
-        logger->log(message);
-    }
-}
-
-template <typename... Args>
-inline void log(const char * filename, int lineno, const char * condition, Poco::Logger * logger, const char * fmt_str, Args &&... args)
 {
     if (logger->fatal())
     {
