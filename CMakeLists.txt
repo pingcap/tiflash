@@ -243,7 +243,7 @@ endif()
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
 
-if (NOT LINKER_NAME)
+if (NOT LINKER_NAME AND NOT APPLE)
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
         set (LINKER_NAME "lld")
     elseif (GOLD_PATH)
