@@ -15,26 +15,27 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
 /**
- * A physical plan node that generates MockExchangeReceiverInputStream.
+ * A physical plan node that generates MockTableScanBlockInputStream.
  * Used in gtest to test execution logic.
  * Only available with `DAGContext.isTest() == true`.
  */
-class PhysicalMockExchangeReceiver : public PhysicalLeaf
+class PhysicalMockTableScan : public PhysicalLeaf
 {
 public:
     static PhysicalPlanNodePtr build(
         Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::ExchangeReceiver & exchange_receiver);
+        const TiDBTableScan & table_scan);
 
-    PhysicalMockExchangeReceiver(
+    PhysicalMockTableScan(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
@@ -48,7 +49,6 @@ public:
 private:
     void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
-private:
     Block sample_block;
 
     BlockInputStreams mock_streams;

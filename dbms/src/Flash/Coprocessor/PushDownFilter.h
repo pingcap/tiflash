@@ -25,6 +25,10 @@ struct PushDownFilter
 {
     static PushDownFilter toPushDownFilter(const String & executor_id, const tipb::Executor * executor);
 
+    static PushDownFilter toPushDownFilter(const String & executor_id, const tipb::Selection & selection);
+
+    PushDownFilter() = default;
+
     PushDownFilter(
         const String & executor_id_,
         const std::vector<const tipb::Expr *> & conditions_);
@@ -33,7 +37,7 @@ struct PushDownFilter
 
     tipb::Executor * constructSelectionForRemoteRead(tipb::Executor * mutable_executor) const;
 
-    String executor_id;
-    std::vector<const tipb::Expr *> conditions;
+    String executor_id{};
+    std::vector<const tipb::Expr *> conditions{};
 };
 } // namespace DB

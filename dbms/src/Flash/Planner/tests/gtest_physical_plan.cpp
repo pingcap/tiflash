@@ -221,5 +221,22 @@ MockExchangeReceiver)",
 }
 CATCH
 
+TEST_F(PhysicalPlanTestRunner, MockTableScan)
+try
+{
+    auto request = context.scan("test_db", "test_table")
+                       .build(context);
+
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<MockTableScan, table_scan_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+MockTableScan)",
+        {toNullableVec<String>({"banana", {}, "banana"}),
+         toNullableVec<String>({"apple", {}, "banana"})});
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
