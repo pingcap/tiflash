@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
@@ -162,6 +163,32 @@ void orderStreams(
             limit,
             settings.max_bytes_before_external_sort,
             context.getTemporaryPath(),
+            log->identifier());
+    }
+}
+
+void executeCreatingSets(
+    DAGPipeline & pipeline,
+    const Context & context,
+    size_t max_streams,
+    const LoggerPtr & log)
+{
+    DAGContext & dag_context = *context.getDAGContext();
+    /// add union to run in parallel if needed
+    if (unlikely(dag_context.isTest()))
+        executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for test");
+    else if (dag_context.isMPPTask())
+        /// MPPTask do not need the returned blocks.
+        executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for mpp");
+    else
+        executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for non mpp");
+    if (dag_context.hasSubquery())
+    {
+        const Settings & settings = context.getSettingsRef();
+        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
+            pipeline.firstStream(),
+            std::move(dag_context.moveSubqueries()),
+            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
             log->identifier());
     }
 }
