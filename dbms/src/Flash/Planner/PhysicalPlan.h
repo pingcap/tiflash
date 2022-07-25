@@ -36,7 +36,7 @@ public:
 
     void build(const String & executor_id, const tipb::Executor * executor);
 
-    void buildSource(const BlockInputStreams & source_streams);
+    void buildSource(const String & executor_id, const BlockInputStreams & source_streams);
 
     void buildFinalProjection(const String & column_prefix, bool is_root);
 

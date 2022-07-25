@@ -34,6 +34,7 @@ struct PlanType
         Projection = 9,
         TableScan = 10,
         MockTableScan = 11,
+        Join = 12,
     };
     PlanTypeEnum enum_value;
 

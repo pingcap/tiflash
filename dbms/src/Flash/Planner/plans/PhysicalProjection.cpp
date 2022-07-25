@@ -86,7 +86,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
     }
 
     auto physical_projection = std::make_shared<PhysicalProjection>(
-        "NonRootFinalProjection",
+        child->execId(),
         schema,
         log->identifier(),
         child,
@@ -131,7 +131,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     }
 
     auto physical_projection = std::make_shared<PhysicalProjection>(
-        "RootFinalProjection",
+        child->execId(),
         schema,
         log->identifier(),
         child,

@@ -21,6 +21,7 @@
 #include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalFilter.h>
+#include <Flash/Planner/plans/PhysicalJoin.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
@@ -117,6 +118,33 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         dagContext().table_scan_executor_id = executor_id;
         break;
     }
+    case tipb::ExecType::TypeJoin:
+    {
+        auto right = popBack();
+        auto left = popBack();
+
+        /// Both sides of the join need to have non-root-final-projection to ensure that
+        /// there are no duplicate columns in the blocks on the build and probe sides.
+
+        /// After DAGQueryBlock removed, `dagContext().isTest() && right->tp() != PlanType::Source`
+        /// and `dagContext().isTest() && right->tp() != PlanType::Source` will be removed.
+        if (dagContext().isTest() && right->tp() != PlanType::Source)
+        {
+            pushBack(right);
+            buildFinalProjection(fmt::format("{}_r_", executor_id), false);
+            right = popBack();
+        }
+
+        if (dagContext().isTest() && right->tp() != PlanType::Source)
+        {
+            pushBack(left);
+            buildFinalProjection(fmt::format("{}_l_", executor_id), false);
+            left = popBack();
+        }
+
+        pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), left, right));
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }
@@ -162,23 +190,28 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
     return back;
 }
 
-void PhysicalPlan::buildSource(const BlockInputStreams & source_streams)
+void PhysicalPlan::buildSource(const String & executor_id, const BlockInputStreams & source_streams)
 {
-    pushBack(PhysicalSource::build(source_streams, log));
+    pushBack(PhysicalSource::build(executor_id, source_streams, log));
 }
 
 void PhysicalPlan::outputAndOptimize()
 {
     RUNTIME_ASSERT(!root_node, log, "root_node shoud be nullptr before `outputAndOptimize`");
     RUNTIME_ASSERT(cur_plan_nodes.size() == 1, log, "There can only be one plan node output, but here are {}", cur_plan_nodes.size());
-    root_node = popBack();
 
+    root_node = popBack();
     LOG_FMT_DEBUG(
         log,
         "build unoptimized physical plan: \n{}",
         toString());
 
     root_node = optimize(context, root_node);
+    LOG_FMT_DEBUG(
+        log,
+        "build optimized physical plan: \n{}",
+        toString());
+
     RUNTIME_ASSERT(root_node, log, "root_node shoudn't be nullptr after `outputAndOptimize`");
 }
 
