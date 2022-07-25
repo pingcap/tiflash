@@ -26,6 +26,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <shared_mutex>
 
 // TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
 namespace Poco::Util
@@ -185,7 +186,7 @@ class ReadLimiter : public WriteLimiter
 {
 public:
     ReadLimiter(
-        std::function<Int64()> getIOStatistic_,
+        std::function<Int64()> get_read_bytes_,
         Int64 rate_limit_per_sec_,
         LimiterType type_,
         UInt64 refill_period_ms_ = 100);
@@ -204,7 +205,7 @@ private:
 
     Int64 getAvailableBalance();
 
-    std::function<Int64()> get_io_statistic;
+    std::function<Int64()> get_read_bytes;
     Int64 last_stat_bytes;
     Poco::Logger * log;
 };
@@ -263,6 +264,7 @@ private:
     std::atomic<bool> stop;
     std::thread auto_tune_and_get_io_info_thread;
     IOInfo io_info;
+    mutable std::shared_mutex io_info_mtx;
     const UInt64 update_io_stat_period_ms;
 
     // Noncopyable and nonmovable.

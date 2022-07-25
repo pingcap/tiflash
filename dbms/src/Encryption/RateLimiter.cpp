@@ -19,6 +19,7 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
+#include <unistd.h>
 
 #include <boost/algorithm/string.hpp>
 #include <cassert>
@@ -289,19 +290,19 @@ void WriteLimiter::updateMaxBytesPerSec(Int64 max_bytes_per_sec)
 }
 
 ReadLimiter::ReadLimiter(
-    std::function<Int64()> getIOStatistic_,
+    std::function<Int64()> get_read_bytes_,
     Int64 rate_limit_per_sec_,
     LimiterType type_,
     UInt64 refill_period_ms_)
     : WriteLimiter(rate_limit_per_sec_, type_, refill_period_ms_)
-    , get_io_statistic(std::move(getIOStatistic_))
-    , last_stat_bytes(get_io_statistic())
+    , get_read_bytes(std::move(get_read_bytes_))
+    , last_stat_bytes(get_read_bytes())
     , log(&Poco::Logger::get("ReadLimiter"))
 {}
 
 Int64 ReadLimiter::getAvailableBalance()
 {
-    Int64 bytes = get_io_statistic();
+    Int64 bytes = get_read_bytes();
     if (bytes < last_stat_bytes)
     {
         LOG_FMT_WARNING(
@@ -363,7 +364,7 @@ void ReadLimiter::refillAndAlloc()
 IORateLimiter::IORateLimiter(UInt64 update_io_stat_period_ms_)
     : log(&Poco::Logger::get("IORateLimiter"))
     , stop(false)
-    , update_io_stat_period_ms(update_io_stat_period_ms_) // 200ms
+    , update_io_stat_period_ms(update_io_stat_period_ms_)
 {}
 
 IORateLimiter::~IORateLimiter()
@@ -435,9 +436,11 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
 {
     LOG_FMT_INFO(log, "updateReadLimiter: bg_bytes {} fg_bytes {}", bg_bytes, fg_bytes);
     auto get_bg_read_io_statistic = [&]() {
+        std::shared_lock lock(io_info_mtx);
         return io_info.bg_read_bytes;
     };
     auto get_fg_read_io_statistic = [&]() {
+        std::shared_lock lock(io_info_mtx);
         return std::max(0, io_info.total_read_bytes - io_info.bg_read_bytes);
     };
 
@@ -606,20 +609,24 @@ void IORateLimiter::runAutoTune()
     auto auto_tune_and_get_io_info_worker = [&]() {
         using time_point = std::chrono::time_point<std::chrono::system_clock>;
         using clock = std::chrono::system_clock;
-        time_point auot_tune_time = clock::now();
+        time_point auto_tune_time = clock::now();
         time_point update_io_stat_time = clock::now();
         while (!stop.load(std::memory_order_relaxed))
         {
             auto now_time_point = clock::now();
-            if ((io_config.auto_tune_sec > 0) && (now_time_point - auot_tune_time > std::chrono::seconds(io_config.auto_tune_sec)))
+            if ((io_config.auto_tune_sec > 0) && (now_time_point - auto_tune_time > std::chrono::seconds(io_config.auto_tune_sec)))
             {
                 autoTune();
-                auot_tune_time = now_time_point;
+                auto_tune_time = now_time_point;
             }
             if ((bg_read_limiter || fg_read_limiter) && (now_time_point - update_io_stat_time > std::chrono::milliseconds(update_io_stat_period_ms)))
             {
-                io_info = getCurrentIOInfo();
+                IOInfo io_info_tmp = getCurrentIOInfo();
                 update_io_stat_time = now_time_point;
+                io_info_mtx.lock();
+                io_info = io_info_tmp;
+                io_info_mtx.unlock();
+                std::this_thread::sleep_for(std::chrono::milliseconds(update_io_stat_period_ms - 1));
             }
         }
     };
