@@ -21,7 +21,7 @@
 namespace DB
 {
 /**
- * A physical plan node with a left and right child.
+ * A physical plan node with two children: left and right.
  */
 class PhysicalBinary : public PhysicalPlanNode
 {
