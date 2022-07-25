@@ -141,6 +141,8 @@ public:
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
     size_t getTotalByteCount() const;
 
+    size_t getTotalBuildInputRows() const { return total_input_build_rows; }
+
     ASTTableJoin::Kind getKind() const { return kind; }
 
     bool useNulls() const { return use_nulls; }
@@ -337,6 +339,7 @@ private:
     SizeLimits limits;
 
     Block totals;
+    std::atomic<size_t> total_input_build_rows{0};
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
       *  and StorageJoin only calls these two methods.
