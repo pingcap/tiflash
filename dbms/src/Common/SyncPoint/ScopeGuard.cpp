@@ -12,25 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-// Expose publicly
 #include <Common/SyncPoint/Ctl.h>
 #include <Common/SyncPoint/ScopeGuard.h>
-// =======
-
-#include <fiu.h>
 
 namespace DB
 {
 
-/**
- * Suspend the execution (when enabled), until `SyncPointCtl::waitAndPause()`,
- * `SyncPointCtl::next()` or `SyncPointCtl::waitAndNext()` is called somewhere
- * (e.g. in tests).
- *
- * Usually this is invoked in actual business logics.
- */
-#define SYNC_FOR(name) fiu_do_on(name, SyncPointCtl::sync(name);)
+SyncPointScopeGuard::SyncPointScopeGuard(const char * name_)
+    : name(name_)
+{
+    SyncPointCtl::enable(name_);
+}
+
+void SyncPointScopeGuard::disable()
+{
+    if (disabled)
+        return;
+    SyncPointCtl::disable(name.c_str());
+    disabled = true;
+}
+
+void SyncPointScopeGuard::waitAndPause()
+{
+    SyncPointCtl::waitAndPause(name.c_str());
+}
+
+void SyncPointScopeGuard::next()
+{
+    SyncPointCtl::next(name.c_str());
+}
+
+void SyncPointScopeGuard::waitAndNext()
+{
+    SyncPointCtl::waitAndNext(name.c_str());
+}
 
 } // namespace DB

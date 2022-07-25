@@ -332,51 +332,40 @@ CATCH
 TEST_P(BasicManualCompactTest, DuplicatedLogicalId)
 try
 {
-    using namespace SyncPointOps;
+    auto sp_req1_merge_delta = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment");
+    auto req1 = std::async([&]() {
+        auto request = ::kvrpcpb::CompactRequest();
+        request.set_physical_table_id(TABLE_ID);
+        request.set_logical_table_id(2);
+        auto response = ::kvrpcpb::CompactResponse();
+        auto status_code = manager->handleRequest(&request, &response);
+        ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+        ASSERT_FALSE(response.has_error());
+        helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
+        helper->expected_delta_rows[0] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    });
 
-    std::future<void> req1;
+    sp_req1_merge_delta.waitAndPause();
 
-    auto syncs = SyncPointSequence();
-    syncs
-        // req1: Send a request and suspend it at middle.
-        << Call([&]() {
-               req1 = std::async([&]() {
-                   // req1
-                   auto request = ::kvrpcpb::CompactRequest();
-                   request.set_physical_table_id(TABLE_ID);
-                   request.set_logical_table_id(2);
-                   auto response = ::kvrpcpb::CompactResponse();
-                   auto status_code = manager->handleRequest(&request, &response);
-                   ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
-                   ASSERT_FALSE(response.has_error());
-                   helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
-                   helper->expected_delta_rows[0] = 0;
-                   helper->verifyExpectedRowsForAllSegments();
-               });
-           })
-        << WaitAndPause("before_DeltaMergeStore::mergeDeltaBySegment")
+    // req2: Another request with the same logical id.
+    // Although worker pool size is 1, this request will be returned immediately with an error,
+    // because there is already same logic id working in progress.
+    {
+        auto request = ::kvrpcpb::CompactRequest();
+        request.set_physical_table_id(TABLE_ID);
+        request.set_logical_table_id(2);
+        auto response = ::kvrpcpb::CompactResponse();
+        auto status_code = manager->handleRequest(&request, &response);
+        ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
+        ASSERT_TRUE(response.has_error());
+        ASSERT_TRUE(response.error().has_err_compact_in_progress());
+        helper->verifyExpectedRowsForAllSegments();
+    }
 
-        // req2: Another request with the same logical id.
-        // Although worker pool size is 1, this request will be returned immediately with an error,
-        // because there is already same logic id working in progress.
-        << Call([&]() {
-               auto request = ::kvrpcpb::CompactRequest();
-               request.set_physical_table_id(TABLE_ID);
-               request.set_logical_table_id(2);
-               auto response = ::kvrpcpb::CompactResponse();
-               auto status_code = manager->handleRequest(&request, &response);
-               ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
-               ASSERT_TRUE(response.has_error());
-               ASSERT_TRUE(response.error().has_err_compact_in_progress());
-               helper->verifyExpectedRowsForAllSegments();
-           })
-        // Proceed the execution of req1. Everything should work normally.
-        << Next("before_DeltaMergeStore::mergeDeltaBySegment")
-        << Call([&]() {
-               req1.wait();
-           });
-
-    syncs.execute();
+    // Proceed the execution of req1. Everything should work normally.
+    sp_req1_merge_delta.next();
+    req1.wait();
 }
 CATCH
 

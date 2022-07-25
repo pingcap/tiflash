@@ -14,7 +14,9 @@
 
 #include <Common/Exception.h>
 #include <Common/SyncPoint/Ctl.h>
+#include <Common/SyncPoint/ScopeGuard.h>
 #include <Common/SyncPoint/SyncChannel.h>
+#include <common/logger_useful.h>
 #include <fiu-control.h>
 
 namespace DB
@@ -108,5 +110,10 @@ void SyncPointCtl::next(const char *) {}
 void SyncPointCtl::sync(const char *) {}
 
 #endif
+
+SyncPointScopeGuard SyncPointCtl::enableInScope(const char * name)
+{
+    return SyncPointScopeGuard(name);
+}
 
 } // namespace DB
