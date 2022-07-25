@@ -1669,12 +1669,16 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
             output_schema.push_back(field);
     }
 
-    for (auto & field : right->output_schema)
+    /// for semi/anti semi join, the right table column is ignored
+    if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
     {
-        if (tp == tipb::JoinType::TypeLeftOuterJoin && field.second.hasNotNullFlag())
-            output_schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            output_schema.push_back(field);
+        for (auto & field : right->output_schema)
+        {
+            if (tp == tipb::JoinType::TypeLeftOuterJoin && field.second.hasNotNullFlag())
+                output_schema.push_back(toNullableDAGColumnInfo(field));
+            else
+                output_schema.push_back(field);
+        }
     }
 
     auto join = std::make_shared<mock::Join>(executor_index, output_schema, tp, using_expr_list);
