@@ -143,6 +143,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         }
 
         pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), left, right));
+        break;
     }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
