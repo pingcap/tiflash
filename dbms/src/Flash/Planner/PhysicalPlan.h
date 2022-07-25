@@ -42,7 +42,7 @@ public:
     void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
 private:
-    void addRootFinalProjectionForCop();
+    void addRootFinalProjectionIfNeed();
 
     void build(const String & executor_id, const tipb::Executor * executor);
 

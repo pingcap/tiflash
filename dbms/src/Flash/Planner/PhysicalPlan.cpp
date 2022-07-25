@@ -27,7 +27,6 @@
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
 #include <Flash/Planner/plans/PhysicalMockTableScan.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
-#include <Flash/Planner/plans/PhysicalSource.h>
 #include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Flash/Statistics/traverseExecutors.h>
@@ -121,27 +120,13 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
     case tipb::ExecType::TypeJoin:
     {
-        auto right = popBack();
-        auto left = popBack();
-
         /// Both sides of the join need to have non-root-final-projection to ensure that
         /// there are no duplicate columns in the blocks on the build and probe sides.
+        buildFinalProjection(fmt::format("{}_r_", executor_id), false);
+        auto right = popBack();
 
-        /// After DAGQueryBlock removed, `dagContext().isTest() && right->tp() != PlanType::Source`
-        /// and `dagContext().isTest() && right->tp() != PlanType::Source` will be removed.
-        if (dagContext().isTest() && right->tp() != PlanType::Source)
-        {
-            pushBack(right);
-            buildFinalProjection(fmt::format("{}_r_", executor_id), false);
-            right = popBack();
-        }
-
-        if (dagContext().isTest() && right->tp() != PlanType::Source)
-        {
-            pushBack(left);
-            buildFinalProjection(fmt::format("{}_l_", executor_id), false);
-            left = popBack();
-        }
+        buildFinalProjection(fmt::format("{}_l_", executor_id), false);
+        auto left = popBack();
 
         pushBack(PhysicalJoin::build(context, executor_id, log, executor->join(), left, right));
         break;
@@ -191,8 +176,9 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
     return back;
 }
 
-/// We should add root final projection for batchcop/cop.
-void PhysicalPlan::addRootFinalProjectionForCop()
+/// For MPP, root final projection has been added under PhysicalExchangeSender or PhysicalMockExchangeSender.
+/// For batchcop/cop that without PhysicalExchangeSender or PhysicalMockExchangeSender, We need to add root final projection.
+void PhysicalPlan::addRootFinalProjectionIfNeed()
 {
     assert(root_node);
     if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
@@ -208,14 +194,14 @@ void PhysicalPlan::outputAndOptimize()
     RUNTIME_ASSERT(!root_node, log, "root_node shoud be nullptr before `outputAndOptimize`");
     RUNTIME_ASSERT(cur_plan_nodes.size() == 1, log, "There can only be one plan node output, but here are {}", cur_plan_nodes.size());
     root_node = popBack();
-    addRootFinalProjectionForCop();
+    addRootFinalProjectionIfNeed();
 
     LOG_FMT_DEBUG(
         log,
         "build unoptimized physical plan: \n{}",
         toString());
 
-    root_node = optimize(context, root_node);
+    root_node = optimize(context, root_node, log);
     LOG_FMT_DEBUG(
         log,
         "build optimized physical plan: \n{}",
