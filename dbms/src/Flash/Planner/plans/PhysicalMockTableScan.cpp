@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/MockExchangeReceiverInputStream.h>
+#include <DataStreams/MockTableScanBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
+#include <Flash/Planner/plans/PhysicalMockTableScan.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -28,7 +29,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     Context & context,
     const String & executor_id,
     const LoggerPtr & log,
-    const tipb::ExchangeReceiver & exchange_receiver)
+    const TiDBTableScan & table_scan)
 {
     NamesAndTypes schema;
     BlockInputStreams mock_streams;
@@ -40,18 +41,17 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
     {
         /// build with default blocks.
+        schema = genNamesAndTypes(table_scan, "mock_table_scan");
+        auto columns_with_type_and_name = getColumnWithTypeAndName(schema);
         for (size_t i = 0; i < max_streams; ++i)
-            // use max_block_size / 10 to determine the mock block's size
-            mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(exchange_receiver, context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
-        for (const auto & col : mock_streams.back()->getHeader())
-            schema.emplace_back(col.name, col.type);
+            mock_streams.emplace_back(std::make_shared<MockTableScanBlockInputStream>(columns_with_type_and_name, context.getSettingsRef().max_block_size));
     }
     else
     {
         /// build from user input blocks.
-        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, executor_id);
+        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id);
         schema = std::move(names_and_types);
-        mock_streams.insert(mock_streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
+        mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
 
     assert(!schema.empty());
@@ -61,47 +61,47 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
 }
 } // namespace
 
-PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(
+PhysicalMockTableScan::PhysicalMockTableScan(
     const String & executor_id_,
     const NamesAndTypes & schema_,
     const String & req_id,
     const Block & sample_block_,
     const BlockInputStreams & mock_streams_)
-    : PhysicalLeaf(executor_id_, PlanType::MockExchangeReceiver, schema_, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
 {}
 
-PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
+PhysicalPlanNodePtr PhysicalMockTableScan::build(
     Context & context,
     const String & executor_id,
     const LoggerPtr & log,
-    const tipb::ExchangeReceiver & exchange_receiver)
+    const TiDBTableScan & table_scan)
 {
     assert(context.getDAGContext()->isTest());
 
-    auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, exchange_receiver);
+    auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
 
-    auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
+    auto physical_mock_table_scan = std::make_shared<PhysicalMockTableScan>(
         executor_id,
         schema,
         log->identifier(),
         PhysicalPlanHelper::constructBlockFromSchema(schema),
         mock_streams);
-    return physical_mock_exchange_receiver;
+    return physical_mock_table_scan;
 }
 
-void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
+void PhysicalMockTableScan::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockExchangeReceiver::finalize(const Names & parent_require)
+void PhysicalMockTableScan::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 }
 
-const Block & PhysicalMockExchangeReceiver::getSampleBlock() const
+const Block & PhysicalMockTableScan::getSampleBlock() const
 {
     return sample_block;
 }

@@ -34,6 +34,8 @@ struct PlanType
         Projection = 9,
         Window = 10,
         WindowSort = 11,
+        TableScan = 12,
+        MockTableScan = 13,
     };
     PlanTypeEnum enum_value;
 

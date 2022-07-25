@@ -45,6 +45,10 @@ String PlanType::toString() const
         return "Window";
     case WindowSort:
         return "WindowSort";
+    case TableScan:
+        return "TableScan";
+    case MockTableScan:
+        return "MockTableScan";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }

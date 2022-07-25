@@ -56,8 +56,13 @@ PushDownFilter PushDownFilter::toPushDownFilter(const String & executor_id, cons
         return {"", {}};
     }
 
+    return toPushDownFilter(executor_id, executor->selection());
+}
+
+PushDownFilter PushDownFilter::toPushDownFilter(const String & executor_id, const tipb::Selection & selection)
+{
     std::vector<const tipb::Expr *> conditions;
-    for (const auto & condition : executor->selection().conditions())
+    for (const auto & condition : selection.conditions())
         conditions.push_back(&condition);
 
     return {executor_id, conditions};

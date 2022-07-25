@@ -25,8 +25,10 @@
 #include <Flash/Planner/plans/PhysicalLimit.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeSender.h>
+#include <Flash/Planner/plans/PhysicalMockTableScan.h>
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalSource.h>
+#include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Flash/Planner/plans/PhysicalWindow.h>
 #include <Flash/Planner/plans/PhysicalWindowSort.h>
@@ -35,6 +37,23 @@
 
 namespace DB
 {
+namespace
+{
+bool pushDownSelection(const PhysicalPlanNodePtr & plan, const String & executor_id, const tipb::Selection & selection)
+{
+    if (plan->tp() == PlanType::TableScan)
+    {
+        auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
+        if (!physical_table_scan->hasPushDownFilter())
+        {
+            physical_table_scan->pushDownFilter(executor_id, selection);
+            return true;
+        }
+    }
+    return false;
+}
+} // namespace
+
 void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
 {
     assert(dag_request);
@@ -59,8 +78,14 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         pushBack(PhysicalTopN::build(context, executor_id, log, executor->topn(), popBack()));
         break;
     case tipb::ExecType::TypeSelection:
-        pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), popBack()));
+    {
+        auto child = popBack();
+        if (pushDownSelection(child, executor_id, executor->selection()))
+            pushBack(child);
+        else
+            pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
         break;
+    }
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
         pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), popBack()));
@@ -90,6 +115,17 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeSort:
         pushBack(PhysicalWindowSort::build(context, executor_id, log, executor->sort(), FineGrainedShuffle(executor), popBack()));
         break;
+    case tipb::ExecType::TypeTableScan:
+    case tipb::ExecType::TypePartitionTableScan:
+    {
+        TiDBTableScan table_scan(executor, executor_id, dagContext());
+        if (unlikely(dagContext().isTest()))
+            pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
+        else
+            pushBack(PhysicalTableScan::build(executor_id, log, table_scan));
+        dagContext().table_scan_executor_id = executor_id;
+        break;
+    }
     default:
         throw TiFlashException(fmt::format("{} executor is not supported", executor->tp()), Errors::Planner::Unimplemented);
     }

@@ -273,6 +273,21 @@ Expression: <cast after window>
         {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
+
+TEST_F(PhysicalPlanTestRunner, MockTableScan)
+try
+{
+    auto request = context.scan("test_db", "test_table")
+                       .build(context);
+
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<MockTableScan, table_scan_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
+        /*expected_streams=*/R"(
+MockTableScan)",
+        {toNullableVec<String>({"banana", {}, "banana"}),
+         toNullableVec<String>({"apple", {}, "banana"})});
 }
 CATCH
 

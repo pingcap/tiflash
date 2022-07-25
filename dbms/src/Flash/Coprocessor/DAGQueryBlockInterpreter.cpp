@@ -162,7 +162,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
 {
     if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID()).empty())
     {
-        auto names_and_types = genNamesAndTypes(table_scan);
+        auto names_and_types = genNamesAndTypes(table_scan, "mock_table_scan");
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         for (size_t i = 0; i < max_streams; ++i)

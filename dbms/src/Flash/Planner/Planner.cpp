@@ -24,14 +24,12 @@ namespace DB
 {
 namespace
 {
-void analyzePhysicalPlan(Context & context, PhysicalPlan & physical_plan, const DAGQueryBlock & query_block)
+void analyzePhysicalPlan(PhysicalPlan & physical_plan, const DAGQueryBlock & query_block)
 {
     assert(query_block.source);
     physical_plan.build(query_block.source_name, query_block.source);
 
-    // selection on table scan had been executed in table scan.
-    // In test mode, filter is not pushed down to table scan.
-    if (query_block.selection && (!query_block.isTableScanSource() || context.getDAGContext()->isTest()))
+    if (query_block.selection)
     {
         physical_plan.build(query_block.selection_name, query_block.selection);
     }
@@ -98,6 +96,7 @@ bool Planner::isSupported(const DAGQueryBlock & query_block)
                 || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
                 || query_block.source->tp() == tipb::ExecType::TypeWindow
                 || (query_block.source->tp() == tipb::ExecType::TypeSort && query_block.source->sort().ispartialsort()));
+                || query_block.isTableScanSource());
     };
     return has_supported_source(query_block) && disable_fine_frained_shuffle(query_block);
 }
@@ -122,7 +121,7 @@ void Planner::executeImpl(DAGPipeline & pipeline)
         physical_plan.buildSource(input_streams);
     }
 
-    analyzePhysicalPlan(context, physical_plan, query_block);
+    analyzePhysicalPlan(physical_plan, query_block);
 
     physical_plan.outputAndOptimize();
 
