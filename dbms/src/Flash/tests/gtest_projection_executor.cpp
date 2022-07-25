@@ -85,142 +85,142 @@ public:
 TEST_F(ExecutorProjectionTestRunner, Projection)
 try
 {
-    wrapForDisEnablePlanner([&]() {
-        /// Check single column
-        auto request = buildDAGRequest<MockColumnNameVec>({col_names[4]});
-        executeWithConcurrency(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+    /// Check single column
+    auto request = buildDAGRequest<MockColumnNameVec>({col_names[4]});
+    executeWithConcurrency(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        /// Check multi columns
-        request = buildDAGRequest<MockColumnNameVec>({col_names[0], col_names[4]});
-        executeWithConcurrency(request,
-                               {
-                                   toNullableVec<String>(col_names[0], col0_sorted_asc),
-                                   toNullableVec<Int32>(col_names[4], col4_sorted_asc),
-                               });
+    /// Check multi columns
+    request = buildDAGRequest<MockColumnNameVec>({col_names[0], col_names[4]});
+    executeWithConcurrency(request,
+                           {
+                               toNullableVec<String>(col_names[0], col0_sorted_asc),
+                               toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                           });
 
-        /// Check multi columns
-        request = buildDAGRequest<MockColumnNameVec>({col_names[0], col_names[1], col_names[4]});
-        executeWithConcurrency(request,
-                               {toNullableVec<String>(col_names[0], col0_sorted_asc),
-                                toNullableVec<String>(col_names[1], col1_sorted_asc),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    /// Check multi columns
+    request = buildDAGRequest<MockColumnNameVec>({col_names[0], col_names[1], col_names[4]});
+    executeWithConcurrency(request,
+                           {toNullableVec<String>(col_names[0], col0_sorted_asc),
+                            toNullableVec<String>(col_names[1], col1_sorted_asc),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        /// Check duplicate columns
-        request = buildDAGRequest<MockColumnNameVec>({col_names[4], col_names[4], col_names[4]});
-        executeWithConcurrency(request,
-                               {toNullableVec<Int32>(col_names[4], col4_sorted_asc),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    /// Check duplicate columns
+    request = buildDAGRequest<MockColumnNameVec>({col_names[4], col_names[4], col_names[4]});
+    executeWithConcurrency(request,
+                           {toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
+    {
+        /// Check large number of columns
+        const size_t col_num = 100;
+        MockColumnNameVec projection_input;
+        ColumnsWithTypeAndName columns;
+        auto expect_column = toNullableVec<Int32>(col_names[4], col4_sorted_asc);
+
+        for (size_t i = 0; i < col_num; ++i)
         {
-            /// Check large number of columns
-            const size_t col_num = 100;
-            MockColumnNameVec projection_input;
-            ColumnsWithTypeAndName columns;
-            auto expect_column = toNullableVec<Int32>(col_names[4], col4_sorted_asc);
-
-            for (size_t i = 0; i < col_num; ++i)
-            {
-                projection_input.push_back(col_names[4]);
-                columns.push_back(expect_column);
-            }
-
-            request = buildDAGRequest<MockColumnNameVec>(projection_input);
-            executeWithConcurrency(request, columns);
+            projection_input.push_back(col_names[4]);
+            columns.push_back(expect_column);
         }
-    });
+
+        request = buildDAGRequest<MockColumnNameVec>(projection_input);
+        executeWithConcurrency(request, columns);
+    }
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
 TEST_F(ExecutorProjectionTestRunner, ProjectionFunction)
 try
 {
-    wrapForDisEnablePlanner([&]() {
-        std::shared_ptr<tipb::DAGRequest> request;
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+    std::shared_ptr<tipb::DAGRequest> request;
 
-        /// Test "equal" function
+    /// Test "equal" function
 
-        /// Data type: TypeString
-        request = buildDAGRequest<MockAstVec>({eq(col(col_names[0]), col(col_names[0])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    /// Data type: TypeString
+    request = buildDAGRequest<MockAstVec>({eq(col(col_names[0]), col(col_names[0])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        request = buildDAGRequest<MockAstVec>({eq(col(col_names[0]), col(col_names[1])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 0}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    request = buildDAGRequest<MockAstVec>({eq(col(col_names[0]), col(col_names[1])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        /// Data type: TypeLong
-        request = buildDAGRequest<MockAstVec>({eq(col(col_names[3]), col(col_names[4])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 1, 0}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
-
-
-        /// Test "greater" function
-
-        /// Data type: TypeString
-        request = buildDAGRequest<MockAstVec>({gt(col(col_names[0]), col(col_names[1])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 0, 0}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
-
-        request = buildDAGRequest<MockAstVec>({gt(col(col_names[1]), col(col_names[0])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 1, 0, 1, {}, 1, 1}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
-
-        /// Data type: TypeLong
-        request = buildDAGRequest<MockAstVec>({gt(col(col_names[3]), col(col_names[4])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 0, 1, 1, {}, 0, 0}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
-
-        request = buildDAGRequest<MockAstVec>({gt(col(col_names[4]), col(col_names[3])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 0, 1}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    /// Data type: TypeLong
+    request = buildDAGRequest<MockAstVec>({eq(col(col_names[3]), col(col_names[4])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 1, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
 
-        /// Test "and" function
+    /// Test "greater" function
 
-        /// Data type: TypeString
-        request = buildDAGRequest<MockAstVec>({And(col(col_names[0]), col(col_names[0])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    /// Data type: TypeString
+    request = buildDAGRequest<MockAstVec>({gt(col(col_names[0]), col(col_names[1])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        request = buildDAGRequest<MockAstVec>({And(col(col_names[0]), col(col_names[1])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    request = buildDAGRequest<MockAstVec>({gt(col(col_names[1]), col(col_names[0])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 0, 1, {}, 1, 1}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        /// Data type: TypeLong
-        request = buildDAGRequest<MockAstVec>({And(col(col_names[3]), col(col_names[4])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 1, 0}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    /// Data type: TypeLong
+    request = buildDAGRequest<MockAstVec>({gt(col(col_names[3]), col(col_names[4])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 1, 1, {}, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        /// Test "not" function
+    request = buildDAGRequest<MockAstVec>({gt(col(col_names[4]), col(col_names[3])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 0, 1}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        /// Data type: TypeString
-        request = buildDAGRequest<MockAstVec>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
-                                toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
-                                toNullableVec<UInt64>({1, {}, 1, 1, 1, 1, {}}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
-        /// Data type: TypeLong
-        request = buildDAGRequest<MockAstVec>({NOT(col(col_names[3])), NOT(col(col_names[4])), col(col_names[4])});
-        executeWithConcurrency(request,
-                               {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 1}),
-                                toNullableVec<UInt64>({{}, 0, 0, 1, 0, 0, 0}),
-                                toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    /// Test "and" function
 
-        /// TODO more functions...
-    });
+    /// Data type: TypeString
+    request = buildDAGRequest<MockAstVec>({And(col(col_names[0]), col(col_names[0])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+
+    request = buildDAGRequest<MockAstVec>({And(col(col_names[0]), col(col_names[1])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+
+    /// Data type: TypeLong
+    request = buildDAGRequest<MockAstVec>({And(col(col_names[3]), col(col_names[4])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 1, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+
+    /// Test "not" function
+
+    /// Data type: TypeString
+    request = buildDAGRequest<MockAstVec>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
+                            toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
+                            toNullableVec<UInt64>({1, {}, 1, 1, 1, 1, {}}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+
+    /// Data type: TypeLong
+    request = buildDAGRequest<MockAstVec>({NOT(col(col_names[3])), NOT(col(col_names[4])), col(col_names[4])});
+    executeWithConcurrency(request,
+                           {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 1}),
+                            toNullableVec<UInt64>({{}, 0, 0, 1, 0, 0, 0}),
+                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+
+    /// TODO more functions...
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 

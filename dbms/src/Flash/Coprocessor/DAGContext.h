@@ -53,6 +53,7 @@ struct JoinExecuteInfo
     String build_side_root_executor_id;
     JoinPtr join_ptr;
     BlockInputStreams non_joined_streams;
+    BlockInputStreams join_build_streams;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
@@ -127,7 +128,6 @@ public:
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(false)
         , is_root_mpp_task(false)
-        , tunnel_set(nullptr)
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
@@ -147,7 +147,6 @@ public:
         , return_executor_id(true)
         , is_mpp_task(true)
         , is_root_mpp_task(is_root_mpp_task_)
-        , tunnel_set(nullptr)
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , mpp_task_meta(meta_)
@@ -169,7 +168,6 @@ public:
         , collect_execution_summaries(false)
         , is_mpp_task(false)
         , is_root_mpp_task(false)
-        , tunnel_set(nullptr)
         , flags(0)
         , sql_mode(0)
         , max_recorded_error_count(max_error_count_)
@@ -184,7 +182,6 @@ public:
         , initialize_concurrency(concurrency)
         , is_mpp_task(true)
         , is_root_mpp_task(false)
-        , tunnel_set(nullptr)
         , log(Logger::get(log_identifier))
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
@@ -337,6 +334,7 @@ public:
     bool is_mpp_task = false;
     bool is_root_mpp_task = false;
     bool is_batch_cop = false;
+    // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
