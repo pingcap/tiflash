@@ -56,6 +56,8 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         read_limiter,
         tracing_id);
 
+    bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
+
     DMFileReader reader(
         dmfile,
         read_columns,
@@ -73,8 +75,9 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         read_limiter,
         rows_threshold_per_read,
         read_one_pack_every_time,
-        tracing_id);
+        tracing_id,
+        enable_read_thread);
 
-    return std::make_shared<DMFileBlockInputStream>(std::move(reader));
+    return std::make_shared<DMFileBlockInputStream>(std::move(reader), enable_read_thread);
 }
 } // namespace DB::DM

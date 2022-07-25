@@ -195,10 +195,9 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
     Int32 old_value = -1;
     parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
 
-    /// can not cancel parent inputStream or the exception might be lost
     if (!parent.executed)
         /// use cancel instead of kill to avoid too many useless error message
-        parent.processor.cancel(false);
+        parent.cancel(false);
 }
 
 

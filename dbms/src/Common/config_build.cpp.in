@@ -47,8 +47,6 @@ const char * auto_config_build[]{
     "@GLIBC_COMPATIBILITY@",
     "USE_JEMALLOC",
     "@USE_JEMALLOC@",
-    "USE_TCMALLOC",
-    "@USE_TCMALLOC@",
     "USE_MIMALLOC",
     "@USE_MIMALLOC@",
     "USE_UNWIND",
