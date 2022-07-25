@@ -124,5 +124,12 @@ void Planner::executeImpl(DAGPipeline & pipeline)
     physical_plan.outputAndOptimize();
 
     physical_plan.transform(pipeline, context, max_streams);
+
+    // TODO Now both PhysicalWindow and PhysicalSort are disabled restoreConcurrency.
+    // After DAGQueryBlock removed, we can only disable restoreConcurrency for
+    // the PhysicalWindow and PhysicalSort below PhysicalWindow and remove this line.
+    // PhysicalWindow <-- PhysicalWindow/PhysicalSort.
+    if (query_block.source->tp() == tipb::ExecType::TypeWindow)
+        restorePipelineConcurrency(pipeline);
 }
 } // namespace DB

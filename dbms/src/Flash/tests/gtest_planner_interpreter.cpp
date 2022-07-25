@@ -564,8 +564,8 @@ try
     {
         String expected = R"(
 Union: <for test>
- Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
+ SharedQuery x 10: <restore concurrency>
+  Expression: <final projection>
    Expression: <cast after window>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
@@ -587,8 +587,8 @@ Union: <for test>
 Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
-   Expression: <final projection>
-    SharedQuery: <restore concurrency>
+   SharedQuery: <restore concurrency>
+    Expression: <final projection>
      Expression: <cast after window>
       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
        Expression: <final projection>
@@ -611,8 +611,8 @@ Union: <for test>
 Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
-   Expression: <final projection>
-    SharedQuery: <restore concurrency>
+   SharedQuery: <restore concurrency>
+    Expression: <final projection>
      Expression: <cast after window>
       Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
        Union: <merge into one for window input>
@@ -680,8 +680,8 @@ Union: <for test>
     {
         String expected = R"(
 Union: <for test>
- Expression x 10: <final projection>
-  SharedQuery: <restore concurrency>
+ SharedQuery x 10: <restore concurrency>
+  Expression: <final projection>
    Expression: <cast after window>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      Expression: <final projection>
