@@ -208,9 +208,11 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
     String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
+    auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
     build_pipeline.transform([&](auto & stream) {
         stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
         stream->setExtraInfo(join_build_extra_info);
+        join_execute_info.join_build_streams.push_back(stream);
     });
     // for test, join executor need the return blocks to output.
     executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dag_context.isTest(), "for join");
