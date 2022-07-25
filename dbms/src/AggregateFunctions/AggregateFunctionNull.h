@@ -436,7 +436,7 @@ public:
                 const IColumn * nested_column = &column->getNestedColumn();
                 this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
             }
-            else if (const String & nexted_func_name = this->nested_function->getName(); nexted_func_name == "groupBitOr" || nexted_func_name == "groupBitAnd" || nexted_func_name == "groupBitXor")
+            else if (const String & nested_func_name = this->nested_function->getName(); nested_func_name == "groupBitOr" || nested_func_name == "groupBitAnd" || nested_func_name == "groupBitXor")
             {
                 // If nested_function is bitwise aggregation function,
                 // the result is always not null.
@@ -474,7 +474,7 @@ public:
                 arena,
                 if_argument_pos);
 
-            if (const String & nexted_func_name = this->nested_function->getName(); nexted_func_name == "groupBitOr" || nexted_func_name == "groupBitAnd" || nexted_func_name == "groupBitXor")
+            if (const String & nested_func_name = this->nested_function->getName(); nested_func_name == "groupBitOr" || nested_func_name == "groupBitAnd" || nested_func_name == "groupBitXor")
             {
                 // If nested_function is bitwise aggregation function,
                 // the result is always not null.
