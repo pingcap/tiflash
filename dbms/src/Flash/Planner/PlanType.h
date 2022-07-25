@@ -36,6 +36,7 @@ struct PlanType
         WindowSort = 11,
         TableScan = 12,
         MockTableScan = 13,
+        Join = 14,
     };
     PlanTypeEnum enum_value;
 

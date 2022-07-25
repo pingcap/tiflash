@@ -49,6 +49,8 @@ String PlanType::toString() const
         return "TableScan";
     case MockTableScan:
         return "MockTableScan";
+    case Join:
+        return "Join";
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }

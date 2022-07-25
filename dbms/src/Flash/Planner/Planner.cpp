@@ -91,6 +91,7 @@ bool Planner::isSupported(const DAGQueryBlock & query_block)
                 || query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver
                 || query_block.source->tp() == tipb::ExecType::TypeWindow
                 || (query_block.source->tp() == tipb::ExecType::TypeSort && query_block.source->sort().ispartialsort())
+                || query_block.source->tp() == tipb::ExecType::TypeJoin
                 || query_block.isTableScanSource());
     };
     return has_supported_source(query_block);
@@ -110,20 +111,17 @@ void Planner::restorePipelineConcurrency(DAGPipeline & pipeline)
 void Planner::executeImpl(DAGPipeline & pipeline)
 {
     PhysicalPlan physical_plan{context, log->identifier()};
-    for (const auto & input_streams : input_streams_vec)
+    assert(query_block.children.size() == input_streams_vec.size());
+    for (size_t i = 0; i < input_streams_vec.size(); ++i)
     {
-        RUNTIME_ASSERT(!input_streams.empty(), log, "input streams cannot be empty");
-        physical_plan.buildSource(input_streams);
+        RUNTIME_ASSERT(!input_streams_vec[i].empty(), log, "input streams cannot be empty");
+        assert(query_block.children[i] && query_block.children[i]->root && query_block.children[i]->root->has_executor_id());
+        physical_plan.buildSource(query_block.children[i]->root->executor_id(), input_streams_vec[i]);
     }
 
     analyzePhysicalPlan(physical_plan, query_block);
 
     physical_plan.outputAndOptimize();
-
-    LOG_FMT_DEBUG(
-        log,
-        "build physical plan: \n{}",
-        physical_plan.toString());
 
     physical_plan.transform(pipeline, context, max_streams);
 }
