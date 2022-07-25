@@ -89,16 +89,25 @@ try
                        .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
                        .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                        .build(context);
-    executeWithConcurrency(request, createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})}));
+    executeWithConcurrency(
+        request,
+        createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+                       toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+                       toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})}));
 
     // null input
-    executeStreamsWithSingleSource(
-        request,
-        {toNullableVec<Int64>("partition", {}), toNullableVec<Int64>("order", {})},
-        {});
+    executeWithTableScanAndConcurrency(request,
+                                       {toNullableVec<Int64>("partition", {}), toNullableVec<Int64>("order", {})},
+                                       createColumns({}));
 
     // nullable
-    executeWithTableScanAndConcurrency(request, {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}), {toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2})}}, createColumns({toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}), toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})}));
+    executeWithTableScanAndConcurrency(
+        request,
+        {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}),
+         {toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2})}},
+        createColumns({toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}),
+                       toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2}),
+                       toNullableVec<Int64>("row_number", {1, 1, 2, 3, 4, 1, 2, 3, 4})}));
 
     // string - sql : select *, row_number() over w1 from test2 window w1 as (partition by partition_string order by order_string)
     request = context
