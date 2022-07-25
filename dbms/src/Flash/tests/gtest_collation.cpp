@@ -426,7 +426,7 @@ try
         auto request = context.scan(db_name, proj_table).project(MockAstVec{eq(col(proj_col[0]), col(proj_col[0])), gt(col(proj_col[0]), col(proj_col[1]))}).build(context);
         checkScalarFunctionCollation(request);
 
-        /// TODO more scalar functions to
+        /// TODO more scalar functions to test...
     }
 }
 CATCH
