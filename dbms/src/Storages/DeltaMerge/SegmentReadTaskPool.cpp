@@ -61,7 +61,7 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
         return a->ranges.size() < b->ranges.size();
     };
     std::priority_queue<SegmentReadTaskPtr, std::vector<SegmentReadTaskPtr>, decltype(cmp)> largest_ranges_first(cmp);
-    for (auto & task : tasks)
+    for (const auto & task : tasks)
         largest_ranges_first.push(task);
 
     // Split the top task.
@@ -93,6 +93,173 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
     }
 
     return result_tasks;
+}
+
+BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
+{
+    MemoryTrackerSetter setter(true, mem_tracker);
+    auto seg = t->segment;
+    BlockInputStreamPtr stream;
+    if (is_raw)
+    {
+        stream = seg->getInputStreamRaw(*dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, do_range_filter_for_raw);
+    }
+    else
+    {
+        auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
+        stream = seg->getInputStream(*dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
+    }
+    LOG_FMT_DEBUG(log, "getInputStream pool {} seg_id {} succ", pool_id, seg->segmentId());
+    return stream;
+}
+
+void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
+{
+    after_segment_read(dm_context, seg);
+    bool pool_finished = false;
+    {
+        std::lock_guard lock(mutex);
+        active_segment_ids.erase(seg->segmentId());
+        pool_finished = active_segment_ids.empty() && tasks.empty();
+    }
+    LOG_FMT_DEBUG(log, "finishSegment pool {} seg_id {} pool_finished {}", pool_id, seg->segmentId(), pool_finished);
+    if (pool_finished)
+    {
+        q.finish();
+    }
+}
+
+SegmentReadTaskPtr SegmentReadTaskPool::getTask(uint64_t seg_id)
+{
+    std::lock_guard lock(mutex);
+    // TODO(jinhelin): use unordered_map
+    auto itr = std::find_if(tasks.begin(), tasks.end(), [seg_id](const SegmentReadTaskPtr & task) { return task->segment->segmentId() == seg_id; });
+    if (itr == tasks.end())
+    {
+        throw Exception(fmt::format("pool {} seg_id {} not found", pool_id, seg_id));
+    }
+    auto t = *(itr);
+    tasks.erase(itr);
+    active_segment_ids.insert(seg_id);
+    return t;
+}
+
+// Choose a segment to read.
+// Returns <segment_id, pool_ids>.
+std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadTaskPool::scheduleSegment(const std::unordered_map<uint64_t, std::vector<uint64_t>> & segments, uint64_t expected_merge_count)
+{
+    auto target = segments.end();
+    std::lock_guard lock(mutex);
+    if (getFreeActiveSegmentCountUnlock() <= 0)
+    {
+        return target;
+    }
+    for (const auto & task : tasks)
+    {
+        auto itr = segments.find(task->segment->segmentId());
+        if (itr == segments.end())
+        {
+            throw DB::Exception(fmt::format("seg_id {} not found from merging segments", task->segment->segmentId()));
+        }
+        if (std::find(itr->second.begin(), itr->second.end(), poolId()) == itr->second.end())
+        {
+            throw DB::Exception(fmt::format("pool {} not found from merging segment {}=>{}", poolId(), itr->first, itr->second));
+        }
+        if (target == segments.end() || itr->second.size() > target->second.size())
+        {
+            target = itr;
+        }
+        if (target->second.size() >= expected_merge_count)
+        {
+            break;
+        }
+    }
+    return target;
+}
+
+bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
+{
+    MemoryTrackerSetter setter(true, mem_tracker);
+    auto block = stream->read();
+    if (block)
+    {
+        pushBlock(std::move(block));
+        return true;
+    }
+    else
+    {
+        finishSegment(seg);
+        return false;
+    }
+}
+
+void SegmentReadTaskPool::popBlock(Block & block)
+{
+    q.pop(block);
+    blk_stat.pop(block);
+    global_blk_stat.pop(block);
+    if (exceptionHappened())
+    {
+        throw exception;
+    }
+}
+
+void SegmentReadTaskPool::pushBlock(Block && block)
+{
+    blk_stat.push(block);
+    global_blk_stat.push(block);
+    q.push(std::move(block), nullptr);
+}
+
+int64_t SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()
+{
+    return unordered_input_stream_ref_count.fetch_add(1, std::memory_order_relaxed);
+}
+int64_t SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
+{
+    return unordered_input_stream_ref_count.fetch_sub(1, std::memory_order_relaxed);
+}
+
+int64_t SegmentReadTaskPool::getFreeBlockSlots() const
+{
+    double block_slots_scale = dm_context->db_context.getSettingsRef().dt_block_slots_scale;
+    auto block_slots = static_cast<int64_t>(std::ceil(unordered_input_stream_ref_count.load(std::memory_order_relaxed) * block_slots_scale));
+    if (block_slots < 3)
+    {
+        block_slots = 3;
+    }
+    return block_slots - blk_stat.pendingCount();
+}
+
+int64_t SegmentReadTaskPool::getFreeActiveSegmentCountUnlock()
+{
+    double active_segments_scale = dm_context->db_context.getSettingsRef().dt_active_segments_scale;
+    auto active_segment_limit = static_cast<int64_t>(std::ceil(unordered_input_stream_ref_count.load(std::memory_order_relaxed) * active_segments_scale));
+    if (active_segment_limit < 2)
+    {
+        active_segment_limit = 2;
+    }
+    return active_segment_limit - static_cast<int64_t>(active_segment_ids.size());
+}
+
+bool SegmentReadTaskPool::exceptionHappened() const
+{
+    return exception_happened.load(std::memory_order_relaxed);
+}
+
+bool SegmentReadTaskPool::valid() const
+{
+    return !exceptionHappened() && unordered_input_stream_ref_count.load(std::memory_order_relaxed) > 0;
+}
+void SegmentReadTaskPool::setException(const DB::Exception & e)
+{
+    std::lock_guard lock(mutex);
+    if (!exceptionHappened())
+    {
+        exception = e;
+        exception_happened.store(true, std::memory_order_relaxed);
+        q.finish();
+    }
 }
 
 } // namespace DB::DM
