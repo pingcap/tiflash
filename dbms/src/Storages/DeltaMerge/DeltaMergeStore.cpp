@@ -26,6 +26,8 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -38,10 +40,6 @@
 
 #include <atomic>
 #include <ext/scope_guard.h>
-
-#if USE_TCMALLOC
-#include <gperftools/malloc_extension.h>
-#endif
 
 namespace ProfileEvents
 {
@@ -472,11 +470,6 @@ void DeltaMergeStore::drop()
     // Drop data in storage path pool
     path_pool.drop(/*recursive=*/true, /*must_success=*/false);
     LOG_FMT_INFO(log, "Drop DeltaMerge done [{}.{}]", db_name, table_name);
-
-#if USE_TCMALLOC
-    // Reclaim memory.
-    MallocExtension::instance()->ReleaseFreeMemory();
-#endif
 }
 
 void DeltaMergeStore::shutdown()
@@ -985,6 +978,8 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
 bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed)
 {
+    size_t sleep_ms = 5;
+
     RowKeyRange cur_range = range;
     while (!cur_range.none())
     {
@@ -1008,7 +1003,6 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             }
             segment_range = segment->getRowKeyRange();
 
-            // Flush could fail.
             if (segment->flushCache(*dm_context))
             {
                 break;
@@ -1017,6 +1011,13 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             {
                 return false;
             }
+
+            // Flush could fail. Typical cases:
+            // #1. The segment is abandoned (due to an update is finished)
+            // #2. There is another flush in progress, for example, triggered in background
+            // Let's sleep 5ms ~ 100ms and then retry flush again.
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+            sleep_ms = std::min(sleep_ms * 2, 100);
         }
 
         cur_range.setStart(segment_range.end);
@@ -1050,6 +1051,8 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
     auto dm_context = newDMContext(context, context.getSettingsRef(),
                                    /*tracing_id*/ fmt::format("mergeDeltaBySegment_{}", latest_gc_safe_point.load(std::memory_order_relaxed)));
 
+    size_t sleep_ms = 50;
+
     while (true)
     {
         SegmentPtr segment;
@@ -1063,25 +1066,33 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
             segment = segment_it->second;
         }
 
-        if (!segment->flushCache(*dm_context))
+        if (segment->flushCache(*dm_context))
         {
-            // If the flush failed, it means there are parallel updates to the segment in the background.
-            // In this case, we try again.
-            continue;
-        }
-
-        const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
-        if (new_segment)
-        {
-            const auto segment_end = new_segment->getRowKeyRange().end;
-            if (unlikely(*segment_end.value <= *start_key.value))
+            const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
+            if (new_segment)
             {
-                // The next start key must be > current start key
-                LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
-                throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
-            }
-            return new_segment->getRowKeyRange();
-        }
+                const auto segment_end = new_segment->getRowKeyRange().end;
+                if (unlikely(*segment_end.value <= *start_key.value))
+                {
+                    // The next start key must be > current start key
+                    LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
+                    throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
+                }
+                return new_segment->getRowKeyRange();
+            } // else: sleep and retry
+        } // else: sleep and retry
+
+        // Typical cases:
+        // #1. flushCache failed
+        //    - The segment is abandoned (due to segment updated)
+        //    - There is another flush in progress (e.g. triggered in background)
+        // #2. segmentMergeDelta failed
+        //    - The segment is abandoned (due to segment updated)
+        //    - The segment is updating (e.g. a split-preparation is working, which occupies a for-write snapshot).
+        // It could be possible to take seconds to finish the segment updating, so let's sleep for a short time
+        // (50ms ~ 1000ms) and then retry.
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+        sleep_ms = std::min(sleep_ms * 2, 1000);
     }
 }
 
@@ -1122,19 +1133,22 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
     }
 }
 
-// Read data without mvcc filtering && delete-range filtering.
+// Read data without mvcc filtering && delete mark != 0 filtering.
 // just for debug
+// readRaw is called under 'selraw  xxxx'
 BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                                            const DB::Settings & db_settings,
                                            const ColumnDefines & columns_to_read,
                                            size_t num_streams,
+                                           bool keep_order,
                                            const SegmentIdSet & read_segments,
                                            size_t extra_table_id_index)
 {
     SegmentReadTasks tasks;
 
     auto dm_context = newDMContext(db_context, db_settings, fmt::format("read_raw_{}", db_context.getCurrentQueryId()));
-
+    // If keep order is required, disable read thread.
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     {
         std::shared_lock lock(read_write_mutex);
 
@@ -1166,7 +1180,17 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
-    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        physical_table_id,
+        dm_context,
+        columns_to_read,
+        EMPTY_FILTER,
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        /* is_raw = */ true,
+        /* do_delete_mark_filter_for_raw = */ false,
+        std::move(tasks),
+        after_segment_read);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
@@ -1174,20 +1198,37 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
-            dm_context,
-            read_task_pool,
-            after_segment_read,
-            columns_to_read,
-            EMPTY_FILTER,
-            std::numeric_limits<UInt64>::max(),
-            DEFAULT_BLOCK_SIZE,
-            true,
-            db_settings.dt_raw_filter_range,
-            extra_table_id_index,
-            physical_table_id,
-            req_info);
+        BlockInputStreamPtr stream;
+        if (enable_read_thread)
+        {
+            stream = std::make_shared<UnorderedInputStream>(
+                read_task_pool,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id,
+                req_info);
+        }
+        else
+        {
+            stream = std::make_shared<DMSegmentThreadInputStream>(
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                EMPTY_FILTER,
+                std::numeric_limits<UInt64>::max(),
+                DEFAULT_BLOCK_SIZE,
+                /* is_raw_ */ true,
+                /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
+                extra_table_id_index,
+                physical_table_id,
+                req_info);
+        }
         res.push_back(stream);
+    }
+    if (enable_read_thread)
+    {
+        SegmentReadTaskScheduler::instance().add(read_task_pool);
     }
     return res;
 }
@@ -1200,17 +1241,27 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         UInt64 max_version,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
+                                        bool keep_order,
+                                        bool is_fast_mode,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
-
-    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments);
+    // If keep order is required, disable read thread.
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
+    // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
+    // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
+    // Also, too many read tasks of a segment with different samll ranges is not good for data sharing cache.
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
 
     auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
-    LOG_FMT_DEBUG(tracing_logger, "Read create segment snapshot done");
+    LOG_FMT_DEBUG(tracing_logger,
+                  "Read create segment snapshot done keep_order {} dt_enable_read_thread {} => enable_read_thread {}",
+                  keep_order,
+                  db_context.getSettingsRef().dt_enable_read_thread,
+                  enable_read_thread);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1219,7 +1270,17 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
-    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        physical_table_id,
+        dm_context,
+        columns_to_read,
+        filter,
+        max_version,
+        expected_block_size,
+        /* is_raw = */ is_fast_mode,
+        /* do_delete_mark_filter_for_raw = */ is_fast_mode,
+        std::move(tasks),
+        after_segment_read);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
@@ -1227,22 +1288,38 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(
-            dm_context,
-            read_task_pool,
-            after_segment_read,
-            columns_to_read,
-            filter,
-            max_version,
-            expected_block_size,
-            false,
-            db_settings.dt_raw_filter_range,
-            extra_table_id_index,
-            physical_table_id,
-            req_info);
+        BlockInputStreamPtr stream;
+        if (enable_read_thread)
+        {
+            stream = std::make_shared<UnorderedInputStream>(
+                read_task_pool,
+                columns_to_read,
+                extra_table_id_index,
+                physical_table_id,
+                req_info);
+        }
+        else
+        {
+            stream = std::make_shared<DMSegmentThreadInputStream>(
+                dm_context,
+                read_task_pool,
+                after_segment_read,
+                columns_to_read,
+                filter,
+                max_version,
+                expected_block_size,
+                /* is_raw_ */ is_fast_mode,
+                /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
+                extra_table_id_index,
+                physical_table_id,
+                req_info);
+        }
         res.push_back(stream);
     }
-
+    if (enable_read_thread)
+    {
+        SegmentReadTaskScheduler::instance().add(read_task_pool);
+    }
     LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
 
     return res;
@@ -1753,7 +1830,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
-    LOG_FMT_DEBUG(log,
+    LOG_FMT_TRACE(log,
                   "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
                   table_name,
                   next_gc_check_key.toDebugString(),
@@ -1847,7 +1924,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
-                    LOG_FMT_INFO(
+                    LOG_FMT_DEBUG(
                         log,
                         "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
                         segment_id,
@@ -1856,7 +1933,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 }
                 else
                 {
-                    LOG_FMT_INFO(
+                    LOG_FMT_DEBUG(
                         log,
                         "GC aborted on Segment [{}] [range={}] [table={}]",
                         segment_id,
@@ -1879,7 +1956,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         }
     }
 
-    LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    if (gc_segments_num != 0)
+    {
+        LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+    }
     return gc_segments_num;
 }
 
@@ -2621,7 +2701,8 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     DMContext & dm_context,
     const RowKeyRanges & sorted_ranges,
     size_t expected_tasks_count,
-    const SegmentIdSet & read_segments)
+    const SegmentIdSet & read_segments,
+    bool try_split_task)
 {
     SegmentReadTasks tasks;
 
@@ -2676,12 +2757,15 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
                 ++seg_it;
         }
     }
-
-    /// Try to make task number larger or equal to expected_tasks_count.
-    auto result_tasks = SegmentReadTask::trySplitReadTasks(tasks, expected_tasks_count);
+    auto tasks_before_split = tasks.size();
+    if (try_split_task)
+    {
+        /// Try to make task number larger or equal to expected_tasks_count.
+        tasks = SegmentReadTask::trySplitReadTasks(tasks, expected_tasks_count);
+    }
 
     size_t total_ranges = 0;
-    for (auto & task : result_tasks)
+    for (auto & task : tasks)
     {
         /// Merge continuously ranges.
         task->mergeRanges();
@@ -2693,11 +2777,11 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         tracing_logger,
         "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
         sorted_ranges.size(),
+        tasks_before_split,
         tasks.size(),
-        result_tasks.size(),
         total_ranges);
 
-    return result_tasks;
+    return tasks;
 }
 
 } // namespace DM

@@ -182,6 +182,52 @@ StoragePathPool & StoragePathPool::operator=(const StoragePathPool & rhs)
     return *this;
 }
 
+bool StoragePathPool::createPSV2DeleteMarkFile()
+{
+    try
+    {
+        return Poco::File(getPSV2DeleteMarkFilePath()).createFile();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log);
+        return false;
+    }
+}
+
+bool StoragePathPool::isPSV2Deleted() const
+{
+    return Poco::File(getPSV2DeleteMarkFilePath()).exists();
+}
+
+void StoragePathPool::clearPSV2ObsoleteData()
+{
+    std::lock_guard lock{mutex};
+    auto drop_instance_data = [&](const String & prefix) {
+        for (auto & path_info : latest_path_infos)
+        {
+            try
+            {
+                auto path = fmt::format("{}/{}", path_info.path, prefix);
+                if (Poco::File dir(path); dir.exists())
+                {
+                    // This function is used to clean obsolete data in ps v2 instance at restart,
+                    // so no need to update global_capacity here.
+                    LOG_FMT_INFO(log, "Begin to drop obsolete data[dir={}]", path);
+                    file_provider->deleteDirectory(dir.path(), false, true);
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log);
+            }
+        }
+    };
+    drop_instance_data("meta");
+    drop_instance_data("log");
+    drop_instance_data("data");
+}
+
 void StoragePathPool::rename(const String & new_database, const String & new_table, bool clean_rename)
 {
     if (unlikely(new_database.empty() || new_table.empty()))
@@ -309,6 +355,11 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
         file.renameTo(new_path);
     else
         LOG_FMT_WARNING(log, "Path \"{}\" is missed.", old_path);
+}
+
+String StoragePathPool::getPSV2DeleteMarkFilePath() const
+{
+    return fmt::format("{}/{}", latest_path_infos[0].path, "PS_V2_DELETED");
 }
 
 //==========================================================================================

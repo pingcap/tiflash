@@ -138,7 +138,7 @@ public:
         SettingUInt64 blob_file_limit_size = BLOBFILE_LIMIT_SIZE;
         SettingUInt64 blob_spacemap_type = 2;
         SettingUInt64 blob_cached_fd_size = BLOBSTORE_CACHED_FD_SIZE;
-        SettingDouble blob_heavy_gc_valid_rate = 0.2;
+        SettingDouble blob_heavy_gc_valid_rate = 0.5;
         SettingUInt64 blob_block_alignment_bytes = 0;
 
         SettingUInt64 wal_roll_size = PAGE_META_ROLL_SIZE;
@@ -208,6 +208,14 @@ public:
     void reloadSettings(const Config & new_config) { config.reload(new_config); };
     Config getSettings() const { return config; }
 
+    // Use a more easy gc config for v2 when all of its data will be transformed to v3.
+    static Config getEasyGCConfig()
+    {
+        Config gc_config;
+        gc_config.file_roll_size = PAGE_FILE_SMALL_SIZE;
+        return gc_config;
+    }
+
 public:
     static PageStoragePtr
     create(
@@ -215,7 +223,8 @@ public:
         PSDiskDelegatorPtr delegator,
         const PageStorage::Config & config,
         const FileProviderPtr & file_provider,
-        bool use_v3 = false);
+        bool use_v3 = false,
+        bool no_more_insert_to_v2 = false);
 
     PageStorage(
         String name,

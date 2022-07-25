@@ -347,10 +347,14 @@ public:
                               const DB::Settings & db_settings,
                               const ColumnDefines & columns_to_read,
                               size_t num_streams,
+                              bool keep_order,
                               const SegmentIdSet & read_segments = {},
                               size_t extra_table_id_index = InvalidColumnID);
 
-    /// Read rows with MVCC filtering
+
+    /// Read rows in two modes:
+    ///     when is_fast_mode == false, we are in normal mode. Thus we will read rows with MVCC filtering, del mark !=0  filter and sorted merge
+    ///     when is_fast_mode == true, we are in fast mode. Thus we will read rows without MVCC and sorted merge
     /// `sorted_ranges` should be already sorted and merged
     BlockInputStreams read(const Context & db_context,
                            const DB::Settings & db_settings,
@@ -360,6 +364,8 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            const String & tracing_id,
+                           bool keep_order,
+                           bool is_fast_mode = false, // set true when read in fast mode
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
@@ -486,7 +492,8 @@ private:
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,
                                           size_t expected_tasks_count = 1,
-                                          const SegmentIdSet & read_segments = {});
+                                          const SegmentIdSet & read_segments = {},
+                                          bool try_split_task = true);
 
 private:
     void dropAllSegments(bool keep_first_segment);

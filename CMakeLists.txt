@@ -134,6 +134,48 @@ if (COMPILER_CLANG)
     endif ()
 endif ()
 
+option (ENABLE_LLVM_PROFILE_INSTR "Generate instrumented code to collect execution counts" OFF)
+option (ENABLE_LLVM_PGO "Enables flags for Profile Guided Optimization (PGO)" OFF)
+option (ENABLE_LLVM_PGO_USE_SAMPLE "Enables flags for Profile Guided Optimization (PGO) and use sampling profilers" OFF)
+set (USE_LLVM_FDO OFF CACHE BOOL "" FORCE)
+
+if (ENABLE_LLVM_PGO)
+    if (ENABLE_LLVM_PROFILE_INSTR)
+        message (FATAL_ERROR "`ENABLE_LLVM_PROFILE_INSTR` can not be used with `ENABLE_LLVM_PGO`")
+    endif ()
+    if (ENABLE_LLVM_PGO_USE_SAMPLE)
+
+        # Follow https://clang.llvm.org/docs/UsersManual.html#using-sampling-profilers
+        # Use https://github.com/google/autofdo
+
+        set (_LLVM_PGO_USE_SAMPLE_FLAGS "-gline-tables-only -fdebug-info-for-profiling -funique-internal-linkage-names")
+
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_LLVM_PGO_USE_SAMPLE_FLAGS}")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_LLVM_PGO_USE_SAMPLE_FLAGS}")
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-rosegment")
+        message (STATUS "Add flags `${_LLVM_PGO_USE_SAMPLE_FLAGS}` for profiling")
+
+        if (NOT "$ENV{TIFLASH_LLVM_PROFDATA}" STREQUAL "")
+            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-sample-use=$ENV{TIFLASH_LLVM_PROFDATA}")
+            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-sample-use=$ENV{TIFLASH_LLVM_PROFDATA}")
+            message (STATUS "Use sample profile data `$ENV{TIFLASH_LLVM_PROFDATA}` for profile-guided optimization")
+            set (USE_LLVM_FDO ON CACHE BOOL "" FORCE)
+        else ()
+            message (STATUS "NOT use sample profile data")
+        endif ()
+
+        unset (_LLVM_PGO_USE_SAMPLE_FLAGS)
+    else ()
+        if ("$ENV{TIFLASH_LLVM_PROFDATA}" STREQUAL "")
+            message (FATAL_ERROR "Please set env var `TIFLASH_LLVM_PROFDATA`")
+        endif ()
+
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-use=$ENV{TIFLASH_LLVM_PROFDATA} -Wno-profile-instr-unprofiled")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-instr-use=$ENV{TIFLASH_LLVM_PROFDATA} -Wno-profile-instr-unprofiled")
+        message (STATUS "Use instrumentation data `$ENV{TIFLASH_LLVM_PROFDATA}` for profile-guided optimization")
+    endif ()
+endif ()
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
@@ -201,7 +243,7 @@ endif()
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
 
-if (NOT LINKER_NAME)
+if (NOT LINKER_NAME AND NOT APPLE)
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
         set (LINKER_NAME "lld")
     elseif (GOLD_PATH)
@@ -397,7 +439,6 @@ option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
 include (libs/libdaemon/cmake/find_unwind.cmake)
 
 # Need to process before "contrib" dir:
-include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
 include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
@@ -441,6 +482,16 @@ endif ()
 option (TEST_LLVM_COVERAGE "Enables flags for test coverage" OFF)
 if (TEST_LLVM_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-instr-generate -fcoverage-mapping -DTIFLASH_LLVM_COVERAGE=1")
+endif ()
+
+# `ENABLE_LLVM_PROFILE_INSTR` will make executable binary generate profile data automatically. Make it only work at modules dbms and libs.
+if (ENABLE_LLVM_PROFILE_INSTR)
+    if (ENABLE_LLVM_PGO)
+        message (FATAL_ERROR "`ENABLE_LLVM_PROFILE_INSTR` can not be used with `ENABLE_LLVM_PGO`")
+    endif ()
+    message (STATUS "Using flag `-fprofile-instr-generate`. Generate instrumented code to collect execution counts into default.profraw file(overridden by '=' form of option or `LLVM_PROFILE_FILE` env var). Follow https://clang.llvm.org/docs/UsersManual.html#profile-guided-optimization.")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate")
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-instr-generate")
 endif ()
 
 if (ARCH_AMD64)
