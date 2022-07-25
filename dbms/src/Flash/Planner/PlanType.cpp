@@ -41,6 +41,10 @@ String PlanType::toString() const
         return "MockExchangeReceiver";
     case Projection:
         return "Projection";
+    case TableScan:
+        return "TableScan";
+    case MockTableScan:
+        return "MockTableScan";
     case Join:
         return "Join";
     default:

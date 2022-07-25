@@ -12,45 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/PushDownFilter.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-/**
- * A physical plan node that generates MockExchangeReceiverInputStream.
- * Used in gtest to test execution logic.
- * Only available with `DAGContext.isTest() == true`.
- */
-class PhysicalMockExchangeReceiver : public PhysicalLeaf
+class PhysicalTableScan : public PhysicalLeaf
 {
 public:
     static PhysicalPlanNodePtr build(
-        Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::ExchangeReceiver & exchange_receiver);
+        const TiDBTableScan & table_scan);
 
-    PhysicalMockExchangeReceiver(
+    PhysicalTableScan(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const Block & sample_block_,
-        const BlockInputStreams & mock_streams_);
+        const TiDBTableScan & tidb_table_scan_,
+        const Block & sample_block_);
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
-private:
-    void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
+    void pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection);
+
+    bool hasPushDownFilter() const;
 
 private:
+    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+
+private:
+    PushDownFilter push_down_filter;
+
+    TiDBTableScan tidb_table_scan;
+
     Block sample_block;
-
-    BlockInputStreams mock_streams;
 };
 } // namespace DB

@@ -1170,4 +1170,17 @@ ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
     return ret;
 }
 
+ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
+{
+    ColumnInfo tidb_column_info;
+    tidb_column_info.tp = static_cast<TiDB::TP>(tipb_column_info.tp());
+    tidb_column_info.id = tipb_column_info.column_id();
+    tidb_column_info.flag = tipb_column_info.flag();
+    tidb_column_info.flen = tipb_column_info.columnlen();
+    tidb_column_info.decimal = tipb_column_info.decimal();
+    for (int i = 0; i < tipb_column_info.elems_size(); ++i)
+        tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);
+    return tidb_column_info;
+}
+
 } // namespace TiDB
