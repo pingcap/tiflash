@@ -273,6 +273,8 @@ Expression: <cast after window>
         {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
          toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
+}
+CATCH
 
 TEST_F(PhysicalPlanTestRunner, MockTableScan)
 try

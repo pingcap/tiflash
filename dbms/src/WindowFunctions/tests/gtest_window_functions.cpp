@@ -62,6 +62,7 @@ public:
 TEST_F(WindowExecutorTestRunner, testWindowFunctionByPartitionAndOrder)
 try
 {
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     /***** row_number with different types of input *****/
     // int - sql : select *, row_number() over w1 from test1 window w1 as (partition by partition_int order by order_int)
     auto request = context
@@ -69,10 +70,11 @@ try
                        .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
                        .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                        .build(context);
-    ASSERT_COLUMNS_EQ_R(executeStreams(request),
-                        createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+    auto expect_result = createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
                                        toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
-                                       toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})}));
+                                       toNullableVec<Int64>("row_number", {1, 2, 3, 4, 1, 2, 3, 4})});
+    ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_result);
+    ASSERT_COLUMNS_EQ_UR(executeStreams(request, 5), expect_result);
 
     // null input
     executeStreamsWithSingleSource(
@@ -185,6 +187,7 @@ try
                                        toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2}),
                                        toNullableVec<Int64>("rank", {1, 2, 1, 1, 3, 3, 1, 1, 3, 3}),
                                        toNullableVec<Int64>("dense_rank", {1, 2, 1, 1, 2, 2, 1, 1, 2, 2})}));
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
