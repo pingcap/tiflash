@@ -14,9 +14,10 @@
 
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <set>
-#include <queue>
+
 #include <functional>
+#include <queue>
+#include <set>
 
 namespace DB
 {
@@ -123,7 +124,7 @@ void ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest>
     std::queue<tipb::Executor *> executors;
     tipb::Executor * executor = dag_request->mutable_root_executor();
     executors.push(executor);
-    
+
     while (!executors.empty())
     {
         tipb::Executor * executor = executors.back();
@@ -190,7 +191,7 @@ void ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest>
             if (exchange_sender->has_child())
                 executors.push(exchange_sender->mutable_child());
             break;
-        }        
+        }
         case tipb::ExecType::TypeSelection:
         {
             tipb::Selection * selection = executor->mutable_selection();
@@ -297,7 +298,7 @@ void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRe
             if (exchange_sender->has_child())
                 executors.push(exchange_sender->mutable_child());
             break;
-        }        
+        }
         case tipb::ExecType::TypeSelection:
         {
             tipb::Selection * selection = executor->mutable_selection();
@@ -368,7 +369,7 @@ void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRe
         auto iter = scalar_func_need_collation.find(expr->sig());
         if (iter == scalar_func_need_collation.end())
             continue; /// Ignore this scalar function
-        
+
         /// Check
         ASSERT_NE(expr->field_type().collate(), 0);
     }
@@ -401,9 +402,9 @@ try
     {
         /// Check collation for executors
         auto request = context.scan(join_table, "t1")
-                        .join(context.scan(join_table, "t2"), {col("a")}, ASTTableJoin::Kind::Inner)
-                        .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
-                        .build(context);
+                           .join(context.scan(join_table, "t2"), {col("a")}, ASTTableJoin::Kind::Inner)
+                           .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
+                           .build(context);
         checkExecutorCollation(request);
 
         request = context.scan(db_name, topn_table).topN(topn_col, true, 100).build(context);
@@ -411,7 +412,7 @@ try
 
         request = context.scan(db_name, proj_table).project(MockAstVec{col(proj_col[0])}).build(context);
         checkExecutorCollation(request);
-        
+
         request = context.scan(db_name, limit_table).limit(100).build(context);
         checkExecutorCollation(request);
 
