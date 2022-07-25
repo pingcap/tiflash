@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -36,6 +38,15 @@ public:
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                                      toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+        context.addExchangeReceiver("exchange_r_table",
+                                    {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                    {toNullableVec<String>("s", {"banana", "banana"}),
+                                     toNullableVec<String>("join_c", {"apple", "banana"})});
+        context.addExchangeReceiver("exchange_l_table",
+                                    {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+                                    {toNullableVec<String>("s", {"banana", "banana"}),
+                                     toNullableVec<String>("join_c", {"apple", "banana"})});
     }
 
     void execute(
@@ -61,9 +72,27 @@ public:
         {
             DAGPipeline pipeline;
             physical_plan.transform(pipeline, context.context, max_streams);
-            // TODO support non-joined streams.
-            assert(pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty());
-            final_stream = pipeline.firstStream();
+            if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty() && !dag_context.hasSubquery())
+            {
+                final_stream = pipeline.firstStream();
+            }
+            else // for join
+            {
+                // for non joined probe streams.
+                BlockInputStreams inputs{};
+                inputs.insert(inputs.end(), pipeline.streams.cbegin(), pipeline.streams.cend());
+                inputs.insert(inputs.end(), pipeline.streams_with_non_joined_data.cbegin(), pipeline.streams_with_non_joined_data.cend());
+                auto probe_stream = std::make_shared<ConcatBlockInputStream>(inputs, log->identifier());
+
+                // for join build side streams
+                assert(dag_context.hasSubquery());
+                const Settings & settings = context.context.getSettingsRef();
+                final_stream = std::make_shared<CreatingSetsBlockInputStream>(
+                    probe_stream,
+                    std::move(dag_context.moveSubqueries()),
+                    SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
+                    dag_context.log->identifier());
+            }
             FmtBuffer fb;
             final_stream->dumpTree(fb);
             ASSERT_EQ(Poco::trim(expected_streams), Poco::trim(fb.toString()));
@@ -235,6 +264,98 @@ try
 MockTableScan)",
         {toNullableVec<String>({"banana", {}, "banana"}),
          toNullableVec<String>({"apple", {}, "banana"})});
+}
+CATCH
+
+TEST_F(PhysicalPlanTestRunner, Join)
+try
+{
+    auto get_request = [&](const ASTTableJoin::Kind & kind) {
+        return context
+            .receive("exchange_l_table")
+            .join(context.receive("exchange_r_table"), {col("join_c"), col("join_c")}, kind)
+            .build(context);
+    };
+
+    auto request = get_request(ASTTableJoin::Kind::Inner);
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Join, Join_2> | is_record_profile_streams: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+ <Projection, exchange_receiver_0> | is_record_profile_streams: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
+ <Projection, exchange_receiver_1> | is_record_profile_streams: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_1> | is_record_profile_streams: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+        /*expected_streams=*/R"(
+CreatingSets
+ HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Inner
+  Expression: <append join key and join filters for build side>
+   Expression: <final projection>
+    MockExchangeReceiver
+ Concat
+  Expression: <remove useless column after join>
+   HashJoinProbe: <join probe, join_executor_id = Join_2>
+    Expression: <append join key and join filters for probe side>
+     Expression: <final projection>
+      MockExchangeReceiver)",
+        {toNullableVec<String>({"banana", "banana"}),
+         toNullableVec<String>({"apple", "banana"}),
+         toNullableVec<String>({"banana", "banana"}),
+         toNullableVec<String>({"apple", "banana"})});
+
+    request = get_request(ASTTableJoin::Kind::Left);
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Join, Join_2> | is_record_profile_streams: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+ <Projection, exchange_receiver_0> | is_record_profile_streams: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
+ <Projection, exchange_receiver_1> | is_record_profile_streams: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_1> | is_record_profile_streams: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+        /*expected_streams=*/R"(
+CreatingSets
+ HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
+  Expression: <append join key and join filters for build side>
+   Expression: <final projection>
+    MockExchangeReceiver
+ Concat
+  Expression: <remove useless column after join>
+   HashJoinProbe: <join probe, join_executor_id = Join_2>
+    Expression: <append join key and join filters for probe side>
+     Expression: <final projection>
+      MockExchangeReceiver)",
+        {toNullableVec<String>({"banana", "banana"}),
+         toNullableVec<String>({"apple", "banana"}),
+         toNullableVec<String>({"banana", "banana"}),
+         toNullableVec<String>({"apple", "banana"})});
+
+    request = get_request(ASTTableJoin::Kind::Right);
+    execute(
+        request,
+        /*expected_physical_plan=*/R"(
+<Join, Join_2> | is_record_profile_streams: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+ <Projection, exchange_receiver_0> | is_record_profile_streams: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
+ <Projection, exchange_receiver_1> | is_record_profile_streams: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+  <MockExchangeReceiver, exchange_receiver_1> | is_record_profile_streams: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+        /*expected_streams=*/R"(
+CreatingSets
+ HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
+  Expression: <append join key and join filters for build side>
+   Expression: <final projection>
+    MockExchangeReceiver
+ Concat
+  Expression: <remove useless column after join>
+   HashJoinProbe: <join probe, join_executor_id = Join_2>
+    Expression: <append join key and join filters for probe side>
+     Expression: <final projection>
+      MockExchangeReceiver
+  Expression: <remove useless column after join>
+   NonJoined: <add stream with non_joined_data if full_or_right_join>)",
+        {toNullableVec<String>({"banana", "banana"}),
+         toNullableVec<String>({"apple", "banana"}),
+         toNullableVec<String>({"banana", "banana"}),
+         toNullableVec<String>({"apple", "banana"})});
 }
 CATCH
 
