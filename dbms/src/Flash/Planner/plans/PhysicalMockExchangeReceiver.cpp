@@ -22,6 +22,45 @@
 
 namespace DB
 {
+namespace
+{
+std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
+    Context & context,
+    const String & executor_id,
+    const LoggerPtr & log,
+    const tipb::ExchangeReceiver & exchange_receiver)
+{
+    NamesAndTypes schema;
+    BlockInputStreams mock_streams;
+
+    auto & dag_context = *context.getDAGContext();
+    size_t max_streams = dag_context.initialize_concurrency;
+    assert(max_streams > 0);
+
+    if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
+    {
+        /// build with default blocks.
+        for (size_t i = 0; i < max_streams; ++i)
+            // use max_block_size / 10 to determine the mock block's size
+            mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(exchange_receiver, context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
+        for (const auto & col : mock_streams.back()->getHeader())
+            schema.emplace_back(col.name, col.type);
+    }
+    else
+    {
+        /// build from user input blocks.
+        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, executor_id);
+        schema = std::move(names_and_types);
+        mock_streams.insert(mock_streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
+    }
+
+    assert(!schema.empty());
+    assert(!mock_streams.empty());
+
+    return {std::move(schema), std::move(mock_streams)};
+}
+} // namespace
+
 PhysicalMockExchangeReceiver::PhysicalMockExchangeReceiver(
     const String & executor_id_,
     const NamesAndTypes & schema_,
@@ -39,26 +78,9 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     const LoggerPtr & log,
     const tipb::ExchangeReceiver & exchange_receiver)
 {
-    NamesAndTypes schema;
-    BlockInputStreams mock_streams;
-    auto & dag_context = *context.getDAGContext();
-    size_t max_streams = dag_context.initialize_concurrency;
-    if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
-    {
-        for (size_t i = 0; i < max_streams; ++i)
-            // use max_block_size / 10 to determine the mock block's size
-            mock_streams.push_back(std::make_shared<MockExchangeReceiverInputStream>(exchange_receiver, context.getSettingsRef().max_block_size, context.getSettingsRef().max_block_size / 10));
-        for (const auto & col : mock_streams.back()->getHeader())
-            schema.emplace_back(col.name, col.type);
-    }
-    else
-    {
-        auto [names_and_types, mock_exchange_streams] = mockSourceStream<MockExchangeReceiverInputStream>(context, max_streams, log, executor_id);
-        schema = std::move(names_and_types);
-        mock_streams.insert(mock_streams.end(), mock_exchange_streams.begin(), mock_exchange_streams.end());
-    }
-    assert(!schema.empty());
-    assert(!mock_streams.empty());
+    assert(context.getDAGContext()->isTest());
+
+    auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, exchange_receiver);
 
     auto physical_mock_exchange_receiver = std::make_shared<PhysicalMockExchangeReceiver>(
         executor_id,

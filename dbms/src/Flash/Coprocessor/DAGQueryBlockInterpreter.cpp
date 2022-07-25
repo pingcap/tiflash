@@ -161,7 +161,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
 {
     if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID()).empty())
     {
-        auto names_and_types = genNamesAndTypes(table_scan);
+        auto names_and_types = genNamesAndTypes(table_scan, "mock_table_scan");
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         for (size_t i = 0; i < max_streams; ++i)
@@ -264,6 +264,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 
+    auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
+
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
 
     /// build side streams
@@ -274,6 +276,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
         stream->setExtraInfo(
             fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
+        join_execute_info.join_build_streams.push_back(stream);
     });
     // for test, join executor need the return blocks to output.
     executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dagContext().isTest(), "for join");
@@ -294,7 +297,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     /// add join input stream
     if (is_tiflash_right_join)
     {
-        auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
         size_t not_joined_concurrency = join_ptr->getNotJoinedStreamConcurrency();
         for (size_t i = 0; i < not_joined_concurrency; ++i)
         {

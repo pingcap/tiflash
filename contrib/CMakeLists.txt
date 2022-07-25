@@ -123,11 +123,6 @@ if (USE_INTERNAL_TIFLASH_PROXY)
     add_subdirectory (tiflash-proxy-cmake)
 endif ()
 
-# TODO: remove tcmalloc
-if (ENABLE_TCMALLOC AND USE_INTERNAL_GPERFTOOLS_LIBRARY)
-    add_subdirectory (libtcmalloc)
-endif ()
-
 if (ENABLE_JEMALLOC AND USE_INTERNAL_JEMALLOC_LIBRARY)
     add_subdirectory (jemalloc-cmake)
 endif ()
@@ -164,7 +159,9 @@ SET (BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable google-benchmark testi
 add_subdirectory(benchmark)
 
 set (BUILD_TESTING OFF CACHE BOOL "Disable cpu-features testing" FORCE)
-add_subdirectory(cpu_features)
+if ((NOT APPLE) AND (NOT ARCH_AARCH64))
+    add_subdirectory(cpu_features)
+endif()
 
 if (ARCH_AARCH64 AND ARCH_LINUX)
     add_subdirectory(arm-optimized-routines-cmake)

@@ -17,6 +17,7 @@
 #include <Columns/ColumnString.h>
 #include <Core/AccurateComparison.h>
 #include <Functions/StringUtil.h>
+#include <Storages/Transaction/CollatorUtils.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
 
@@ -26,42 +27,6 @@
 
 namespace DB
 {
-
-template <typename T>
-ALWAYS_INLINE inline int signum(T val)
-{
-    return (0 < val) - (val < 0);
-}
-
-// Check equality is much faster than other comparison.
-// - check size first
-// - return 0 if equal else 1
-__attribute__((flatten, always_inline, pure)) inline uint8_t RawStrEqualCompare(const std::string_view & lhs, const std::string_view & rhs)
-{
-    return StringRef(lhs) == StringRef(rhs) ? 0 : 1;
-}
-
-// Compare str view by memcmp
-__attribute__((flatten, always_inline, pure)) inline int RawStrCompare(const std::string_view & v1, const std::string_view & v2)
-{
-    return signum(v1.compare(v2));
-}
-
-constexpr char SPACE = ' ';
-
-// Remove tail space
-__attribute__((flatten, always_inline, pure)) inline std::string_view RightTrim(const std::string_view & v)
-{
-    if (likely(v.empty() || v.back() != SPACE))
-        return v;
-    size_t end = v.find_last_not_of(SPACE);
-    return end == std::string_view::npos ? std::string_view{} : std::string_view(v.data(), end + 1);
-}
-
-__attribute__((flatten, always_inline, pure)) inline int RtrimStrCompare(const std::string_view & va, const std::string_view & vb)
-{
-    return RawStrCompare(RightTrim(va), RightTrim(vb));
-}
 
 // If true, only need to check equal or not.
 template <typename T>
@@ -83,6 +48,7 @@ struct IsEqualRelated<DB::NotEqualsOp<A...>>
 };
 
 // Loop columns and invoke callback for each pair.
+// Remove last zero byte.
 template <typename F>
 __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
     const ColumnString::Chars_t & a_data,
@@ -92,18 +58,29 @@ __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
     size_t size,
     F && func)
 {
+    ColumnString::Offset a_prev_offset = 0;
+    ColumnString::Offset b_prev_offset = 0;
+    const auto * a_ptr = reinterpret_cast<const char *>(a_data.data());
+    const auto * b_ptr = reinterpret_cast<const char *>(b_data.data());
+
     for (size_t i = 0; i < size; ++i)
     {
-        size_t a_size = StringUtil::sizeAt(a_offsets, i) - 1;
-        size_t b_size = StringUtil::sizeAt(b_offsets, i) - 1;
-        const auto * a_ptr = reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]);
-        const auto * b_ptr = reinterpret_cast<const char *>(&b_data[StringUtil::offsetAt(b_offsets, i)]);
+        auto a_size = a_offsets[i] - a_prev_offset;
+        auto b_size = b_offsets[i] - b_prev_offset;
 
-        func({a_ptr, a_size}, {b_ptr, b_size}, i);
+        // Remove last zero byte.
+        func({a_ptr, a_size - 1}, {b_ptr, b_size - 1}, i);
+
+        a_ptr += a_size;
+        b_ptr += b_size;
+
+        a_prev_offset = a_offsets[i];
+        b_prev_offset = b_offsets[i];
     }
 }
 
 // Loop one column and invoke callback for each pair.
+// Remove last zero byte.
 template <typename F>
 __attribute__((flatten, always_inline)) inline void LoopOneColumn(
     const ColumnString::Chars_t & a_data,
@@ -111,12 +88,18 @@ __attribute__((flatten, always_inline)) inline void LoopOneColumn(
     size_t size,
     F && func)
 {
+    ColumnString::Offset a_prev_offset = 0;
+    const auto * a_ptr = reinterpret_cast<const char *>(a_data.data());
+
     for (size_t i = 0; i < size; ++i)
     {
-        size_t a_size = StringUtil::sizeAt(a_offsets, i) - 1;
-        const auto * a_ptr = reinterpret_cast<const char *>(&a_data[StringUtil::offsetAt(a_offsets, i)]);
+        auto a_size = a_offsets[i] - a_prev_offset;
 
-        func({a_ptr, a_size}, i);
+        // Remove last zero byte.
+        func({a_ptr, a_size - 1}, i);
+
+        a_ptr += a_size;
+        a_prev_offset = a_offsets[i];
     }
 }
 
