@@ -25,8 +25,8 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <thread>
 #include <shared_mutex>
+#include <thread>
 
 // TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
 namespace Poco::Util

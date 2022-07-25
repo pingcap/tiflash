@@ -19,8 +19,6 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
-#include <unistd.h>
-
 #include <boost/algorithm/string.hpp>
 #include <cassert>
 #include <fstream>
