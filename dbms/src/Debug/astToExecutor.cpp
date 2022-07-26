@@ -204,7 +204,7 @@ DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
     return output;
 }
 
-void literalToPB(tipb::Expr * expr, const Field & value, uint32_t collator_id)
+void literalToPB(tipb::Expr * expr, const Field & value, int32_t collator_id)
 {
     DataTypePtr type = applyVisitor(FieldToDataType(), value);
     ColumnInfo ci = reverseGetColumnInfo({"", type}, 0, Field(), true);
@@ -224,7 +224,7 @@ String getFunctionNameForConstantFolding(tipb::Expr * expr)
 }
 
 
-void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & context)
+void foldConstant(tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     if (expr->tp() == tipb::ScalarFunc)
     {
@@ -282,12 +282,12 @@ void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & conte
     }
 }
 
-void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, uint32_t collator_id, const Context & context);
+void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context);
 
-void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, uint32_t collator_id);
+void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, int32_t collator_id);
 
 
-void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t collator_id, const Context & context)
+void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
@@ -307,7 +307,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
     }
 }
 
-void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, uint32_t collator_id, const Context & context)
+void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     /// aggregation function is handled in Aggregation, so just treated as a column
     auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
@@ -518,7 +518,7 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
     foldConstant(expr, collator_id, context);
 }
 
-void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, uint32_t collator_id)
+void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, int32_t collator_id)
 {
     auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
         auto column_name = splitQualifiedName(id->getColumnName());
@@ -816,7 +816,7 @@ std::pair<String, String> splitQualifiedName(const String & s)
 
 namespace mock
 {
-bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeSender);
     tipb_executor->set_executor_id(name);
@@ -857,7 +857,7 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t col
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
-bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &)
+bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
     tipb_executor->set_executor_id(name);
@@ -893,7 +893,7 @@ void TableScan::columnPrune(std::unordered_set<String> & used_columns)
                         output_schema.end());
 }
 
-bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &)
+bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &)
 {
     if (table_info.is_partition_table)
     {
@@ -918,7 +918,7 @@ bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const M
     return true;
 }
 
-bool Selection::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Selection::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeSelection);
     tipb_executor->set_executor_id(name);
@@ -941,7 +941,7 @@ void Selection::columnPrune(std::unordered_set<String> & used_columns)
     output_schema = children[0]->output_schema;
 }
 
-bool TopN::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool TopN::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeTopN);
     tipb_executor->set_executor_id(name);
@@ -970,7 +970,7 @@ void TopN::columnPrune(std::unordered_set<String> & used_columns)
     output_schema = children[0]->output_schema;
 }
 
-bool Limit::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Limit::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeLimit);
     tipb_executor->set_executor_id(name);
@@ -987,7 +987,7 @@ void Limit::columnPrune(std::unordered_set<String> & used_columns)
     output_schema = children[0]->output_schema;
 }
 
-bool Aggregation::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Aggregation::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeAggregation);
     tipb_executor->set_executor_id(name);
@@ -1134,7 +1134,7 @@ void Aggregation::toMPPSubPlan(size_t & executor_index, const DAGProperties & pr
     children[0] = exchange_receiver;
 }
 
-bool Project::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Project::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeProjection);
     tipb_executor->set_executor_id(name);
@@ -1263,9 +1263,9 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
 void Join::fillJoinKeyAndFieldType(
     ASTPtr key,
     const DAGSchema & child_schema,
-    tipb::Expr * const tipb_key,
-    tipb::FieldType * const tipb_field_type,
-    uint32_t collator_id)
+    tipb::Expr * tipb_key,
+    tipb::FieldType * tipb_field_type,
+    int32_t collator_id)
 {
     auto * identifier = typeid_cast<ASTIdentifier *>(key.get());
     for (size_t index = 0; index < child_schema.size(); ++index)
@@ -1289,7 +1289,7 @@ void Join::fillJoinKeyAndFieldType(
     }
 }
 
-bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeJoin);
     tipb_executor->set_executor_id(name);
@@ -1371,7 +1371,7 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
     exchange_map[right_exchange_receiver->name] = std::make_pair(right_exchange_receiver, right_exchange_sender);
 }
 
-bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeWindow);
     tipb_executor->set_executor_id(name);
@@ -1448,7 +1448,7 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeSort);
     tipb_executor->set_executor_id(name);

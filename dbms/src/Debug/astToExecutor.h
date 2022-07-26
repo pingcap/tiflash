@@ -114,7 +114,7 @@ struct Executor
     {
         index_++;
     }
-    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
         = 0;
     virtual void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map)
     {
@@ -134,7 +134,7 @@ struct ExchangeSender : Executor
         , partition_keys(partition_keys_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 
 struct ExchangeReceiver : Executor
@@ -147,7 +147,7 @@ struct ExchangeReceiver : Executor
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
 };
 
 struct TableScan : public Executor
@@ -159,7 +159,7 @@ struct TableScan : public Executor
         , table_info(table_info_)
     {}
     void columnPrune(std::unordered_set<String> & used_columns) override;
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &) override;
     void toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> &) override
     {}
 
@@ -191,7 +191,7 @@ struct Selection : public Executor
         : Executor(index_, "selection_" + std::to_string(index_), output_schema_)
         , conditions(std::move(conditions_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -204,7 +204,7 @@ struct TopN : public Executor
         , order_columns(std::move(order_columns_))
         , limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -215,7 +215,7 @@ struct Limit : public Executor
         : Executor(index_, "limit_" + std::to_string(index_), output_schema_)
         , limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -235,7 +235,7 @@ struct Aggregation : public Executor
         , gby_exprs(std::move(gby_exprs_))
         , is_final_mode(is_final_mode_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
@@ -247,7 +247,7 @@ struct Project : public Executor
         : Executor(index_, "project_" + std::to_string(index_), output_schema_)
         , exprs(std::move(exprs_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -276,9 +276,9 @@ struct Join : Executor
         const DAGSchema & schema,
         tipb::Expr * tipb_key,
         tipb::FieldType * tipb_field_type,
-        uint32_t collator_id);
+        int32_t collator_id);
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
@@ -313,7 +313,7 @@ struct Window : Executor
     // Currently only use Window Executor in Unit Test which don't call columnPrume.
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 
 struct Sort : Executor
@@ -332,7 +332,7 @@ struct Sort : Executor
     // Currently only use Sort Executor in Unit Test which don't call columnPrume.
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 } // namespace mock
 
