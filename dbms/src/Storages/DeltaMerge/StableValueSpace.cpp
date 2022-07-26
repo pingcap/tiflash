@@ -328,17 +328,18 @@ StableValueSpace::Snapshot::getInputStream(
     const RSOperatorPtr & filter,
     UInt64 max_data_version,
     size_t expected_block_size,
-    bool enable_clean_read,
-    bool is_fast_mode)
+    bool enable_handle_clean_read,
+    bool is_fast_mode,
+    bool enable_del_clean_read)
 {
-    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_clean_read: {}", max_data_version, enable_clean_read);
+    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_mode, enable_del_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
         builder
-            .enableCleanRead(enable_clean_read, is_fast_mode, max_data_version)
+            .enableCleanRead(enable_handle_clean_read, is_fast_mode, enable_del_clean_read, max_data_version)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)

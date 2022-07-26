@@ -134,6 +134,7 @@ public:
     {
         UInt32 rows;
         UInt32 not_clean;
+        UInt32 is_delete;
         UInt64 first_version;
         UInt64 bytes;
         UInt8 first_tag;

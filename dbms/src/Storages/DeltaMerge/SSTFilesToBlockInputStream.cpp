@@ -65,7 +65,7 @@ void SSTFilesToBlockInputStream::readPrefix()
 {
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
-        auto & snapshot = snaps.views[i];
+        const auto & snapshot = snaps.views[i];
         switch (snapshot.type)
         {
         case ColumnFamilyType::Default:
@@ -295,17 +295,18 @@ SSTFilesToBlockInputStream::ProcessKeys BoundedSSTFilesToBlockInputStream::getPr
     return _raw_child->process_keys;
 }
 
-const RegionPtr BoundedSSTFilesToBlockInputStream::getRegion() const
+RegionPtr BoundedSSTFilesToBlockInputStream::getRegion() const
 {
     return _raw_child->region;
 }
 
-std::tuple<size_t, size_t, UInt64> //
+std::tuple<size_t, size_t, size_t, UInt64> //
 BoundedSSTFilesToBlockInputStream::getMvccStatistics() const
 {
     return std::make_tuple(
         mvcc_compact_stream->getEffectiveNumRows(),
         mvcc_compact_stream->getNotCleanRows(),
+        mvcc_compact_stream->getIsDeleteRows(),
         mvcc_compact_stream->getGCHintVersion());
 }
 

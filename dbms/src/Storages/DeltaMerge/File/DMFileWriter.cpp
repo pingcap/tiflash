@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 
+#include "Storages/DeltaMerge/DeltaMergeDefines.h"
+
 #ifndef NDEBUG
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -124,6 +126,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     DMFile::PackStat stat{};
     stat.rows = block.rows();
     stat.not_clean = block_property.not_clean_rows;
+    stat.is_delete = block_property.is_delete_rows;
     stat.bytes = block.bytes(); // This is bytes of pack data in memory.
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
@@ -194,7 +197,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             {
                 // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
                 // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
-                iter->second->addPack(column, col_id == EXTRA_HANDLE_COLUMN_ID ? nullptr : del_mark);
+                // For TAG Column, we also ignore del_mark when add minmax index.
+                iter->second->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
             }
 
             auto offset_in_compressed_block = single_file_stream->original_layer.offset();
@@ -259,7 +263,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 {
                     // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
                     // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
-                    stream->minmaxes->addPack(column, col_id == EXTRA_HANDLE_COLUMN_ID ? nullptr : del_mark);
+                    // For TAG Column, we also ignore del_mark when add minmax index.
+                    stream->minmaxes->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
                 }
 
                 /// There could already be enough data to compress into the new block.

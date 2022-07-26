@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 
+#include "Storages/DeltaMerge/DeltaMergeDefines.h"
+
 /// This test file is mainly test on the correctness of read in fast mode.
 /// Because the basic functions are tested in gtest_dm_delta_merge_storage.cpp, we will not cover it here.
 
@@ -101,7 +103,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -205,7 +207,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -304,7 +306,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -323,7 +325,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -352,7 +354,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -451,7 +453,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -470,7 +472,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -499,7 +501,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -600,7 +602,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -619,7 +621,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -649,7 +651,7 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                     {
                         if (iter.name == DMTestEnv::pk_name)
                         {
@@ -748,7 +750,7 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -850,13 +852,13 @@ try
                     if (iter.name == DMTestEnv::pk_name)
                     {
                         auto c = iter.column;
-                        for (Int64 i = 0; i < Int64(c->size()); ++i)
+                        for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                         {
-                            if (i < Int64(num_write_rows / 2))
+                            if (i < static_cast<Int64>(num_write_rows / 2))
                             {
                                 ASSERT_EQ(c->getInt(i), i);
                             }
-                            else if (i < Int64(2.5 * num_write_rows))
+                            else if (i < static_cast<Int64>(2.5 * num_write_rows))
                             {
                                 ASSERT_EQ(c->getInt(i), (i - num_write_rows / 2) / 2 + num_write_rows / 2);
                             }
@@ -891,7 +893,7 @@ try
                     if (iter.name == DMTestEnv::pk_name)
                     {
                         auto c = iter.column;
-                        for (Int64 i = 0; i < Int64(c->size()); ++i)
+                        for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                         {
                             ASSERT_EQ(c->getInt(i), i + begin_value);
                         }
@@ -922,7 +924,7 @@ try
                     if (iter.name == DMTestEnv::pk_name)
                     {
                         auto c = iter.column;
-                        for (Int64 i = 0; i < Int64(c->size()); ++i)
+                        for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                         {
                             ASSERT_EQ(c->getInt(i), i + begin_value);
                         }
@@ -1031,7 +1033,7 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -1072,7 +1074,7 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -1134,7 +1136,7 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -1176,7 +1178,7 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -1252,7 +1254,7 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -1361,13 +1363,13 @@ try
                     if (iter.name == DMTestEnv::pk_name)
                     {
                         auto c = iter.column;
-                        for (Int64 i = 0; i < Int64(c->size()); ++i)
+                        for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                         {
-                            if (i < Int64(num_write_rows / 2))
+                            if (i < static_cast<Int64>(num_write_rows / 2))
                             {
                                 ASSERT_EQ(c->getInt(i), i);
                             }
-                            else if (i < Int64(2.5 * num_write_rows))
+                            else if (i < static_cast<Int64>(2.5 * num_write_rows))
                             {
                                 ASSERT_EQ(c->getInt(i), (i - num_write_rows / 2) / 2 + num_write_rows / 2);
                             }
@@ -1401,7 +1403,7 @@ try
                     if (iter.name == DMTestEnv::pk_name)
                     {
                         auto c = iter.column;
-                        for (Int64 i = 0; i < Int64(c->size()); ++i)
+                        for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                         {
                             ASSERT_EQ(c->getInt(i), i + begin_value);
                         }
@@ -1431,7 +1433,7 @@ try
                     if (iter.name == DMTestEnv::pk_name)
                     {
                         auto c = iter.column;
-                        for (Int64 i = 0; i < Int64(c->size()); ++i)
+                        for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                         {
                             ASSERT_EQ(c->getInt(i), i + begin_value);
                         }
@@ -1455,7 +1457,7 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
@@ -1470,7 +1472,7 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -1539,7 +1541,7 @@ try
             for (auto && iter : block)
             {
                 auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                for (Int64 i = 0; i < static_cast<Int64>(c->size()); ++i)
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
@@ -1566,13 +1568,13 @@ try
 
     store->mergeDeltaAll(*db_context);
 
-    // could do clean read with handle optimization
+    // could do clean read with handle and del optimization
     {
         const auto & columns = store->getTableColumns();
         ColumnDefines real_columns;
-        for (auto & col : columns)
+        for (const auto & col : columns)
         {
-            if (col.name != EXTRA_HANDLE_COLUMN_NAME)
+            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
             {
                 real_columns.emplace_back(col);
             }
