@@ -37,6 +37,11 @@ using MockWindowFrame = mock::MockWindowFrame;
 
 class MockDAGRequestContext;
 
+inline int32_t convertToTiDBCollation(int32_t collation)
+{
+    return -(abs(collation));
+}
+
 /** Responsible for Hand write tipb::DAGRequest
   * Use this class to mock DAGRequest, then feed the DAGRequest into 
   * the Interpreter for test purpose.
@@ -103,7 +108,7 @@ public:
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
-    void setCollation(Int32 collator_) { properties.collator = -abs(collator_); }
+    void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
     Int32 getCollation() const { return abs(properties.collator); }
 
 private:
@@ -149,7 +154,7 @@ public:
     DAGRequestBuilder scan(String db_name, String table_name);
     DAGRequestBuilder receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
-    void setCollation(Int32 collation_) { collation = -abs(collation_); }
+    void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
     Int32 getCollation() const { return abs(collation); }
 
 private:

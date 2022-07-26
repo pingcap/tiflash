@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Statistics/traverseExecutors.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -24,6 +25,7 @@ namespace DB
 namespace tests
 {
 
+/// Note: These tests are for the correctness of the test framework
 class ExecutorCollation : public DB::tests::ExecutorTest
 {
 public:
@@ -76,11 +78,10 @@ public:
     {
         context.setCollation(collation);
         auto request = context.scan(db_name, table_name).aggregation(MockAstVec{}, {col(col_name)}).project({col_name}).build(context);
-        std::cout << request->DebugString() << std::endl;
-        ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request, 1));
+        ASSERT_COLUMNS_EQ_UR(expect, executeStreams(request));
     }
 
-    void checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const;
+    std::queue<tipb::ExecType> checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const;
     void checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const;
     void addExpr(std::queue<const tipb::Expr *> & exprs, const tipb::Expr * const expr) const;
 
@@ -119,124 +120,74 @@ void ExecutorCollation::addExpr(std::queue<const tipb::Expr *> & exprs, const ti
         addExpr(exprs, &(expr->children(i)));
 }
 
-void ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const
+std::queue<tipb::ExecType> ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const
 {
-    std::queue<tipb::Executor *> executors;
-    tipb::Executor * executor = dag_request->mutable_root_executor();
-    executors.push(executor);
+    std::queue<tipb::ExecType> exec_collation_absent;
 
-    while (!executors.empty())
-    {
-        tipb::Executor * executor = executors.back();
-        executors.pop();
-        tipb::ExecType type = executor->tp();
+    auto checkExecutor = [&](const tipb::Executor & executor) -> bool {
+#define CHECK(probe_type, exec_type)               \
+    do                                             \
+    {                                              \
+        if (probe_type.collate() == 0)             \
+        {                                          \
+            exec_collation_absent.push(exec_type); \
+            return true;                           \
+        }                                          \
+    } while (0);
+        tipb::ExecType type = executor.tp();
 
         switch (type)
         {
         case tipb::ExecType::TypeJoin: /// need collation
         {
-            tipb::Join * join = executor->mutable_join();
-            int probe_type_size = join->probe_types_size();
-            int build_type_size = join->build_types_size();
+            const tipb::Join & join = executor.join();
+            int probe_type_size = join.probe_types_size();
+            int build_type_size = join.build_types_size();
 
             for (int i = 0; i < probe_type_size; ++i)
-            {
-                const tipb::FieldType & probe_type = join->probe_types(i);
-                ASSERT_NE(probe_type.collate(), 0); /// Check collation
-            }
+                CHECK(join.probe_types(i), tipb::ExecType::TypeJoin);
 
             for (int i = 0; i < build_type_size; ++i)
-            {
-                const tipb::FieldType & build_type = join->build_types(i);
-                ASSERT_NE(build_type.collate(), 0); /// /// Check collation
-            }
+                CHECK(join.build_types(i), tipb::ExecType::TypeJoin);
 
-            /// Push child executors into queue
-            int children_size = join->children_size();
-            for (int i = 0; i < children_size; ++i)
-                executors.push(join->mutable_children(i));
             break;
         }
         case tipb::ExecType::TypeExchangeReceiver: /// need collation
         {
-            tipb::ExchangeReceiver * exchange_receiver = executor->mutable_exchange_receiver();
-            int field_types_size = exchange_receiver->field_types_size();
+            const tipb::ExchangeReceiver & exchange_receiver = executor.exchange_receiver();
+            int field_types_size = exchange_receiver.field_types_size();
 
             for (int i = 0; i < field_types_size; ++i)
-            {
-                const tipb::FieldType & field_type = exchange_receiver->field_types(i);
-                ASSERT_NE(field_type.collate(), 0); /// Check collation
-            }
+                CHECK(exchange_receiver.field_types(i), tipb::ExecType::TypeExchangeReceiver);
+
             break;
         }
         case tipb::ExecType::TypeExchangeSender: /// need collation
         {
-            tipb::ExchangeSender * exchange_sender = executor->mutable_exchange_sender();
-            int types_size = exchange_sender->types_size();
-            int all_field_types_size = exchange_sender->all_field_types_size();
+            const tipb::ExchangeSender & exchange_sender = executor.exchange_sender();
+            int types_size = exchange_sender.types_size();
+            int all_field_types_size = exchange_sender.all_field_types_size();
 
             for (int i = 0; i < types_size; ++i)
-            {
-                const tipb::FieldType & field_type = exchange_sender->types(i);
-                ASSERT_NE(field_type.collate(), 0); /// Check collation
-            }
+                CHECK(exchange_sender.types(i), tipb::ExecType::TypeExchangeSender);
 
             for (int i = 0; i < all_field_types_size; ++i)
-            {
-                const tipb::FieldType & field_type = exchange_sender->all_field_types(i);
-                ASSERT_NE(field_type.collate(), 0); /// Check collation
-            }
+                CHECK(exchange_sender.all_field_types(i), tipb::ExecType::TypeExchangeSender);
 
-            /// Push child executors
-            if (exchange_sender->has_child())
-                executors.push(exchange_sender->mutable_child());
             break;
         }
         case tipb::ExecType::TypeSelection:
-        {
-            tipb::Selection * selection = executor->mutable_selection();
-
-            if (selection->has_child())
-                executors.push(selection->mutable_child());
-        }
+            break; /// Do nothing
         case tipb::ExecType::TypeAggregation:
-        {
-            tipb::Aggregation * aggregation = executor->mutable_aggregation();
-
-            if (aggregation->has_child())
-                executors.push(aggregation->mutable_child());
-            break;
-        }
+            break; /// Do nothing
         case tipb::ExecType::TypeTopN:
-        {
-            tipb::TopN * topn = executor->mutable_topn();
-
-            if (topn->has_child())
-                executors.push(topn->mutable_child());
-            break;
-        }
+            break; /// Do nothing
         case tipb::ExecType::TypeLimit:
-        {
-            tipb::Limit * limit = executor->mutable_limit();
-
-            if (limit->has_child())
-                executors.push(limit->mutable_child());
-        }
+            break; /// Do nothing
         case tipb::ExecType::TypeProjection:
-        {
-            tipb::Projection * projection = executor->mutable_projection();
-
-            if (projection->has_child())
-                executors.push(projection->mutable_child());
-            break;
-        }
+            break; /// Do nothing
         case tipb::ExecType::TypeWindow:
-        {
-            tipb::Window * window = executor->mutable_window();
-
-            if (window->has_child())
-                executors.push(window->mutable_child());
-        }
+            break; /// Do nothing
         case tipb::ExecType::TypeTableScan:
             break; /// Do nothing
         default:
@@ -245,15 +196,17 @@ void ExecutorCollation::checkExecutorCollation(std::shared_ptr<tipb::DAGRequest>
             throw Exception(exception_str);
         }
         }
-    }
+
+        return true; /// Alawys traverse the executors
+    };
+
+    traverseExecutors(dag_request.get(), checkExecutor);
+    return exec_collation_absent;
 }
 
 void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRequest> dag_request) const
 {
-    std::queue<tipb::Executor *> executors;
     std::queue<const tipb::Expr *> exprs;
-    tipb::Executor * executor = dag_request->mutable_root_executor();
-    executors.push(executor);
 
     using MultiExprs = ::google::protobuf::RepeatedPtrField<tipb::Expr>;
     auto add_multi_exprs = [&](const MultiExprs & field, int size) {
@@ -261,93 +214,59 @@ void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRe
             addExpr(exprs, &(field.Get(i)));
     };
 
-    /// Firstly, collect scalar functions
-    while (!executors.empty())
-    {
-        tipb::Executor * executor = executors.back();
-        executors.pop();
-        tipb::ExecType type = executor->tp();
+    auto collectExprs = [&](const tipb::Executor & executor) -> bool {
+        tipb::ExecType type = executor.tp();
 
         switch (type)
         {
         case tipb::ExecType::TypeJoin: /// need collation
         {
-            tipb::Join * join = executor->mutable_join();
+            const tipb::Join & join = executor.join();
 
-            add_multi_exprs(join->left_join_keys(), join->left_join_keys_size());
-            add_multi_exprs(join->right_join_keys(), join->right_join_keys_size());
-            add_multi_exprs(join->left_conditions(), join->left_conditions_size());
-            add_multi_exprs(join->right_conditions(), join->right_conditions_size());
-            add_multi_exprs(join->other_conditions(), join->other_conditions_size());
-            add_multi_exprs(join->other_eq_conditions_from_in(), join->other_eq_conditions_from_in_size());
-
-            /// Push child executors into queue
-            int children_size = join->children_size();
-            for (int i = 0; i < children_size; ++i)
-                executors.push(join->mutable_children(i));
+            add_multi_exprs(join.left_join_keys(), join.left_join_keys_size());
+            add_multi_exprs(join.right_join_keys(), join.right_join_keys_size());
+            add_multi_exprs(join.left_conditions(), join.left_conditions_size());
+            add_multi_exprs(join.right_conditions(), join.right_conditions_size());
+            add_multi_exprs(join.other_conditions(), join.other_conditions_size());
+            add_multi_exprs(join.other_eq_conditions_from_in(), join.other_eq_conditions_from_in_size());
             break;
         }
         case tipb::ExecType::TypeExchangeReceiver: /// need collation
             break; /// Do nothing
         case tipb::ExecType::TypeExchangeSender: /// need collation
         {
-            tipb::ExchangeSender * exchange_sender = executor->mutable_exchange_sender();
-            add_multi_exprs(exchange_sender->partition_keys(), exchange_sender->partition_keys_size());
-
-            /// Push child executors
-            if (exchange_sender->has_child())
-                executors.push(exchange_sender->mutable_child());
+            const tipb::ExchangeSender & exchange_sender = executor.exchange_sender();
+            add_multi_exprs(exchange_sender.partition_keys(), exchange_sender.partition_keys_size());
             break;
         }
         case tipb::ExecType::TypeSelection:
         {
-            tipb::Selection * selection = executor->mutable_selection();
-            add_multi_exprs(selection->conditions(), selection->conditions_size());
-
-            if (selection->has_child())
-                executors.push(selection->mutable_child());
+            const tipb::Selection & selection = executor.selection();
+            add_multi_exprs(selection.conditions(), selection.conditions_size());
+            break;
         }
         case tipb::ExecType::TypeAggregation:
         {
-            tipb::Aggregation * aggregation = executor->mutable_aggregation();
-            add_multi_exprs(aggregation->group_by(), aggregation->group_by_size());
-            add_multi_exprs(aggregation->agg_func(), aggregation->agg_func_size());
-
-            if (aggregation->has_child())
-                executors.push(aggregation->mutable_child());
+            const tipb::Aggregation & aggregation = executor.aggregation();
+            add_multi_exprs(aggregation.group_by(), aggregation.group_by_size());
+            add_multi_exprs(aggregation.agg_func(), aggregation.agg_func_size());
             break;
         }
         case tipb::ExecType::TypeTopN:
-        {
-            tipb::TopN * topn = executor->mutable_topn();
-
-            if (topn->has_child())
-                executors.push(topn->mutable_child());
-            break;
-        }
+            break; /// Do nothing
         case tipb::ExecType::TypeLimit:
-        {
-            tipb::Limit * limit = executor->mutable_limit();
-
-            if (limit->has_child())
-                executors.push(limit->mutable_child());
-        }
+            break; /// Do nothing
         case tipb::ExecType::TypeProjection:
         {
-            tipb::Projection * projection = executor->mutable_projection();
-            add_multi_exprs(projection->exprs(), projection->exprs_size());
-
-            if (projection->has_child())
-                executors.push(projection->mutable_child());
+            const tipb::Projection & projection = executor.projection();
+            add_multi_exprs(projection.exprs(), projection.exprs_size());
             break;
         }
         case tipb::ExecType::TypeWindow:
         {
-            tipb::Window * window = executor->mutable_window();
-            add_multi_exprs(window->func_desc(), window->func_desc_size());
-
-            if (window->has_child())
-                executors.push(window->mutable_child());
+            const tipb::Window & window = executor.window();
+            add_multi_exprs(window.func_desc(), window.func_desc_size());
+            break;
         }
         case tipb::ExecType::TypeTableScan:
             break; /// Do nothing
@@ -357,7 +276,11 @@ void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRe
             throw Exception(exception_str);
         }
         }
-    }
+        return true; /// Alawys traverse the executors
+    };
+
+    /// Firstly, collect scalar functions
+    traverseExecutors(dag_request.get(), collectExprs);
 
     /// Secondly, check collation of scalar functions
     while (!exprs.empty())
@@ -405,21 +328,21 @@ try
                            .join(context.scan(join_table, "t2"), {col("a")}, ASTTableJoin::Kind::Inner)
                            .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
                            .build(context);
-        checkExecutorCollation(request);
+        ASSERT_EQ(checkExecutorCollation(request).size(), 0);
 
         request = context.scan(db_name, topn_table).topN(topn_col, true, 100).build(context);
-        checkExecutorCollation(request);
+        ASSERT_EQ(checkExecutorCollation(request).size(), 0);
 
         request = context.scan(db_name, proj_table).project(MockAstVec{col(proj_col[0])}).build(context);
-        checkExecutorCollation(request);
+        ASSERT_EQ(checkExecutorCollation(request).size(), 0);
 
         request = context.scan(db_name, limit_table).limit(100).build(context);
-        checkExecutorCollation(request);
+        ASSERT_EQ(checkExecutorCollation(request).size(), 0);
 
         request = context.receive(sender_name).project({"s1", "s2", "s3"}).exchangeSender(tipb::Broadcast).build(context);
-        checkExecutorCollation(request);
+        ASSERT_EQ(checkExecutorCollation(request).size(), 0);
 
-        /// TODO test window executor
+        /// TODO some collation fields may not be set for some executors, set them and test it!
     }
 
     {
@@ -427,7 +350,7 @@ try
         auto request = context.scan(db_name, proj_table).project(MockAstVec{eq(col(proj_col[0]), col(proj_col[0])), gt(col(proj_col[0]), col(proj_col[1]))}).build(context);
         checkScalarFunctionCollation(request);
 
-        /// TODO more scalar functions to test...
+        /// TODO test more scalar functions...
     }
 }
 CATCH
