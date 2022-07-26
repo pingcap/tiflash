@@ -108,7 +108,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_side_header,
         tiflash_join.getProbeJoinKeys(),
         tiflash_join.join_key_types,
-        true,
+        /*left=*/true,
         is_tiflash_right_join,
         tiflash_join.getProbeConditions());
     RUNTIME_ASSERT(probe_side_prepare_actions, log, "probe_side_prepare_actions cannot be nullptr");
@@ -119,7 +119,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         build_side_header,
         tiflash_join.getBuildJoinKeys(),
         tiflash_join.join_key_types,
-        false,
+        /*left=*/false,
         is_tiflash_right_join,
         tiflash_join.getBuildConditions());
     RUNTIME_ASSERT(build_side_prepare_actions, log, "build_side_prepare_actions cannot be nullptr");

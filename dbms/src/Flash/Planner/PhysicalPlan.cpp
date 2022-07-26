@@ -92,7 +92,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         break;
     case tipb::ExecType::TypeExchangeSender:
     {
-        buildFinalProjection(executor_id, true);
+        buildFinalProjection(fmt::format("{}_", executor_id), true);
         if (unlikely(dagContext().isTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
         else
@@ -193,7 +193,7 @@ void PhysicalPlan::addRootFinalProjectionIfNeed()
     if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
     {
         pushBack(root_node);
-        buildFinalProjection(root_node->execId(), true);
+        buildFinalProjection(fmt::format("{}_", root_node->execId()), true);
         root_node = popBack();
     }
 }

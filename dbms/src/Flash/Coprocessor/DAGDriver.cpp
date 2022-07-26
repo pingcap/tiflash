@@ -19,7 +19,6 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
@@ -89,7 +88,6 @@ void DAGDriver<batch>::execute()
 try
 {
     auto start_time = Clock::now();
-    DAGQuerySource dag(context);
     DAGContext & dag_context = *context.getDAGContext();
 
     BlockIO streams = executeQuery(context, internal, QueryProcessingStage::Complete);

@@ -21,6 +21,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
 #include <DataStreams/copyData.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <IO/ConcatReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/IQuerySource.h>
