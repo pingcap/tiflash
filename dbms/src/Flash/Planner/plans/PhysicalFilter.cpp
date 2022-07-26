@@ -67,7 +67,7 @@ void PhysicalFilter::finalize(const Names & parent_require)
     child->finalize(before_filter_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(before_filter_actions, child->getSampleBlock().columns());
 
-    FinalizeHelper::checkSampleBlockContainsSchema(getSampleBlock(), schema);
+    FinalizeHelper::checkSampleBlockContainsParentRequire(getSampleBlock(), parent_require);
 }
 
 const Block & PhysicalFilter::getSampleBlock() const
