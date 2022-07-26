@@ -180,7 +180,7 @@ TEST_F(DTToolTest, ConsecutiveMigration)
     };
 
     EXPECT_EQ(DTTool::Migrate::migrateServiceMain(*db_context, args), 0);
-    auto *logger = &Poco::Logger::get("DTToolTest");
+    auto * logger = &Poco::Logger::get("DTToolTest");
     std::unordered_map<std::string, std::string> records;
     {
         Poco::File file{dmfile->path()};
