@@ -31,16 +31,6 @@
 
 #include <chrono>
 
-#if USE_TCMALLOC
-#include <gperftools/malloc_extension.h>
-
-/// Initializing malloc extension in global constructor as required.
-struct MallocExtensionInitializer
-{
-    MallocExtensionInitializer() { MallocExtension::Initialize(); }
-} malloc_extension_initializer;
-#endif
-
 #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
 #endif
@@ -208,32 +198,6 @@ void AsynchronousMetrics::update()
         set("BlobDiskBytes", usage.total_disk_size);
         set("BlobValidBytes", usage.total_valid_size);
     }
-
-#if USE_TCMALLOC
-    {
-        /// tcmalloc related metrics. Remove if you switch to different allocator.
-
-        MallocExtension & malloc_extension = *MallocExtension::instance();
-
-        auto malloc_metrics = {
-            "generic.current_allocated_bytes",
-            "generic.heap_size",
-            "tcmalloc.current_total_thread_cache_bytes",
-            "tcmalloc.central_cache_free_bytes",
-            "tcmalloc.transfer_cache_free_bytes",
-            "tcmalloc.thread_cache_free_bytes",
-            "tcmalloc.pageheap_free_bytes",
-            "tcmalloc.pageheap_unmapped_bytes",
-        };
-
-        for (auto malloc_metric : malloc_metrics)
-        {
-            size_t value = 0;
-            if (malloc_extension.GetNumericProperty(malloc_metric, &value))
-                set(malloc_metric, value);
-        }
-    }
-#endif
 
 #if USE_MIMALLOC
 #define MI_STATS_SET(X) set("mimalloc." #X, X)

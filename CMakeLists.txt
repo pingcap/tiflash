@@ -243,7 +243,7 @@ endif()
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
 
-if (NOT LINKER_NAME)
+if (NOT LINKER_NAME AND NOT APPLE)
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
         set (LINKER_NAME "lld")
     elseif (GOLD_PATH)
@@ -439,7 +439,6 @@ option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
 include (libs/libdaemon/cmake/find_unwind.cmake)
 
 # Need to process before "contrib" dir:
-include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
 include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)

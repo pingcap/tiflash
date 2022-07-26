@@ -64,6 +64,9 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/TCPHandlerFactory.h>
 #include <Server/UserConfigParser.h>
+#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -1334,6 +1337,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
+
+    // Initialize the thread pool of storage before the storage engine is initialized.
+    LOG_FMT_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+    DM::SegmentReaderPoolManager::instance().init(server_info);
+    DM::SegmentReadTaskScheduler::instance();
+    DM::DMFileReaderPool::instance();
 
     {
         // Note that this must do before initialize schema sync service.

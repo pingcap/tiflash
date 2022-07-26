@@ -205,8 +205,23 @@ namespace DB
         F(type_thread_hard_limit, {"type", "thread_hard_limit"}),                                                                         \
         F(type_hard_limit_exceeded_count, {"type", "hard_limit_exceeded_count"}))                                                         \
     M(tiflash_task_scheduler_waiting_duration_seconds, "Bucketed histogram of task waiting for scheduling duration", Histogram,           \
-        F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets{0.001, 2, 20}))
-
+        F(type_task_scheduler_waiting_duration, {{"type", "task_waiting_duration"}}, ExpBuckets{0.001, 2, 20}))                           \
+    M(tiflash_storage_read_thread_counter, "The counter of storage read thread", Counter,                                                 \
+        F(type_sche_no_pool, {"type", "sche_no_pool"}),                                                                                   \
+        F(type_sche_no_slot, {"type", "sche_no_slot"}),                                                                                   \
+        F(type_sche_no_segment, {"type", "sche_no_segment"}),                                                                             \
+        F(type_sche_from_cache, {"type", "sche_from_cache"}),                                                                             \
+        F(type_sche_new_task, {"type", "sche_new_task"}),                                                                                 \
+        F(type_add_cache_succ, {"type", "add_cache_succ"}),                                                                               \
+        F(type_add_cache_stale, {"type", "add_cache_stale"}),                                                                             \
+        F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                               \
+        F(type_get_cache_part, {"type", "get_cache_part"}),                                                                               \
+        F(type_get_cache_hit, {"type", "get_cache_hit"}),                                                                                 \
+        F(type_get_cache_copy, {"type", "add_cache_copy"}))                                                                               \
+    M(tiflash_storage_read_thread_gauge, "The gauge of storage read thread", Gauge,                                                       \
+        F(type_merged_task, {"type", "merged_task"}))                                                                                     \
+    M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
+        F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))
 // clang-format on
 
 struct ExpBuckets
