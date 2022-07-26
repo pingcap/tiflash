@@ -44,15 +44,15 @@ extern const int NOT_IMPLEMENTED;
 
 constexpr char tls_err_msg[] = "common name check is failed";
 
-FlashService::FlashService(IServer & server_)
-    : server(server_)
-    , security_config(server_.securityConfig())
+FlashService::FlashService(TiFlashSecurityConfig & security_config_, Context & context_)
+    : security_config(security_config_)
+    , m_context(context_)
     , log(&Poco::Logger::get("FlashService"))
     , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(
-          server_.context().getGlobalContext(),
-          server_.context().getGlobalContext().getSettingsRef()))
+          m_context.getGlobalContext(),
+          m_context.getGlobalContext().getSettingsRef()))
 {
-    auto settings = server_.context().getSettingsRef();
+    auto settings = m_context.getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
@@ -364,8 +364,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     try
     {
         /// Create DB context.
-        auto context = std::make_shared<Context>(server.context());
-        context->setGlobalContext(server.context());
+        auto context = std::make_shared<Context>(m_context);
+        context->setGlobalContext(m_context);
 
         /// Set a bunch of client information.
         std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
@@ -411,17 +411,17 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     catch (Exception & e)
     {
         LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
+        return std::make_tuple(std::make_shared<Context>(m_context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
     }
     catch (const std::exception & e)
     {
         LOG_FMT_ERROR(log, "std exception: {}", e.what());
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
+        return std::make_tuple(std::make_shared<Context>(m_context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
     }
     catch (...)
     {
         LOG_FMT_ERROR(log, "other exception");
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
+        return std::make_tuple(std::make_shared<Context>(m_context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
     }
 }
 

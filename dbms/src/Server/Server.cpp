@@ -598,9 +598,9 @@ public:
         /// Init and register flash service.
         bool enable_async_server = server.context().getSettingsRef().enable_async_server;
         if (enable_async_server)
-            flash_service = std::make_unique<AsyncFlashService>(server);
+            flash_service = std::make_unique<AsyncFlashService>(server.securityConfig(), server.context());
         else
-            flash_service = std::make_unique<FlashService>(server);
+            flash_service = std::make_unique<FlashService>(server.securityConfig(), server.context());
         diagnostics_service = std::make_unique<DiagnosticsService>(server);
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
