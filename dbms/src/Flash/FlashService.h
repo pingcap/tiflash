@@ -46,7 +46,7 @@ class FlashService : public tikvpb::Tikv::Service
     , private boost::noncopyable
 {
 public:
-    explicit FlashService(const TiFlashSecurityConfig & security_config_, Context & context_);
+    FlashService(const TiFlashSecurityConfig & security_config_, Context & context_);
 
     ~FlashService() override;
 
@@ -103,7 +103,7 @@ public:
     // 48 is EstablishMPPConnection API ID of GRPC
     // note: if the kvrpc protocal is updated, please keep consistent with the generated code.
     static constexpr int EstablishMPPConnectionApiID = 48;
-    explicit AsyncFlashService(const TiFlashSecurityConfig & security_config_, Context & context_)
+    AsyncFlashService(const TiFlashSecurityConfig & security_config_, Context & context_)
         : FlashService(security_config_, context_)
     {
         is_async = true;
