@@ -16,6 +16,7 @@
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/Volnitsky.h>
+#include <Common/hex.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -4083,7 +4084,7 @@ private:
             break;
         default:
             throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        };
+        }
     }
 };
 
@@ -5120,6 +5121,305 @@ private:
     }
 };
 
+class FunctionHexStr : public IFunction
+{
+public:
+    static constexpr auto name = "hexStr";
+    FunctionHexStr() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexStr>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto col_res = ColumnString::create();
+            vector(col->getChars(), col->getOffsets(), col_res->getChars(), col_res->getOffsets());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get()))
+        {
+            auto col_res = ColumnFixedString::create(col->getN() * 2);
+            vectorFixed(col->getChars(), col->getN(), col_res->getChars());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+private:
+    static constexpr UInt8 hexTable[17] = "0123456789ABCDEF";
+
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        // every string contains a tailing zero, which will not be hexed, so minus size to remove these doubled zeros
+        res_data.resize(data.size() * 2 - size);
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            for (size_t j = prev_offset; j < offsets[i] - 1; ++j)
+            {
+                ColumnString::Offset pos = j * 2 - i;
+                UInt8 byte = data[j];
+                res_data[pos] = hexTable[byte >> 4];
+                res_data[pos + 1] = hexTable[byte & 0x0f];
+            }
+            // the last element written by the previous loop is:
+            // `(offsets[i] - 2) * 2 - i + 1 = offsets[i] * 2 - i - 3`
+            // then the zero should be written to `offsets[i] * 2 - i - 2`
+            res_data[offsets[i] * 2 - i - 2] = 0;
+            res_offsets[i] = offsets[i] * 2 - i - 1;
+
+            prev_offset = offsets[i];
+        }
+    }
+
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t length, ColumnString::Chars_t & res_data)
+    {
+        size_t size = data.size() / length;
+        res_data.resize(data.size() * 2);
+
+        for (size_t i = 0; i < size; ++i)
+            for (size_t j = i * length; j < (i + 1) * length; ++j)
+            {
+                ColumnString::Offset pos = j * 2;
+                UInt8 byte = data[j];
+                res_data[pos] = hexTable[byte >> 4];
+                res_data[pos + 1] = hexTable[byte & 0x0f];
+            }
+    }
+};
+
+class FunctionHexInt : public IFunction
+{
+public:
+    static constexpr auto name = "hexInt";
+    FunctionHexInt() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexInt>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isNumber())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeHexInt<UInt8>(block, arguments, result)
+            || executeHexInt<UInt16>(block, arguments, result)
+            || executeHexInt<UInt32>(block, arguments, result)
+            || executeHexInt<UInt64>(block, arguments, result)
+            || executeHexInt<Int8>(block, arguments, result)
+            || executeHexInt<Int16>(block, arguments, result)
+            || executeHexInt<Int32>(block, arguments, result)
+            || executeHexInt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeHexInt(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        const auto col = checkAndGetColumn<ColumnVector<IntType>>(column.get());
+        if (col == nullptr)
+        {
+            return false;
+        }
+        size_t size = col->size();
+
+        auto col_res = ColumnString::create();
+
+        ColumnString::Chars_t & res_chars = col_res->getChars();
+        // Convert a UInt64 to hex, will cost 17 bytes at most
+        res_chars.reserve(size * 17);
+        ColumnString::Offsets & res_offsets = col_res->getOffsets();
+        res_offsets.resize(size);
+
+        size_t prev_res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            UInt64 number = col->getUInt(i);
+
+            int print_size = sprintf(reinterpret_cast<char *>(&res_chars[prev_res_offset]), "%lX", number);
+            res_chars[prev_res_offset + print_size] = 0;
+            // Add the size of printed string and a tailing zero
+            prev_res_offset += print_size + 1;
+            res_offsets[i] = prev_res_offset;
+        }
+        res_chars.resize(prev_res_offset);
+
+        block.getByPosition(result).column = std::move(col_res);
+
+        return true;
+    }
+};
+
+class FunctionBin : public IFunction
+{
+public:
+    static constexpr auto name = "bin";
+    static constexpr size_t word_size = 8;
+    FunctionBin() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionBin>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 1)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    template <typename T>
+    static void executeOneUIntOrInt(T data, char *& out)
+    {
+        auto x = static_cast<Int64>(data); // NOLINT
+        bool was_nonzero = false;
+        bool was_first_nonzero_byte = true;
+        for (int offset = (sizeof(Int64) - 1) * 8; offset >= 0; offset -= 8)
+        {
+            UInt8 byte = x >> offset;
+            /// Skip leading zeros
+            if (byte == 0 && !was_nonzero && offset)
+                continue;
+            was_nonzero = true;
+            if (was_first_nonzero_byte)
+            {
+                out += writeNoZeroPrefixBinByte(byte, out);
+                was_first_nonzero_byte = false;
+            }
+            else
+            {
+                writeBinByte(byte, out);
+                out += word_size;
+            }
+        }
+        *out = '\0';
+        ++out;
+    }
+
+    template <typename T>
+    bool tryExecuteUIntOrInt(const IColumn * col, ColumnPtr & col_res) const
+    {
+        auto * col_vec = checkAndGetColumn<ColumnVector<T>>(col);
+        static constexpr size_t MAX_LENGTH = sizeof(Int64) * word_size + 1; /// Including trailing zero byte.
+        if (col_vec)
+        {
+            auto col_str = ColumnString::create();
+            ColumnString::Chars_t & out_vec = col_str->getChars();
+            ColumnString::Offsets & out_offsets = col_str->getOffsets();
+            const typename ColumnVector<T>::Container & in_vec = col_vec->getData();
+            size_t size = in_vec.size();
+            out_offsets.resize(size);
+            out_vec.resize(size * (word_size + 1) + MAX_LENGTH); /// word_size+1 is length of one byte in hex/bin plus zero byte.
+            size_t pos = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                /// Manual exponential growth, so as not to rely on the linear amortized work time of `resize` (no one guarantees it).
+                if (pos + MAX_LENGTH > out_vec.size())
+                    out_vec.resize(out_vec.size() * word_size + MAX_LENGTH);
+                char * begin = reinterpret_cast<char *>(&out_vec[pos]);
+                char * end = begin;
+                executeOneUIntOrInt(in_vec[i], end);
+                pos += end - begin;
+                out_offsets[i] = pos;
+            }
+            out_vec.resize(pos);
+            col_res = std::move(col_str);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const IColumn * column = block.getByPosition(arguments[0]).column.get();
+        ColumnPtr res_column;
+        if (tryExecuteUIntOrInt<UInt8>(column, res_column)
+            || tryExecuteUIntOrInt<UInt16>(column, res_column)
+            || tryExecuteUIntOrInt<UInt32>(column, res_column)
+            || tryExecuteUIntOrInt<UInt64>(column, res_column)
+            || tryExecuteUIntOrInt<Int8>(column, res_column)
+            || tryExecuteUIntOrInt<Int16>(column, res_column)
+            || tryExecuteUIntOrInt<Int32>(column, res_column)
+            || tryExecuteUIntOrInt<Int64>(column, res_column))
+        {
+            block.getByPosition(result).column = std::move(res_column);
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+};
+
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
@@ -5204,6 +5504,9 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSubStringIndex>();
     factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();
+    factory.registerFunction<FunctionHexStr>();
+    factory.registerFunction<FunctionHexInt>();
     factory.registerFunction<FunctionRepeat>();
+    factory.registerFunction<FunctionBin>();
 }
 } // namespace DB

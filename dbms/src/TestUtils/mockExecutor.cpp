@@ -272,8 +272,10 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group
 {
     auto agg_funcs = std::make_shared<ASTExpressionList>();
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
-    agg_funcs->children.push_back(agg_func);
-    group_by_exprs->children.push_back(group_by_expr);
+    if (agg_func)
+        agg_funcs->children.push_back(agg_func);
+    if (group_by_expr)
+        group_by_exprs->children.push_back(group_by_expr);
     return buildAggregation(agg_funcs, group_by_exprs);
 }
 
@@ -387,7 +389,7 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
-    auto builder = DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
+    auto builder = DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
     // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
     // If user don't want to test executors, it will be safe to run Interpreter Tests.
     if (mock_table_columns.find(db_name + "." + table_name) != mock_table_columns.end())
@@ -399,7 +401,7 @@ DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 
 DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name], fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(exchange_schemas[exchange_name], fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
     // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
     // If user don't want to test executors, it will be safe to run Interpreter Tests.
