@@ -84,7 +84,7 @@ protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
     const TiFlashSecurityConfig & security_config;
-    Context & m_context;
+    Context & context;
     Poco::Logger * log;
     bool is_async = false;
     bool enable_local_tunnel = false;
