@@ -80,6 +80,7 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
         size_t concurrency = 1);
+
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
@@ -111,4 +112,6 @@ protected:
     std::thread thd(run_server);                                                       \
     thd.detach();                                                                      \
     std::this_thread::sleep_for(std::chrono::seconds(5));
+
+// figure out how to avoid connection error, make the server alive..
 } // namespace DB::tests

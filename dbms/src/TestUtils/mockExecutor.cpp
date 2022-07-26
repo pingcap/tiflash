@@ -79,9 +79,7 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
         dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
 
     for (size_t i = 0; i < root->output_schema.size(); ++i)
-    {
         dag_request.add_output_offsets(i);
-    }
 }
 
 // traval the AST tree to build tipb::Executor recursively.

@@ -14,11 +14,9 @@
 
 #include <Server/MockExecutionServer.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TestUtils/mockExecutor.h>
-
-#include <thread>
-
 
 namespace DB
 {
@@ -71,10 +69,10 @@ try
     {
         ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
     }
-
+    // We must start the server before executing MPP Tasks.
     RUN_SERVER();
-    executeMPPTasks(tasks);
-    executeMPPTasks(tasks);
+    auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
+    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
 }
 CATCH
 } // namespace tests

@@ -188,7 +188,6 @@ grpc::Status CoprocessorHandler::execute()
     }
 }
 
-
 grpc::Status CoprocessorHandler::recordError(grpc::StatusCode err_code, const String & err_msg)
 {
     cop_response->Clear();

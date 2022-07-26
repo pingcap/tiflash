@@ -608,7 +608,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (packet->has_error())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
 
-
                 if (!pushPacket<enable_fine_grained_shuffle, true>(req.source_index, req_info, packet, msg_channels, log))
                 {
                     meet_error = true;
