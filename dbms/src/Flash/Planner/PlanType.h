@@ -32,9 +32,11 @@ struct PlanType
         ExchangeReceiver = 7,
         MockExchangeReceiver = 8,
         Projection = 9,
-        TableScan = 10,
-        MockTableScan = 11,
-        Join = 12,
+        Window = 10,
+        WindowSort = 11,
+        TableScan = 12,
+        MockTableScan = 13,
+        Join = 14,
     };
     PlanTypeEnum enum_value;
 
