@@ -5281,18 +5281,17 @@ private:
         ColumnString::Offsets & res_offsets = col_res->getOffsets();
         res_offsets.resize(size);
 
-        size_t prev_res_offset = 0;
+        auto res_chars_iter = res_chars.begin();
         for (size_t i = 0; i < size; ++i)
         {
             UInt64 number = col->getUInt(i);
 
-            int print_size = sprintf(reinterpret_cast<char *>(&res_chars[prev_res_offset]), "%llX", number);
-            res_chars[prev_res_offset + print_size] = 0;
+            res_chars_iter = fmt::format_to(res_chars_iter, "{:X}", number);
+            *(++res_chars_iter) = 0;
             // Add the size of printed string and a tailing zero
-            prev_res_offset += print_size + 1;
-            res_offsets[i] = prev_res_offset;
+            res_offsets[i] = res_chars_iter - res_chars.begin();
         }
-        res_chars.resize(prev_res_offset);
+        res_chars.resize(res_chars_iter - res_chars.begin());
 
         block.getByPosition(result).column = std::move(col_res);
 
